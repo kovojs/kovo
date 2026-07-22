@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_JAVASCRIPT_MODULE_REFERENCES } from './javascript-ast.js';
 import { type KovoEmittedTranslationInput, verifyEmittedTranslation } from './translation.js';
 
 // @kovo-security-classifier-corpus finite-security-operation-ir
@@ -58,6 +59,20 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'client-import-parse',
+          relation: 'client-import-subset',
+        }),
+      ]),
+    );
+
+    const overBudget = validTranslation();
+    artifact(overBudget, 'client').source = "import './safe.client.js';\n".repeat(
+      MAX_JAVASCRIPT_MODULE_REFERENCES + 1,
+    );
+    expect(verifyEmittedTranslation(overBudget).findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'client-import-budget',
+          message: 'emitted client module exceeds the finite module-reference budget',
           relation: 'client-import-subset',
         }),
       ]),

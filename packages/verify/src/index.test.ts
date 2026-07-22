@@ -10,6 +10,7 @@ import {
   type KovoCertificateV1,
   verifyCertificate,
 } from './index.js';
+import { MAX_JAVASCRIPT_MODULE_REFERENCES } from './javascript-ast.js';
 
 const rootModule = '@kovojs/server/dist/root.mjs';
 const workerModule = '@kovojs/server/dist/worker.mjs';
@@ -78,22 +79,13 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
   });
 
   it('parses the complete near-limit module before deriving a hidden tail capability', async () => {
-    // Regression for es-module-lexer/js silently stopping after 14,688 of these 185,714 imports.
-    // The old checker observed only the safe edge and PASSed this exact 3,900,051-byte root with
-    // an empty cap summary. SPEC §6.6 requires local(m) to come from every published module byte.
-    const safeModule = '@kovojs/server/dist/safe.mjs';
-    const rootSource =
-      "import './safe.mjs';\n".repeat(185_714) +
-      "import 'node:child_process';\nexport const loaded = true;\n";
+    // Full parsing happens before the finite reference extraction budget. A long comment keeps the
+    // capability at the old 3,900,051-byte regression boundary without manufacturing references.
+    const tail = "import 'node:child_process';\nexport const loaded = true;\n";
+    const rootSource = `/*${'x'.repeat(3_900_051 - Buffer.byteLength(`/**/\n${tail}`))}*/\n${tail}`;
     expect(Buffer.byteLength(rootSource)).toBe(3_900_051);
-    const artifacts = artifactSource({
-      [rootModule]: rootSource,
-      [safeModule]: 'export {};',
-    });
-    const certificate = certificateFor(artifacts, {
-      cap: { [rootModule]: [], [safeModule]: [] },
-      edges: [[rootModule, safeModule]],
-    });
+    const artifacts = artifactSource({ [rootModule]: rootSource });
+    const certificate = certificateFor(artifacts);
 
     const result = await verifyBound(certificate, artifacts);
     expect(result.findings).toEqual([
@@ -102,6 +94,128 @@ describe('standalone kovo.certificate/v1 checker (Plan 3 §2.1 C13 anchor)', () 
         message: expect.stringContaining('process'),
         obligation: 'stability',
       }),
+    ]);
+  });
+
+  it('checks the exact per-module reference limit and closes with one sentinel at limit plus one', async () => {
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const safeImport = "import './safe.mjs';\n";
+    const capabilityImport = "import 'node:child_process';\n";
+    const exactArtifacts = artifactSource({
+      [rootModule]: safeImport.repeat(MAX_JAVASCRIPT_MODULE_REFERENCES - 1) + capabilityImport,
+      [safeModule]: 'export {};',
+    });
+    const exactCertificate = certificateFor(exactArtifacts, {
+      edges: [[rootModule, safeModule]],
+    });
+    await expect(verifyBound(exactCertificate, exactArtifacts)).resolves.toMatchObject({
+      findings: [expect.objectContaining({ code: 'local-capability-missing' })],
+      ok: false,
+    });
+
+    const overArtifacts = artifactSource({
+      [rootModule]: safeImport.repeat(MAX_JAVASCRIPT_MODULE_REFERENCES) + capabilityImport,
+      [safeModule]: 'export {};',
+    });
+    const overCertificate = certificateFor(overArtifacts, {
+      edges: [[rootModule, safeModule]],
+    });
+    const result = await verifyBound(overCertificate, overArtifacts);
+    expect(result.findings).toEqual([
+      {
+        code: 'artifact-analysis-budget',
+        message: 'artifact analysis exceeds the finite module-reference or finding budget',
+        obligation: 'coverage',
+      },
+    ]);
+    expect(formatCertificateVerification(result).length).toBeLessThan(256);
+
+    const invalidArtifacts = artifactSource({
+      [rootModule]: `${safeImport.repeat(MAX_JAVASCRIPT_MODULE_REFERENCES + 1)}export {`,
+      [safeModule]: 'export {};',
+    });
+    const invalidResult = await verifyBound(certificateFor(invalidArtifacts), invalidArtifacts);
+    expect(invalidResult.findings).toEqual([
+      expect.objectContaining({ code: 'artifact-parse', obligation: 'coverage' }),
+    ]);
+  });
+
+  it('closes with one sentinel when individually valid modules exceed the aggregate reference budget', async () => {
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const safeImport = "import './safe.mjs';\n";
+    const sources: Record<string, string> = { [safeModule]: 'export {};' };
+    const edges: [string, string][] = [];
+    for (let index = 0; index < 4; index += 1) {
+      const module = `@kovojs/server/dist/budget-${index}.mjs`;
+      sources[module] = safeImport.repeat(MAX_JAVASCRIPT_MODULE_REFERENCES);
+      edges.push([module, safeModule]);
+    }
+    const overModule = '@kovojs/server/dist/budget-4.mjs';
+    sources[overModule] = safeImport;
+    edges.push([overModule, safeModule]);
+    const artifacts = artifactSource(sources);
+    const result = await verifyBound(certificateFor(artifacts, { edges }), artifacts);
+
+    expect(result.findings).toEqual([
+      {
+        code: 'artifact-analysis-budget',
+        message: 'artifact analysis exceeds the finite module-reference or finding budget',
+        obligation: 'coverage',
+      },
+    ]);
+  });
+
+  it('counts imported bindings in the finite module-reference budget', async () => {
+    const safeModule = '@kovojs/server/dist/safe.mjs';
+    const importWithBindings = (count: number): string =>
+      `import {${Array.from({ length: count }, (_, index) => `value as value${index}`).join(',')}} from './safe.mjs';`;
+    const exactArtifacts = artifactSource({
+      [rootModule]: importWithBindings(MAX_JAVASCRIPT_MODULE_REFERENCES - 1),
+      [safeModule]: 'export {};',
+    });
+    await expect(
+      verifyBound(
+        certificateFor(exactArtifacts, { edges: [[rootModule, safeModule]] }),
+        exactArtifacts,
+      ),
+    ).resolves.toMatchObject({ findings: [], ok: true });
+
+    const overArtifacts = artifactSource({
+      [rootModule]: importWithBindings(MAX_JAVASCRIPT_MODULE_REFERENCES),
+      [safeModule]: 'export {};',
+    });
+    const overResult = await verifyBound(
+      certificateFor(overArtifacts, { edges: [[rootModule, safeModule]] }),
+      overArtifacts,
+    );
+    expect(overResult.findings).toEqual([
+      {
+        code: 'artifact-analysis-budget',
+        message: 'artifact analysis exceeds the finite module-reference or finding budget',
+        obligation: 'coverage',
+      },
+    ]);
+  });
+
+  it('bounds reference-derived findings and replaces limit plus one with one sentinel', async () => {
+    const unsupportedImport = "import 'https://example.invalid/module.js';\n";
+    const exactArtifacts = artifactSource({
+      [rootModule]: unsupportedImport.repeat(1024),
+    });
+    const exactResult = await verifyBound(certificateFor(exactArtifacts), exactArtifacts);
+    expect(exactResult.findings).toHaveLength(1024);
+    expect(exactResult.findings.every((entry) => entry.code === 'unsupported-import')).toBe(true);
+
+    const overArtifacts = artifactSource({
+      [rootModule]: unsupportedImport.repeat(1025),
+    });
+    const overResult = await verifyBound(certificateFor(overArtifacts), overArtifacts);
+    expect(overResult.findings).toEqual([
+      {
+        code: 'artifact-analysis-budget',
+        message: 'artifact analysis exceeds the finite module-reference or finding budget',
+        obligation: 'coverage',
+      },
     ]);
   });
 

@@ -9,6 +9,20 @@ export interface JavaScriptModuleReference {
   specifier: string | undefined;
 }
 
+/** @internal Finite extraction ceiling for one completely parsed emitted module (SPEC §6.6). */
+export const MAX_JAVASCRIPT_MODULE_REFERENCES = 32_768;
+
+export interface JavaScriptModuleReferenceCollection {
+  limitExceeded: boolean;
+  referenceUnits: number;
+  references: JavaScriptModuleReference[];
+}
+
+interface JavaScriptImportedNames {
+  names: string[];
+  units: number;
+}
+
 /** Parse the complete emitted module with one standards-oriented ESTree parser. */
 export function parseJavaScriptModule(source: string): JavaScriptAstNode {
   const program = parse(source, {
@@ -21,90 +35,114 @@ export function parseJavaScriptModule(source: string): JavaScriptAstNode {
 
 export function collectJavaScriptModuleReferences(
   program: JavaScriptAstNode,
-): JavaScriptModuleReference[] {
+  maxReferences = MAX_JAVASCRIPT_MODULE_REFERENCES,
+): JavaScriptModuleReferenceCollection {
+  if (!Number.isSafeInteger(maxReferences) || maxReferences < 0) {
+    throw new TypeError('JavaScript module reference limit must be a non-negative safe integer');
+  }
   const references: JavaScriptModuleReference[] = [];
+  let referenceUnits = 0;
+  let limitExceeded = false;
   walkJavaScriptAst(program, (node) => {
+    const remainingNames = maxReferences - referenceUnits - 1;
+    let reference: JavaScriptModuleReference | undefined;
+    let referenceNameUnits = 0;
     if (node.type === 'ImportDeclaration') {
-      references.push({
-        importedNames: importDeclarationNames(node),
+      const importedNames = importDeclarationNames(node, remainingNames);
+      if (importedNames === undefined) {
+        limitExceeded = true;
+        return false;
+      }
+      reference = {
+        importedNames: importedNames.names,
         kind: 'import',
         node,
         specifier: staticStringValue(node.source),
-      });
-      return;
-    }
-    if (
+      };
+      referenceNameUnits = importedNames.units;
+    } else if (
       node.type === 'ExportNamedDeclaration' &&
       node.source !== null &&
       node.source !== undefined
     ) {
-      references.push({
-        importedNames: exportDeclarationNames(node),
+      const importedNames = exportDeclarationNames(node, remainingNames);
+      if (importedNames === undefined) {
+        limitExceeded = true;
+        return false;
+      }
+      reference = {
+        importedNames: importedNames.names,
         kind: 'export',
         node,
         specifier: staticStringValue(node.source),
-      });
-      return;
-    }
-    if (node.type === 'ExportAllDeclaration') {
-      references.push({
+      };
+      referenceNameUnits = importedNames.units;
+    } else if (node.type === 'ExportAllDeclaration') {
+      reference = {
         importedNames: ['*'],
         kind: 'export',
         node,
         specifier: staticStringValue(node.source),
-      });
-      return;
-    }
-    if (node.type === 'ImportExpression') {
-      references.push({
+      };
+      referenceNameUnits = 1;
+    } else if (node.type === 'ImportExpression') {
+      reference = {
         importedNames: ['*'],
         kind: 'dynamic-import',
         node,
         specifier: staticStringValue(node.source),
-      });
+      };
+      referenceNameUnits = 1;
     }
+
+    if (reference === undefined) return true;
+    const units = 1 + referenceNameUnits;
+    if (units > maxReferences - referenceUnits) {
+      limitExceeded = true;
+      return false;
+    }
+    references.push(reference);
+    referenceUnits += units;
+    return true;
   });
-  return references;
+  if (limitExceeded) {
+    references.length = 0;
+    referenceUnits = 0;
+  }
+  return { limitExceeded, references, referenceUnits };
 }
 
 function walkJavaScriptAst(
   root: JavaScriptAstNode,
-  visitor: (node: JavaScriptAstNode) => void,
+  visitor: (node: JavaScriptAstNode) => boolean,
 ): void {
-  const stack = [root];
+  if (!visitor(root)) return;
+  const stack = [childNodes(root)];
   while (stack.length > 0) {
-    const current = stack.pop()!;
-    visitor(current);
-    const children = childNodes(current);
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      stack.push(children[index]!);
+    const next = stack.at(-1)!.next();
+    if (next.done) {
+      stack.pop();
+      continue;
     }
+    if (!visitor(next.value)) return;
+    stack.push(childNodes(next.value));
   }
 }
 
-function childNodes(node: JavaScriptAstNode): JavaScriptAstNode[] {
-  const children: JavaScriptAstNode[] = [];
-  const seen = new Set<JavaScriptAstNode>();
+function* childNodes(node: JavaScriptAstNode): Generator<JavaScriptAstNode, void, void> {
   for (const [key, value] of Object.entries(node)) {
     if (key === 'end' || key === 'loc' || key === 'range' || key === 'start' || key === 'type') {
       continue;
     }
     if (isJavaScriptAstNode(value)) {
-      if (!seen.has(value)) {
-        seen.add(value);
-        children.push(value);
-      }
+      yield value;
       continue;
     }
     if (!Array.isArray(value)) continue;
     for (const item of value) {
-      if (isJavaScriptAstNode(item) && !seen.has(item)) {
-        seen.add(item);
-        children.push(item);
-      }
+      if (isJavaScriptAstNode(item)) yield item;
     }
   }
-  return children;
 }
 
 export function isJavaScriptAstNode(value: unknown): value is JavaScriptAstNode {
@@ -123,38 +161,50 @@ export function staticStringValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function importDeclarationNames(node: JavaScriptAstNode): string[] {
-  if (!Array.isArray(node.specifiers)) return [];
+function importDeclarationNames(
+  node: JavaScriptAstNode,
+  maxNames: number,
+): JavaScriptImportedNames | undefined {
+  if (!Array.isArray(node.specifiers)) return { names: [], units: 0 };
   const names: string[] = [];
   for (const value of node.specifiers) {
     if (!isJavaScriptAstNode(value)) continue;
-    if (value.type === 'ImportDefaultSpecifier') names.push('default');
-    else if (value.type === 'ImportNamespaceSpecifier') names.push('*');
+    let name: string | undefined;
+    if (value.type === 'ImportDefaultSpecifier') name = 'default';
+    else if (value.type === 'ImportNamespaceSpecifier') name = '*';
     else if (value.type === 'ImportSpecifier') {
-      const imported = identifierOrStringName(value.imported);
-      if (imported !== undefined) names.push(imported);
+      name = identifierOrStringName(value.imported);
     }
+    if (name === undefined) continue;
+    if (names.length >= maxNames) return undefined;
+    names.push(name);
   }
-  return [...new Set(names)].sort(compareStrings);
+  return { names: [...new Set(names)], units: names.length };
 }
 
-function exportDeclarationNames(node: JavaScriptAstNode): string[] {
-  if (!Array.isArray(node.specifiers) || node.specifiers.length === 0) return ['*'];
+function exportDeclarationNames(
+  node: JavaScriptAstNode,
+  maxNames: number,
+): JavaScriptImportedNames | undefined {
+  if (!Array.isArray(node.specifiers) || node.specifiers.length === 0) {
+    return maxNames >= 1 ? { names: ['*'], units: 1 } : undefined;
+  }
   const names: string[] = [];
   for (const value of node.specifiers) {
     if (!isJavaScriptAstNode(value)) continue;
     const local = identifierOrStringName(value.local);
-    if (local !== undefined) names.push(local);
+    if (local === undefined) continue;
+    if (names.length >= maxNames) return undefined;
+    names.push(local);
   }
-  return names.length === 0 ? ['*'] : [...new Set(names)].sort(compareStrings);
+  if (names.length > 0) {
+    return { names: [...new Set(names)], units: names.length };
+  }
+  return maxNames >= 1 ? { names: ['*'], units: 1 } : undefined;
 }
 
 function identifierOrStringName(value: unknown): string | undefined {
   if (!isJavaScriptAstNode(value)) return undefined;
   if (value.type === 'Identifier' && typeof value.name === 'string') return value.name;
   return staticStringValue(value);
-}
-
-function compareStrings(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
 }

@@ -6,6 +6,7 @@ import { readBoundedRegularFileSnapshot } from './file-snapshot.js';
 import {
   collectJavaScriptModuleReferences,
   isJavaScriptAstNode,
+  MAX_JAVASCRIPT_MODULE_REFERENCES,
   type JavaScriptAstNode,
   parseJavaScriptModule,
 } from './javascript-ast.js';
@@ -19,6 +20,12 @@ const MAX_PACKAGE_ENTRIES = 4096;
 const MAX_PACKAGE_DEPTH = 16;
 const MAX_ARTIFACT_BYTES = 4 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES = 32 * 1024 * 1024;
+// SPEC §6.6's byte/row budgets also need finite derived-evidence budgets: otherwise compact
+// repeated imports can amplify one admitted module into an enormous reference graph or report.
+const MAX_TOTAL_ARTIFACT_REFERENCES = MAX_CERTIFICATE_ROWS;
+const MAX_CERTIFICATE_FINDINGS = 1024;
+const ARTIFACT_ANALYSIS_BUDGET_MESSAGE =
+  'artifact analysis exceeds the finite module-reference or finding budget';
 const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype) as object;
 const TYPED_ARRAY_BUFFER_GETTER = Object.getOwnPropertyDescriptor(
   TYPED_ARRAY_PROTOTYPE,
@@ -145,6 +152,19 @@ interface ArtifactSourceSnapshot {
 interface ArtifactByteBudget {
   exhausted: boolean;
   total: number;
+}
+
+interface ArtifactAnalysisBudget {
+  findings: number;
+  references: number;
+}
+
+interface ParsedArtifact {
+  budgetExceeded: boolean;
+  edges: readonly (readonly [string, string])[];
+  findings: readonly KovoCertificateFinding[];
+  localCapabilities: Set<KovoCertificateCapabilityKind>;
+  opaque: readonly { module: string; reason: string }[];
 }
 
 function snapshotPolicyBytes(value: unknown): Uint8Array | undefined {
@@ -285,6 +305,7 @@ async function verifyCertificateSnapshot(
   const declaredOpaque = new Set(
     certificate.opaque.map((entry) => `${entry.module}\0${entry.reason}`),
   );
+  const analysisBudget: ArtifactAnalysisBudget = { findings: 0, references: 0 };
   for (const module of expectedPaths) {
     const bytes = bytesByPath.get(module)!;
     const parsed = parseArtifact(
@@ -293,8 +314,12 @@ async function verifyCertificateSnapshot(
       artifactSet,
       policy,
       declaredOpaque,
-      coverageFindings,
+      analysisBudget,
     );
+    if (parsed.budgetExceeded) {
+      return verificationResult([artifactAnalysisBudgetFinding()], certificate);
+    }
+    coverageFindings.push(...parsed.findings);
     localCapabilities.set(module, parsed.localCapabilities);
     for (const edge of parsed.edges) derivedEdges.set(tupleKey(edge), edge);
     for (const entry of parsed.opaque) {
@@ -1928,36 +1953,52 @@ function parseArtifact(
   artifacts: ReadonlySet<string>,
   policy: KovoCertificatePolicyV1,
   declaredOpaque: ReadonlySet<string>,
-  findings: KovoCertificateFinding[],
-): {
-  edges: readonly (readonly [string, string])[];
-  localCapabilities: Set<KovoCertificateCapabilityKind>;
-  opaque: readonly { module: string; reason: string }[];
-} {
+  budget: ArtifactAnalysisBudget,
+): ParsedArtifact {
+  const findings: KovoCertificateFinding[] = [];
+  const recordFinding = (entry: KovoCertificateFinding): boolean =>
+    recordArtifactAnalysisFinding(budget, findings, entry);
   let source: string;
   try {
     source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    findings.push(finding('coverage', 'artifact-utf8', `${module} is not valid UTF-8`));
-    return { edges: [], localCapabilities: new Set(), opaque: [] };
+    if (!recordFinding(finding('coverage', 'artifact-utf8', `${module} is not valid UTF-8`))) {
+      return budgetExceededParsedArtifact();
+    }
+    return emptyParsedArtifact(findings);
   }
   let program: JavaScriptAstNode;
   try {
     program = parseJavaScriptModule(source);
   } catch (error) {
-    findings.push(
-      finding(
-        'coverage',
-        'artifact-parse',
-        `${module} parse failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-      ),
-    );
-    return { edges: [], localCapabilities: new Set(), opaque: [] };
+    if (
+      !recordFinding(
+        finding(
+          'coverage',
+          'artifact-parse',
+          `${module} parse failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        ),
+      )
+    ) {
+      return budgetExceededParsedArtifact();
+    }
+    return emptyParsedArtifact(findings);
   }
+
+  // Acorn has already parsed the complete source. Extraction may stop at the finite certificate
+  // budget because the verifier then has a closed verdict and does not need a partial summary.
+  const remainingReferences = MAX_TOTAL_ARTIFACT_REFERENCES - budget.references;
+  const collected = collectJavaScriptModuleReferences(
+    program,
+    Math.min(MAX_JAVASCRIPT_MODULE_REFERENCES, remainingReferences),
+  );
+  if (collected.limitExceeded) return budgetExceededParsedArtifact();
+  budget.references += collected.referenceUnits;
+
   const edges = new Map<string, readonly [string, string]>();
   const localCapabilities = new Set<KovoCertificateCapabilityKind>();
   const opaque = new Map<string, { module: string; reason: string }>();
-  for (const imported of collectJavaScriptModuleReferences(program)) {
+  for (const imported of collected.references) {
     const specifier = imported.specifier;
     if (specifier === undefined) {
       const importSource = imported.node.source;
@@ -1968,13 +2009,17 @@ function parseArtifact(
         Array.isArray(importSource.expressions) &&
         importSource.expressions.length === 0
       ) {
-        findings.push(
-          finding(
-            'coverage',
-            'unsupported-template-import',
-            `${module} uses a no-substitution template dynamic import outside the finite certificate grammar`,
-          ),
-        );
+        if (
+          !recordFinding(
+            finding(
+              'coverage',
+              'unsupported-template-import',
+              `${module} uses a no-substitution template dynamic import outside the finite certificate grammar`,
+            ),
+          )
+        ) {
+          return budgetExceededParsedArtifact();
+        }
         continue;
       }
       const entry = {
@@ -1985,13 +2030,17 @@ function parseArtifact(
       const key = `${entry.module}\0${entry.reason}`;
       opaque.set(key, entry);
       if (!declaredOpaque.has(key)) {
-        findings.push(
-          finding(
-            'coverage',
-            'computed-import',
-            `${module} contains an unledgered computed dynamic import`,
-          ),
-        );
+        if (
+          !recordFinding(
+            finding(
+              'coverage',
+              'computed-import',
+              `${module} contains an unledgered computed dynamic import`,
+            ),
+          )
+        ) {
+          return budgetExceededParsedArtifact();
+        }
       }
       continue;
     }
@@ -2013,35 +2062,47 @@ function parseArtifact(
       continue;
     }
     if (unsupportedModuleSpecifier(specifier)) {
-      findings.push(
-        finding(
-          'coverage',
-          'unsupported-import',
-          `${module} imports unsupported module specifier ${JSON.stringify(specifier)}`,
-        ),
-      );
+      if (
+        !recordFinding(
+          finding(
+            'coverage',
+            'unsupported-import',
+            `${module} imports unsupported module specifier ${JSON.stringify(specifier)}`,
+          ),
+        )
+      ) {
+        return budgetExceededParsedArtifact();
+      }
       continue;
     }
     if (specifier.endsWith('.node') || specifier.endsWith('.wasm')) {
-      findings.push(
-        finding(
-          'coverage',
-          'native-or-wasm-import',
-          `${module} imports unsupported ${JSON.stringify(specifier)}`,
-        ),
-      );
+      if (
+        !recordFinding(
+          finding(
+            'coverage',
+            'native-or-wasm-import',
+            `${module} imports unsupported ${JSON.stringify(specifier)}`,
+          ),
+        )
+      ) {
+        return budgetExceededParsedArtifact();
+      }
       continue;
     }
     const target = resolveArtifactSpecifier(module, specifier, policy);
     if (target === undefined) {
       if (specifier.startsWith('@kovojs/') || specifier.startsWith('#')) {
-        findings.push(
-          finding(
-            'coverage',
-            'edge-unresolved',
-            `${module} first-party or package import ${JSON.stringify(specifier)} is unresolved`,
-          ),
-        );
+        if (
+          !recordFinding(
+            finding(
+              'coverage',
+              'edge-unresolved',
+              `${module} first-party or package import ${JSON.stringify(specifier)} is unresolved`,
+            ),
+          )
+        ) {
+          return budgetExceededParsedArtifact();
+        }
       } else {
         const entry = { module, reason: externalOpaqueReason(specifier) };
         opaque.set(`${entry.module}\0${entry.reason}`, entry);
@@ -2049,25 +2110,66 @@ function parseArtifact(
       continue;
     }
     if (!artifacts.has(target)) {
-      findings.push(
-        finding(
-          'coverage',
-          'edge-unresolved',
-          `${module} import ${JSON.stringify(specifier)} does not resolve to ${target}`,
-        ),
-      );
+      if (
+        !recordFinding(
+          finding(
+            'coverage',
+            'edge-unresolved',
+            `${module} import ${JSON.stringify(specifier)} does not resolve to ${target}`,
+          ),
+        )
+      ) {
+        return budgetExceededParsedArtifact();
+      }
       continue;
     }
     const edge = [module, target] as const;
     edges.set(tupleKey(edge), edge);
   }
   return {
+    budgetExceeded: false,
     edges: [...edges.values()].sort(compareTuples),
+    findings,
     localCapabilities,
     opaque: [...opaque.values()].sort((left, right) =>
       compareStrings(`${left.module}\0${left.reason}`, `${right.module}\0${right.reason}`),
     ),
   };
+}
+
+function emptyParsedArtifact(findings: readonly KovoCertificateFinding[]): ParsedArtifact {
+  return {
+    budgetExceeded: false,
+    edges: [],
+    findings,
+    localCapabilities: new Set(),
+    opaque: [],
+  };
+}
+
+function budgetExceededParsedArtifact(): ParsedArtifact {
+  return {
+    budgetExceeded: true,
+    edges: [],
+    findings: [],
+    localCapabilities: new Set(),
+    opaque: [],
+  };
+}
+
+function recordArtifactAnalysisFinding(
+  budget: ArtifactAnalysisBudget,
+  findings: KovoCertificateFinding[],
+  entry: KovoCertificateFinding,
+): boolean {
+  if (budget.findings >= MAX_CERTIFICATE_FINDINGS) return false;
+  budget.findings += 1;
+  findings.push(entry);
+  return true;
+}
+
+function artifactAnalysisBudgetFinding(): KovoCertificateFinding {
+  return finding('coverage', 'artifact-analysis-budget', ARTIFACT_ANALYSIS_BUDGET_MESSAGE);
 }
 
 function resolveArtifactSpecifier(
@@ -2298,8 +2400,18 @@ function verificationResult(
   certificate?: KovoCertificateV1,
 ): KovoCertificateVerificationResult {
   const cap = certificate === undefined ? [] : Object.values(certificate.cap).flat();
+  const boundedFindings =
+    findings.length <= MAX_CERTIFICATE_FINDINGS
+      ? [...findings].sort(compareFindings)
+      : [
+          finding(
+            'schema',
+            'finding-budget',
+            'certificate verification exceeds the finite finding budget',
+          ),
+        ];
   return {
-    findings: [...findings].sort(compareFindings),
+    findings: boundedFindings,
     ok: findings.length === 0,
     stats: {
       artifacts: certificate?.artifacts.length ?? 0,

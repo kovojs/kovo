@@ -499,9 +499,20 @@ function checkClientImports(
   }
 
   for (const artifact of input.artifacts.filter((entry) => entry.kind === 'client')) {
-    let imports: ReturnType<typeof collectJavaScriptModuleReferences>;
+    let imports: ReturnType<typeof collectJavaScriptModuleReferences>['references'];
     try {
-      imports = collectJavaScriptModuleReferences(parseJavaScriptModule(artifact.source));
+      const collected = collectJavaScriptModuleReferences(parseJavaScriptModule(artifact.source));
+      if (collected.limitExceeded) {
+        pushFinding(
+          findings,
+          'client-import-subset',
+          'client-import-budget',
+          'emitted client module exceeds the finite module-reference budget',
+          artifact.kind,
+        );
+        continue;
+      }
+      imports = collected.references;
     } catch (error) {
       pushFinding(
         findings,
