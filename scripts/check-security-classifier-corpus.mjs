@@ -2895,8 +2895,8 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'binds every manifest-public runtime value and module initializer to reviewed posture',
           'kills omission, duplicate, and newly exported-member mutants',
           'digests every regular production source asset and normalizes only exact compiler self fields',
-          'kills security-role omission across auth, secret, SQL, authorization, CSRF, and replay exports',
-          "rootKind: 'application'",
+          'keeps security-bearing roles and root factories explicit',
+          "['@kovojs/server', '.', 'createApp', 'application']",
         ],
       },
       {

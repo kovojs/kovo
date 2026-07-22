@@ -10,7 +10,7 @@ import {
 
 describe('security-gate-mutations', () => {
   it('pins the exact forcing denominator across the complete security gate', () => {
-    expect(SECURITY_GATE_MUTANTS).toHaveLength(441);
+    expect(SECURITY_GATE_MUTANTS).toHaveLength(442);
   });
 
   it('enrolls finite structured-opacity summary forcing mutants', () => {
