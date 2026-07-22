@@ -373,11 +373,12 @@ trusted the expected identity supplied by the same subject.
   - **Dedup:** distinct from M15's foreign-final-response authority and M14's build selection: this
     root is the same-origin exact typed-read endpoint's negative authorization outcome after URL
     and build admission.
-  - **Open work:** make typed reads reject redirects at Fetch, and turn an admitted authorization
-    denial or unauthenticated redirect failure into full-document recovery before any later query
-    response is applied. Preserve ordinary diagnostics for non-authorization transport failures,
-    but never retain a denied query as fresh truth. Prove seeded-private-value 403, unauthenticated
-    redirect, multi-query atomicity, visible-return, delta-miss, lifecycle, and generated-inline
+  - **Open work:** make typed reads reject redirects at Fetch. For enhanced typed reads, return an
+    exact non-redirecting 401/403 authorization outcome; retain 303 only for native navigation.
+    Turn the admitted denial into full-document recovery before any later query response is
+    applied. Preserve ordinary diagnostics for indistinguishable network failures, but never retain
+    a denied query as fresh truth. Prove seeded-private-value 403, enhanced unauthenticated denial,
+    native 303, multi-query atomicity, visible-return, delta-miss, lifecycle, and generated-inline
     parity.
 
 ## Low
