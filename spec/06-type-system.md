@@ -412,6 +412,64 @@ architecture change, while deleting or narrowing one requires no compatibility m
 binding-sensitive distinction between an exact reviewed digest import and broader crypto acquisition;
 neither kind may be downgraded to an opaque external import or omitted from post-fixpoint closure.
 
+The authority posture for that certificate belongs to a distinct, canonical
+`kovo.certificate-policy/v1` reviewer policy. The policy MUST own the exact sorted
+`{path, sha512}` set of packed `@kovojs/*/dist/*.mjs` modules, the complete installed manifest for
+every package in scope, and the complete roots, doors, and opaque-assumption rows. The certificate
+MUST contain only the corresponding sorted artifact paths, the fixed capability domain, capability
+summaries, import edges, exact copies of the policy's roots/doors/opaque rows, and `policySha512`
+computed over the exact canonical policy bytes. A checker MUST require exact equality for every
+copied posture row and artifact path before checking coverage, stability, or closure. The policy is
+an independently obtained review decision: a copy emitted beside an application build is an audit
+convenience only and MUST NOT become a trust root. Fetching policy, certificate, and artifacts from
+one mutable location does not establish independent review. A detached signature over a certificate
+authenticates only those certificate bytes and MUST NOT substitute for obtaining and reviewing the
+policy bytes named by `policySha512`.
+
+The standalone directory checker MUST derive the actual `@kovojs/*` package census from the supplied
+packed tree and require it to equal the policy package census. It MUST compare each installed
+`package.json` as a complete JSON object with the reviewer-owned manifest, reject `publishConfig` and
+`browser` remapping, and reject every non-empty automatic package-manager lifecycle hook named
+`dependencies`, `install`, `postinstall`, `preinstall`, `prepack`, `postpack`, `prepare`,
+`preprepare`, `postprepare`, `prepublish`, or `prepublishOnly`. Every non-types conditional export,
+fallback, `main`, `module`, or `bin` arm MUST collapse to one canonical listed runtime target.
+Package `imports` aliases MUST be exact non-wildcard `#name` keys whose non-types arms collapse to
+one canonical relative target; any alias used by packed runtime code MUST resolve to a listed packed
+module. Source-only aliases are inert only when the complete packed-tree census proves the source
+files are absent.
+
+The packed-tree census MUST admit only regular, non-symlink files: the installed manifest, canonical
+`.mjs` runtime modules below `dist/`, reviewed declaration/source-map companions below `dist/`, and
+the package README. Root or `dist/` JavaScript with any other suffix, extensionless executable
+files, JSON runtime payloads, native addons, WASM, special files, unexpected documentation, and
+unreviewed siblings fail coverage. Certificate and policy input files and every manifest/runtime
+module MUST be read through a no-follow descriptor after path and descriptor identity agree; the
+checker MUST read through a fixed maximum-plus-one buffer rather than an EOF-growing convenience
+read, compare size and file identity before and after that same-descriptor read, bind each read to the
+initial file/directory census, and repeat the complete census after verification. An added, removed,
+replaced, grown, or otherwise mutated file or directory at any of those boundaries fails closed.
+
+The v1 checker budgets are part of the denial-of-service boundary: policy bytes are at most 1 MiB,
+CLI certificate bytes at most 2 MiB, one runtime module at most 4 MiB, all runtime modules together
+at most 32 MiB, the policy may name at most 32 packages, the packed tree at most 4,096 files and
+depth 16, and certificate plus policy JSON together at most 262,144 nodes and depth 64. The checker
+MUST snapshot caller-owned JSON and policy bytes once before validation and MUST NOT re-read them
+after making a decision.
+
+Every non-dry release from the authorized `main` commit MUST publish separate GitHub artifact
+attestations for the exact committed reviewer-policy and certificate files. The attestation job MUST
+perform no dependency installation or repository script execution, and dry runs MUST receive no
+attestation or OIDC authority. Consumers MUST verify those attestations against the intended release
+workflow and commit, or obtain the exact policy bytes through another independently authenticated
+channel; the committed SHA-512 joins evidence but does not create that channel.
+
+Certificate doors remain coarse module-plus-capability approvals. Their `site` field is a reviewer
+label, not a source-location proof. The checker re-derives lexical import edges and the modeled raw
+capability vocabulary, but it does not prove the behavior of host globals, `eval`, `new Function`,
+computed runtime loading, or every native/WASM execution route beyond explicit rejection and the
+reviewed opaque ledger. Those residual limitations remain honesty obligations under §4.6 and the
+trusted application-code boundary below.
+
 The server runtime has one primitive-owning crypto authority. It captures its Node crypto and byte
 controls during the bootstrap-before-app boundary and runs known-answer checks for RFC 5869
 HKDF-SHA256, HMAC-SHA256, fixed-width equality, and AES-256-GCM before serving. It MUST NOT expose a

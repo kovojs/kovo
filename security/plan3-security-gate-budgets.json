@@ -1,6 +1,6 @@
 {
   "schema": "kovo.plan3-security-gate-budgets/v1",
-  "budgetVersion": "2026-07-21.2",
+  "budgetVersion": "2026-07-21.3",
   "intendedRunner": {
     "architecture": "x64",
     "ciImage": "github-actions/ubuntu-24.04",
@@ -288,7 +288,7 @@
     },
     {
       "id": "certificate",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["2.1", "2.2"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:certificate",
@@ -334,8 +334,12 @@
             "vitest",
             "--run",
             "scripts/kovo-certificate.test.mjs",
+            "scripts/kovo-certificate-capability-domain.test.mjs",
+            "scripts/kovo-certificate-policy.test.mjs",
             "packages/verify/src/index.test.ts",
             "packages/verify/src/directory.test.ts",
+            "packages/verify/src/directory-race.test.ts",
+            "packages/verify/src/file-snapshot.test.ts",
             "packages/verify/src/bin.test.ts",
             "packages/verify/src/translation.test.ts",
             "--reporter=dot"

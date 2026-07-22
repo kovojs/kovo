@@ -9,11 +9,18 @@ const releaseWorkflow = readFileSync(
 const ATTESTATION_JOB_ACTIONS = Object.freeze([
   'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
   'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
+  'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
+  'actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
 ]);
 const ATTESTATION_JOB_PERMISSIONS = Object.freeze([
   'attestations: write',
   'contents: read',
   'id-token: write',
+]);
+const ATTESTATION_SUBJECTS = Object.freeze([
+  'security/advisories/feed.json\0security/advisories/feed.json',
+  'security/kovo-certificate-policy-v1.json\0security/kovo-certificate-policy-v1.json',
+  'security/kovo-certificate-v1.json\0security/kovo-certificate-v1.json',
 ]);
 
 function attestationJob(source) {
@@ -34,13 +41,33 @@ function attestationJobMatchesStepAllowlist(source) {
     .slice(permissionStart, permissionEnd)
     .match(/^      [a-z-]+:\s+(?:read|write|none)$/gmu)
     ?.map((line) => line.trim());
+  const subjects = attestationSubjects(job);
   return (
     steps.length === ATTESTATION_JOB_ACTIONS.length &&
     actions.length === ATTESTATION_JOB_ACTIONS.length &&
     actions.every((action, index) => action === ATTESTATION_JOB_ACTIONS[index]) &&
     permissions?.length === ATTESTATION_JOB_PERMISSIONS.length &&
-    permissions.every((permission, index) => permission === ATTESTATION_JOB_PERMISSIONS[index])
+    permissions.every((permission, index) => permission === ATTESTATION_JOB_PERMISSIONS[index]) &&
+    subjects.length === ATTESTATION_SUBJECTS.length &&
+    subjects.every((subject, index) => subject === ATTESTATION_SUBJECTS[index])
   );
+}
+
+function attestationSubjects(job) {
+  return job
+    .split(/(?=^      - )/mu)
+    .filter((step) => step.includes(`uses: ${ATTESTATION_JOB_ACTIONS[1]}`))
+    .map((step) => {
+      const inputs = [...step.matchAll(/^          ([a-z-]+):\s+(\S+)\s*$/gmu)];
+      if (
+        inputs.length !== 2 ||
+        inputs[0]?.[1] !== 'subject-name' ||
+        inputs[1]?.[1] !== 'subject-path'
+      ) {
+        return 'invalid-attestation-inputs';
+      }
+      return `${inputs[0][2]}\0${inputs[1][2]}`;
+    });
 }
 
 describe('release workflow authority', () => {
@@ -105,6 +132,10 @@ describe('release workflow authority', () => {
     expect(attest).toContain('uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6');
     expect(attest).toContain('subject-name: security/advisories/feed.json');
     expect(attest).toContain('subject-path: security/advisories/feed.json');
+    expect(attest).toContain('subject-name: security/kovo-certificate-policy-v1.json');
+    expect(attest).toContain('subject-path: security/kovo-certificate-policy-v1.json');
+    expect(attest).toContain('subject-name: security/kovo-certificate-v1.json');
+    expect(attest).toContain('subject-path: security/kovo-certificate-v1.json');
     expect(attest).toContain('ref: ${{ github.sha }}');
     expect(attest).toContain('persist-credentials: false');
     expect(attest).not.toContain('voidzero-dev/setup-vp@');
@@ -148,6 +179,16 @@ describe('release workflow authority', () => {
       '      - name: Attest exact advisory feed',
       '      - uses: actions/cache@2f8e54208210a422b2efd51efaa6bd6d7ca8920f\n\n' +
         '      - name: Attest exact advisory feed',
+    );
+    expect(mutated).not.toBe(releaseWorkflow);
+    expect(attestationJobMatchesStepAllowlist(mutated)).toBe(false);
+  });
+
+  it('rejects a substituted or merely comment-mentioned attestation subject', () => {
+    const mutated = releaseWorkflow.replace(
+      '          subject-name: security/kovo-certificate-policy-v1.json',
+      '          # subject-name: security/kovo-certificate-policy-v1.json\n' +
+        '          subject-name: security/advisories/feed.json',
     );
     expect(mutated).not.toBe(releaseWorkflow);
     expect(attestationJobMatchesStepAllowlist(mutated)).toBe(false);
