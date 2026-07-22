@@ -265,9 +265,7 @@ export interface KovoHmrEventPayload {
   impact: HmrImpactClassification['impact'];
   liveTargets?: readonly string[];
   newClientHref?: string;
-  newFactHash?: string;
   oldClientHref?: string;
-  oldFactHash?: string;
   reasons: readonly string[];
   sourceFile: string;
 }
@@ -2307,9 +2305,7 @@ function sendKovoHmrEvent(
       impact: classification.impact,
       liveTargets: viteHmrLiveTargets(next?.liveTargetFacts ?? []),
       ...(next?.clientHref ? { newClientHref: next.clientHref } : {}),
-      ...(next?.factHash ? { newFactHash: next.factHash } : {}),
       ...(previous?.clientHref ? { oldClientHref: previous.clientHref } : {}),
-      ...(previous?.factHash ? { oldFactHash: previous.factHash } : {}),
       reasons: classification.reasons,
       sourceFile: next?.sourceFileName ?? previous?.sourceFileName ?? '',
     },

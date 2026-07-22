@@ -696,6 +696,12 @@ describe('server app shell Vite dev seam', () => {
       });
 
       const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      // Acquire the document/build first, as a real enhanced typed read does. Dev handler
+      // construction atomically publishes mandatory modules before exposing that build token.
+      const documentResponse = await fetch(`${origin}/directory`, {
+        headers: { Accept: 'text/html' },
+      });
+      const documentBody = await documentResponse.text();
       const queryResponse = await fetch(`${origin}/_q/directory-stats`, {
         headers: {
           Accept: 'text/html',
@@ -704,10 +710,6 @@ describe('server app shell Vite dev seam', () => {
         },
       });
       const queryBody = await queryResponse.text();
-      const documentResponse = await fetch(`${origin}/directory`, {
-        headers: { Accept: 'text/html' },
-      });
-      const documentBody = await documentResponse.text();
 
       expect(queryResponse.status).toBe(200);
       expect(queryResponse.headers.get('content-type')).toContain('text/html');

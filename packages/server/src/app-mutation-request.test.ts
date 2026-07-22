@@ -503,6 +503,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const app = createApp({ mutations: [addToCart] });
+    const requestHandler = createRequestHandler(app);
     const form = new FormData();
     form.set('productId', 'p1');
     const request = new Request('https://shop.example.test/_m/cart/request-db', {
@@ -520,7 +521,7 @@ describe('server app mutation request boundary', () => {
       value: db,
     });
 
-    const response = await createRequestHandler(app)(request);
+    const response = await requestHandler(request);
 
     expect(response.status).toBe(200);
     expect(writes).toEqual(['p1']);
