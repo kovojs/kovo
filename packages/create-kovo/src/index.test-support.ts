@@ -69,6 +69,7 @@ const packedWorkspacePackages: readonly WorkspacePackage[] = [
   { name: '@kovojs/icons', dir: 'icons' },
   { name: '@kovojs/ui', dir: 'ui' },
   { name: '@kovojs/better-auth', dir: 'better-auth' },
+  { name: '@kovojs/verify', dir: 'verify' },
   { name: '@kovojs/compiler', dir: 'compiler' },
   { name: '@kovojs/cli', dir: 'cli' },
   { name: 'create-kovo', dir: 'create-kovo' },
