@@ -685,12 +685,36 @@
       "steps": [
         {
           "command": [
-            "pnpm",
-            "exec",
-            "vitest",
+            "node",
+            "node_modules/vitest/vitest.mjs",
             "--run",
             "packages/cli/src/commands/advisory-feed-gate.test.ts",
+            "--maxWorkers=1",
+            "--pool=threads",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "--run",
             "packages/cli/src/commands/advisories.test.ts",
+            "--maxWorkers=1",
+            "--pool=threads",
+            "--testNamePattern=^(?!.*real Sigstore trust boundary)",
+            "--reporter=dot"
+          ]
+        },
+        {
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "--run",
+            "packages/cli/src/commands/advisories.test.ts",
+            "--maxWorkers=1",
+            "--pool=threads",
+            "--testNamePattern=real Sigstore trust boundary",
             "--reporter=dot"
           ]
         }

@@ -99,6 +99,50 @@ describe('Plan 3 security-gate cost budgets', () => {
     }
   });
 
+  it('keeps the advisory-feed proofs within the two-GiB budget by serializing files', () => {
+    const gate = loadPlan3CostBudgetManifest().gates.find(
+      (candidate) => candidate.id === 'advisory-feed',
+    );
+    expect(gate.peakRssCeilingMiB).toBe(2048);
+    expect(gate.steps).toEqual([
+      {
+        command: [
+          'node',
+          'node_modules/vitest/vitest.mjs',
+          '--run',
+          'packages/cli/src/commands/advisory-feed-gate.test.ts',
+          '--maxWorkers=1',
+          '--pool=threads',
+          '--reporter=dot',
+        ],
+      },
+      {
+        command: [
+          'node',
+          'node_modules/vitest/vitest.mjs',
+          '--run',
+          'packages/cli/src/commands/advisories.test.ts',
+          '--maxWorkers=1',
+          '--pool=threads',
+          '--testNamePattern=^(?!.*real Sigstore trust boundary)',
+          '--reporter=dot',
+        ],
+      },
+      {
+        command: [
+          'node',
+          'node_modules/vitest/vitest.mjs',
+          '--run',
+          'packages/cli/src/commands/advisories.test.ts',
+          '--maxWorkers=1',
+          '--pool=threads',
+          '--testNamePattern=real Sigstore trust boundary',
+          '--reporter=dot',
+        ],
+      },
+    ]);
+  });
+
   it('labels only the exact CI image, architecture, and Node calibration as intended', () => {
     const intended = loadPlan3CostBudgetManifest().intendedRunner;
     const exact = {
