@@ -107,8 +107,9 @@ describe('Plan 3 security-gate cost budgets', () => {
     expect(gate.steps).toEqual([
       {
         command: [
-          'node',
-          'node_modules/vitest/vitest.mjs',
+          'vp',
+          'exec',
+          'vitest',
           '--run',
           'packages/cli/src/commands/advisory-feed-gate.test.ts',
           '--maxWorkers=1',
@@ -118,8 +119,9 @@ describe('Plan 3 security-gate cost budgets', () => {
       },
       {
         command: [
-          'node',
-          'node_modules/vitest/vitest.mjs',
+          'vp',
+          'exec',
+          'vitest',
           '--run',
           'packages/cli/src/commands/advisories.test.ts',
           '--maxWorkers=1',
@@ -130,8 +132,9 @@ describe('Plan 3 security-gate cost budgets', () => {
       },
       {
         command: [
-          'node',
-          'node_modules/vitest/vitest.mjs',
+          'vp',
+          'exec',
+          'vitest',
           '--run',
           'packages/cli/src/commands/advisories.test.ts',
           '--maxWorkers=1',

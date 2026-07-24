@@ -436,8 +436,9 @@
       "steps": [
         {
           "command": [
-            "node",
-            "node_modules/vitest/vitest.mjs",
+            "vp",
+            "exec",
+            "vitest",
             "--run",
             "packages/cli/src/commands/advisory-feed-gate.test.ts",
             "--maxWorkers=1",
@@ -447,8 +448,9 @@
         },
         {
           "command": [
-            "node",
-            "node_modules/vitest/vitest.mjs",
+            "vp",
+            "exec",
+            "vitest",
             "--run",
             "packages/cli/src/commands/advisories.test.ts",
             "--maxWorkers=1",
@@ -459,8 +461,9 @@
         },
         {
           "command": [
-            "node",
-            "node_modules/vitest/vitest.mjs",
+            "vp",
+            "exec",
+            "vitest",
             "--run",
             "packages/cli/src/commands/advisories.test.ts",
             "--maxWorkers=1",
