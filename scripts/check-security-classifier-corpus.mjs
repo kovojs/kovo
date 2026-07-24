@@ -105,6 +105,11 @@ const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-boot
 // executes every other test in each file, so isolation cannot narrow the corpus.
 const LOAD_ISOLATED_TEST_CONFIGS = [
   {
+    // Metric E builds and signs multiple temporary Git histories. Running that work beside the
+    // broad corpus can consume its fixed per-test budget without changing classifier behavior.
+    file: 'scripts/metric-e-rounds-gate.test.mjs',
+  },
+  {
     // These tests spawn real Vite SSR processes whose bootstrap must observe pristine intrinsics.
     // Keep hostile same-realm mutation corpora in a different Vitest process.
     file: 'packages/cli/src/index.kovo-dev.test.ts',
