@@ -1,4 +1,10 @@
-import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
+import {
+  enhancedMutationHeaders,
+  headerValues,
+  setCookieValues,
+  type EnhancedMutationLiveTarget,
+} from '@kovojs/test/headers';
+import { decodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import { readonlyDb, toNodeHandler } from '@kovojs/server';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
@@ -339,7 +345,10 @@ export function createCommerceScenarioClient(
     options: CommerceScenarioEnhancedOptions = {},
   ): Promise<Response> {
     const cartPage = await get('/cart');
-    const snapshot = cartPageLiveTargetSnapshot(await cartPage.text());
+    const buildToken = cartPage.headers.get('Kovo-Build');
+    if (!buildToken) throw new Error('Expected commerce cart Kovo-Build identity');
+    const cartHtml = await cartPage.text();
+    const snapshot = cartPageLiveTargetSnapshot(cartHtml);
     const targetHeaders =
       options.target === 'form'
         ? enhancedMutationHeaders({
@@ -351,30 +360,41 @@ export function createCommerceScenarioClient(
             liveTargets: snapshot.liveTargets,
             targets: snapshot.targets,
           });
-    return postForm('/_m/domain/add-to-cart', await addToCartFields(input), {
+    return postForm('/_m/domain/add-to-cart', await addToCartFields(input, cartHtml), {
       ...options,
       headers: {
         ...headersRecord(options.headers),
+        'Kovo-Build': buildToken,
         referer: `${commerceOrigin}/cart`,
         ...targetHeaders,
       },
     });
   }
 
-  async function addToCartFields(input: AddToCartInput): Promise<Record<string, string | number>> {
+  async function addToCartFields(
+    input: AddToCartInput,
+    renderedCartHtml?: string,
+  ): Promise<Record<string, string | number>> {
     const productId = typeof input.productId === 'string' ? input.productId : undefined;
     const quantity = typeof input.quantity === 'number' ? input.quantity : undefined;
     if (productId === undefined) throw new Error('Expected add-to-cart productId input');
     if (quantity === undefined) throw new Error('Expected add-to-cart quantity input');
-    const cartPage = await get('/cart');
-    const html = await cartPage.text();
+    const html =
+      renderedCartHtml ??
+      (await (async () => {
+        const cartPage = await get('/cart');
+        return cartPage.text();
+      })());
     const fields = formFieldsByName(html, '/_m/domain/add-to-cart', productId);
     const csrf = fields.csrf?.value;
     const formKey = fields['kovo-form-key']?.value;
+    const idem = fields['Kovo-Idem']?.value;
     if (csrf === undefined) throw new Error('Expected add-to-cart CSRF field');
     if (formKey === undefined) throw new Error('Expected add-to-cart form key field');
+    if (idem === undefined) throw new Error('Expected add-to-cart Kovo-Idem field');
     return {
       csrf,
+      'Kovo-Idem': idem,
       'kovo-form-key': formKey,
       productId,
       quantity,
@@ -393,12 +413,12 @@ export function createCommerceScenarioClient(
 }
 
 interface HtmlLiveTargetSnapshot {
-  liveTargets: string[];
+  liveTargets: EnhancedMutationLiveTarget[];
   targets: { queries: string; target: string }[];
 }
 
 function cartPageLiveTargetSnapshot(html: string): HtmlLiveTargetSnapshot {
-  const liveTargets: string[] = [];
+  const liveTargets: EnhancedMutationLiveTarget[] = [];
   const targets: { queries: string; target: string }[] = [];
   for (const match of html.matchAll(/<[^>]*\bkovo-deps=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
     const attrs = readTagAttributes(match[0]);
@@ -411,9 +431,25 @@ function cartPageLiveTargetSnapshot(html: string): HtmlLiveTargetSnapshot {
     const component = attrs['kovo-live-component'];
     const token = attrs['kovo-live-token'];
     if (!target || !component || !token) continue;
-    liveTargets.push(`${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
+    liveTargets.push({
+      attestation: token,
+      component,
+      props: parseLiveTargetProps(attrs['kovo-props']),
+      target,
+    });
   }
   return { liveTargets, targets: dedupeTargets(targets) };
+}
+
+function parseLiveTargetProps(source: string | undefined): Record<string, unknown> {
+  if (source === undefined) return {};
+  const parsed: unknown = JSON.parse(source);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Expected commerce live-target props object');
+  }
+  const props: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed)) props[key] = value;
+  return props;
 }
 
 function dedupeTargets(
@@ -429,10 +465,14 @@ function dedupeTargets(
 }
 
 function readDeps(value: string | undefined): string[] {
-  return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+  const deps: string[] = [];
+  for (const token of (value ?? '').split(/[\s,]+/)) {
+    const encoded = token.trim();
+    if (!encoded) continue;
+    const decoded = decodeFrameworkIdentityToken(encoded);
+    if (decoded) deps.push(decoded);
+  }
+  return deps;
 }
 
 function readTagAttributes(tag: string): Record<string, string> {
