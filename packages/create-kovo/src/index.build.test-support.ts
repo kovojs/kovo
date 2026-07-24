@@ -1070,8 +1070,7 @@ export function addRuntimeMutationSafetyProofs(
         : []),
       '',
       "async function insertTxProofRow(db: AppRequest['db'], id: string) {",
-      '  void id;',
-      `  await db.insert(txProofs).values({ id: trustedAssign(crypto.randomUUID(), { evidence: { digest: 'sha256:50bdcf18fca1a51200dab11f42ace64b20ae8d42194762c00cd14f9e0596ad73', kind: 'test', reference: 'starter-tests/transaction-proof-id' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.transaction-proof-id/v1' } }) });`,
+      `  await db.insert(txProofs).values({ id: trustedAssign(id, { evidence: { digest: 'sha256:50bdcf18fca1a51200dab11f42ace64b20ae8d42194762c00cd14f9e0596ad73', kind: 'test', reference: 'starter-tests/transaction-proof-id' }, invariant: 'governed-write.authorized-principal', why: { kind: 'policy', policy: 'starter.transaction-proof-id/v1' } }) });`,
       '}',
       '',
       ...(includeManagedWriteEscapeAttempt
