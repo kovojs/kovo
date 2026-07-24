@@ -253,7 +253,8 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'decoding="async"',
     'data-delay="250"',
     'hidden>GH</span>',
-    'hidden src="/avatars/missing.png"',
+    'data-state="error" decoding="async" hidden',
+    'src="/avatars/missing.png"',
   ],
   '/components/alert': ['role="status"', 'role="alert"'],
   '/components/alert-dialog': [

@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
@@ -218,10 +219,11 @@ function compileGalleryInteractiveClientModule(
 
 function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   const hrefs = new Map<string, string>();
-  const modules: Array<{ modulePath: string; source: string }> = [];
+  const modules = new Map<string, string>();
 
   for (const sourcePath of ['client-helper-abi.ts', 'generated.ts']) {
-    modules.push(headlessUiClientModuleSource(sourcePath));
+    const module = headlessUiClientModuleSource(sourcePath);
+    modules.set(module.modulePath, module.source);
   }
 
   for (const directory of ['lib', 'primitives']) {
@@ -231,20 +233,71 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
       if (!fileName.endsWith('.ts') || fileName.endsWith('.test.ts')) continue;
 
       const sourcePath = `${directory}/${fileName}`;
-      modules.push(headlessUiClientModuleSource(sourcePath));
+      const module = headlessUiClientModuleSource(sourcePath);
+      modules.set(module.modulePath, module.source);
     }
   }
 
-  for (const module of modules) {
-    const href = galleryInteractiveClientModules.put({
-      path: module.modulePath,
-      source: module.source,
-    });
+  const visiting = new Set<string>();
+  const register = (modulePath: string): string => {
+    const existing = hrefs.get(modulePath);
+    if (existing !== undefined) return existing;
+    if (visiting.has(modulePath)) {
+      throw new Error(`Cyclic gallery headless UI client module graph at ${modulePath}.`);
+    }
+    const rawSource = modules.get(modulePath);
+    if (rawSource === undefined) {
+      throw new Error(`Missing gallery headless UI client module source for ${modulePath}.`);
+    }
 
-    hrefs.set(module.modulePath, href);
+    visiting.add(modulePath);
+    const imports = galleryClientModuleImports(rawSource);
+    const source = resolveGalleryClientModuleSpecifiers(
+      rawSource,
+      imports.map((moduleSpecifier) => ({ imports: [], moduleSpecifier })),
+      (moduleSpecifier) => {
+        if (!moduleSpecifier.startsWith('.')) {
+          throw new Error(`Unexpected headless UI browser import ${moduleSpecifier}.`);
+        }
+        const dependencyPath = posix.normalize(
+          posix.join(posix.dirname(modulePath), moduleSpecifier),
+        );
+        return register(dependencyPath);
+      },
+    );
+    const href = galleryInteractiveClientModules.put({
+      path: modulePath,
+      source,
+    });
+    visiting.delete(modulePath);
+    hrefs.set(modulePath, href);
+    return href;
+  };
+
+  for (const modulePath of modules.keys()) {
+    register(modulePath);
   }
 
   return hrefs;
+}
+
+function galleryClientModuleImports(source: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    'gallery-headless-ui-client.js',
+    source,
+    ts.ScriptTarget.Latest,
+  );
+  const imports: string[] = [];
+  for (const statement of sourceFile.statements) {
+    const moduleSpecifier =
+      ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
+        ? statement.moduleSpecifier
+        : undefined;
+    if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+      imports.push(moduleSpecifier.text);
+    }
+  }
+  return imports;
 }
 
 function headlessUiClientModuleSource(sourcePath: string): { modulePath: string; source: string } {
