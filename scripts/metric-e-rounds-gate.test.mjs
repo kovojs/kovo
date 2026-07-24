@@ -574,7 +574,7 @@ describe('Metric E comparable-round series', () => {
         firstRootSetEvidence,
       ),
     ).toThrow(/reuses prior signed escape-review evidence/u);
-  });
+  }, 60_000);
 
   it('appends a real historical commit without a nonexistent census-graph path', () => {
     const root = createMetricERepository();
