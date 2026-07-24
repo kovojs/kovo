@@ -1756,7 +1756,10 @@ export function addEscapedAttackerTextProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
-export function addRuntimeContractProofs(root: string): void {
+export function addRuntimeContractProofs(
+  root: string,
+  options: { includeClosedSyncParseProof?: boolean } = {},
+): void {
   writeFileSync(
     join(root, 'src/runtime-contract-proofs.tsx'),
     [
@@ -1779,6 +1782,7 @@ export function addRuntimeContractProofs(root: string): void {
       '  access: publicProof,',
       '  csrf: false,',
       "  csrfJustification: 'public refresh proof changes no server or browser state',",
+      "  machineReplayPrincipal: () => 'runtime-contract-refresh-proof',",
       '  input: s.object({ reason: s.string() }),',
       '  registry: {',
       '    queries: [warningItemsQuery],',
@@ -1794,35 +1798,40 @@ export function addRuntimeContractProofs(root: string): void {
       '  access: publicProof,',
       '  csrf: false,',
       "  csrfJustification: 'public MIME proof stores no state and uses no ambient authority',",
+      "  machineReplayPrincipal: () => 'runtime-contract-upload-proof',",
       "  input: s.object({ avatar: s.file().accept(['image/png']) }),",
       '  handler(input: { avatar: { name: string; type: string } }) {',
       '    return { name: input.avatar.name, type: input.avatar.type };',
       '  },',
       '});',
       '',
-      'export const syncVerifiedFileParseQuery = query({',
-      '  access: publicProof,',
-      '  load: () => {',
-      '    const file = {',
-      "      name: 'avatar.png',",
-      '      size: 11,',
-      "      type: 'image/png',",
-      '      async arrayBuffer() {',
-      '        return new Uint8Array([',
-      '          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,',
-      '        ]).buffer;',
-      '      },',
-      '    };',
-      '    try {',
-      "      s.file().accept(['image/png']).parse(file);",
-      "      return { ok: false, message: 'sync parse unexpectedly trusted client MIME' };",
-      '    } catch {',
-      "      return { ok: true, message: 'verified file type checks require async parsing; call parseAsync' };",
-      '    }',
-      '  },',
-      '  reads: [],',
-      '});',
-      '',
+      ...(options.includeClosedSyncParseProof === false
+        ? []
+        : [
+            'export const syncVerifiedFileParseQuery = query({',
+            '  access: publicProof,',
+            '  load: () => {',
+            '    const file = {',
+            "      name: 'avatar.png',",
+            '      size: 11,',
+            "      type: 'image/png',",
+            '      async arrayBuffer() {',
+            '        return new Uint8Array([',
+            '          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,',
+            '        ]).buffer;',
+            '      },',
+            '    };',
+            '    try {',
+            "      s.file().accept(['image/png']).parse(file);",
+            "      return { ok: false, message: 'sync parse unexpectedly trusted client MIME' };",
+            '    } catch {',
+            "      return { ok: true, message: 'verified file type checks require async parsing; call parseAsync' };",
+            '    }',
+            '  },',
+            '  reads: [],',
+            '});',
+            '',
+          ]),
       'export const RuntimeContractsProof = component({',
       '  queries: { warningItems: warningItemsQuery },',
       '  render: ({ warningItems }) => {',
@@ -1842,8 +1851,6 @@ export function addRuntimeContractProofs(root: string): void {
     join(root, 'src/mutations.ts'),
     [
       "import { mutation, publicAccess, s } from '@kovojs/server';",
-      "import { contact } from './model.js';",
-      "import { contactsQuery } from './queries.js';",
       '',
       "const publicProof = publicAccess('unused runtime contract fixture mutation');",
       '',
@@ -1857,13 +1864,12 @@ export function addRuntimeContractProofs(root: string): void {
       '  access: publicProof,',
       '  csrf: false,',
       "  csrfJustification: 'public contract fixture uses no session or cookie authority',",
+      "  machineReplayPrincipal: () => 'runtime-contract-unused-proof',",
       '  input: s.object({',
       '    name: s.string(),',
       '    email: s.string(),',
       '    company: s.string(),',
       '  }),',
-      "  optimistic: { [contactsQuery.key]: 'await-fragment' },",
-      '  registry: { touches: [contact] },',
       '  handler(input: AddContactInput) {',
       '    return { id: input.email };',
       '  },',
@@ -1878,6 +1884,7 @@ export function addRuntimeContractProofs(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace("import { ContactsRegion } from './components/contacts.js';\n", '')
+    .replace("import { contactsQuery } from './queries.js';\n", '')
     .replace(
       "import { addContact } from './mutations.js';",
       [
@@ -1886,7 +1893,7 @@ export function addRuntimeContractProofs(root: string): void {
         '  acceptPngUpload,',
         '  refreshWarningItems,',
         '  RuntimeContractsProof,',
-        '  syncVerifiedFileParseQuery,',
+        ...(options.includeClosedSyncParseProof === false ? [] : ['  syncVerifiedFileParseQuery,']),
         '  warningItemsQuery,',
         "} from './runtime-contract-proofs.js';",
       ].join('\n'),
@@ -1902,7 +1909,9 @@ export function addRuntimeContractProofs(root: string): void {
     .replace('      <ContactsRegion />', '      <main data-proof="runtime-contracts-home" />')
     .replace(
       '  queries: [contactsQuery],',
-      '  queries: [contactsQuery, syncVerifiedFileParseQuery, warningItemsQuery],',
+      options.includeClosedSyncParseProof === false
+        ? '  queries: [warningItemsQuery],'
+        : '  queries: [syncVerifiedFileParseQuery, warningItemsQuery],',
     )
     .replace(
       "  routes: [\n    route('/', {",

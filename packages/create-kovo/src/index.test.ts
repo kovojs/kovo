@@ -395,9 +395,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');
     expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
-    expect(files.get('src/app.test.ts')).toContain("import { readonlyAppDb } from './db.js'");
+    expect(files.get('src/app.test.ts')).not.toContain("from './db.js'");
     expect(files.get('src/app.test.ts')).not.toContain('createAppDb');
-    expect(files.get('src/app.test.ts')).toContain('{ db: readonlyAppDb, request: {} }');
+    expect(files.get('src/app.test.ts')).toContain('contactsQuery.load(undefined)');
     expect(files.get('vite.config.ts')).toContain("setupFiles: ['./src/test-setup.ts']");
     expect(files.get('src/test-setup.ts')).toContain('...(await importOriginal())');
     expect(files.get('src/test-setup.ts')).toContain(

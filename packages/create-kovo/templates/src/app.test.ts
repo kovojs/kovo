@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import app from './app.js';
 import { ContactsRegion } from './components/contacts.js';
-import { readonlyAppDb } from './db.js';
 import { contactsQuery } from './queries.js';
 
 // SPEC.md §9.5: unit tests inspect the same pure app aggregate that `kovo build` and
@@ -14,9 +13,10 @@ describe('starter app', () => {
     expect(isKovoApp(app)).toBe(true);
   });
 
-  it('reads seeded contacts through the typed query', async () => {
-    const result = await contactsQuery.load(undefined, { db: readonlyAppDb, request: {} });
-    expect(result.items.map((contact) => contact.id)).toContain('c1');
+  it('requires the framework-provided read-only database context', async () => {
+    await expect(contactsQuery.load(undefined)).rejects.toThrow(
+      'contacts query requires the framework-provided context.db',
+    );
   });
 
   it('preserves submitted contact fields on duplicate-email failure renders', () => {

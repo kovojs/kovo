@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
@@ -34,7 +35,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
     try {
       writeKovoProject(root, { name: 'Prod Runtime Contract Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeContractProofs(root);
+      addRuntimeContractProofs(root, { includeClosedSyncParseProof: false });
 
       buildReusableProductionArtifact(root);
 
@@ -56,6 +57,8 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const page = await fetch(`${origin}/runtime-contracts-proof`);
       const jar = new Map<string, string>();
       mergeCookies(jar, page.headers.getSetCookie());
+      const buildToken = page.headers.get('Kovo-Build');
+      expect(buildToken).toBeTruthy();
       const pageHtml = await page.text();
       expect(page.status).toBe(200);
       expect(page.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
@@ -79,17 +82,20 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const liveDeps = requiredAttribute(proofRoot, 'kovo-deps');
       const liveProps = attributeValue(proofRoot, 'kovo-props') ?? '{}';
       const refresh = new FormData();
+      const refreshIdem = freshProductionArtifactIdempotencyToken();
       refresh.set('reason', 'prod-artifact-contract');
+      refresh.set('Kovo-Idem', refreshIdem);
       const mutationRefresh = await fetch(
         `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
         {
           body: refresh,
           headers: {
             cookie: cookieHeader(jar),
+            'Kovo-Build': buildToken!,
             'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
-            'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
+            'Kovo-Idem': refreshIdem,
+            'Kovo-Live-Targets': formatLiveTarget(liveTarget, liveComponent, liveToken, liveProps),
             'Kovo-Targets': `${liveTarget}=${liveDeps}`,
           },
           method: 'POST',
@@ -116,16 +122,26 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const refreshedToken = requiredAttribute(refreshedRoot, 'kovo-live-token');
       const refreshedDeps = requiredAttribute(refreshedRoot, 'kovo-deps');
       const refreshedProps = attributeValue(refreshedRoot, 'kovo-props') ?? '{}';
+      const secondRefreshIdem = freshProductionArtifactIdempotencyToken();
       const secondRefresh = await fetch(
         `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
         {
-          body: new URLSearchParams({ reason: 'prod-artifact-second-refresh' }),
+          body: new URLSearchParams({
+            'Kovo-Idem': secondRefreshIdem,
+            reason: 'prod-artifact-second-refresh',
+          }),
           headers: {
             cookie: cookieHeader(jar),
+            'Kovo-Build': buildToken!,
             'Kovo-Current-Url': `${origin}/runtime-contracts-proof`,
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': freshProductionArtifactIdempotencyToken(),
-            'Kovo-Live-Targets': `${refreshedTarget}#${refreshedComponent}@${refreshedToken}:${refreshedProps}`,
+            'Kovo-Idem': secondRefreshIdem,
+            'Kovo-Live-Targets': formatLiveTarget(
+              refreshedTarget,
+              refreshedComponent,
+              refreshedToken,
+              refreshedProps,
+            ),
             'Kovo-Targets': `${refreshedTarget}=${refreshedDeps}`,
           },
           method: 'POST',
@@ -135,16 +151,6 @@ describe('create-kovo starter (build integration: production runtime contract ar
       expect(secondRefresh.status, `${secondRefreshBody}\n${output()}`).toBe(200);
       expect(secondRefreshBody).toContain('<kovo-fragment');
       expect(secondRefreshBody).toContain('data-warning-count="2"');
-
-      const syncParse = await fetch(
-        `${origin}/_q/runtime-contract-proofs/sync-verified-file-parse-query`,
-      );
-      const syncParseBody = await syncParse.text();
-      expect(syncParse.status).toBe(200);
-      expect(syncParseBody).toContain('"ok":true');
-      expect(syncParseBody).toContain(
-        'verified file type checks require async parsing; call parseAsync',
-      );
 
       const forgedHtmlUpload = new FormData();
       forgedHtmlUpload.set(
@@ -158,6 +164,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const rejected = await fetch(`${origin}/_m/runtime-contract-proofs/accept-png-upload`, {
         body: forgedHtmlUpload,
         headers: {
+          'Kovo-Build': buildToken!,
           'Kovo-Form-Target': 'runtime-upload-form',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': forgedHtmlUploadIdem,
@@ -182,6 +189,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
       const accepted = await fetch(`${origin}/_m/runtime-contract-proofs/accept-png-upload`, {
         body: clientMimeLie,
         headers: {
+          'Kovo-Build': buildToken!,
           'Kovo-Fragment': 'true',
           'Kovo-Idem': clientMimeLieIdem,
           origin,
@@ -204,6 +212,13 @@ function rootElementWithAttribute(html: string, name: string, value: string): st
   const match = pattern.exec(html);
   if (!match) throw new Error(`Missing element with ${name}="${value}" in built artifact.`);
   return match[0];
+}
+
+function formatLiveTarget(target: string, component: string, token: string, props: string): string {
+  const encodedTarget = encodeFrameworkIdentityToken(target);
+  const encodedComponent = encodeFrameworkIdentityToken(component);
+  if (!encodedTarget || !encodedComponent) throw new Error('Invalid live target identity.');
+  return `${encodedTarget}#${encodedComponent}@${token}:${props}`;
 }
 
 function requiredAttribute(tag: string, name: string): string {
