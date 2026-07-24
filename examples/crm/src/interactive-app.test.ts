@@ -5,14 +5,18 @@ import { readFileSync } from 'node:fs';
 import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import {
+  decodeFrameworkQueryDependencyToken,
+  encodeFrameworkLiveTargetHeader,
+  encodeFrameworkTargetHeader,
+  type FrameworkQueryDependencyIdentity,
+} from '@kovojs/core/internal/wire-input-grammar';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
 import {
   buildCrmInteractiveApp as buildCrmInteractiveApplication,
   type BuildCrmInteractiveAppOptions,
 } from './interactive-app.js';
-import { crmCsrf } from './mutations.js';
 import { contacts, deals } from './schema.js';
 
 // SPEC.md §9.1: the interactive CRM app's mutation endpoints run the REAL Drizzle
@@ -25,7 +29,6 @@ import { contacts, deals } from './schema.js';
 const contactsTarget = 'contacts-region';
 const pipelineTarget = 'pipeline-region';
 const dealDetailTarget = 'deal-detail-region';
-const demoCsrfRequest = { session: { id: 'demo-session' } };
 const insertedContactId = 'c-11111111-1111-4111-8111-111111111111';
 const duplicateEmailContactId = 'c-22222222-2222-4222-8222-222222222222';
 const spoofedOwnerContactId = 'c-33333333-3333-4333-8333-333333333333';
@@ -50,22 +53,24 @@ async function postForm(
   fields: Record<string, string>,
   options: { route: string; targets: readonly string[] },
 ): Promise<{ status: number; html: string }> {
-  const headers = await enhancedHeadersForRoute(handler, options.route, options.targets);
+  const headers = await enhancedHeadersForRoute(handler, key, options.route, options.targets);
   const response = await handler(
     new Request(`http://example.test/_m/${key}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
+        'Kovo-Build': headers.buildToken,
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
+        'Kovo-Idem': headers.idem,
         'Kovo-Live-Targets': headers.liveTargets,
         'Kovo-Targets': headers.targets,
         'Kovo-Current-Url': headers.currentUrl,
         Origin: 'http://example.test',
+        Referer: headers.currentUrl,
       },
       body: new URLSearchParams({
         ...fields,
-        csrf: csrfToken(demoCsrfRequest, crmCsrf, { mutation: key }),
+        csrf: headers.csrf,
       }),
     }),
   );
@@ -74,9 +79,17 @@ async function postForm(
 
 async function enhancedHeadersForRoute(
   handler: (request: Request) => Promise<Response>,
+  mutationKey: string,
   route: string,
   targets: readonly string[],
-): Promise<{ currentUrl: string; liveTargets: string; targets: string }> {
+): Promise<{
+  buildToken: string;
+  csrf: string;
+  currentUrl: string;
+  idem: string;
+  liveTargets: string;
+  targets: string;
+}> {
   const currentUrl = `http://example.test${route}`;
   const response = await handler(
     new Request(currentUrl, {
@@ -84,6 +97,7 @@ async function enhancedHeadersForRoute(
     }),
   );
   const html = await response.text();
+  const buildToken = readDocumentBuildToken(html);
   const wanted = new Set(targets);
   const liveTargets = new Map<string, string>();
   const targetHeaders = new Set<string>();
@@ -95,19 +109,60 @@ async function enhancedHeadersForRoute(
     const deps = readDeps(attrs['kovo-deps']);
     if (deps.length === 0) continue;
 
-    targetHeaders.add(`${target}=${deps.join(' ')}`);
+    targetHeaders.add(encodeFrameworkTargetHeader([{ deps, target }]));
 
     const component = attrs['kovo-live-component'];
     const token = attrs['kovo-live-token'];
     if (!component || !token || liveTargets.has(target)) continue;
-    liveTargets.set(target, `${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
+    liveTargets.set(
+      target,
+      encodeFrameworkLiveTargetHeader([
+        {
+          attestation: token,
+          component,
+          propsSource: attrs['kovo-props'],
+          target,
+        },
+      ]),
+    );
   }
 
+  const formFields = readMutationFormFields(html, mutationKey);
   return {
+    buildToken,
+    csrf: formFields.csrf,
     currentUrl,
+    idem: formFields.idem,
     liveTargets: [...liveTargets.values()].join('; '),
     targets: [...targetHeaders].join('; '),
   };
+}
+
+function readMutationFormFields(
+  html: string,
+  mutationKey: string,
+): { csrf: string; idem: string } {
+  for (const match of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)) {
+    const openingTag = match[0].slice(0, match[0].indexOf('>') + 1);
+    if (readTagAttributes(openingTag).action !== `/_m/${mutationKey}`) continue;
+    let csrf = '';
+    let idem = '';
+    for (const input of match[0].matchAll(/<input\b[^>]*>/g)) {
+      const attrs = readTagAttributes(input[0]);
+      if (attrs.name === 'csrf' && attrs.value) csrf = attrs.value;
+      if (attrs.name === 'Kovo-Idem' && attrs.value) idem = attrs.value;
+    }
+    if (csrf && idem) return { csrf, idem };
+  }
+  throw new Error(`CRM document omitted mutation security fields for ${mutationKey}.`);
+}
+
+function readDocumentBuildToken(html: string): string {
+  for (const match of html.matchAll(/<meta\b[^>]*>/g)) {
+    const attrs = readTagAttributes(match[0]);
+    if (attrs.name === 'kovo-build' && attrs.content) return attrs.content;
+  }
+  throw new Error('CRM document did not carry its Kovo build identity.');
 }
 
 function readTagAttributes(tag: string): Record<string, string> {
@@ -129,11 +184,15 @@ function decodeHtmlAttribute(value: string): string {
     .replaceAll('&amp;', '&');
 }
 
-function readDeps(value: string | undefined): string[] {
+function readDeps(value: string | undefined): FrameworkQueryDependencyIdentity[] {
   return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => {
+      const dependency = decodeFrameworkQueryDependencyToken(token);
+      if (!dependency) throw new Error(`CRM document carried invalid kovo-deps token ${token}.`);
+      return dependency;
+    });
 }
 
 describe('crm interactive app', () => {

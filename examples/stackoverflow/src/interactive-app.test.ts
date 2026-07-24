@@ -5,14 +5,18 @@ import { readFileSync } from 'node:fs';
 import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import {
+  decodeFrameworkQueryDependencyToken,
+  encodeFrameworkLiveTargetHeader,
+  encodeFrameworkTargetHeader,
+  type FrameworkQueryDependencyIdentity,
+} from '@kovojs/core/internal/wire-input-grammar';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
 import {
   buildSoInteractiveApp as buildSoInteractiveApplication,
   type BuildSoInteractiveAppOptions,
 } from './interactive-app.js';
-import { soCsrf } from './mutations.js';
 import { answers, questions, votes } from './schema.js';
 
 const questionListTarget = 'question-list-region';
@@ -32,21 +36,18 @@ function withCsrf(mutation: string, fields: Record<string, string>): Record<stri
 }
 
 function withSessionCsrf(
-  sessionId: string,
-  mutation: string,
+  _sessionId: string,
+  _mutation: string,
   fields: Record<string, string>,
 ): Record<string, string> {
-  return {
-    // Bind the token audience to the targeted mutation key. Mutation dispatch
-    // validates `{ audience: definition.key }` (SPEC §6.5/§9.1, mutation.ts:150),
-    // so an unbound `field:csrf` token is rejected with a bare 422.
-    csrf: csrfToken({ session: { id: sessionId } }, soCsrf, { mutation }),
-    ...fields,
-  };
+  return fields;
 }
 
 interface BrowserCollectedLiveHeaders {
+  buildToken: string;
+  csrfTokens: Readonly<Record<string, string>>;
   currentUrl: string;
+  idemTokens: Readonly<Record<string, string>>;
   liveTargets: string;
   targets: string;
 }
@@ -62,12 +63,43 @@ async function browserCollectedLiveHeadersForRoute(
       headers: { Accept: 'text/html', ...headers },
     }),
   );
-  return { currentUrl, ...browserCollectedLiveHeaders(await response.text()) };
+  const html = await response.text();
+  const mutationFields = readMutationSecurityFields(html);
+  return {
+    buildToken: readDocumentBuildToken(html),
+    csrfTokens: mutationFields.csrf,
+    currentUrl,
+    idemTokens: mutationFields.idem,
+    ...browserCollectedLiveHeaders(html),
+  };
+}
+
+function readMutationSecurityFields(html: string): {
+  csrf: Readonly<Record<string, string>>;
+  idem: Readonly<Record<string, string>>;
+} {
+  const csrf: Record<string, string> = {};
+  const idem: Record<string, string> = {};
+  for (const match of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)) {
+    const openingTag = match[0].slice(0, match[0].indexOf('>') + 1);
+    const action = readTagAttributes(openingTag).action;
+    if (!action?.startsWith('/_m/')) continue;
+    for (const input of match[0].matchAll(/<input\b[^>]*>/g)) {
+      const attrs = readTagAttributes(input[0]);
+      if (attrs.name === 'csrf' && attrs.value) {
+        csrf[action.slice('/_m/'.length)] = attrs.value;
+      }
+      if (attrs.name === 'Kovo-Idem' && attrs.value) {
+        idem[action.slice('/_m/'.length)] = attrs.value;
+      }
+    }
+  }
+  return { csrf, idem };
 }
 
 function browserCollectedLiveHeaders(
   html: string,
-): Omit<BrowserCollectedLiveHeaders, 'currentUrl'> {
+): Pick<BrowserCollectedLiveHeaders, 'liveTargets' | 'targets'> {
   const targets = new Set<string>();
   const liveTargets = new Map<string, string>();
 
@@ -77,11 +109,18 @@ function browserCollectedLiveHeaders(
     const target = attrs['kovo-fragment-target'] ?? attrs.id ?? attrs['kovo-c'];
     if (!target) continue;
 
-    targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+    targets.add(encodeFrameworkTargetHeader([{ deps, target }]));
     if (!liveTargets.has(target)) {
       liveTargets.set(
         target,
-        `${target}#${attrs['kovo-live-component'] ?? attrs['kovo-c'] ?? target}@${attrs['kovo-live-token'] ?? ''}:${decodeHtmlAttribute(attrs['kovo-props'] ?? '{}')}`,
+        encodeFrameworkLiveTargetHeader([
+          {
+            attestation: attrs['kovo-live-token'] ?? '',
+            component: attrs['kovo-live-component'] ?? attrs['kovo-c'] ?? target,
+            propsSource: attrs['kovo-props'],
+            target,
+          },
+        ]),
       );
     }
   }
@@ -92,11 +131,17 @@ function browserCollectedLiveHeaders(
   };
 }
 
-function readDeps(value: string | undefined): string[] {
+function readDeps(value: string | undefined): FrameworkQueryDependencyIdentity[] {
   return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => {
+      const dependency = decodeFrameworkQueryDependencyToken(token);
+      if (!dependency) {
+        throw new Error(`StackOverflow document carried invalid kovo-deps token ${token}.`);
+      }
+      return dependency;
+    });
 }
 
 function readTagAttributes(tag: string): Record<string, string> {
@@ -107,6 +152,14 @@ function readTagAttributes(tag: string): Record<string, string> {
     attrs[name] = decodeHtmlAttribute(match[2] ?? match[3] ?? '');
   }
   return attrs;
+}
+
+function readDocumentBuildToken(html: string): string {
+  for (const match of html.matchAll(/<meta\b[^>]*>/g)) {
+    const attrs = readTagAttributes(match[0]);
+    if (attrs.name === 'kovo-build' && attrs.content) return attrs.content;
+  }
+  throw new Error('StackOverflow document did not carry its Kovo build identity.');
 }
 
 function decodeHtmlAttribute(value: string): string {
@@ -145,16 +198,33 @@ async function postForm(
         // floor (SPEC §9.5) rejects header-less POSTs with 422. Node fetch omits it.
         Origin: 'http://example.test',
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
+        'Kovo-Idem': requiredMutationIdem(live, key),
         'Kovo-Current-Url': live.currentUrl,
+        'Kovo-Build': live.buildToken,
         'Kovo-Live-Targets': live.liveTargets,
         'Kovo-Targets': live.targets,
+        Referer: live.currentUrl,
         ...headers,
       },
-      body: new URLSearchParams(fields),
+      body: new URLSearchParams({
+        ...fields,
+        csrf: requiredMutationCsrf(live, key),
+      }),
     }),
   );
   return { status: response.status, html: await response.text() };
+}
+
+function requiredMutationCsrf(live: BrowserCollectedLiveHeaders, key: string): string {
+  const token = live.csrfTokens[key];
+  if (!token) throw new Error(`StackOverflow document omitted the CSRF field for ${key}.`);
+  return token;
+}
+
+function requiredMutationIdem(live: BrowserCollectedLiveHeaders, key: string): string {
+  const token = live.idemTokens[key];
+  if (!token) throw new Error(`StackOverflow document omitted the idempotency field for ${key}.`);
+  return token;
 }
 
 describe('stackoverflow interactive app', () => {
@@ -192,12 +262,12 @@ describe('stackoverflow interactive app', () => {
     const { handler } = await buildSoInteractiveApp();
     const routes = [
       {
-        deps: 'queries/question-list queries/question-score',
+        deps: 'queries%2Fquestion-list queries%2Fquestion-score',
         route: '/',
         target: questionListTarget,
       },
       {
-        deps: 'queries/question-answers queries/question-detail',
+        deps: 'queries%2Fquestion-answers queries%2Fquestion-detail',
         route: '/questions/q1',
         target: `${questionDetailTarget}:q1`,
       },
@@ -255,17 +325,20 @@ describe('stackoverflow interactive app', () => {
           'content-type': 'application/x-www-form-urlencoded',
           Origin: 'http://example.test',
           'Kovo-Fragment': 'true',
-          'Kovo-Idem': 'test-vote-1',
+          'Kovo-Idem': requiredMutationIdem(live, 'mutations/vote-up-mutation'),
           'Kovo-Current-Url': live.currentUrl,
+          'Kovo-Build': live.buildToken,
           'Kovo-Live-Targets': live.liveTargets,
           'Kovo-Targets': live.targets,
+          Referer: live.currentUrl,
         },
         body: new URLSearchParams(
-          withCsrf('mutations/vote-up-mutation', {
+          {
             id: 'v-test',
             targetId: first.id,
             userId: 'demo-viewer',
-          }),
+            csrf: requiredMutationCsrf(live, 'mutations/vote-up-mutation'),
+          },
         ),
       }),
     );
@@ -342,9 +415,11 @@ describe('stackoverflow interactive app', () => {
     const headers = await browserCollectedLiveHeadersForRoute(handler, `/questions/${question.id}`);
     const detailTarget = `${questionDetailTarget}:${question.id}`;
     expect(headers.targets).toContain(
-      `${detailTarget}=queries/question-answers queries/question-detail`,
+      `${encodeURIComponent(detailTarget)}=queries%2Fquestion-answers queries%2Fquestion-detail`,
     );
-    expect(headers.liveTargets).toContain(`${detailTarget}#${questionDetailComponent}@`);
+    expect(headers.liveTargets).toContain(
+      `${encodeURIComponent(detailTarget)}#${encodeURIComponent(questionDetailComponent)}@`,
+    );
     expect(headers.liveTargets).toContain(`:${JSON.stringify({ questionId: question.id })}`);
 
     const { status, html } = await postForm(

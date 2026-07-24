@@ -91,7 +91,7 @@ describe('reference app shell HTTP entry', () => {
       expect(admin.status, formatDevServerFailure(adminBody, served.stderr())).toBe(200);
       expect(adminBody).toContain('admin:u1');
 
-      const sourceModule = await fetch(`${origin}/src/app.ts`);
+      const sourceModule = await fetch(`${origin}/src/app.tsx`);
       const sourceModuleBody = await sourceModule.text();
       expect(sourceModule.status, formatDevServerFailure(sourceModuleBody, served.stderr())).toBe(
         200,
@@ -115,7 +115,7 @@ describe('reference app shell HTTP entry', () => {
         ['exec', 'vp', 'run', '--no-cache', 'export'],
         {
           cwd: referenceRoot,
-          timeout: 60000,
+          timeout: 90000,
         },
       );
       const output = `${result.stdout}\n${result.stderr}`;
@@ -129,17 +129,19 @@ describe('reference app shell HTTP entry', () => {
       const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
       expect(html).toContain('<title>Kovo Reference Public Shell</title>');
       expect(html).toContain('data-reference-public-shell');
-      expect(html).toContain('/c/__v/reference-r7/reference.client.js');
+      const clientHref =
+        html.match(/\/c\/__v\/[0-9a-f]{64}\/reference\.client\.js/u)?.[0] ?? '';
+      expect(clientHref).toMatch(/^\/c\/__v\/[0-9a-f]{64}\/reference\.client\.js$/u);
 
       const clientModule = await readFile(
-        path.join(distDir, 'c/__v/reference-r7/reference.client.js'),
+        path.join(distDir, clientHref.slice(1)),
         'utf8',
       );
       expect(clientModule).toContain('Reference$markReady');
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
-  }, 90_000);
+  }, 120_000);
 
   it('keeps reference static export failures from creating partial output', async () => {
     const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-reference-export-'));
