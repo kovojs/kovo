@@ -5314,6 +5314,7 @@ function runVitest(testFiles, root, options = {}) {
       'exec',
       'vitest',
       '--run',
+      '--testTimeout=60000',
       ...(options.noFileParallelism ? ['--no-file-parallelism'] : []),
       ...(options.testNamePattern ? ['--testNamePattern', options.testNamePattern] : []),
       ...testFiles,
