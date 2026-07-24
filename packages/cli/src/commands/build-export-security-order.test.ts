@@ -428,15 +428,14 @@ export default createApp({
     }
   }, 60_000);
 
-  it('keeps real CLI export bytes exact after app-first String.replace poisoning is refused', () => {
+  it('rejects app-first String.replace poisoning before export', () => {
     const root = cliFixtureRoot('export-lowerer-poison');
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
     try {
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route } from '@kovojs/server';
-import { renderedHtml } from '@kovojs/server/internal/html';
+        `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
 
 if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
   throw new Error('String.replace poison unexpectedly installed');
@@ -445,7 +444,7 @@ if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
 export default createApp({
   routes: [route('/', {
     access: publicAccess('bootstrap poison regression'),
-    page: () => renderedHtml('<main data-exact-export>Exact export</main>'),
+    page: () => trustedHtml('<main data-exact-export>Exact export</main>', 'fixed test fixture'),
   })],
 });
 `,
@@ -453,12 +452,10 @@ export default createApp({
       );
 
       const result = runKovoCli(root, ['export', appPath, '--out', outDir]);
-      expect(result.status, result.stderr).toBe(0);
-      expect(result.stdout).toContain('SUMMARY html=1');
-      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
-        '<main data-exact-export>Exact export</main>',
-      );
-      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).not.toContain('attacker-output');
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('ERROR KV424');
+      expect(result.stderr).toContain('Reflect.set');
+      expect(readFileIfPresent(join(outDir, 'index.html'))).toBeUndefined();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -737,6 +734,7 @@ export default createApp({
     const outside = mkdtempSync(join(tmpdir(), 'kovo-static-cache-victim-'));
     const appPath = join(root, 'app.ts');
     try {
+      writeNodeRetentionConfig(root);
       symlinkSync(
         join(process.cwd(), 'packages/drizzle'),
         join(root, 'node_modules/@kovojs/drizzle'),
@@ -1129,6 +1127,7 @@ export default createApp({
     const appPath = join(root, 'app.mjs');
     const markerPath = join(root, 'vite-config-evaluated.marker');
     try {
+      writeNodeRetentionConfig(root);
       mkdirSync(join(root, 'src'), { recursive: true });
       writeFileSync(
         join(root, 'index.html'),
@@ -1238,6 +1237,24 @@ function cliFixtureRoot(name: string): string {
   symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
   writeFileSync(join(root, 'package.json'), '{"private":true,"type":"module"}\n', 'utf8');
   return root;
+}
+
+function writeNodeRetentionConfig(root: string): void {
+  writeFileSync(
+    join(root, 'kovo.config.mjs'),
+    `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+`,
+    'utf8',
+  );
 }
 
 function runKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env) {
