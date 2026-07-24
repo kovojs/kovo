@@ -49,6 +49,7 @@ export const defaultCommandExecutionToolingRationales = {
 
 export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
 export const defaultGeneratedNodeStaticServeSinkFiles = ['packages/server/src/build.ts'];
+export const boundedRegularFilePath = 'packages/cli/src/commands/bounded-regular-file.ts';
 export const defaultRootedFileServeRawSinkFiles = [
   ...defaultRootedFileServeSinkFiles,
   // Private boot-pinned membrane used only by the audited core filesystem boundary.
@@ -365,13 +366,19 @@ export function checkSinkPolicyGate(options = {}) {
         allowedFileServeSink: rootedFileServeRawSinkFileSet.has(filePath),
         // build.ts owns one generated, descriptor-bound open import. Keep every other raw
         // filesystem import/call in that large source file default-deny.
-        allowedImportLocals: generatedNodeStaticServeSinkFileSet.has(filePath)
-          ? ['importedOpenFileDescriptor']
-          : [],
+        allowedImportLocals: [
+          ...(generatedNodeStaticServeSinkFileSet.has(filePath)
+            ? ['importedOpenFileDescriptor']
+            : []),
+          ...(filePath === boundedRegularFilePath ? ['builtinOpenSync'] : []),
+        ],
       }),
     );
     if (generatedNodeStaticServeSinkFileSet.has(filePath)) {
       findings.push(...generatedNodeStaticServeInvariantFindings(filePath, text));
+    }
+    if (filePath === boundedRegularFilePath) {
+      findings.push(...boundedRegularFileInvariantFindings(filePath, text));
     }
     if (deserializationFiles.includes(filePath)) {
       findings.push(...deserializationSinkFindings(filePath, text));
@@ -1796,6 +1803,65 @@ export function generatedNodeStaticServeInvariantFindings(filePath, text) {
     findings.push(
       `${filePath}: generated Node static serving must close the validated descriptor in finally`,
     );
+  }
+  return findings;
+}
+
+export function boundedRegularFileInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+  const pinnedControls = [
+    'closeSync = builtinCloseSync',
+    'fstatSync = builtinFstatSync',
+    'lstatSync = builtinLstatSync',
+    'openSync = builtinOpenSync',
+    'readSync = builtinReadSync',
+  ];
+  if (
+    !/\bopenSync\s+as\s+builtinOpenSync\b[\s\S]{0,500}?\bfrom\s+['"]node:fs['"]/.test(source) ||
+    pinnedControls.some((control) => !source.includes(`const ${control};`))
+  ) {
+    findings.push(
+      `${filePath}: bounded evidence reads must keep the raw descriptor controls boot-pinned and private`,
+    );
+  }
+  if (
+    !/\bbuiltinFileSystemConstants\s*\.\s*O_RDONLY\b[\s\S]{0,160}?\bbuiltinFileSystemConstants\s*\.\s*O_NOFOLLOW\b/.test(
+      source,
+    ) ||
+    !/\bopenSync\s*\(\s*path\s*,\s*boundedInputOpenFlags\s*\)/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: bounded evidence reads must open the candidate read-only with O_NOFOLLOW`,
+    );
+  }
+  if (
+    !/\blexical\s*=\s*lstatSync\s*\(\s*path\s*,\s*\{\s*bigint:\s*true\s*\}\s*\)/.test(source) ||
+    !/\binitial\s*=\s*fstatSync\s*\(\s*fileDescriptor\s*,\s*\{\s*bigint:\s*true\s*\}\s*\)/.test(
+      source,
+    ) ||
+    !/\bsameFileVersion\s*\(\s*lexical\s*,\s*initial\s*\)/.test(source) ||
+    !/\bsameFileVersion\s*\(\s*initial\s*,\s*completed\s*\)/.test(source) ||
+    !/\bsameFileVersion\s*\(\s*completed\s*,\s*completedLexical\s*\)/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: bounded evidence reads must bind lexical, pre-read, and post-read descriptor identity`,
+    );
+  }
+  if (
+    !/\binitial\s*\.\s*size\s*>\s*BigInt\s*\(\s*options\s*\.\s*maxBytes\s*\)/.test(source) ||
+    !/\bBuffer\s*\.\s*allocUnsafe\s*\(\s*expectedLength\s*\+\s*1\s*\)/.test(source) ||
+    !/\breadSync\s*\(\s*fileDescriptor\s*,/.test(source) ||
+    !/\blength\s*>\s*options\s*\.\s*maxBytes\b/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: bounded evidence reads must enforce the maximum before and after a maximum-plus-one descriptor read`,
+    );
+  }
+  if (
+    !/\bfinally\s*\{\s*closeSync\s*\(\s*fileDescriptor\s*\)\s*;?\s*\}/.test(source)
+  ) {
+    findings.push(`${filePath}: bounded evidence reads must close the validated descriptor in finally`);
   }
   return findings;
 }

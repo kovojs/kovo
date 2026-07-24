@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  boundedRegularFileInvariantFindings,
   blessedSinkKindsReferencedByFile,
   checkSinkPolicyGate,
   commandExecutionSinkFindings,
@@ -760,6 +761,75 @@ describe('sink-policy gate', () => {
       ),
     ).toContain(
       'packages/server/src/build.ts: generated Node static serving must keep its one raw open import private to the boot pin',
+    );
+  });
+
+  it('keeps bounded CLI evidence reads tied to a capped no-follow descriptor', () => {
+    const boundedReader = `
+      import {
+        closeSync as builtinCloseSync,
+        fstatSync as builtinFstatSync,
+        lstatSync as builtinLstatSync,
+        openSync as builtinOpenSync,
+        readSync as builtinReadSync,
+      } from 'node:fs';
+      const closeSync = builtinCloseSync;
+      const fstatSync = builtinFstatSync;
+      const lstatSync = builtinLstatSync;
+      const openSync = builtinOpenSync;
+      const readSync = builtinReadSync;
+      const boundedInputOpenFlags =
+        builtinFileSystemConstants.O_RDONLY | builtinFileSystemConstants.O_NOFOLLOW;
+      lexical = lstatSync(path, { bigint: true });
+      fileDescriptor = openSync(path, boundedInputOpenFlags);
+      initial = fstatSync(fileDescriptor, { bigint: true });
+      sameFileVersion(lexical, initial);
+      if (initial.size > BigInt(options.maxBytes)) throw new TypeError(options.limitMessage);
+      const bytes = Buffer.allocUnsafe(expectedLength + 1);
+      readSync(fileDescriptor, bytes, length, bytes.byteLength - length, null);
+      completed = fstatSync(fileDescriptor, { bigint: true });
+      sameFileVersion(initial, completed);
+      sameFileVersion(completed, completedLexical);
+      if (length > options.maxBytes) throw new TypeError(options.limitMessage);
+      try { read(); } finally { closeSync(fileDescriptor); }
+    `;
+
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/cli/src/commands/bounded-regular-file.ts',
+        boundedReader,
+        { allowedImportLocals: ['builtinOpenSync'] },
+      ),
+    ).toEqual([]);
+    expect(
+      boundedRegularFileInvariantFindings(
+        'packages/cli/src/commands/bounded-regular-file.ts',
+        boundedReader,
+      ),
+    ).toEqual([]);
+    expect(
+      boundedRegularFileInvariantFindings(
+        'packages/cli/src/commands/bounded-regular-file.ts',
+        boundedReader.replace('builtinFileSystemConstants.O_NOFOLLOW', '0'),
+      ),
+    ).toContain(
+      'packages/cli/src/commands/bounded-regular-file.ts: bounded evidence reads must open the candidate read-only with O_NOFOLLOW',
+    );
+    expect(
+      boundedRegularFileInvariantFindings(
+        'packages/cli/src/commands/bounded-regular-file.ts',
+        boundedReader.replace('sameFileVersion(completed, completedLexical);', ''),
+      ),
+    ).toContain(
+      'packages/cli/src/commands/bounded-regular-file.ts: bounded evidence reads must bind lexical, pre-read, and post-read descriptor identity',
+    );
+    expect(
+      boundedRegularFileInvariantFindings(
+        'packages/cli/src/commands/bounded-regular-file.ts',
+        boundedReader.replace('expectedLength + 1', 'expectedLength'),
+      ),
+    ).toContain(
+      'packages/cli/src/commands/bounded-regular-file.ts: bounded evidence reads must enforce the maximum before and after a maximum-plus-one descriptor read',
     );
   });
 
