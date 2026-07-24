@@ -122,7 +122,7 @@ describe('SPEC §6.6 shared async-context confinement', () => {
   });
 
   it('keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps', async () => {
-    const cellCount = 10;
+    const cellCount = 11;
     const requestCount = 24;
     const cells = Array.from({ length: cellCount }, (_unused, index) =>
       createFrameworkAsyncContextCell<OracleCellValue>(`oracle.concurrent.${index}`),

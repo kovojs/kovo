@@ -28,6 +28,11 @@ import {
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
 import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithFrameworkAsyncContext,
+} from './async-context.js';
+import {
   frameworkTrustedSqlCarrier,
   snapshotManagedSqlStatement,
 } from '@kovojs/core/internal/sql-safety';
@@ -181,6 +186,11 @@ export interface PostgresReadonlyClientOptions {
   rlsDiagnostics?: PostgresRlsSilentDenyDiagnosticsOptions;
 }
 
+/** @internal Transaction-bound system SQL authority for the single-connection PGlite runtime. */
+export const kovoPostgresTransactionSystemRole: unique symbol = Symbol(
+  'kovo.postgres-transaction-system-role',
+);
+
 /** Options for a Postgres/PGlite request-scoped transaction client. */
 export interface PostgresScopedClientOptions {
   principal?: string | undefined;
@@ -189,6 +199,27 @@ export interface PostgresScopedClientOptions {
   rlsDiagnostics?: PostgresRlsSilentDenyDiagnosticsOptions;
   role?: string | false;
   roleSetting?: string;
+  /** @internal PGlite-only system role used by framework stores inside the active app transaction. */
+  [kovoPostgresTransactionSystemRole]?: string;
+}
+
+export interface PostgresTransactionSystemSqlExecutor {
+  execute<Row = Record<string, unknown>>(statement: {
+    readonly text: string;
+    readonly values: readonly unknown[];
+  }): Promise<{ readonly rows: readonly Row[]; readonly rowCount?: number }>;
+}
+
+const postgresTransactionSystemSqlContext =
+  createFrameworkAsyncContextCell<PostgresTransactionSystemSqlExecutor>(
+    'server.postgres-transaction-system-sql',
+  );
+
+/** @internal Return the exact system executor bound to the current PGlite transaction, if any. */
+export function currentPostgresTransactionSystemSqlExecutor():
+  | PostgresTransactionSystemSqlExecutor
+  | undefined {
+  return currentFrameworkAsyncContextValue(postgresTransactionSystemSqlContext);
 }
 
 /** Minimal query surface for dev-only RLS silent-deny recounts. */
@@ -846,6 +877,7 @@ function snapshotPostgresScopedClientOptions(
   const readOnly = optionalOwnDataProperty(options, 'readOnly');
   const role = optionalOwnDataProperty(options, 'role');
   const roleSetting = optionalOwnDataProperty(options, 'roleSetting');
+  const systemRole = optionalOwnDataProperty(options, kovoPostgresTransactionSystemRole);
   const rlsDiagnostics = optionalOwnDataProperty(options, 'rlsDiagnostics');
   if (principal !== undefined) {
     if (typeof principal !== 'string') throw new TypeError('Postgres principal must be a string.');
@@ -875,6 +907,12 @@ function snapshotPostgresScopedClientOptions(
     if (typeof roleSetting !== 'string')
       throw new TypeError('Postgres roleSetting must be a string.');
     snapshot.roleSetting = roleSetting;
+  }
+  if (systemRole !== undefined) {
+    if (typeof systemRole !== 'string' || systemRole === '') {
+      throw new TypeError('Postgres transaction system role must be a non-empty string.');
+    }
+    snapshot[kovoPostgresTransactionSystemRole] = systemRole;
   }
   if (rlsDiagnostics !== undefined) {
     snapshot.rlsDiagnostics = snapshotPostgresRlsDiagnostics(rlsDiagnostics);
@@ -2222,9 +2260,56 @@ async function runScopedPostgresTransactionCallback<Result>(
 ): Promise<Result> {
   const controls = pinPostgresTransactionControls(tx);
   await runPostgresTransactionControl(tx, controls, options);
-  return witnessReflectApply(callback, undefined, [
-    scopedPostgresTransactionClient(tx, controls, options),
-  ]) as Result;
+  const run = () =>
+    witnessReflectApply(callback, undefined, [
+      scopedPostgresTransactionClient(tx, controls, options),
+    ]) as Result;
+  const systemRole = options[kovoPostgresTransactionSystemRole];
+  if (systemRole === undefined) return run();
+  if (options.role === false || options.role === undefined) {
+    throw new KovoReadonlyHandleError(
+      'KV433: transaction-bound system SQL requires an exact app role to restore (SPEC §10.3).',
+    );
+  }
+  const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
+  const appRole = options.role;
+  const executor = witnessFreeze({
+    async execute<Row>(statement: {
+      readonly text: string;
+      readonly values: readonly unknown[];
+    }): Promise<{ readonly rows: readonly Row[]; readonly rowCount?: number }> {
+      await witnessReflectApply<Promise<unknown>>(controls.exec, tx, [
+        `SET LOCAL ROLE ${quote(systemRole)}`,
+      ]);
+      try {
+        const result = await witnessReflectApply<Promise<unknown>>(controls.query, tx, [
+          statement.text,
+          snapshotUnknownArray(statement.values),
+        ]);
+        if (!isRecord(result)) {
+          throw new KovoReadonlyHandleError(
+            'KV433: transaction-bound system SQL returned a malformed result (SPEC §10.3).',
+          );
+        }
+        const rows = dataPropertyValue(result, 'rows');
+        if (!witnessIsArray(rows)) {
+          throw new KovoReadonlyHandleError(
+            'KV433: transaction-bound system SQL returned malformed rows (SPEC §10.3).',
+          );
+        }
+        const rowCount = dataPropertyValue(result, 'rowCount');
+        return {
+          rows: snapshotUnknownArray(rows) as readonly Row[],
+          ...(typeof rowCount === 'number' ? { rowCount } : {}),
+        };
+      } finally {
+        await witnessReflectApply<Promise<unknown>>(controls.exec, tx, [
+          `SET LOCAL ROLE ${quote(appRole)}`,
+        ]);
+      }
+    },
+  });
+  return runWithFrameworkAsyncContext(postgresTransactionSystemSqlContext, executor, run);
 }
 
 function scopedPostgresTransactionClient(
@@ -2451,7 +2536,7 @@ function postgresQueryExecutionArgs(
 
 function dataPropertyValue(
   record: Record<PropertyKey, unknown>,
-  property: 'sql' | 'text' | 'values',
+  property: 'rowCount' | 'rows' | 'sql' | 'text' | 'values',
 ): unknown {
   const descriptor = witnessGetOwnPropertyDescriptor(record, property);
   if (descriptor === undefined || !('value' in descriptor)) return undefined;

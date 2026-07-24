@@ -49,6 +49,13 @@
       "role": "credential-authority"
     },
     {
+      "id": "server.postgres-transaction-system-sql",
+      "path": "packages/server/src/managed-db.ts",
+      "binding": "postgresTransactionSystemSqlContext",
+      "mode": "shared",
+      "role": "transaction-authority"
+    },
+    {
       "id": "server.request-input-provenance",
       "path": "packages/server/src/request-input-provenance.ts",
       "binding": "requestInputProvenance",
@@ -92,6 +99,6 @@
     "test": "keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps",
     "seed": "0x4b564f56",
     "requests": 24,
-    "logicalCells": 10
+    "logicalCells": 11
   }
 }

@@ -11,7 +11,7 @@ describe('async-context confinement census gate', () => {
     const result = validateAsyncContextConfinement(input);
     expect(result).toMatchObject({
       ok: true,
-      summary: { cells: 10, reviewedNonRuntimeCarriers: 1, runtimeAuthorityCells: 9 },
+      summary: { cells: 11, reviewedNonRuntimeCarriers: 1, runtimeAuthorityCells: 10 },
     });
   });
 

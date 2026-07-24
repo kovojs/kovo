@@ -48,6 +48,8 @@ import {
   createFrameworkAuthorizationCensusDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
+  currentPostgresTransactionSystemSqlExecutor,
+  kovoPostgresTransactionSystemRole,
   readonlyDb,
   type PostgresReadonlyClientOptions,
   type PostgresScopedClientOptions,
@@ -1753,18 +1755,29 @@ export function createPostgresAppRuntimeDb(
     return scopedDb;
   };
   const durableReplaySqlExecutor = (): ReturnType<typeof createDurableTaskSqlExecutor> => {
-    replaySqlExecutor ??= createDurableTaskSqlExecutor(
-      dbForRequest({
-        principalPosture: declareSystemPrincipal(
-          'reserve and settle framework-owned durable replay truth',
-          {
-            ingress: 'endpoint',
-            operation: 'write',
-            surface: 'createPostgresAppRuntimeDb().replayStores',
-          },
-        ),
-      }),
-    );
+    if (replaySqlExecutor === undefined) {
+      const standalone = createDurableTaskSqlExecutor(
+        dbForRequest({
+          principalPosture: declareSystemPrincipal(
+            'reserve and settle framework-owned durable replay truth',
+            {
+              ingress: 'endpoint',
+              operation: 'write',
+              surface: 'createPostgresAppRuntimeDb().replayStores',
+            },
+          ),
+        }),
+      );
+      replaySqlExecutor = witnessFreeze({
+        execute<Row>(statement: { readonly text: string; readonly values: readonly unknown[] }) {
+          // PGlite owns one connection. During an app mutation transaction, route framework-only
+          // replay/epoch SQL through that exact frame so the pre-commit freshness proof neither
+          // self-deadlocks nor moves outside the commit boundary (SPEC §6.6/§10.3).
+          const transaction = currentPostgresTransactionSystemSqlExecutor();
+          return (transaction ?? standalone).execute<Row>(statement);
+        },
+      });
+    }
     return replaySqlExecutor;
   };
   const durableCapabilityReplayStore = (): CapabilityReplayStore => {
@@ -9731,6 +9744,9 @@ function postgresScopedClientOptions(
   const options: PostgresScopedClientOptions = {
     role: roleSetting === 'system' ? config.systemRole : config.writerRole,
   };
+  if (config.driver === 'pglite' && roleSetting !== 'system') {
+    options[kovoPostgresTransactionSystemRole] = config.systemRole;
+  }
   if (principal !== undefined) options.principal = principal;
   return options;
 }

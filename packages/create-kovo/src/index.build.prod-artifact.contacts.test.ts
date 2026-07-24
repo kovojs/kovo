@@ -94,9 +94,15 @@ describe('create-kovo starter (build integration: production contact artifacts)'
         mergeCookies(jar, signIn.headers.getSetCookie());
         expect(signIn.status).toBe(303);
 
-        const homeResponse = await fetchTextWhenReady(`${origin}/`, output, {
+        await fetchTextWhenReady(`${origin}/`, output, {
           headers: { cookie: cookieHeader(jar) },
         });
+        const homeDocument = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const homeResponse = await homeDocument.text();
+        const buildToken = homeDocument.headers.get('Kovo-Build');
+        expect(buildToken).toBeTruthy();
         expect(homeResponse).toContain('3 contacts');
         const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
         const contactRegion = elementOpeningTagByAttribute(
@@ -130,6 +136,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
               'content-type': 'application/x-www-form-urlencoded',
               cookie: cookieHeader(jar),
               'Kovo-Current-Url': `${origin}/`,
+              'Kovo-Build': buildToken!,
               'Kovo-Form-Target': target,
               'Kovo-Fragment': 'true',
               'Kovo-Idem': idem,
@@ -148,8 +155,11 @@ describe('create-kovo starter (build integration: production contact artifacts)'
           duplicateAddContact.text(),
         ]);
 
-        for (const response of [firstAddContact, duplicateAddContact]) {
-          expect(response.status).toBe(200);
+        for (const [response, body] of [
+          [firstAddContact, firstBody],
+          [duplicateAddContact, duplicateBody],
+        ] as const) {
+          expect(response.status, `${body}\n${output()}`).toBe(200);
           expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
           expect(response.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
         }
@@ -279,11 +289,12 @@ describe('create-kovo starter (build integration: production contact artifacts)'
         const jar = new Map<string, string>();
 
         await signInDemoUser(root, origin, jar, output);
-        const homeHtml = await (
-          await fetch(`${origin}/`, {
-            headers: { cookie: cookieHeader(jar) },
-          })
-        ).text();
+        const homeDocument = await fetch(`${origin}/`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const homeHtml = await homeDocument.text();
+        const buildToken = homeDocument.headers.get('Kovo-Build');
+        expect(buildToken).toBeTruthy();
         expect(homeHtml).toContain('Live stats: 3');
 
         const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
@@ -317,6 +328,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
             accept: 'text/vnd.kovo.fragment+html',
             'content-type': 'application/x-www-form-urlencoded',
             cookie: cookieHeader(jar),
+            'Kovo-Build': buildToken!,
             'Kovo-Current-Url': `${origin}/`,
             'Kovo-Form-Target': contactDescriptor.target,
             'Kovo-Fragment': 'true',
@@ -334,7 +346,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
           method: 'POST',
         });
         const body = await addContact.text();
-        expect(addContact.status).toBe(200);
+        expect(addContact.status, `${body}\n${output()}`).toBe(200);
         expect(body).toContain('<kovo-fragment target="contacts-region"');
         expect(body).toContain('<kovo-fragment target="contact-stats-region"');
         expect(body).toContain('Multi Live Ada');
@@ -410,7 +422,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
         const second = await submitNoJs('Second Idem Contact', 'second-idem@example.com');
         const secondBody = await second.text();
 
-        expect(first.status).toBe(303);
+        expect(first.status, output()).toBe(303);
         expect(second.status).toBe(422);
         expect(secondBody).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
 
