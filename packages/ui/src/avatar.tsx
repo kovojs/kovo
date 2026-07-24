@@ -6,6 +6,7 @@ import {
   avatarRootAttributes,
   type AvatarImageStatus,
 } from '@kovojs/headless-ui/avatar';
+import { trustedUrl } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -62,10 +63,9 @@ export interface AvatarImageProps extends AvatarStateProps {
   alt: string;
   decoding?: 'async' | 'auto' | 'sync';
   loading?: 'eager' | 'lazy';
-  referrerPolicy?: string;
   sizes?: string;
+  src: string;
   styles?: AvatarStyleOverrides;
-  srcSet?: string;
 }
 
 /**
@@ -176,10 +176,9 @@ export const AvatarImage = component({
       alt: props.alt,
       ...(props.decoding === undefined ? {} : { decoding: props.decoding }),
       ...(props.loading === undefined ? {} : { loading: props.loading }),
-      ...(props.referrerPolicy === undefined ? {} : { referrerPolicy: props.referrerPolicy }),
+      referrerPolicy: 'no-referrer',
       ...(props.sizes === undefined ? {} : { sizes: props.sizes }),
-      ...(props.src === undefined ? {} : { src: props.src }),
-      ...(props.srcSet === undefined ? {} : { srcSet: props.srcSet }),
+      src: props.src,
       ...(props.status === undefined ? {} : { status: props.status }),
     });
     const styleAttrs = style.attrs(avatarStyles.image, props.styles?.image);
@@ -187,16 +186,15 @@ export const AvatarImage = component({
     return (
       <img
         alt={attrs.alt}
-        {...styleAttrs}
-        {...passThroughProps(props)}
+        class={styleAttrs.class ?? ''}
+        data-style-src={styleAttrs['data-style-src'] ?? ''}
         data-state={attrs['data-state']}
         decoding={attrs.decoding}
         hidden={attrs.hidden}
         loading={attrs.loading}
-        referrerpolicy={attrs.referrerpolicy}
+        referrerpolicy="no-referrer"
         sizes={attrs.sizes}
-        src={attrs.src}
-        srcset={attrs.srcset}
+        src={trustedUrl(props.src, 'caller-selected avatar image')}
       />
     );
   },

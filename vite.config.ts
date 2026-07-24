@@ -32,6 +32,10 @@ export default defineConfig({
     }),
     exampleKovoCompilerPlugin({
       include: [
+        'site/tutorial/steps/03-queries/src/app.tsx',
+        'site/tutorial/steps/03-queries/src/components/cart-badge.tsx',
+        'site/tutorial/steps/03-queries/src/components/product-list.tsx',
+        'site/tutorial/steps/03-queries/src/queries.ts',
         'site/tutorial/steps/05-optimistic',
         'site/tutorial/steps/06-streaming',
         'site/tutorial/steps/07-verification',

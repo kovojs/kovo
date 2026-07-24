@@ -23,10 +23,10 @@ describe('tutorial step 03 — queries & data binding', () => {
 
     // The queries declaration became kovo-deps plus inferred refresh target metadata.
     expect(html).toContain(
-      `<cart-badge kovo-deps="${cartQuery.key}" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge"`,
+      `<cart-badge kovo-deps="${encodeURIComponent(cartQuery.key)}" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge"`,
     );
     expect(html).toContain('kovo-c="product-list"');
-    expect(html).toContain(`kovo-deps="${productsQuery.key}"`);
+    expect(html).toContain(`kovo-deps="${encodeURIComponent(productsQuery.key)}"`);
 
     // {cart.count} became a typed data-bind path the loader can re-run.
     expect(html).toContain('<span data-bind="cart.count">0</span>');

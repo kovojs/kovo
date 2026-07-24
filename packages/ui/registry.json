@@ -146,7 +146,8 @@
           "avatarRootAttributes"
         ],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component", "ComponentChild"]
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/server": ["trustedUrl"]
       },
       "uiComponents": ["pass-through", "theme"]
     },

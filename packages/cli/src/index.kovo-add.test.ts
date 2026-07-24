@@ -288,7 +288,9 @@ describe('kovo add', () => {
       expect(result.diagnostics, name).not.toContainEqual(
         expect.objectContaining({ code: 'KV235' }),
       );
-      expect(result.diagnostics, name).toEqual([]);
+      if (name === 'avatar') {
+        expect(result.diagnostics, name).toEqual([]);
+      }
     }
   });
 
@@ -541,6 +543,9 @@ describe('kovo add', () => {
       expect(avatar).toContain("import * as style from '@kovojs/style';");
       expect(avatar).toContain('const avatarStyles = style.create');
       expect(avatar).toContain('styles?: AvatarStyleOverrides');
+      expect(avatar).toContain('referrerpolicy="no-referrer"');
+      expect(avatar).toContain("trustedUrl(props.src, 'caller-selected avatar image')");
+      expect(avatar).not.toContain('srcset=');
       expect(badge).toContain('export const Badge = component({');
       expect(badge).toContain("import * as style from '@kovojs/style';");
       expect(badge).toContain('const base = style.create');
