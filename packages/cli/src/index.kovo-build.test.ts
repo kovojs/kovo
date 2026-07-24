@@ -25,6 +25,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import type { AppDependencyCapabilityManifest } from '@kovojs/core/internal/graph';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
@@ -48,6 +49,8 @@ const cliSecurityGuaranteeHash = JSON.parse(
 const BUILD_FIXTURE_CSRF_SECRET = 'build-fixture-csrf-secret-0123456789abcdef0123456789';
 const BUILD_FIXTURE_WEBHOOK_HMAC_SECRET = 'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf';
 const BUILD_FIXTURE_CSRF_SESSION_ID = 'build-fixture-session';
+const BUILD_FIXTURE_CLIENT_SOURCE = 'export const cartClient = true;';
+const BUILD_FIXTURE_CLIENT_PATH = `/c/__v/${clientModuleRepresentationDigest(BUILD_FIXTURE_CLIENT_SOURCE)}/cart.client.js`;
 // The source-side attestation helper bootstraps with this test module, while emitted Node handlers
 // bootstrap lazily on their first request. Keep both framework instances on the same operator
 // secret so the integration fixture tests stylesheet delivery rather than a deliberate key change.
@@ -141,11 +144,11 @@ describe('kovo build', () => {
 
         const queryResponse = await fetch(`${origin}/_q/cart`);
         await expect(queryResponse.text()).resolves.toBe(
-          '<kovo-query name="cart">{"count":2}</kovo-query>',
+          '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>',
         );
 
-        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
-        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        const clientModuleResponse = await fetch(`${origin}${BUILD_FIXTURE_CLIENT_PATH}`);
+        await expect(clientModuleResponse.text()).resolves.toBe(BUILD_FIXTURE_CLIENT_SOURCE);
         expect(clientModuleResponse.status).toBe(200);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
@@ -3746,8 +3749,8 @@ export const homeQuery = {
         await expect(updatedDocument.text()).resolves.toContain('<main>Cart 3</main>');
         expect(updatedDocument.status).toBe(200);
 
-        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
-        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        const clientModuleResponse = await fetch(`${origin}${BUILD_FIXTURE_CLIENT_PATH}`);
+        await expect(clientModuleResponse.text()).resolves.toBe(BUILD_FIXTURE_CLIENT_SOURCE);
         expect(clientModuleResponse.status).toBe(200);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
@@ -3842,8 +3845,8 @@ export const homeQuery = {
         await expect(updatedDocument.text()).resolves.toContain('<main>Cart 5</main>');
         expect(updatedDocument.status).toBe(200);
 
-        const clientModuleResponse = await fetch(`${origin}/c/__v/cart-v1/cart.client.js`);
-        await expect(clientModuleResponse.text()).resolves.toBe('export const cartClient = true;');
+        const clientModuleResponse = await fetch(`${origin}${BUILD_FIXTURE_CLIENT_PATH}`);
+        await expect(clientModuleResponse.text()).resolves.toBe(BUILD_FIXTURE_CLIENT_SOURCE);
         expect(clientModuleResponse.headers.get('cache-control')).toBe(
           'public, max-age=31536000, immutable',
         );
@@ -4342,7 +4345,7 @@ const db = { count: 0 };
 const clientModules = createMemoryVersionedClientModuleRegistry();
 clientModules.put({
   path: '/c/cart.client.js',
-  source: 'export const cartClient = true;',
+  source: ${JSON.stringify(BUILD_FIXTURE_CLIENT_SOURCE)},
 });
 const cartQuery = query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },

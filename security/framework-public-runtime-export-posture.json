@@ -712,7 +712,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "3c2049e57aed193f83d2bc63c54381532ebdde15a170b6bd2001831aa637beda"
+      "sourceTreeSha256": "9ec56851884087c347c768f8f4717aaa693275b68d992064009285d91a63c57d"
     },
     {
       "manifestVariants": [
@@ -774,7 +774,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "a3c6642f853d1b3a366e7afefad5690ee7ac1dee981f3e6b1ff7e161bcfe9c3e"
+      "sourceTreeSha256": "9e22042cfe586136aa525dbd73424332478b6181736d7fc0aaaea066875bb6dd"
     },
     {
       "manifestVariants": [
@@ -1615,7 +1615,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "bc5bc795571301b8dd09d61a880b0dd9632020a5908ca1055a9ae8a3cd298d65"
+      "sourceTreeSha256": "c00134fb309e67c9e5d88739bd74e2b5c44eae3410ee4ed6bfec2518ebb42057"
     },
     {
       "manifestVariants": [
@@ -1883,7 +1883,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "05d0ab06e076f0bf6a741dc4e01ebefb6250ae8d8721992fa6e556256b00f9fc"
+      "sourceTreeSha256": "79fe9a341c5e324cb0f08c169e208d18d63896649b5b7d25ce03ef308a3e7459"
     },
     {
       "manifestVariants": [
@@ -10643,7 +10643,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "a7ec04add8646fbd927e8179c163e0593d2abfa268f258845a7a3cd3dd2ec976"
+      "sourceTreeSha256": "80e8a43f7eecf0669b8f45b3c5dfce2f9041d12b28196a2fc1877f9ebf2ea302"
     },
     {
       "manifestVariants": [

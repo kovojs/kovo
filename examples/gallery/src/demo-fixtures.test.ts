@@ -255,7 +255,7 @@ describe('gallery demo fixtures', () => {
     expect(avatar.html).toContain('data-state="loaded"');
     expect(avatar.html).toContain('hidden>GH</span>');
     expect(avatar.html).toContain('data-state="error"');
-    expect(avatar.html).toContain('hidden src="/avatars/missing.png"');
+    expect(avatar.html).toContain('hidden referrerpolicy="no-referrer" src="/avatars/missing.png"');
   });
 
   it('renders alert-dialog fixture with native alertdialog and action wiring', () => {
