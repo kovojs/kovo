@@ -374,8 +374,9 @@ export function renderFrameworkExportPostureGenerated(ledger, actual) {
     '',
     '// Exact package-name closures for first-party packages with no app-public runtime surface.',
     '// The analyzer executable is authenticated by the release/install channel, not by itself.',
-    'export const frameworkZeroPublicRequestClosedPackages: readonly string[] =',
-    `  ${JSON.stringify(zeroPublicRequestClosedPackages)};`,
+    `export const frameworkZeroPublicRequestClosedPackages: readonly string[] = [${zeroPublicRequestClosedPackages
+      .map(quoteTypeScriptString)
+      .join(', ')}];`,
     '',
     '// Compact generated closed membership; expanded formatting triples parse input.',
     '// prettier-ignore',

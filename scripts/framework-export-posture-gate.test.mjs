@@ -375,7 +375,7 @@ describe('framework public runtime export posture gate', () => {
     expect(cli).not.toContain('kovo-packed-tree-sha256:');
 
     expect(generated).toContain(
-      'frameworkZeroPublicRequestClosedPackages: readonly string[] =\n  ["@kovojs/compiler"]',
+      "frameworkZeroPublicRequestClosedPackages: readonly string[] = ['@kovojs/compiler']",
     );
     expect(generated).not.toContain('["@kovojs/compiler", "0.2.0"');
 

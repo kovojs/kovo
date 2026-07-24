@@ -36,8 +36,7 @@ export const frameworkExportPostureSummaryVersion =
 
 // Exact package-name closures for first-party packages with no app-public runtime surface.
 // The analyzer executable is authenticated by the release/install channel, not by itself.
-export const frameworkZeroPublicRequestClosedPackages: readonly string[] =
-  ["@kovojs/compiler"];
+export const frameworkZeroPublicRequestClosedPackages: readonly string[] = ['@kovojs/compiler'];
 
 // Compact generated closed membership; expanded formatting triples parse input.
 // prettier-ignore
