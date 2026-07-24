@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'd8eb0b52396dfa7839d07f89fc18f9bd96a7f684c2e872d53bb837f85b84f22f';
+  '22c93bdb6fffd692da8ecafd0e400c0d27d5e0a620c6270b0be6d5d749171ca5';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   '9129b08ee380ed03fb17366dc93b33216bd26b2b1f42508bc0dae241928ab71a';
 const expectedDiagnosticActualLayerReviewDigest =
-  '9a6a25418f2dfd2855a023c7f9112f1ecfaae37c6e56af416a8aa41994d6b856';
+  '2c782dd9ff9f645636cbf89aacc8ad97a650a230a0e9a110a91e3ae3d82344db';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -158,7 +158,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    '4a90f10505c35a08b7e130ff8869f16199952da05a94822531b27d66303761ff',
+    'c546cb0cfea3846551c3a54f70a2abde55ea4a8185d6751c416783d5a459f4eb',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
