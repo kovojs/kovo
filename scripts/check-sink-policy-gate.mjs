@@ -1858,10 +1858,10 @@ export function boundedRegularFileInvariantFindings(filePath, text) {
       `${filePath}: bounded evidence reads must enforce the maximum before and after a maximum-plus-one descriptor read`,
     );
   }
-  if (
-    !/\bfinally\s*\{\s*closeSync\s*\(\s*fileDescriptor\s*\)\s*;?\s*\}/.test(source)
-  ) {
-    findings.push(`${filePath}: bounded evidence reads must close the validated descriptor in finally`);
+  if (!/\bfinally\s*\{\s*closeSync\s*\(\s*fileDescriptor\s*\)\s*;?\s*\}/.test(source)) {
+    findings.push(
+      `${filePath}: bounded evidence reads must close the validated descriptor in finally`,
+    );
   }
   return findings;
 }

@@ -4076,9 +4076,7 @@ function browserSyntacticStaticPropertyName(
   return literalAstString(member.property);
 }
 
-function browserAstIsImportMeta(
-  value: unknown,
-): value is Readonly<Record<string, unknown>> & {
+function browserAstIsImportMeta(value: unknown): value is Readonly<Record<string, unknown>> & {
   readonly meta: Readonly<Record<string, unknown>> & {
     readonly name: 'import';
     readonly type: 'Identifier';

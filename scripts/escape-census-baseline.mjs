@@ -754,14 +754,7 @@ export function buildEscapeCensusRepresentativeApp() {
   const cli = resolve(repoRoot, 'packages/cli/src/bin.ts');
   const result = spawnSync(
     process.execPath,
-    [
-      '--experimental-strip-types',
-      cli,
-      'build',
-      fixtureApp,
-      '--out',
-      fixtureOut,
-    ],
+    ['--experimental-strip-types', cli, 'build', fixtureApp, '--out', fixtureOut],
     {
       cwd: fixtureRoot,
       encoding: 'utf8',

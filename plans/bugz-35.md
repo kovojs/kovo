@@ -42,7 +42,7 @@ excluded.
     10/10 and proves registry-hidden Better Auth entrypoints are discovered.
 
 - [x] **M2 — The final tutorial application exposed one authenticated user's cart and orders to
-      another authenticated user.** *(tutorial/example only)*
+      another authenticated user.** _(tutorial/example only)_
   - Step 07 authenticated the add-to-cart mutation, but cart rows carried no principal, the cart
     query summed every row, and order history returned every order. The route also rendered both
     private consumers without an authenticated-session branch. Direct tutorial execution therefore

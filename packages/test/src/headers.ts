@@ -4,6 +4,7 @@ import {
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
   encodeFrameworkWireEntryList,
+  type FrameworkQueryDependencyIdentity,
 } from '@kovojs/core/internal/wire-input-grammar';
 import {
   verifierArraySlice,
@@ -140,16 +141,16 @@ function encodeStructuredTarget(value: unknown): string {
 
   const target = requiredStringOwnDataValue(value, 'target', 'Enhanced mutation target');
   const queries = optionalOwnDataValue(value, 'queries', 'Enhanced mutation target');
-  const deps =
+  const deps: readonly FrameworkQueryDependencyIdentity[] =
     queries === undefined
       ? []
       : typeof queries === 'string'
-        ? [queries]
+        ? [{ name: queries }]
         : verifierDenseArraySnapshot(queries, 'Enhanced mutation query list', (entry) => {
             if (typeof entry !== 'string') {
               throw verifierTypeError('Enhanced mutation query names must be strings.');
             }
-            return entry;
+            return { name: entry };
           });
   return encodeFrameworkTargetHeader([{ deps, target }]);
 }

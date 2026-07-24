@@ -357,7 +357,7 @@ function finiteMcpJsonSourceIsAmbiguousOrOverBudget(source: string): boolean {
 
   let index = 0;
   while (index < source.length) {
-    const char = source[index];
+    const char = source[index]!;
     if (/\s/u.test(char)) {
       index += 1;
       continue;
@@ -419,7 +419,7 @@ function finiteMcpJsonSourceIsAmbiguousOrOverBudget(source: string): boolean {
       continue;
     }
     if (!startValue()) return true;
-    while (index < source.length && !/[\s,\]}]/u.test(source[index])) index += 1;
+    while (index < source.length && !/[\s,\]}]/u.test(source[index]!)) index += 1;
   }
   return false;
 }
@@ -520,11 +520,7 @@ function snapshotTool(value: FiniteMcpTool, maxLineBytes: number): FiniteMcpTool
   if (!isJsonRecord(value.inputSchema, maxLineBytes)) {
     throw new TypeError(`tool ${name} inputSchema must be an own-JSON object`);
   }
-  const inputSchema = cloneJsonRecord(
-    value.inputSchema,
-    `tool ${name} inputSchema`,
-    maxLineBytes,
-  );
+  const inputSchema = cloneJsonRecord(value.inputSchema, `tool ${name} inputSchema`, maxLineBytes);
   return Object.freeze({ description, inputSchema, name });
 }
 
@@ -694,7 +690,7 @@ function cloneFiniteJsonValue<T>(value: T, maxSerializedBytes: number): T {
       for (const [key] of entries) addBytes(jsonStringEncodedByteLength(key));
     }
     for (const [key, item] of entries) {
-      let cloned = item;
+      let cloned: unknown;
       if (item === null || typeof item !== 'object') {
         cloned = clonePrimitive(item);
       } else {
@@ -702,12 +698,13 @@ function cloneFiniteJsonValue<T>(value: T, maxSerializedBytes: number): T {
         if (seen.has(item)) throw new TypeError('cyclic JSON value');
         seen.add(item);
         const itemIsArray = Array.isArray(item);
-        cloned = itemIsArray ? [] : {};
-        containers.push(cloned);
+        const clonedContainer: unknown[] | Record<string, unknown> = itemIsArray ? [] : {};
+        cloned = clonedContainer;
+        containers.push(clonedContainer);
         pending.push({
           depth: frame.depth + 1,
           source: item as readonly unknown[] | Readonly<Record<string, unknown>>,
-          target: cloned,
+          target: clonedContainer,
         });
       }
       Object.defineProperty(frame.target, key, {
@@ -854,7 +851,9 @@ function isJsonValue(value: unknown, maxSerializedBytes = MAX_LINE_BYTES): boole
       if (frame.depth > MAX_JSON_DEPTH) return false;
       if (seen.has(current)) return false;
       seen.add(current);
-      const { entries, isArray } = ownJsonContainerEntries(current);
+      const { entries, isArray } = ownJsonContainerEntries(
+        current as readonly unknown[] | Readonly<Record<string, unknown>>,
+      );
       if (!addBytes(2 + Math.max(0, entries.length - 1) + (isArray ? 0 : entries.length))) {
         return false;
       }

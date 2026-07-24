@@ -995,15 +995,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ]);
 
     expect(result.diagnostics).toEqual([]);
-    expect(
-      result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name),
-    ).toEqual(
-      expect.arrayContaining([
-        'createApp',
-        'records',
-        'save',
-        '/schema-component',
-      ]),
+    expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual(
+      expect.arrayContaining(['createApp', 'records', 'save', '/schema-component']),
     );
   });
 

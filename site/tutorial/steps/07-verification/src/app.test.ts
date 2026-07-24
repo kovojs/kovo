@@ -423,9 +423,7 @@ describe('tutorial step 07 — testing & verification', () => {
       ok: true,
       value: { count: 1 },
     });
-    await expect(
-      runQuery(orderHistoryQuery, undefined, attackerRequest),
-    ).resolves.toEqual({
+    await expect(runQuery(orderHistoryQuery, undefined, attackerRequest)).resolves.toEqual({
       input: undefined,
       ok: true,
       value: {

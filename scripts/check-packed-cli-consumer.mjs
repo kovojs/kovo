@@ -188,7 +188,7 @@ function finiteMcpLifecycleInput() {
     .join('\n')}\n`;
 }
 
-function runCommand(command, args, cwd, label, input = undefined) {
+function runCommand(command, args, cwd, label, input) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',

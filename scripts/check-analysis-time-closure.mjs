@@ -252,10 +252,7 @@ export function discoverGateEntrypoints({
       findings.push(`${registryPath}: analysis command registry is not valid JSON`);
       continue;
     }
-    if (
-      registry?.schema !== plan3GateCommandSchema ||
-      !Array.isArray(registry.gates)
-    ) {
+    if (registry?.schema !== plan3GateCommandSchema || !Array.isArray(registry.gates)) {
       findings.push(
         `${registryPath}: analysis command registry must use ${plan3GateCommandSchema} with a gates array`,
       );

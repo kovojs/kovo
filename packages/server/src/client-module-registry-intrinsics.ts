@@ -32,7 +32,7 @@ witnessReflectApply(nativeHashUpdate, semanticHash, ['abc']);
 if (
   witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, ['名🙂', 'utf8']) !== 7 ||
   witnessReflectApply<string>(nativeHashDigest, semanticHash, ['hex']) !==
-  'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 ) {
   throw new TypeError('Kovo client-module build-token hash controls failed their semantic check.');
 }
@@ -61,7 +61,10 @@ export function clientModuleBuildTokenHash(
 }
 
 function updateFrame(hash: object, tag: string, value: string): void {
-  const tagLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [tag, 'utf8']);
+  const tagLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [
+    tag,
+    'utf8',
+  ]);
   const valueLength = witnessReflectApply<number>(nativeBufferByteLength, NativeBuffer, [
     value,
     'utf8',

@@ -804,8 +804,7 @@ export function presetRetentionPolicyFindings(filePath, sourceText) {
     /\bfor\s*\(\s*let\s+[A-Za-z_$][\w$]*\s*=\s*0\s*;[^;]*<\s*clientModules\s*\.\s*length\s*;[^)]*\+=\s*1\s*\)/u.test(
       scanText,
     );
-  const completeSnapshotPresenceCheck =
-    /\bclientModules\s*\.\s*length\s*===\s*0\b/u.test(scanText);
+  const completeSnapshotPresenceCheck = /\bclientModules\s*\.\s*length\s*===\s*0\b/u.test(scanText);
   if (!indexedTraversal && !completeSnapshotPresenceCheck) {
     findings.push(
       `${filePath}: deploy-skew retention policy must classify pinned client modules through indexed traversal or the complete snapshot length`,

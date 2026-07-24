@@ -1,11 +1,7 @@
 import { frameworkWireIdentityIsValid } from '@kovojs/core/internal/wire-input-grammar';
 
 import { queryStoreKey } from './query-store.js';
-import {
-  securityMap,
-  securityMapGet,
-  securityMapSet,
-} from './security-witness-intrinsics.js';
+import { securityMap, securityMapGet, securityMapSet } from './security-witness-intrinsics.js';
 
 // This module is instantiated once per browser build/document. HMR build replacement reloads the
 // document, so the private map is also the `(identity, build)` metadata ledger. Query updates that

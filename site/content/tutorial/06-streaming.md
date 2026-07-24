@@ -24,7 +24,7 @@ import { Defer } from '@kovojs/server';
   priority="after-paint"
   fallback={<section aria-busy="true">Loading products...</section>}
   render={() => <ProductList />}
-/>
+/>;
 ```
 
 Keep the boundary inside the request-rendered page. JSX function components execute where they are

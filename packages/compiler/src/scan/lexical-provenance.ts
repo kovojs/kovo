@@ -1558,15 +1558,14 @@ function isReviewedFrameworkDeclarationReceiverCandidate(
   const factoryId = frameworkCallModelIdForCandidate(factory);
   return (
     factoryId === factoryWitness &&
-    reviewedFrameworkDeclarationReceiverMethods
-      .get(factoryWitness)
-      ?.has(members.at(-1)!) === true
+    reviewedFrameworkDeclarationReceiverMethods.get(factoryWitness)?.has(members.at(-1)!) === true
   );
 }
 
 function closeUnreviewedFrameworkDeclarationReceiver(callee: Value): Value {
   const hasDeclarationResult = callee.candidates.some(
-    (candidate) => candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined,
+    (candidate) =>
+      candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined,
   );
   return hasDeclarationResult &&
     !callee.candidates.every(isReviewedFrameworkDeclarationReceiverCandidate)

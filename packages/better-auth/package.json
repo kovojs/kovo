@@ -8,11 +8,6 @@
   "files": [
     "dist"
   ],
-  "kovoPublish": {
-    "extraEntries": [
-      "./src/internal/runtime-lock.ts"
-    ]
-  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -49,5 +44,10 @@
   },
   "peerDependencies": {
     "better-auth": "1.6.17"
+  },
+  "kovoPublish": {
+    "extraEntries": [
+      "./src/internal/runtime-lock.ts"
+    ]
   }
 }
