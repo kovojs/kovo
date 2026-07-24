@@ -137,15 +137,22 @@ describe('commerce app HTTP entry', () => {
     enhancedForm.set('productId', 'p1');
     enhancedForm.set('quantity', '2');
     const enhancedSource = await fetch(`${origin}/cart`, { headers: { cookie: sessionCookie } });
-    enhancedForm.set(
-      'csrf',
-      productMutationCsrf(await enhancedSource.text(), '/_m/domain/add-to-cart', 'p1'),
+    const enhancedFields = productMutationFields(
+      await enhancedSource.text(),
+      '/_m/domain/add-to-cart',
+      'p1',
     );
+    enhancedForm.set('csrf', enhancedFields.csrf);
+    enhancedForm.set('Kovo-Idem', enhancedFields.idem);
+    enhancedForm.set('kovo-form-key', enhancedFields.formKey);
+    const buildToken = enhancedSource.headers.get('Kovo-Build');
+    if (!buildToken) throw new Error('Expected commerce Kovo-Build identity.');
     const enhanced = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: enhancedForm,
       headers: {
         cookie: sessionCookie,
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Kovo-Build': buildToken,
         // SPEC §6.6/§9.1: real browsers send a same-origin Origin on unsafe POSTs; the CSRF
         // Origin floor requires it. Node fetch omits it, so the test supplies it explicitly.
         Origin: origin,
@@ -166,10 +173,14 @@ describe('commerce app HTTP entry', () => {
     noJsForm.set('productId', 'p2');
     noJsForm.set('quantity', '1');
     const noJsSource = await fetch(`${origin}/cart`, { headers: { cookie: sessionCookie } });
-    noJsForm.set(
-      'csrf',
-      productMutationCsrf(await noJsSource.text(), '/_m/domain/add-to-cart', 'p2'),
+    const noJsFields = productMutationFields(
+      await noJsSource.text(),
+      '/_m/domain/add-to-cart',
+      'p2',
     );
+    noJsForm.set('csrf', noJsFields.csrf);
+    noJsForm.set('Kovo-Idem', noJsFields.idem);
+    noJsForm.set('kovo-form-key', noJsFields.formKey);
     const noJs = await fetch(`${origin}/_m/domain/add-to-cart`, {
       body: noJsForm,
       headers: {
@@ -327,15 +338,23 @@ function mutationFormCsrf(html: string, action: string): string {
   return csrf;
 }
 
-function productMutationCsrf(html: string, action: string, productId: string): string {
+function productMutationFields(
+  html: string,
+  action: string,
+  productId: string,
+): { csrf: string; formKey: string; idem: string } {
   const form = htmlFormFacts(html).find(
     (candidate) =>
       candidate.action === action &&
       candidate.fields.some((field) => field.name === 'productId' && field.value === productId),
   );
   const csrf = form?.fields.find((field) => field.name === 'csrf')?.value;
+  const formKey = form?.fields.find((field) => field.name === 'kovo-form-key')?.value;
+  const idem = form?.fields.find((field) => field.name === 'Kovo-Idem')?.value;
   if (!csrf) throw new Error(`Expected ${action} ${productId} form CSRF field.`);
-  return csrf;
+  if (!formKey) throw new Error(`Expected ${action} ${productId} form key field.`);
+  if (!idem) throw new Error(`Expected ${action} ${productId} Kovo-Idem field.`);
+  return { csrf, formKey, idem };
 }
 
 function listen(target: Server): Promise<void> {
