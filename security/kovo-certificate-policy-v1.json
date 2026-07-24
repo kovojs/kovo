@@ -130,7 +130,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-YxzTyhj0ba1hgufRXTSfdJMa8O2+F/XnyYodrOvotR55Xjz6+rEvAaIDPvygggacAoRGNKEmkXhUS9KJ12T3nQ=="
+      "sha512": "sha512-kpz84ppPgZ5IODfwy7c9S2uMmCbpaVsuGThjlzfw599rV7QUuZecGAlIs0Jkdvp1VPTGxctGbOFLJOe2xUToyQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -254,7 +254,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/mcp-stdio.mjs",
-      "sha512": "sha512-P7/1mu2BXMJVdUe/AmMS5K7VJseN6wU3UO+zbggJyKD3opWSHoTIzv+6AnNbeN7EgTVD7hl5/jdZERGMzIPmTw=="
+      "sha512": "sha512-3MmS7yVipcTYElVZG+nHr9Ll3RlW5PqH+REn2faEXPLd+2o8KULDGITLXLOzNj46F2+BSv034n8UgD3Ukd0meA=="
     },
     {
       "path": "@kovojs/core/dist/internal/module-ref.mjs",
