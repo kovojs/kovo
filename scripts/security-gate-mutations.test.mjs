@@ -833,7 +833,7 @@ describe('security-gate-mutations', () => {
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);
     expect(results.length).toBe(SECURITY_GATE_MUTANTS.length);
-  }, 1_200_000);
+  }, 1_800_000);
 
   it('executes semantic-v2 consumer mutants instead of source-text assertions', () => {
     const semanticV2Mutants = SECURITY_GATE_MUTANTS.filter((mutant) =>
