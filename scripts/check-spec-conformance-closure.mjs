@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'fef8e5668d09abbd4441cc8299351b64342afc4ac606a6248dbe1c56ba560859';
+  'd8eb0b52396dfa7839d07f89fc18f9bd96a7f684c2e872d53bb837f85b84f22f';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -83,9 +83,9 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
 const expectedDiagnosticEvidenceWitnessDigest =
-  'f13c6210b08259959c03ae1942ee0cdf6846fd079c4ad37c2650dbcd3ba3993d';
+  '9129b08ee380ed03fb17366dc93b33216bd26b2b1f42508bc0dae241928ab71a';
 const expectedDiagnosticActualLayerReviewDigest =
-  'd91bbb0ef0dd3ae51373d49408322228220e0816f3d2de40a259c05974842f45';
+  '9a6a25418f2dfd2855a023c7f9112f1ecfaae37c6e56af416a8aa41994d6b856';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -95,20 +95,20 @@ const expectedCompileComponentModuleDigest =
 const expectedValidateComponentPhaseDigest =
   '54f995664b8b91f754f04481585a009e256dce30ac8f3a66cabb80fc53d109db';
 const expectedCoreBuildDistCommand =
-  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
+  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
 // runtime-selected. Each row pins both the complete source file and the acquisition expression, so
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
-  'packages/browser/src/inline-loader.ts#130d8a7cf55bb8dc5ddcb53e279bda823fc9de2a9060528ac22f9325a5e17fd2#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#fc4bcec8fe8239a4963956ff4400cb92ec9f515dc426225681f94bad74cdcec7#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/sqlite.ts#cb9e237f018341e5691068e518d914311e3699a6b214f34e54dfb399b5f80e50#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
-  'packages/test/src/integration/optimistic-client.ts#b24a45e17548fade0853e47da6ae471c27445ca38c518f509fe71353aafe1879#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/test/src/integration/optimistic-client.ts#e54d1c166f3e8fd585b9c65bbdf6281a7fc5b25644415776589ef44dda89d943#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
@@ -121,12 +121,12 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/capability-closure-packages.ts',
-    '7b13fa8f9c8f16fd5159adbec738120549cf1a5f72b088121d1e2ae944a1ab3a',
+    'e27f8372435ccd68c5ad554bfc52579bf105ab8dde2cac1101e037b3f203f978',
   ],
-  ['packages/cli/src/bin.ts', '1d98e30c50e8fd8ce2bbe489d56fcbd0df3042d49c1a38d03dcfdd635a77a088'],
+  ['packages/cli/src/bin.ts', 'e7ffee6190f6ba8d1b268c7d427f111b926710714bd684de7bcb30572d7ded5c'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '647da0a90472389bf67b6927de644492c5267dfdabd8766b7c4fc6f6dd504e3c',
+    '1fd0482b5ac77891f2a7534b80bc7d42059cdb7725528e88cb6498d57a369fc5',
   ],
   [
     'packages/cli/src/commands/compile.ts',
@@ -158,7 +158,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'c26f0c079205efaca08574e903fb522a2a1ad5f73a118b0f974ebd3f8b84ba4d',
+    '4a90f10505c35a08b7e130ff8869f16199952da05a94822531b27d66303761ff',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -190,7 +190,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
 ]);
 const reviewedExcludedSourceReachability = new Set([
-  'packages/browser/src/inline-loader-response-apply-fixture.ts#827d81112f925959161c509d839ac5c547cc6fc1f0adf87173555c0fdc47c342#packages/conformance-fixtures/src/oracle-fixtures.ts#296830253989e0b95f67bda799647ab13254403ed3344491e427e14dad067c56',
+  'packages/browser/src/inline-loader-response-apply-fixture.ts#77c214c4f09dea1fc4f04ad5dd0b82d91ebb9e28e160eb43f4ba3757a469f7f0#packages/conformance-fixtures/src/oracle-fixtures.ts#296830253989e0b95f67bda799647ab13254403ed3344491e427e14dad067c56',
 ]);
 // Dynamic `{ code, message/severity }` projections are denied by default. The few existing
 // non-diagnostic protocols and registry-derived projections are capability-closed by exact site +
@@ -209,7 +209,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
-    'packages/cli/src/commands/mcp.ts#literal#6affac251930fd2eed1ebe17b0bf9a2cedbf622fb6edbe4baab81d3366695b9f#0344b46b3f7ef48b3eab5b172714f4ff3d92a0435e78195222d4b1bd1df78003',
+    'packages/cli/src/commands/mcp.ts#literal#6affac251930fd2eed1ebe17b0bf9a2cedbf622fb6edbe4baab81d3366695b9f#0bb344d352f0d6ba65d4e80613da9e036382483da6972a526f956cf42734a970',
     'Non-Kovo JSON-RPC response envelope with protocol-defined code and message fields.',
   ],
   [
@@ -217,7 +217,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Non-Kovo JSON-RPC error response with protocol-defined code and message fields.',
   ],
   [
-    'packages/cli/src/commands/mcp.ts#literal#f2091906e301fb03121aa20a853418afcc31c978c1d8a82154ca6f5b7ae00d7c#fa8805bb083a94886273d47b92c0687075cc917036e3a9bedbe5060fd5dfedc4',
+    'packages/core/src/internal/mcp-stdio.ts#literal#f2091906e301fb03121aa20a853418afcc31c978c1d8a82154ca6f5b7ae00d7c#cf6591b3a4ba873f14a91d88c778ffa00721f6204fd2134f6b3302370450ab8e',
     'Non-Kovo JSON-RPC error response with protocol-defined code and message fields.',
   ],
   [
@@ -233,7 +233,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Gallery oracle mismatch record; code is a non-diagnostic comparison label.',
   ],
   [
-    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#f58b25d212d057aba99b6dc36dcc1a824145fb31dd3a4493d1e5b9f247ed4912',
+    'packages/compiler/src/hmr-impact.ts#literal#d36859e8a89c106c98eb8f0d2ce79cf1cbbdde9ebbb0c5b4a707207683282580#e620a964cb6cae4d07073c9168c847a6b869bc832f8ab7e4ce60d57dd83b2097',
     'Registry-derived compiler diagnostic projection for the HMR impact protocol.',
   ],
   [
@@ -309,7 +309,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Certificate finding projection with a non-Kovo capability-obligation code namespace.',
   ],
   [
-    'packages/verify/src/translation.ts#literal#34420495135a3d428c054b502a02d1a1ecaf6c4ed10edbb63e1f2f01c761c4e8#993d7ea5e33d2835ff644550c337a0815edc65fcc792c09aa57df274e6a0b2b5',
+    'packages/verify/src/translation.ts#literal#34420495135a3d428c054b502a02d1a1ecaf6c4ed10edbb63e1f2f01c761c4e8#fe5ff670befc4c811bb30c71e564a50a578ef73c70b1c810103e92d3af9da625',
     'Translation finding projection with a non-Kovo relation-specific code namespace.',
   ],
   [
@@ -427,7 +427,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '73cc618b78eebad1ac1680e178f3ec1496c6ab0e85b96bdae68a31ef69086efc',
+    '99c90e9cc0ee35a1bdf6a9352796f09d27812c618828ffca8786b527482a7fd9',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -435,11 +435,11 @@ const diagnosticLiteralExemptions = new Map([
   ],
   [
     'packages/core/src/internal/security-markers.ts',
-    'd75bb917e18841ebb759f6ccaa1791a2295fe4327bdb0532d67e99ea38f1105f',
+    '65f104f11ee87e77124fac889a4cc8a22a67acfd3018d1d9534c68dfe0c52bc3',
   ],
   [
     'packages/core/src/internal/source-sink-registry.ts',
-    '4704211efbac9b6e7a1467cc43128168aee53afa36c84742c97b7e3f5a95f833',
+    'fb6a4609d537894b1eaf7a20e183eac0aaaa618a78ad12fb320c1f387815e801',
   ],
 ]);
 
