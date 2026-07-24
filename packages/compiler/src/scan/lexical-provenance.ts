@@ -1209,14 +1209,16 @@ function readExpression(
       // exact reviewed factory is framework data, not another callable framework root.
       return {
         ...unknownResult,
-        candidates: callee.candidates.map((candidate) =>
-          candidate.kind === 'import'
-            ? {
+        candidates: callee.candidates.map((candidate) => {
+          if (candidate.kind !== 'import') return candidate;
+          const factoryId = frameworkCallModelIdForCandidate(candidate);
+          return factoryId === undefined
+            ? candidate
+            : {
                 ...candidate,
-                reviewedDeclarationFactory: frameworkCallModelIdForCandidate(candidate),
-              }
-            : candidate,
-        ),
+                reviewedDeclarationFactory: factoryId,
+              };
+        }),
         effectsModeled: true,
         effectSites: currentEffectSites(env),
         rootWideningRequired: false,
@@ -1548,16 +1550,16 @@ function isReviewedFrameworkDeclarationReceiverCandidate(
   }
   const members = candidate.members ?? [];
   if (members.length === 0) return false;
+  const { reviewedDeclarationFactory: factoryWitness, ...factoryCandidate } = candidate;
   const factory = {
-    ...candidate,
+    ...factoryCandidate,
     members: members.slice(0, -1),
-    reviewedDeclarationFactory: undefined,
   };
   const factoryId = frameworkCallModelIdForCandidate(factory);
   return (
-    factoryId === candidate.reviewedDeclarationFactory &&
+    factoryId === factoryWitness &&
     reviewedFrameworkDeclarationReceiverMethods
-      .get(candidate.reviewedDeclarationFactory)
+      .get(factoryWitness)
       ?.has(members.at(-1)!) === true
   );
 }
