@@ -86,7 +86,7 @@
     {
       "site": "packages/server/src/mutation.ts#site-0001",
       "file": "packages/server/src/mutation.ts",
-      "line": 1574,
+      "line": 1592,
       "column": 31,
       "owner": "revealCsrfTokenInput",
       "door": "revealUntrusted",
@@ -97,7 +97,7 @@
     {
       "site": "packages/server/src/mutation/replay-policy.ts#site-0001",
       "file": "packages/server/src/mutation/replay-policy.ts",
-      "line": 615,
+      "line": 849,
       "column": 7,
       "owner": "readNoJsIdemField",
       "door": "revealUntrusted",
@@ -108,7 +108,7 @@
     {
       "site": "packages/server/src/replay.ts#site-0001",
       "file": "packages/server/src/replay.ts",
-      "line": 1014,
+      "line": 1002,
       "column": 26,
       "owner": "canonicalJson",
       "door": "revealUntrusted",
@@ -119,7 +119,7 @@
     {
       "site": "packages/server/src/route.ts#site-0001",
       "file": "packages/server/src/route.ts",
-      "line": 656,
+      "line": 657,
       "column": 36,
       "owner": "revealRouteRequestValue",
       "door": "revealUntrusted",
@@ -130,7 +130,7 @@
     {
       "site": "packages/server/src/route.ts#site-0002",
       "file": "packages/server/src/route.ts",
-      "line": 1884,
+      "line": 1892,
       "column": 29,
       "owner": "searchParamValue",
       "door": "revealUntrusted",
