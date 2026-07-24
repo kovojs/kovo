@@ -77,7 +77,7 @@ describe('Plan 3 security-gate cost budgets', () => {
     // The unsharded root suite must not scale heavyweight compiler/build
     // proofs past the four-core CI resource envelope. CI shards independently
     // tighten this to one file at a time with --no-file-parallelism.
-    expect(packageJson.scripts.test).toBe('vitest --run --maxWorkers=2');
+    expect(packageJson.scripts.test).toBe('vitest --run --maxWorkers=1');
   });
 
   it('routes already-built pack gates through the existing publish-readiness job', () => {

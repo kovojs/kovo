@@ -14,7 +14,7 @@ import {
 describe('security-ledger index gate', () => {
   it('accepts the checked-in explicit registry at its reconciliation date', () => {
     expect(
-      validateSecurityLedgerIndex({ rootDir: defaultRepoRoot, today: '2026-07-21' }),
+      validateSecurityLedgerIndex({ rootDir: defaultRepoRoot, today: '2026-07-22' }),
     ).toMatchObject({ ok: true, findings: [] });
   });
 
