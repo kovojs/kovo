@@ -20,14 +20,6 @@
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
-      "id": "crypto-door-003",
-      "file": "examples/gallery/src/app-shell.ts",
-      "kind": "digest",
-      "operations": ["createHash"],
-      "tier": "example-runtime",
-      "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
-    },
-    {
       "id": "crypto-door-004",
       "file": "examples/reference/src/auth.ts",
       "kind": "crypto-acquisition",
@@ -47,9 +39,9 @@
       "id": "crypto-door-007",
       "file": "packages/browser/src/inline-loader-build.ts",
       "kind": "crypto-acquisition",
-      "operations": ["createHash", "randomUUID"],
+      "operations": ["randomUUID"],
       "tier": "browser-runtime",
-      "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+      "review": "A random UUID isolates the temporary inline-loader output filename; it is not treated as security proof, and the migration target remains a purpose-minimal authority handle."
     },
     {
       "id": "crypto-door-008",
@@ -432,6 +424,14 @@
       "review": "The sealed certificate signer accepts only caller-supplied PKCS8 Ed25519 key bytes, emits one fixed detached envelope, and keeps verification beside signing so the generator remains authority-free."
     },
     {
+      "id": "crypto-door-kovo-certificate-format",
+      "file": "scripts/kovo-certificate-format.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-512 digests bind analyzer-derived certificate artifact bytes; this formatter acquires no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-050",
       "file": "scripts/hermetic-proof-stage.mjs",
       "kind": "crypto-acquisition",
@@ -472,6 +472,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-reproducible-pack",
+      "file": "scripts/reproducible-pack.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-512 digests re-verify the reproducible packed-tarball snapshot bytes; this verifier acquires no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-053",
       "file": "scripts/publish-packed-packages.mjs",
       "kind": "digest",
@@ -504,20 +512,12 @@
       "review": "Exact non-keyed SHA-256 digest keys isolated-test baseline reuse by immutable source bytes; it acquires no entropy, key material, or keyed operation."
     },
     {
-      "id": "crypto-door-056",
-      "file": "site/src/client/modules.ts",
+      "id": "crypto-door-verify-packed-release-certificate",
+      "file": "scripts/verify-packed-release-certificate.mjs",
       "kind": "digest",
       "operations": ["createHash"],
       "tier": "build-tooling",
-      "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
-    },
-    {
-      "id": "crypto-door-057",
-      "file": "site/src/gallery.ts",
-      "kind": "digest",
-      "operations": ["createHash"],
-      "tier": "build-tooling",
-      "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+      "review": "Exact non-keyed SHA-512 digests compare packed verifier-module bytes with reviewer policy; this verifier acquires no entropy, key material, or keyed operation."
     }
   ]
 }
