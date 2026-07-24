@@ -478,6 +478,18 @@ export const controls = [randomUUID, path.resolve, Readable.toWeb];
         `,
       ),
     ).toEqual([]);
+    expect(
+      presetRetentionPolicyFindings(
+        presetRetentionPolicyFile,
+        `
+          const clientModules = snapshotBuildArray(
+            build.clientModules,
+            'preset deploy-skew client modules',
+          );
+          if (clientModules.length === 0) return [];
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('C205 pins built-in preset diagnostic aggregation and source classifiers', () => {
