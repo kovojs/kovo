@@ -58,7 +58,7 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/inline-loader.mjs",
-      "sha512": "sha512-HTtm39VsPYFN60/pjtWNvRLOnuLqZ+RR7f00B2Jg/bq8soC5jQEg+EioF5M4ZmstEzk797tzSB7djT9j7XYwzg=="
+      "sha512": "sha512-m52HHdeTatop51My/0MAPOAOMx99yrrhFB2yr3oFKuLAv+AY6UuD+LBq5QXL6+0GSpfMsAplrGw7+tbmJsEnvw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/morph.mjs",
@@ -130,7 +130,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-VXz5Ncq+LxNAP5Y8TwU9fDVAstg5p3EHPzfwQLSkZxP7rj/R0GvKsKEy+iAnLjSdZKOOEMm4/4dedZBiF4pbdg=="
+      "sha512": "sha512-Rc7yTiD4ybSOPbVTtzdGS+SREzLHSPWtEs/Q8z6AheizWbHYOn7TaJtWm1MJGAmJFoRFjVLMS3D6HcXJcu5asw=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",

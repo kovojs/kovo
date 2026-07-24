@@ -54,11 +54,11 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
     ["sha256:590e2f07cd2ccb7e683c967e8b643f8b1240d33904bfe0cf00d77206a20a7a06", [
       [".",["default","types"]],
       ["./client",["default","types"]],
-    ], ["kovo-packed-tree-sha256:f2b9aadc62f31946d94fab695ece5af5d5ed65db65b7d6e8af0738550926cb4e"]],
+    ], ["kovo-packed-tree-sha256:eefb8e7a4f1b18ad88f894a2802057fd3b08f5972c18717862ded24dc3e306f8"]],
     ["sha256:e327a7775f263277b3636109d11a9a1f8b50da1f7277d600e7dc6933710cda97", [
       [".",["default"]],
       ["./client",["default"]],
-    ], ["kovo-source-tree-sha256:9f9f143a1fa681420d3545041bfc8f7ecdbbb99e454afe1d4db302cc02e26743"]],
+    ], ["kovo-source-tree-sha256:d79a0e285bdd6ae788fa14fe24a25b660a25d87a05a02731000734d7a004e7d8"]],
   ], "exact-implementation"],
   ["@kovojs/cli", "0.2.0", [
     ["sha256:7b28433b398f349e38f7f7916aee45f6d34d9540a9c531fd96571ed30e2db134", [
