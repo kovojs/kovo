@@ -74,6 +74,7 @@ console.log('KOVO_STRUCTURED_CLONE_GUARD_' + outcome);
 `;
 
 const captureEffectivenessConsumer = `
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/client-module-url';
 import '@kovojs/core/internal/filesystem';
 import '@kovojs/core/internal/render-plan-token';
@@ -104,7 +105,7 @@ try {
   const capturesStayedEffective =
     clientModule.clientModuleRepresentationDigest(clientSource) === expectedClientDigest &&
     fileSystem.containsPath('/srv/kovo', '/srv/kovo/public/index.html') &&
-    /^[0-9a-f]{16}$/.test(firstRenderPlan) &&
+    /^[0-9a-f]{64}$/.test(firstRenderPlan) &&
     firstRenderPlan !== secondRenderPlan;
   console.log('KOVO_BOOTSTRAP_CAPTURES_' + (capturesStayedEffective ? 'EFFECTIVE' : 'POISONED'));
 } finally {

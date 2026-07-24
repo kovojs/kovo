@@ -94,12 +94,16 @@ describe('queryRef visible-return refetch', () => {
     const fetchText = new Promise<string>((resolve) => {
       resolveFetchText = resolve;
     });
-    const fetch = vi.fn(async (url: string) =>
-      queryTestResponse(url, {
+    const fetch = vi.fn(async (url: string) => {
+      const queryName = new URL(url).pathname === '/_q/cart' ? 'cart' : 'reviews';
+      return queryTestResponse(url, {
         status: 200,
-        text: () => fetchText,
-      }),
-    );
+        text: () =>
+          queryName === 'cart'
+            ? fetchText
+            : '<kovo-query name="reviews" href="/_q/reviews">{"total":3}</kovo-query>',
+      });
+    });
 
     root.scripts = [testQueryScript('cart', '/_q/cart', '{"count":1}')];
     root.bindings = [cartBinding, reviewsBinding];
@@ -122,7 +126,7 @@ describe('queryRef visible-return refetch', () => {
     expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }, { name: 'reviews' }]);
     expect(fetch).toHaveBeenCalledTimes(1);
 
-    resolveFetchText?.('<kovo-query name="cart">{"count":2}</kovo-query>');
+    resolveFetchText?.('<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>');
     await Promise.all([first, second]);
 
     expect(store.get('cart')).toEqual({ count: 2 });
@@ -143,7 +147,7 @@ describe('queryRef visible-return refetch', () => {
     const fetch = vi.fn(async (url: string) =>
       queryTestResponse(url, {
         status: 200,
-        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+        text: async () => '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>',
       }),
     );
 
@@ -234,7 +238,7 @@ describe('queryRef visible-return refetch', () => {
     const fetch = vi.fn(async (url: string) =>
       queryTestResponse(url, {
         status: 200,
-        text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+        text: async () => '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>',
       }),
     );
 
@@ -287,8 +291,8 @@ describe('queryRef visible-return refetch', () => {
         status: 200,
         text: async () =>
           new URL(url).pathname === '/_q/cart'
-            ? '<kovo-query name="cart">{"count":2}</kovo-query>'
-            : '<kovo-query name="group:catalog" key="group:catalog:item">{"items":["p2"]}</kovo-query>',
+            ? '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>'
+            : '<kovo-query name="group:catalog" key="group:catalog:item" href="/_q/group%3Acatalog?key=item">{"items":["p2"]}</kovo-query>',
       }),
     );
 
@@ -341,7 +345,7 @@ describe('queryRef visible-return refetch', () => {
     const fetch = vi.fn(async (url: string) =>
       queryTestResponse(url, {
         status: 200,
-        text: async () => '<kovo-query name="cart">{</kovo-query>',
+        text: async () => '<kovo-query name="cart" href="/_q/cart">{</kovo-query>',
       }),
     );
 
@@ -358,11 +362,10 @@ describe('queryRef visible-return refetch', () => {
 
     // SPEC.md §4.4: visible-return refetch follows hydrated queries; malformed typed-read
     // chunks still report through the same runtime apply path instead of drifting silently.
-    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(1);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
       'Malformed JSON in kovo-query cart',
     );
-    expect(String(onError.mock.calls[1]?.[0].message)).toContain('different query identity');
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 

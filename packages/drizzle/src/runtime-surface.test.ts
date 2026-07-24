@@ -347,7 +347,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(drizzleDeriveSource()).not.toContain('ts-morph');
     // api-cleanup Phase 6: static extraction is now CLI/internal only, but it still
     // imports ts-morph at runtime through the internal subpath.
-    expect(packageJson.dependencies?.['ts-morph']).toBe('^28.0.0');
+    expect(packageJson.dependencies?.['ts-morph']).toBe('28.0.0');
     expect(packageJson.devDependencies?.['ts-morph']).toBeUndefined();
     expect(runtimeSource).not.toContain('ts-morph');
     expect(runtimeSource).not.toContain('./index.js');
