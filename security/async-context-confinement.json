@@ -14,6 +14,13 @@
       "role": "build-authority"
     },
     {
+      "id": "server.durable-task-authority",
+      "path": "packages/server/src/task-runner.ts",
+      "binding": "durableTaskAuthority",
+      "mode": "isolated",
+      "role": "task-authority"
+    },
+    {
       "id": "server.framework-egress-policy",
       "path": "packages/server/src/egress.ts",
       "binding": "frameworkEgressPolicyContext",
@@ -85,6 +92,6 @@
     "test": "keeps seeded concurrent principals disjoint through awaits, streams, and thenable traps",
     "seed": "0x4b564f56",
     "requests": 24,
-    "logicalCells": 9
+    "logicalCells": 10
   }
 }

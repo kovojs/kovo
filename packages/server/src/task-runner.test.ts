@@ -13,7 +13,12 @@ import { installUndiciFloor } from './egress-undici.js';
 import { mutation, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
 import { s } from './schema.js';
-import { task } from './task.js';
+import {
+  task,
+  type TaskPrincipalScope,
+  type TaskPrincipalWriteScope,
+  type TaskRunContext,
+} from './task.js';
 import {
   createDurableTaskRunner,
   DurableTaskLeaseLostError,
@@ -27,6 +32,7 @@ import {
   type DurableTaskQueueStore,
 } from './task-queue.js';
 import { assertNonRequestPrincipalPosture } from './auth-principal.js';
+import { runInFreshFrameworkAsyncContext } from './async-context.js';
 import { registerFrameworkManagedDbHooks } from './managed-db.js';
 
 interface ChildScheduleJobProbe {
@@ -291,6 +297,125 @@ describe('durable task runner (SPEC §9.6)', () => {
       [{ id: 'system_ord', ownerId: '*', scope: 'system' }],
     ]);
     expect(mutationValues).toEqual([{ id: 'ord_1', ownerId: 'user_1', scope: 'act-as' }]);
+  });
+
+  it('starts detached jobs in a fresh lifecycle for explicit actAs and system writes', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const values: string[] = [];
+    const directErrors: string[] = [];
+    const record = mutation('detached/record', {
+      input: s.object({ value: s.string() }),
+      handler: (input) => input.value,
+    });
+    const detached = task('detached.explicit-authority', {
+      input: s.object({ ownerId: s.string() }),
+      async run(args, context) {
+        try {
+          await context.runMutation(record, { value: 'ambient' });
+        } catch (error) {
+          directErrors.push(String(error));
+        }
+        values.push(
+          String(await context.actAs(args.ownerId).runMutation(record, { value: 'principal' })),
+        );
+        values.push(
+          String(
+            await context
+              .declareSystemWrite('detached system maintenance')
+              .runMutation(record, { value: 'system' }),
+          ),
+        );
+      },
+    });
+    await store.enqueue({
+      args: { ownerId: 'user_1' },
+      runAt: new Date('2026-06-30T10:00:00Z'),
+      task: detached.key,
+    });
+    const runner = createDurableTaskRunner({
+      hooks: {
+        runMutation: async (definition, input, options) => {
+          const result = await runMutation(
+            definition as never,
+            input,
+            {},
+            {
+              csrf: false,
+              principalPosture: options.principalPosture,
+            },
+          );
+          if (!result.ok) throw new Error(result.error.code);
+          return result.value;
+        },
+      },
+      store,
+      tasks: [detached],
+    });
+    let releaseDetached!: () => void;
+    const detachedGate = new Promise<void>((resolve) => {
+      releaseDetached = resolve;
+    });
+    let detachedRun!: Promise<unknown>;
+
+    await runInFreshFrameworkAsyncContext(async () => {
+      detachedRun = detachedGate.then(() => runner.runOnce(new Date('2026-06-30T10:00:01Z')));
+    });
+    releaseDetached();
+    await detachedRun;
+
+    expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    expect(values).toEqual(['principal', 'system']);
+    expect(directErrors).toEqual([
+      expect.stringContaining('without actAs(id) or declareSystemWrite(reason). SPEC §10.3 DEC-G'),
+    ]);
+  });
+
+  it('revokes captured task principal scopes after the task body settles', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const runMutationHook = vi.fn(async () => 'unexpected');
+    const record = mutation('detached/stale-record', {
+      input: s.object({}),
+      handler: () => 'recorded',
+    });
+    let capturedContext: TaskRunContext | undefined;
+    let capturedScope: TaskPrincipalScope | undefined;
+    let capturedSystemScope: TaskPrincipalWriteScope | undefined;
+    const capture = task('detached.capture-authority', {
+      input: s.object({}),
+      run(_args, context) {
+        capturedContext = context;
+        capturedScope = context.actAs('user_1');
+        capturedSystemScope = context.declareSystemWrite('captured system authority');
+      },
+    });
+    await store.enqueue({
+      args: {},
+      runAt: new Date('2026-06-30T10:00:00Z'),
+      task: capture.key,
+    });
+    const runner = createDurableTaskRunner({
+      hooks: { runMutation: runMutationHook },
+      store,
+      tasks: [capture],
+    });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:01Z'));
+
+    expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    expect(() => capturedContext!.actAs('attacker')).toThrow(
+      /task authority .* is closed; detached work cannot reacquire actAs/u,
+    );
+    expect(() => capturedContext!.declareSystemWrite('stale system authority')).toThrow(
+      /task authority .* is closed/u,
+    );
+    expect(() => capturedContext!.systemStateKey('stale')).toThrow(/task authority .* is closed/u);
+    await expect(
+      runInFreshFrameworkAsyncContext(() => capturedScope!.runMutation(record, {})),
+    ).rejects.toThrow(/task authority .* is closed/u);
+    await expect(
+      runInFreshFrameworkAsyncContext(() => capturedSystemScope!.runMutation(record, {})),
+    ).rejects.toThrow(/task authority .* is closed/u);
+    expect(runMutationHook).not.toHaveBeenCalled();
   });
 
   it('routes default ctx.fetch through the framework egress allowlist choke', async () => {

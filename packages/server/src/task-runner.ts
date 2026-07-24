@@ -12,6 +12,11 @@ import {
   type NonRequestPrincipalPosture,
   type PrincipalAccessOperation,
 } from './auth-principal.js';
+import {
+  createFrameworkAsyncContextCell,
+  currentFrameworkAsyncContextValue,
+  runWithIsolatedFrameworkAsyncContext,
+} from './async-context.js';
 import { parseSchemaAsync } from './schema.js';
 import type {
   TaskDefinition,
@@ -87,6 +92,15 @@ export interface DurableTaskRunnerHooks {
     options: TaskIngressRunOptions,
   ) => Promise<unknown>;
 }
+
+interface DurableTaskAuthorityState {
+  readonly jobId: string;
+  open: boolean;
+}
+
+const durableTaskAuthority = createFrameworkAsyncContextCell<DurableTaskAuthorityState>(
+  'server.durable-task-authority',
+);
 
 export interface DurableTaskRunnerErrorContext {
   readonly job: DurableTaskJob;
@@ -379,16 +393,33 @@ export class DurableTaskRunner {
     const abortController = taskCreateAbortController();
     const signal = taskAbortControllerSignal(abortController);
     let settled = false;
+    const taskAuthorityState: DurableTaskAuthorityState = { jobId: job.id, open: true };
     let heartbeatPending = false;
     let rejectLeaseLost: (error: DurableTaskLeaseLostError) => void = () => undefined;
+    const assertTaskAuthorityOpen = (): void => {
+      if (
+        !taskAuthorityState.open ||
+        currentFrameworkAsyncContextValue(durableTaskAuthority) !== taskAuthorityState
+      ) {
+        throw new Error(
+          `Durable task authority for job "${job.id}" is closed; detached work cannot reacquire actAs(id) or declared-system posture.`,
+        );
+      }
+    };
 
     const bodyPromise = taskPromiseThen(taskPromiseResolve(undefined), () =>
-      task.run(args, this.createContext(job, signal)),
+      runWithIsolatedFrameworkAsyncContext(durableTaskAuthority, taskAuthorityState, () =>
+        task.run(args, this.createContext(job, signal, assertTaskAuthorityOpen)),
+      ),
     );
     const bodySettled = taskPromiseThen(
       bodyPromise,
-      () => undefined,
-      () => undefined,
+      () => {
+        taskAuthorityState.open = false;
+      },
+      () => {
+        taskAuthorityState.open = false;
+      },
     );
     const leaseLost = taskCreatePromise<never>((_resolve, reject) => {
       rejectLeaseLost = reject;
@@ -443,7 +474,11 @@ export class DurableTaskRunner {
     }
   }
 
-  private createContext(job: DurableTaskJob, signal: AbortSignal): TaskRunContext {
+  private createContext(
+    job: DurableTaskJob,
+    signal: AbortSignal,
+    assertTaskAuthorityOpen: () => void,
+  ): TaskRunContext {
     const runMutation = this.hooks.runMutation;
     const runQuery = this.hooks.runQuery;
     const context: TaskRunContext = {
@@ -453,34 +488,46 @@ export class DurableTaskRunner {
       // SPEC §6.6: task code receives exactly the framework-owned positive egress capability.
       // Runner hooks may adapt persistence/query execution, but cannot replace the network door.
       fetch: frameworkEgressFetch,
-      actAs: (principalId: string): TaskPrincipalScope =>
-        this.createPrincipalScope(
+      actAs: (principalId: string): TaskPrincipalScope => {
+        assertTaskAuthorityOpen();
+        return this.createPrincipalScope(
           job,
           actAsNonRequestPrincipal(principalId, taskPrincipalAudit(job, 'read')),
           actAsNonRequestPrincipal(principalId, taskPrincipalAudit(job, 'write')),
           runQuery,
           runMutation,
           signal,
-        ),
-      declareSystemRead: (reason: string): TaskPrincipalReadScope =>
-        this.createPrincipalScope(
+          assertTaskAuthorityOpen,
+        );
+      },
+      declareSystemRead: (reason: string): TaskPrincipalReadScope => {
+        assertTaskAuthorityOpen();
+        return this.createPrincipalScope(
           job,
           declareSystemPrincipal(reason, taskPrincipalAudit(job, 'read')),
           undefined,
           runQuery,
           runMutation,
           signal,
-        ),
-      declareSystemWrite: (reason: string): TaskPrincipalWriteScope =>
-        this.createPrincipalScope(
+          assertTaskAuthorityOpen,
+        );
+      },
+      declareSystemWrite: (reason: string): TaskPrincipalWriteScope => {
+        assertTaskAuthorityOpen();
+        return this.createPrincipalScope(
           job,
           undefined,
           declareSystemPrincipal(reason, taskPrincipalAudit(job, 'write')),
           runQuery,
           runMutation,
           signal,
-        ),
-      systemStateKey: (key: string) => frameworkScopedKey('durable-task-system', key),
+          assertTaskAuthorityOpen,
+        );
+      },
+      systemStateKey: (key: string) => {
+        assertTaskAuthorityOpen();
+        return frameworkScopedKey('durable-task-system', key);
+      },
       runMutation: async () => {
         throw missingTaskPrincipalPostureError(job, 'write');
       },
@@ -492,7 +539,7 @@ export class DurableTaskRunner {
         // maxGenerations, and the self-reschedule delay floor are computed here before any queue
         // write, so runtime hooks cannot replace the backstopped ctx.schedule contract. Validation
         // may yield, so re-check the lease immediately before persistence too.
-        assertActiveTaskLease(job, signal);
+        assertActiveTaskLease(job, signal, assertTaskAuthorityOpen);
         const enqueueInput = await durableTaskScheduleInput({
           args,
           definition,
@@ -501,7 +548,7 @@ export class DurableTaskRunner {
           registeredTasks: this.tasks,
           selfRescheduleDelayFloorMs: this.selfRescheduleDelayFloorMs,
         });
-        assertActiveTaskLease(job, signal);
+        assertActiveTaskLease(job, signal, assertTaskAuthorityOpen);
         return this.store.enqueue(enqueueInput);
       },
     };
@@ -519,16 +566,19 @@ export class DurableTaskRunner {
     runQuery: DurableTaskRunnerHooks['runQuery'],
     runMutation: DurableTaskRunnerHooks['runMutation'],
     signal: AbortSignal,
+    assertTaskAuthorityOpen: () => void,
   ): TaskPrincipalScope {
     const principalPosture = readPosture ?? writePosture;
-    const stateKey = (key: string) =>
-      principalPosture?.kind === 'act-as'
+    const stateKey = (key: string) => {
+      assertTaskAuthorityOpen();
+      return principalPosture?.kind === 'act-as'
         ? principalScopedKey(principalPosture.principal, key)
         : frameworkScopedKey('durable-task-system', key);
+    };
     return {
       stateKey,
       runMutation: async (definition, input) => {
-        assertActiveTaskLease(job, signal);
+        assertActiveTaskLease(job, signal, assertTaskAuthorityOpen);
         if (writePosture === undefined) throw missingTaskPrincipalPostureError(job, 'write');
         if (runMutation === undefined) {
           throw new Error('Task runner runMutation hook is not configured.');
@@ -536,7 +586,7 @@ export class DurableTaskRunner {
         return runMutation(definition, input, { principalPosture: writePosture, signal });
       },
       runQuery: async (definition, input) => {
-        assertActiveTaskLease(job, signal);
+        assertActiveTaskLease(job, signal, assertTaskAuthorityOpen);
         if (readPosture === undefined) throw missingTaskPrincipalPostureError(job, 'read');
         if (runQuery === undefined) {
           throw new Error('Task runner runQuery hook is not configured.');
@@ -965,7 +1015,12 @@ function isDurableTaskRunInterruptedError(
   );
 }
 
-function assertActiveTaskLease(job: DurableTaskJob, signal: AbortSignal): void {
+function assertActiveTaskLease(
+  job: DurableTaskJob,
+  signal: AbortSignal,
+  assertTaskAuthorityOpen: () => void,
+): void {
+  assertTaskAuthorityOpen();
   if (taskAbortSignalIsAborted(signal)) {
     throw new DurableTaskLeaseLostError(job.id, taskPromiseResolve(undefined));
   }
