@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import { describe, expect, it } from 'vitest';
 
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';
@@ -140,7 +141,13 @@ describe('create-kovo starter (build integration: production contact artifacts)'
               'Kovo-Form-Target': target,
               'Kovo-Fragment': 'true',
               'Kovo-Idem': idem,
-              'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+              'Kovo-Live-Targets': formatLiveTargetDescriptor({
+                component,
+                deps,
+                props,
+                target,
+                token: liveToken,
+              }),
               'Kovo-Targets': `${target}=${deps}`,
               origin,
             },
@@ -518,7 +525,11 @@ function liveTargetDescriptor(openingTag: string): LiveTargetDescriptor {
 }
 
 function formatLiveTargetDescriptor(descriptor: LiveTargetDescriptor): string {
-  return `${descriptor.target}#${descriptor.component}@${descriptor.token}:${descriptor.props}`;
+  const target = encodeFrameworkIdentityToken(descriptor.target);
+  const component = encodeFrameworkIdentityToken(descriptor.component);
+  expect(target).toBeTruthy();
+  expect(component).toBeTruthy();
+  return `${target}#${component}@${descriptor.token}:${descriptor.props}`;
 }
 
 function requiredAttribute(openingTag: string, name: string): string {
