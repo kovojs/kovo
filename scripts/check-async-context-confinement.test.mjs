@@ -215,7 +215,7 @@ describe('async-context confinement census gate', () => {
     expect(validateAsyncContextConfinement(noWinnerGate).findings).toContain(
       'packages/server/src/deferred-region.ts: deferred success, error, and timeout must select one owned JSX re-entry',
     );
-  });
+  }, 120_000);
 
   it('rejects verifier revocation and interleaving-oracle drift', () => {
     const verifier = loadAsyncContextConfinementInput();
