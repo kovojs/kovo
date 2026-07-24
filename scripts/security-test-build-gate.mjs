@@ -227,8 +227,8 @@ export function generateParanoidGeneratorAcceptanceCases({
 }
 
 export function paranoidGeneratorAcceptanceProofNeedles(options) {
-  // DEC-H/A9: Phase 5.1 acceptance is generated across read/write
-  // paranoid-mode shapes, not a single hand-enrolled adversarial fixture.
+  // DEC-H/A9: legacy Phase 5.1 generated read/write shapes must remain closed
+  // when they leave the compiler-owned capability graph and finite IR.
   void options;
   return [
     'writeKovoProject(root, {',
@@ -238,14 +238,10 @@ export function paranoidGeneratorAcceptanceProofNeedles(options) {
     "addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' })",
     'addParanoidPhase5WriteBoundaryProof(root)',
     'buildParanoidProductionArtifact(root)',
-    'expectBlockedReadShapes(origin, jar)',
-    'expectAllowedReadShapes(origin, jar, output)',
-    'expectStarterInScopeWrite(origin, jar, output)',
-    'expectBlockedWrites(origin, jar, output)',
-    'expectWriteStatus(origin, output)',
-    "expect(output()).toContain('KV435')",
-    "expect(output()).toContain('KV406')",
-    "KOVO_PARANOID: '1'",
+    'KV448',
+    'lexical-provenance:mutable-or-ambiguous',
+    'KV449',
+    'closed:opaque-transfer',
   ];
 }
 
@@ -486,71 +482,37 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'phase-5-postgres-paranoid-dogfood-read-acceptance',
-    code: 'KV435',
+    claimId: 'phase-5-postgres-paranoid-dogfood-capability-closure',
+    code: 'KV448',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
     requiredNeedles: [
       "dialect: 'postgres'",
       'addPostgresParanoidPhase5DogfoodProof(root)',
       'buildParanoidProductionArtifact(root)',
-      'expectPostgresEndpoint(origin, output)',
-      'expectPostgresReadonlyRowsEmpty(origin)',
-      'expectPostgresReadonlySecretsDenied(origin)',
-      'expectPostgresTask(origin, jar, marker, output, publicOrigin)',
-      'expectPostgresWebhook(origin, marker, output)',
+      'KV448',
+      'lexical-provenance:mutable-or-ambiguous',
     ],
     requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName: 'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
+    testName: 'rejects the legacy Phase 5 Postgres paranoid dogfood fixture outside the finite IR',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'phase-5-postgres-paranoid-dogfood-write-acceptance',
-    code: 'KV406',
+    claimId: 'phase-5-1-full-paranoid-capability-closure',
+    code: 'KV448',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    requiredNeedles: [
-      "dialect: 'postgres'",
-      'addPostgresParanoidPhase5DogfoodProof(root)',
-      'buildParanoidProductionArtifact(root)',
-      'expectPostgresOwnWrite(origin, jar, publicOrigin)',
-      'expectPostgresCrossOwnerWrite(origin, jar, output, publicOrigin)',
-      'expectPostgresRawCrossOwnerWrite(origin, jar, output, publicOrigin)',
-      'expectPostgresTask(origin, jar, marker, output, publicOrigin)',
-      'expectPostgresWebhook(origin, marker, output)',
-    ],
-    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles(),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName: 'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
+    testName: 'rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'phase-5-1-full-paranoid-dogfood-read-acceptance',
-    code: 'KV435',
+    claimId: 'phase-5-1-full-paranoid-finite-ir-closure',
+    code: 'KV449',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
-      (needle) => needle !== "KOVO_PARANOID: '1'",
-    ),
-    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
-      (needle) => needle === "KOVO_PARANOID: '1'",
-    ),
+    requiredNeedles: [...paranoidGeneratorAcceptanceProofNeedles()],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName:
-      'rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture',
-  },
-  {
-    buildInvocation: 'starter-build-production-artifact',
-    claimId: 'phase-5-1-full-paranoid-dogfood-write-acceptance',
-    code: 'KV406',
-    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter((needle) => {
-      return needle !== "KOVO_PARANOID: '1'";
-    }),
-    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter((needle) => {
-      return needle === "KOVO_PARANOID: '1'";
-    }),
-    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName:
-      'rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture',
+    testName: 'rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

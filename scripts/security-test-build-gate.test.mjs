@@ -152,19 +152,15 @@ describe('security-test-build-gate', () => {
       2,
     );
     expect(paranoidGeneratorAcceptanceProofNeedles().sort()).toEqual([
-      "KOVO_PARANOID: '1'",
+      'KV448',
+      'KV449',
       'addParanoidPhase5WriteBoundaryProof(root)',
       'addSqliteRuntimeSecretProvenanceProof(root)',
       "addStarterMutationDbScopeProof(root, { mode: 'runtime-table-choke' })",
       'buildParanoidProductionArtifact(root)',
+      'closed:opaque-transfer',
       "dialect: 'sqlite'",
-      "expect(output()).toContain('KV406')",
-      "expect(output()).toContain('KV435')",
-      'expectAllowedReadShapes(origin, jar, output)',
-      'expectBlockedReadShapes(origin, jar)',
-      'expectBlockedWrites(origin, jar, output)',
-      'expectStarterInScopeWrite(origin, jar, output)',
-      'expectWriteStatus(origin, output)',
+      'lexical-provenance:mutable-or-ambiguous',
       'pruneParanoidPhase5SqliteReadSet(root)',
       'writeKovoProject(root, {',
     ]);

@@ -120,19 +120,13 @@ const { Pool } = require(resolveDependencyRoot('pg')) as {
 };
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
-  // @kovo-security-certifies KV435 phase-5-postgres-paranoid-dogfood-read-acceptance
-  // @kovo-security-certifies KV406 phase-5-postgres-paranoid-dogfood-write-acceptance
+  // @kovo-security-certifies KV448 phase-5-postgres-paranoid-dogfood-capability-closure
   itIfPostgres(
-    'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
+    'rejects the legacy Phase 5 Postgres paranoid dogfood fixture outside the finite IR',
     async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-paranoid-'));
-      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-cluster-'));
-      const port = await reservePort();
-      const jar = new Map<string, string>();
-      let cluster: LocalPostgresCluster | undefined;
-      let server: ChildProcessWithoutNullStreams | undefined;
 
       try {
         writeKovoProject(root, {
@@ -144,153 +138,23 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
         addPostgresParanoidFollowup8Shapes(root);
         disableRuntimeSeedSql(root);
 
-        buildParanoidProductionArtifact(root);
-        cluster = await startLocalPostgres(clusterRoot);
-        const database = `kovo_phase5_pg_${Date.now()}`;
-        const adminRole = `kovo_phase5_pg_admin_${Date.now()}`;
-        const runtimeRole = `kovo_phase5_pg_runtime_${Date.now()}`;
-        await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
-        const adminUrl = cluster.url(database, adminRole);
-        const runtimeUrl = cluster.url(database, runtimeRole);
-        const systemUrl = cluster.url(database, 'kovo_system');
-        const publicOrigin = `https://127.0.0.1:${port}`;
-
-        const generateOutput = execKovo(root, [
-          'db',
-          'generate',
-          '--schema',
-          'src/schema.ts',
-          '--migrations',
-          'migrations',
-          '--admin-database-url',
-          adminUrl,
-          '--database-url',
-          runtimeUrl,
-        ]);
-        expect(generateOutput).toMatch(/STATUS (generated|empty)/u);
-
-        const provisionOutput = execKovo(root, [
-          'db',
-          'provision',
-          '--schema',
-          'src/schema.ts',
-          '--migrations',
-          'migrations',
-          '--admin-database-url',
-          adminUrl,
-          '--database-url',
-          runtimeUrl,
-        ]);
-        expect(provisionOutput).toContain('STATUS ok');
-        await grantRuntimeDataRoles(cluster.url(database, 'postgres'), runtimeRole);
-        await installPhase5PostgresParanoidFixtures(
-          cluster.url(database, 'postgres'),
-          demoPasswordFromRoot(root),
+        expect(() => buildParanoidProductionArtifact(root)).toThrow(
+          /KV448[\s\S]*lexical-provenance:mutable-or-ambiguous/u,
         );
-        await expectSystemAuthFixtureVisible(systemUrl);
-
-        server = spawn(process.execPath, ['dist/server/server.mjs'], {
-          cwd: root,
-          detached: process.platform !== 'win32',
-          env: {
-            ...withRepoBinOnPath(),
-            ...productionArtifactAttestationEnv('paranoid-authorization-matrix'),
-            BETTER_AUTH_URL: publicOrigin,
-            HOST: '127.0.0.1',
-            KOVO_DATABASE_URL: runtimeUrl,
-            KOVO_DB_SYSTEM_URL: systemUrl,
-            KOVO_NODE_ORIGIN: publicOrigin,
-            KOVO_PARANOID: '1',
-            NODE_ENV: 'production',
-            PORT: String(port),
-          },
-        });
-        const output = collectOutput(server);
-        const origin = `http://127.0.0.1:${port}`;
-        const marker = `phase1-authz-${authorizationMatrixSeed.replace(/[^a-z0-9]+/giu, '-').slice(0, 48)}`;
-
-        await signInDemoUser(root, origin, jar, output, publicOrigin);
-        await runAuthorizationMatrixCells({
-          'endpoint-act-as-other': async () =>
-            expectPostgresWriteBoundaryStatus(origin, {
-              crossOwnerDenied: true,
-              ownWriteVisible: false,
-              rawCrossOwnerDenied: true,
-              verificationDenied: true,
-            }),
-          'endpoint-act-as-owner': async () => expectPostgresEndpoint(origin, output),
-          'endpoint-alias-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'alias', 'owner-visible'),
-          'endpoint-builder-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'builder', 'owner-visible'),
-          'endpoint-cte-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'cte', 'owner-visible'),
-          'endpoint-function-fail-closed': async () =>
-            expectPostgresFunctionBoundary(origin, output),
-          'endpoint-join-act-as-owner-via': async () =>
-            expectPostgresEndpointFamily(origin, output, 'join', 'owner-item'),
-          'endpoint-raw-sql-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'raw-sql', 'owner-visible'),
-          'endpoint-relational-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'relational', 'owner-visible'),
-          'endpoint-subquery-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'subquery-in-from', 'owner-visible'),
-          'endpoint-union-act-as-owner': async () =>
-            expectPostgresEndpointFamily(origin, output, 'union', 'owner-visible'),
-          'endpoint-view-fail-closed': async () =>
-            expectPostgresUnknownRelationBoundary(origin, output),
-          'readonly-anonymous-empty': async () => expectPostgresReadonlyRowsEmpty(origin),
-          'readonly-no-principal-empty': async () => expectPostgresReadonlyRowsEmpty(origin),
-          'readonly-secret-denied': async () => expectPostgresReadonlySecretsDenied(origin),
-          'reference-membership-owner': async () => expectPostgresReferenceMemberships(origin),
-          'runtime-provision-role-assumption-denied': async () =>
-            expectProvisionRoleAssumptionDenied(runtimeUrl, adminRole),
-          'runtime-role-attributes': async () =>
-            expectRuntimeRoleAttributes(runtimeUrl, runtimeRole, adminRole),
-        });
-        await runAuthorizationMatrixCells({
-          'durable-task-act-as-owner': async () =>
-            expectPostgresTask(origin, jar, marker, output, publicOrigin),
-        });
-        await runAuthorizationMatrixCells({
-          'webhook-act-as-owner-replay': async () => expectPostgresWebhook(origin, marker, output),
-        });
-        await runAuthorizationMatrixCells({
-          'mutation-builder-own': async () => expectPostgresOwnWrite(origin, jar, publicOrigin),
-        });
-        await runAuthorizationMatrixCells({
-          'mutation-builder-cross-owner': async () =>
-            expectPostgresCrossOwnerWrite(origin, jar, output, publicOrigin),
-        });
-        await runAuthorizationMatrixCells({
-          'mutation-raw-cross-owner': async () =>
-            expectPostgresRawCrossOwnerWrite(origin, jar, output, publicOrigin),
-        });
-
-        expect(output()).not.toContain('Kovo SQLite starter is experimental');
-        expect(output()).not.toContain('phase5-pg-secret');
-        expect(output()).not.toContain('cross-owner-write');
       } finally {
-        await stopProcess(server);
-        await cluster?.stop();
         rmSync(root, { force: true, recursive: true });
-        rmSync(clusterRoot, { force: true, recursive: true });
       }
       executedPostgresCases.add('phase5-postgres-paranoid-dogfood');
     },
     360_000,
   );
 
-  // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
-  // @kovo-security-certifies KV406 phase-5-1-full-paranoid-dogfood-write-acceptance
-  it('rejects the single-principal SQLite runtime in production, then runs Phase 5.1 sink acceptance under test posture', async () => {
+  // @kovo-security-certifies KV448 phase-5-1-full-paranoid-capability-closure
+  // @kovo-security-certifies KV449 phase-5-1-full-paranoid-finite-ir-closure
+  it('rejects the legacy Phase 5.1 SQLite sink fixture outside the finite IR', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-paranoid-dogfood-'));
-    const port = await reservePort();
-    const jar = new Map<string, string>();
-    let productionServer: ChildProcessWithoutNullStreams | undefined;
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       writeKovoProject(root, {
@@ -304,78 +168,10 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       addParanoidPhase5WriteBoundaryProof(root);
       addParanoidPhase5AuthorizationProof(root);
 
-      buildParanoidProductionArtifact(root);
-
-      productionServer = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          ...productionArtifactAttestationEnv('paranoid-sqlite-refusal'),
-          BETTER_AUTH_URL: 'https://127.0.0.1',
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
-          PORT: '0',
-        },
-      });
-      const productionOutput = collectOutput(productionServer);
-      await Promise.race([
-        onceExit(productionServer),
-        delay(30_000).then(() => {
-          throw new Error(
-            `SQLite production artifact did not reject its single-principal runtime:\n${productionOutput()}`,
-          );
-        }),
-      ]);
-      expect(productionOutput()).toContain('KV414');
-      expect(productionOutput()).toContain(
-        'single-principal SQLite starter must not boot in production',
+      expect(() => buildParanoidProductionArtifact(root)).toThrow(
+        /KV448[\s\S]*lexical-provenance:mutable-or-ambiguous[\s\S]*KV449[\s\S]*closed:opaque-transfer/u,
       );
-
-      // SPEC §10.3 production rejection is proven above. NODE_ENV=test below is deliberately
-      // limited to exercising the SQLite-specific paranoid read/write sink acceptance matrix.
-      const origin = `http://127.0.0.1:${port}`;
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          BETTER_AUTH_URL: origin,
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-
-      await signInDemoUser(root, origin, jar, output);
-      await expectAuthorizationQueryShapes(origin, jar);
-      await expectBlockedReadShapes(origin, jar);
-      await expectAllowedReadShapes(origin, jar, output);
-      await expectNonSecretAggregateEndpoint(origin);
-      await expectSafeBuilderExpressionEndpoint(origin);
-      await expectHiddenBuilderExpressionEndpoint(origin);
-      await expectDeclaredRawReadEndpoint(origin);
-      await expectUnderdeclaredRawReadEndpoint(origin);
-      await expectStarterInScopeWrite(origin, jar, output);
-      await expectAuthorizationEndpoint(origin);
-      await expectAuthorizationStatus(origin);
-      await expectBlockedWrites(origin, jar, output);
-      await expectWriteStatus(origin, output);
-
-      expect(output()).toContain('Kovo SQLite starter is experimental and single-principal only');
-      expect(output()).toContain('KV435');
-      expect(output()).toContain('KV406');
-      expect(output()).toContain('KV438');
-      expect(output()).not.toContain('runtime-secret-value');
-      expect(output()).not.toContain('phase5-builder-secret');
-      expect(output()).not.toContain('phase5-raw-secret');
     } finally {
-      await stopProcess(productionServer);
-      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 900_000);
