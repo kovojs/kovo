@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  reviewedCanonicalClientHandlerCallSummary,
   reviewedCanonicalClientHandlerImportTarget,
   reviewedClientHandlerImportTarget,
 } from './client-handler-import-policy.js';
@@ -276,6 +277,17 @@ describe('client-handler registry integrity', () => {
     expect(reviewedCanonicalClientHandlerImportTarget('@kovojs/headless-ui', 'tabsKeyDown')).toBe(
       '@kovojs/headless-ui/generated',
     );
+    expect(reviewedCanonicalClientHandlerCallSummary('@kovojs/headless-ui', 'tabsKeyDown')).toEqual(
+      {
+        eventArgument: 0,
+        maxArguments: 3,
+        minArguments: 2,
+        returnKind: 'plain-data',
+      },
+    );
+    expect(
+      reviewedCanonicalClientHandlerCallSummary('@kovojs/headless-ui', 'tabsKeyDownForged'),
+    ).toBeUndefined();
   });
 
   it('snapshots generated registry data before later mutation attempts', () => {

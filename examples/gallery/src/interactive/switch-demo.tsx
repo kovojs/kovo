@@ -1,6 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { switchTriggerClick as _switchTriggerClick } from '../primitive-actions.js';
+import {
+  browserEventKey as _browserEventKey,
+  browserEventPreventDefault as _browserEventPreventDefault,
+  switchTriggerClick as _switchTriggerClick,
+} from '../primitive-actions.js';
 import { Switch } from '@kovojs/ui/switch';
 
 export interface GallerySwitchDemoState {
@@ -18,15 +22,15 @@ export const GallerySwitchDemo = component({
       form="gallery-switch-form"
       name="gallery-notifications"
       onClick={() => {
-        const result = _switchTriggerClick(Object(event), { checked: state.checked });
+        const result = _switchTriggerClick(event! as never, { checked: state.checked });
         if (!result) return;
         state.checked = result.checked;
       }}
       onKeyDown={() => {
-        if (Object(event)['key'] !== 'Enter') return;
-        const result = _switchTriggerClick(Object(event), { checked: state.checked });
+        if (_browserEventKey(event! as never) !== 'Enter') return;
+        const result = _switchTriggerClick(event! as never, { checked: state.checked });
         if (!result) return;
-        Object(event)['preventDefault']?.call(event);
+        _browserEventPreventDefault(event! as never);
         state.checked = result.checked;
       }}
       value="enabled"

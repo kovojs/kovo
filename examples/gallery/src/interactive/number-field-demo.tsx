@@ -52,7 +52,7 @@ export const GalleryNumberFieldDemo = component({
               inputId={inputId}
               label="Decrease seats"
               onClick={() => {
-                const result = _numberFieldDecrementClick(Object(event), {
+                const result = _numberFieldDecrementClick(event! as never, {
                   max: 5,
                   min: 0,
                   smallStep: 1,
@@ -71,7 +71,7 @@ export const GalleryNumberFieldDemo = component({
               id={inputId}
               label="Seats"
               onInput={() => {
-                const result = _numberFieldInput(Object(event), {
+                const result = _numberFieldInput(event! as never, {
                   max: 5,
                   min: 0,
                   smallStep: 1,
@@ -82,7 +82,7 @@ export const GalleryNumberFieldDemo = component({
                 state.value = result.value ?? 0;
               }}
               onKeyDown={() => {
-                const result = _numberFieldKeyDown(Object(event), {
+                const result = _numberFieldKeyDown(event! as never, {
                   max: 5,
                   min: 0,
                   smallStep: 1,
@@ -101,7 +101,7 @@ export const GalleryNumberFieldDemo = component({
               inputId={inputId}
               label="Increase seats"
               onClick={() => {
-                const result = _numberFieldIncrementClick(Object(event), {
+                const result = _numberFieldIncrementClick(event! as never, {
                   max: 5,
                   min: 0,
                   smallStep: 1,

@@ -50,7 +50,7 @@ export interface NavigationMenuStateProps {
   disabled?: boolean;
   items?: readonly HeadlessNavigationMenuItem[];
   loop?: boolean;
-  openValue?: string;
+  openValue?: string | undefined;
   orientation?: CollectionOrientation;
 }
 

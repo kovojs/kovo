@@ -416,7 +416,7 @@ describe('compiled interactive gallery demos', () => {
     expect(hoverCardClient).toContain(
       'hoverCardContentPointerEnter as _hoverCardContentPointerEnter',
     );
-    expect(hoverCardClient).toContain('setTimeout');
+    expect(hoverCardClient).not.toContain('setTimeout');
     expect(hoverCardClient).not.toMatch(
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );

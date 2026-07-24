@@ -34,27 +34,27 @@ export const GalleryTooltipDemo = component({
             aria-describedby={state.open ? 'gallery-tooltip-content' : null}
             contentId={contentId}
             onBlur={() => {
-              const result = _tooltipTriggerBlur(Object(event), { open: state.open });
+              const result = _tooltipTriggerBlur(event! as never, { open: state.open });
               if (!result) return;
               state.open = result.open;
             }}
             onFocus={() => {
-              const result = _tooltipTriggerFocus(Object(event), { open: state.open });
+              const result = _tooltipTriggerFocus(event! as never, { open: state.open });
               if (!result) return;
               state.open = result.open;
             }}
             onKeyDown={() => {
-              const result = _tooltipEscapeKeyDown(Object(event), { open: state.open });
+              const result = _tooltipEscapeKeyDown(event! as never, { open: state.open });
               if (!result) return;
               state.open = result.open;
             }}
             onPointerEnter={() => {
-              const result = _tooltipTriggerPointerEnter(Object(event), { open: state.open });
+              const result = _tooltipTriggerPointerEnter(event! as never, { open: state.open });
               if (!result) return;
               state.open = result.open;
             }}
             onPointerLeave={() => {
-              const result = _tooltipTriggerPointerLeave(Object(event), { open: state.open });
+              const result = _tooltipTriggerPointerLeave(event! as never, { open: state.open });
               if (!result) return;
               state.open = result.open;
             }}

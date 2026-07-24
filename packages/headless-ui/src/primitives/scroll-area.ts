@@ -667,6 +667,14 @@ export function scrollAreaThumbGeometry(
   });
 }
 
+/** Framework-owned event projection for compiler-reviewed scroll handlers. */
+export function scrollAreaThumbGeometryFromEvent(
+  event: Event,
+  options: ScrollAreaThumbGeometryOptions = {},
+): ScrollAreaThumbGeometry {
+  return scrollAreaThumbGeometry((event.target ?? {}) as ScrollAreaViewportTarget, options);
+}
+
 /**
  * Computes scroll area viewport scroll for the Scroll Area primitive.
  *

@@ -19,9 +19,20 @@ export type ClientHandlerImportKind =
   | 'namespace'
   | 'type-only';
 
+export interface ReviewedClientHandlerCallSummary {
+  readonly eventArgument?: number;
+  readonly maxArguments: number;
+  readonly minArguments: number;
+  readonly returnKind: 'plain-data';
+}
+
 const GENERATED_HEADLESS_HANDLER_MODULE = '@kovojs/headless-ui/generated';
 const reviewedClientHandlerImportTargets = compilerCreateMap<string, string>();
 const reviewedCanonicalClientHandlerImportTargets = compilerCreateMap<string, string>();
+const reviewedCanonicalClientHandlerCallSummaries = compilerCreateMap<
+  string,
+  ReviewedClientHandlerCallSummary
+>();
 
 registerReviewedClientHandlerImport('@kovojs/core', 'publishToClient', '@kovojs/core');
 registerReviewedCanonicalClientHandlerImport('@kovojs/core', 'publishToClient', '@kovojs/core');
@@ -66,6 +77,66 @@ for (let entryIndex = 0; entryIndex < headlessEntryLength; entryIndex += 1) {
       importedName,
       GENERATED_HEADLESS_HANDLER_MODULE,
     );
+  }
+  const summaries = entry.summaries;
+  const summaryLength = compilerArrayLength(
+    summaries,
+    `Generated Headless UI client-handler imports[${entryIndex}] summaries`,
+  );
+  if (summaryLength !== importedNameLength) {
+    compilerFailClosed(
+      `Generated Headless UI client-handler imports[${entryIndex}] summary count must match its names.`,
+    );
+  }
+  for (let summaryIndex = 0; summaryIndex < summaryLength; summaryIndex += 1) {
+    const summary = compilerOwnDataValue(
+      summaries,
+      summaryIndex,
+      `Generated Headless UI client-handler imports[${entryIndex}] summaries`,
+    );
+    const exportName = compilerOwnDataValue(summary, 'exportName', 'Reviewed call summary');
+    const eventArgument = compilerOwnDataValue(summary, 'eventArgument', 'Reviewed call summary');
+    const maxArguments = compilerOwnDataValue(summary, 'maxArguments', 'Reviewed call summary');
+    const minArguments = compilerOwnDataValue(summary, 'minArguments', 'Reviewed call summary');
+    const returnKind = compilerOwnDataValue(summary, 'returnKind', 'Reviewed call summary');
+    if (
+      typeof exportName !== 'string' ||
+      typeof maxArguments !== 'number' ||
+      maxArguments < 0 ||
+      maxArguments % 1 !== 0 ||
+      (eventArgument !== undefined &&
+        (typeof eventArgument !== 'number' ||
+          eventArgument < 0 ||
+          eventArgument % 1 !== 0 ||
+          eventArgument >= maxArguments)) ||
+      typeof minArguments !== 'number' ||
+      minArguments < 0 ||
+      minArguments % 1 !== 0 ||
+      minArguments > maxArguments ||
+      returnKind !== 'plain-data'
+    ) {
+      compilerFailClosed('Generated Headless UI call summary must be exact finite data.');
+    }
+    const expectedName = compilerOwnDataValue(
+      entry.importedNames,
+      summaryIndex,
+      `Generated Headless UI client-handler imports[${entryIndex}] names`,
+    );
+    if (exportName !== expectedName) {
+      compilerFailClosed(
+        `Generated Headless UI client-handler imports[${entryIndex}] summary ordering is stale.`,
+      );
+    }
+    const key = clientHandlerImportKey('@kovojs/headless-ui', exportName);
+    if (compilerMapGet(reviewedCanonicalClientHandlerCallSummaries, key) !== undefined) {
+      compilerFailClosed(`Duplicate canonical client-handler call summary ${exportName}.`);
+    }
+    compilerMapSet(reviewedCanonicalClientHandlerCallSummaries, key, {
+      ...(eventArgument === undefined ? {} : { eventArgument }),
+      maxArguments,
+      minArguments,
+      returnKind,
+    });
   }
 }
 
@@ -130,6 +201,20 @@ export const reviewedCanonicalClientHandlerImportTarget = securityClassifier(
   function (moduleName: string, importedName: string): string | undefined {
     return compilerMapGet(
       reviewedCanonicalClientHandlerImportTargets,
+      clientHandlerImportKey(moduleName, importedName),
+    );
+  },
+);
+
+/** Resolve the generated, positional finite-call contract for one exact framework export. */
+export const reviewedCanonicalClientHandlerCallSummary = securityClassifier(
+  'compiler.client-handler-import.reviewed-call-summary',
+  function (
+    moduleName: string,
+    importedName: string,
+  ): ReviewedClientHandlerCallSummary | undefined {
+    return compilerMapGet(
+      reviewedCanonicalClientHandlerCallSummaries,
       clientHandlerImportKey(moduleName, importedName),
     );
   },

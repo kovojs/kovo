@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
+  browserEventPreventDefault as _browserEventPreventDefault,
   navigationMenuFocusElement as _navigationMenuFocusElement,
   navigationMenuKeyDown as _navigationMenuKeyDown,
   navigationMenuLinkClick as _navigationMenuLinkClick,
@@ -41,7 +43,7 @@ export const GalleryNavigationMenuDemo = component({
       activeValue: state.activeValue,
       items: navigationItems,
       label: 'Primary',
-      ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+      openValue: state.openValue || undefined,
     };
 
     return (
@@ -50,26 +52,26 @@ export const GalleryNavigationMenuDemo = component({
         data-gallery-interactive="navigation-menu"
         data-open={state.openValue || 'none'}
         onKeyDown={() => {
-          const keyResult = _navigationMenuKeyDown(Object(event), {
+          const keyResult = _navigationMenuKeyDown(event! as never, {
             activeValue: state.activeValue,
             items: [
               { hasContent: true, label: 'Products', value: 'products' },
               { label: 'Docs', value: 'docs' },
             ],
-            ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+            openValue: state.openValue || undefined,
           });
           if (keyResult?.changed) {
             state.openValue = keyResult.openValue ?? '';
-            if (Object(event).key === 'Escape') {
+            if (_browserEventKey(event! as never) === 'Escape') {
               _navigationMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.activeValue === 'docs'
                   ? 'gallery-navigation-docs-link'
                   : 'gallery-navigation-products-trigger',
               );
             } else {
               state.activeValue = 'products';
-              _navigationMenuFocusElement(Object(event), 'gallery-navigation-products-trigger');
+              _navigationMenuFocusElement(event! as never, 'gallery-navigation-products-trigger');
             }
             return;
           }
@@ -81,18 +83,18 @@ export const GalleryNavigationMenuDemo = component({
                 { hasContent: true, label: 'Products', value: 'products' },
                 { label: 'Docs', value: 'docs' },
               ],
-              ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+              openValue: state.openValue || undefined,
             },
-            Object(event).key,
+            _browserEventKey(event! as never),
             { loop: true },
           );
           if (move) {
-            Object(event).preventDefault?.();
+            _browserEventPreventDefault(event! as never);
             state.activeValue = move.activeValue ?? state.activeValue;
             if (state.openValue !== '')
               state.openValue = state.activeValue === 'products' ? 'products' : '';
             _navigationMenuFocusElement(
-              Object(event),
+              event! as never,
               state.activeValue === 'docs'
                 ? 'gallery-navigation-docs-link'
                 : 'gallery-navigation-products-trigger',
@@ -107,18 +109,18 @@ export const GalleryNavigationMenuDemo = component({
                 { hasContent: true, label: 'Products', value: 'products' },
                 { label: 'Docs', value: 'docs' },
               ],
-              ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+              openValue: state.openValue || undefined,
             },
-            Object(event).key,
+            _browserEventKey(event! as never),
             { loop: true, now: 0 },
           );
           if (typeahead.activeValue === state.activeValue) return;
-          Object(event).preventDefault?.();
+          _browserEventPreventDefault(event! as never);
           state.activeValue = typeahead.activeValue ?? state.activeValue;
           if (state.openValue !== '')
             state.openValue = state.activeValue === 'products' ? 'products' : '';
           _navigationMenuFocusElement(
-            Object(event),
+            event! as never,
             state.activeValue === 'docs'
               ? 'gallery-navigation-docs-link'
               : 'gallery-navigation-products-trigger',
@@ -142,7 +144,7 @@ export const GalleryNavigationMenuDemo = component({
               itemLabel="Products"
               itemValue="products"
               onClick={() => {
-                const result = _navigationMenuTriggerClick(Object(event), {
+                const result = _navigationMenuTriggerClick(event! as never, {
                   activeValue: state.activeValue,
                   contentId: 'gallery-navigation-products-content',
                   itemValue: 'products',
@@ -150,14 +152,14 @@ export const GalleryNavigationMenuDemo = component({
                     { hasContent: true, label: 'Products', value: 'products' },
                     { label: 'Docs', value: 'docs' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (!result?.changed) return;
                 state.activeValue = 'products';
                 state.openValue = result.openValue ?? '';
               }}
               onFocus={() => {
-                const result = _navigationMenuTriggerFocus(Object(event), {
+                const result = _navigationMenuTriggerFocus(event! as never, {
                   activeValue: state.activeValue,
                   contentId: 'gallery-navigation-products-content',
                   itemValue: 'products',
@@ -165,13 +167,13 @@ export const GalleryNavigationMenuDemo = component({
                     { hasContent: true, label: 'Products', value: 'products' },
                     { label: 'Docs', value: 'docs' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 state.activeValue = 'products';
                 if (result?.changed) state.openValue = result.openValue ?? '';
               }}
               onPointerEnter={() => {
-                const result = _navigationMenuTriggerPointerEnter(Object(event), {
+                const result = _navigationMenuTriggerPointerEnter(event! as never, {
                   activeValue: state.activeValue,
                   contentId: 'gallery-navigation-products-content',
                   itemValue: 'products',
@@ -179,7 +181,7 @@ export const GalleryNavigationMenuDemo = component({
                     { hasContent: true, label: 'Products', value: 'products' },
                     { label: 'Docs', value: 'docs' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 state.activeValue = 'products';
                 if (result?.changed) state.openValue = result.openValue ?? '';
@@ -204,7 +206,7 @@ export const GalleryNavigationMenuDemo = component({
               itemLabel="Docs"
               itemValue="docs"
               onClick={() => {
-                const result = _navigationMenuLinkClick(Object(event), {
+                const result = _navigationMenuLinkClick(event! as never, {
                   activeValue: state.activeValue,
                   href: '/docs',
                   itemValue: 'docs',
@@ -212,10 +214,10 @@ export const GalleryNavigationMenuDemo = component({
                     { hasContent: true, label: 'Products', value: 'products' },
                     { label: 'Docs', value: 'docs' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (!result?.selected) return;
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.activeValue = 'docs';
                 state.openValue = result.open.openValue ?? '';
                 state.value = result.value;

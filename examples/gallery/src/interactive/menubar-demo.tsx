@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
+  browserEventPreventDefault as _browserEventPreventDefault,
   menubarFocusElement as _menubarFocusElement,
   menubarItemClick as _menubarItemClick,
   menubarItemKeyDown as _menubarItemKeyDown,
@@ -34,7 +36,7 @@ export const GalleryMenubarDemo = component({
       activeValue: state.activeValue,
       items: menubarItems,
       label: 'Document commands',
-      ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+      openValue: state.openValue || undefined,
     };
 
     return (
@@ -43,7 +45,7 @@ export const GalleryMenubarDemo = component({
         data-gallery-interactive="menubar"
         data-open={state.openValue || 'none'}
         onKeyDown={() => {
-          const keyResult = _menubarKeyDown(Object(event), {
+          const keyResult = _menubarKeyDown(event! as never, {
             activeValue: state.activeValue,
             items: [
               { hasPopup: true, label: 'File', value: 'file' },
@@ -51,16 +53,16 @@ export const GalleryMenubarDemo = component({
               { label: 'New file', parentValue: 'file', value: 'new' },
               { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
             ],
-            ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+            openValue: state.openValue || undefined,
           });
           if (keyResult?.changed) {
             state.openValue = keyResult.openValue ?? '';
-            if (Object(event).key === 'Escape') {
+            if (_browserEventKey(event! as never) === 'Escape') {
               state.activeValue = 'file';
-              _menubarFocusElement(Object(event), 'gallery-menubar-file');
+              _menubarFocusElement(event! as never, 'gallery-menubar-file');
             } else if (state.activeValue === 'file') {
               state.activeValue = 'new';
-              _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
+              _menubarFocusElement(event! as never, 'gallery-menubar-new', { defer: true });
             }
             return;
           }
@@ -74,18 +76,18 @@ export const GalleryMenubarDemo = component({
                 { label: 'New file', parentValue: 'file', value: 'new' },
                 { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
               ],
-              ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+              openValue: state.openValue || undefined,
             },
-            Object(event).key,
+            _browserEventKey(event! as never),
             { loop: true },
           );
           if (move) {
-            Object(event).preventDefault?.();
+            _browserEventPreventDefault(event! as never);
             state.activeValue = move.activeValue ?? state.activeValue;
             if (state.openValue !== '')
               state.openValue = state.activeValue === 'file' ? 'file' : '';
             _menubarFocusElement(
-              Object(event),
+              event! as never,
               state.activeValue === 'edit' ? 'gallery-menubar-edit' : 'gallery-menubar-file',
             );
             return;
@@ -100,17 +102,17 @@ export const GalleryMenubarDemo = component({
                 { label: 'New file', parentValue: 'file', value: 'new' },
                 { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
               ],
-              ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+              openValue: state.openValue || undefined,
             },
-            Object(event).key,
+            _browserEventKey(event! as never),
             { loop: true, now: 0 },
           );
           if (typeahead.activeValue === state.activeValue) return;
-          Object(event).preventDefault?.();
+          _browserEventPreventDefault(event! as never);
           state.activeValue = typeahead.activeValue ?? state.activeValue;
           if (state.openValue !== '') state.openValue = state.activeValue === 'file' ? 'file' : '';
           _menubarFocusElement(
-            Object(event),
+            event! as never,
             state.activeValue === 'edit' ? 'gallery-menubar-edit' : 'gallery-menubar-file',
           );
         }}
@@ -131,7 +133,7 @@ export const GalleryMenubarDemo = component({
               itemLabel="File"
               itemValue="file"
               onClick={() => {
-                const result = _menubarSubmenuTriggerClick(Object(event), {
+                const result = _menubarSubmenuTriggerClick(event! as never, {
                   activeValue: state.activeValue,
                   contentId: 'gallery-menubar-file-menu',
                   itemValue: 'file',
@@ -141,23 +143,23 @@ export const GalleryMenubarDemo = component({
                     { label: 'New file', parentValue: 'file', value: 'new' },
                     { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (!result?.changed) return;
                 state.openValue = result.openValue ?? '';
                 state.activeValue = result.openValue === 'file' ? 'new' : 'file';
                 if (result.openValue === 'file')
-                  _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
+                  _menubarFocusElement(event! as never, 'gallery-menubar-new', { defer: true });
               }}
               onKeyDown={() => {
                 if (
-                  Object(event).key !== 'Enter' &&
-                  Object(event).key !== ' ' &&
-                  Object(event).key !== 'Spacebar'
+                  _browserEventKey(event! as never) !== 'Enter' &&
+                  _browserEventKey(event! as never) !== ' ' &&
+                  _browserEventKey(event! as never) !== 'Spacebar'
                 )
                   return;
 
-                const result = _menubarSubmenuTriggerClick(Object(event), {
+                const result = _menubarSubmenuTriggerClick(event! as never, {
                   activeValue: state.activeValue,
                   contentId: 'gallery-menubar-file-menu',
                   itemValue: 'file',
@@ -167,14 +169,14 @@ export const GalleryMenubarDemo = component({
                     { label: 'New file', parentValue: 'file', value: 'new' },
                     { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (!result?.changed) return;
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.openValue = result.openValue ?? '';
                 state.activeValue = result.openValue === 'file' ? 'new' : 'file';
                 if (result.openValue === 'file')
-                  _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
+                  _menubarFocusElement(event! as never, 'gallery-menubar-new', { defer: true });
               }}
               tabIndex={state.activeValue === 'file' ? 0 : -1}
             >
@@ -213,7 +215,7 @@ export const GalleryMenubarDemo = component({
               itemParentValue="file"
               itemValue="new"
               onKeyDown={() => {
-                const result = _menubarItemKeyDown(Object(event), {
+                const result = _menubarItemKeyDown(event! as never, {
                   activeValue: state.activeValue,
                   itemParentValue: 'file',
                   itemValue: 'new',
@@ -223,17 +225,17 @@ export const GalleryMenubarDemo = component({
                     { label: 'New file', parentValue: 'file', value: 'new' },
                     { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (result?.selected) {
                   state.openValue = result.open.openValue ?? '';
                   state.activeValue = 'file';
                   state.value = result.value;
-                  _menubarFocusElement(Object(event), 'gallery-menubar-file');
+                  _menubarFocusElement(event! as never, 'gallery-menubar-file');
                   return;
                 }
 
-                const keyResult = _menubarKeyDown(Object(event), {
+                const keyResult = _menubarKeyDown(event! as never, {
                   activeValue: state.activeValue,
                   items: [
                     { hasPopup: true, label: 'File', value: 'file' },
@@ -241,12 +243,12 @@ export const GalleryMenubarDemo = component({
                     { label: 'New file', parentValue: 'file', value: 'new' },
                     { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (keyResult?.changed) {
                   state.openValue = keyResult.openValue ?? '';
                   state.activeValue = 'file';
-                  _menubarFocusElement(Object(event), 'gallery-menubar-file');
+                  _menubarFocusElement(event! as never, 'gallery-menubar-file');
                   return;
                 }
 
@@ -259,15 +261,15 @@ export const GalleryMenubarDemo = component({
                       { label: 'New file', parentValue: 'file', value: 'new' },
                       { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                     ],
-                    ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                    openValue: state.openValue || undefined,
                   },
-                  Object(event).key,
+                  _browserEventKey(event! as never),
                   { loop: true, parentValue: 'file' },
                 );
                 if (move) {
-                  Object(event).preventDefault?.();
+                  _browserEventPreventDefault(event! as never);
                   state.activeValue = move.activeValue ?? state.activeValue;
-                  _menubarFocusElement(Object(event), 'gallery-menubar-new');
+                  _menubarFocusElement(event! as never, 'gallery-menubar-new');
                   return;
                 }
 
@@ -280,18 +282,18 @@ export const GalleryMenubarDemo = component({
                       { label: 'New file', parentValue: 'file', value: 'new' },
                       { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                     ],
-                    ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                    openValue: state.openValue || undefined,
                   },
-                  Object(event).key,
+                  _browserEventKey(event! as never),
                   { loop: true, now: 0, parentValue: 'file' },
                 );
                 if (typeahead.activeValue === state.activeValue) return;
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.activeValue = typeahead.activeValue ?? state.activeValue;
-                _menubarFocusElement(Object(event), 'gallery-menubar-new');
+                _menubarFocusElement(event! as never, 'gallery-menubar-new');
               }}
               onClick={() => {
-                const result = _menubarItemClick(Object(event), {
+                const result = _menubarItemClick(event! as never, {
                   activeValue: state.activeValue,
                   itemParentValue: 'file',
                   itemValue: 'new',
@@ -301,13 +303,13 @@ export const GalleryMenubarDemo = component({
                     { label: 'New file', parentValue: 'file', value: 'new' },
                     { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
                   ],
-                  ...(state.openValue === '' ? {} : { openValue: state.openValue }),
+                  openValue: state.openValue || undefined,
                 });
                 if (!result?.selected) return;
                 state.openValue = result.open.openValue ?? '';
                 state.activeValue = 'file';
                 state.value = result.value;
-                _menubarFocusElement(Object(event), 'gallery-menubar-file');
+                _menubarFocusElement(event! as never, 'gallery-menubar-file');
               }}
               tabIndex={state.activeValue === 'new' ? 0 : -1}
             >

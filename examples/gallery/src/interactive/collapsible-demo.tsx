@@ -1,6 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { collapsibleTriggerClick as _collapsibleTriggerClick } from '../primitive-actions.js';
+import {
+  browserEventPreventDefault as _browserEventPreventDefault,
+  collapsibleTriggerClick as _collapsibleTriggerClick,
+} from '../primitive-actions.js';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@kovojs/ui/collapsible';
 
 export interface GalleryCollapsibleDemoState {
@@ -19,9 +22,9 @@ export const GalleryCollapsibleDemo = component({
         <CollapsibleTrigger
           contentId={contentId}
           onClick={() => {
-            const result = _collapsibleTriggerClick(Object(event), { open: state.open });
+            const result = _collapsibleTriggerClick(event! as never, { open: state.open });
             if (!result) return;
-            Object(event)['preventDefault']?.call(event);
+            _browserEventPreventDefault(event! as never);
             state.open = result.open;
           }}
           open={state.open}

@@ -1,6 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventTargetChecked as _browserEventTargetChecked,
+  browserEventTargetValid as _browserEventTargetValid,
+  browserEventTargetValue as _browserEventTargetValue,
+} from '../primitive-actions.js';
+import {
   Field,
   FieldControl,
   FieldDescription,
@@ -72,14 +77,8 @@ export const GalleryFieldDemo = component({
             id="gallery-interactive-field-email-input"
             name="gallery-email"
             onInput={() => {
-              const target = Object(event)['target'];
-              const nextEmail = Object(target)['value']?.toString?.() ?? state.email;
-              const checkValidity = Object(target)['checkValidity'];
-              state.email = nextEmail;
-              state.invalid =
-                typeof checkValidity === 'function'
-                  ? !checkValidity.call(target)
-                  : !/.+@kovo\.sh/.test(nextEmail);
+              state.email = _browserEventTargetValue(event! as never);
+              state.invalid = !_browserEventTargetValid(event! as never);
             }}
             pattern={'.+@kovo\\.sh'}
             type="email"
@@ -137,7 +136,7 @@ export const GalleryFieldDemo = component({
             id="gallery-interactive-field-plan-select"
             name="gallery-plan"
             onChange={() => {
-              state.plan = Object(event)['target']?.value?.toString?.() ?? state.plan;
+              state.plan = _browserEventTargetValue(event! as never);
             }}
             required={true}
             value={state.plan}
@@ -177,9 +176,10 @@ export const GalleryFieldDemo = component({
                 type="checkbox"
                 checked={state.shippingDisabled}
                 onClick={() => {
-                  const checked = Object(event)['target']?.checked;
-                  state.shippingDisabled =
-                    typeof checked === 'boolean' ? checked : !state.shippingDisabled;
+                  state.shippingDisabled = _browserEventTargetChecked(
+                    event! as never,
+                    state.shippingDisabled,
+                  );
                 }}
               />
               Disable shipping group

@@ -44,7 +44,7 @@ export const GalleryAlertDialogDemo = component({
           data-state={state.open ? 'open' : 'closed'}
           open={state.open}
           onClick={() => {
-            const result = _alertDialogTriggerClick(Object(event), { open: state.open });
+            const result = _alertDialogTriggerClick(event! as never, { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
@@ -57,7 +57,7 @@ export const GalleryAlertDialogDemo = component({
           descriptionId={descriptionId}
           open={state.open}
           onCancel={() => {
-            const result = _alertDialogCancel(Object(event), { open: state.open });
+            const result = _alertDialogCancel(event! as never, { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
@@ -76,7 +76,7 @@ export const GalleryAlertDialogDemo = component({
               data-state={state.open ? 'open' : 'closed'}
               open={state.open}
               onClick={() => {
-                const result = _alertDialogCancelClick(Object(event), { open: state.open });
+                const result = _alertDialogCancelClick(event! as never, { open: state.open });
                 if (!result?.changed) return;
                 state.open = result.open;
               }}
@@ -89,7 +89,7 @@ export const GalleryAlertDialogDemo = component({
               intent="destructive"
               open={state.open}
               onClick={() => {
-                const result = _alertDialogActionClick(Object(event), { open: state.open });
+                const result = _alertDialogActionClick(event! as never, { open: state.open });
                 if (!result?.changed) return;
                 state.open = result.open;
               }}

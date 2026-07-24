@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
   comboboxFilteredItems as _comboboxFilteredItems,
   comboboxInput as _comboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
@@ -97,7 +98,7 @@ export const GalleryComboboxDemo = component({
               state.highlightedValue = state.value;
             }}
             onInput={() => {
-              const result = _comboboxInput(Object(event), { value: state.inputValue });
+              const result = _comboboxInput(event! as never, { value: state.inputValue });
               if (!result) return;
               state.inputValue = result.value ?? '';
               state.open = true;
@@ -126,7 +127,7 @@ export const GalleryComboboxDemo = component({
                 filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
             }}
             onKeyDown={() => {
-              const result = _comboboxKeyDown(Object(event), {
+              const result = _comboboxKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: _comboboxFilteredItems({
                   items: [
@@ -165,7 +166,7 @@ export const GalleryComboboxDemo = component({
                 state.highlightedValue = result.highlightedValue ?? '';
               } else {
                 state.open = result.open;
-                if (Object(event)['key'] === 'Escape') {
+                if (_browserEventKey(event! as never) === 'Escape') {
                   state.inputValue = state.value;
                   state.highlightedValue = state.value;
                 }
@@ -193,7 +194,7 @@ export const GalleryComboboxDemo = component({
               itemLabel="Austin"
               itemValue="austin"
               onClick={() => {
-                const result = _comboboxOptionClick(Object(event), {
+                const result = _comboboxOptionClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   items: [
                     {
@@ -260,7 +261,7 @@ export const GalleryComboboxDemo = component({
               id="gallery-combobox-listbox-option-2"
               itemValue="chicago"
               onClick={() => {
-                const result = _comboboxOptionClick(Object(event), {
+                const result = _comboboxOptionClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   items: [
                     {

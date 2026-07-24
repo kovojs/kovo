@@ -34,33 +34,29 @@ export const GalleryHoverCardDemo = component({
           href="#hover-card-demo"
           open={state.open}
           onBlur={() => {
-            const result = _hoverCardTriggerBlur(Object(event), { open: state.open });
+            const result = _hoverCardTriggerBlur(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
           onFocus={() => {
-            const result = _hoverCardTriggerFocus(Object(event), { open: state.open });
+            const result = _hoverCardTriggerFocus(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
           onKeyDown={() => {
-            const result = _hoverCardEscapeKeyDown(Object(event), { open: state.open });
+            const result = _hoverCardEscapeKeyDown(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
           onPointerEnter={() => {
-            const result = _hoverCardTriggerPointerEnter(Object(event), { open: state.open });
+            const result = _hoverCardTriggerPointerEnter(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
           onPointerLeave={() => {
-            return new Promise((resolve) => {
-              setTimeout(() => {
-                const result = _hoverCardTriggerPointerLeave(Object(event), { open: state.open });
-                if (result) state.open = result.open;
-                resolve(undefined);
-              }, 150);
-            });
+            const result = _hoverCardTriggerPointerLeave(event! as never, { open: state.open });
+            if (!result) return;
+            state.open = result.open;
           }}
         >
           Ada Lovelace
@@ -71,12 +67,12 @@ export const GalleryHoverCardDemo = component({
           hidden={!state.open}
           open={state.open}
           onPointerEnter={() => {
-            const result = _hoverCardContentPointerEnter(Object(event), { open: state.open });
+            const result = _hoverCardContentPointerEnter(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
           onPointerLeave={() => {
-            const result = _hoverCardContentPointerLeave(Object(event), { open: state.open });
+            const result = _hoverCardContentPointerLeave(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}

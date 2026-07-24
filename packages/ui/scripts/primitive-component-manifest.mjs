@@ -277,6 +277,16 @@ export const primitiveComponentManifest = {
   ],
   headlessPrimitives: [
     {
+      clientHelpers: [
+        'browserDataString',
+        'browserEventFocusElement',
+        'browserEventFocusIndexedElement',
+        'browserEventKey',
+        'browserEventPreventDefault',
+        'browserEventTargetChecked',
+        'browserEventTargetValid',
+        'browserEventTargetValue',
+      ],
       handlers: ['accordionKeyDown', 'accordionTriggerClick'],
       subpath: 'accordion',
     },
@@ -438,7 +448,7 @@ export const primitiveComponentManifest = {
       subpath: 'radio-group',
     },
     {
-      clientHelpers: ['scrollAreaThumbGeometry'],
+      clientHelpers: ['scrollAreaThumbGeometry', 'scrollAreaThumbGeometryFromEvent'],
       handlers: [
         'scrollAreaScrollTo',
         'scrollAreaThumbDrag',

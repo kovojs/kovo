@@ -39,7 +39,7 @@ export const GalleryRadioGroupDemo = component({
         data-gallery-interactive="radio-group"
         labelledBy="gallery-radio-group-label"
         onKeyDown={() => {
-          const result = _radioGroupKeyDown(Object(event), {
+          const result = _radioGroupKeyDown(event! as never, {
             items: [{ value: 'email' }, { disabled: true, value: 'phone' }, { value: 'sms' }],
             value: state.value,
           });
@@ -58,7 +58,7 @@ export const GalleryRadioGroupDemo = component({
             controlId="gallery-radio-email"
             itemValue="email"
             onClick={() => {
-              const result = _radioGroupItemClick(Object(event), {
+              const result = _radioGroupItemClick(event! as never, {
                 itemValue: 'email',
                 value: state.value,
               });
@@ -100,7 +100,7 @@ export const GalleryRadioGroupDemo = component({
             controlId="gallery-radio-sms"
             itemValue="sms"
             onClick={() => {
-              const result = _radioGroupItemClick(Object(event), {
+              const result = _radioGroupItemClick(event! as never, {
                 itemValue: 'sms',
                 value: state.value,
               });

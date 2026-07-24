@@ -92,10 +92,10 @@ export const GalleryToastDemo = component({
           id="gallery-toast-viewport"
           label="Gallery notifications"
           onKeyDown={() => {
-            if (_toastViewportKeyDown(Object(event))) return;
+            if (_toastViewportKeyDown(event! as never)) return;
 
             if (state.activeOpen) {
-              const result = _toastEscapeKeyDown(Object(event), {
+              const result = _toastEscapeKeyDown(event! as never, {
                 id: 'gallery-toast',
                 open: state.activeOpen,
               });
@@ -104,7 +104,7 @@ export const GalleryToastDemo = component({
               return;
             }
 
-            const previousResult = _toastEscapeKeyDown(Object(event), {
+            const previousResult = _toastEscapeKeyDown(event! as never, {
               id: 'gallery-toast-previous',
               open: state.previousOpen,
             });
@@ -125,7 +125,7 @@ export const GalleryToastDemo = component({
               {...previousToastState}
               data-state={state.previousOpen ? 'open' : 'closed'}
               onClick={() => {
-                const result = _toastCloseClick(Object(event), {
+                const result = _toastCloseClick(event! as never, {
                   id: 'gallery-toast-previous',
                   open: state.previousOpen,
                 });
@@ -140,7 +140,7 @@ export const GalleryToastDemo = component({
             hidden={!state.activeOpen}
             onAnimationEnd={() => {
               const result = _toastAnimationEnd(
-                Object(event),
+                event! as never,
                 { id: 'gallery-toast', open: state.activeOpen },
                 'gallery-toast-auto-dismiss',
               );
@@ -161,7 +161,7 @@ export const GalleryToastDemo = component({
               {...activeToastState}
               actionValue="undo"
               onClick={() => {
-                const result = _toastActionClick(Object(event), {
+                const result = _toastActionClick(event! as never, {
                   id: 'gallery-toast',
                   open: state.activeOpen,
                 });
@@ -178,7 +178,7 @@ export const GalleryToastDemo = component({
               dismissOnAction={false}
               onClick={() => {
                 const result = _toastActionClick(
-                  Object(event),
+                  event! as never,
                   { id: 'gallery-toast', open: state.activeOpen },
                   { dismissOnAction: false },
                 );
@@ -191,7 +191,7 @@ export const GalleryToastDemo = component({
               {...activeToastState}
               data-state={state.activeOpen ? 'open' : 'closed'}
               onClick={() => {
-                const result = _toastCloseClick(Object(event), {
+                const result = _toastCloseClick(event! as never, {
                   id: 'gallery-toast',
                   open: state.activeOpen,
                 });
@@ -206,7 +206,7 @@ export const GalleryToastDemo = component({
               disabled={true}
               dismissOnAction={false}
               onClick={() => {
-                _toastActionClick(Object(event), {
+                _toastActionClick(event! as never, {
                   disabled: true,
                   id: 'gallery-toast',
                   open: state.activeOpen,

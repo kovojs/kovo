@@ -37,7 +37,7 @@ export const GalleryPopoverDemo = component({
           contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
           onBeforeToggle={() => {
-            const result = _popoverBeforeToggle(Object(event), { open: state.open });
+            const result = _popoverBeforeToggle(event! as never, { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}

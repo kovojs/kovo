@@ -12,6 +12,16 @@ import {
   type PrimitiveDataAttributes,
   type TextDirection,
 } from '../lib/index.js';
+export {
+  browserDataString,
+  browserEventFocusElement,
+  browserEventFocusIndexedElement,
+  browserEventKey,
+  browserEventPreventDefault,
+  browserEventTargetChecked,
+  browserEventTargetValid,
+  browserEventTargetValue,
+} from './browser-event.js';
 
 /**
  * Public type used by the Accordion primitive.

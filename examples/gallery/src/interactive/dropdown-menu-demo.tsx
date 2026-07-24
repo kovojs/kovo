@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
+  browserEventPreventDefault as _browserEventPreventDefault,
   dropdownMenuFocusElement as _dropdownMenuFocusElement,
   dropdownMenuItemClick as _dropdownMenuItemClick,
   dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown,
@@ -55,7 +57,7 @@ export const GalleryDropdownMenuDemo = component({
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-dropdown-menu-trigger"
           onClick={() => {
-            const result = _dropdownMenuTriggerClick(Object(event), {
+            const result = _dropdownMenuTriggerClick(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Duplicate', value: 'duplicate' },
@@ -68,12 +70,12 @@ export const GalleryDropdownMenuDemo = component({
             state.open = result.open;
             state.highlightedValue = 'duplicate';
             if (result.open)
-              _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-duplicate', {
+              _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-duplicate', {
                 defer: true,
               });
           }}
           onKeyDown={() => {
-            const result = _dropdownMenuTriggerKeyDown(Object(event), {
+            const result = _dropdownMenuTriggerKeyDown(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Duplicate', value: 'duplicate' },
@@ -84,10 +86,11 @@ export const GalleryDropdownMenuDemo = component({
             });
             if (!result?.changed) return;
             state.open = result.open;
-            state.highlightedValue = Object(event).key === 'ArrowUp' ? 'rename' : 'duplicate';
+            state.highlightedValue =
+              _browserEventKey(event! as never) === 'ArrowUp' ? 'rename' : 'duplicate';
             if (result.open) {
               _dropdownMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.highlightedValue === 'rename'
                   ? 'gallery-dropdown-menu-rename'
                   : 'gallery-dropdown-menu-duplicate',
@@ -112,7 +115,7 @@ export const GalleryDropdownMenuDemo = component({
             itemLabel="Duplicate"
             itemValue="duplicate"
             onKeyDown={() => {
-              const result = _dropdownMenuItemKeyDown(Object(event), {
+              const result = _dropdownMenuItemKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'duplicate',
                 items: [
@@ -126,11 +129,11 @@ export const GalleryDropdownMenuDemo = component({
                 state.open = result.open.open;
                 state.highlightedValue = result.value;
                 state.value = result.value;
-                _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+                _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
                 return;
               }
 
-              const keyResult = _dropdownMenuKeyDown(Object(event), {
+              const keyResult = _dropdownMenuKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Duplicate', value: 'duplicate' },
@@ -142,7 +145,7 @@ export const GalleryDropdownMenuDemo = component({
               if (keyResult?.changed) {
                 state.open = keyResult.open;
                 if (!keyResult.open)
-                  _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+                  _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
                 return;
               }
 
@@ -156,14 +159,14 @@ export const GalleryDropdownMenuDemo = component({
                   ],
                   open: state.open,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { loop: true },
               );
               if (move) {
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
                 _dropdownMenuFocusElement(
-                  Object(event),
+                  event! as never,
                   state.highlightedValue === 'rename'
                     ? 'gallery-dropdown-menu-rename'
                     : 'gallery-dropdown-menu-duplicate',
@@ -181,21 +184,21 @@ export const GalleryDropdownMenuDemo = component({
                   ],
                   open: state.open,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { now: 0, loop: true },
               );
               if (typeahead.highlightedValue === state.highlightedValue) return;
-              Object(event).preventDefault?.();
+              _browserEventPreventDefault(event! as never);
               state.highlightedValue = typeahead.highlightedValue ?? state.highlightedValue;
               _dropdownMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.highlightedValue === 'rename'
                   ? 'gallery-dropdown-menu-rename'
                   : 'gallery-dropdown-menu-duplicate',
               );
             }}
             onClick={() => {
-              const result = _dropdownMenuItemClick(Object(event), {
+              const result = _dropdownMenuItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'duplicate',
                 items: [
@@ -209,7 +212,7 @@ export const GalleryDropdownMenuDemo = component({
               state.open = result.open.open;
               state.highlightedValue = result.value;
               state.value = result.value;
-              _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+              _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
             }}
             tabIndex={state.highlightedValue === 'duplicate' ? 0 : -1}
           >
@@ -232,7 +235,7 @@ export const GalleryDropdownMenuDemo = component({
             itemLabel="Rename"
             itemValue="rename"
             onKeyDown={() => {
-              const result = _dropdownMenuItemKeyDown(Object(event), {
+              const result = _dropdownMenuItemKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'rename',
                 items: [
@@ -246,11 +249,11 @@ export const GalleryDropdownMenuDemo = component({
                 state.open = result.open.open;
                 state.highlightedValue = result.value;
                 state.value = result.value;
-                _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+                _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
                 return;
               }
 
-              const keyResult = _dropdownMenuKeyDown(Object(event), {
+              const keyResult = _dropdownMenuKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Duplicate', value: 'duplicate' },
@@ -262,7 +265,7 @@ export const GalleryDropdownMenuDemo = component({
               if (keyResult?.changed) {
                 state.open = keyResult.open;
                 if (!keyResult.open)
-                  _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+                  _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
                 return;
               }
 
@@ -276,14 +279,14 @@ export const GalleryDropdownMenuDemo = component({
                   ],
                   open: state.open,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { loop: true },
               );
               if (move) {
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
                 _dropdownMenuFocusElement(
-                  Object(event),
+                  event! as never,
                   state.highlightedValue === 'rename'
                     ? 'gallery-dropdown-menu-rename'
                     : 'gallery-dropdown-menu-duplicate',
@@ -301,21 +304,21 @@ export const GalleryDropdownMenuDemo = component({
                   ],
                   open: state.open,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { now: 0, loop: true },
               );
               if (typeahead.highlightedValue === state.highlightedValue) return;
-              Object(event).preventDefault?.();
+              _browserEventPreventDefault(event! as never);
               state.highlightedValue = typeahead.highlightedValue ?? state.highlightedValue;
               _dropdownMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.highlightedValue === 'rename'
                   ? 'gallery-dropdown-menu-rename'
                   : 'gallery-dropdown-menu-duplicate',
               );
             }}
             onClick={() => {
-              const result = _dropdownMenuItemClick(Object(event), {
+              const result = _dropdownMenuItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'rename',
                 items: [
@@ -329,7 +332,7 @@ export const GalleryDropdownMenuDemo = component({
               state.open = result.open.open;
               state.highlightedValue = result.value;
               state.value = result.value;
-              _dropdownMenuFocusElement(Object(event), 'gallery-dropdown-menu-trigger');
+              _dropdownMenuFocusElement(event! as never, 'gallery-dropdown-menu-trigger');
             }}
             tabIndex={state.highlightedValue === 'rename' ? 0 : -1}
           >

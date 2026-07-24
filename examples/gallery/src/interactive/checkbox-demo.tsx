@@ -20,7 +20,7 @@ export const GalleryCheckboxDemo = component({
       data-gallery-interactive="checkbox"
       name="gallery-email-summary"
       onClick={() => {
-        const result = _checkboxTriggerClick(Object(event), { checked: state.checked });
+        const result = _checkboxTriggerClick(event! as never, { checked: state.checked });
         if (!result) return;
         state.checked = result.checked;
       }}

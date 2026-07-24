@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
   selectItemClick as _selectItemClick,
   selectKeyDown as _selectKeyDown,
   selectMove as _selectMove,
@@ -71,7 +72,7 @@ export const GallerySelectDemo = component({
           id="gallery-select-trigger"
           labelledBy="gallery-select-label"
           onClick={() => {
-            const result = _selectTriggerClick(Object(event), {
+            const result = _selectTriggerClick(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Standard', value: 'standard' },
@@ -86,7 +87,7 @@ export const GallerySelectDemo = component({
             state.highlightedValue = state.value;
           }}
           onKeyDown={() => {
-            const keyResult = _selectKeyDown(Object(event), {
+            const keyResult = _selectKeyDown(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Standard', value: 'standard' },
@@ -138,7 +139,7 @@ export const GallerySelectDemo = component({
                 open: state.open,
                 value: state.value,
               },
-              Object(event).key,
+              _browserEventKey(event! as never),
               { loop: true },
             );
             if (!move) return;
@@ -154,7 +155,7 @@ export const GallerySelectDemo = component({
             itemLabel="Standard"
             itemValue="standard"
             onClick={() => {
-              const result = _selectItemClick(Object(event), {
+              const result = _selectItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Standard', value: 'standard' },
@@ -182,7 +183,7 @@ export const GallerySelectDemo = component({
             itemLabel="Express"
             itemValue="express"
             onClick={() => {
-              const result = _selectItemClick(Object(event), {
+              const result = _selectItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Standard', value: 'standard' },
@@ -211,7 +212,7 @@ export const GallerySelectDemo = component({
             itemLabel="Drone"
             itemValue="drone"
             onClick={() => {
-              const result = _selectItemClick(Object(event), {
+              const result = _selectItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Standard', value: 'standard' },

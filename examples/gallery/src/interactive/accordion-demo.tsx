@@ -1,8 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserDataString as _browserDataString,
   accordionKeyDown as _accordionKeyDown,
   accordionTriggerClick as _accordionTriggerClick,
+  browserEventFocusElement as _browserEventFocusElement,
 } from '../primitive-actions.js';
 import {
   Accordion,
@@ -35,7 +37,7 @@ export const GalleryAccordionDemo = component({
         {...rootState}
         data-gallery-interactive="accordion"
         onKeyDown={() => {
-          const result = _accordionKeyDown(Object(event), {
+          const result = _accordionKeyDown(event! as never, {
             activeValue: state.activeValue,
             items: [{ value: 'shipping' }, { value: 'billing' }],
             type: 'single',
@@ -43,9 +45,12 @@ export const GalleryAccordionDemo = component({
           });
           if (!result?.value) return;
           state.activeValue = result.value;
-          const root = Object(event)['target']?.closest?.('[data-gallery-interactive="accordion"]');
-          const next = Object(root)?.querySelector?.(`#gallery-accordion-${result.value}-trigger`);
-          Object(next)['focus']?.call(next);
+          _browserEventFocusElement(
+            event! as never,
+            result.value === 'billing'
+              ? 'gallery-accordion-billing-trigger'
+              : 'gallery-accordion-shipping-trigger',
+          );
         }}
       >
         <AccordionItem
@@ -66,7 +71,7 @@ export const GalleryAccordionDemo = component({
               contentId="gallery-accordion-shipping-content"
               itemValue="shipping"
               onClick={() => {
-                const result = _accordionTriggerClick(Object(event), {
+                const result = _accordionTriggerClick(event! as never, {
                   collapsible: true,
                   itemValue: 'shipping',
                   type: 'single',
@@ -74,7 +79,7 @@ export const GalleryAccordionDemo = component({
                 });
                 if (!result) return;
                 state.activeValue = 'shipping';
-                state.value = result.value?.toString() ?? '';
+                state.value = _browserDataString(result.value);
               }}
               tabIndex={state.activeValue === 'shipping' ? 0 : -1}
               triggerId="gallery-accordion-shipping-trigger"
@@ -113,7 +118,7 @@ export const GalleryAccordionDemo = component({
               contentId="gallery-accordion-billing-content"
               itemValue="billing"
               onClick={() => {
-                const result = _accordionTriggerClick(Object(event), {
+                const result = _accordionTriggerClick(event! as never, {
                   collapsible: true,
                   itemValue: 'billing',
                   type: 'single',
@@ -121,7 +126,7 @@ export const GalleryAccordionDemo = component({
                 });
                 if (!result) return;
                 state.activeValue = 'billing';
-                state.value = result.value?.toString() ?? '';
+                state.value = _browserDataString(result.value);
               }}
               tabIndex={state.activeValue === 'billing' ? 0 : -1}
               triggerId="gallery-accordion-billing-trigger"

@@ -43,7 +43,7 @@ export interface MenubarStateProps {
   disabled?: boolean;
   items?: readonly HeadlessMenubarItem[];
   loop?: boolean;
-  openValue?: string;
+  openValue?: string | undefined;
   orientation?: CollectionOrientation;
 }
 

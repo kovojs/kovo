@@ -57,7 +57,7 @@ export interface MenubarState {
   disabled?: boolean;
   items?: readonly MenubarItem[];
   loop?: boolean;
-  openValue?: string;
+  openValue?: string | undefined;
   orientation?: CollectionOrientation;
 }
 

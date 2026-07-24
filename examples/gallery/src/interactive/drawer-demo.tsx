@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventFocusElement as _browserEventFocusElement,
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
@@ -40,9 +41,10 @@ export const GalleryDrawerDemo = component({
           aria-expanded={state.open ? 'true' : 'false'}
           contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
+          id="gallery-drawer-trigger"
           open={state.open}
           onClick={() => {
-            const result = _dialogTriggerClick(Object(event), { open: state.open });
+            const result = _dialogTriggerClick(event! as never, { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
@@ -56,7 +58,7 @@ export const GalleryDrawerDemo = component({
           descriptionId={descriptionId}
           open={state.open}
           onCancel={() => {
-            const result = _dialogCancel(Object(event), { open: state.open });
+            const result = _dialogCancel(event! as never, { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
@@ -76,14 +78,10 @@ export const GalleryDrawerDemo = component({
             data-state={state.open ? 'open' : 'closed'}
             open={state.open}
             onClick={() => {
-              const result = _dialogCloseClick(Object(event), { open: state.open });
+              const result = _dialogCloseClick(event! as never, { open: state.open });
               if (!result?.changed) return;
               state.open = result.open;
-              const root = Object(event)['target']?.closest?.(
-                '[data-gallery-interactive="drawer"]',
-              );
-              const trigger = Object(root)?.querySelector?.('button[command="show-modal"]');
-              Object(trigger)['focus']?.call(trigger);
+              _browserEventFocusElement(event! as never, 'gallery-drawer-trigger');
             }}
           >
             Close drawer

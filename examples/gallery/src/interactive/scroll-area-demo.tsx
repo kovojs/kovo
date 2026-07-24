@@ -5,6 +5,7 @@ import {
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
   scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
+  scrollAreaThumbGeometryFromEvent as _scrollAreaThumbGeometryFromEvent,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
 } from '../primitive-actions.js';
@@ -93,10 +94,10 @@ export const GalleryScrollAreaDemo = component({
             scrollY={state.scrollY}
             style="max-height: 72px; overflow: auto;"
             onScroll={() => {
-              const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
+              const result = _scrollAreaViewportScroll(event! as never, { scrollbars: 'vertical' });
               if (!result) return;
 
-              const geometry = _scrollAreaThumbGeometry(Object(event)['target'], {
+              const geometry = _scrollAreaThumbGeometryFromEvent(event! as never, {
                 orientation: 'vertical',
                 scrollbars: 'vertical',
               });
@@ -138,7 +139,7 @@ export const GalleryScrollAreaDemo = component({
             id="gallery-scroll-area-scrollbar"
             onPointerDown={() => {
               const result = _scrollAreaTrackPointerDown(
-                Object(event),
+                event! as never,
                 {
                   clientHeight: 72,
                   clientWidth: 240,
@@ -212,7 +213,7 @@ export const GalleryScrollAreaDemo = component({
               }}
               onPointerDown={() => {
                 const result = _scrollAreaThumbDragStart(
-                  Object(event),
+                  event! as never,
                   {
                     clientHeight: 72,
                     clientWidth: 240,
@@ -238,7 +239,7 @@ export const GalleryScrollAreaDemo = component({
               onPointerMove={() => {
                 if (!state.dragging) return;
                 const result = _scrollAreaThumbDrag(
-                  Object(event),
+                  event! as never,
                   {
                     clientHeight: 72,
                     clientWidth: 240,
@@ -312,7 +313,7 @@ export const GalleryScrollAreaDemo = component({
             // KV201) and sets .scrollTop, which fires the viewport's scroll handler
             // to reconcile the thumb. The optimistic state below keeps the
             // aria-pressed/data-state contract immediate.
-            _scrollAreaScrollTo(Object(event), { position: nextAtEnd ? 'end' : 'start' });
+            _scrollAreaScrollTo(event! as never, { position: nextAtEnd ? 'end' : 'start' });
             state.scrollTop = nextAtEnd ? 1000000 : 0;
             state.scrollY = nextAtEnd ? 'end' : 'start';
             state.thumbOffset = nextAtEnd ? 100 : 0;

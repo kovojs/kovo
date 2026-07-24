@@ -19,7 +19,7 @@ export const GalleryToggleDemo = component({
       <Toggle
         aria-label="Toggle gallery density"
         onClick={() => {
-          const result = _toggleTriggerClick(Object(event), { pressed: state.pressed });
+          const result = _toggleTriggerClick(event! as never, { pressed: state.pressed });
           if (!result) return;
           state.pressed = result.pressed;
         }}

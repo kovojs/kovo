@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventFocusElement as _browserEventFocusElement,
   tabsKeyDown as _tabsKeyDown,
   tabsTriggerClick as _tabsTriggerClick,
 } from '../primitive-actions.js';
@@ -34,7 +35,7 @@ export const GalleryTabsDemo = component({
         {...rootState}
         data-gallery-interactive="tabs"
         onKeyDown={() => {
-          const result = _tabsKeyDown(Object(event), {
+          const result = _tabsKeyDown(event! as never, {
             activationMode: 'manual',
             activeValue: state.activeValue,
             items: [
@@ -48,9 +49,12 @@ export const GalleryTabsDemo = component({
           state.activeValue = result.activeValue ?? state.activeValue;
           state.value = result.value ?? state.value;
           if (result.activeValue === undefined) return;
-          const root = Object(event)['target']?.closest?.('[data-gallery-interactive="tabs"]');
-          const next = Object(root)?.querySelector?.(`#gallery-tabs-${result.activeValue}-trigger`);
-          Object(next)['focus']?.call(next);
+          _browserEventFocusElement(
+            event! as never,
+            result.activeValue === 'details'
+              ? 'gallery-tabs-details-trigger'
+              : 'gallery-tabs-overview-trigger',
+          );
         }}
       >
         <TabsList {...rootState} label="Gallery sections">
@@ -61,7 +65,7 @@ export const GalleryTabsDemo = component({
             id="gallery-tabs-overview-trigger"
             itemValue="overview"
             onClick={() => {
-              const result = _tabsTriggerClick(Object(event), {
+              const result = _tabsTriggerClick(event! as never, {
                 itemValue: 'overview',
                 value: state.value,
               });
@@ -81,7 +85,7 @@ export const GalleryTabsDemo = component({
             id="gallery-tabs-details-trigger"
             itemValue="details"
             onClick={() => {
-              const result = _tabsTriggerClick(Object(event), {
+              const result = _tabsTriggerClick(event! as never, {
                 itemValue: 'details',
                 value: state.value,
               });

@@ -900,7 +900,7 @@ export const Demo = component({
     },
   );
 
-  it('rejects inline framework calls until their exact export summary is generated', () => {
+  it('rejects callback-bearing options even for an exact reviewed framework export', () => {
     expect(
       kv449(`
 import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
@@ -910,6 +910,44 @@ export const Demo = component({
     toggleTriggerClick(event, { pressed: false }, {
       onPressedChange: () => { state.count += 1; },
     });
+  }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+  });
+
+  it('admits exact generated Headless UI summaries and their plain-data result projections', () => {
+    expect(
+      kv449(`
+import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
+export const Demo = component({
+  state: () => ({ pressed: false }),
+  render: () => <button onClick={() => {
+    const result = toggleTriggerClick(event, { pressed: state.pressed });
+    if (result) state.pressed = result.pressed;
+  }}>Run</button>,
+});
+`),
+    ).toEqual([]);
+  });
+
+  it('closes stale Headless UI identities and calls outside the generated exact arity', () => {
+    expect(
+      kv449(`
+import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
+export const Demo = component({
+  render: () => <button onClick={() => {
+    toggleTriggerClick(event, { pressed: false }, {}, 'stale-extra-argument');
+  }}>Run</button>,
+});
+`),
+    ).not.toEqual([]);
+    expect(
+      kv449(`
+import { toggleTriggerClickForged } from '@kovojs/headless-ui/toggle';
+export const Demo = component({
+  render: () => <button onClick={() => {
+    toggleTriggerClickForged(event, { pressed: false });
   }}>Run</button>,
 });
 `),

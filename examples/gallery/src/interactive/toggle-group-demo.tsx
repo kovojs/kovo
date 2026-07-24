@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserDataString as _browserDataString,
+  browserEventFocusElement as _browserEventFocusElement,
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
 } from '../primitive-actions.js';
@@ -44,7 +46,7 @@ export const GalleryToggleGroupDemo = component({
           {...groupState}
           labelledBy="gallery-toggle-group-label"
           onKeyDown={() => {
-            const result = _toggleGroupKeyDown(Object(event), {
+            const result = _toggleGroupKeyDown(event! as never, {
               activeValue: state.activeValue,
               items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
               type: 'single',
@@ -52,9 +54,12 @@ export const GalleryToggleGroupDemo = component({
             });
             if (!result?.value) return;
             state.activeValue = result.value;
-            const root = Object(event)['target']?.closest?.('[role="group"]');
-            const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
-            Object(next)['focus']?.call(next);
+            _browserEventFocusElement(
+              event! as never,
+              result.value === 'italic'
+                ? 'gallery-toggle-group-italic'
+                : 'gallery-toggle-group-bold',
+            );
           }}
         >
           <ToggleGroupItem {...boldState}>
@@ -64,7 +69,7 @@ export const GalleryToggleGroupDemo = component({
               data-state={state.value === 'bold' ? 'pressed' : 'off'}
               id="gallery-toggle-group-bold"
               onClick={() => {
-                const result = _toggleGroupItemClick(Object(event), {
+                const result = _toggleGroupItemClick(event! as never, {
                   itemValue: 'bold',
                   items: [
                     { value: 'bold' },
@@ -76,7 +81,7 @@ export const GalleryToggleGroupDemo = component({
                 });
                 if (!result) return;
                 state.activeValue = 'bold';
-                state.value = result.value?.toString() ?? '';
+                state.value = _browserDataString(result.value);
               }}
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
@@ -101,7 +106,7 @@ export const GalleryToggleGroupDemo = component({
               data-state={state.value === 'italic' ? 'pressed' : 'off'}
               id="gallery-toggle-group-italic"
               onClick={() => {
-                const result = _toggleGroupItemClick(Object(event), {
+                const result = _toggleGroupItemClick(event! as never, {
                   itemValue: 'italic',
                   items: [
                     { value: 'bold' },
@@ -113,7 +118,7 @@ export const GalleryToggleGroupDemo = component({
                 });
                 if (!result) return;
                 state.activeValue = 'italic';
-                state.value = result.value?.toString() ?? '';
+                state.value = _browserDataString(result.value);
               }}
               tabIndex={state.activeValue === 'italic' ? 0 : -1}
             >

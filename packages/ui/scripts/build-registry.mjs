@@ -12,6 +12,7 @@
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 import { primitiveComponentManifest } from './primitive-component-manifest.mjs';
 
@@ -557,14 +558,30 @@ function generateHeadlessGeneratedTs() {
 function generateCompilerHeadlessClientExecutablesTs() {
   const entries = primitiveComponentManifest.headlessPrimitives
     .filter((primitive) => primitiveClientCallables(primitive).length > 0)
-    .map((primitive) =>
-      [
+    .map((primitive) => {
+      const summaries = primitiveClientCallables(primitive).map((exportName) =>
+        headlessClientCallableSummary(primitive, exportName),
+      );
+      return [
         '  {',
         `    moduleSpecifier: '@kovojs/headless-ui/${primitive.subpath}',`,
         formatGeneratedHandlerNames(primitiveClientCallables(primitive)),
+        '    summaries: [',
+        ...summaries.flatMap((summary) => [
+          '      {',
+          `        exportName: ${formatTypeScriptString(summary.exportName)},`,
+          `        eventArgument: ${
+            summary.eventArgument === undefined ? 'undefined' : summary.eventArgument
+          },`,
+          `        maxArguments: ${summary.maxArguments},`,
+          `        minArguments: ${summary.minArguments},`,
+          "        returnKind: 'plain-data',",
+          '      },',
+        ]),
+        '    ],',
         '  },',
-      ].join('\n'),
-    );
+      ].join('\n');
+    });
 
   return [
     generatedSourceComment,
@@ -574,6 +591,55 @@ function generateCompilerHeadlessClientExecutablesTs() {
     '] as const;',
     '',
   ].join('\n');
+}
+
+function headlessClientCallableSummary(primitive, exportName) {
+  const sourcePaths = [
+    path.join(headlessRoot, 'src', 'primitives', `${primitive.subpath}.ts`),
+    path.join(headlessRoot, 'src', 'primitives', 'browser-event.ts'),
+  ];
+  let declaration;
+  for (const sourcePath of sourcePaths) {
+    const sourceText = readFileSync(sourcePath, 'utf8');
+    const sourceFile = ts.createSourceFile(
+      sourcePath,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    declaration = sourceFile.statements.find(
+      (statement) =>
+        ts.isFunctionDeclaration(statement) &&
+        statement.name?.text === exportName &&
+        statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+    );
+    if (declaration) break;
+  }
+  if (!declaration || !ts.isFunctionDeclaration(declaration)) {
+    throw new Error(
+      `${primitive.subpath}: cannot derive exact client-callable signature for ${exportName}`,
+    );
+  }
+  const parameters = [...declaration.parameters];
+  if (parameters.some((parameter) => parameter.dotDotDotToken !== undefined)) {
+    throw new Error(
+      `${primitive.subpath}#${exportName}: rest parameters are not finite-summary ABI`,
+    );
+  }
+  const firstParameter = parameters[0];
+  const eventArgument =
+    firstParameter && ts.isIdentifier(firstParameter.name) && firstParameter.name.text === 'event'
+      ? 0
+      : undefined;
+  return {
+    eventArgument,
+    exportName,
+    maxArguments: parameters.length,
+    minArguments: parameters.filter(
+      (parameter) => parameter.questionToken === undefined && parameter.initializer === undefined,
+    ).length,
+  };
 }
 
 function generateCoreHeadlessClientExecutableIdentitiesTs() {

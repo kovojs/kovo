@@ -1,7 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { checkboxTriggerClick as _checkboxTriggerClick } from '../primitive-actions.js';
-import { checkboxGroupItemClick as _checkboxGroupItemClick } from '../primitive-actions.js';
+import {
+  browserDataString as _browserDataString,
+  checkboxGroupItemClick as _checkboxGroupItemClick,
+} from '../primitive-actions.js';
 import { Checkbox } from '@kovojs/ui/checkbox';
 import {
   CheckboxGroup,
@@ -60,7 +63,7 @@ export const GalleryCheckboxGroupDemo = component({
           }
           id="gallery-checkbox-group-all"
           onClick={() => {
-            const result = _checkboxTriggerClick(Object(event), {
+            const result = _checkboxTriggerClick(event! as never, {
               checked:
                 state.value === 'updates,billing'
                   ? true
@@ -86,7 +89,7 @@ export const GalleryCheckboxGroupDemo = component({
                 : 'unchecked'
             }
             onClick={() => {
-              const result = _checkboxGroupItemClick(Object(event), {
+              const result = _checkboxGroupItemClick(event! as never, {
                 itemValue: 'updates',
                 items: [{ value: 'updates' }, { value: 'billing' }],
                 value:
@@ -98,7 +101,7 @@ export const GalleryCheckboxGroupDemo = component({
               });
               if (!result) return;
               state.activeValue = 'updates';
-              state.value = result.value.toString();
+              state.value = _browserDataString(result.value);
             }}
             tabIndex={0}
           />
@@ -126,7 +129,7 @@ export const GalleryCheckboxGroupDemo = component({
                 : 'unchecked'
             }
             onClick={() => {
-              const result = _checkboxGroupItemClick(Object(event), {
+              const result = _checkboxGroupItemClick(event! as never, {
                 itemValue: 'billing',
                 items: [{ value: 'updates' }, { value: 'billing' }],
                 value:
@@ -138,7 +141,7 @@ export const GalleryCheckboxGroupDemo = component({
               });
               if (!result) return;
               state.activeValue = 'billing';
-              state.value = result.value.toString();
+              state.value = _browserDataString(result.value);
             }}
             tabIndex={0}
           />

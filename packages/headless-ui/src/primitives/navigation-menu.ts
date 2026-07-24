@@ -58,7 +58,7 @@ export interface NavigationMenuState {
   disabled?: boolean;
   items?: readonly NavigationMenuItem[];
   loop?: boolean;
-  openValue?: string;
+  openValue?: string | undefined;
   orientation?: CollectionOrientation;
 }
 

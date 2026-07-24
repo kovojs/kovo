@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
   autocompleteInput as _autocompleteInput,
   autocompleteKeyDown as _autocompleteKeyDown,
   autocompleteOptionClick as _autocompleteOptionClick,
@@ -91,7 +92,7 @@ export const GalleryAutocompleteDemo = component({
             id="gallery-autocomplete-input"
             labelledBy="gallery-autocomplete-label"
             onInput={() => {
-              const result = _autocompleteInput(Object(event), {
+              const result = _autocompleteInput(event! as never, {
                 inputValue: state.inputValue,
                 value: state.value,
               });
@@ -122,7 +123,7 @@ export const GalleryAutocompleteDemo = component({
                 })[0]?.value ?? '';
             }}
             onKeyDown={() => {
-              const result = _autocompleteKeyDown(Object(event), {
+              const result = _autocompleteKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 inputValue: state.inputValue,
                 items: [
@@ -164,7 +165,7 @@ export const GalleryAutocompleteDemo = component({
                 state.highlightedValue = result.highlightedValue ?? '';
               } else {
                 state.open = result.open;
-                if (Object(event)['key'] === 'Escape') {
+                if (_browserEventKey(event! as never) === 'Escape') {
                   state.inputValue = state.value;
                   state.highlightedValue = state.value;
                 }
@@ -191,7 +192,7 @@ export const GalleryAutocompleteDemo = component({
               itemLabel="Design"
               itemValue="design"
               onClick={() => {
-                const result = _autocompleteOptionClick(Object(event), {
+                const result = _autocompleteOptionClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   inputValue: state.inputValue,
                   items: [
@@ -242,7 +243,7 @@ export const GalleryAutocompleteDemo = component({
               id="gallery-autocomplete-list-option-2"
               itemValue="development"
               onClick={() => {
-                const result = _autocompleteOptionClick(Object(event), {
+                const result = _autocompleteOptionClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   inputValue: state.inputValue,
                   items: [

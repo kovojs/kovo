@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
   commandCloseClick as _commandCloseClick,
   commandFilteredItems as _commandFilteredItems,
   commandInput as _commandInput,
@@ -80,7 +81,7 @@ export const GalleryCommandDemo = component({
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-command-trigger"
           onClick={() => {
-            const result = _commandTriggerClick(Object(event), { open: state.open });
+            const result = _commandTriggerClick(event! as never, { open: state.open });
             if (result) state.open = result.open;
           }}
         >
@@ -114,7 +115,7 @@ export const GalleryCommandDemo = component({
             id="gallery-command-input"
             labelledBy="gallery-command-title"
             onInput={() => {
-              const result = _commandInput(Object(event), { inputValue: state.inputValue });
+              const result = _commandInput(event! as never, { inputValue: state.inputValue });
               if (!result) return;
               state.inputValue = result.inputValue;
               state.open = true;
@@ -143,7 +144,7 @@ export const GalleryCommandDemo = component({
                 filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
             }}
             onKeyDown={() => {
-              const result = _commandKeyDown(Object(event), {
+              const result = _commandKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 inputValue: state.inputValue,
                 items: [
@@ -182,7 +183,8 @@ export const GalleryCommandDemo = component({
                 state.lastKeyAction = 'moved';
               } else {
                 state.open = result.open;
-                state.lastKeyAction = Object(event)['key'] === 'Escape' ? 'closed' : 'idle';
+                state.lastKeyAction =
+                  _browserEventKey(event! as never) === 'Escape' ? 'closed' : 'idle';
               }
             }}
             aria-activedescendant={
@@ -219,7 +221,7 @@ export const GalleryCommandDemo = component({
               itemLabel="Open dashboard"
               itemValue="dashboard"
               onClick={() => {
-                const result = _commandItemClick(Object(event), {
+                const result = _commandItemClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   inputValue: state.inputValue,
                   items: [
@@ -269,7 +271,7 @@ export const GalleryCommandDemo = component({
               itemLabel="Invite teammate"
               itemValue="invite"
               onClick={() => {
-                const result = _commandItemClick(Object(event), {
+                const result = _commandItemClick(event! as never, {
                   highlightedValue: state.highlightedValue,
                   inputValue: state.inputValue,
                   items: [
@@ -344,7 +346,7 @@ export const GalleryCommandDemo = component({
               contentId={contentId}
               data-state={state.open ? 'open' : 'closed'}
               onClick={() => {
-                const result = _commandCloseClick(Object(event), { open: state.open });
+                const result = _commandCloseClick(event! as never, { open: state.open });
                 if (result) state.open = result.open;
               }}
             >

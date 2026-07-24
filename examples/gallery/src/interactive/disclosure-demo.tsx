@@ -16,7 +16,7 @@ export const GalleryDisclosureDemo = component({
       <DisclosureTrigger
         contentId="gallery-interactive-disclosure-panel"
         onClick={() => {
-          const result = _disclosureTriggerClick(Object(event), { open: state.open });
+          const result = _disclosureTriggerClick(event! as never, { open: state.open });
           if (!result) return;
           state.open = result.open;
         }}

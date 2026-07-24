@@ -64,7 +64,7 @@ export const GallerySliderDemo = component({
             styles={{ input: sliderDemoStyles.input }}
             value={state.value}
             onInput={() => {
-              const result = _sliderInput(Object(event), {
+              const result = _sliderInput(event! as never, {
                 max: 100,
                 min: 0,
                 step: 1,
@@ -79,7 +79,7 @@ export const GallerySliderDemo = component({
             data-value={String(state.value)}
             data-value-ratio={String(state.value / 100)}
             onPointerDown={() => {
-              const result = _sliderTrackPointerDown(Object(event), {
+              const result = _sliderTrackPointerDown(event! as never, {
                 max: 100,
                 min: 0,
                 step: 1,
@@ -108,7 +108,7 @@ export const GallerySliderDemo = component({
                 transform: 'translate(-50%, -50%)',
               }}
               onKeyDown={() => {
-                const result = _sliderKeyDown(Object(event), {
+                const result = _sliderKeyDown(event! as never, {
                   max: 100,
                   min: 0,
                   step: 1,
@@ -118,7 +118,7 @@ export const GallerySliderDemo = component({
                 state.value = result.value;
               }}
               onPointerDown={() => {
-                const result = _sliderThumbDragStart(Object(event), {
+                const result = _sliderThumbDragStart(event! as never, {
                   max: 100,
                   min: 0,
                   step: 1,
@@ -132,7 +132,7 @@ export const GallerySliderDemo = component({
               onPointerMove={() => {
                 if (!state.dragging) return;
                 const result = _sliderThumbDrag(
-                  Object(event),
+                  event! as never,
                   {
                     max: 100,
                     min: 0,

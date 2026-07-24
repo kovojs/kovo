@@ -1,6 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toolbarKeyDown as _toolbarKeyDown } from '../primitive-actions.js';
+import {
+  browserEventFocusElement as _browserEventFocusElement,
+  toolbarKeyDown as _toolbarKeyDown,
+} from '../primitive-actions.js';
 import { Bold } from '@kovojs/icons/bold';
 import { Italic } from '@kovojs/icons/italic';
 import { Link } from '@kovojs/icons/link';
@@ -36,15 +39,16 @@ export const GalleryToolbarDemo = component({
         <Toolbar
           {...rootState}
           onKeyDown={() => {
-            const result = _toolbarKeyDown(Object(event), {
+            const result = _toolbarKeyDown(event! as never, {
               activeValue: state.activeValue,
               items: [{ value: 'bold' }, { disabled: true, value: 'italic' }, { value: 'link' }],
             });
             if (!result?.value) return;
             state.activeValue = result.value;
-            const root = Object(event)['target']?.closest?.('[role="toolbar"]');
-            const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
-            Object(next)['focus']?.call(next);
+            _browserEventFocusElement(
+              event! as never,
+              result.value === 'link' ? 'gallery-toolbar-link' : 'gallery-toolbar-bold',
+            );
           }}
         >
           <ToolbarItem {...boldState}>

@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  browserEventKey as _browserEventKey,
+  browserEventPreventDefault as _browserEventPreventDefault,
   contextMenuFocusElement as _contextMenuFocusElement,
   contextMenuItemClick as _contextMenuItemClick,
   contextMenuItemKeyDown as _contextMenuItemKeyDown,
@@ -58,7 +60,7 @@ export const GalleryContextMenuDemo = component({
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-context-menu-trigger"
           onContextMenu={() => {
-            const result = _contextMenuTriggerContextMenu(Object(event), {
+            const result = _contextMenuTriggerContextMenu(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Copy link', value: 'copy' },
@@ -73,10 +75,12 @@ export const GalleryContextMenuDemo = component({
             state.point = result.point ?? state.point;
             state.highlightedValue = 'copy';
             if (result.open)
-              _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
+              _contextMenuFocusElement(event! as never, 'gallery-context-menu-copy', {
+                defer: true,
+              });
           }}
           onKeyDown={() => {
-            const result = _contextMenuTriggerKeyDown(Object(event), {
+            const result = _contextMenuTriggerKeyDown(event! as never, {
               highlightedValue: state.highlightedValue,
               items: [
                 { label: 'Copy link', value: 'copy' },
@@ -91,7 +95,9 @@ export const GalleryContextMenuDemo = component({
             state.point = result.point ?? state.point;
             state.highlightedValue = 'copy';
             if (result.open)
-              _contextMenuFocusElement(Object(event), 'gallery-context-menu-copy', { defer: true });
+              _contextMenuFocusElement(event! as never, 'gallery-context-menu-copy', {
+                defer: true,
+              });
           }}
           tabIndex="0"
         >
@@ -113,7 +119,7 @@ export const GalleryContextMenuDemo = component({
             itemLabel="Copy link"
             itemValue="copy"
             onKeyDown={() => {
-              const result = _contextMenuItemKeyDown(Object(event), {
+              const result = _contextMenuItemKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'copy',
                 items: [
@@ -128,11 +134,11 @@ export const GalleryContextMenuDemo = component({
                 state.open = result.open.open;
                 state.highlightedValue = result.value;
                 state.value = result.value;
-                _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+                _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
                 return;
               }
 
-              const keyResult = _contextMenuKeyDown(Object(event), {
+              const keyResult = _contextMenuKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Copy link', value: 'copy' },
@@ -145,7 +151,7 @@ export const GalleryContextMenuDemo = component({
               if (keyResult?.changed) {
                 state.open = keyResult.open;
                 if (!keyResult.open)
-                  _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+                  _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
                 return;
               }
 
@@ -160,14 +166,14 @@ export const GalleryContextMenuDemo = component({
                   open: state.open,
                   point: state.point,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { loop: true },
               );
               if (move) {
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
                 _contextMenuFocusElement(
-                  Object(event),
+                  event! as never,
                   state.highlightedValue === 'inspect'
                     ? 'gallery-context-menu-inspect'
                     : 'gallery-context-menu-copy',
@@ -186,21 +192,21 @@ export const GalleryContextMenuDemo = component({
                   open: state.open,
                   point: state.point,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { now: 0, loop: true },
               );
               if (typeahead.highlightedValue === state.highlightedValue) return;
-              Object(event).preventDefault?.();
+              _browserEventPreventDefault(event! as never);
               state.highlightedValue = typeahead.highlightedValue ?? state.highlightedValue;
               _contextMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.highlightedValue === 'inspect'
                   ? 'gallery-context-menu-inspect'
                   : 'gallery-context-menu-copy',
               );
             }}
             onClick={() => {
-              const result = _contextMenuItemClick(Object(event), {
+              const result = _contextMenuItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'copy',
                 items: [
@@ -215,7 +221,7 @@ export const GalleryContextMenuDemo = component({
               state.open = result.open.open;
               state.highlightedValue = result.value;
               state.value = result.value;
-              _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+              _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
             }}
             tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
           >
@@ -238,7 +244,7 @@ export const GalleryContextMenuDemo = component({
             itemLabel="Inspect"
             itemValue="inspect"
             onKeyDown={() => {
-              const result = _contextMenuItemKeyDown(Object(event), {
+              const result = _contextMenuItemKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'inspect',
                 items: [
@@ -253,11 +259,11 @@ export const GalleryContextMenuDemo = component({
                 state.open = result.open.open;
                 state.highlightedValue = result.value;
                 state.value = result.value;
-                _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+                _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
                 return;
               }
 
-              const keyResult = _contextMenuKeyDown(Object(event), {
+              const keyResult = _contextMenuKeyDown(event! as never, {
                 highlightedValue: state.highlightedValue,
                 items: [
                   { label: 'Copy link', value: 'copy' },
@@ -270,7 +276,7 @@ export const GalleryContextMenuDemo = component({
               if (keyResult?.changed) {
                 state.open = keyResult.open;
                 if (!keyResult.open)
-                  _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+                  _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
                 return;
               }
 
@@ -285,14 +291,14 @@ export const GalleryContextMenuDemo = component({
                   open: state.open,
                   point: state.point,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { loop: true },
               );
               if (move) {
-                Object(event).preventDefault?.();
+                _browserEventPreventDefault(event! as never);
                 state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
                 _contextMenuFocusElement(
-                  Object(event),
+                  event! as never,
                   state.highlightedValue === 'inspect'
                     ? 'gallery-context-menu-inspect'
                     : 'gallery-context-menu-copy',
@@ -311,21 +317,21 @@ export const GalleryContextMenuDemo = component({
                   open: state.open,
                   point: state.point,
                 },
-                Object(event).key,
+                _browserEventKey(event! as never),
                 { now: 0, loop: true },
               );
               if (typeahead.highlightedValue === state.highlightedValue) return;
-              Object(event).preventDefault?.();
+              _browserEventPreventDefault(event! as never);
               state.highlightedValue = typeahead.highlightedValue ?? state.highlightedValue;
               _contextMenuFocusElement(
-                Object(event),
+                event! as never,
                 state.highlightedValue === 'inspect'
                   ? 'gallery-context-menu-inspect'
                   : 'gallery-context-menu-copy',
               );
             }}
             onClick={() => {
-              const result = _contextMenuItemClick(Object(event), {
+              const result = _contextMenuItemClick(event! as never, {
                 highlightedValue: state.highlightedValue,
                 itemValue: 'inspect',
                 items: [
@@ -340,7 +346,7 @@ export const GalleryContextMenuDemo = component({
               state.open = result.open.open;
               state.highlightedValue = result.value;
               state.value = result.value;
-              _contextMenuFocusElement(Object(event), 'gallery-context-menu-trigger');
+              _contextMenuFocusElement(event! as never, 'gallery-context-menu-trigger');
             }}
             tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
           >

@@ -1,6 +1,17 @@
 // Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
 // Browser-callable ABI for compiler-emitted client modules. App-authored source must not import this subpath.
-export { accordionKeyDown, accordionTriggerClick } from './primitives/accordion.js';
+export {
+  accordionKeyDown,
+  accordionTriggerClick,
+  browserDataString,
+  browserEventFocusElement,
+  browserEventFocusIndexedElement,
+  browserEventKey,
+  browserEventPreventDefault,
+  browserEventTargetChecked,
+  browserEventTargetValid,
+  browserEventTargetValue,
+} from './primitives/accordion.js';
 export {
   alertDialogActionClick,
   alertDialogBeforeToggle,
@@ -105,6 +116,7 @@ export {
   scrollAreaTrackPointerDown,
   scrollAreaViewportScroll,
   scrollAreaThumbGeometry,
+  scrollAreaThumbGeometryFromEvent,
 } from './primitives/scroll-area.js';
 export {
   selectItemClick,
