@@ -5474,7 +5474,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./pglite",["default"]],
       ["./sqlite",["default"]],
       ["./test-case",["default"]],
-    ], ["kovo-source-tree-sha256:759eda84ef7a0f99a5561f2bb4083c38e70ff1c9a049c2b7e8d946a5c00eef7c"]],
+    ], ["kovo-source-tree-sha256:2bb9f3fbb1e42310cd3e14e56ad569e673c4bdd39124b4ba4b7fa70ab11445f4"]],
     ["sha256:00c0bece9507f985ab410b795a4e90e11d8dcee72e6fb64bbb1f1f497671c662", [
       ["./assertions",["default","types"]],
       ["./harness",["default","types"]],

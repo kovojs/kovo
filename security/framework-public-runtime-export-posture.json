@@ -908,7 +908,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "bca96e6f4b12c118aff12ab14e40a27b5c83a1345b3aec74a2d476e4f6dfe94c"
+      "sourceTreeSha256": "19696206eeefca78e02b87434e83cb78b2a2ce7d095297661ce816786401e91c"
     },
     {
       "manifestVariants": [
@@ -18116,7 +18116,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "759eda84ef7a0f99a5561f2bb4083c38e70ff1c9a049c2b7e8d946a5c00eef7c"
+      "sourceTreeSha256": "2bb9f3fbb1e42310cd3e14e56ad569e673c4bdd39124b4ba4b7fa70ab11445f4"
     },
     {
       "manifestVariants": [
