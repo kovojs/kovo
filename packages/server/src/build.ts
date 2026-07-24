@@ -818,7 +818,7 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 
 function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
   return securityRegExpTest(
-    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)["']/,
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire(?:\.resolve)?\s*\(\s*|\bresolve\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)(?:\/[^"']*)?["']/,
     source,
   );
 }

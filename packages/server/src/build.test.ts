@@ -1753,6 +1753,17 @@ export default createRequestHandler(app);
           },
         }),
       ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
+      expect(
+        node({ retention: declaredDeploySkewRetention }).inspect!(build, {
+          declaredEnv: [],
+          readServerHandlerSource() {
+            return [
+              'const loader = createRequire(import.meta.url);',
+              'const binding = loader.resolve("better-sqlite3/build/Release/better_sqlite3.node");',
+            ].join('\n');
+          },
+        }),
+      ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
       await expect(
         node({ retention: declaredDeploySkewRetention }).inspect!(build, {
           declaredEnv: [],
