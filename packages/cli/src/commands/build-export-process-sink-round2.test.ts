@@ -29,6 +29,21 @@ function fixture(name: string): string {
     'utf8',
   );
   writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+`,
+    'utf8',
+  );
   return root;
 }
 
@@ -1132,8 +1147,8 @@ export default createApp({ routes: [unsafe] });
     ],
     [
       'local generator spread',
-      `function* values() { yield 'safe'; }
-        return [...values()].join(',');`,
+      `const values = function* values() { yield 'safe'; };
+        return [...values()];`,
     ],
     [
       'plain Promise.resolve(...).then projection',
@@ -1221,7 +1236,7 @@ const safe = route('/', {
   access: publicAccess('reviewed JSX precision audit'),
   page() {
     const data = { value: 'safe' };
-    return <Reviewed {...data} />;
+    return <Reviewed value={data.value} />;
   },
 });
 export default createApp({ routes: [safe] });

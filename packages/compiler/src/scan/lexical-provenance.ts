@@ -92,12 +92,14 @@ const reviewedFrameworkOpaqueValueCalls = new Set([
 ]);
 const reviewedFrameworkDeclarationFactoryCalls = new Set([
   frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
+  frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'),
 ]);
 const reviewedFrameworkDeclarationReceiverMethods = new Map([
   [
     frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
     new Set(['buildToken', 'entries', 'put', 'resolve']),
   ],
+  [frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'), new Set(['serve'])],
 ]);
 // Keep this finite: frozen `s` declaration builders/modifiers return schema data. Parse, storage,
 // callback-bearing, and otherwise effectful APIs intentionally remain opaque (SPEC §6.6, §13.1).

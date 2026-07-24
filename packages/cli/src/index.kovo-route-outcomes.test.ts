@@ -31,6 +31,17 @@ describe('kovo route outcome graph facts', () => {
         'utf8',
       );
       writeFileSync(
+        join(root, 'kovo.config.ts'),
+        `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({ preset: node({ retention: {
+  hours: 24,
+  immutableClientModules: 'retained',
+  priorTokenQueryReads: 'retained',
+} }) });
+`,
+        'utf8',
+      );
+      writeFileSync(
         appPath,
         `
 import { createApp, publicAccess, respond as response, route } from '@kovojs/server';
@@ -56,7 +67,11 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const previousCwd = process.cwd();
+      process.chdir(root);
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]).finally(() => {
+        process.chdir(previousCwd);
+      });
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       const graphPath = join(outDir, '.kovo/graph.json');
@@ -112,20 +127,37 @@ export default createApp({
         'utf8',
       );
       writeFileSync(
+        join(root, 'kovo.config.ts'),
+        `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({ preset: node({ retention: {
+  hours: 24,
+  immutableClientModules: 'retained',
+  priorTokenQueryReads: 'retained',
+} }) });
+`,
+        'utf8',
+      );
+      writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, rootedFiles, route } from '@kovojs/server';
+import {
+  createApp,
+  publicAccess,
+  rootedFiles as openRootedFiles,
+  route,
+} from '@kovojs/server';
 
-const docs = await rootedFiles(${JSON.stringify(docsRoot)});
+const docs = await openRootedFiles(${JSON.stringify(docsRoot)});
 
 export default createApp({
   routes: [
     route('/docs/readme.txt', {
       access: publicAccess('public rooted docs download'),
-      page: () => docs.serve('readme.txt', {
-        contentType: 'text/plain; charset=utf-8',
-        filename: 'readme.txt',
-      }),
+      page: () =>
+        docs.serve('readme.txt', {
+          contentType: 'text/plain; charset=utf-8',
+          filename: 'readme.txt',
+        }),
     }),
   ],
 });
@@ -133,7 +165,11 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const previousCwd = process.cwd();
+      process.chdir(root);
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]).finally(() => {
+        process.chdir(previousCwd);
+      });
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       const graphPath = join(outDir, '.kovo/graph.json');

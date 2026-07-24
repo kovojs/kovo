@@ -40,7 +40,9 @@ describe('createDevtoolApp', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(html).toContain('<style>@font-face');
-    expect(html).toContain('on:visible="/c/__v/pz-r1/devtool-pz.client.js#Devtool$init"');
+    expect(html).toMatch(
+      /on:visible="\/c\/__v\/[a-f0-9]{64}\/devtool-pz\.client\.js#Devtool\$init"/u,
+    );
     expect(html).toContain('data-node-id="domain:orders"');
     expect(html).not.toContain('</style><script>');
   });

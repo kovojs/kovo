@@ -100,7 +100,7 @@ describe('compiler/browser oracle contract', () => {
     );
 
     expect(modularApplied.appliedFragments).toEqual(fixture.runtime.expectedAppliedFragments);
-    expect(modularApplied.queries).toEqual(['cart', 'product']);
+    expect(modularApplied.queries).toEqual([{ name: 'cart' }, { name: 'product' }]);
     expect(modularStore.get('cart')).toEqual(fixture.runtime.cartValue);
     expect(modularStore.get('product')).toEqual(fixture.runtime.productValue);
     expect(modularRoot.bindings[0]?.textContent).toBe('2');
@@ -155,7 +155,7 @@ describe('compiler/browser oracle contract', () => {
     });
 
     try {
-      expect(inlineAppliedQueries).toEqual(['cart', 'product']);
+      expect(inlineAppliedQueries).toEqual([{ name: 'cart' }, { name: 'product' }]);
       expect(inlineAppliedFragments).toEqual(fixture.runtime.expectedAppliedFragments);
       expect(inlineStore.get('cart')).toEqual(modularStore.get('cart'));
       expect(inlineStore.get('product')).toEqual(modularStore.get('product'));

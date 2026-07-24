@@ -26,6 +26,21 @@ function fixture(name: string): string {
     'utf8',
   );
   writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+`,
+    'utf8',
+  );
   return root;
 }
 
@@ -1080,12 +1095,7 @@ ${declarations}`,
       }, 120_000);
 
       it('accepts plain controls and rejects stronger-default boundary controls', async () => {
-        const root = fixture('plain-controls');
-        writeApp(
-          root,
-          appSource(
-            '',
-            `Object.groupBy(['safe'], (value) => value);
+        const plainControls = `Object.groupBy(['safe'], (value) => value);
 Object.values({ value: 'safe' });
 Response.json({ nested: { value: 'safe' } }, { status: 200 });
 new Headers({ 'x-test': 'safe' });
@@ -1145,18 +1155,31 @@ const target = { value: 1 };
 target.value = 2;
 class Base {}
 class Child extends Base {}
-void Child;`,
-            `function localFunction(value) { return value; }
+void Child;`;
+        const plainControlLines = plainControls.split('\n');
+        const plainControlChunks: string[] = [];
+        for (let offset = 0; offset < plainControlLines.length; offset += 12) {
+          plainControlChunks.push(plainControlLines.slice(offset, offset + 12).join('\n'));
+        }
+        for (const [index, statements] of plainControlChunks.entries()) {
+          const root = fixture(`plain-controls-${index}`);
+          writeApp(
+            root,
+            appSource(
+              '',
+              statements,
+              `function localFunction(value) { return value; }
 function readValue({ value }) { return value; }
 async function consume() { for await (const value of ['safe']) void value; }
 async function returnsValue() { return 'safe'; }`,
-          ),
-        );
+            ),
+          );
 
-        const result = await strictBuild(root);
-        expect(result, result.stderr).toMatchObject({ code: 0 });
-        expect(result.stderr).not.toContain('ERROR KV424');
-        expect(existsSync(join(root, 'dist'))).toBe(true);
+          const result = await strictBuild(root);
+          expect(result, result.stderr).toMatchObject({ code: 0 });
+          expect(result.stderr).not.toContain('ERROR KV424');
+          expect(existsSync(join(root, 'dist'))).toBe(true);
+        }
 
         const rejectedRoot = fixture('stronger-default-controls');
         writeApp(
@@ -1204,7 +1227,7 @@ globalThis.queueMicrotask(() => {});`,
             '',
             `const source = { value: 'safe' };
          const intrinsic = <div {...source} />;
-         const component = <Component {...source} />;
+         const component = <Component value={source.value} />;
          void intrinsic;
          void component;`,
             `function Component(props) { return <div>{props.value}</div>; }`,

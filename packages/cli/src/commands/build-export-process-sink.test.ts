@@ -27,6 +27,21 @@ function fixture(name: string): string {
     'utf8',
   );
   writeFileSync(join(root, 'src/client.ts'), 'export {};\n', 'utf8');
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    `import { defineConfig, node } from '@kovojs/server/build';
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+`,
+    'utf8',
+  );
   return root;
 }
 
@@ -330,6 +345,7 @@ export default createApp({
   createFileSystemStorage,
   mutation,
   publicAccess,
+  publicScopedKey,
   rootedFiles,
   route,
   s,
@@ -415,7 +431,7 @@ export const safeFiles = mutation({
   access: publicAccess('static file authority'),
   input: s.object({}),
   async handler() {
-    await storage.stat('fixed-key');
+    await storage.stat(publicScopedKey('fixed-key'));
     void files;
     return { value: true };
   },
@@ -1200,11 +1216,14 @@ import {
   trustedHtml,
   webhook,
   type MutationReplayStore,
+  type MutationReplayResponse,
   type Schema,
+  type ScopedKey,
   type VersionedClientModuleInput,
   type VersionedClientModuleStore,
   type WebhookReplayIdentity,
   type WebhookReplayStore,
+  type WebhookWireResponse,
 } from '@kovojs/server';
 
 class BaseSchema implements Schema<Record<string, never>> {
@@ -1220,28 +1239,40 @@ class BaseSchema implements Schema<Record<string, never>> {
 class InheritedSchema extends BaseSchema {}
 
 class BaseReplay implements WebhookReplayStore, MutationReplayStore {
+  get(_scope: string, _identity: WebhookReplayIdentity): undefined;
   get(
+    _key: ScopedKey,
     _scope: string,
-    _identity: string | WebhookReplayIdentity,
+    _idem: string,
     _fingerprint?: string,
-  ): undefined {
+    _principal?: string,
+  ): undefined;
+  get(..._args: unknown[]): undefined {
     execFileSync('replay-get');
     return undefined;
   }
+  reserve(_scope: string, _identity: WebhookReplayIdentity): undefined;
   reserve(
+    _key: ScopedKey,
     _scope: string,
-    _identity: string | WebhookReplayIdentity,
+    _idem: string,
     _fingerprint?: string,
-  ): undefined {
+    _principal?: string,
+  ): undefined;
+  reserve(..._args: unknown[]): undefined {
     execFileSync('replay-reserve');
     return undefined;
   }
+  set(_scope: string, _identity: WebhookReplayIdentity, _response: WebhookWireResponse): void;
   set(
+    _key: ScopedKey,
     _scope: string,
-    _identity: string | WebhookReplayIdentity,
-    _response: unknown,
+    _idem: string,
+    _response: MutationReplayResponse,
     _fingerprint?: string,
-  ): void {
+    _principal?: string,
+  ): void;
+  set(..._args: unknown[]): void {
     execFileSync('replay-set');
   }
 }

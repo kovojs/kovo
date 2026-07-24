@@ -88,6 +88,26 @@ function isImport(candidate: ScannedBindingCandidate, imported: string): boolean
 }
 
 describe('SPEC §6.6 JSX lexical provenance', () => {
+  it('keeps a local generator invocation distinct from imported framework roots', () => {
+    const { call } = analyzeSource(`
+      import { createApp, publicAccess, route } from '@kovojs/server';
+      const safe = route('/', {
+        access: publicAccess('local generator provenance'),
+        page() {
+          function* values() { yield 'safe'; }
+          return [...values()].join(',');
+        },
+      });
+      export default createApp({ routes: [safe] });
+    `);
+
+    expect(call('values')).toEqual({
+      candidates: [{ exportName: 'values', kind: 'local' }],
+      rootWideningRequired: false,
+      uncertain: false,
+    });
+  });
+
   it('records exact call provenance inside JSX children, attributes, and nested fragments', () => {
     const { call } = analyzeSource(`
       import { Badge } from '@kovojs/ui/badge';

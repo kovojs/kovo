@@ -645,7 +645,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
     };
   };
   const progressElement = element({ 'kovo-upload-progress': '', max: '100', value: '0' });
-  const pendingElement = element({ 'kovo-deps': 'order' });
+  const pendingElement = element({ id: 'order', 'kovo-deps': 'order' });
   const commerceTransport = {
     action: '/_m/order/receipt',
     method: 'POST' as const,
@@ -671,12 +671,16 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
   let pendingDuringResponse: string | null = null;
 
   await runtime.submitEnhancedMutation({
+    expectedBuildToken: 'conformance-commerce-build',
     fetch: async (url: string, options: { onUploadProgress?: (progress: any) => void }) => ({
+      redirected: false,
       headers: {
         get(name: string) {
-          return name.toLowerCase() === 'content-type'
-            ? 'text/vnd.kovo.fragment+html; charset=utf-8'
-            : null;
+          if (name.toLowerCase() === 'content-type') {
+            return 'text/vnd.kovo.fragment+html; charset=utf-8';
+          }
+          if (name.toLowerCase() === 'kovo-build') return 'conformance-commerce-build';
+          return null;
         },
       },
       async text() {
@@ -695,7 +699,7 @@ export async function serverCommerceAdoptDontInventBehaviorFact(
       progressElement.setAttribute('max', '100');
       progressElement.setAttribute('value', String(Math.round((progress.loaded / total) * 100)));
     },
-    pendingQueries: ['order'],
+    pendingQueries: [{ kind: 'exact', name: 'order' }],
     pendingRoot: mutationRoot,
     root: mutationRoot,
     store: runtime.createQueryStore(),

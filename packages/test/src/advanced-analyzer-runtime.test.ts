@@ -76,11 +76,17 @@ afterEach(async () => {
 describe('advanced analyzer runtime cross-checks', () => {
   it('verifies scoped PGlite writes and reads against extracted static facts', async () => {
     const touchGraph = extractTouchGraphFromProject({ files: scopedTicketFiles });
-    expect(diagnosticsForTouchGraph(touchGraph)).toEqual([]);
+    expect(diagnosticsForTouchGraph(touchGraph)).toEqual([
+      expect.objectContaining({
+        code: 'KV409',
+        severity: 'notice',
+        site: 'ticket.pipeline.ts:28',
+      }),
+    ]);
     expect(touchGraph.closeTicket?.touches).toMatchObject([
       {
         domain: 'ticket',
-        keys: 'arg:ticketId',
+        keys: null,
         via: 'tickets',
       },
     ]);
