@@ -341,6 +341,7 @@
       "id": "escape-census",
       "steps": [
         {
+          "buildIntegrated": true,
           "command": ["pnpm", "run", "check:escape-census:baseline"]
         },
         {

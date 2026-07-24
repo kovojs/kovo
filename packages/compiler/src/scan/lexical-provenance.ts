@@ -87,7 +87,42 @@ const reviewedFrameworkRootFactoryCalls = new Set(
 // its property reads are modeled here so large static TSX views do not consume the provenance
 // effect budget merely by reading generated class records (SPEC §5.2, §6.6, §13.1).
 const reviewedFrameworkOpaqueValueCalls = new Set([
+  frameworkCallModelId('@kovojs/core', '.', 'component'),
   frameworkCallModelId('@kovojs/style', '.', 'create'),
+]);
+// Keep this finite: frozen `s` declaration builders/modifiers return schema data. Parse, storage,
+// callback-bearing, and otherwise effectful APIs intentionally remain opaque (SPEC §6.6, §13.1).
+const reviewedSchemaBuilderMethods = new Set([
+  'array',
+  'boolean',
+  'date',
+  'datetime',
+  'decimal',
+  'file',
+  'json',
+  'number',
+  'object',
+  'record',
+  'secret',
+  'string',
+]);
+const reviewedSchemaModifierMethods = new Set([
+  'accept',
+  'allowControlChars',
+  'default',
+  'email',
+  'format',
+  'int',
+  'matches',
+  'max',
+  'maxBytes',
+  'min',
+  'multiline',
+  'optional',
+  'pattern',
+  'slug',
+  'url',
+  'uuid',
 ]);
 
 /** Syntax-only lexical + flow abstraction for exact per-use capability provenance (SPEC §6.6). */
@@ -1142,7 +1177,19 @@ function readExpression(
       'call result is not a finite binding reference',
       canReturnFrameworkRoot,
     );
-    return reviewedRootFactory || argumentValues.length === 0
+    if (reviewedRootFactory) {
+      // Arguments and callbacks were already walked above. The declaration value returned by an
+      // exact reviewed factory is framework data, not another callable framework root.
+      return {
+        ...unknownResult,
+        candidates: [{ exportName: 'reviewed framework declaration', kind: 'local' }],
+        effectsModeled: true,
+        effectSites: currentEffectSites(env),
+        rootWideningRequired: false,
+        uncertain: false,
+      };
+    }
+    return argumentValues.length === 0
       ? unknownResult
       : joinValues(state, unknownResult, ...argumentValues);
   }
@@ -1434,9 +1481,28 @@ function isReviewedFrameworkOpaqueValueCall(callee: Value): boolean {
     !callee.rootWideningRequired &&
     callee.candidates.length > 0 &&
     callee.candidates.every((candidate) => {
+      if (isReviewedSchemaValueCallCandidate(candidate)) return true;
       const id = frameworkCallModelIdForCandidate(candidate);
       return id !== undefined && reviewedFrameworkOpaqueValueCalls.has(id);
     })
+  );
+}
+
+function isReviewedSchemaValueCallCandidate(candidate: ScannedBindingCandidate): boolean {
+  if (candidate.kind !== 'import' || candidate.namespace === true) return false;
+  const specifier = frameworkPackageSubpath(candidate.specifier);
+  if (
+    specifier?.packageName !== '@kovojs/server' ||
+    specifier.subpath !== '.' ||
+    candidate.exportName !== 's'
+  ) {
+    return false;
+  }
+  const members = candidate.members ?? [];
+  return (
+    members.length > 0 &&
+    reviewedSchemaBuilderMethods.has(members[0]!) &&
+    members.slice(1).every((member) => reviewedSchemaModifierMethods.has(member))
   );
 }
 

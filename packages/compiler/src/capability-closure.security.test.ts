@@ -950,6 +950,35 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('models frozen schema chains and component declarations without widening framework roots', () => {
+    const result = analyze([
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { component } from '@kovojs/core';
+          import { createApp, mutation, route, s } from '@kovojs/server';
+
+          const save = mutation({
+            csrf: false,
+            csrfJustification: 'non-browser test fixture',
+            input: s.object({ id: s.string().allowControlChars() }),
+            handler() { return { ok: true }; },
+          });
+          const Page = component({ render() { return <main />; } });
+          export default createApp({
+            mutations: [save],
+            routes: [route('/schema-component', { page: () => <Page /> })],
+          });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name),
+    ).toEqual(expect.arrayContaining(['createApp', 'save', '/schema-component']));
+  });
+
   it('keeps non-intrinsic identifier spellings on the component invocation boundary', () => {
     const files = [
       ['underscore.tsx', '_Child'],

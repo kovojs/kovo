@@ -1,6 +1,6 @@
 {
   "schema": "kovo.plan3-security-gate-budgets/v1",
-  "budgetVersion": "2026-07-21.3",
+  "budgetVersion": "2026-07-23.1",
   "intendedRunner": {
     "architecture": "x64",
     "ciImage": "github-actions/ubuntu-24.04",
@@ -531,19 +531,23 @@
     },
     {
       "id": "escape-census",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["4.1", "4.2"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:escape-census",
       "groups": [],
       "wallTimeCeilingMs": 240000,
-      "peakRssCeilingMiB": 3072,
+      "peakRssCeilingMiB": 4096,
       "buildTime": {
-        "status": "not-applicable",
-        "reviewedReason": "Escape census/review analysis consumes checked source and app-graph fixtures without invoking a production build."
+        "status": "enforced",
+        "ceilingMs": 240000,
+        "scope": "Production build of the representative Metric E app plus exact escape-census review derivation."
       },
       "steps": [
-        { "command": ["pnpm", "run", "check:escape-census:baseline"] },
+        {
+          "buildIntegrated": true,
+          "command": ["pnpm", "run", "check:escape-census:baseline"]
+        },
         {
           "command": [
             "pnpm",

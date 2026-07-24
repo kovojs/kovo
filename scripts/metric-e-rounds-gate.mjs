@@ -108,6 +108,7 @@ export const metricEHistoricalSubjectPaths = Object.freeze([
   'security/escape-census-baseline.json',
   'security/fixtures/escape-census-real-app/app.tsx',
   'security/fixtures/escape-census-real-app/index.html',
+  'security/fixtures/escape-census-real-app/kovo.config.ts',
   'security/fixtures/escape-census-real-app/package.json',
   'security/fixtures/escape-census-real-app/src/client.ts',
   'security/fixtures/escape-census-real-app/src/style.css',
@@ -117,6 +118,7 @@ export const metricEHistoricalSubjectPaths = Object.freeze([
 export const metricEComparableCorpusPaths = Object.freeze([
   'security/fixtures/escape-census-real-app/app.tsx',
   'security/fixtures/escape-census-real-app/index.html',
+  'security/fixtures/escape-census-real-app/kovo.config.ts',
   'security/fixtures/escape-census-real-app/package.json',
   'security/fixtures/escape-census-real-app/src/client.ts',
   'security/fixtures/escape-census-real-app/src/style.css',

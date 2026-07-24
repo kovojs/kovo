@@ -761,8 +761,6 @@ export function buildEscapeCensusRepresentativeApp() {
       fixtureApp,
       '--out',
       fixtureOut,
-      '--preset',
-      'node',
     ],
     {
       cwd: fixtureRoot,
