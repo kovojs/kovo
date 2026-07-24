@@ -159,6 +159,7 @@ export type ScannedBindingCandidate =
       readonly kind: 'import';
       readonly members?: readonly string[];
       readonly namespace?: boolean;
+      readonly reviewedDeclarationFactory?: string;
       readonly specifier: string;
     }
   | { readonly kind: 'unknown'; readonly reason: string };

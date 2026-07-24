@@ -956,17 +956,38 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import { createApp, mutation, route, s } from '@kovojs/server';
+          import {
+            createApp,
+            createMemoryVersionedClientModuleRegistry,
+            domain,
+            mutation,
+            query,
+            route,
+            s,
+          } from '@kovojs/server';
 
+          const records = domain('records');
+          const recordsQuery = query('records', {
+            access: { kind: 'public', reason: 'test fixture' },
+            load() { return []; },
+            reads: [records],
+          });
           const save = mutation({
             csrf: false,
             csrfJustification: 'non-browser test fixture',
             input: s.object({ id: s.string().allowControlChars() }),
             handler() { return { ok: true }; },
           });
+          const clientModules = createMemoryVersionedClientModuleRegistry();
+          clientModules.put({
+            path: '/c/page.js',
+            source: 'export const page = true;',
+          });
           const Page = component({ render() { return <main />; } });
           export default createApp({
+            clientModules,
             mutations: [save],
+            queries: [recordsQuery],
             routes: [route('/schema-component', { page: () => <Page /> })],
           });
         `,
@@ -976,7 +997,14 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics).toEqual([]);
     expect(
       result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name),
-    ).toEqual(expect.arrayContaining(['createApp', 'save', '/schema-component']));
+    ).toEqual(
+      expect.arrayContaining([
+        'createApp',
+        'records',
+        'save',
+        '/schema-component',
+      ]),
+    );
   });
 
   it('keeps non-intrinsic identifier spellings on the component invocation boundary', () => {

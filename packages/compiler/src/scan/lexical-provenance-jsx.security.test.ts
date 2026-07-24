@@ -281,7 +281,7 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
       'clientModules.put',
       's.number().int',
       's.number().int().min',
-      's.number().int().min().default',
+      's.number().int().min(1).default',
     ]) {
       const fact = call(callee);
       expect(fact.rootWideningRequired, callee).toBe(false);

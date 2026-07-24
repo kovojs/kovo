@@ -90,6 +90,15 @@ const reviewedFrameworkOpaqueValueCalls = new Set([
   frameworkCallModelId('@kovojs/core', '.', 'component'),
   frameworkCallModelId('@kovojs/style', '.', 'create'),
 ]);
+const reviewedFrameworkDeclarationFactoryCalls = new Set([
+  frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
+]);
+const reviewedFrameworkDeclarationReceiverMethods = new Map([
+  [
+    frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
+    new Set(['buildToken', 'entries', 'put', 'resolve']),
+  ],
+]);
 // Keep this finite: frozen `s` declaration builders/modifiers return schema data. Parse, storage,
 // callback-bearing, and otherwise effectful APIs intentionally remain opaque (SPEC §6.6, §13.1).
 const reviewedSchemaBuilderMethods = new Set([
@@ -759,7 +768,9 @@ function runInvocation(
   state: AnalysisState,
 ): Environment {
   env = runExpression(calleeExpression, env, scope, state);
-  const callee = readExpression(calleeExpression, env, scope, state);
+  const callee = closeUnreviewedFrameworkDeclarationReceiver(
+    readExpression(calleeExpression, env, scope, state),
+  );
   const first = arguments_[0];
   const key = lexicalCallKey(node, state.sourceFile);
   const prior = state.calls.get(key);
@@ -821,7 +832,9 @@ function beginImplicitInvocation(
   state: AnalysisState,
 ): { readonly callee: Value; readonly env: Environment } {
   env = runExpression(calleeExpression, env, scope, state);
-  const callee = readExpression(calleeExpression, env, scope, state);
+  const callee = closeUnreviewedFrameworkDeclarationReceiver(
+    readExpression(calleeExpression, env, scope, state),
+  );
   const key = lexicalCallKey(node, state.sourceFile);
   const prior = state.calls.get(key);
   state.calls.set(key, {
@@ -1104,6 +1117,18 @@ function readExpression(
   }
   const reference = expressionReference(expression, scope);
   if (reference) return readBinding(reference.binding, reference.path, env, scope, state);
+  if (ts.isPropertyAccessExpression(expression)) {
+    const projected = projectValue(
+      readExpression(expression.expression, env, scope, state),
+      expression.name.text,
+    );
+    if (
+      projected.candidates.length > 0 &&
+      projected.candidates.every(isReviewedSchemaValueCallCandidate)
+    ) {
+      return projected;
+    }
+  }
   // An ambient/global value is not itself evidence of a Kovo root-factory binding. Invoking it is
   // still effectful, and its unsupported result remains root-bearing below; raw platform globals
   // are closed independently by the capability scanner.
@@ -1154,6 +1179,7 @@ function readExpression(
       readExpression(argument, env, scope, state),
     );
     const reviewedRootFactory = isReviewedFrameworkRootFactoryCall(callee);
+    const reviewedDeclarationFactory = isReviewedFrameworkDeclarationFactoryCall(callee);
     const reviewedOpaqueValue = isReviewedFrameworkOpaqueValueCall(callee);
     if (reviewedOpaqueValue) {
       const containsRoot = argumentValues.some((argument) => argument.containsRoot);
@@ -1170,6 +1196,7 @@ function readExpression(
     }
     const canReturnFrameworkRoot =
       !reviewedRootFactory &&
+      !reviewedDeclarationFactory &&
       (callee.containsRoot ||
         argumentValues.some((argument) => argument.containsRoot) ||
         callee.candidates.some(candidateCallResultMayContainRoot));
@@ -1177,12 +1204,19 @@ function readExpression(
       'call result is not a finite binding reference',
       canReturnFrameworkRoot,
     );
-    if (reviewedRootFactory) {
+    if (reviewedRootFactory || reviewedDeclarationFactory) {
       // Arguments and callbacks were already walked above. The declaration value returned by an
       // exact reviewed factory is framework data, not another callable framework root.
       return {
         ...unknownResult,
-        candidates: [{ exportName: 'reviewed framework declaration', kind: 'local' }],
+        candidates: callee.candidates.map((candidate) =>
+          candidate.kind === 'import'
+            ? {
+                ...candidate,
+                reviewedDeclarationFactory: frameworkCallModelIdForCandidate(candidate),
+              }
+            : candidate,
+        ),
         effectsModeled: true,
         effectSites: currentEffectSites(env),
         rootWideningRequired: false,
@@ -1268,7 +1302,13 @@ function readBinding(
   const key = stateKey(binding, path);
   let value = env.get(key);
   const exact = value !== undefined;
-  if (!value && path) value = projectValue(readBinding(binding, '', env, scope, state), path);
+  if (!value && path) {
+    value = projectValue(readBinding(binding, '', env, scope, state), path);
+    const historicalBase = binding.mutable ? state.history.get(stateKey(binding)) : undefined;
+    if (historicalBase !== undefined) {
+      value = joinValues(state, value, projectValue(historicalBase, path));
+    }
+  }
   value ??= valueOf({
     exportName: binding.name,
     kind: 'local',
@@ -1482,10 +1522,54 @@ function isReviewedFrameworkOpaqueValueCall(callee: Value): boolean {
     callee.candidates.length > 0 &&
     callee.candidates.every((candidate) => {
       if (isReviewedSchemaValueCallCandidate(candidate)) return true;
+      if (isReviewedFrameworkDeclarationReceiverCandidate(candidate)) return true;
       const id = frameworkCallModelIdForCandidate(candidate);
       return id !== undefined && reviewedFrameworkOpaqueValueCalls.has(id);
     })
   );
+}
+
+function isReviewedFrameworkDeclarationFactoryCall(callee: Value): boolean {
+  return (
+    !callee.rootWideningRequired &&
+    callee.candidates.length > 0 &&
+    callee.candidates.every((candidate) => {
+      const id = frameworkCallModelIdForCandidate(candidate);
+      return id !== undefined && reviewedFrameworkDeclarationFactoryCalls.has(id);
+    })
+  );
+}
+
+function isReviewedFrameworkDeclarationReceiverCandidate(
+  candidate: ScannedBindingCandidate,
+): boolean {
+  if (candidate.kind !== 'import' || candidate.reviewedDeclarationFactory === undefined) {
+    return false;
+  }
+  const members = candidate.members ?? [];
+  if (members.length === 0) return false;
+  const factory = {
+    ...candidate,
+    members: members.slice(0, -1),
+    reviewedDeclarationFactory: undefined,
+  };
+  const factoryId = frameworkCallModelIdForCandidate(factory);
+  return (
+    factoryId === candidate.reviewedDeclarationFactory &&
+    reviewedFrameworkDeclarationReceiverMethods
+      .get(candidate.reviewedDeclarationFactory)
+      ?.has(members.at(-1)!) === true
+  );
+}
+
+function closeUnreviewedFrameworkDeclarationReceiver(callee: Value): Value {
+  const hasDeclarationResult = callee.candidates.some(
+    (candidate) => candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined,
+  );
+  return hasDeclarationResult &&
+    !callee.candidates.every(isReviewedFrameworkDeclarationReceiverCandidate)
+    ? { ...callee, rootWideningRequired: true, uncertain: true }
+    : callee;
 }
 
 function isReviewedSchemaValueCallCandidate(candidate: ScannedBindingCandidate): boolean {
@@ -1507,6 +1591,9 @@ function isReviewedSchemaValueCallCandidate(candidate: ScannedBindingCandidate):
 }
 
 function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {
+  if (candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined) {
+    return false;
+  }
   const id = frameworkCallModelIdForCandidate(candidate);
   return id !== undefined && reviewedFrameworkRootFactoryCalls.has(id);
 }
@@ -1559,6 +1646,7 @@ function callEffectsAreModeled(callee: Value): boolean {
     !callee.rootWideningRequired &&
     (callee.effectsModeled ||
       isReviewedFrameworkRootFactoryCall(callee) ||
+      isReviewedFrameworkDeclarationFactoryCall(callee) ||
       isReviewedFrameworkOpaqueValueCall(callee))
   );
 }
