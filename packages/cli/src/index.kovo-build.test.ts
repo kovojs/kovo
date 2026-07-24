@@ -416,6 +416,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, typescriptAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () =>
         mainAsync(['build', './app.ts', '--out', './dist']),
@@ -483,6 +484,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -549,6 +551,7 @@ export function ContactCard(props: { name: string }) {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -602,6 +605,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -1628,6 +1632,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(appPath, appSource, 'utf8');
 
       const exitCode = await withCwd(root, () =>
@@ -1763,6 +1768,7 @@ export default createApp({
       writeFileSync(join(root, 'shared.mjs'), sharedSource, 'utf8');
       writeFileSync(join(root, 'src/src/client.ts'), clientSource, 'utf8');
       writeFileSync(join(root, 'src/index.html'), clientEntry, 'utf8');
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () =>
         mainAsync(['build', './src/app.mjs', '--out', 'dist']),
@@ -1887,6 +1893,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       const reviewedSource = (field: 'name' | 'role') =>
         [
           "import { createApp, trustedAssign } from '@kovojs/server';",
@@ -2018,6 +2025,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         [
@@ -2541,6 +2549,7 @@ export const ContactsRegion = defineRegion({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -2719,6 +2728,7 @@ export default createApp({
         join(root, 'node_modules/drizzle-orm'),
       );
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         join(root, 'app.ts'),
         `
@@ -3038,6 +3048,7 @@ export const memberships = pgTable('memberships', {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -3088,6 +3099,7 @@ export default createApp({ endpoints: [download] });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -3237,6 +3249,7 @@ export default createApp({ endpoints: [forgedEndpoint] });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -3886,7 +3899,14 @@ export const homeQuery = {
         [
           "import { defineConfig, node } from '@kovojs/server/build';",
           'export default defineConfig({',
-          '  preset: node({ dockerfile: false }),',
+          '  preset: node({',
+          '    dockerfile: false,',
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+          '  }),',
           '});',
           '',
         ].join('\n'),
@@ -3966,7 +3986,13 @@ export const homeQuery = {
         [
           "import { cloudflare, defineConfig } from '@kovojs/server/build';",
           'export default defineConfig({',
-          '  preset: cloudflare(),',
+          '  preset: cloudflare({',
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+          '  }),',
           '});',
           '',
         ].join('\n'),
@@ -3994,7 +4020,7 @@ export const homeQuery = {
     }
   });
 
-  it('auto-detects Vercel and emits Build Output API files', async () => {
+  it('uses configured Vercel and emits Build Output API files', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-vercel-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -4007,9 +4033,10 @@ export const homeQuery = {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root, 'vercel');
 
-      const exitCode = await withEnv({ VERCEL: '1' }, () =>
-        mainAsync(['build', appPath, '--out', outDir]),
+      const exitCode = await withCwd(root, () =>
+        withEnv({ VERCEL: '1' }, () => mainAsync(['build', appPath, '--out', outDir])),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
@@ -4091,7 +4118,7 @@ export const homeQuery = {
     }
   });
 
-  it('auto-detects Vercel and emits pure static output for static-only apps', async () => {
+  it('uses configured Vercel and emits pure static output for static-only apps', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-vercel-static-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -4104,9 +4131,10 @@ export const homeQuery = {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, staticAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root, 'vercel');
 
-      const exitCode = await withEnv({ VERCEL: '1' }, () =>
-        mainAsync(['build', appPath, '--out', outDir]),
+      const exitCode = await withCwd(root, () =>
+        withEnv({ VERCEL: '1' }, () => mainAsync(['build', appPath, '--out', outDir])),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
@@ -4176,7 +4204,7 @@ export const homeQuery = {
     }
   });
 
-  it('uses KOVO_PRESET before host auto-detection', async () => {
+  it('uses configured Cloudflare before host preset auto-selection', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -4189,9 +4217,10 @@ export const homeQuery = {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root, 'cloudflare');
 
-      const exitCode = await withEnv({ KOVO_PRESET: 'cloudflare', VERCEL: '1' }, () =>
-        mainAsync(['build', appPath, '--out', outDir]),
+      const exitCode = await withCwd(root, () =>
+        withEnv({ VERCEL: '1' }, () => mainAsync(['build', appPath, '--out', outDir])),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
@@ -4226,7 +4255,7 @@ export const homeQuery = {
     }
   });
 
-  it('auto-detects Cloudflare Pages and emits Wrangler output', async () => {
+  it('uses configured Cloudflare Pages and emits Wrangler output', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-auto-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -4239,9 +4268,10 @@ export const homeQuery = {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, dynamicAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root, 'cloudflare');
 
-      const exitCode = await withEnv({ CF_PAGES: '1' }, () =>
-        mainAsync(['build', appPath, '--out', outDir]),
+      const exitCode = await withCwd(root, () =>
+        withEnv({ CF_PAGES: '1' }, () => mainAsync(['build', appPath, '--out', outDir])),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
@@ -4260,7 +4290,7 @@ export const homeQuery = {
     }
   });
 
-  it('prints Cloudflare database guidance when the bundle references DATABASE_URL', async () => {
+  it('prints configured Cloudflare database guidance when the bundle references DATABASE_URL', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-db-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
@@ -4273,9 +4303,10 @@ export const homeQuery = {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(appPath, databaseEnvAppModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root, 'cloudflare');
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.mjs', '--out', outDir, '--preset', 'cloudflare']),
+        mainAsync(['build', './app.mjs', '--out', outDir]),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
 
@@ -4537,13 +4568,16 @@ export default createApp({
 `;
 }
 
-function writeRetentionProofConfig(root: string): void {
+function writeRetentionProofConfig(
+  root: string,
+  preset: 'cloudflare' | 'node' | 'vercel' = 'node',
+): void {
   writeFileSync(
     join(root, 'kovo.config.ts'),
     [
-      "import { defineConfig, node } from '@kovojs/server/build';",
+      `import { defineConfig, ${preset} } from '@kovojs/server/build';`,
       'export default defineConfig({',
-      '  preset: node({',
+      `  preset: ${preset}({`,
       '    retention: {',
       '      hours: 24,',
       "      immutableClientModules: 'retained',",
