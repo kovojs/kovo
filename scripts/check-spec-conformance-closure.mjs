@@ -138,7 +138,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    '36f651e75afae2afefb693c21cb33a22c4743b0bfd78a66ea738e02347fdaaf4',
+    '92ca8a506905e4108dee30e1779ea03a0817e8c0ca2b8d9b26743a456cd97734',
   ],
   [
     'packages/compiler/src/ts-api.ts',
