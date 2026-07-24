@@ -112,6 +112,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       const loginResponse = await fetch(`${origin}/login`);
       const loginHtml = await loginResponse.text();
       expect(loginResponse.status, `${loginHtml}\n${output()}`).toBe(200);
+      const buildToken = loginResponse.headers.get('Kovo-Build');
+      expect(buildToken).toBeTruthy();
       const stylesheetHref = /\/assets\/styles\.css/.exec(loginHtml)?.[0] ?? '';
 
       expect(stylesheetHref).toBe('/assets/styles.css');
@@ -151,6 +153,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
           headers: {
             'content-type': 'application/x-www-form-urlencoded',
             cookie: cookieHeader(jar),
+            'Kovo-Build': buildToken!,
             'Kovo-Fragment': 'true',
             'Kovo-Idem': idem,
             origin,
