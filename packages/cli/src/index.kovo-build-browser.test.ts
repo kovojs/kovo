@@ -21,30 +21,34 @@ import { mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
 
-// SPEC §4.4/§5.2.1: these low-level trusted-HTML fixtures must declare the exact client module
-// URL that the compiler would mark beside each generated handler/derive reference.
-function appSource(): string {
-  return `
-import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
-import { trustedHtml } from '@kovojs/browser';
-
-const clientModules = createMemoryVersionedClientModuleRegistry();
-const clientHref = clientModules.put({
-  path: '/c/counter.client.js',
-  source: 'export function increment(event, ctx){ ctx.state.n = (ctx.state.n || 0) + 1; }',
-});
-
-const home = route('/', {
-  access: publicAccess('browser build fixture'),
-  page: () =>
-    trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state="{&quot;n&quot;:0}">' +
-    '<button on:click="' + clientHref + '#increment" data-kovo-module-allowlist="' + clientHref + '">bump</button> ' +
-    '<output data-bind="state.n">0</output>' +
-    '</counter-island></main>'),
-});
-
-export default createApp({ clientModules, routes: [home] });
-`;
+// SPEC §5.2: app components remain TSX; the fixture inspects compiler-emitted handler refs only to
+// exercise the production loader/cache boundary.
+function appSource(refs: { click: string; href: string }): string {
+  return [
+    '/** @jsxImportSource @kovojs/server */',
+    "import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';",
+    "import { CounterIsland } from './components/counter-island.tsx';",
+    '',
+    'void CounterIsland;',
+    'export default createApp({',
+    '  routes: [',
+    "    route('/', {",
+    "      access: publicAccess('browser build fixture'),",
+    '      page: () => trustedHtml(',
+    '        ' +
+      JSON.stringify(
+        `<main><section kovo-c="counter-island" kovo-state="{&quot;count&quot;:0,&quot;label&quot;:&quot;ready&quot;}">` +
+          `<button data-testid="counter" type="button" on:click="${refs.click}" data-kovo-module-allowlist="${refs.href}">bump</button>` +
+          `<output data-testid="count" data-bind="state.count">0</output>` +
+          `</section></main>`,
+      ) +
+      ',',
+    '      ),',
+    '    }),',
+    '  ],',
+    '});',
+    '',
+  ].join('\n');
 }
 
 function writeClientEntry(root: string): void {
@@ -172,7 +176,7 @@ function stateTextIslandRefs(): {
 describe('kovo build — browser drive (S1)', () => {
   it('drives a prod-built interactive island in a real browser', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-browser-'));
-    const appPath = join(root, 'app.mjs');
+    const appPath = join(root, 'src/app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -181,14 +185,22 @@ describe('kovo build — browser drive (S1)', () => {
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
-      writeFileSync(appPath, appSource(), 'utf8');
       writeClientEntry(root);
       writeRetentionProofConfig(root);
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      const refs = authoredIslandRefs();
+      writeFileSync(appPath, appSource(refs), 'utf8');
+      writeFileSync(
+        join(root, 'src/components/counter-island.tsx'),
+        authoredIslandSource(),
+        'utf8',
+      );
 
       const exitCode = await withCwd(root, () =>
-        mainAsync(['build', './app.mjs', '--out', './dist']),
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
@@ -213,7 +225,7 @@ describe('kovo build — browser drive (S1)', () => {
 
       await page.goto(`${origin}/`);
 
-      const output = page.locator('output[data-bind="state.n"]');
+      const output = page.getByTestId('count');
       await output.waitFor();
       expect(await output.textContent()).toBe('0');
 
@@ -222,7 +234,7 @@ describe('kovo build — browser drive (S1)', () => {
       // prod-built resumability chain running in a real browser.
       await page.getByRole('button', { name: 'bump' }).click();
       await page.waitForFunction(
-        () => document.querySelector('output[data-bind="state.n"]')?.textContent === '1',
+        () => document.querySelector('[data-testid="count"]')?.textContent === '1',
         undefined,
         { timeout: 10_000 },
       );
@@ -230,9 +242,7 @@ describe('kovo build — browser drive (S1)', () => {
 
       // The /c/ module the browser actually loaded is a content-versioned URL served with
       // an immutable cache posture — safe to cache forever, never poisoning a redeploy.
-      const counterModule = clientModuleResponses.find((entry) =>
-        entry.url.includes('counter-v1/counter.client.js'),
-      );
+      const counterModule = clientModuleResponses.find((entry) => entry.url.endsWith(refs.href));
       expect(counterModule, 'loader import()ed the versioned /c/ module').toBeTruthy();
       expect(counterModule?.cacheControl).toContain('immutable');
     } finally {

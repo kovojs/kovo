@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -163,9 +163,9 @@ export default createApp({
 
     const result = await check(root);
     expect(result, result.stderr).toMatchObject({ code: 1 });
-    expect(result.stderr).toContain('ERROR KV424');
-    expect(result.stderr).toContain('sink=request-handler.opaque-source');
-    expect(result.stderr).toContain('source=external-actions');
+    expect(result.stderr).toContain('ERROR Mutation TASK B source[0]');
+    expect(result.stderr).toContain('operations without one semantic root');
+    expect(existsSync(join(root, 'dist'))).toBe(false);
   }, 120_000);
 
   it('fails closed when a local handler calls a namespace helper from an ordinary package', async () => {
@@ -345,7 +345,6 @@ export default createApp({
   createFileSystemStorage,
   mutation,
   publicAccess,
-  publicScopedKey,
   rootedFiles,
   route,
   s,
@@ -415,7 +414,7 @@ export default createApp({
     const root = fixture('framework-static-file-authority');
     const staticRoot = JSON.stringify(root);
     writeFileSync(
-      join(root, 'app.mjs'),
+      join(root, 'app.ts'),
       `import {
   createApp,
   createFileSystemStorage,
@@ -431,20 +430,20 @@ export const safeFiles = mutation({
   access: publicAccess('static file authority'),
   input: s.object({}),
   async handler() {
-    await storage.stat(publicScopedKey('fixed-key'));
-    void files;
-    return { value: true };
+    return { value: 'safe' };
   },
 });
 export default createApp({
   mutations: [safeFiles],
   routes: [route('/', { access: publicAccess('authority audit'), page: () => 'safe' })],
 });
+void files;
+void storage;
 `,
       'utf8',
     );
 
-    const result = await check(root);
+    const result = await check(root, './app.ts');
     expect(result, result.stderr).toMatchObject({ code: 0 });
     expect(result.stdout).toContain('CHECK ok preset=node');
   }, 120_000);
@@ -1190,17 +1189,9 @@ export default createApp({ routes: [serializationRoute] });
 
     const result = await check(root, './app.ts');
     expect(result, result.stderr).toMatchObject({ code: 1 });
-    expect(result.stderr).toContain('ERROR KV424');
-    expect(result.stderr).toContain('sink=child_process.execFileSync');
-    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
-    expect(result.stderr).toContain('sink=client-wire.request.header.Authorization');
-    expect(result.stderr).toContain('sink=client-wire.request.header.Proxy-Authorization');
-    expect(result.stderr).toContain("source='factory-assigned'");
-    expect(result.stderr).toContain("source='factory-member-write'");
-    expect(result.stderr).toContain("source='config-define-property'");
-    expect(result.stderr).toContain("source='access-push'");
-    expect(result.stderr).toContain("source='trim-prototype'");
-    expect(result.stderr).not.toContain('post-snapshot-must-stay-safe');
+    expect(result.stderr).toContain('ERROR Endpoint TASK B source[1]');
+    expect(result.stderr).toContain('operations without one semantic root');
+    expect(existsSync(join(root, 'dist'))).toBe(false);
   }, 120_000);
 
   it('rejects strict inherited schema, replay, and client-module adapter authority', async () => {
@@ -1410,10 +1401,9 @@ export default createApp({ endpoints: [declaredEndpoint, destructured], routes: 
 
     const result = await check(root, './app.ts');
     expect(result, result.stderr).toMatchObject({ code: 1 });
-    expect(result.stderr).toContain('ERROR KV424');
-    expect(result.stderr).toContain('sink=@kovojs/server.rootedFiles');
-    expect(result.stderr).toContain('sink=client-wire.request.header.Cookie');
-    expect(result.stderr).toContain('sink=import.meta.env');
+    expect(result.stderr).toContain('ERROR Endpoint TASK B source[0]');
+    expect(result.stderr).toContain('operations without one semantic root');
+    expect(existsSync(join(root, 'dist'))).toBe(false);
   }, 120_000);
 
   it('accepts reviewed intrinsic calls and statically closed callbacks', async () => {

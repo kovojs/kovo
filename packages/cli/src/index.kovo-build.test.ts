@@ -28,6 +28,10 @@ import { createApp, route } from '@kovojs/server';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import type { AppDependencyCapabilityManifest } from '@kovojs/core/internal/graph';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
+import {
+  encodeFrameworkIdentityToken,
+  encodeFrameworkTargetHeader,
+} from '@kovojs/core/internal/wire-input-grammar';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
@@ -749,6 +753,7 @@ export default createApp({
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       mkdirSync(join(root, 'src/components'), { recursive: true });
       writeFileSync(appPath, registryWrappedFragmentBuildAppSource(), 'utf8');
       writeFileSync(
@@ -782,7 +787,10 @@ export default createApp({
         const origin = await listen(server);
 
         try {
-          const documentHtml = await (await fetch(`${origin}/`)).text();
+          const documentResponse = await fetch(`${origin}/`);
+          const documentHtml = await documentResponse.text();
+          const documentBuild = documentResponse.headers.get('Kovo-Build');
+          expect(documentBuild).toBeTruthy();
           const liveTarget = liveTargetHeaderFromDocument(
             documentHtml,
             'contacts-region',
@@ -792,9 +800,13 @@ export default createApp({
             body: buildFixtureMutationBody(addContactKey),
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
+              'Kovo-Build': documentBuild!,
+              'Kovo-Current-Url': `${origin}/`,
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': liveTarget,
-              'Kovo-Targets': `contacts-region=${contactsQueryKey}`,
+              'Kovo-Targets': encodeFrameworkTargetHeader([
+                { deps: [{ name: contactsQueryKey }], target: 'contacts-region' },
+              ]),
               Origin: origin,
               Referer: `${origin}/`,
             },
@@ -2296,6 +2308,7 @@ export async function unsafe(db, input) {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       symlinkSync(join(repoRoot, 'packages/drizzle'), join(root, 'node_modules/@kovojs/drizzle'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       writeFileSync(
         appPath,
         `
@@ -2511,6 +2524,7 @@ export const ContactsRegion = defineRegion({
 `,
         'utf8',
       );
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () =>
         mainAsync(['build', './app.mjs', '--out', './dist']),
@@ -3427,6 +3441,7 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -3510,6 +3525,7 @@ export async function resetFixture() {
       symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeSplitStyleCreateComponentClientEntry(root);
       writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -3566,6 +3582,7 @@ export async function resetFixture() {
       writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
       writeDocumentShellTemplate(root);
       writeSplitStyleCreateComponentClientEntry(root);
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -3630,6 +3647,7 @@ export const homeQuery = {
         }),
         'utf8',
       );
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () => mainAsync(['build', appPath, '--out', outDir]));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -3654,7 +3672,10 @@ export const homeQuery = {
         const origin = await listen(server);
 
         try {
-          const documentHtml = await (await fetch(`${origin}/`)).text();
+          const documentResponse = await fetch(`${origin}/`);
+          const documentHtml = await documentResponse.text();
+          const documentBuild = documentResponse.headers.get('Kovo-Build');
+          expect(documentBuild).toBeTruthy();
           const homePanelLiveTarget = liveTargetHeaderFromDocument(
             documentHtml,
             'home-panel',
@@ -3664,9 +3685,13 @@ export const homeQuery = {
             body: new URLSearchParams(),
             headers: {
               'Kovo-Current-Url': `${origin}/login`,
+              'Kovo-Build': documentBuild!,
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': homePanelLiveTarget,
-              'Kovo-Targets': 'home-panel=home',
+              'Kovo-Targets': encodeFrameworkTargetHeader([
+                { deps: [{ name: 'home' }], target: 'home-panel' },
+              ]),
+              Origin: origin,
               Referer: `${origin}/login`,
             },
             method: 'POST',
@@ -3681,9 +3706,13 @@ export const homeQuery = {
             body: new URLSearchParams(),
             headers: {
               'Kovo-Current-Url': `${origin}/`,
+              'Kovo-Build': documentBuild!,
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': homePanelLiveTarget,
-              'Kovo-Targets': 'home-panel=home',
+              'Kovo-Targets': encodeFrameworkTargetHeader([
+                { deps: [{ name: 'home' }], target: 'home-panel' },
+              ]),
+              Origin: origin,
               Referer: `${origin}/`,
             },
             method: 'POST',
@@ -4499,7 +4528,12 @@ function liveTargetHeaderFromDocument(
 ): string {
   const token = /\bkovo-live-token="([^"]+)"/u.exec(documentHtml)?.[1];
   if (!token) throw new Error('Built fixture document is missing a live-target attestation.');
-  return `${target}#${component}@${token}:{}`;
+  const targetToken = encodeFrameworkIdentityToken(target);
+  const componentToken = encodeFrameworkIdentityToken(component);
+  if (!targetToken || !componentToken) {
+    throw new Error('Built fixture live-target identity is invalid.');
+  }
+  return `${targetToken}#${componentToken}@${token}:{}`;
 }
 
 function fixtureDerivedRegistryKey(fileName: string, exportedBinding: string): string {
