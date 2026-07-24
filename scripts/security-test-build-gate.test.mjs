@@ -828,10 +828,10 @@ describe('security-test-build-gate', () => {
     });
   });
 
-  it('keeps the KV433 storage query write proof enrolled for exact put/delete/upload verbs', () => {
+  it('keeps the KV449 storage query write proof enrolled for exact put/delete/upload calls', () => {
     const proof = SECURITY_BUILD_PROOFS.find(
       (candidate) =>
-        candidate.code === 'KV433' && candidate.claimId === 'storage-query-write-prod-artifact',
+        candidate.code === 'KV449' && candidate.claimId === 'storage-query-write-prod-artifact',
     );
     expect(proof).toMatchObject({
       buildInvocation: 'starter-build-production-artifact',
@@ -839,12 +839,12 @@ describe('security-test-build-gate', () => {
       requiredNeedles: expect.arrayContaining([
         'addStorageQueryWriteProof(root)',
         'buildProductionArtifact(root)',
-        'operation=put',
-        'operation=delete',
-        'operation=upload',
+        'computed server capability call storage.put',
+        'computed server capability call storage.delete',
+        'computed server capability call storageUpload.upload',
       ]),
     });
-    expect(proof?.requiredNeedles).not.toContain('operation=store');
+    expect(proof?.requiredNeedles).not.toContain('computed server capability call storage.store');
   });
 
   it('keeps the managed write raw-driver proof enrolled on its KV424 property-protocol path', () => {

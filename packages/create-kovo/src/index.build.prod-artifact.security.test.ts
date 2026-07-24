@@ -849,8 +849,8 @@ describe('create-kovo starter (build integration: production security artifacts)
     PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   );
 
-  // @kovo-security-certifies KV433 storage-query-write-prod-artifact
-  // Exact put/delete/upload authorities reach KV433; the opaque file-store sibling is covered
+  // @kovo-security-certifies KV449 storage-query-write-prod-artifact
+  // Exact put/delete/upload authorities fail at the stronger finite-IR floor; the opaque sibling is covered
   // separately by the M1 adversarial KV424 fixture.
   it(
     'blocks storage writes from query loaders in the production build artifact',
@@ -865,13 +865,13 @@ describe('create-kovo starter (build integration: production security artifacts)
         addStorageQueryWriteProof(root);
 
         const output = captureBuildFailure(() => buildProductionArtifact(root));
-        expect(output).toContain('KV433');
+        expect(output).toContain('KV449');
         expect(output).toContain('storage-put-write-query');
         expect(output).toContain('storage-delete-write-query');
         expect(output).toContain('storage-upload-write-query');
-        expect(output).toContain('operation=put');
-        expect(output).toContain('operation=delete');
-        expect(output).toContain('operation=upload');
+        expect(output).toContain('computed server capability call storage.put');
+        expect(output).toContain('computed server capability call storage.delete');
+        expect(output).toContain('computed server capability call storageUpload.upload');
       } finally {
         rmSync(root, { force: true, recursive: true });
       }

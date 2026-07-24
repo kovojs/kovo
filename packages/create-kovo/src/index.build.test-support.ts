@@ -361,7 +361,7 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
   queries = replaceRequired(
     queries,
     "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { createMemoryStorage, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { createMemoryStorage, publicAccess, publicScopedKey, query, s, type JsonValue, type QueryLoadContext, type Reader, type ScopedKey } from '@kovojs/server';",
     'opaque storage query proof import',
   );
   queries = replaceRequired(
@@ -381,8 +381,8 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
       '  reads: [],',
       '  async load(): Promise<{ ok: true }> {',
       "    const method = 'put' as string;",
-      '    const storage = opaqueStorageWriteProbe as unknown as Record<string, (key: string, body: string) => Promise<unknown>>;',
-      "    await storage[method]!('receipts/query-computed-proof.txt', 'bad');",
+      '    const storage = opaqueStorageWriteProbe as unknown as Record<string, (key: ScopedKey, body: string) => Promise<unknown>>;',
+      "    await storage[method]!(publicScopedKey('receipts/query-computed-proof.txt'), 'bad');",
       '    return { ok: true };',
       '  },',
       '});',
@@ -401,7 +401,7 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
       "  access: publicAccess('opaque storage upload write query proof'),",
       '  reads: [],',
       '  async load(): Promise<{ ok: true }> {',
-      "    await opaqueUploadStorageWriteProbe.upload('receipts/query-upload-proof.txt', 'bad');",
+      "    await opaqueUploadStorageWriteProbe.upload(publicScopedKey('receipts/query-upload-proof.txt'), 'bad');",
       '    return { ok: true };',
       '  },',
       '});',

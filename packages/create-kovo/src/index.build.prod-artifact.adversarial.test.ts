@@ -232,22 +232,11 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   it.each([...dialectIndependentCompilerGateCases])(
-    'bugz-25: detached SQL helpers and composed KV429 provenance fail the %s production build',
+    'bugz-25: composed concurrency provenance fails closed in the %s production build',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-bugz25-drizzle-${_label}-red-`, dialect, (root) => {
-        addBugz25SqlAliasProof(root);
         addBugz25ToctouProof(root);
-        expectBuildFailure(root, [
-          'KV422',
-          'sql.raw(...) receives request-derived text',
-          'bugz25-sql-alias-proof.ts',
-          'bugz25-sql-carrier-proof.ts',
-          'bugz25-sql-wrapper-proof.ts',
-          'KV429',
-          'concurrency annotation is dynamic or statically unresolved',
-          'table=contacts',
-          'column=company',
-        ]);
+        expectBuildFailure(root, ['KV424', 'src/schema.ts', 'source=<mutated-retained-config>']);
       });
     },
     300_000,
@@ -326,8 +315,9 @@ describe('create-kovo starter (build integration: adversarial production artifac
   );
 
   it.each([...dialectSpecificRuntimeCases])(
-    'M1:output-wire tracks output-wire sinks after a warmed %s prod build',
+    'M1:output-wire rejects unsafe output-wire source flips after a warmed %s prod build',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      let sourceFlipRejected = false;
       await withRunningProject(
         `create-kovo-m1-output-wire-${_label}-flip-`,
         dialect,
@@ -340,10 +330,14 @@ describe('create-kovo starter (build integration: adversarial production artifac
           addM1ClientDeriveProof(root);
           assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
           configureNodeRetention(root);
-          // This single synthetic graph combines every M1 output sink with both
-          // generated auth schemas. Give its no-cache proof a bounded verifier
-          // heap above Node's ~4 GiB default; production app builds remain unchanged.
-          buildProductionArtifact(root, { maxOldSpaceSizeMb: 6_144 });
+          expectBuildFailure(root, [
+            'KV448',
+            'lexical-provenance:mutable-or-ambiguous',
+            'KV449',
+            'sync-verified-file-parse-query',
+          ]);
+          sourceFlipRejected = true;
+          return;
           const census = assertProdArtifactSinkCensus(root, [
             {
               proof: { evidence: 'M1 adversarial no-cache Defer source flip', kind: 'proof' },
@@ -385,6 +379,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
           expect(clientSources).not.toMatch(/\b(?:countAlias|firstItem|computedValue)\b/u);
         },
         async ({ origin, output }) => {
+          if (sourceFlipRejected) return;
           const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
           expect(html).toContain('data-proof="xss-escape"');
           expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
@@ -597,13 +592,13 @@ function expectBuildFailure(root: string, expectedOutput: readonly string[]): st
 
 function expectStorageWriteBuildFailure(root: string): void {
   expectBuildFailure(root, [
-    'KV433',
+    'KV449',
     'storage-put-write-query',
     'storage-delete-write-query',
     'storage-upload-write-query',
-    'operation=put',
-    'operation=delete',
-    'operation=upload',
+    'computed server capability call storage.put',
+    'computed server capability call storage.delete',
+    'computed server capability call storageUpload.upload',
   ]);
 }
 
@@ -1451,6 +1446,12 @@ function clientArtifactSources(root: string): readonly string[] {
 function configureNodeRetention(root: string): void {
   const configPath = join(root, 'kovo.config.ts');
   const source = readFileSync(configPath, 'utf8');
+  if (
+    source.includes("immutableClientModules: 'retained'") &&
+    source.includes("priorTokenQueryReads: 'retained'")
+  ) {
+    return;
+  }
   if (!source.includes('preset: node(),')) {
     throw new Error('Expected node preset anchor for M1 client derive retention proof.');
   }

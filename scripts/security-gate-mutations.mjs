@@ -16351,21 +16351,21 @@ async function assertKv426TrustedUrlAttributeProofEnrollmentIsPinned(moduleUnder
 async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) {
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
-      candidate.code === 'KV433' &&
+      candidate.code === 'KV449' &&
       candidate.claimId === 'storage-query-write-prod-artifact' &&
       candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
   );
-  if (!proof) throw new Error('KV433 storage-query production build proof is not enrolled');
+  if (!proof) throw new Error('KV449 storage-query production build proof is not enrolled');
   const needles = [
     'addStorageQueryWriteProof(root)',
     'buildProductionArtifact(root)',
-    'operation=put',
-    'operation=delete',
-    'operation=upload',
+    'computed server capability call storage.put',
+    'computed server capability call storage.delete',
+    'computed server capability call storageUpload.upload',
   ];
   for (const needle of needles) {
     if (!proof.requiredNeedles?.includes(needle)) {
-      throw new Error(`KV433 storage-query proof must require ${JSON.stringify(needle)}`);
+      throw new Error(`KV449 storage-query proof must require ${JSON.stringify(needle)}`);
     }
   }
 }
