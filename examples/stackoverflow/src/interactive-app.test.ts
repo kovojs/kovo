@@ -332,14 +332,12 @@ describe('stackoverflow interactive app', () => {
           'Kovo-Targets': live.targets,
           Referer: live.currentUrl,
         },
-        body: new URLSearchParams(
-          {
-            id: 'v-test',
-            targetId: first.id,
-            userId: 'demo-viewer',
-            csrf: requiredMutationCsrf(live, 'mutations/vote-up-mutation'),
-          },
-        ),
+        body: new URLSearchParams({
+          id: 'v-test',
+          targetId: first.id,
+          userId: 'demo-viewer',
+          csrf: requiredMutationCsrf(live, 'mutations/vote-up-mutation'),
+        }),
       }),
     );
 

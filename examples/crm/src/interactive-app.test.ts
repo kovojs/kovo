@@ -138,10 +138,7 @@ async function enhancedHeadersForRoute(
   };
 }
 
-function readMutationFormFields(
-  html: string,
-  mutationKey: string,
-): { csrf: string; idem: string } {
+function readMutationFormFields(html: string, mutationKey: string): { csrf: string; idem: string } {
   for (const match of html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)) {
     const openingTag = match[0].slice(0, match[0].indexOf('>') + 1);
     if (readTagAttributes(openingTag).action !== `/_m/${mutationKey}`) continue;

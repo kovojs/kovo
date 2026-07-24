@@ -129,14 +129,10 @@ describe('reference app shell HTTP entry', () => {
       const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
       expect(html).toContain('<title>Kovo Reference Public Shell</title>');
       expect(html).toContain('data-reference-public-shell');
-      const clientHref =
-        html.match(/\/c\/__v\/[0-9a-f]{64}\/reference\.client\.js/u)?.[0] ?? '';
+      const clientHref = html.match(/\/c\/__v\/[0-9a-f]{64}\/reference\.client\.js/u)?.[0] ?? '';
       expect(clientHref).toMatch(/^\/c\/__v\/[0-9a-f]{64}\/reference\.client\.js$/u);
 
-      const clientModule = await readFile(
-        path.join(distDir, clientHref.slice(1)),
-        'utf8',
-      );
+      const clientModule = await readFile(path.join(distDir, clientHref.slice(1)), 'utf8');
       expect(clientModule).toContain('Reference$markReady');
     } finally {
       await rm(distDir, { force: true, recursive: true });
