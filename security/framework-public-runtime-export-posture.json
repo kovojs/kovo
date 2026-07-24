@@ -712,7 +712,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "d79a0e285bdd6ae788fa14fe24a25b660a25d87a05a02731000734d7a004e7d8"
+      "sourceTreeSha256": "3c2049e57aed193f83d2bc63c54381532ebdde15a170b6bd2001831aa637beda"
     },
     {
       "manifestVariants": [
@@ -774,7 +774,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9242d1ef23c90ef183f8416ad34bfb7b0c2bd8d940b70aba49d6232c91dddc24"
+      "sourceTreeSha256": "a3c6642f853d1b3a366e7afefad5690ee7ac1dee981f3e6b1ff7e161bcfe9c3e"
     },
     {
       "manifestVariants": [
@@ -1615,7 +1615,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "77344031123cf022d4f0a13d1247545cb471f5cdd1a467ff5f975414bf4d03c0"
+      "sourceTreeSha256": "bc5bc795571301b8dd09d61a880b0dd9632020a5908ca1055a9ae8a3cd298d65"
     },
     {
       "manifestVariants": [
@@ -9768,7 +9768,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "53fca1a286316021941ee26f81aa7d653e113c3fb8802a28dcf07127d9adc9cf"
+      "sourceTreeSha256": "66d2e2824adbb8d674a1cfb57575dc2d4e136c8a9cd9d5cd59e8389c34e49058"
     },
     {
       "manifestVariants": [
@@ -10115,7 +10115,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "396922dcc4d3ebbaa7063ddcee40863d96bcc59edf48069ddd68910d3ae5884c"
+      "sourceTreeSha256": "759eda84ef7a0f99a5561f2bb4083c38e70ff1c9a049c2b7e8d946a5c00eef7c"
     },
     {
       "manifestVariants": [
