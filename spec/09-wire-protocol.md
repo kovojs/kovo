@@ -579,7 +579,11 @@ boundary. Task code may perform external I/O, but task DB writes must go through
 and reads through `ctx.runQuery(...)`, so every data change still reuses the audited mutation/query
 surfaces (§10.2, §10.3). A task context may schedule more tasks, use external `fetch`/storage/secrets
 capabilities, and receive a stable job id for external idempotency keys; it does not receive the
-caller mutation's transactional `db`.
+caller mutation's transactional `db`. The framework also exposes the current one-based claimed
+attempt as immutable `ctx.attempt`. It is runner-owned retry metadata, not app authority: authored
+code may pass the direct scalar through the compiler's finite plain-input grammar to an exact local
+task/query/mutation declaration, while aliases, writes, computed access, proxies, and retention fail
+closed.
 
 `request.schedule(task, args, opts?)` is the only built-in way for a mutation handler to arrange
 post-commit work. Scheduling writes a durable job row in the same transaction as the mutation's data:

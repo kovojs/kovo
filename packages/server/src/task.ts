@@ -120,6 +120,8 @@ export interface TaskPrincipalScope extends TaskPrincipalReadScope, TaskPrincipa
  * work reuses the audited mutation/query channels instead of importing a broad app DB handle.
  */
 export interface TaskRunContext {
+  /** One-based execution attempt for this durable job, including the current lease claim. */
+  readonly attempt: number;
   readonly jobId: string;
   /** Stable idempotency key for external APIs; equal to the durable job id (SPEC §9.6). */
   readonly idempotencyKey: string;

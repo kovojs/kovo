@@ -7275,6 +7275,19 @@ function requestExactMutationTaskScheduleInputIsPlain(
     });
   }
   if (Node.isPropertyAccessExpression(node)) {
+    const receiver = node.getExpression();
+    if (
+      callable.rootFactory === 'task' &&
+      callable.rootCallback === 'run' &&
+      ['attempt', 'idempotencyKey', 'jobId'].includes(node.getName()) &&
+      requestExpressionIsDirectRootParameterWithRole(receiver, callable, 'capability') &&
+      requestRootCapabilityMethodIsPristine(receiver, callable, session)
+    ) {
+      // SPEC §9.6: these are immutable, framework-minted scalar facts on the direct task
+      // context. They may cross only the finite plain-input grammar into an exact local
+      // query/mutation/task declaration; aliases, writes, computed access, and retention close.
+      return true;
+    }
     return requestRootRoleIncludesInput(
       requestExpressionRootParameterRole(node, callable, new Set(), 0),
     );

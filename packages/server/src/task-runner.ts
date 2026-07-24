@@ -482,6 +482,7 @@ export class DurableTaskRunner {
     const runMutation = this.hooks.runMutation;
     const runQuery = this.hooks.runQuery;
     const context: TaskRunContext = {
+      attempt: job.attempts,
       jobId: job.id,
       idempotencyKey: job.id,
       signal,
@@ -555,6 +556,7 @@ export class DurableTaskRunner {
     // The type is readonly for authors, but the runtime invariant must survive JavaScript and
     // casts too. Close the delivered capability property itself after constructing the context;
     // task code cannot swap in ambient fetch or a proxy dispatcher (SPEC §6.6).
+    taskDefineDataProperty(context, 'attempt', job.attempts);
     taskDefineDataProperty(context, 'signal', signal);
     return taskDefineDataProperty(context, 'fetch', frameworkEgressFetch);
   }

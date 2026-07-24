@@ -3196,7 +3196,7 @@ export const report = query('report', {
       });
       export const enqueue = mutation({
         input: s.object({ id: s.string() }),
-        async handler(input, request) {
+        async handler(input: { id: string }, request: AppRequest) {
           await request.schedule(follow, { id: input.id }, {
             key: publicScopedKey(\`starter:${'${input.id}'}\`),
           });
@@ -3377,11 +3377,18 @@ export const report = query('report', {
 
   it('accepts only exact task composition through pristine task context and posture scopes', () => {
     const safe = sinksFor(`
-      import { mutation, query, s, task } from '@kovojs/server';
+      import { domain, mutation, publicAccess, query, s, task } from '@kovojs/server';
       const attempts = new Map<string, number>();
+      const records = domain('records');
+      const publicRecords = publicAccess('public task composition fixture');
       const record = mutation({
+        access: publicRecords,
         input: s.object({ id: s.string() }),
-        handler(input) { return { id: input.id }; },
+        registry: { tables: ['records'], touches: [records] },
+        async handler(input, request) {
+          await request.db.insert(recordsTable).values({ id: input.id });
+          return { id: input.id };
+        },
       });
       const namedRecord = mutation('records/create', {
         input: s.object({ id: s.string() }),
@@ -3400,7 +3407,10 @@ export const report = query('report', {
         async run(input, context) {
           const attempt = (attempts.get(input.id) ?? 0) + 1;
           attempts.set(input.id, attempt);
-          await context.actAs('reviewed-principal').runMutation(record, { id: input.id });
+          await context.actAs('reviewed-principal').runMutation(record, {
+            attempt: context.attempt,
+            id: input.id,
+          });
           await context.runMutation(namedRecord, { id: input.id });
           await context.runQuery(inspect, { id: input.id });
           await context.runQuery(namedInspect, { id: input.id });
@@ -3421,6 +3431,16 @@ export const report = query('report', {
       `const alias = record; await context.actAs('reviewed').runMutation(alias, { id: input.id });`,
       `const alias = context; await alias.runMutation(record, { id: input.id });`,
       `await context.actAs('reviewed')[input.method](record, { id: input.id });`,
+      `const alias = context;
+       await context.actAs('reviewed').runMutation(record, {
+         attempt: alias.attempt,
+         id: input.id,
+       });`,
+      `context.attempt = 999;
+       await context.actAs('reviewed').runMutation(record, {
+         attempt: context.attempt,
+         id: input.id,
+       });`,
       `await context.schedule(follow, { id: input.id }, { onReady() {} });`,
     ]) {
       const facts = sinksFor(`

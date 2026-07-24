@@ -127,7 +127,14 @@ describe('durable task runner (SPEC §9.6)', () => {
     expect(claimed).toHaveLength(1);
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0]![0]).toEqual({ orderId: 'ord_1' });
-    expect(run.mock.calls[0]![1]).toMatchObject({ jobId: handle.id });
+    const deliveredContext = run.mock.calls[0]![1];
+    expect(deliveredContext).toMatchObject({ attempt: 1, jobId: handle.id });
+    expect(Object.getOwnPropertyDescriptor(deliveredContext, 'attempt')).toMatchObject({
+      configurable: false,
+      writable: false,
+    });
+    expect(Reflect.set(deliveredContext, 'attempt', 999)).toBe(false);
+    expect(deliveredContext.attempt).toBe(1);
     expect(store.snapshot()[0]).toMatchObject({ id: handle.id, status: 'succeeded' });
   });
 
