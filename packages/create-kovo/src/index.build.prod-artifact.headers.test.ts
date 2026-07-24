@@ -193,6 +193,8 @@ describe('create-kovo starter (build integration: production response header art
       const cookieJar = new Map<string, string>();
       const cookiePage = await fetch(`${origin}/header-cookie-proof`);
       mergeCookies(cookieJar, cookiePage.headers.getSetCookie());
+      const buildToken = cookiePage.headers.get('Kovo-Build');
+      expect(buildToken).toBeTruthy();
       const cookieForm = firstFormHtml(await cookiePage.text());
       const action = attributeValue(cookieForm, 'action');
       if (!action) throw new Error('Expected header cookie proof form action.');
@@ -207,6 +209,7 @@ describe('create-kovo starter (build integration: production response header art
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(cookieJar),
+          'Kovo-Build': buildToken!,
           'Kovo-Fragment': 'true',
           'Kovo-Idem': cookieIdem,
           origin,
@@ -230,6 +233,7 @@ describe('create-kovo starter (build integration: production response header art
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(cookieJar),
+          'Kovo-Build': buildToken!,
           'Kovo-Fragment': 'true',
           'Kovo-Idem': unsafeCookieIdem,
           origin,
@@ -274,27 +278,30 @@ describe('create-kovo starter (build integration: production response header art
         '/header-route-access-private.txt',
         '/header-parent-layout-access-private.txt',
       ]) {
-        const unauthorized = await fetch(`${origin}${path}`);
+        const unauthorized = await fetch(`${origin}${path}`, { redirect: 'manual' });
         const unauthorizedBody = await unauthorized.text();
-        expect(unauthorized.status, `${path}\n${unauthorizedBody}`).toBe(403);
+        expect(unauthorized.status, `${path}\n${unauthorizedBody}`).toBe(303);
+        expect(unauthorized.headers.get('location')).toBe(
+          `/login?next=${encodeURIComponent(path)}`,
+        );
         expect(unauthorizedBody).not.toContain('PRIVATE:victim');
 
         const authorized = await fetch(`${origin}${path}`, {
-          headers: { 'x-principal': 'victim' },
+          headers: { 'x-kovo-rolling-proof': '1' },
         });
         await expect(authorized.text()).resolves.toBe('PRIVATE:victim');
         expect(authorized.status, path).toBe(200);
-        expect(authorized.headers.get('cache-control'), path).toBe('no-store');
+        expect(authorized.headers.get('cache-control'), path).toBe('private, no-store');
         expect(authorized.headers.get('vary'), path).toContain('Cookie');
 
         const notModified = await fetch(`${origin}${path}`, {
           headers: {
             'if-none-match': '"private-v1"',
-            'x-principal': 'victim',
+            'x-kovo-rolling-proof': '1',
           },
         });
         expect(notModified.status, path).toBe(304);
-        expect(notModified.headers.get('cache-control'), path).toBe('no-store');
+        expect(notModified.headers.get('cache-control'), path).toBe('private, no-store');
         expect(notModified.headers.get('vary'), path).toContain('Cookie');
       }
 
@@ -436,10 +443,7 @@ function addHeaderSinkProofRoutes(root: string): void {
       '    });',
       '  },',
       '});',
-      'const HeaderCacheParentLayout = layout<AppRequest>({ access: [(request: AppRequest) =>',
-      "  request.headers.get('x-principal') === 'victim'",
-      '    ? true',
-      "    : { kind: 'forbidden' as const }] });",
+      'const HeaderCacheParentLayout = layout<AppRequest>({ access: [appAuthed] });',
       'const HeaderCacheChildLayout = layout<AppRequest>({ parent: HeaderCacheParentLayout });',
     ].join('\n'),
     'response-header proof raw endpoints',
@@ -513,12 +517,9 @@ function addHeaderSinkProofRoutes(root: string): void {
       '      },',
       '    }),',
       "    route('/header-route-access-private.txt', {",
-      '      access: [(request: AppRequest) =>',
-      "        request.headers.get('x-principal') === 'victim'",
-      '          ? true',
-      "          : { kind: 'forbidden' as const }],",
-      '      page(_context, request: AppRequest) {',
-      "        return respond.file(`PRIVATE:${request.headers.get('x-principal')}`, {",
+      '      access: [appAuthed],',
+      '      page() {',
+      "        return respond.file('PRIVATE:victim', {",
       "          contentType: 'text/plain; charset=utf-8',",
       '          etag: \'"private-v1"\',',
       "          filename: 'private.txt',",
@@ -528,8 +529,8 @@ function addHeaderSinkProofRoutes(root: string): void {
       "    route('/header-parent-layout-access-private.txt', {",
       "      access: publicAccess('parent layout owns private access proof'),",
       '      layout: HeaderCacheChildLayout,',
-      '      page(_context, request: AppRequest) {',
-      "        return respond.file(`PRIVATE:${request.headers.get('x-principal')}`, {",
+      '      page() {',
+      "        return respond.file('PRIVATE:victim', {",
       "          contentType: 'text/plain; charset=utf-8',",
       '          etag: \'"private-v1"\',',
       "          filename: 'private.txt',",
@@ -610,7 +611,101 @@ function addHeaderSinkProofRoutes(root: string): void {
     ].join('\n'),
     'response-header proof routes',
   );
-  writeFileSync(appPath, withRoutes, 'utf8');
+  const rawProofStart = "const rawHeaderProofVerifier = customVerifier('raw-header-proof'";
+  const layoutProofStart = 'const HeaderCacheParentLayout = layout<AppRequest>';
+  const rawStartIndex = withRoutes.indexOf(rawProofStart);
+  const layoutStartIndex = withRoutes.indexOf(layoutProofStart);
+  if (rawStartIndex < 0 || layoutStartIndex <= rawStartIndex) {
+    throw new Error('Expected scaffold anchors for response-header proof module extraction.');
+  }
+  const rawProof = withRoutes.slice(rawStartIndex, layoutStartIndex);
+
+  writeFileSync(
+    join(root, 'src/header-raw-proof.ts'),
+    [
+      "import { customVerifier, endpoint, publicAccess } from '@kovojs/server';",
+      '',
+      rawProof.replaceAll(/^const rawHeader/gmu, 'export const rawHeader').trimEnd(),
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  let modularApp = withRoutes
+    .slice(0, rawStartIndex)
+    .concat(withRoutes.slice(layoutStartIndex))
+    .replace(
+      "import { HeaderCookieProof, headerCookieProof } from './header-cookie-proof.js';",
+      [
+        "import { HeaderCookieProof, headerCookieProof } from './header-cookie-proof.js';",
+        'import {',
+        '  rawHeaderEndpoint,',
+        '  rawHeaderRedirectEndpoint,',
+        '  rawHeaderTransportEndpoint,',
+        "} from './header-raw-proof.js';",
+      ].join('\n'),
+    );
+  const privateRouteStart = "    route('/header-route-access-private.txt'";
+  const parentPrivateRouteStart = "    route('/header-parent-layout-access-private.txt'";
+  const privateRouteEnd = "    route('/header-public-cache-control.txt'";
+  const privateRouteStartIndex = modularApp.indexOf(privateRouteStart);
+  const parentPrivateRouteStartIndex = modularApp.indexOf(parentPrivateRouteStart);
+  const privateRouteEndIndex = modularApp.indexOf(privateRouteEnd);
+  const modularLayoutStartIndex = modularApp.indexOf(layoutProofStart);
+  const modularLayoutEndIndex = modularApp.indexOf(
+    'const principalEpochStore = appRuntimePrincipalEpochStore;',
+  );
+  if (
+    privateRouteStartIndex < 0 ||
+    parentPrivateRouteStartIndex <= privateRouteStartIndex ||
+    privateRouteEndIndex <= parentPrivateRouteStartIndex ||
+    modularLayoutStartIndex < 0 ||
+    modularLayoutEndIndex <= modularLayoutStartIndex
+  ) {
+    throw new Error('Expected scaffold anchors for private response-header route extraction.');
+  }
+  const privateRouteProof = modularApp.slice(privateRouteStartIndex, parentPrivateRouteStartIndex);
+  const parentPrivateRouteProof = modularApp.slice(
+    parentPrivateRouteStartIndex,
+    privateRouteEndIndex,
+  );
+  const privateLayoutProof = modularApp.slice(modularLayoutStartIndex, modularLayoutEndIndex);
+  const asDeclaration = (name: string, proof: string): string =>
+    `export const ${name} = ${proof.trim().replace(/,$/u, ';')}`;
+  writeFileSync(
+    join(root, 'src/header-private-route-proof.ts'),
+    [
+      "import { layout, publicAccess, respond, route } from '@kovojs/server';",
+      '',
+      "import { appAuthed, type AppRequest } from './auth.js';",
+      '',
+      privateLayoutProof.trimEnd(),
+      '',
+      asDeclaration('headerRouteAccessPrivate', privateRouteProof),
+      '',
+      asDeclaration('headerParentLayoutAccessPrivate', parentPrivateRouteProof),
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  modularApp = modularApp
+    .slice(0, modularLayoutStartIndex)
+    .concat(modularApp.slice(modularLayoutEndIndex))
+    .replace(
+      privateRouteProof + parentPrivateRouteProof,
+      '    headerRouteAccessPrivate,\n    headerParentLayoutAccessPrivate,\n',
+    )
+    .replace(
+      "import { HeaderCookieProof, headerCookieProof } from './header-cookie-proof.js';",
+      [
+        "import { HeaderCookieProof, headerCookieProof } from './header-cookie-proof.js';",
+        'import {',
+        '  headerParentLayoutAccessPrivate,',
+        '  headerRouteAccessPrivate,',
+        "} from './header-private-route-proof.js';",
+      ].join('\n'),
+    );
+  writeFileSync(appPath, modularApp, 'utf8');
 }
 
 function pipelinedTransportHeaderExchange(port: number): Promise<string> {
