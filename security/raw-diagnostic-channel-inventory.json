@@ -399,6 +399,17 @@
       "expressionSha256": "323f005daf7debbbac1871c0f25f359064cac125e157d28ed47ec9cd28de52a8"
     },
     {
+      "id": "packages/browser/src/handler-context.ts#throw#KV449#2b99750996566778a007a31da583f48c71bf60cda69f49786c9c541c514b22a2#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/handler-context.ts",
+      "owner": "snapshotHandlerStateJsonValue",
+      "expressionSha256": "2b99750996566778a007a31da583f48c71bf60cda69f49786c9c541c514b22a2"
+    },
+    {
       "id": "packages/browser/src/handlers.ts#throw#KV449#1de5e9c593e871814991873ad8b5b71531a0a94df1ad2b6d8889b3105f8c341e#0",
       "code": "KV449",
       "enforcementClass": "compile-error",
@@ -465,6 +476,83 @@
       "expressionSha256": "c2559679caac40d1b932978a8facc53dc40d0d0a4b978c61e02ac0dd2fe6404e"
     },
     {
+      "id": "packages/browser/src/handlers.ts#throw#KV449#c644ed8a96dffa8d12439f4ada50eb5482d84210bde1c5331e1a0557318e73d7#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/handlers.ts",
+      "owner": "dispatchDelegatedEventForElement",
+      "expressionSha256": "c644ed8a96dffa8d12439f4ada50eb5482d84210bde1c5331e1a0557318e73d7"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#generated-runtime#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "<module>",
+      "expressionSha256": "6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#generated-runtime#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#1",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "<module>",
+      "expressionSha256": "6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#generated-runtime#KV449#e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "<module>",
+      "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#generated-runtime#KV449#e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46#1",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "<module>",
+      "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#throw#KV449#6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "fail",
+      "expressionSha256": "6bb97bd6f4c768858540f2ec6b18b767b8988c846cfce7238f82e0ce1f791d28"
+    },
+    {
+      "id": "packages/browser/src/inline-loader.ts#throw#KV449#e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/browser/src/inline-loader.ts",
+      "owner": "nr",
+      "expressionSha256": "e3c149f45de799fd93656b692618bc3d1326b0cd577b21c0d79a1a58925f1f46"
+    },
+    {
       "id": "packages/cli/src/commands/build-export.ts#throw#KV235#bdd3bd65e4a8b052027b7d84ec559f51041d02a4acacef947f46dc8911d87b97#0",
       "code": "KV235",
       "enforcementClass": "compile-error",
@@ -507,6 +595,17 @@
       "file": "packages/cli/src/dependency-capability-loader.ts",
       "owner": "dependencyCapabilityError",
       "expressionSha256": "e81f1096a5092c951e9a70f0a246b7582b267f624024e6997927d71cc208431d"
+    },
+    {
+      "id": "packages/compiler/src/emit/client.ts#generated-runtime#KV449#733a96f79f3e9047de54506932cf6a2fbcd7ca2681a843609814deaabb127194#0",
+      "code": "KV449",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "generated-runtime",
+      "channel": "generated-runtime",
+      "file": "packages/compiler/src/emit/client.ts",
+      "owner": "emitHandlerBody",
+      "expressionSha256": "733a96f79f3e9047de54506932cf6a2fbcd7ca2681a843609814deaabb127194"
     },
     {
       "id": "packages/compiler/src/emit/client.ts#generated-runtime#KV449#7cd7faae0ed68c03d5d12667fbcae2c40750d3e1dc469036b439060e798d79cc#0",
@@ -971,7 +1070,29 @@
       "expressionSha256": "7098afc6256711a56d1b7753f8e5c93867ca083a4deaeeb570bb4c4a3dce0cc1"
     },
     {
-      "id": "packages/server/src/client-modules.ts#throw#KV417#80437a3e84ad05076f850b1eba4f96e08780b24ca26856d026cebbea2629b575#0",
+      "id": "packages/server/src/client-modules.ts#error-object#KV417#fbd11f770ee98a98f012ca3e26621bbce0ec48177cd161470dfe257c8c09f3ba#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "error-object",
+      "file": "packages/server/src/client-modules.ts",
+      "owner": "publishActiveSnapshot",
+      "expressionSha256": "fbd11f770ee98a98f012ca3e26621bbce0ec48177cd161470dfe257c8c09f3ba"
+    },
+    {
+      "id": "packages/server/src/client-modules.ts#throw#KV417#42fe6a36398632292e45da5a33cd2bf6a7ced08afa94d62939ea19d0f975927b#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/client-modules.ts",
+      "owner": "registerMandatoryVersionedClientModule",
+      "expressionSha256": "42fe6a36398632292e45da5a33cd2bf6a7ced08afa94d62939ea19d0f975927b"
+    },
+    {
+      "id": "packages/server/src/client-modules.ts#throw#KV417#7f30c643dad8e519c2ba3e00dc9a6ad7ac8460d59124bd36f916167db6534aca#0",
       "code": "KV417",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -979,7 +1100,40 @@
       "channel": "throw",
       "file": "packages/server/src/client-modules.ts",
       "owner": "assertDeploySkewRetentionOptions",
-      "expressionSha256": "80437a3e84ad05076f850b1eba4f96e08780b24ca26856d026cebbea2629b575"
+      "expressionSha256": "7f30c643dad8e519c2ba3e00dc9a6ad7ac8460d59124bd36f916167db6534aca"
+    },
+    {
+      "id": "packages/server/src/client-modules.ts#throw#KV417#96e37245f8ef38fc5e2021764c954eb84607c3db018a16da72949cd0ee64dca9#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/client-modules.ts",
+      "owner": "put",
+      "expressionSha256": "96e37245f8ef38fc5e2021764c954eb84607c3db018a16da72949cd0ee64dca9"
+    },
+    {
+      "id": "packages/server/src/client-modules.ts#throw#KV417#9f14e4778321b291a0acc855c8b744af9d13ef3b10233a27caa215609470deb8#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/client-modules.ts",
+      "owner": "replaceVersionedClientModuleBuildSnapshot",
+      "expressionSha256": "9f14e4778321b291a0acc855c8b744af9d13ef3b10233a27caa215609470deb8"
+    },
+    {
+      "id": "packages/server/src/client-modules.ts#throw#KV417#eb84b3cea118f65c83dd6a93249bb2b00b97a3f892516ad4e89d3b12e08aa7c8#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/client-modules.ts",
+      "owner": "finalizeVersionedClientModuleBuild",
+      "expressionSha256": "eb84b3cea118f65c83dd6a93249bb2b00b97a3f892516ad4e89d3b12e08aa7c8"
     },
     {
       "id": "packages/server/src/command.ts#throw#KV424#2bd7f447f48cbf2a13600befc7568a9033984a726d36453ead02b5bc6a782406#0",
@@ -4337,7 +4491,29 @@
       "expressionSha256": "af24a136fbb8a1867ec263b9b844351c789403d51e4657a909df07b1def68512"
     },
     {
-      "id": "packages/server/src/static-export-client-modules.ts#throw#KV229#ce54f94d4b47b52c4f6f3c65c34716493a84cc64bd9da8b26acdc86bf4e8b9d1#0",
+      "id": "packages/server/src/static-export-client-modules.ts#throw#KV229#381bde14fe23a14fcb13f006676c36d50ad51a78635d7af7ec41ff63b56dd3e4#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/static-export-client-modules.ts",
+      "owner": "staticExportClientModuleTarget",
+      "expressionSha256": "381bde14fe23a14fcb13f006676c36d50ad51a78635d7af7ec41ff63b56dd3e4"
+    },
+    {
+      "id": "packages/server/src/static-export-client-modules.ts#throw#KV229#9937010c405581ece9ffeeb8fca88ca7a88ea163c69d348e0fef3c777619ee36#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/static-export-client-modules.ts",
+      "owner": "assertStaticExportClientModuleRepresentation",
+      "expressionSha256": "9937010c405581ece9ffeeb8fca88ca7a88ea163c69d348e0fef3c777619ee36"
+    },
+    {
+      "id": "packages/server/src/static-export-client-modules.ts#throw#KV229#dc185e03f246d7a2aa16a627776d7ecf5ed9172a7ddce2b169c3ce3b3dde966a#0",
       "code": "KV229",
       "enforcementClass": "compile-error",
       "severity": "error",
@@ -4345,7 +4521,7 @@
       "channel": "throw",
       "file": "packages/server/src/static-export-client-modules.ts",
       "owner": "replayStaticExportClientModuleArtifacts",
-      "expressionSha256": "ce54f94d4b47b52c4f6f3c65c34716493a84cc64bd9da8b26acdc86bf4e8b9d1"
+      "expressionSha256": "dc185e03f246d7a2aa16a627776d7ecf5ed9172a7ddce2b169c3ce3b3dde966a"
     },
     {
       "id": "packages/server/src/static-export-headers.ts#error-object#KV229#eed548c40a0dd4fce490fe58c08ff70582e46abd44af03cfb9ef671b1bdf69cd#0",
@@ -4401,6 +4577,17 @@
       "file": "packages/server/src/static-export-output-targets.ts",
       "owner": "staticExportAssetTargetPath",
       "expressionSha256": "1ecd54cc5d1370ea8300fcf8df4c30b9e2971f3962ed4db46b91f2d9a5e13387"
+    },
+    {
+      "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#36d8a0276244a36b7bc8471d851a829659bc198bb485e0e4748ea244f259bfcb#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/static-export-output-targets.ts",
+      "owner": "assertStaticExportClientModuleTarget",
+      "expressionSha256": "36d8a0276244a36b7bc8471d851a829659bc198bb485e0e4748ea244f259bfcb"
     },
     {
       "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#3a5571e1db5fc8245b82940e92863e9adeab8ec9224ca157060104145455eb92#0",
@@ -4480,6 +4667,17 @@
       "expressionSha256": "d7b8fce597a7e97f3529886515f6bcef2c2ad5786419ce6e1f236ae3b63cc672"
     },
     {
+      "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#e4d7bea4f1365c18b068f93c34a5d3c522796eb9a5a864c3ad54377ca0d79ad7#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "analysis",
+      "channel": "throw",
+      "file": "packages/server/src/static-export-output-targets.ts",
+      "owner": "assertStaticExportClientModuleTarget",
+      "expressionSha256": "e4d7bea4f1365c18b068f93c34a5d3c522796eb9a5a864c3ad54377ca0d79ad7"
+    },
+    {
       "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#e6295ea2ef38d455fb02f769cd68256b2dbc9f293276779e5bf2812811bf2e2d#0",
       "code": "KV229",
       "enforcementClass": "compile-error",
@@ -4500,17 +4698,6 @@
       "file": "packages/server/src/static-export-output-targets.ts",
       "owner": "staticExportArtifactTargetPath",
       "expressionSha256": "e70a5f8a20e6fa036f2601a4ef16dda9d85b4d63906518a91e76674b6a13a5ee"
-    },
-    {
-      "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#e974533abb3c2c7081e9c133c73be594af8d4b51e2e7abdb17e51fd5b778be06#0",
-      "code": "KV229",
-      "enforcementClass": "compile-error",
-      "severity": "error",
-      "layer": "analysis",
-      "channel": "throw",
-      "file": "packages/server/src/static-export-output-targets.ts",
-      "owner": "assertStaticExportClientModuleTarget",
-      "expressionSha256": "e974533abb3c2c7081e9c133c73be594af8d4b51e2e7abdb17e51fd5b778be06"
     },
     {
       "id": "packages/server/src/static-export-output-targets.ts#throw#KV229#e976ebaf4d74b8d03890afa5288dfeef2f3ac42383b6decdf0be53a8d7804718#0",
@@ -4665,6 +4852,17 @@
       "file": "packages/server/src/vite-build-assets.ts",
       "owner": "resolvedFileSystemPath",
       "expressionSha256": "2b14ff4acbe822efc05a8741e353429bfbdfed1279e269666ed8429d224ad713"
+    },
+    {
+      "id": "packages/server/src/vite-dev.ts#error-object#KV417#568af70c3e1f9568f0b3cc310832c8a40cbf24a1c5d7b1bc822907058f3dd94f#0",
+      "code": "KV417",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "error-object",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "publishKovoAppShellViteDevClientModuleSnapshot",
+      "expressionSha256": "568af70c3e1f9568f0b3cc310832c8a40cbf24a1c5d7b1bc822907058f3dd94f"
     },
     {
       "id": "packages/server/src/vite-manifest.ts#throw#KV229#7c9b508aa3140c11557d199367f9c08a2cd394d9ef5643cedd25c3ba569ea8a1#0",
