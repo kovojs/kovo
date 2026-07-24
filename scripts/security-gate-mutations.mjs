@@ -2033,7 +2033,7 @@ const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGa
 
 const weakenedKv426TrustedUrlAttributeProofNeedle = `      'TrustedUrl',`;
 
-const kv433StorageDeleteProofNeedle = `      'operation=delete',`;
+const kv433StorageDeleteProofNeedle = `      'computed server capability call storage.delete',`;
 
 const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
 
@@ -7375,9 +7375,9 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
-      'Weakens the KV433 storage-query proof enrollment so it no longer pins direct delete write detection.',
+      'Weakens the KV449 storage-query proof enrollment so it no longer pins direct delete write detection.',
     expectedKiller:
-      'KV433 storage-query proof enrollment must retain direct storage delete operation evidence',
+      'KV449 storage-query proof enrollment must retain direct storage delete operation evidence',
     name: 'security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment',
     replacement: weakenedKv433StorageDeleteProofNeedle,
     search: kv433StorageDeleteProofNeedle,
