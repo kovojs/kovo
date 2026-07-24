@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
+  capabilityManifestFingerprint,
   computeFrameworkRuntimeSurface,
   expandFrameworkExportPostureLedger,
   productionPackedTreeSha256,
@@ -14,6 +15,7 @@ import {
   renderFrameworkExportPostureGenerated,
   validateFrameworkExportPosture,
 } from './framework-export-posture-gate.mjs';
+import { expectedPackedManifest, releasePackages } from './release-packages.mjs';
 
 const ledger = readFrameworkExportPostureLedger();
 const actual = computeFrameworkRuntimeSurface();
@@ -103,6 +105,22 @@ function groupWithMember(document, packageName, subpath, name) {
 }
 
 describe('framework public runtime export posture gate', () => {
+  it('reviews the exact source-derived packed manifest and keeps dependency mutants closed', () => {
+    const packages = releasePackages();
+    const releaseVersions = new Map(packages.map((pkg) => [pkg.name, pkg.version]));
+    const server = packages.find((pkg) => pkg.name === '@kovojs/server');
+    expect(server).toBeDefined();
+    const packed = expectedPackedManifest(server.manifest, releaseVersions);
+    const reviewedFingerprints = packageRow(actual, '@kovojs/server').manifestVariants.map(
+      (variant) => variant.fingerprint,
+    );
+    expect(reviewedFingerprints).toContain(capabilityManifestFingerprint(packed));
+
+    const mismatched = structuredClone(packed);
+    mismatched.dependencies['@kovojs/core'] = '9.9.9';
+    expect(reviewedFingerprints).not.toContain(capabilityManifestFingerprint(mismatched));
+  });
+
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);

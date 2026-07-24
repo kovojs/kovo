@@ -13,6 +13,7 @@ import {
   publicEntrySubpaths,
   repoRoot,
 } from './public-packages.mjs';
+import { expectedPackedManifest, releasePackages } from './release-packages.mjs';
 import { securityCoverageVocabulary } from './security-coverage.mjs';
 
 export const FRAMEWORK_EXPORT_POSTURE_SCHEMA = 'kovo-framework-public-runtime-export-posture/v1';
@@ -585,12 +586,14 @@ function manifestVariants(manifest) {
 }
 
 function manifestVariantCandidates(manifest) {
+  const releaseVersions = new Map(releasePackages().map((pkg) => [pkg.name, pkg.version]));
   return [
     manifest,
     {
       ...manifest,
       ...(isRecord(manifest.publishConfig) ? manifest.publishConfig : {}),
     },
+    expectedPackedManifest(manifest, releaseVersions),
   ];
 }
 
@@ -626,7 +629,7 @@ function frameworkImplementationVariants(
     .sort((left, right) => compareStrings(left.fingerprint, right.fingerprint));
 }
 
-function capabilityManifestFingerprint(manifest) {
+export function capabilityManifestFingerprint(manifest) {
   const securityShape = {
     browser: orderPreservingManifestValue(ownValue(manifest, 'browser')),
     bundleDependencies: orderPreservingManifestValue(ownValue(manifest, 'bundleDependencies')),

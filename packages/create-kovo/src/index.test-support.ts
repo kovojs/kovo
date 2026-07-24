@@ -328,17 +328,23 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
   for (const pkg of packedWorkspacePackages) {
     const packageRoot = join(process.cwd(), 'packages', pkg.dir);
     const before = new Set(readdirSync(tarballDir).filter((file) => file.endsWith('.tgz')));
-    execStarterCommand('pnpm', ['pack', '--pack-destination', tarballDir], {
-      cwd: packageRoot,
-      stdio: 'pipe',
-    });
+    execStarterCommand(
+      'pnpm',
+      ['--config.ignore-scripts=true', 'pack', '--pack-destination', tarballDir],
+      {
+        cwd: packageRoot,
+        stdio: 'pipe',
+      },
+    );
     const created = readdirSync(tarballDir)
       .filter((file) => file.endsWith('.tgz') && !before.has(file))
       .sort();
     if (created.length !== 1) {
       throw new Error(`Expected one tarball for ${pkg.name}; found ${created.length}.`);
     }
-    tarballByName.set(pkg.name, realpathSync(join(tarballDir, created[0] ?? '')));
+    const tarballPath = realpathSync(join(tarballDir, created[0] ?? ''));
+    canonicalizePackedTarball(tarballPath);
+    tarballByName.set(pkg.name, tarballPath);
   }
 
   const overridesByName: Record<string, string> = {};
@@ -351,6 +357,25 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
   packedKovoPackageCache = { overridesByName, tarballByName, tarballDir };
   writePackedKovoPackageManifest(packedKovoPackageCache);
   return packedKovoPackageCache;
+}
+
+function canonicalizePackedTarball(tarballPath: string): void {
+  const moduleUrl = pathToFileURL(
+    join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
+  ).href;
+  execStarterCommand(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `import { canonicalizePackedTarball } from ${JSON.stringify(moduleUrl)}; canonicalizePackedTarball(process.argv[1]);`,
+      tarballPath,
+    ],
+    {
+      cwd: process.cwd(),
+      stdio: 'pipe',
+    },
+  );
 }
 
 function readPackedKovoPackageManifest(tarballDir: string): PackedKovoPackages | undefined {
