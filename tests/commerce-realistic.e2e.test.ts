@@ -78,9 +78,11 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       await expect(page.locator('form[action="/_m/domain/add-to-cart"]')).toHaveCount(0);
 
       // The live CSRF/session stack still rejects a raw anonymous mutation.
+      const buildToken = await page.locator('meta[name="kovo-build"]').getAttribute('content');
+      if (!buildToken) throw new Error('storefront document did not carry its build identity');
       const csrf = await page.request.post(`${origin}/_m/domain/add-to-cart`, {
         form: { productId: 'p1', quantity: '1' },
-        headers: { 'Kovo-Fragment': 'true' },
+        headers: { 'Kovo-Build': buildToken, 'Kovo-Fragment': 'true' },
         failOnStatusCode: false,
       });
       expect(csrf.status()).toBe(422);

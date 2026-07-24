@@ -16,6 +16,10 @@ import {
   type MutationEndpointRequest,
 } from '../../../../../packages/server/src/mutation-wire.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
+import {
+  encodeTutorialMutationHeaders,
+  encodeTutorialQueryDependency,
+} from '../../../mutation-wire-test-headers.js';
 
 import {
   addToCart,
@@ -94,35 +98,16 @@ function withAttestedLiveTargets(
   headers: TutorialMutationHeaders,
   request: ShopRequest,
 ): TutorialMutationHeaders {
-  const value = headers['Kovo-Live-Targets'];
-  if (typeof value !== 'string') return headers;
-
-  return { ...headers, 'Kovo-Live-Targets': attestLiveTargetEntries(value, request) };
-}
-
-function attestLiveTargetEntries(value: string, request: ShopRequest): string {
-  return value
-    .split(';')
-    .map((entry) => {
-      const trimmed = entry.trim();
-      const componentSeparator = trimmed.indexOf('#');
-      const propsSeparator = trimmed.indexOf(':', componentSeparator + 1);
-      if (componentSeparator <= 0 || propsSeparator <= componentSeparator + 1) return trimmed;
-      const target = trimmed.slice(0, componentSeparator);
-      const component = trimmed.slice(componentSeparator + 1, propsSeparator);
-      const propsJson = trimmed.slice(propsSeparator + 1);
-      const props = JSON.parse(propsJson) as Record<string, unknown>;
-      const token = createLiveTargetAttestation(
-        { component, props, target },
-        {
-          buildToken: tutorialLiveTargetAuthority.audience,
-          ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
-          request,
-        },
-      );
-      return `${target}#${component}@${token}:${propsJson}`;
-    })
-    .join('; ');
+  return encodeTutorialMutationHeaders(headers, ({ component, props, target }) =>
+    createLiveTargetAttestation(
+      { component, props, target },
+      {
+        buildToken: tutorialLiveTargetAuthority.audience,
+        ...(tutorialWireCsrf === undefined ? {} : { csrf: tutorialWireCsrf }),
+        request,
+      },
+    ),
+  );
 }
 
 function renderAddToCartFailureFragment(
@@ -213,9 +198,10 @@ describe('tutorial step 06 — streaming & defer', () => {
   // snippet:query-order-test
   it('keeps the deferred consumer bound to its compiler-derived query identity', async () => {
     const response = await renderShopPageDeferredStream(createShopDb());
-
     const fragmentIndex = response.body.indexOf('<kovo-fragment target="product-list"');
-    const dependencyIndex = response.body.indexOf(`kovo-deps="${productsQuery.key}"`);
+    const dependencyIndex = response.body.indexOf(
+      `kovo-deps="${encodeTutorialQueryDependency(productsQuery.key)}"`,
+    );
     expect(fragmentIndex).toBeGreaterThan(-1);
     expect(dependencyIndex).toBeGreaterThan(fragmentIndex);
   });
