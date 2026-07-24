@@ -3,7 +3,9 @@ import { defineConfig } from 'vite-plus';
 import { exampleDrizzleRegistryPlugin } from './examples/vite-drizzle-registry.js';
 import {
   commerceRegistryFacts,
+  crmRegistryFacts,
   exampleKovoCompilerPlugin,
+  stackOverflowRegistryFacts,
   tutorialAppRegistryFacts,
   tutorialMutationRegistryFacts,
 } from './examples/vite-kovo-compiler.js';
@@ -26,6 +28,9 @@ function workspaceRootFromCwd(): string {
 
 export default defineConfig({
   plugins: [
+    exampleKovoCompilerPlugin({
+      include: ['site/tutorial/steps/02-islands'],
+    }),
     exampleKovoCompilerPlugin({
       include: ['site/tutorial/steps/04-mutations'],
       registryFacts: tutorialMutationRegistryFacts,
@@ -58,6 +63,7 @@ export default defineConfig({
     }),
     exampleKovoCompilerPlugin({
       include: ['examples/crm/src/components', 'examples/crm/src/mutations.ts'],
+      registryFacts: crmRegistryFacts,
     }),
     exampleDrizzleRegistryPlugin({
       appEntries: [
@@ -78,6 +84,7 @@ export default defineConfig({
         'examples/stackoverflow/src/components/question-list.tsx',
         'examples/stackoverflow/src/mutations.ts',
       ],
+      registryFacts: stackOverflowRegistryFacts,
     }),
   ],
   lint: {
@@ -354,12 +361,14 @@ export default defineConfig({
       'packages/compiler/src/vite-config.ts',
       'packages/core/src/generated.ts',
       'packages/core/src/internal/agent-docs.ts',
+      'packages/core/src/internal/cache-influence.ts',
       'packages/core/src/internal/client-module-url.ts',
       'packages/core/src/internal/classifier-verdict.ts',
       'packages/core/src/internal/component-render.ts',
       'packages/core/src/internal/derivation.ts',
       'packages/core/src/internal/diagnostics.ts',
       'packages/core/src/internal/document-protocol.ts',
+      'packages/core/src/internal/emission.ts',
       'packages/core/src/internal/event.ts',
       'packages/core/src/internal/filesystem.ts',
       'packages/core/src/internal/fragment-target.ts',
@@ -382,6 +391,7 @@ export default defineConfig({
       'packages/core/src/internal/sql-safety.ts',
       'packages/core/src/internal/storage.ts',
       'packages/core/src/internal/verifier.ts',
+      'packages/core/src/internal/wire-input-grammar.ts',
       'packages/core/src/internal/wire-json.ts',
       'packages/browser/src/client.ts',
       'packages/browser/src/generated.ts',
