@@ -958,9 +958,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
           import { component } from '@kovojs/core';
           import {
             createApp,
+            createMemoryStorage,
             createMemoryVersionedClientModuleRegistry,
             domain,
             mutation,
+            publicScopedKey,
             query,
             route,
             s,
@@ -983,6 +985,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
             path: '/c/page.js',
             source: 'export const page = true;',
           });
+          const storage = createMemoryStorage();
+          await storage.put(publicScopedKey('receipts/one.txt'), 'one');
           const Page = component({ render() { return <main />; } });
           export default createApp({
             clientModules,
@@ -997,6 +1001,25 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual(
       expect.arrayContaining(['createApp', 'records', 'save', '/schema-component']),
+    );
+  });
+
+  it('keeps unreviewed memory-storage receiver methods fail closed', () => {
+    const result = analyze([
+      {
+        fileName: 'app.ts',
+        source: `
+          import { createMemoryStorage, route } from '@kovojs/server';
+          const storage = createMemoryStorage();
+          storage.acquireAuthority();
+          export const page = route('/storage-escape', { page() { return null; } });
+        `,
+      },
+    ]);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'mutable or ambiguous lexical provenance',
     );
   });
 

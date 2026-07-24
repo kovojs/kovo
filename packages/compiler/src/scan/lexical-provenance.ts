@@ -91,10 +91,15 @@ const reviewedFrameworkOpaqueValueCalls = new Set([
   frameworkCallModelId('@kovojs/style', '.', 'create'),
 ]);
 const reviewedFrameworkDeclarationFactoryCalls = new Set([
+  frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
   frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
   frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'),
 ]);
 const reviewedFrameworkDeclarationReceiverMethods = new Map([
+  [
+    frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
+    new Set(['delete', 'get', 'put', 'stat', 'stream']),
+  ],
   [
     frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
     new Set(['buildToken', 'entries', 'put', 'resolve']),
