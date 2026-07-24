@@ -5,6 +5,7 @@ import type {
   ScannedImportBindingFact,
 } from '../security/capability-closure-model.js';
 import { frameworkExportPostureGroups } from '../security/framework-public-runtime-export-posture.generated.js';
+import { isIntrinsicJsxTagName } from './jsx-tag.js';
 
 export interface ScannedCallProvenance {
   readonly callee: ScannedUseProvenance;
@@ -80,6 +81,14 @@ const reviewedFrameworkRootFactoryCalls = new Set(
         ),
   ),
 );
+
+// `style.create` validates data-only style input and returns compiler-owned opaque style records.
+// Argument expressions are still walked before the call; only the exact reviewed result object and
+// its property reads are modeled here so large static TSX views do not consume the provenance
+// effect budget merely by reading generated class records (SPEC §5.2, §6.6, §13.1).
+const reviewedFrameworkOpaqueValueCalls = new Set([
+  frameworkCallModelId('@kovojs/style', '.', 'create'),
+]);
 
 /** Syntax-only lexical + flow abstraction for exact per-use capability provenance (SPEC §6.6). */
 export function scanLexicalProvenance(
@@ -642,7 +651,9 @@ function runJsxExpression(
   let invocation: { readonly callee: Value; readonly node: ts.JsxOpeningLikeElement } | undefined;
   if (opening !== undefined) {
     const callee = jsxTagExpression(opening.tagName);
-    if (callee) {
+    // Intrinsic JSX tags lower to string names; there is no ambient component getter or invocation
+    // to model. Attributes and children remain executable and are walked below.
+    if (callee && !isIntrinsicJsxTagName(opening.tagName)) {
       const begun = beginImplicitInvocation(opening, callee, env, scope, state);
       env = begun.env;
       invocation = { callee: begun.callee, node: opening };
@@ -650,12 +661,7 @@ function runJsxExpression(
     for (const attribute of opening.attributes.properties) {
       if (ts.isJsxSpreadAttribute(attribute)) {
         env = runExpression(attribute.expression, env, scope, state);
-        env = markUnmodeledEffects(
-          env,
-          scope,
-          state,
-          lexicalNodeKey(attribute, state.sourceFile),
-        );
+        env = markUnmodeledEffects(env, scope, state, lexicalNodeKey(attribute, state.sourceFile));
         continue;
       }
       const initializer = attribute.initializer;
@@ -676,12 +682,7 @@ function runJsxExpression(
       if (child.expression === undefined) continue;
       env = runExpression(child.expression, env, scope, state);
       if (child.dotDotDotToken !== undefined) {
-        env = markUnmodeledEffects(
-          env,
-          scope,
-          state,
-          lexicalNodeKey(child, state.sourceFile),
-        );
+        env = markUnmodeledEffects(env, scope, state, lexicalNodeKey(child, state.sourceFile));
       }
     } else if (
       ts.isJsxElement(child) ||
@@ -1118,6 +1119,20 @@ function readExpression(
       readExpression(argument, env, scope, state),
     );
     const reviewedRootFactory = isReviewedFrameworkRootFactoryCall(callee);
+    const reviewedOpaqueValue = isReviewedFrameworkOpaqueValueCall(callee);
+    if (reviewedOpaqueValue) {
+      const containsRoot = argumentValues.some((argument) => argument.containsRoot);
+      return {
+        ...callee,
+        callables: [],
+        captured: [],
+        containsRoot,
+        effectsModeled: true,
+        effectSites: currentEffectSites(env),
+        rootWideningRequired: containsRoot,
+        uncertain: containsRoot,
+      };
+    }
     const canReturnFrameworkRoot =
       !reviewedRootFactory &&
       (callee.containsRoot ||
@@ -1414,6 +1429,17 @@ function isReviewedFrameworkRootFactoryCall(callee: Value): boolean {
   );
 }
 
+function isReviewedFrameworkOpaqueValueCall(callee: Value): boolean {
+  return (
+    !callee.rootWideningRequired &&
+    callee.candidates.length > 0 &&
+    callee.candidates.every((candidate) => {
+      const id = frameworkCallModelIdForCandidate(candidate);
+      return id !== undefined && reviewedFrameworkOpaqueValueCalls.has(id);
+    })
+  );
+}
+
 function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {
   const id = frameworkCallModelIdForCandidate(candidate);
   return id !== undefined && reviewedFrameworkRootFactoryCalls.has(id);
@@ -1465,7 +1491,9 @@ function frameworkCallModelId(packageName: string, subpath: string, exportName: 
 function callEffectsAreModeled(callee: Value): boolean {
   return (
     !callee.rootWideningRequired &&
-    (callee.effectsModeled || isReviewedFrameworkRootFactoryCall(callee))
+    (callee.effectsModeled ||
+      isReviewedFrameworkRootFactoryCall(callee) ||
+      isReviewedFrameworkOpaqueValueCall(callee))
   );
 }
 

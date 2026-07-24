@@ -1529,7 +1529,7 @@ function isReviewedNonRuntimeDistPath(value: string): boolean {
 }
 
 function isReviewedPackageDocumentationPath(value: string): boolean {
-  return /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/README\.md$/u.test(value);
+  return /^@kovojs\/[a-z0-9]+(?:-[a-z0-9]+)*\/(?:NOTICE|README\.md)$/u.test(value);
 }
 
 function executableDistPath(value: string): boolean {
@@ -1685,7 +1685,7 @@ function collectPackageFiles(
           executableDistPath(relativePath)
             ? 'unsupported-executable-artifact'
             : 'unsupported-dist-artifact',
-          `${relativePath} is not a reviewed non-runtime declaration, source map, or package README`,
+          `${relativePath} is not a reviewed non-runtime declaration, source map, package README, or license notice`,
         ),
       );
     }

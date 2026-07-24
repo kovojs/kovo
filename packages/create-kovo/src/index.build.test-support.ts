@@ -162,6 +162,7 @@ export function buildProductionArtifact(
   root: string,
   options: { maxOldSpaceSizeMb?: number } = {},
 ): void {
+  declareProductionArtifactRetention(root);
   // CI may restore TypeScript build-info; this prod-artifact gate still proves a fully cold source.
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   const env = nonParanoidStarterEnv(root);
@@ -174,16 +175,44 @@ export function buildProductionArtifact(
 }
 
 export function buildReusableProductionArtifact(root: string): void {
+  declareProductionArtifactRetention(root);
   execKovoCli(root, ['build', './src/app.tsx'], nonParanoidStarterEnv(root));
 }
 
 export function buildParanoidProductionArtifact(root: string): void {
+  declareProductionArtifactRetention(root);
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], {
     ...withStarterBinOnPath(root),
     KOVO_PARANOID: '1',
     NODE_OPTIONS: '--max-old-space-size=8192',
   });
+}
+
+// Production-artifact fixtures serve their generated output from one retained local directory for
+// the entire test. Declare that exact SPEC §14 capability instead of weakening the node preset's
+// fail-closed deploy-skew default (KV417).
+function declareProductionArtifactRetention(root: string): void {
+  const configPath = join(root, 'kovo.config.ts');
+  const source = readFileSync(configPath, 'utf8');
+  const defaultPreset = 'preset: node(),';
+  if (!source.includes(defaultPreset)) return;
+  writeFileSync(
+    configPath,
+    source.replace(
+      defaultPreset,
+      [
+        'preset: node({',
+        '  retention: {',
+        '    hours: 24,',
+        "    immutableClientModules: 'retained',",
+        "    priorTokenQueryReads: 'retained',",
+        '  },',
+        '}),',
+      ].join('\n'),
+    ),
+    'utf8',
+  );
 }
 
 export function migrateRuntimeSecretBoundaryProof(root: string, dataDir: string): void {

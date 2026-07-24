@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-22.2",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-23.1",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "ff04c21afbb33dea36fe1e9bf4aa21fa22a9bd4f8d043534f6e5728e231ce7a6",
+      "sourceTreeSha256": "05b024ff97f55216d1dd81d2f21429af5a414526982e45ad15048db2b086e0d4",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -449,6 +449,10 @@
               "types": "./dist/internal/inline-loader.d.mts",
               "default": "./dist/internal/inline-loader.mjs"
             },
+            "./internal/hmr-target-snapshot": {
+              "types": "./dist/internal/hmr-target-snapshot.d.mts",
+              "default": "./dist/internal/hmr-target-snapshot.mjs"
+            },
             "./internal/morph": {
               "types": "./dist/internal/morph.d.mts",
               "default": "./dist/internal/morph.mjs"
@@ -462,7 +466,7 @@
               "default": "./dist/internal/output.mjs"
             }
           },
-          "fingerprint": "sha256:73d33f1173f0e2295eb1dd481e46109279f7896a6708161b2673d941acf39398"
+          "fingerprint": "sha256:590e2f07cd2ccb7e683c967e8b643f8b1240d33904bfe0cf00d77206a20a7a06"
         },
         {
           "exports": {
@@ -470,12 +474,13 @@
             "./client": "./src/client.ts",
             "./generated": "./src/generated.ts",
             "./internal/delegation": "./src/internal/delegation.ts",
+            "./internal/hmr-target-snapshot": "./src/internal/hmr-target-snapshot.ts",
             "./internal/inline-loader": "./src/internal/inline-loader.ts",
             "./internal/morph": "./src/internal/morph.ts",
             "./internal/mutation": "./src/internal/mutation.ts",
             "./internal/output": "./src/internal/output.ts"
           },
-          "fingerprint": "sha256:238ab77deb1dd05b8378996381a23c970538230ccee0d62b870596fa0a849fa9"
+          "fingerprint": "sha256:e327a7775f263277b3636109d11a9a1f8b50da1f7277d600e7dc6933710cda97"
         }
       ],
       "packageName": "@kovojs/browser",
@@ -707,7 +712,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "525ffc27cd409480a03b3daccfbb35b236068202f0171be1c3a774306f9a7604"
+      "sourceTreeSha256": "9f9f143a1fa681420d3545041bfc8f7ecdbbb99e454afe1d4db302cc02e26743"
     },
     {
       "manifestVariants": [
@@ -769,7 +774,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9664bf99df8ce7bfed989aa3a55ed8d27c552dc05fa58eadd845689cc758473b"
+      "sourceTreeSha256": "9242d1ef23c90ef183f8416ad34bfb7b0c2bd8d940b70aba49d6232c91dddc24"
     },
     {
       "manifestVariants": [
@@ -9763,7 +9768,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "5651685b8ab1149df242253c3f90079a02dd3885c9159a21ab17a41e15c12591"
+      "sourceTreeSha256": "53fca1a286316021941ee26f81aa7d653e113c3fb8802a28dcf07127d9adc9cf"
     },
     {
       "manifestVariants": [
@@ -10698,7 +10703,7 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "6ca56ee98148e8e35acc0e024622e945a650b8fe48ee953ec8998819b4211647"
+      "sourceTreeSha256": "381522bf9a7d37c7ac0c12734d6d8685979783236cd0ca0339a070c2126672dd"
     }
   ]
 }

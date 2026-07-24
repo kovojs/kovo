@@ -105,6 +105,11 @@ const PACKED_RUNTIME_BOOTSTRAP_IMPORT = "import '../dist/server/src/runtime-boot
 // executes every other test in each file, so isolation cannot narrow the corpus.
 const LOAD_ISOLATED_TEST_CONFIGS = [
   {
+    // These tests spawn real Vite SSR processes whose bootstrap must observe pristine intrinsics.
+    // Keep hostile same-realm mutation corpora in a different Vitest process.
+    file: 'packages/cli/src/index.kovo-dev.test.ts',
+  },
+  {
     file: 'packages/compiler/src/security-operation-ir.security.test.ts',
     freshTestNames: ['closes the normalized semantic summary budget with its exact reason'],
   },
@@ -2748,6 +2753,18 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'enrolls decorator and JSX component invocation without treating ordinary components as roots',
           'uses the catch block lexical scope for bindings without an outer declaration',
           'keeps ordinary relative data arguments out of opaque fluent root provenance',
+          'does not charge exact intrinsic JSX names as opaque component invocations',
+          '<div data-index={${index}}>row ${index}</div>',
+          '<X-element data-index={${index}}>row ${index}</X-element>',
+          'does not charge compiler-owned static style records as opaque property effects',
+          '<div style={styles.s${index}}>row ${index}</div>',
+          'keeps non-intrinsic identifier spellings on the component invocation boundary',
+          "['cjk.tsx', '中Child']",
+          'keeps more than 32 opaque JSX component invocations globally fail closed',
+          '<Opaque${index} />',
+          'keeps more than 32 genuine opaque effects globally fail closed',
+          'value.member${index};',
+          'expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true)',
           '/unreviewed-framework-call-effects',
         ],
       },

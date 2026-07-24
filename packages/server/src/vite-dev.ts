@@ -14,7 +14,7 @@ import {
   decodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
 } from '@kovojs/core/internal/wire-input-grammar';
-import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/mutation';
+import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/hmr-target-snapshot';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';

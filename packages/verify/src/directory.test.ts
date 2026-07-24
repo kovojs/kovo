@@ -26,6 +26,10 @@ describe('filesystem certificate artifacts', () => {
     });
     const policy = policyBytes(fixture.sources, fixture.root);
     writeFileSync(path.join(fixture.root, '@kovojs/server/README.md'), '# Server\n');
+    writeFileSync(
+      path.join(fixture.root, '@kovojs/server/NOTICE'),
+      'Bundled dependency notices.\n',
+    );
     await expect(
       verifyCertificateDirectory(
         certificate(fixture.sources, policy, [

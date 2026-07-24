@@ -1898,6 +1898,7 @@
         "generated": ["./generated"],
         "internal": [
           "./internal/delegation",
+          "./internal/hmr-target-snapshot",
           "./internal/inline-loader",
           "./internal/morph",
           "./internal/mutation",

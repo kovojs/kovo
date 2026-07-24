@@ -1,46 +1,48 @@
 {
   "artifacts": [
     "@kovojs/better-auth/dist/index.mjs",
-    "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs",
+    "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
     "@kovojs/better-auth/dist/internal.mjs",
+    "@kovojs/better-auth/dist/internal/runtime-lock.mjs",
     "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
-    "@kovojs/better-auth/dist/mount-adapter-5Nc8IezZ.mjs",
-    "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs",
+    "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs",
+    "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
     "@kovojs/browser/dist/client.mjs",
     "@kovojs/browser/dist/derive-BorkxMAn.mjs",
     "@kovojs/browser/dist/generated.mjs",
-    "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
+    "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
     "@kovojs/browser/dist/index.mjs",
     "@kovojs/browser/dist/internal/delegation.mjs",
+    "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs",
     "@kovojs/browser/dist/internal/inline-loader.mjs",
     "@kovojs/browser/dist/internal/morph.mjs",
     "@kovojs/browser/dist/internal/mutation.mjs",
     "@kovojs/browser/dist/internal/output.mjs",
-    "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-    "@kovojs/browser/dist/morph-DNp97odV.mjs",
-    "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
-    "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
-    "@kovojs/browser/dist/query-events-BiwjlY2O.mjs",
-    "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
-    "@kovojs/browser/dist/security-output-CQHqmnNL.mjs",
-    "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs",
-    "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
-    "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+    "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+    "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
+    "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+    "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
+    "@kovojs/browser/dist/query-events-1-51MysL.mjs",
+    "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
+    "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
+    "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs",
+    "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+    "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
     "@kovojs/compiler/dist/compile.mjs",
-    "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs",
+    "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
     "@kovojs/compiler/dist/graph.mjs",
     "@kovojs/compiler/dist/index.mjs",
     "@kovojs/compiler/dist/internal.mjs",
     "@kovojs/compiler/dist/internal/graph.mjs",
-    "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
-    "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+    "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+    "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
     "@kovojs/compiler/dist/package-styles.mjs",
     "@kovojs/compiler/dist/security-bootstrap.mjs",
     "@kovojs/compiler/dist/source-filesystem.mjs",
-    "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+    "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
     "@kovojs/compiler/dist/vite-config.mjs",
     "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
-    "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs",
+    "@kovojs/core/dist/diagnostics-Bn03luHl.mjs",
     "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs",
     "@kovojs/core/dist/generated.mjs",
     "@kovojs/core/dist/index.mjs",
@@ -61,6 +63,7 @@
     "@kovojs/core/dist/internal/framework-identity.mjs",
     "@kovojs/core/dist/internal/graph.mjs",
     "@kovojs/core/dist/internal/json.mjs",
+    "@kovojs/core/dist/internal/mcp-stdio.mjs",
     "@kovojs/core/dist/internal/module-ref.mjs",
     "@kovojs/core/dist/internal/package-prefix.mjs",
     "@kovojs/core/dist/internal/query-delta.mjs",
@@ -83,7 +86,7 @@
     "@kovojs/core/dist/json-clone-DyZpkX4r.mjs",
     "@kovojs/core/dist/secret-BzCxLQUp.mjs",
     "@kovojs/core/dist/security-decision-CSd_sj2A.mjs",
-    "@kovojs/core/dist/semantic-attributes-CoQCq1uJ.mjs",
+    "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs",
     "@kovojs/core/dist/storage-z2dLx4BL.mjs",
     "@kovojs/core/dist/verifier-BQQp-_Ia.mjs",
     "@kovojs/drizzle/dist/derive-codegen.mjs",
@@ -94,8 +97,8 @@
     "@kovojs/drizzle/dist/runtime-security-intrinsics-BI0-4xdr.mjs",
     "@kovojs/drizzle/dist/runtime.mjs",
     "@kovojs/drizzle/dist/static.mjs",
-    "@kovojs/server/dist/agent-DbitE648.mjs",
-    "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+    "@kovojs/server/dist/agent-CCMo7p_M.mjs",
+    "@kovojs/server/dist/app-BVo85gmg.mjs",
     "@kovojs/server/dist/async-context-BVk6EIZL.mjs",
     "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs",
     "@kovojs/server/dist/build-preset-internal.mjs",
@@ -103,24 +106,24 @@
     "@kovojs/server/dist/build.mjs",
     "@kovojs/server/dist/cache-influence-DHXYJzpr.mjs",
     "@kovojs/server/dist/capability-intrinsics-BvLPtcN0.mjs",
-    "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
-    "@kovojs/server/dist/client-module-registry-intrinsics-DpW0X4E9.mjs",
-    "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
+    "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
+    "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs",
+    "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
     "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
-    "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
+    "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
     "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs",
     "@kovojs/server/dist/csp-CJw9DDf-.mjs",
     "@kovojs/server/dist/csrf-B8ljLrSR.mjs",
     "@kovojs/server/dist/data-plane-static-analysis-Bl4wUGql.mjs",
-    "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
-    "@kovojs/server/dist/definition-DR5Pytot.mjs",
+    "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
+    "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
     "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs",
-    "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
-    "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs",
-    "@kovojs/server/dist/egress-BQhGMrS2.mjs",
-    "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
+    "@kovojs/server/dist/document-core-D38djjej.mjs",
+    "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs",
+    "@kovojs/server/dist/egress-BS7-X9oP.mjs",
+    "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
     "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs",
-    "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+    "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
     "@kovojs/server/dist/env-T_mpE-6b.mjs",
     "@kovojs/server/dist/html-B8n1jHC5.mjs",
     "@kovojs/server/dist/index.mjs",
@@ -150,42 +153,42 @@
     "@kovojs/server/dist/internal/vite-security-profile.mjs",
     "@kovojs/server/dist/internal/wire.mjs",
     "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs",
-    "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+    "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
     "@kovojs/server/dist/jsx-runtime.mjs",
     "@kovojs/server/dist/logging-intrinsics-BIdUZ47w.mjs",
     "@kovojs/server/dist/managed-db-joQ882mg.mjs",
     "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs",
-    "@kovojs/server/dist/node-CLAWQfAP.mjs",
+    "@kovojs/server/dist/node-DXePx7RK.mjs",
     "@kovojs/server/dist/password-DWn0dx8N.mjs",
-    "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+    "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
     "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs",
     "@kovojs/server/dist/renderable-C_lz6SZ6.mjs",
-    "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+    "@kovojs/server/dist/replay-B-zip-L2.mjs",
     "@kovojs/server/dist/request-carrier-BqiMItGw.mjs",
     "@kovojs/server/dist/request-ingress-policy-BsG2ojwt.mjs",
     "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs",
     "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs",
     "@kovojs/server/dist/response-transport-headers-6IYiT06Q.mjs",
-    "@kovojs/server/dist/route-06jOQ55f.mjs",
+    "@kovojs/server/dist/route-CpBQv02a.mjs",
     "@kovojs/server/dist/runtime-bootstrap.mjs",
     "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs",
-    "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+    "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
     "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs",
     "@kovojs/server/dist/serialized-header-safety-DptwNGGr.mjs",
-    "@kovojs/server/dist/shell-BjfBYZ01.mjs",
+    "@kovojs/server/dist/shell-C5dTC4nR.mjs",
     "@kovojs/server/dist/sql-parser-authority-bootstrap-BGPAHcE4.mjs",
     "@kovojs/server/dist/sqlite.mjs",
-    "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+    "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
     "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs",
-    "@kovojs/server/dist/task-DAw3D1nG.mjs",
-    "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-    "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+    "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+    "@kovojs/server/dist/task-k3EiyGQT.mjs",
+    "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
     "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs",
     "@kovojs/server/dist/testing.mjs",
-    "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+    "@kovojs/server/dist/vite-BvDB_9wh.mjs",
     "@kovojs/server/dist/vite-build-assets-CELlvPFz.mjs",
-    "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
-    "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+    "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
+    "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
     "@kovojs/server/dist/vite.mjs",
     "@kovojs/server/dist/write-governance-CTzZJ0kS.mjs",
     "@kovojs/style/dist/engine-CXFYWPm_.mjs",
@@ -193,7 +196,8 @@
     "@kovojs/style/dist/internal.mjs",
     "@kovojs/verify/dist/bin.mjs",
     "@kovojs/verify/dist/index.mjs",
-    "@kovojs/verify/dist/src-BvXhWGtv.mjs",
+    "@kovojs/verify/dist/javascript-ast-CxKtzxyz.mjs",
+    "@kovojs/verify/dist/src-BB4lJZ7L.mjs",
     "@kovojs/verify/dist/translation.mjs"
   ],
   "cap": {
@@ -207,7 +211,7 @@
       "process",
       "vm"
     ],
-    "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs": [
+    "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs": [
       "crypto-acquisition",
       "database-driver",
       "digest",
@@ -227,39 +231,41 @@
       "process",
       "vm"
     ],
+    "@kovojs/better-auth/dist/internal/runtime-lock.mjs": [],
     "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs": [
       "crypto-acquisition"
     ],
-    "@kovojs/better-auth/dist/mount-adapter-5Nc8IezZ.mjs": [
+    "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs": [
       "crypto-acquisition"
     ],
-    "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs": [
+    "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs": [
       "crypto-acquisition"
     ],
     "@kovojs/browser/dist/client.mjs": [],
     "@kovojs/browser/dist/derive-BorkxMAn.mjs": [],
     "@kovojs/browser/dist/generated.mjs": [],
-    "@kovojs/browser/dist/handlers-Dda7pC82.mjs": [],
+    "@kovojs/browser/dist/handlers-BsEYJaMg.mjs": [],
     "@kovojs/browser/dist/index.mjs": [],
     "@kovojs/browser/dist/internal/delegation.mjs": [],
+    "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs": [],
     "@kovojs/browser/dist/internal/inline-loader.mjs": [],
     "@kovojs/browser/dist/internal/morph.mjs": [],
     "@kovojs/browser/dist/internal/mutation.mjs": [],
     "@kovojs/browser/dist/internal/output.mjs": [],
-    "@kovojs/browser/dist/loader-DMEhf3VT.mjs": [],
-    "@kovojs/browser/dist/morph-DNp97odV.mjs": [],
-    "@kovojs/browser/dist/optimism-BkA5-CnA.mjs": [],
-    "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs": [],
-    "@kovojs/browser/dist/query-events-BiwjlY2O.mjs": [],
-    "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs": [],
-    "@kovojs/browser/dist/security-output-CQHqmnNL.mjs": [],
-    "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs": [],
-    "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs": [
+    "@kovojs/browser/dist/loader-BgWx2tjS.mjs": [],
+    "@kovojs/browser/dist/morph-DFOhlgH6.mjs": [],
+    "@kovojs/browser/dist/optimism-LoK78ZX_.mjs": [],
+    "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs": [],
+    "@kovojs/browser/dist/query-events-1-51MysL.mjs": [],
+    "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs": [],
+    "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs": [],
+    "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs": [],
+    "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/compile-BVprV3ed.mjs": [
+    "@kovojs/compiler/dist/compile-x1V1INRF.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -271,7 +277,7 @@
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs": [
+    "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs": [
       "crypto-acquisition",
       "filesystem"
     ],
@@ -299,12 +305,12 @@
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs": [
+    "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs": [
+    "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
@@ -322,7 +328,7 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/vite-B2NMwoTR.mjs": [
+    "@kovojs/compiler/dist/vite-CXXGBXCL.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -337,7 +343,7 @@
       "vm"
     ],
     "@kovojs/core/dist/audit-text-CmsLNB8H.mjs": [],
-    "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs": [],
+    "@kovojs/core/dist/diagnostics-Bn03luHl.mjs": [],
     "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs": [],
     "@kovojs/core/dist/generated.mjs": [],
     "@kovojs/core/dist/index.mjs": [
@@ -371,6 +377,7 @@
     "@kovojs/core/dist/internal/framework-identity.mjs": [],
     "@kovojs/core/dist/internal/graph.mjs": [],
     "@kovojs/core/dist/internal/json.mjs": [],
+    "@kovojs/core/dist/internal/mcp-stdio.mjs": [],
     "@kovojs/core/dist/internal/module-ref.mjs": [],
     "@kovojs/core/dist/internal/package-prefix.mjs": [],
     "@kovojs/core/dist/internal/query-delta.mjs": [],
@@ -400,7 +407,7 @@
     "@kovojs/core/dist/json-clone-DyZpkX4r.mjs": [],
     "@kovojs/core/dist/secret-BzCxLQUp.mjs": [],
     "@kovojs/core/dist/security-decision-CSd_sj2A.mjs": [],
-    "@kovojs/core/dist/semantic-attributes-CoQCq1uJ.mjs": [],
+    "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs": [],
     "@kovojs/core/dist/storage-z2dLx4BL.mjs": [
       "crypto-acquisition",
       "filesystem"
@@ -417,14 +424,14 @@
       "digest",
       "dynamic-loader"
     ],
-    "@kovojs/server/dist/agent-DbitE648.mjs": [
+    "@kovojs/server/dist/agent-CCMo7p_M.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
       "filesystem",
       "network"
     ],
-    "@kovojs/server/dist/app-DiOsP5Pv.mjs": [
+    "@kovojs/server/dist/app-BVo85gmg.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -451,15 +458,15 @@
       "crypto-acquisition"
     ],
     "@kovojs/server/dist/capability-intrinsics-BvLPtcN0.mjs": [],
-    "@kovojs/server/dist/capability-route-sFDV8_aF.mjs": [
+    "@kovojs/server/dist/capability-route-DMF-WOut.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/client-module-registry-intrinsics-DpW0X4E9.mjs": [
+    "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs": [
       "digest"
     ],
-    "@kovojs/server/dist/client-modules-DBXwhpg1.mjs": [
+    "@kovojs/server/dist/client-modules-CX5rEz2l.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -468,7 +475,7 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs": [
+    "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -491,12 +498,12 @@
       "filesystem",
       "vm"
     ],
-    "@kovojs/server/dist/deferred-region-luxtTLew.mjs": [
+    "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/definition-DR5Pytot.mjs": [
+    "@kovojs/server/dist/definition-DpgrF0ZJ.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -505,24 +512,24 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/server/dist/document-core-Dt7egnWp.mjs": [
+    "@kovojs/server/dist/document-core-D38djjej.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs": [
+    "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/egress-BQhGMrS2.mjs": [
+    "@kovojs/server/dist/egress-BS7-X9oP.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
       "filesystem",
       "network"
     ],
-    "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs": [
+    "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -532,7 +539,7 @@
     "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs": [
       "network"
     ],
-    "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs": [
+    "@kovojs/server/dist/endpoint-DqdDPFS-.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -675,7 +682,7 @@
       "network"
     ],
     "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs": [],
-    "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs": [
+    "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem",
@@ -693,7 +700,7 @@
       "filesystem"
     ],
     "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs": [],
-    "@kovojs/server/dist/node-CLAWQfAP.mjs": [
+    "@kovojs/server/dist/node-DXePx7RK.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem",
@@ -702,7 +709,7 @@
     "@kovojs/server/dist/password-DWn0dx8N.mjs": [
       "crypto-acquisition"
     ],
-    "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs": [
+    "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs": [
       "crypto-acquisition",
       "database-driver",
       "digest",
@@ -718,7 +725,7 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/server/dist/replay-D-yk1fdj.mjs": [
+    "@kovojs/server/dist/replay-B-zip-L2.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -732,7 +739,7 @@
       "crypto-acquisition"
     ],
     "@kovojs/server/dist/response-transport-headers-6IYiT06Q.mjs": [],
-    "@kovojs/server/dist/route-06jOQ55f.mjs": [
+    "@kovojs/server/dist/route-CpBQv02a.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -744,7 +751,7 @@
       "network"
     ],
     "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs": [],
-    "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs": [
+    "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem",
@@ -752,7 +759,7 @@
     ],
     "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs": [],
     "@kovojs/server/dist/serialized-header-safety-DptwNGGr.mjs": [],
-    "@kovojs/server/dist/shell-BjfBYZ01.mjs": [
+    "@kovojs/server/dist/shell-C5dTC4nR.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -772,7 +779,7 @@
       "network",
       "vm"
     ],
-    "@kovojs/server/dist/static-export-B_9ihAb8.mjs": [
+    "@kovojs/server/dist/static-export-CqwI7ea4.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -784,21 +791,21 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/task-DAw3D1nG.mjs": [
+    "@kovojs/server/dist/task-cron-Co1u-cvi.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
       "filesystem",
       "network"
     ],
-    "@kovojs/server/dist/task-cron-DWDmKmH-.mjs": [
+    "@kovojs/server/dist/task-k3EiyGQT.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
       "filesystem",
       "network"
     ],
-    "@kovojs/server/dist/task-queue-DmQibsOq.mjs": [
+    "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs": [
       "crypto-acquisition",
       "digest",
       "filesystem"
@@ -816,7 +823,7 @@
       "process",
       "vm"
     ],
-    "@kovojs/server/dist/vite-Dh495BJ-.mjs": [
+    "@kovojs/server/dist/vite-BvDB_9wh.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -828,14 +835,14 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs": [
+    "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
       "filesystem",
       "network"
     ],
-    "@kovojs/server/dist/vite-dev-BfHXac--.mjs": [
+    "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -864,7 +871,8 @@
       "digest",
       "filesystem"
     ],
-    "@kovojs/verify/dist/src-BvXhWGtv.mjs": [
+    "@kovojs/verify/dist/javascript-ast-CxKtzxyz.mjs": [],
+    "@kovojs/verify/dist/src-BB4lJZ7L.mjs": [
       "digest",
       "filesystem"
     ],
@@ -1426,15 +1434,19 @@
   "edges": [
     [
       "@kovojs/better-auth/dist/index.mjs",
-      "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs"
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs"
     ],
     [
       "@kovojs/better-auth/dist/index.mjs",
-      "@kovojs/better-auth/dist/mount-adapter-5Nc8IezZ.mjs"
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
     ],
     [
       "@kovojs/better-auth/dist/index.mjs",
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs"
+      "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/index.mjs",
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs"
     ],
     [
       "@kovojs/better-auth/dist/index.mjs",
@@ -1473,56 +1485,72 @@
       "@kovojs/server/dist/internal/sqlite.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs",
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs"
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs",
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
       "@kovojs/server/dist/index.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs",
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
       "@kovojs/server/dist/internal/better-auth.mjs"
     ],
     [
       "@kovojs/better-auth/dist/internal.mjs",
-      "@kovojs/better-auth/dist/internal-6uxfM5WV.mjs"
+      "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs"
     ],
     [
       "@kovojs/better-auth/dist/internal.mjs",
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs"
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
-      "@kovojs/better-auth/dist/mount-adapter-5Nc8IezZ.mjs"
+      "@kovojs/better-auth/dist/internal.mjs",
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs"
-    ],
-    [
-      "@kovojs/better-auth/dist/mount-adapter-5Nc8IezZ.mjs",
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs"
-    ],
-    [
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs",
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs",
+      "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
+      "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs",
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs",
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
+      "@kovojs/better-auth/dist/internal/runtime-lock.mjs"
+    ],
+    [
+      "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
       "@kovojs/server/dist/internal/keyring.mjs"
     ],
     [
       "@kovojs/browser/dist/client.mjs",
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs"
     ],
     [
       "@kovojs/browser/dist/client.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
       "@kovojs/browser/dist/client.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
@@ -1530,50 +1558,50 @@
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs"
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
       "@kovojs/core/dist/internal/module-ref.mjs"
     ],
     [
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs",
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
@@ -1582,47 +1610,47 @@
     ],
     [
       "@kovojs/browser/dist/index.mjs",
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs"
     ],
     [
       "@kovojs/browser/dist/index.mjs",
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs"
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/delegation.mjs",
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs"
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/delegation.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/inline-loader.mjs",
-      "@kovojs/browser/dist/query-events-BiwjlY2O.mjs"
+      "@kovojs/browser/dist/query-events-1-51MysL.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/inline-loader.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/morph.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/output.mjs",
@@ -1630,255 +1658,271 @@
     ],
     [
       "@kovojs/browser/dist/internal/output.mjs",
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs"
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/handlers-Dda7pC82.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/handlers-BsEYJaMg.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/query-events-BiwjlY2O.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/query-events-1-51MysL.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-DMEhf3VT.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/morph-DNp97odV.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/morph-DNp97odV.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-BkA5-CnA.mjs",
+      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
       "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
       "@kovojs/core/dist/internal/module-ref.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-events-BiwjlY2O.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-events-BiwjlY2O.mjs",
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs"
+      "@kovojs/browser/dist/query-events-1-51MysL.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-events-BiwjlY2O.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/query-events-1-51MysL.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
-      "@kovojs/browser/dist/morph-DNp97odV.mjs"
+      "@kovojs/browser/dist/query-events-1-51MysL.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
-      "@kovojs/browser/dist/query-bindings-CrR_F1rQ.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
+      "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
+      "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
+    ],
+    [
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
       "@kovojs/core/dist/internal/query-delta.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/browser/dist/query-refetch-_yIZCFJ3.mjs",
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
+    ],
+    [
+      "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
       "@kovojs/core/dist/internal/wire-json.mjs"
     ],
     [
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs",
-      "@kovojs/browser/dist/trusted-types-umoCjdtO.mjs"
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
+      "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs",
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/browser/dist/security-output-CQHqmnNL.mjs",
+      "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/cache-influence.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/graph.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs"
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/cache-influence.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/emission.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/module-ref.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/render-plan-token.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/route-pattern.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/security-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "@kovojs/verify/dist/translation.mjs"
     ],
     [
       "@kovojs/compiler/dist/compile.mjs",
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs"
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
     ],
     [
       "@kovojs/compiler/dist/graph.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs"
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
@@ -1886,35 +1930,39 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs"
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs"
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs"
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs"
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs"
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs"
+      "@kovojs/compiler/dist/source-filesystem.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/internal.mjs",
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1934,110 +1982,114 @@
     ],
     [
       "@kovojs/compiler/dist/internal/graph.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "@kovojs/core/dist/internal/package-prefix.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "@kovojs/style/dist/index.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "@kovojs/style/dist/internal.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs"
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "@kovojs/style/dist/internal.mjs"
     ],
     [
       "@kovojs/compiler/dist/package-styles.mjs",
-      "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs"
+      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs"
     ],
     [
       "@kovojs/compiler/dist/security-bootstrap.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
       "@kovojs/compiler/dist/security-bootstrap.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
+      "@kovojs/compiler/dist/security-bootstrap.mjs",
+      "@kovojs/verify/dist/translation.mjs"
+    ],
+    [
       "@kovojs/compiler/dist/source-filesystem.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
-      "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs"
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
-      "@kovojs/compiler/dist/compile-BVprV3ed.mjs"
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
-      "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs"
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
-      "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs"
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
@@ -2106,6 +2158,10 @@
     ],
     [
       "@kovojs/compiler/dist/vite-config.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
+    ],
+    [
+      "@kovojs/compiler/dist/vite-config.mjs",
       "@kovojs/style/dist/index.mjs"
     ],
     [
@@ -2121,7 +2177,7 @@
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs",
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
@@ -2174,7 +2230,7 @@
     ],
     [
       "@kovojs/core/dist/internal/diagnostics.mjs",
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs"
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs"
     ],
     [
       "@kovojs/core/dist/internal/document-protocol.mjs",
@@ -2210,7 +2266,7 @@
     ],
     [
       "@kovojs/core/dist/internal/graph.mjs",
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs"
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs"
     ],
     [
       "@kovojs/core/dist/internal/graph.mjs",
@@ -2257,8 +2313,12 @@
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
+      "@kovojs/core/dist/internal/render-plan-token.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
+    ],
+    [
       "@kovojs/core/dist/internal/route-pattern.mjs",
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs"
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs"
     ],
     [
       "@kovojs/core/dist/internal/route-pattern.mjs",
@@ -2282,11 +2342,11 @@
     ],
     [
       "@kovojs/core/dist/internal/semantic-attributes.mjs",
-      "@kovojs/core/dist/semantic-attributes-CoQCq1uJ.mjs"
+      "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs"
     ],
     [
       "@kovojs/core/dist/internal/sink-policy.mjs",
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs"
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs"
     ],
     [
       "@kovojs/core/dist/internal/sink-policy.mjs",
@@ -2294,7 +2354,7 @@
     ],
     [
       "@kovojs/core/dist/internal/sink-policy.mjs",
-      "@kovojs/core/dist/semantic-attributes-CoQCq1uJ.mjs"
+      "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs"
     ],
     [
       "@kovojs/core/dist/internal/source-sink-registry.mjs",
@@ -2314,7 +2374,7 @@
     ],
     [
       "@kovojs/core/dist/internal/sql-safety.mjs",
-      "@kovojs/core/dist/diagnostics-CUlxtE2O.mjs"
+      "@kovojs/core/dist/diagnostics-Bn03luHl.mjs"
     ],
     [
       "@kovojs/core/dist/internal/sql-safety.mjs",
@@ -2373,7 +2433,7 @@
       "@kovojs/core/dist/security-decision-CSd_sj2A.mjs"
     ],
     [
-      "@kovojs/core/dist/semantic-attributes-CoQCq1uJ.mjs",
+      "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
@@ -2469,171 +2529,171 @@
       "@kovojs/drizzle/dist/runtime-security-intrinsics-BI0-4xdr.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/agent-DbitE648.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/browser/dist/internal/inline-loader.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/core/dist/internal/document-protocol.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/core/dist/internal/json.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/csp-CJw9DDf-.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/env-T_mpE-6b.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs"
     ],
     [
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs",
       "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
     ],
     [
@@ -2663,10 +2723,6 @@
     [
       "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/build.mjs",
-      "@kovojs/browser/dist/internal/inline-loader.mjs"
     ],
     [
       "@kovojs/server/dist/build.mjs",
@@ -2710,7 +2766,7 @@
     ],
     [
       "@kovojs/server/dist/build.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/build.mjs",
@@ -2737,159 +2793,163 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/server/dist/capability-intrinsics-BvLPtcN0.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/server/dist/env-T_mpE-6b.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs"
     ],
     [
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/client-module-registry-intrinsics-DpW0X4E9.mjs",
+      "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
       "@kovojs/core/dist/internal/render-plan-token.mjs"
     ],
     [
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
-      "@kovojs/server/dist/client-module-registry-intrinsics-DpW0X4E9.mjs"
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
+      "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs"
     ],
     [
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs",
-      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
-      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
-      "@kovojs/server/dist/html-B8n1jHC5.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
-      "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
-      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/core/dist/index.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/core/dist/internal/cache-influence.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/core/dist/internal/json.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/core/dist/internal/security-markers.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/cache-influence-DHXYJzpr.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/env-T_mpE-6b.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/html-B8n1jHC5.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
-      "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
-    ],
-    [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
+      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
+      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
+      "@kovojs/server/dist/html-B8n1jHC5.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
+      "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-render-BBYLKuQu.mjs",
+      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/core/dist/index.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/core/dist/internal/cache-influence.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/core/dist/internal/json.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/core/dist/internal/security-markers.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/core/dist/internal/wire-input-grammar.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/cache-influence-DHXYJzpr.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/env-T_mpE-6b.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/html-B8n1jHC5.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
+      "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
+    ],
+    [
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
@@ -3017,47 +3077,47 @@
       "@kovojs/server/dist/internal/runtime-registry-wire.mjs"
     ],
     [
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
       "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
     ],
     [
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs",
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/definition-DR5Pytot.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
@@ -3077,223 +3137,223 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/browser/dist/internal/inline-loader.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/browser/dist/internal/output.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/index.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/json.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/route-pattern.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/security-url.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/core/dist/internal/wire-json.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/drizzle/dist/runtime-metadata-internal.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/drizzle/dist/runtime.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/async-context-BVk6EIZL.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/csp-CJw9DDf-.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/internal/runtime-registry-wire.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/managed-db-joQ882mg.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/response-transport-headers-6IYiT06Q.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs",
       "@kovojs/server/dist/serialized-header-safety-DptwNGGr.mjs"
     ],
     [
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs",
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs",
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs",
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs",
       "@kovojs/server/dist/async-context-BVk6EIZL.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs",
       "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
       "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/core/dist/internal/verifier.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/cache-influence-DHXYJzpr.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/managed-db-joQ882mg.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
@@ -3386,11 +3446,11 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/agent-DbitE648.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3398,15 +3458,15 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs"
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs"
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3418,11 +3478,11 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs"
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3430,15 +3490,15 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3454,7 +3514,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3462,7 +3522,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/node-CLAWQfAP.mjs"
+      "@kovojs/server/dist/node-DXePx7RK.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3470,7 +3530,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3482,7 +3542,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3498,7 +3558,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3506,7 +3566,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3518,7 +3578,7 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3526,15 +3586,15 @@
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs"
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs"
     ],
     [
       "@kovojs/server/dist/index.mjs",
@@ -3546,27 +3606,27 @@
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/node-CLAWQfAP.mjs"
+      "@kovojs/server/dist/node-DXePx7RK.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
@@ -3574,15 +3634,15 @@
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs"
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs"
     ],
     [
       "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs"
     ],
     [
       "@kovojs/server/dist/internal/audit-facts.mjs",
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs"
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs"
     ],
     [
       "@kovojs/server/dist/internal/audit-facts.mjs",
@@ -3590,11 +3650,11 @@
     ],
     [
       "@kovojs/server/dist/internal/audit-facts.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/audit-facts.mjs",
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs"
     ],
     [
       "@kovojs/server/dist/internal/audit-facts.mjs",
@@ -3610,15 +3670,15 @@
     ],
     [
       "@kovojs/server/dist/internal/better-auth.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
       "@kovojs/server/dist/internal/better-auth.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/better-auth.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
       "@kovojs/server/dist/internal/better-auth.mjs",
@@ -3654,11 +3714,11 @@
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs"
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
@@ -3670,7 +3730,7 @@
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
@@ -3678,15 +3738,15 @@
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
@@ -3694,15 +3754,15 @@
     ],
     [
       "@kovojs/server/dist/internal/build.mjs",
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs"
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs"
     ],
     [
       "@kovojs/server/dist/internal/capabilities.mjs",
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs"
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs"
     ],
     [
       "@kovojs/server/dist/internal/client-modules.mjs",
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs"
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
     ],
     [
       "@kovojs/server/dist/internal/csp.mjs",
@@ -3718,11 +3778,11 @@
     ],
     [
       "@kovojs/server/dist/internal/egress.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
       "@kovojs/server/dist/internal/egress.mjs",
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs"
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs"
     ],
     [
       "@kovojs/server/dist/internal/escape.mjs",
@@ -3734,7 +3794,7 @@
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
@@ -3742,7 +3802,7 @@
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
@@ -3754,19 +3814,19 @@
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
@@ -3774,7 +3834,7 @@
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
@@ -3782,7 +3842,7 @@
     ],
     [
       "@kovojs/server/dist/internal/execution.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/internal/html.mjs",
@@ -3790,15 +3850,15 @@
     ],
     [
       "@kovojs/server/dist/internal/html.mjs",
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs"
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs"
     ],
     [
       "@kovojs/server/dist/internal/html.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/html.mjs",
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs"
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs"
     ],
     [
       "@kovojs/server/dist/internal/html.mjs",
@@ -3822,15 +3882,15 @@
     ],
     [
       "@kovojs/server/dist/internal/route.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/internal/route.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
       "@kovojs/server/dist/internal/route.mjs",
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs"
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs"
     ],
     [
       "@kovojs/server/dist/internal/runtime-environment.mjs",
@@ -3874,7 +3934,7 @@
     ],
     [
       "@kovojs/server/dist/internal/static-export.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/internal/static-export.mjs",
@@ -3882,7 +3942,7 @@
     ],
     [
       "@kovojs/server/dist/internal/static-export.mjs",
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs"
     ],
     [
       "@kovojs/server/dist/internal/static-export.mjs",
@@ -3890,19 +3950,19 @@
     ],
     [
       "@kovojs/server/dist/internal/vite-security-profile.mjs",
-      "@kovojs/server/dist/node-CLAWQfAP.mjs"
+      "@kovojs/server/dist/node-DXePx7RK.mjs"
     ],
     [
       "@kovojs/server/dist/internal/vite-security-profile.mjs",
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs"
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs"
     ],
     [
       "@kovojs/server/dist/internal/vite-security-profile.mjs",
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs"
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
-      "@kovojs/server/dist/agent-DbitE648.mjs"
+      "@kovojs/server/dist/agent-CCMo7p_M.mjs"
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
@@ -3910,7 +3970,7 @@
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
@@ -3918,7 +3978,7 @@
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
@@ -3930,11 +3990,11 @@
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/internal/wire.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
       "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs",
@@ -3945,80 +4005,80 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/browser/dist/internal/output.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/core/dist/index.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/core/dist/internal/security-url.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/component-render-BBYLKuQu.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/renderable-C_lz6SZ6.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs",
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs",
       "@kovojs/style/dist/index.mjs"
     ],
     [
       "@kovojs/server/dist/jsx-runtime.mjs",
-      "@kovojs/server/dist/jsx-runtime-CYGcKG4i.mjs"
+      "@kovojs/server/dist/jsx-runtime-CESmUqs_.mjs"
     ],
     [
       "@kovojs/server/dist/managed-db-joQ882mg.mjs",
@@ -4061,96 +4121,96 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/node-CLAWQfAP.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/node-DXePx7RK.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "@kovojs/server/dist/node-DXePx7RK.mjs",
       "@kovojs/server/dist/request-ingress-policy-BsG2ojwt.mjs"
     ],
     [
-      "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "@kovojs/server/dist/node-DXePx7RK.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "@kovojs/server/dist/node-DXePx7RK.mjs",
       "@kovojs/server/dist/response-transport-headers-6IYiT06Q.mjs"
     ],
     [
-      "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "@kovojs/server/dist/node-DXePx7RK.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/egress-bootstrap-DLPzE_Nx.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/egress-bootstrap-CBoJU-YO.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/internal/postgres-capability.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/managed-db-joQ882mg.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "@kovojs/server/dist/sql-parser-authority-bootstrap-BGPAHcE4.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs"
     ],
     [
       "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs",
@@ -4185,35 +4245,35 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/core/dist/index.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
@@ -4245,143 +4305,139 @@
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/browser/dist/internal/output.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/core/dist/index.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/core/dist/internal/route-pattern.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
-      "@kovojs/server/dist/deferred-region-luxtTLew.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
+      "@kovojs/server/dist/deferred-region-DI0mbfe0.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/route-06jOQ55f.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
       "@kovojs/server/dist/runtime-bootstrap.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/core/dist/internal/filesystem.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/core/dist/internal/render-plan-token.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/capability-intrinsics-BvLPtcN0.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
-      "@kovojs/server/dist/client-module-registry-intrinsics-DpW0X4E9.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
+      "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/logging-intrinsics-BIdUZ47w.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs",
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs",
       "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
     ],
     [
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs",
-      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs",
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
@@ -4414,7 +4470,7 @@
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
@@ -4430,7 +4486,7 @@
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
@@ -4442,7 +4498,7 @@
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
       "@kovojs/server/dist/sqlite.mjs",
@@ -4453,64 +4509,68 @@
       "@kovojs/server/dist/sql-parser-authority-bootstrap-BGPAHcE4.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/browser/dist/internal/inline-loader.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/core/dist/internal/client-module-url.mjs"
+    ],
+    [
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/core/dist/internal/filesystem.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
-      "@kovojs/server/dist/client-modules-DBXwhpg1.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/response-transport-headers-6IYiT06Q.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs"
     ],
     [
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
       "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs",
@@ -4533,179 +4593,179 @@
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/async-context-BVk6EIZL.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-DAw3D1nG.mjs",
-      "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
-    ],
-    [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/index.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/json.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/query-delta.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/core/dist/internal/verifier.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/capability-route-sFDV8_aF.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/capability-route-DMF-WOut.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/definition-DR5Pytot.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/definition-DpgrF0ZJ.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/egress-BQhGMrS2.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/egress-BS7-X9oP.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/env-T_mpE-6b.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/managed-db-joQ882mg.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/replay-D-yk1fdj.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/replay-B-zip-L2.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs",
       "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/async-context-BVk6EIZL.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/csrf-B8ljLrSR.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-k3EiyGQT.mjs",
+      "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
+    ],
+    [
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/core/dist/internal/json.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/core/dist/internal/storage.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/server/dist/managed-db-joQ882mg.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/server/dist/runtime-environment-B5cdmDn_.mjs"
     ],
     [
-      "@kovojs/server/dist/task-queue-DmQibsOq.mjs",
+      "@kovojs/server/dist/task-queue-Cpx7pQMx.mjs",
       "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs"
     ],
     [
@@ -4726,7 +4786,7 @@
     ],
     [
       "@kovojs/server/dist/testing.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
       "@kovojs/server/dist/testing.mjs",
@@ -4738,7 +4798,7 @@
     ],
     [
       "@kovojs/server/dist/testing.mjs",
-      "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs"
+      "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs"
     ],
     [
       "@kovojs/server/dist/testing.mjs",
@@ -4746,50 +4806,50 @@
     ],
     [
       "@kovojs/server/dist/testing.mjs",
-      "@kovojs/server/dist/security-bootstrap-BhfV5IvG.mjs"
+      "@kovojs/server/dist/security-bootstrap-pc3MHzgZ.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/compiler/dist/internal.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/compiler/dist/package-styles.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/compiler/dist/security-bootstrap.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/compiler/dist/vite-config.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/server/dist/data-plane-static-analysis-Bl4wUGql.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/server/dist/internal/build-context.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/server/dist/internal/runtime-registry-wire.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs",
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
@@ -4813,116 +4873,136 @@
       "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
-      "@kovojs/server/dist/static-export-B_9ihAb8.mjs"
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
+      "@kovojs/server/dist/static-export-CqwI7ea4.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-build-output-BJyaOKEt.mjs",
+      "@kovojs/server/dist/vite-build-output-Cfr6qBqB.mjs",
       "@kovojs/server/dist/vite-build-assets-CELlvPFz.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/core/dist/internal/json.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/app-DiOsP5Pv.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/app-BVo85gmg.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/component-root-stamps-UeLD5gqY.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/client-modules-CX5rEz2l.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/component-root-stamps-DK0UIqpz.mjs"
+    ],
+    [
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/document-core-Dt7egnWp.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/document-core-D38djjej.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/document-diagnostics-D-i6i-XQ.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/document-diagnostics-WNGKEKrI.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/endpoint-Bcxj_vyd.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/endpoint-DqdDPFS-.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/html-B8n1jHC5.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/node-CLAWQfAP.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/node-DXePx7RK.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/request-carrier-BqiMItGw.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/route-06jOQ55f.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/route-CpBQv02a.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
       "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/shell-BjfBYZ01.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/shell-C5dTC4nR.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/task-DAw3D1nG.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/task-cron-Co1u-cvi.mjs"
     ],
     [
-      "@kovojs/server/dist/vite-dev-BfHXac--.mjs",
-      "@kovojs/server/dist/task-cron-DWDmKmH-.mjs"
+      "@kovojs/server/dist/vite-dev-Cu4UMxw_.mjs",
+      "@kovojs/server/dist/task-k3EiyGQT.mjs"
     ],
     [
       "@kovojs/server/dist/vite.mjs",
-      "@kovojs/server/dist/vite-Dh495BJ-.mjs"
+      "@kovojs/server/dist/vite-BvDB_9wh.mjs"
     ],
     [
       "@kovojs/server/dist/write-governance-CTzZJ0kS.mjs",
@@ -4950,11 +5030,19 @@
     ],
     [
       "@kovojs/verify/dist/bin.mjs",
-      "@kovojs/verify/dist/src-BvXhWGtv.mjs"
+      "@kovojs/verify/dist/src-BB4lJZ7L.mjs"
     ],
     [
       "@kovojs/verify/dist/index.mjs",
-      "@kovojs/verify/dist/src-BvXhWGtv.mjs"
+      "@kovojs/verify/dist/src-BB4lJZ7L.mjs"
+    ],
+    [
+      "@kovojs/verify/dist/src-BB4lJZ7L.mjs",
+      "@kovojs/verify/dist/javascript-ast-CxKtzxyz.mjs"
+    ],
+    [
+      "@kovojs/verify/dist/translation.mjs",
+      "@kovojs/verify/dist/javascript-ast-CxKtzxyz.mjs"
     ]
   ],
   "opaque": [
@@ -4967,7 +5055,7 @@
       "reason": "imports external module \"better-auth/adapters/drizzle\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/better-auth/dist/trusted-plaintext-CL9x4Xp1.mjs",
+      "module": "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
@@ -4975,27 +5063,27 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-BeONZUEx.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-BVprV3ed.mjs",
+      "module": "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs",
+      "module": "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
       "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compiler-security-intrinsics-CDmjhBwl.mjs",
+      "module": "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5003,19 +5091,19 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-BQlLa6cq.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "module": "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-CJlt00XB.mjs",
+      "module": "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5036,6 +5124,10 @@
     },
     {
       "module": "@kovojs/compiler/dist/source-filesystem.mjs",
+      "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/source-filesystem.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5043,15 +5135,15 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-B2NMwoTR.mjs",
+      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5077,6 +5169,10 @@
     {
       "module": "@kovojs/compiler/dist/vite-config.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/core/dist/internal/client-module-url-intrinsics.mjs",
+      "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
     },
     {
       "module": "@kovojs/core/dist/internal/filesystem-intrinsics.mjs",
@@ -5085,6 +5181,10 @@
     {
       "module": "@kovojs/core/dist/internal/filesystem-intrinsics.mjs",
       "reason": "imports external module \"node:timers\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/core/dist/internal/mcp-stdio.mjs",
+      "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
     },
     {
       "module": "@kovojs/core/dist/internal/render-plan-token-intrinsics.mjs",
@@ -5139,6 +5239,14 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
+      "module": "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs",
+      "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
+      "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
+    },
+    {
       "module": "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
@@ -5151,19 +5259,19 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "module": "@kovojs/server/dist/document-core-D38djjej.mjs",
       "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "module": "@kovojs/server/dist/document-core-D38djjej.mjs",
       "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-Dt7egnWp.mjs",
+      "module": "@kovojs/server/dist/document-core-D38djjej.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/egress-BQhGMrS2.mjs",
+      "module": "@kovojs/server/dist/egress-BS7-X9oP.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
@@ -5195,31 +5303,31 @@
       "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "module": "@kovojs/server/dist/node-DXePx7RK.mjs",
       "reason": "imports external module \"node:stream\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "module": "@kovojs/server/dist/node-DXePx7RK.mjs",
       "reason": "imports external module \"node:stream/promises\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/node-CLAWQfAP.mjs",
+      "module": "@kovojs/server/dist/node-DXePx7RK.mjs",
       "reason": "imports external module \"node:zlib\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "module": "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "module": "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "module": "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "reason": "imports external module \"node:timers\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-B81aOMBy.mjs",
+      "module": "@kovojs/server/dist/postgres-runtime-WwPml_ei.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5247,7 +5355,7 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/static-export-B_9ihAb8.mjs",
+      "module": "@kovojs/server/dist/static-export-CqwI7ea4.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5271,19 +5379,11 @@
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
-      "reason": "imports external module \"es-module-lexer/js\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/verify/dist/src-BvXhWGtv.mjs",
+      "module": "@kovojs/verify/dist/src-BB4lJZ7L.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/verify/dist/translation.mjs",
-      "reason": "imports external module \"es-module-lexer/js\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-4YBSJYS/SZ2Y6MyVz+vupW9M7MwOEJkd1A0R56xIMKuQFktt1ksw2wDchnyLtjxiSA8VRUtKtCNFuL5L/3qsug==",
+  "policySha512": "sha512-BzWgBH+kY2WToFTxp8OnAJZGjpSqECBKj8KQZJONFwjaWgaZnRGohRitklud3LErVCisfRr3irMpMHjA0ytGTw==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

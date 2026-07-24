@@ -12,6 +12,7 @@ import {
 } from './security/capability-closure.js';
 import { frameworkExportPosturePackages } from './security/framework-public-runtime-export-posture.generated.js';
 import { canonicalFrameworkImplementationDigest } from './security/framework-implementation-digest.js';
+import { scanCapabilityClosureModules } from './scan/capability-closure.js';
 
 const FRAMEWORK_VERSION = '0.2.0';
 
@@ -874,6 +875,172 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       ),
     ).toEqual([]);
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('does not charge exact intrinsic JSX names as opaque component invocations', () => {
+    const intrinsicTags = Array.from({ length: 64 }, (_, index) =>
+      index % 2 === 0
+        ? `<div data-index={${index}}>row ${index}</div>`
+        : `<X-element data-index={${index}}>row ${index}</X-element>`,
+    ).join('\n');
+    const files = [
+      {
+        fileName: 'dense-view.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+
+          function renderIntrinsicGrid() {
+            return <section>${intrinsicTags}</section>;
+          }
+
+          export const page = route('/dense-intrinsic-grid', {
+            render: renderIntrinsicGrid,
+          });
+        `,
+      },
+    ];
+
+    const scanned = scanCapabilityClosureModules(files)[0]!;
+    expect(scanned.lexicalProvenanceBudgetExhausted).toBeUndefined();
+
+    const result = analyze(files);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'root',
+        name: '/dense-intrinsic-grid',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('does not charge compiler-owned static style records as opaque property effects', () => {
+    const styleDefinitions = Array.from(
+      { length: 40 },
+      (_, index) => `s${index}: { color: 'red' },`,
+    ).join('\n');
+    const styleReads = Array.from(
+      { length: 40 },
+      (_, index) => `<div style={styles.s${index}}>row ${index}</div>`,
+    ).join('\n');
+    const files = [
+      {
+        fileName: 'styled-view.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+          import * as style from '@kovojs/style';
+
+          const styles = style.create({ ${styleDefinitions} });
+          export const page = route('/styled-grid', {
+            render() {
+              return <section>${styleReads}</section>;
+            },
+          });
+        `,
+      },
+    ];
+
+    const scanned = scanCapabilityClosureModules(files)[0]!;
+    expect(scanned.lexicalProvenanceBudgetExhausted).toBeUndefined();
+
+    const result = analyze(files);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({ kind: 'root', name: '/styled-grid', rootKind: 'route' }),
+    );
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('keeps non-intrinsic identifier spellings on the component invocation boundary', () => {
+    const files = [
+      ['underscore.tsx', '_Child'],
+      ['dollar.tsx', '$Child'],
+      ['non-ascii.tsx', 'éChild'],
+      ['cjk.tsx', '中Child'],
+    ].map(([fileName, componentName]) => ({
+      fileName: fileName!,
+      source: `
+        import { route as Route } from '@kovojs/server';
+        function Plain() { return null; }
+        let ${componentName} = Plain;
+        if (componentChoice) ${componentName} = Route;
+        export const view = <${componentName} />;
+      `,
+    }));
+
+    const result = analyze(files);
+    expect(
+      result.facts.filter((fact) => fact.kind === 'root' && fact.name === 'route'),
+    ).toHaveLength(4);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(4);
+  });
+
+  it('keeps more than 32 opaque JSX component invocations globally fail closed', () => {
+    const opaqueComponents = Array.from({ length: 40 }, (_, index) => `<Opaque${index} />`).join(
+      '\n',
+    );
+    const files = [
+      {
+        fileName: 'opaque-components.tsx',
+        source: `
+          import { route } from '@kovojs/server';
+
+          export const page = route('/opaque-component-budget', {
+            render() {
+              return <section>${opaqueComponents}</section>;
+            },
+          });
+        `,
+      },
+    ];
+
+    const scanned = scanCapabilityClosureModules(files)[0]!;
+    expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true);
+
+    const result = analyze(files);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/opaque-component-budget',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
+  });
+
+  it('keeps more than 32 genuine opaque effects globally fail closed', () => {
+    const opaqueReads = Array.from({ length: 40 }, (_, index) => `value.member${index};`).join(
+      '\n',
+    );
+    const files = [
+      {
+        fileName: 'opaque-effects.ts',
+        source: `
+          import { route } from '@kovojs/server';
+
+          function inspectOpaqueValue(value) {
+            ${opaqueReads}
+          }
+
+          export const page = route('/opaque-effect-budget', {
+            render() { return null; },
+          });
+          void inspectOpaqueValue;
+        `,
+      },
+    ];
+
+    const scanned = scanCapabilityClosureModules(files)[0]!;
+    expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true);
+
+    const result = analyze(files);
+    expect(result.facts).toContainEqual(
+      expect.objectContaining({
+        kind: 'closed',
+        name: '/opaque-effect-budget',
+        rootKind: 'route',
+      }),
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
   });
 
   it('retains root assignments and spread effects nested in JSX', () => {
@@ -1832,9 +1999,9 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ]);
 
     const roots = result.facts.filter((fact) => fact.kind === 'root');
-    expect(roots.filter((fact) => fact.name === 'route')).toHaveLength(5);
+    expect(roots.filter((fact) => fact.name === 'route')).toHaveLength(4);
     expect(roots.some((fact) => fact.name === 'Plain')).toBe(false);
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(3);
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(2);
   });
 
   it('uses the catch block lexical scope for bindings without an outer declaration', () => {

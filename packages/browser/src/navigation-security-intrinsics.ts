@@ -2948,7 +2948,12 @@ export function createBrowserNavigationSecurityControls(
     }
   }
 
+  let controlFailureReason = 'unknown control';
   function controlsAreSound(): boolean {
+    const fail = (reason: string): false => {
+      controlFailureReason = reason;
+      return false;
+    };
     try {
       if (
         typeof nativeReflectApply !== 'function' ||
@@ -2995,10 +3000,10 @@ export function createBrowserNavigationSecurityControls(
         !readerRead ||
         !readerReleaseLock
       ) {
-        return false;
+        return fail('required intrinsic census');
       }
       if (apply<number>((left: number, right: number) => left + right, undefined, [2, 3]) !== 5) {
-        return false;
+        return fail('Reflect.apply');
       }
       const fetchControlDescriptor = descriptor(scope, 'fetch');
       if (
@@ -3006,7 +3011,7 @@ export function createBrowserNavigationSecurityControls(
         !('value' in fetchControlDescriptor) ||
         fetchControlDescriptor.value !== browserFetch
       ) {
-        return false;
+        return fail('global fetch descriptor');
       }
       const control = facts(new NativeURL('/safe?q=1#hash', 'https://kovo.test/base'));
       const crossOrigin = facts(new NativeURL('https://evil.example/phish'));
@@ -3019,7 +3024,7 @@ export function createBrowserNavigationSecurityControls(
         control.hash !== '#hash' ||
         crossOrigin.origin !== 'https://evil.example'
       ) {
-        return false;
+        return fail('URL facts');
       }
       if (
         lower('TEXT/HTML') !== 'text/html' ||
@@ -3035,7 +3040,7 @@ export function createBrowserNavigationSecurityControls(
         apply(nativeDecodeURIComponent, undefined, ['/%5Cevil.example']) !== '/\\evil.example' ||
         apply(nativeDecodeURIComponent, undefined, ['/%2F%2Fevil.example']) !== '///evil.example'
       ) {
-        return false;
+        return fail('string, regexp, or decode controls');
       }
       const freezeControl = { marker: 'kovo-browser-snapshot' };
       if (
@@ -3044,7 +3049,7 @@ export function createBrowserNavigationSecurityControls(
         apply<unknown>(nativeArrayIsArray, NativeArray, [[]]) !== true ||
         apply<unknown>(nativeArrayIsArray, NativeArray, [{}]) !== false
       ) {
-        return false;
+        return fail('Object or Array controls');
       }
       const weakMapControl = new NativeWeakMap<object, object>();
       const weakMapKey = {};
@@ -3056,7 +3061,7 @@ export function createBrowserNavigationSecurityControls(
         apply<unknown>(nativeWeakMapHas, weakMapControl, [{}]) !== false ||
         apply<unknown>(nativeWeakMapGet, weakMapControl, [weakMapKey]) !== weakMapValue
       ) {
-        return false;
+        return fail('WeakMap controls');
       }
       let rejectedForeignWeakMapReceiver = false;
       try {
@@ -3064,7 +3069,7 @@ export function createBrowserNavigationSecurityControls(
       } catch {
         rejectedForeignWeakMapReceiver = true;
       }
-      if (!rejectedForeignWeakMapReceiver) return false;
+      if (!rejectedForeignWeakMapReceiver) return fail('WeakMap receiver rejection');
       const mapControl = new NativeMap<unknown, object>();
       const mapKey = 'kovo-browser-map-control';
       const mapValue = { marker: 'kovo-browser-map-value' };
@@ -3074,7 +3079,7 @@ export function createBrowserNavigationSecurityControls(
         apply<boolean>(nativeMapHas, mapControl, [mapKey]) !== true ||
         apply<boolean>(nativeMapHas, mapControl, ['kovo-browser-map-negative']) !== false
       ) {
-        return false;
+        return fail('Map controls');
       }
       let rejectedForeignMapReceiver = false;
       try {
@@ -3082,7 +3087,7 @@ export function createBrowserNavigationSecurityControls(
       } catch {
         rejectedForeignMapReceiver = true;
       }
-      if (!rejectedForeignMapReceiver) return false;
+      if (!rejectedForeignMapReceiver) return fail('Map receiver rejection');
       const abortControllerControl = new NativeAbortController();
       const abortSignalControl = apply<unknown>(abortControllerSignal, abortControllerControl, []);
       if (
@@ -3090,17 +3095,19 @@ export function createBrowserNavigationSecurityControls(
         typeof abortSignalControl !== 'object' ||
         apply<unknown>(abortSignalAborted, abortSignalControl, []) !== false
       ) {
-        return false;
+        return fail('AbortController controls');
       }
       apply(abortControllerAbort, abortControllerControl, []);
-      if (apply<unknown>(abortSignalAborted, abortSignalControl, []) !== true) return false;
+      if (apply<unknown>(abortSignalAborted, abortSignalControl, []) !== true) {
+        return fail('AbortSignal transition');
+      }
       let rejectedForeignAbortReceiver = false;
       try {
         apply(abortControllerAbort, {}, []);
       } catch {
         rejectedForeignAbortReceiver = true;
       }
-      if (!rejectedForeignAbortReceiver) return false;
+      if (!rejectedForeignAbortReceiver) return fail('AbortController receiver rejection');
       const decoderControl = new NativeTextDecoder();
       const decoderBytes = new NativeUint8Array([
         60, 107, 111, 118, 111, 45, 100, 111, 110, 101, 32, 114, 101, 97, 115, 111, 110, 61, 34,
@@ -3112,10 +3119,10 @@ export function createBrowserNavigationSecurityControls(
           '<kovo-done reason="security-control"></kovo-done>' ||
         apply(textDecoderDecode, decoderControl, []) !== ''
       ) {
-        return false;
+        return fail('TextDecoder controls');
       }
       const decoderByteLength = apply<unknown>(uint8ArrayByteLength, decoderBytes, []);
-      if (typeof decoderByteLength !== 'number') return false;
+      if (typeof decoderByteLength !== 'number') return fail('Uint8Array byte length');
       const decoderCopy = new NativeUint8Array(decoderByteLength);
       apply(uint8ArraySet, decoderCopy, [decoderBytes, 0]);
       const decoderCopyByteLength = apply<unknown>(uint8ArrayByteLength, decoderCopy, []);
@@ -3124,20 +3131,24 @@ export function createBrowserNavigationSecurityControls(
         decoderCopy[0] !== 60 ||
         decoderCopy[decoderByteLength - 1] !== 62
       ) {
-        return false;
+        return fail('Uint8Array copy');
       }
       const streamControl = new NativeReadableStream<Uint8Array>();
-      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) return false;
+      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) {
+        return fail('ReadableStream initial lock');
+      }
       const readerControl = apply<unknown>(readableStreamGetReader, streamControl, []);
       if (
         readerControl === null ||
         typeof readerControl !== 'object' ||
         apply<unknown>(readableStreamLocked, streamControl, []) !== true
       ) {
-        return false;
+        return fail('ReadableStream reader');
       }
       apply(readerReleaseLock, readerControl, []);
-      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) return false;
+      if (apply<unknown>(readableStreamLocked, streamControl, []) !== false) {
+        return fail('ReadableStream release');
+      }
       if (NativePageTransitionEvent) {
         if (!pageTransitionPersisted) return false;
         const persistedControl = new NativePageTransitionEvent('pageshow', { persisted: true });
@@ -3702,14 +3713,16 @@ export function createBrowserNavigationSecurityControls(
       }
       return true;
     } catch {
-      return false;
+      return fail('control threw');
     }
   }
 
   const controlsSound = controlsAreSound();
   if (!controlsSound) {
     throw new TypeError(
-      'Kovo browser navigation controls are unavailable because realm intrinsics were modified before runtime initialization.',
+      'Kovo browser navigation controls are unavailable because realm intrinsics were modified before runtime initialization (' +
+        controlFailureReason +
+        ').',
     );
   }
   if (NativeResponse) {

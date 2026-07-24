@@ -386,15 +386,9 @@ export const PaymentButton = component({
         sourcePath,
         `
 import { component } from '@kovojs/core';
-import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
 
 export const CartBadge = component({
-  queries: { cart: {} },
-  render: ({ cart }) => (
-    <button onClick={() => tabsKeyDown(state, item.id)}>
-      <span>{cart.count}</span>
-    </button>
-  ),
+  render: () => <button onClick={() => {}}>Cart</button>,
 });
 `,
         'utf8',
@@ -829,9 +823,12 @@ export const report = route('/report', {
       const routeClosed = JSON.parse(readFileSync(outPath, 'utf8')) as {
         diagnostics?: readonly { code: string; message: string }[];
       };
-      expect(routeClosed.diagnostics).toHaveLength(3);
-      expect(routeClosed.diagnostics?.every((diagnostic) => diagnostic.code === 'KV450')).toBe(
-        true,
+      expect(routeClosed.diagnostics).toHaveLength(4);
+      expect(
+        routeClosed.diagnostics?.filter((diagnostic) => diagnostic.code === 'KV450'),
+      ).toHaveLength(3);
+      expect(routeClosed.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'KV448' })]),
       );
       expect(routeClosed.diagnostics?.map((diagnostic) => diagnostic.message)).toEqual(
         expect.arrayContaining([

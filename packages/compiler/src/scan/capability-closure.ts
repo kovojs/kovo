@@ -20,6 +20,7 @@ import {
   scanLexicalProvenance,
   type ScannedCallProvenance,
 } from './lexical-provenance.js';
+import { isIntrinsicJsxTagName } from './jsx-tag.js';
 
 const globalCapabilities = new Map<string, RawCapabilityKind>([
   ['Bun', 'process'],
@@ -207,7 +208,7 @@ function scanCapabilityClosureModule(file: CapabilityClosureSourceFile): Scanned
     }
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName;
-      if (!ts.isIdentifier(tag) || tag.text[0] !== tag.text[0]?.toLowerCase()) {
+      if (!isIntrinsicJsxTagName(tag)) {
         collectImplicitInvocation(
           tag as ts.Expression,
           node,

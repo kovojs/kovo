@@ -14,6 +14,7 @@
     "./client": "./src/client.ts",
     "./generated": "./src/generated.ts",
     "./internal/delegation": "./src/internal/delegation.ts",
+    "./internal/hmr-target-snapshot": "./src/internal/hmr-target-snapshot.ts",
     "./internal/inline-loader": "./src/internal/inline-loader.ts",
     "./internal/morph": "./src/internal/morph.ts",
     "./internal/mutation": "./src/internal/mutation.ts",
@@ -36,6 +37,10 @@
       "./internal/delegation": {
         "types": "./dist/internal/delegation.d.mts",
         "default": "./dist/internal/delegation.mjs"
+      },
+      "./internal/hmr-target-snapshot": {
+        "types": "./dist/internal/hmr-target-snapshot.d.mts",
+        "default": "./dist/internal/hmr-target-snapshot.mjs"
       },
       "./internal/inline-loader": {
         "types": "./dist/internal/inline-loader.d.mts",
@@ -61,7 +66,7 @@
     "check": "pnpm run check:inline-loader",
     "check:inline-loader:trusted-types": "vitest run src/inline-loader-trusted-types-routing.test.ts",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
-    "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
+    "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/hmr-target-snapshot.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
