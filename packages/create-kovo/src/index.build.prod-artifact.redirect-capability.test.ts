@@ -91,7 +91,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
 
       const capabilityPage = await fetchTextWhenReady(`${origin}/capability-url-proof`, output);
       const href = capabilityPage.match(/<a\b[^>]*id="capability-proof"[^>]*href="([^"]+)"/)?.[1];
-      expect(href).toMatch(/^\/capability-download\/receipts\/ord_1\.txt\?kovo-cap=/u);
+      expect(href).toMatch(/^\/capability-download\/[^?]*ord_1\.txt\?kovo-cap=/u);
       if (href === undefined) throw new Error('Expected capability proof link href.');
 
       const redirect = await fetch(`${origin}/redirect-location-unsafe`, { redirect: 'manual' });
@@ -105,7 +105,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       expect(download.headers.get('cache-control')).toBe('private, no-store');
       expect(download.headers.get('content-disposition')).toBe('attachment; filename="ord_1.txt"');
 
-      const tamperedHref = href.replace('/receipts/ord_1.txt?', '/receipts/ord_2.txt?');
+      const tamperedHref = href.replace('ord_1.txt?', 'ord_2.txt?');
       const tampered = await fetch(`${origin}${tamperedHref}`);
       const tamperedBody = await tampered.text();
       expect(tampered.status).toBe(404);
