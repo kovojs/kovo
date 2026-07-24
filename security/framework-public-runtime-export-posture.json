@@ -774,7 +774,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9e22042cfe586136aa525dbd73424332478b6181736d7fc0aaaea066875bb6dd"
+      "sourceTreeSha256": "bca96e6f4b12c118aff12ab14e40a27b5c83a1345b3aec74a2d476e4f6dfe94c"
     },
     {
       "manifestVariants": [
@@ -1615,7 +1615,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c00134fb309e67c9e5d88739bd74e2b5c44eae3410ee4ed6bfec2518ebb42057"
+      "sourceTreeSha256": "48883c56cc7a27b33f2b536564e9e288b6f15fec7bebb8cdd9028f72862fc3e2"
     },
     {
       "manifestVariants": [
@@ -2415,7 +2415,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "8f4c266e8a433253b807901689406d226d09462131069ca80625de3150c58249"
+      "sourceTreeSha256": "a3b65f0fbfff6bbce20395f5e42b3b4fb4f08ed7a8720a24cbfc206d294fd929"
     },
     {
       "manifestVariants": [
@@ -10643,7 +10643,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "80e8a43f7eecf0669b8f45b3c5dfce2f9041d12b28196a2fc1877f9ebf2ea302"
+      "sourceTreeSha256": "f21fb0995980e79b84513d40bd9622175e075072aac498ed0f37e2ce6a6c3d78"
     },
     {
       "manifestVariants": [
