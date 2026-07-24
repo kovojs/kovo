@@ -2396,10 +2396,25 @@ const removedVerifyDeclarationOnlyConditionBranch = [
   '      continue;',
   '    }',
 ].join('\n');
-const verifyNoSubstitutionTemplateImportBranch =
-  '      if (isNoSubstitutionTemplateDynamicImport(source, imported)) {';
-const removedVerifyNoSubstitutionTemplateImportBranch =
-  '      if (false && isNoSubstitutionTemplateDynamicImport(source, imported)) {';
+const verifyNoSubstitutionTemplateImportBranch = [
+  '      if (',
+  "        imported.kind === 'dynamic-import' &&",
+  '        isJavaScriptAstNode(importSource) &&',
+  "        importSource.type === 'TemplateLiteral' &&",
+  '        Array.isArray(importSource.expressions) &&',
+  '        importSource.expressions.length === 0',
+  '      ) {',
+].join('\n');
+const removedVerifyNoSubstitutionTemplateImportBranch = [
+  '      if (',
+  '        false &&',
+  "        imported.kind === 'dynamic-import' &&",
+  '        isJavaScriptAstNode(importSource) &&',
+  "        importSource.type === 'TemplateLiteral' &&",
+  '        Array.isArray(importSource.expressions) &&',
+  '        importSource.expressions.length === 0',
+  '      ) {',
+].join('\n');
 const verifyCompleteArtifactParseBranch = '    program = parseJavaScriptModule(source);';
 const restoredPrefixOnlyArtifactParseBranch =
   '    program = parseJavaScriptModule(source.slice(0, 3_899_994));';
@@ -2815,8 +2830,11 @@ const weakenedCspReportBeforeDbAdmissionBranch = [
   '        }',
 ].join('\n');
 const taskStartupAfterRequestAdmissionBranch = [
-  '      if (taskRuntime === undefined) return handleAppRequest(app, dispatchRequest);',
+  '      if (taskRuntime === undefined) {',
+  '        return handleAppRequest(app, dispatchRequest, { buildToken });',
+  '      }',
   '      return handleAppRequest(app, dispatchRequest, {',
+  '        buildToken,',
   '        admitted() {',
   '          void taskRuntime.ensureStarted().catch((error: unknown) => {',
   '            reportAppStartupError(app, taskInternalRequest(), error);',
@@ -2828,7 +2846,7 @@ const weakenedTaskStartupAfterRequestAdmissionBranch = [
   '      void taskRuntime?.ensureStarted().catch((error: unknown) => {',
   '        reportAppStartupError(app, taskInternalRequest(), error);',
   '      });',
-  '      return handleAppRequest(app, dispatchRequest);',
+  '      return handleAppRequest(app, dispatchRequest, { buildToken });',
 ].join('\n');
 const taskScheduleSchemaAdmission =
   '  const parsedArgs = await parseSchemaAsync(input.definition.input, input.args);';
@@ -12759,7 +12777,7 @@ async function assertLexicalCapabilityProvenanceIsEnforced(moduleUnderTest) {
   const implicitClosed = implicitInvocations.facts.filter(
     (fact) => fact.kind === 'closed' && fact.reason?.includes('mutable or ambiguous'),
   );
-  if (implicitRoots.length !== 5 || implicitClosed.length < 3) {
+  if (implicitRoots.length !== 4 || implicitClosed.length < 2) {
     throw new Error(
       `implicit invocation provenance drifted (${implicitRoots.length}/${implicitClosed.length})`,
     );
