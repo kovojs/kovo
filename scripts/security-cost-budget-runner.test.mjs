@@ -38,7 +38,12 @@ describe('Plan 3 security-gate cost budgets', () => {
     ]);
     expect(
       manifest.gates.filter((gate) => gate.buildTime.status === 'enforced').map((gate) => gate.id),
-    ).toEqual(['artifact-provenance-build', 'certificate', 'phase3-dependency-capabilities']);
+    ).toEqual([
+      'artifact-provenance-build',
+      'certificate',
+      'phase3-dependency-capabilities',
+      'escape-census',
+    ]);
     expect(
       manifest.gates.every(
         (gate) =>
@@ -69,6 +74,10 @@ describe('Plan 3 security-gate cost budgets', () => {
     expect(packageJson.scripts.check).not.toContain(
       'node scripts/security-cost-budget-runner.mjs --all',
     );
+    // The unsharded root suite must not scale heavyweight compiler/build
+    // proofs past the four-core CI resource envelope. CI shards independently
+    // tighten this to one file at a time with --no-file-parallelism.
+    expect(packageJson.scripts.test).toBe('vitest --run --maxWorkers=4');
   });
 
   it('routes already-built pack gates through the existing publish-readiness job', () => {
