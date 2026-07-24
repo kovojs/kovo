@@ -26,24 +26,24 @@
     "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
     "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
     "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs",
-    "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
-    "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+    "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
+    "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
     "@kovojs/compiler/dist/compile.mjs",
     "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
     "@kovojs/compiler/dist/graph.mjs",
     "@kovojs/compiler/dist/index.mjs",
     "@kovojs/compiler/dist/internal.mjs",
     "@kovojs/compiler/dist/internal/graph.mjs",
-    "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
-    "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+    "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
+    "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
     "@kovojs/compiler/dist/package-styles.mjs",
     "@kovojs/compiler/dist/security-bootstrap.mjs",
     "@kovojs/compiler/dist/source-filesystem.mjs",
-    "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+    "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
     "@kovojs/compiler/dist/vite-config.mjs",
     "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
     "@kovojs/core/dist/diagnostics-Bn03luHl.mjs",
-    "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs",
+    "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs",
     "@kovojs/core/dist/generated.mjs",
     "@kovojs/core/dist/index.mjs",
     "@kovojs/core/dist/internal/agent-docs.mjs",
@@ -260,12 +260,12 @@
     "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs": [],
     "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs": [],
     "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs": [],
-    "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs": [
+    "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/compile-x1V1INRF.mjs": [
+    "@kovojs/compiler/dist/compile-BP6PmIv_.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -305,12 +305,12 @@
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs": [
+    "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs": [
+    "@kovojs/compiler/dist/package-styles-DGw855jK.mjs": [
       "crypto-acquisition",
       "dynamic-loader",
       "filesystem"
@@ -328,7 +328,7 @@
       "crypto-acquisition",
       "filesystem"
     ],
-    "@kovojs/compiler/dist/vite-CXXGBXCL.mjs": [
+    "@kovojs/compiler/dist/vite-B2LYmDy3.mjs": [
       "crypto-acquisition",
       "digest",
       "dynamic-loader",
@@ -344,7 +344,7 @@
     ],
     "@kovojs/core/dist/audit-text-CmsLNB8H.mjs": [],
     "@kovojs/core/dist/diagnostics-Bn03luHl.mjs": [],
-    "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs": [],
+    "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs": [],
     "@kovojs/core/dist/generated.mjs": [],
     "@kovojs/core/dist/index.mjs": [
       "crypto-acquisition",
@@ -1797,128 +1797,128 @@
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/cache-influence.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/graph.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/cache-influence.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/classifier-verdict.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/emission.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/module-ref.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/render-plan-token.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/route-pattern.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/security-markers.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/security-operation-ir.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/security-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/semantic-attributes.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "@kovojs/verify/dist/translation.mjs"
     ],
     [
       "@kovojs/compiler/dist/compile.mjs",
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs"
     ],
     [
       "@kovojs/compiler/dist/graph.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
@@ -1930,23 +1930,23 @@
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs"
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs"
     ],
     [
       "@kovojs/compiler/dist/index.mjs",
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs"
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1954,7 +1954,7 @@
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1962,7 +1962,7 @@
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs"
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs"
     ],
     [
       "@kovojs/compiler/dist/internal.mjs",
@@ -1982,67 +1982,67 @@
     ],
     [
       "@kovojs/compiler/dist/internal/graph.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/core/dist/internal/package-prefix.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/style/dist/index.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "@kovojs/style/dist/internal.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "@kovojs/style/dist/internal.mjs"
     ],
     [
       "@kovojs/compiler/dist/package-styles.mjs",
-      "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs"
+      "@kovojs/compiler/dist/package-styles-DGw855jK.mjs"
     ],
     [
       "@kovojs/compiler/dist/security-bootstrap.mjs",
@@ -2061,35 +2061,35 @@
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
-      "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs"
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
+      "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
-      "@kovojs/compiler/dist/compile-x1V1INRF.mjs"
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
+      "@kovojs/compiler/dist/compile-BP6PmIv_.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
-      "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs"
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
+      "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "@kovojs/compiler/dist/source-filesystem.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "@kovojs/core/dist/internal/client-module-url.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "@kovojs/core/dist/internal/framework-identity.mjs"
     ],
     [
@@ -2181,7 +2181,7 @@
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
-      "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs",
+      "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs",
       "@kovojs/core/dist/internal/security-witness-intrinsics.mjs"
     ],
     [
@@ -2258,7 +2258,7 @@
     ],
     [
       "@kovojs/core/dist/internal/framework-identity.mjs",
-      "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs"
+      "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs"
     ],
     [
       "@kovojs/core/dist/internal/graph.mjs",
@@ -2294,7 +2294,7 @@
     ],
     [
       "@kovojs/core/dist/internal/query-shape-source.mjs",
-      "@kovojs/core/dist/framework-identity-Eip9N7Jx.mjs"
+      "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs"
     ],
     [
       "@kovojs/core/dist/internal/query-shape-source.mjs",
@@ -5063,19 +5063,19 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-bp-Mwwv3.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-gljH28Mh.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-x1V1INRF.mjs",
+      "module": "@kovojs/compiler/dist/compile-BP6PmIv_.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5091,19 +5091,19 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-Bd9g8XxD.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-CNS8iAs3.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "module": "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-DiSvjtSB.mjs",
+      "module": "@kovojs/compiler/dist/package-styles-DGw855jK.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5135,15 +5135,15 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "module": "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "module": "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-CXXGBXCL.mjs",
+      "module": "@kovojs/compiler/dist/vite-B2LYmDy3.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -5383,7 +5383,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-g1arJlYn+tI8yFrhtOrXEbYIfJrOWX0kCFBiUF2kitV1xQMWn4Iuj8ypCz1lmSeXEVCuobVPAP0gMgLqbjZdXw==",
+  "policySha512": "sha512-P0Wv6/rywbTgV2qjeeKCdwmDv0vN4S+kclYGtr9Zm3V3KAcYhPRFhTjKEAa0J4ewTQS6q3ppsLslzj8Z5SdiLw==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
