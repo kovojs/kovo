@@ -5387,7 +5387,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-BNasiBsc5j3CLZ4n/qYbRpe89+ApLqOvCaJL2bk+KD99PBXMtIYbnTkMESwjz5c99oYIYC1fw02DXQiJISLfDQ==",
+  "policySha512": "sha512-UcHjnMfOusZVcxKapjBebYHKraPzAkRSRfL5pddlzySrhgs+OPHaodBVg33ICQ/qKehSHkILZK45okMfA5UTTQ==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",
