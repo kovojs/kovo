@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
+const requestStateClock = vi.hoisted(() => ({ nowMs: 1_768_000_000_000 }));
+
+vi.mock('./request-state-intrinsics.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./request-state-intrinsics.js')>();
+  return {
+    ...original,
+    requestStateNow: () => requestStateClock.nowMs,
+  };
+});
+
 import './sql-parser-authority-bootstrap.js';
 
 import {
@@ -949,37 +959,42 @@ describe('server guard and session primitives', () => {
   });
 
   it('resets rate-limit buckets after the configured window', async () => {
-    const guarded = mutation('cart/add', {
-      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 5 }),
-      input: s.object({ productId: s.string() }),
-      handler() {
-        return 'ok';
-      },
-    });
+    requestStateClock.nowMs = 1_768_000_000_000;
+    try {
+      const guarded = mutation('cart/add', {
+        guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 5 }),
+        input: s.object({ productId: s.string() }),
+        handler() {
+          return 'ok';
+        },
+      });
 
-    await expect(
-      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: 'ok',
-    });
-    await expect(
-      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-    ).resolves.toMatchObject({
-      error: { code: 'RATE_LIMITED', payload: {} },
-      ok: false,
-      retryAfter: 1,
-      status: 429,
-    });
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: 'ok',
+      });
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        error: { code: 'RATE_LIMITED', payload: {} },
+        ok: false,
+        retryAfter: 1,
+        status: 429,
+      });
 
-    await new Promise((resolve) => setTimeout(resolve, 15));
+      requestStateClock.nowMs += 15;
 
-    await expect(
-      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
-    ).resolves.toMatchObject({
-      ok: true,
-      value: 'ok',
-    });
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: 'ok',
+      });
+    } finally {
+      requestStateClock.nowMs = 1_768_000_000_000;
+    }
   });
 
   it('shares global rate limits across sessions and isolates custom keys', async () => {
