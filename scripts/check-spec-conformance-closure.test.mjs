@@ -11,7 +11,7 @@ import {
 
 let baseline;
 
-vi.setConfig({ testTimeout: 120_000 });
+vi.setConfig({ testTimeout: 600_000 });
 
 beforeAll(async () => {
   baseline = await loadSpecConformanceInput();

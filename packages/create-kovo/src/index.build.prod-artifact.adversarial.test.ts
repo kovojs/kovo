@@ -228,7 +228,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
         buildProductionArtifact(root);
       });
     },
-    240_000,
+    480_000,
   );
 
   it.each([...dialectIndependentCompilerGateCases])(

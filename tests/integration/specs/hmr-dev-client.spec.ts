@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   compileComponentModule,
@@ -480,23 +480,31 @@ async function refreshSourceEditLiveTarget(page: Page): Promise<void> {
       target;
     const token = sourceCard?.getAttribute('kovo-live-token');
     const props = sourceCard?.getAttribute('kovo-props') ?? '{}';
-    if (!target || !component || !token) {
-      throw new Error('HMR source card is missing live-target attestation attributes.');
+    const buildToken = document.querySelector('meta[name="kovo-build"]')?.getAttribute('content');
+    if (!target || !component || !token || !buildToken) {
+      throw new Error('HMR source card is missing live-target attestation or build attributes.');
     }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
-    const response = await fetch('/@kovo/hmr/refresh/live-targets?url=/', {
+    const refreshUrl = new URL('/@kovo/hmr/refresh/live-targets', location.origin);
+    refreshUrl.searchParams.set('url', '/');
+    refreshUrl.searchParams.set('oldBuild', buildToken);
+    const liveTargetHeader = `${encodeURIComponent(target)}#${encodeURIComponent(component)}@${token}:${props}`;
+    const response = await fetch(refreshUrl, {
       headers: {
         'Kovo-Current-Url': location.href,
+        'Kovo-Build': buildToken,
         'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': `${target}#${component}@${token}:${props}`,
+        'Kovo-Live-Targets': liveTargetHeader,
         'Kovo-Targets': 'hmr-source-card=hmr',
       },
       method: 'POST',
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!response.ok) throw new Error(`HMR refresh failed with ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`HMR refresh failed with ${response.status}: ${await response.text()}`);
+    }
     return response.text();
   });
   await page.evaluate((fragmentBody) => {
@@ -877,13 +885,21 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
     handleHotUpdate: hmrTransport.handleHotUpdate,
     name: 'kovo-source-edit-fixture',
     async transform(source, id) {
-      if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
+      const fileName = fixtureComponentFileName(id, root);
+      if (
+        fileName.startsWith('../') ||
+        isAbsolute(fileName) ||
+        !/\.[cm]?tsx?$/.test(fileName) ||
+        !source.includes('component(')
+      ) {
+        return null;
+      }
 
       // Keep the transport's diagnostics and retained HMR state ordered before the fixture's
       // direct compiler inspection of the same authored source.
       await hmrTransport.transform(source, id);
       const result = compileComponentModule({
-        fileName: fixtureComponentFileName(id, root),
+        fileName,
         packagePrefixDiscoveryRoot: root,
         source,
       });
@@ -906,9 +922,7 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
 }
 
 function fixtureComponentFileName(id: string, root: string): string {
-  const path = id.split('?')[0]!.replaceAll('\\', '/');
-  const normalizedRoot = root.replaceAll('\\', '/').replace(/\/$/, '');
-  return path.startsWith(`${normalizedRoot}/`) ? path.slice(normalizedRoot.length + 1) : path;
+  return relative(root, id.split('?')[0]!).replaceAll('\\', '/');
 }
 
 function hmrSourceCard(options: {
@@ -935,12 +949,12 @@ export const HmrSourceCard = component({
   render: (_queries, state) => (
     <section>
       <label for="hmr-source-input">Draft</label>
-      <input id="hmr-source-input" kovo-key="input" value=${JSON.stringify(options.inputValue)} />
-      <output id="hmr-source-output" kovo-key="output">${options.outputText}</output>
+      <input id="hmr-source-input" key="input" value=${JSON.stringify(options.inputValue)} />
+      <output id="hmr-source-output" key="output">${options.outputText}</output>
       <button
         data-handler={state.handler}
         id="hmr-source-button"
-        kovo-key="button"
+        key="button"
         type="button"
         onClick={() => {
           state.handler = ${JSON.stringify(options.handlerText)};

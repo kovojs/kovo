@@ -486,7 +486,7 @@ function scaffoldWithPackedCreateKovo(
     args.push('--postgres');
   }
 
-  execStarterCommand(resolveStarterBin(creatorRoot, 'create-kovo'), args, {
+  execStarterCommand('pnpm', ['--dir', creatorRoot, 'exec', 'create-kovo', ...args], {
     cwd: dirname(root),
     env: withStarterBinOnPath(creatorRoot),
     stdio: 'pipe',
