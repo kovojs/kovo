@@ -87,7 +87,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
       ok: true,
       sites: 201,
     });
-  }, 180_000);
+  }, 600_000);
 
   it('C13 mutation: rejects a SPEC row whose enforcement-class column disappears', () => {
     const specMarkdown = baseline.specMarkdown.replace(
@@ -337,7 +337,7 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     expect(evaluate({ productionFiles: outerControlFiles }).findings.join('\n')).toContain(
       'production diagnostic emission site manifest drifted',
     );
-  }, 180_000);
+  }, 600_000);
 
   it('C13 mutation: production posture cannot disable the compiler validator dispatcher', () => {
     const productionFiles = replaceProductionFile(

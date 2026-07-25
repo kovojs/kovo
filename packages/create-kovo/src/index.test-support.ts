@@ -470,11 +470,20 @@ function scaffoldWithPackedCreateKovo(
     )}\n`,
     'utf8',
   );
-  execStarterCommand('pnpm', ['install', '--ignore-workspace'], {
-    cwd: creatorRoot,
-    env: starterInstallEnv(creatorRoot),
-    stdio: 'pipe',
-  });
+  execStarterCommand(
+    'pnpm',
+    [
+      'add',
+      '--ignore-workspace',
+      '--save-exact',
+      `create-kovo@${fileSpec(creatorRoot, createKovoTarball)}`,
+    ],
+    {
+      cwd: creatorRoot,
+      env: starterInstallEnv(creatorRoot),
+      stdio: 'pipe',
+    },
+  );
 
   const args = [root, '--name', options.name, '--disable-git'];
   if (options.dialect === 'sqlite') {

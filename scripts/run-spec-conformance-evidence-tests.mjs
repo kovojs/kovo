@@ -59,7 +59,16 @@ const outputFile = path.join(outputDirectory, 'vitest-report.json');
 try {
   const child = spawnSync(
     'pnpm',
-    ['exec', 'vitest', '--run', ...files, '--reporter=json', `--outputFile=${outputFile}`],
+    [
+      'exec',
+      'vitest',
+      '--run',
+      '--maxWorkers=1',
+      '--no-file-parallelism',
+      ...files,
+      '--reporter=json',
+      `--outputFile=${outputFile}`,
+    ],
     {
       cwd: repoRoot,
       encoding: 'utf8',
