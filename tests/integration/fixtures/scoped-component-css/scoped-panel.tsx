@@ -9,11 +9,7 @@ export const ScopedPanel = component({
   render: () => (
     <section>
       <h2 class="panel-title">Scoped panel</h2>
-      <aside kovo-c="nested-badge">
-        <span class="nested-copy" data-nested-copy>
-          Nested copy
-        </span>
-      </aside>
+      <NestedBadge />
     </section>
   ),
 });
@@ -21,7 +17,9 @@ export const ScopedPanel = component({
 export const NestedBadge = component({
   render: () => (
     <aside>
-      <span>Nested component identity</span>
+      <span class="nested-copy" data-nested-copy>
+        Nested copy
+      </span>
     </aside>
   ),
 });

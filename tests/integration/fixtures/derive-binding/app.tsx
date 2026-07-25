@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { InventoryPanel } from './inventory-panel';
@@ -27,7 +27,6 @@ export const sellOutInventory = mutation('derive-binding/sell-out', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>')}
       <InventoryPanel />
     </main>
   ),

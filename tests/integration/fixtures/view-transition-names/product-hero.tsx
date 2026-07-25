@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { trustedUrl } from '@kovojs/server';
 
 import type { ProductRecord } from './shared';
 
@@ -9,7 +10,7 @@ export const ProductHero = component({
       <img
         alt={product.imageAlt}
         data-transition="photo"
-        src={product.imageSrc}
+        src={trustedUrl(product.imageSrc, 'fixture-owned product hero image source')}
         viewTransitionName="product-photo"
       />
       <h1 data-transition="title" viewTransitionName="product-title">

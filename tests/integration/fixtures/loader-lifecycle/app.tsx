@@ -5,8 +5,6 @@ import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s, stream } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
-import { PrimaryRunner } from './primary-runner';
-
 export const swapIsland = mutation('loader-lifecycle/swap', {
   csrf: false,
   csrfJustification: 'fixture mutation has no ambient browser authority',
@@ -36,7 +34,11 @@ const homeRoute = route('/', {
       <h1>Loader lifecycle</h1>
       <p data-lifecycle-status>idle</p>
       <div kovo-fragment-target="lifecycle-shell">
-        <PrimaryRunner />
+        <primary-runner-host data-stage="active">
+          <button type="button" data-primary-runner on:click="/client.ts#startLongTask">
+            Start primary task
+          </button>
+        </primary-runner-host>
       </div>
       <form mutation={swapIsland} enhance stream>
         <button type="submit">Swap island</button>

@@ -10,7 +10,7 @@ export const DeferredReview = component({
     }
   `,
   render: () => (
-    <section kovo-fragment-target="deferred-review">
+    <section>
       <div class="review-surface" data-review-card>
         Deferred review ready
       </div>

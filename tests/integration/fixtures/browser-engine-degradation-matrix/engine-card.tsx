@@ -7,7 +7,7 @@ export const EngineMatrixCard = component({
   disableServerRefresh: true,
   queries: { engine: engineQuery },
   render: ({ engine }: { engine: EngineResult }) => (
-    <engine-matrix-card kovo-fragment-target="engine-card">
+    <engine-matrix-card>
       <output>{engine.message}</output>
     </engine-matrix-card>
   ),

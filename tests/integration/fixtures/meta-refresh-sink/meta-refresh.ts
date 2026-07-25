@@ -1,6 +1,5 @@
-/** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
-import { query, type QueryLoadContext } from '@kovojs/server';
+import { renderHtmlValue } from '@kovojs/server/internal/html';
+import { jsx } from '@kovojs/server/jsx-runtime';
 
 export interface MetaRefreshPage extends Record<string, unknown> {
   remoteMeta: Record<string, unknown>;
@@ -36,14 +35,9 @@ export function metaRefreshPage(url: URL): MetaRefreshPage {
   };
 }
 
-export const metaRefreshQuery = query({
-  reads: [],
-  load: (_input: unknown, context?: QueryLoadContext<Request>) =>
-    metaRefreshPage(new URL(context?.request.url ?? 'http://app.test/')),
-});
-
-export const MetaRefreshProbe = component({
-  disableServerRefresh: true,
-  queries: { page: metaRefreshQuery },
-  render: ({ page }: { page: MetaRefreshPage }) => <meta {...page.remoteMeta} />,
-});
+// This fixture targets the runtime's pair-dependent attribute sanitizer directly. It deliberately
+// bypasses authored TSX because SPEC §5.2 requires the compiler to reject this opaque spread before
+// it can reach that defense-in-depth sink in an application component.
+export function renderMetaRefreshProbe(page: MetaRefreshPage): string {
+  return renderHtmlValue(jsx('meta', page.remoteMeta));
+}

@@ -6,14 +6,17 @@ declare const Primitive: {
 };
 
 export const PrimitiveStateAttrsCard = component({
-  render: () => (
+  state: () => ({ active: false }),
+  render: (_queries, state) => (
     <section data-case="primitive-state-attrs">
       <Primitive.Toggle
         attrs={{
-          'aria-pressed': 'false',
+          'aria-pressed': state.active ? 'true' : 'false',
           class: 'primitive-toggle',
-          'data-state': 'off',
-          'on:click': '/client.ts#toggleState',
+          'data-state': state.active ? 'on' : 'off',
+          onClick: () => {
+            state.active = !state.active;
+          },
           type: 'button',
         }}
       >

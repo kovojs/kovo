@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { createApp, mutation, route, s, stream, trustedUrl } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
   kovoFixtureStylesheetManifest,
@@ -30,7 +30,10 @@ export const revealLateCard = mutation('fragment-style-metadata/reveal', {
     yield stream.fragment({
       html: await (
         <>
-          <link rel="stylesheet" href={href} />
+          <link
+            rel="stylesheet"
+            href={trustedUrl(href, 'compiler-emitted fixture stylesheet metadata')}
+          />
           <LateCard />
         </>
       ),

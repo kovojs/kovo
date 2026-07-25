@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'derive-binding' });
 
-test('lazily imports a named derive on query change and updates the bound attribute', async ({
+test('updates a compiler-derived typed attribute when its query changes', async ({
   page,
   kovoApp,
 }) => {
@@ -11,7 +11,6 @@ test('lazily imports a named derive on query change and updates the bound attrib
   const action = page.getByRole('button', { name: 'Ship order' });
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('3');
   await expect(action).not.toBeDisabled();
-  await expect.poll(() => page.evaluate(() => window.__deriveBindingImports ?? 0)).toBe(0);
 
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -27,11 +26,12 @@ test('lazily imports a named derive on query change and updates the bound attrib
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('0');
   await expect(page.locator('[data-bind="inventory.label"]')).toHaveText('Sold out');
   await expect(action).toBeDisabled();
-  await expect.poll(() => page.evaluate(() => window.__deriveBindingImports ?? 0)).toBe(1);
 
   const rows = await kovoApp.db.query('select count, label from inventory_state where id = 1');
   expect(rows[0]).toEqual({ count: 0, label: 'Sold out' });
   expect(
-    await kovoApp.semantic('inventory-panel', { keepAttrs: ['data-bind:disabled'] }),
+    await kovoApp.semantic('inventory-panel', {
+      keepAttrs: ['data-derive', 'data-derive-attr'],
+    }),
   ).toMatchSnapshot('derive-binding.semantic.txt');
 });

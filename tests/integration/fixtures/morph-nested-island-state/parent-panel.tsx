@@ -7,7 +7,7 @@ import { parentQuery, type ParentResult } from './shared';
 export const ParentPanel = component({
   queries: { parent: parentQuery },
   render: ({ parent }: { parent: ParentResult }) => (
-    <section id="parent-panel" kovo-key="parent-panel">
+    <section id="parent-panel">
       <p>
         Parent version <output>{parent.version}</output>
       </p>

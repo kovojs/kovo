@@ -7,6 +7,6 @@ export const ReceiptStatus = component({
   queries: { receipt: receiptQuery },
   render: ({ receipt }: { receipt: { created: boolean } }) => {
     if (receipt.created) throw new Error('receipt renderer leaked details');
-    return <output data-bind="receipt.status">Ready</output>;
+    return <output>Ready</output>;
   },
 });

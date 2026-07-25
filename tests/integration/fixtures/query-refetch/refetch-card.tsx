@@ -7,7 +7,7 @@ export const RefetchCard = component({
   disableServerRefresh: true,
   queries: { refetch: refetchQuery },
   render: ({ refetch }: { refetch: RefetchResult }) => (
-    <refetch-card kovo-fragment-target="refetch-card">
+    <refetch-card>
       <output>{refetch.message}</output>
     </refetch-card>
   ),

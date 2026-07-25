@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, route } from '@kovojs/server';
+import { createApp, route, trustedHtml } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const home = route('/', {
@@ -10,7 +10,7 @@ const home = route('/', {
         Open OAuth fixture
       </a>
       <iframe
-        srcdoc="<main>Embedded fixture</main>"
+        srcdoc={trustedHtml('<main>Embedded fixture</main>')}
         sandbox="allow-same-origin"
         title="Embed fixture"
       />

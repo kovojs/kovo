@@ -15,7 +15,7 @@ export const PrimitiveAsChildCard = component({
           'aria-label': 'Primitive help',
           class: 'primitive-trigger primitive-base',
           'data-state': 'closed',
-          'on:click': '/client.ts#primitive',
+          onClick: () => {},
           role: 'button',
           style: 'color: red;',
         }}
@@ -23,7 +23,7 @@ export const PrimitiveAsChildCard = component({
         <button
           class="author-trigger author-base"
           data-case="primitive-as-child-trigger"
-          on:click="/client.ts#author"
+          onClick={() => {}}
           style="background: blue;"
           type="submit"
         >

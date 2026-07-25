@@ -18,7 +18,7 @@ export const InventoryPanel = component({
       <p>
         <span>{inventory.label}</span>: <span>{inventory.count}</span>
       </p>
-      <button type="button" data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable">
+      <button type="button" disabled={inventory.count <= 0}>
         Ship order
       </button>
       <form mutation={sellOutInventory} enhance>
