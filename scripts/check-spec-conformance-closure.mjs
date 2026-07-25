@@ -101,7 +101,7 @@ const expectedCoreBuildDistCommand =
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
-  'packages/browser/src/inline-loader.ts#fc4bcec8fe8239a4963956ff4400cb92ec9f515dc426225681f94bad74cdcec7#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/browser/src/inline-loader.ts#20f1d4a5dfc82c788169bbbf007314ede0a76e284689ff210367268bf10bcd01#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
