@@ -107,7 +107,9 @@ describe('security convergence baseline', () => {
     });
     expect(baseline).not.toHaveProperty('evidenceCommitSha');
     const retainedSubject = convergenceRepository();
-    expect(await runSecurityConvergenceGate({ args: [], repoRoot: retainedSubject.root })).toBe(true);
+    expect(await runSecurityConvergenceGate({ args: [], repoRoot: retainedSubject.root })).toBe(
+      true,
+    );
   });
 
   it('mechanically separates the clean code subject from its later evidence commit', () => {

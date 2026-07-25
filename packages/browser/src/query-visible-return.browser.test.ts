@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './client.js';
 import { installKovoLoader } from './generated.js';
-import {
-  browserTransportTestBuild,
-  queryTestResponse,
-} from './runtime-test-fakes.js';
+import { browserTransportTestBuild, queryTestResponse } from './runtime-test-fakes.js';
 
 afterEach(() => {
   document.body.replaceChildren();
