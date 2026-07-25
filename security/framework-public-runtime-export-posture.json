@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "1e6386b6e2588a63c99d4fe62e296b946fcec8f1bf8356b215e105a1e1a46be0",
+      "sourceTreeSha256": "e2cd87ef452ef16b182b1033f12f6a623e44117e71e8cb86422dba8c34a5da4e",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -773,7 +773,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "9ec56851884087c347c768f8f4717aaa693275b68d992064009285d91a63c57d"
+      "sourceTreeSha256": "b392cd5f70827e26c73f0e7fd237fafae12056c7052a91d3a1c36c5c0689186f"
     },
     {
       "manifestVariants": [
@@ -848,7 +848,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "9ee49cae5e557366f5ed1ac8e75653842e1a24630350c7d5d6ee8cfc4c719934"
+      "sourceTreeSha256": "dae2cdefbe2cf990a8dab3ae269157d808e9893eade3bf5edcdd11ca6610387a"
     },
     {
       "manifestVariants": [
