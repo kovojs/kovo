@@ -2247,6 +2247,17 @@
       "expressionSha256": "0b0b2bcc3c324e72b6c1138b7932a0d0521c7c62ff9ece736f0a02aa5fec2c1c"
     },
     {
+      "id": "packages/server/src/managed-db.ts#throw#KV433#3d118b4f79b11ec20dc934db70caab302f3f7cdc04c64a78aaeb6fb0c7432a47#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/managed-db.ts",
+      "owner": "runScopedPostgresTransactionCallback",
+      "expressionSha256": "3d118b4f79b11ec20dc934db70caab302f3f7cdc04c64a78aaeb6fb0c7432a47"
+    },
+    {
       "id": "packages/server/src/managed-db.ts#throw#KV433#583f0504018cbce38d460ef6655a15517cd1c987bf7c1650ade4f7c89f87806f#0",
       "code": "KV433",
       "enforcementClass": "compile-error",
@@ -2256,6 +2267,28 @@
       "file": "packages/server/src/managed-db.ts",
       "owner": "postgresTransactionMethod",
       "expressionSha256": "583f0504018cbce38d460ef6655a15517cd1c987bf7c1650ade4f7c89f87806f"
+    },
+    {
+      "id": "packages/server/src/managed-db.ts#throw#KV433#6849ec162df6f46da5248c2642dd9ea433eafd0e8e9f9582b252820a4db67c6b#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/managed-db.ts",
+      "owner": "execute",
+      "expressionSha256": "6849ec162df6f46da5248c2642dd9ea433eafd0e8e9f9582b252820a4db67c6b"
+    },
+    {
+      "id": "packages/server/src/managed-db.ts#throw#KV433#7c14fe05d6c3817fa7ad06a8b7cfb29acf6d9f899ee42ba0e7080048b1ec361c#0",
+      "code": "KV433",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/managed-db.ts",
+      "owner": "execute",
+      "expressionSha256": "7c14fe05d6c3817fa7ad06a8b7cfb29acf6d9f899ee42ba0e7080048b1ec361c"
     },
     {
       "id": "packages/server/src/managed-db.ts#throw#KV433#a3f7016307dcf4c3b16d22bb05c73de52d2f3796250e5daba523a6ba236fca53#0",
