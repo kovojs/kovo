@@ -197,6 +197,9 @@ describe('ci-shards', () => {
     expect(rootTestJob).toContain('-n "kovo-root-timing-history-$shard"');
     expect(rootTestJob).toContain('scripts/ci-shards.mjs combine-histories');
     expect(rootTestJob).toContain(
+      'Timing history shard $shard is unavailable in run $run_id; continuing with available history.',
+    );
+    expect(rootTestJob).toContain(
       '--history "$RUNNER_TEMP/kovo-common-timing/timing-history.json"',
     );
     expect(rootTestJob).toContain('vitest --run --no-file-parallelism');

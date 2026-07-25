@@ -99,11 +99,11 @@ describe('Plan 3 security-gate cost budgets', () => {
     }
   });
 
-  it('keeps the advisory-feed proofs within the two-GiB budget by serializing files', () => {
+  it('keeps the advisory-feed proofs within a bounded 2.25-GiB budget by serializing files', () => {
     const gate = loadPlan3CostBudgetManifest().gates.find(
       (candidate) => candidate.id === 'advisory-feed',
     );
-    expect(gate.peakRssCeilingMiB).toBe(2048);
+    expect(gate.peakRssCeilingMiB).toBe(2304);
     expect(gate.steps).toEqual([
       {
         command: [

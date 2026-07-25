@@ -312,7 +312,9 @@ jobs:
           run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --branch main --status success --limit 100 --json databaseId,updatedAt --jq "[.[] | select(.updatedAt < \"$run_created_at\")][0].databaseId // \"\"")"
           if [ -n "$run_id" ]; then
             for shard in $(seq 1 "${{ matrix.total }}"); do
-              gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "kovo-root-timing-history-$shard" -D "$RUNNER_TEMP/kovo-prior-timing/shard-$shard"
+              if ! gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "kovo-root-timing-history-$shard" -D "$RUNNER_TEMP/kovo-prior-timing/shard-$shard"; then
+                echo "Timing history shard $shard is unavailable in run $run_id; continuing with available history."
+              fi
             done
           fi
           vp exec node scripts/ci-shards.mjs combine-histories --inputDir "$RUNNER_TEMP/kovo-prior-timing" --out "$RUNNER_TEMP/kovo-common-timing/timing-history.json"

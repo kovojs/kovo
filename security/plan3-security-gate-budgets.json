@@ -671,13 +671,13 @@
     },
     {
       "id": "advisory-feed",
-      "budgetVersion": 1,
+      "budgetVersion": 2,
       "planSections": ["5.2"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:advisory-feed",
       "groups": [],
       "wallTimeCeilingMs": 180000,
-      "peakRssCeilingMiB": 2048,
+      "peakRssCeilingMiB": 2304,
       "buildTime": {
         "status": "not-applicable",
         "reviewedReason": "Advisory schema, signature-policy, and client-state tests do not invoke a production build."

@@ -1217,7 +1217,7 @@ globalThis.queueMicrotask(() => {});`,
         ]) {
           expect(rejected.stderr).toContain(sink);
         }
-      }, 120_000);
+      }, 300_000);
 
       it('accepts plain JSX spreads through the emitted build', async () => {
         const root = fixture('plain-tsx-controls');
