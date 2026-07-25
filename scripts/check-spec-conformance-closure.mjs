@@ -83,9 +83,9 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
 const expectedDiagnosticEvidenceWitnessDigest =
-  '9129b08ee380ed03fb17366dc93b33216bd26b2b1f42508bc0dae241928ab71a';
+  'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
 const expectedDiagnosticActualLayerReviewDigest =
-  '2c782dd9ff9f645636cbf89aacc8ad97a650a230a0e9a110a91e3ae3d82344db';
+  '9b13cb492ebfda1473e75bb601be55f94831498ea2b3bc8df69c53a85342fcc0';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
