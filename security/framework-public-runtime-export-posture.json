@@ -848,7 +848,7 @@
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "dae2cdefbe2cf990a8dab3ae269157d808e9893eade3bf5edcdd11ca6610387a"
+      "sourceTreeSha256": "b0f1cedeea12be2b2048201de45051b95c62536c8a7c2d52dfc51602d9e639fe"
     },
     {
       "manifestVariants": [
