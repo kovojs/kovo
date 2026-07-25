@@ -12,6 +12,7 @@ import {
   type KovoVitePlugin,
   type KovoVitePluginOptions,
 } from '@kovojs/compiler';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
@@ -256,11 +257,11 @@ test('dev HMR client reloads the canonical document with server diagnostics', as
 
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/ProductCard.tsx',
-          message: 'JSX nesting violates the HTML content model.',
-        },
+        createRegisteredDiagnostic(
+          'KV225',
+          { fileName: 'src/components/ProductCard.tsx' },
+          { message: 'JSX nesting violates the HTML content model.' },
+        ),
       ],
       fileName: 'src/components/ProductCard.tsx',
       moduleHrefs: [failedModule],

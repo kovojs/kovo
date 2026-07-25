@@ -53,6 +53,8 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
       'Dev diagnostic surfacing test drives the Vite app-shell middleware ABI directly.',
   },
   'tests/integration/specs/hmr-dev-client.spec.ts': {
+    '@kovojs/core/internal/diagnostics':
+      'HMR diagnostic integration constructs a registered compiler diagnostic before exercising canonical document reload.',
     '@kovojs/server/internal/app-shell-vite':
       'HMR integration test drives the Vite app-shell middleware ABI directly.',
     '@kovojs/server/internal/wire':

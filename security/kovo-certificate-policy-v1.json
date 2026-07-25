@@ -30,7 +30,7 @@
     },
     {
       "path": "@kovojs/browser/dist/client.mjs",
-      "sha512": "sha512-xe7XhVH63aTUjS/+SEJIBDSjN2mLRH6/Mib2p4mEXneWTd7T+HaIpVPdr8+3juosWwYPAOPkplW3pN/BqpCdVA=="
+      "sha512": "sha512-86QAvYjMpOAkGK3gUvGWZjc2xNyRALlKwQljFIT6Db9y37sMbHO7rHmR+LOM6HbECVWcraG1yBSFy52pRUt6tA=="
     },
     {
       "path": "@kovojs/browser/dist/derive-BorkxMAn.mjs",
@@ -38,7 +38,7 @@
     },
     {
       "path": "@kovojs/browser/dist/generated.mjs",
-      "sha512": "sha512-afl4ajzZXJh8zV6qA6VY3vEbi2AU4sLsKrt8/suDn4lBC+qafgWGxVisJEz7cgfhJCqv0Q4znqe/f1IxyGnRUg=="
+      "sha512": "sha512-HRqcF69kRziIaN83xGXrUhIGXBZ1f4Unj+WI2aAQVprZSZne+P4MAuyIxUqXeTZoaYW4KLTMq8V9d5mekzv0lw=="
     },
     {
       "path": "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
@@ -54,11 +54,11 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs",
-      "sha512": "sha512-7/irNd8M5vaA6wJnSUbXZ5Ofy4WnvcE1TOuPD4s+IndN80clGvH8YjJ3sPRU+TBiPp5JcwskxctHIae8h7CVGA=="
+      "sha512": "sha512-CfOvkbmJyt+lx41prsfe6OrUZFr9WX8GmTg0FX8cwMKMOuNfYsQ+mPaGHZ40P5+N1vCK33P5EdQLHREcn6X8Tw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/inline-loader.mjs",
-      "sha512": "sha512-m52HHdeTatop51My/0MAPOAOMx99yrrhFB2yr3oFKuLAv+AY6UuD+LBq5QXL6+0GSpfMsAplrGw7+tbmJsEnvw=="
+      "sha512": "sha512-5O4/CvxfLbukXn8L0DjQ/DvtHN8lAV33FBkH+og5jKGQRJxUNxUfLCXSMTilnoysaNxsr7u14+fV6DC4CErkvw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/morph.mjs",
@@ -66,23 +66,23 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/mutation.mjs",
-      "sha512": "sha512-vtjuEvXbJj8mTt+RZtH1WawoPxY1tQCeM0xS6qITgVH0tXtc3ZZg1YWikHJIBnTtbKFcL2fZvnYu7Im/XqeBwg=="
+      "sha512": "sha512-mUIgMUypPn3ZQLEWext9dB5JP5XNF1zQbSjCQVkKezFbiYcOl+I1zNDp/bqL87KgkIXONLTZ+TCT8UOC/MUeJA=="
     },
     {
       "path": "@kovojs/browser/dist/internal/output.mjs",
       "sha512": "sha512-C92fjE8fLkMVarfwfIb/AF706a29FUM8KCKN9XR3Ek2p6nSbTztUgET63O4UBIaQx6jR2Nohrg90wCH2ZKoRHw=="
     },
     {
-      "path": "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
-      "sha512": "sha512-KgstsJk9VlbBHN1edNoGxcB21mhH89z+pJ30eGEte96cCikeMueJwYYecZBb74qMrD0pY7zD6+HUvQA75OM5zg=="
+      "path": "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
+      "sha512": "sha512-dIVFgWxW4AAY4TjQM77repsvI/mTjdMls53H3cusxW57l36G8e89v06lVqiaaH1ofwqsmA4eQOW9dah0umyOPQ=="
     },
     {
       "path": "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
       "sha512": "sha512-mYRXiUijT5j38ASuOFJQ/GJFGE2IofH6thhugh1IHeoyweA2sjw2xZS+NYPFDSnnZhTNz8CdcmGI20e+2XVeyw=="
     },
     {
-      "path": "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
-      "sha512": "sha512-ZJx9baXOD5CSRxfvPQjzaS8PvaiArXBmTFJOP368GB+qhhQ+BaM+y3pcHWsY/CTJnEqeWL9DV6mjZEb14gNfpA=="
+      "path": "@kovojs/browser/dist/optimism-DBgGST85.mjs",
+      "sha512": "sha512-QJunhz544/oUSLvM0fJYZBUPabE5b4M6qdL0lSBai8/kqyEBfsFYC61tlBUWzuV4hE9Sg+ti1uCcHWogPI74Qg=="
     },
     {
       "path": "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
@@ -130,7 +130,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-1EH9Q75QA1JlUCqkg7ejCT4HLbq/xMnufhlD6BOMu++ZkCd+C3LFwKe5XT1zF3GRq/930xtAqRZ1HZSvrITgKQ=="
+      "sha512": "sha512-09B7CTMc85PwQ0Yt3hzBfseZixLOQ67D6X/JWq9S69Unn9GT6SFvFJJPMQ4XVRga+XV2J5t/0spw1lehj325VQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",

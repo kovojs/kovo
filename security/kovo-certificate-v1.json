@@ -18,9 +18,9 @@
     "@kovojs/browser/dist/internal/morph.mjs",
     "@kovojs/browser/dist/internal/mutation.mjs",
     "@kovojs/browser/dist/internal/output.mjs",
-    "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+    "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
     "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
-    "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+    "@kovojs/browser/dist/optimism-DBgGST85.mjs",
     "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
     "@kovojs/browser/dist/query-events-1-51MysL.mjs",
     "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
@@ -252,9 +252,9 @@
     "@kovojs/browser/dist/internal/morph.mjs": [],
     "@kovojs/browser/dist/internal/mutation.mjs": [],
     "@kovojs/browser/dist/internal/output.mjs": [],
-    "@kovojs/browser/dist/loader-BgWx2tjS.mjs": [],
+    "@kovojs/browser/dist/loader-BgQkzjpS.mjs": [],
     "@kovojs/browser/dist/morph-DFOhlgH6.mjs": [],
-    "@kovojs/browser/dist/optimism-LoK78ZX_.mjs": [],
+    "@kovojs/browser/dist/optimism-DBgGST85.mjs": [],
     "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs": [],
     "@kovojs/browser/dist/query-events-1-51MysL.mjs": [],
     "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs": [],
@@ -1542,7 +1542,7 @@
     ],
     [
       "@kovojs/browser/dist/client.mjs",
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs"
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs"
     ],
     [
       "@kovojs/browser/dist/client.mjs",
@@ -1562,11 +1562,11 @@
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs"
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs"
     ],
     [
       "@kovojs/browser/dist/generated.mjs",
@@ -1638,7 +1638,7 @@
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs"
     ],
     [
       "@kovojs/browser/dist/internal/mutation.mjs",
@@ -1661,31 +1661,31 @@
       "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/handlers-BsEYJaMg.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs"
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/query-events-1-51MysL.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
-      "@kovojs/browser/dist/loader-BgWx2tjS.mjs",
+      "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
       "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
@@ -1697,27 +1697,27 @@
       "@kovojs/core/dist/internal/sink-policy.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/browser/dist/morph-DFOhlgH6.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/core/dist/internal/diagnostics.mjs"
     ],
     [
-      "@kovojs/browser/dist/optimism-LoK78ZX_.mjs",
+      "@kovojs/browser/dist/optimism-DBgGST85.mjs",
       "@kovojs/core/dist/internal/wire-input-grammar.mjs"
     ],
     [
@@ -5387,7 +5387,7 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
-  "policySha512": "sha512-1Lrc2Vf0q70F2jsl2rTZQjSMuIhZ4s6p44uzfq18dezUXhe1kFdyu6B27IoTqU6RZCp5e/JPBCKb3nGI86aLyg==",
+  "policySha512": "sha512-BNasiBsc5j3CLZ4n/qYbRpe89+ApLqOvCaJL2bk+KD99PBXMtIYbnTkMESwjz5c99oYIYC1fw02DXQiJISLfDQ==",
   "roots": [
     {
       "module": "@kovojs/better-auth/dist/index.mjs",

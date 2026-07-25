@@ -379,6 +379,7 @@ export function createHmrTargetSnapshotReader(
       const target = targetIdentity(element);
       const component = liveComponentIdentity(element);
       if (
+        target === null ||
         apply<boolean>(identityIsValid!, codec, [target]) !== true ||
         apply<boolean>(componentIsValid!, codec, [component]) !== true ||
         apply<boolean>(attestationIsValid!, codec, [attestation]) !== true ||

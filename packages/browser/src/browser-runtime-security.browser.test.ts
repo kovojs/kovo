@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 import { planFrameworkTargetRequestHeaders } from '@kovojs/core/internal/wire-input-grammar';
@@ -31,6 +31,21 @@ const originalInnerHtmlLowerDescriptor = Object.getOwnPropertyDescriptor(
 );
 const originalInnerHtmlDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, 'innerHTML');
 const originalOuterHtmlDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'outerHTML');
+const originalStartViewTransitionDescriptor = Object.getOwnPropertyDescriptor(
+  document,
+  'startViewTransition',
+);
+
+beforeEach(() => {
+  Object.defineProperty(document, 'startViewTransition', {
+    configurable: true,
+    value(callback: () => void) {
+      callback();
+      const settled = Promise.resolve();
+      return { finished: settled, ready: settled, updateCallbackDone: settled };
+    },
+  });
+});
 
 afterEach(() => {
   String.prototype.trim = originalTrim;
@@ -52,6 +67,11 @@ afterEach(() => {
   }
   if (originalOuterHtmlDescriptor !== undefined) {
     Object.defineProperty(Element.prototype, 'outerHTML', originalOuterHtmlDescriptor);
+  }
+  if (originalStartViewTransitionDescriptor === undefined) {
+    Reflect.deleteProperty(document, 'startViewTransition');
+  } else {
+    Object.defineProperty(document, 'startViewTransition', originalStartViewTransitionDescriptor);
   }
   document.body.replaceChildren();
   document.head

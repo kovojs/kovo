@@ -458,7 +458,7 @@ function scaffoldWithPackedCreateKovo(
       {
         private: true,
         type: 'module',
-        devDependencies: {
+        dependencies: {
           'create-kovo': fileSpec(creatorRoot, createKovoTarball),
         },
         pnpm: {
