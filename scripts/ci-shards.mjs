@@ -17,7 +17,7 @@ const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
 const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
-export const packedStarterWorkspacePackages = [
+const packedStarterWorkspacePackages = [
   { name: '@kovojs/core', dir: 'core' },
   { name: '@kovojs/style', dir: 'style' },
   { name: '@kovojs/browser', dir: 'browser' },

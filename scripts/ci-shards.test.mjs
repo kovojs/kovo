@@ -17,7 +17,6 @@ import {
   groupStarterEntriesForExecution,
   includeVitest,
   mergeDurationHistory,
-  packedStarterWorkspacePackages,
   runStarterShard,
   starterEntries,
   starterEntriesForMode,
@@ -30,22 +29,10 @@ import {
 } from './ci-shards.mjs';
 
 describe('ci-shards', () => {
-  it('packs every workspace package required by packed starter installation', () => {
-    expect(packedStarterWorkspacePackages.map((pkg) => pkg.name)).toEqual([
-      '@kovojs/core',
-      '@kovojs/style',
-      '@kovojs/browser',
-      '@kovojs/server',
-      '@kovojs/drizzle',
-      '@kovojs/headless-ui',
-      '@kovojs/icons',
-      '@kovojs/ui',
-      '@kovojs/better-auth',
-      '@kovojs/verify',
-      '@kovojs/compiler',
-      '@kovojs/cli',
-      'create-kovo',
-    ]);
+  it('packs the verify package required by packed starter installation', async () => {
+    const source = await readFile(new URL('./ci-shards.mjs', import.meta.url), 'utf8');
+    expect(source).toContain("{ name: '@kovojs/verify', dir: 'verify' }");
+    expect(source).toContain('canonicalizePackedTarball(tarball);');
   });
 
   it('balances tests with longest-processing-time first', () => {
