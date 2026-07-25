@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cookiePair,
+  decodeFrameworkIdentityToken,
   enhancedMutationHeaders,
   firstSetCookiePair,
   headerValues,
@@ -9,6 +10,12 @@ import {
 } from './headers.js';
 
 describe('@kovojs/test header fixtures', () => {
+  it('decodes canonical framework identity tokens for rendered scenario fixtures', () => {
+    expect(decodeFrameworkIdentityToken('product%20grid')).toBe('product grid');
+    expect(decodeFrameworkIdentityToken('product%2fgrid')).toBeUndefined();
+    expect(decodeFrameworkIdentityToken('%')).toBeUndefined();
+  });
+
   it('reads case-insensitive header record values', () => {
     expect(
       headerValues(

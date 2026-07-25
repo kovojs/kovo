@@ -5474,7 +5474,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./pglite",["default"]],
       ["./sqlite",["default"]],
       ["./test-case",["default"]],
-    ], ["kovo-source-tree-sha256:2bb9f3fbb1e42310cd3e14e56ad569e673c4bdd39124b4ba4b7fa70ab11445f4"]],
+    ], ["kovo-source-tree-sha256:4b42737435a26b9f32ebc5ef8df7fb9e7cd7f40e2ef96d93c8a0a6131894a825"]],
     ["sha256:00c0bece9507f985ab410b795a4e90e11d8dcee72e6fb64bbb1f1f497671c662", [
       ["./assertions",["default","types"]],
       ["./harness",["default","types"]],
@@ -5483,7 +5483,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./pglite",["default","types"]],
       ["./sqlite",["default","types"]],
       ["./test-case",["default","types"]],
-    ], ["kovo-packed-tree-sha256:4000eb3a939bc5f222756939ea65487a210808164388f30bd643e65a85e5e533"]],
+    ], ["kovo-packed-tree-sha256:6f631977cf53562996f10e4326a50a9f935f659398b38522f0643159fe574ff6"]],
     ["sha256:23d8b069bc142bad59bca7ac655c1599b481465bb819f2928927534e5399eb7b", [
       ["./assertions",["default","types"]],
       ["./harness",["default","types"]],
@@ -5492,7 +5492,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./pglite",["default","types"]],
       ["./sqlite",["default","types"]],
       ["./test-case",["default","types"]],
-    ], ["kovo-packed-tree-sha256:4000eb3a939bc5f222756939ea65487a210808164388f30bd643e65a85e5e533"]],
+    ], ["kovo-packed-tree-sha256:6f631977cf53562996f10e4326a50a9f935f659398b38522f0643159fe574ff6"]],
   ], "exact-implementation"],
   ["@kovojs/ui", "0.2.0", [
     ["sha256:33f0967bfcf7f2e00c790868ff57f13f5dc3b7b12049caf0282f6b260adf880a", [
@@ -5648,7 +5648,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.2.0", [
     ["sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a", [
 
-    ], ["kovo-packed-tree-sha256:acca1dd0a32871bb337025efaca00221a2c394251b657c89fa0585d4ed268d69","kovo-source-tree-sha256:3103088f6a0f6d265d94b449b8910997de3f4aa1f39bfcb0c7fa78a31400aa67"]],
+    ], ["kovo-packed-tree-sha256:acca1dd0a32871bb337025efaca00221a2c394251b657c89fa0585d4ed268d69","kovo-source-tree-sha256:1e6386b6e2588a63c99d4fe62e296b946fcec8f1bf8356b215e105a1e1a46be0"]],
     ["sha256:7e12bd4ad88296e801d099e9479c8ac74041631b8c5a39e9de873eef8e9f1873", [
 
     ], ["kovo-packed-tree-sha256:acca1dd0a32871bb337025efaca00221a2c394251b657c89fa0585d4ed268d69"]],
@@ -9715,7 +9715,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ["@kovojs/test", "authority-free", [], "none", null, [
     ["./assertions",["assertMutationError","propertyTest"]],
     ["./harness",["createKovoTestHarness"]],
-    ["./headers",["cookiePair","enhancedMutationHeaders","firstSetCookiePair","headerValues","setCookieValues"]],
+    ["./headers",["cookiePair","decodeFrameworkIdentityToken","enhancedMutationHeaders","firstSetCookiePair","headerValues","setCookieValues"]],
     ["./html-fragment",["fragmentHtml","htmlDocumentFacts","htmlElementCount","htmlElementFacts","htmlFormActions","htmlFormFacts","htmlFormFields","htmlFormFieldsByName","htmlKeyFacts","htmlKeyTextMap","htmlKeyValues","htmlLinkHrefs","htmlTextContent","kovoQueryJsonValues"]],
     ["./test-case",["kovoTest"]],
   ]],

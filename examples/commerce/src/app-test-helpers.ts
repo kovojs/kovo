@@ -1,10 +1,10 @@
 import {
+  decodeFrameworkIdentityToken,
   enhancedMutationHeaders,
   headerValues,
   setCookieValues,
   type EnhancedMutationLiveTarget,
 } from '@kovojs/test/headers';
-import { decodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import { readonlyDb, toNodeHandler } from '@kovojs/server';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';

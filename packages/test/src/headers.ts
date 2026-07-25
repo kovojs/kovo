@@ -1,5 +1,6 @@
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
+  decodeFrameworkIdentityToken as decodeFrameworkIdentityTokenInternal,
   encodeFrameworkFormTargetHeader,
   encodeFrameworkLiveTargetHeader,
   encodeFrameworkTargetHeader,
@@ -67,6 +68,16 @@ export function cookiePair(setCookie: string | undefined): string {
 /** Return the `name=value` pair of the first `set-cookie` on a `Headers` or {@link HeaderRecord}. */
 export function firstSetCookiePair(source: Headers | HeaderRecord | undefined): string {
   return cookiePair(setCookieValues(source)[0]);
+}
+
+/**
+ * Decode one canonical framework identity token captured from rendered test HTML.
+ *
+ * This test-only helper lets scenario suites inspect `kovo-deps` without depending on Kovo's
+ * internal wire-codec subpath (SPEC.md §9.1).
+ */
+export function decodeFrameworkIdentityToken(value: unknown): string | undefined {
+  return decodeFrameworkIdentityTokenInternal(value);
 }
 
 /** Structured mutation target selection for enhanced scenario requests. */

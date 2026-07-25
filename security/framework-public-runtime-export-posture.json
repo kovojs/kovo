@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "3103088f6a0f6d265d94b449b8910997de3f4aa1f39bfcb0c7fa78a31400aa67",
+      "sourceTreeSha256": "1e6386b6e2588a63c99d4fe62e296b946fcec8f1bf8356b215e105a1e1a46be0",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -10517,6 +10517,7 @@
             "./harness": ["createKovoTestHarness"],
             "./headers": [
               "cookiePair",
+              "decodeFrameworkIdentityToken",
               "enhancedMutationHeaders",
               "firstSetCookiePair",
               "headerValues",
@@ -10611,7 +10612,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "2bb9f3fbb1e42310cd3e14e56ad569e673c4bdd39124b4ba4b7fa70ab11445f4"
+      "sourceTreeSha256": "4b42737435a26b9f32ebc5ef8df7fb9e7cd7f40e2ef96d93c8a0a6131894a825"
     },
     {
       "manifestVariants": [
