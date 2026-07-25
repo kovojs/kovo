@@ -458,9 +458,6 @@ function scaffoldWithPackedCreateKovo(
       {
         private: true,
         type: 'module',
-        dependencies: {
-          'create-kovo': fileSpec(creatorRoot, createKovoTarball),
-        },
         pnpm: {
           overrides: tarballOverridesForRoot(creatorRoot, packedPackages),
         },
@@ -495,7 +492,7 @@ function scaffoldWithPackedCreateKovo(
     args.push('--postgres');
   }
 
-  execStarterCommand('pnpm', ['--dir', creatorRoot, 'exec', 'create-kovo', ...args], {
+  execStarterCommand(resolveStarterBin(creatorRoot, 'create-kovo'), args, {
     cwd: dirname(root),
     env: withStarterBinOnPath(creatorRoot),
     stdio: 'pipe',
