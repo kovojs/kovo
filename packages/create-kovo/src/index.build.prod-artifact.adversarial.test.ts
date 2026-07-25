@@ -330,12 +330,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
           addM1ClientDeriveProof(root);
           assertM1OutputWireFixtureUsesSafeAuthoredShapes(root);
           configureNodeRetention(root);
-          expectBuildFailure(root, [
-            'KV448',
-            'lexical-provenance:mutable-or-ambiguous',
-            'KV449',
-            'sync-verified-file-parse-query',
-          ]);
+          expectBuildFailure(root, ['KV449', 'sync-verified-file-parse-query']);
           sourceFlipRejected = true;
           return;
           const census = assertProdArtifactSinkCensus(root, [

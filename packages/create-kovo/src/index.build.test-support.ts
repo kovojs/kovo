@@ -432,12 +432,12 @@ export function addStorageMutationWriteProof(root: string): void {
     join(root, 'src/storage-mutation-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import { createMemoryStorage, mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server';",
+      "import { createMemoryStorage, mutation, mutationFormAttributes, publicAccess, publicScopedKey, s } from '@kovojs/server';",
       '',
       "import { appCsrf } from './auth.js';",
       '',
       'const storageMutationProof = createMemoryStorage();',
-      "await storageMutationProof.put('receipts/delete-target.txt', 'delete target');",
+      "await storageMutationProof.put(publicScopedKey('receipts/delete-target.txt'), 'delete target');",
       "const publicProof = publicAccess('public storage mutation capability proof');",
       '',
       'export const storageMutationWrite = mutation({',
@@ -446,13 +446,13 @@ export function addStorageMutationWriteProof(root: string): void {
       '  input: s.object({ mode: s.string() }),',
       '  async handler(input: { mode: string }) {',
       "    if (input.mode === 'put') {",
-      "      await storageMutationProof.put('receipts/mutation-put.txt', 'mutation put ok', {",
+      "      await storageMutationProof.put(publicScopedKey('receipts/mutation-put.txt'), 'mutation put ok', {",
       "        contentType: 'text/plain',",
       '      });',
       "      return { mode: 'put' };",
       '    }',
       "    if (input.mode === 'delete') {",
-      "      await storageMutationProof.delete('receipts/delete-target.txt');",
+      "      await storageMutationProof.delete(publicScopedKey('receipts/delete-target.txt'));",
       "      return { mode: 'delete' };",
       '    }',
       "    throw new Error('unsupported storage mutation proof mode');",
@@ -460,8 +460,8 @@ export function addStorageMutationWriteProof(root: string): void {
       '});',
       '',
       'export async function storageMutationStatus() {',
-      "  const put = await storageMutationProof.get('receipts/mutation-put.txt');",
-      "  const deleteTarget = await storageMutationProof.get('receipts/delete-target.txt');",
+      "  const put = await storageMutationProof.get(publicScopedKey('receipts/mutation-put.txt'));",
+      "  const deleteTarget = await storageMutationProof.get(publicScopedKey('receipts/delete-target.txt'));",
       '  return (',
       '    <main data-proof="storage-mutation">',
       '      <p id="storage-put">{put === undefined ? "missing" : "present"}</p>',
@@ -677,7 +677,7 @@ export function addStarterMutationDbScopeProof(
 ): void {
   const staticStructured = options.mode === 'static-structured';
   const proofMutations = staticStructured
-    ? ['starterAuthSessionTableWriteProof', 'starterAuthUserTableWriteProof']
+    ? ['starterAuthRateLimitTableWriteProof', 'starterAuthUserTableWriteProof']
     : ['starterAbsentTablesContactWriteProof', 'starterRawAuthTableWriteProof'];
   const proofImports = [
     ...(staticStructured ? [] : ['starterDbScopeStatusEndpoint']),
@@ -689,15 +689,15 @@ export function addStarterMutationDbScopeProof(
       ...(staticStructured ? [] : ["import { sql, trustedSql } from '@kovojs/drizzle';"]),
       staticStructured
         ? "import { mutation, publicAccess, s, serverValue } from '@kovojs/server';"
-        : "import { endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
+        : "import { endpoint, mutation, publicAccess, s, serverValue, type EndpointDbContext } from '@kovojs/server';",
       ...(staticStructured ? [] : ["import { eq } from 'drizzle-orm';"]),
       '',
       "import { appCsrf, type AppRequest } from './auth.js';",
-      ...(staticStructured ? [] : ["import { readonlyAppDb } from './db.js';"]),
+      ...(staticStructured ? [] : ["import type { AppDb } from './db.js';"]),
       "import { contact } from './model.js';",
       ...(staticStructured ? [] : ["import { contactsQuery } from './queries.js';"]),
       staticStructured
-        ? "import { session, user } from './schema.js';"
+        ? "import { rateLimit, user } from './schema.js';"
         : "import { contacts } from './schema.js';",
       '',
       "const publicProof = publicAccess('public starter mutation DB scope proof');",
@@ -708,17 +708,6 @@ export function addStarterMutationDbScopeProof(
       '',
       ...(staticStructured
         ? [
-            'async function starterAuthUserTableWrite(db: AppRequest["db"]) {',
-            '    await db.insert(user).values({',
-            '      createdAt: new Date(),',
-            "      email: 'starter-scope-proof-auth-user@example.com',",
-            '      emailVerified: false,',
-            "      id: serverValue('starter-scope-proof-auth-user', 'server-generated auth user drift id'),",
-            "      name: 'blocked auth user',",
-            '      updatedAt: new Date(),',
-            '    });',
-            '}',
-            '',
             'export const starterAuthUserTableWriteProof = mutation({',
             '  access: publicProof,',
             '  csrf: appCsrf,',
@@ -726,30 +715,29 @@ export function addStarterMutationDbScopeProof(
             "  registry: { tables: ['contacts'], touches: [contact] },",
             '  async handler(input: { marker: string }, request: AppRequest) {',
             '    void input;',
-            '    await starterAuthUserTableWrite(request.db);',
+            '    await request.db.insert(user).values({',
+            "      email: 'starter-scope-proof-auth-user@example.com',",
+            '      emailVerified: false,',
+            "      id: serverValue('starter-scope-proof-auth-user', 'server-generated auth user drift id'),",
+            "      name: 'blocked auth user',",
+            '    });',
             '    return { ok: true };',
             '  },',
             '});',
             '',
-            'async function starterAuthSessionTableWrite(db: AppRequest["db"]) {',
-            '    await db.insert(session).values({',
-            '      createdAt: new Date(),',
-            '      expiresAt: new Date(60_000),',
-            "      id: serverValue('starter-scope-proof-auth-session', 'server-generated auth session drift id'),",
-            "      token: 'starter-scope-proof-auth-session-token',",
-            '      updatedAt: new Date(),',
-            "      userId: 'demo-user',",
-            '    });',
-            '}',
-            '',
-            'export const starterAuthSessionTableWriteProof = mutation({',
+            'export const starterAuthRateLimitTableWriteProof = mutation({',
             '  access: publicProof,',
             '  csrf: appCsrf,',
             '  input: proofInput,',
             "  registry: { tables: ['contacts'], touches: [contact] },",
             '  async handler(input: { marker: string }, request: AppRequest) {',
             '    void input;',
-            '    await starterAuthSessionTableWrite(request.db);',
+            '    await request.db.insert(rateLimit).values({',
+            '      count: 1,',
+            "      id: serverValue('starter-scope-proof-auth-rate-limit', 'server-generated auth rate-limit drift id'),",
+            "      key: 'starter-scope-proof-auth-rate-limit-key',",
+            '      lastRequest: 1,',
+            '    });',
             '    return { ok: true };',
             '  },',
             '});',
@@ -808,12 +796,14 @@ export function addStarterMutationDbScopeProof(
             "  auth: { justification: 'public starter mutation DB scope proof', kind: 'none' },",
             '  csrf: false,',
             "  csrfJustification: 'read-only starter mutation DB scope proof',",
-            '  async handler(_request: Request) {',
-            '    const contactRows = await readonlyAppDb',
+            '  db: true,',
+            '  async handler(_request: Request, context: EndpointDbContext<AppDb>) {',
+            "    const scoped = await context.actAs('demo-user');",
+            '    const contactRows = await scoped.db.read',
             '      .select({ id: contacts.id })',
             '      .from(contacts)',
             '      .where(eq(contacts.email, STARTER_DB_SCOPE_CONTACT_EMAIL));',
-            '    const absentContactRows = await readonlyAppDb',
+            '    const absentContactRows = await scoped.db.read',
             '      .select({ id: contacts.id })',
             '      .from(contacts)',
             "      .where(eq(contacts.email, 'starter-scope-proof-absent-tables@example.com'));",
@@ -1730,29 +1720,30 @@ export function addEscapedAttackerTextProof(root: string): void {
   );
 
   const appPath = join(root, 'src/app.tsx');
-  const app = readFileSync(appPath, 'utf8')
-    .replace(
-      "import { contactsQuery } from './queries.js';",
-      [
-        "import { contactsQuery } from './queries.js';",
-        "import { attackerMarkup } from './raw-helper.js';",
-      ].join('\n'),
-    )
-    .replace(
+  let app = readFileSync(appPath, 'utf8');
+  const importAnchor = app.includes("import { contactsQuery } from './queries.js';")
+    ? "import { contactsQuery } from './queries.js';"
+    : "import { addContact } from './mutations.js';";
+  app = replaceRequired(
+    app,
+    importAnchor,
+    [importAnchor, "import { attackerMarkup } from './raw-helper.js';"].join('\n'),
+    'escaped attacker text proof import',
+  ).replace(
+    "    route('/', {",
+    [
+      "    route('/xss-escape-proof', {",
+      "      access: publicAccess('public output escaping regression proof'),",
+      "      meta: { title: 'Output escaping proof' },",
+      '      layout: AppLayout,',
+      '      stylesheets,',
+      '      page() {',
+      '        return <main data-proof="xss-escape">{attackerMarkup()}</main>;',
+      '      },',
+      '    }),',
       "    route('/', {",
-      [
-        "    route('/xss-escape-proof', {",
-        "      access: publicAccess('public output escaping regression proof'),",
-        "      meta: { title: 'Output escaping proof' },",
-        '      layout: AppLayout,',
-        '      stylesheets,',
-        '      page() {',
-        '        return <main data-proof="xss-escape">{attackerMarkup()}</main>;',
-        '      },',
-        '    }),',
-        "    route('/', {",
-      ].join('\n'),
-    );
+    ].join('\n'),
+  );
   writeFileSync(appPath, app, 'utf8');
 }
 
@@ -2421,32 +2412,17 @@ export function addSecretViewEgressProof(root: string): void {
     'utf8',
   );
 
-  const queriesPath = join(root, 'src/queries.ts');
-  let queries = readFileSync(queriesPath, 'utf8');
-  queries = replaceRequired(
-    queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    [
-      "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-      "import { pgView } from 'drizzle-orm/pg-core';",
-    ].join('\n'),
-    'secret view proof imports',
+  const schemaPath = join(root, 'src/schema.ts');
+  let schema = replaceRequired(
+    readFileSync(schemaPath, 'utf8'),
+    "import { bigint, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    "import { bigint, boolean, integer, pgTable, pgView, text, timestamp } from 'drizzle-orm/pg-core';",
+    'secret view proof schema import',
   );
-  queries = replaceRequired(
-    queries,
-    "import { contacts } from './schema.js';",
+  schema = replaceRequired(
+    schema,
+    "export const verification = pgTable('verification', {",
     [
-      "import { account, contacts } from './schema.js';",
-      "import { readonlyAppDb } from './db.js';",
-    ].join('\n'),
-    'secret view proof imports',
-  );
-  queries = replaceRequired(
-    queries,
-    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
-    [
-      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
-      '',
       'export const accountSecretView = pgView("account_secret_view").as((qb) =>',
       '  qb',
       '    .select({',
@@ -2456,6 +2432,26 @@ export function addSecretViewEgressProof(root: string): void {
       '    })',
       '    .from(account),',
       ');',
+      '',
+      "export const verification = pgTable('verification', {",
+    ].join('\n'),
+    'secret view proof schema declaration',
+  );
+  writeFileSync(schemaPath, schema, 'utf8');
+
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { contacts } from './schema.js';",
+    "import { accountSecretView, contacts } from './schema.js';",
+    'secret view proof imports',
+  );
+  queries = replaceRequired(
+    queries,
+    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+    [
+      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
       'export interface SecretViewEgressRow {',
       '  readonly [key: string]: JsonValue;',
@@ -2471,8 +2467,9 @@ export function addSecretViewEgressProof(root: string): void {
       'export const secretViewEgressQuery = query({',
       '  access: [appAuthed],',
       '  reads: [],',
-      '  async load(): Promise<SecretViewEgressResult> {',
-      '    const db = readonlyAppDb as unknown as { select: typeof readonlyAppDb.select };',
+      '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<SecretViewEgressResult> {',
+      '    const db = context?.db;',
+      '    if (!db) throw new Error("query requires framework-provided context.db");',
       '    const items = await db',
       '      .select({',
       '        id: accountSecretView.id,',
@@ -2681,7 +2678,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    const db = context?.db;',
       '    if (!db) throw new Error("query requires framework-provided context.db");',
       '    const items = await db',
       '      .select({ id: runtimeSecretProof.id, leaked: runtimeSecretProof.classified })',
@@ -2695,7 +2692,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretFunctionProofDomain],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    const db = context?.db;',
       '    if (!db) throw new Error("query requires framework-provided context.db");',
       '    const items = await db',
       '      .select({',
@@ -2713,7 +2710,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretWholeProofDomain],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    const db = context?.db;',
       '    if (!db) throw new Error("query requires framework-provided context.db");',
       '    const items = await db',
       '      .select({ id: runtimeSecretWholeProof.id, label: runtimeSecretWholeProof.label })',
@@ -2727,7 +2724,7 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '  output: s.object({ items: s.array(runtimeSecretBoundaryRowSchema) }),',
       '  reads: [runtimeSecretProofDomain],',
       '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
-      '    const db: Reader<AppDb> | undefined = context?.db;',
+      '    const db = context?.db;',
       '    if (!db) throw new Error("query requires framework-provided context.db");',
       '    const items = await db',
       '      .select({',

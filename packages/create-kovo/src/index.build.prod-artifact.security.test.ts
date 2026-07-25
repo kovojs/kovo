@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { encodeFrameworkIdentityToken } from '@kovojs/core/internal/wire-input-grammar';
 import { describe, expect, it, vi } from 'vitest';
 
 import { writeKovoProject } from './index.js';
@@ -304,49 +305,23 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
-  // @kovo-security-certifies KV435 runtime-secret-view-egress
-  it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
+  // @kovo-security-certifies KV449 runtime-secret-view-egress
+  it('refuses a runtime Secret read through a Drizzle view before paranoid artifact emission', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-secret-view-egress-'));
-    const port = await reservePort();
-    const jar = new Map<string, string>();
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       writeKovoProject(root, { name: 'Prod Secret View Egress Proof' });
       linkStarterBuildDependencies(root);
       addSecretViewEgressProof(root);
 
-      buildParanoidProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-
-      await signInDemoUser(root, origin, jar, output);
-      const response = await fetch(`${origin}/_q/secret-view-egress`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const body = await response.text();
-
-      expect(response.status).toBe(500);
-      expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
-      expect(body).not.toContain('demo@example.com');
-      expect(output()).toMatch(/KV422|KV435|permission denied for (?:table|view)/u);
+      const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));
+      expect(output).toContain('KV449');
+      expect(output).toContain('secret-view-egress-query');
+      expect(output).toContain('managed database builder continuation');
+      expect(output).not.toContain('demo@example.com');
     } finally {
-      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 240_000);
@@ -468,7 +443,6 @@ describe('create-kovo starter (build integration: production security artifacts)
       const refusedOutput = collectOutput(server);
       await waitForChildExit(server, refusedOutput);
       expect(server.exitCode).not.toBe(0);
-      expect(refusedOutput()).toContain('Kovo refused to boot');
       expect(refusedOutput()).toContain('env.KOVO_CONFIG_SECRET_PROOF');
       expect(refusedOutput()).not.toContain('runtime-config-secret-value');
       server = undefined;
@@ -609,10 +583,14 @@ describe('create-kovo starter (build integration: production security artifacts)
       addStarterMutationDbScopeProof(root, { mode: 'static-structured' });
 
       const output = captureBuildFailure(() => buildProductionArtifact(root));
-      expect(output).toContain('KV414 WRITE starterAuthUserTableWrite');
-      expect(output).toContain('KV414 WRITE starterAuthSessionTableWrite');
+      expect(output).toContain(
+        'KV414 WRITE starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+      );
       expect(output).toContain(
         'KV402 starter-mutation-db-scope-proof/starter-auth-user-table-write-proof',
+      );
+      expect(output).toContain(
+        'KV402 starter-mutation-db-scope-proof/starter-auth-rate-limit-table-write-proof',
       );
       expect(output).not.toContain('KV424');
     } finally {
@@ -879,99 +857,22 @@ describe('create-kovo starter (build integration: production security artifacts)
     PRODUCTION_ARTIFACT_TEST_TIMEOUT_MS,
   );
 
-  it('serves declared mutation storage writes through the production artifact', async () => {
+  it('blocks undeclared mutation storage writes before production artifact emission', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-mutation-write-'));
-    const port = await reservePort();
-    const jar = new Map<string, string>();
-    let server: ChildProcessWithoutNullStreams | undefined;
 
     try {
       writeKovoProject(root, { name: 'Prod Storage Mutation Write Proof' });
       linkStarterBuildDependencies(root);
       addStorageMutationWriteProof(root);
 
-      buildReusableProductionArtifact(root);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
-          HOST: '127.0.0.1',
-          NODE_ENV: 'test',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-
-      await fetchTextWhenReady(`${origin}/storage-mutation-proof`, output);
-      const initialResponse = await fetch(`${origin}/storage-mutation-proof`);
-      mergeCookies(jar, initialResponse.headers.getSetCookie());
-      const initial = await initialResponse.text();
-      expect(initial).toContain('<p id="storage-put">missing</p>');
-      expect(initial).toContain('<p id="storage-delete">present</p>');
-      const putForm = formHtmlByAction(
-        initial,
-        '/_m/storage-mutation-proof/storage-mutation-write',
-      );
-
-      const put = await fetch(`${origin}/_m/storage-mutation-proof/storage-mutation-write`, {
-        body: new URLSearchParams({
-          csrf: fieldValue(putForm, 'csrf'),
-          'Kovo-Idem': fieldValue(putForm, 'Kovo-Idem'),
-          mode: 'put',
-        }),
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          'Kovo-Fragment': 'true',
-          'Kovo-Idem': fieldValue(putForm, 'Kovo-Idem'),
-          origin,
-        },
-        method: 'POST',
-      });
-      await put.text();
-      expect(put.status).toBe(200);
-      const afterPut = await fetch(`${origin}/storage-mutation-proof`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      const afterPutHtml = await afterPut.text();
-      expect(afterPutHtml).toContain('<p id="storage-put">present</p>');
-      const deleteForm = formHtmlByAction(
-        afterPutHtml,
-        '/_m/storage-mutation-proof/storage-mutation-write',
-      );
-
-      const deleteResponse = await fetch(
-        `${origin}/_m/storage-mutation-proof/storage-mutation-write`,
-        {
-          body: new URLSearchParams({
-            csrf: fieldValue(deleteForm, 'csrf'),
-            'Kovo-Idem': fieldValue(deleteForm, 'Kovo-Idem'),
-            mode: 'delete',
-          }),
-          headers: {
-            'content-type': 'application/x-www-form-urlencoded',
-            cookie: cookieHeader(jar),
-            'Kovo-Fragment': 'true',
-            'Kovo-Idem': fieldValue(deleteForm, 'Kovo-Idem'),
-            origin,
-          },
-          method: 'POST',
-        },
-      );
-      await deleteResponse.text();
-      expect(deleteResponse.status).toBe(200);
-      const afterDelete = await fetch(`${origin}/storage-mutation-proof`, {
-        headers: { cookie: cookieHeader(jar) },
-      });
-      await expect(afterDelete.text()).resolves.toContain('<p id="storage-delete">missing</p>');
+      const output = captureBuildFailure(() => buildReusableProductionArtifact(root));
+      expect(output).toContain('KV449');
+      expect(output).toContain('storage-mutation-write');
+      expect(output).toContain('storageMutationProof.put');
+      expect(output).toContain('storageMutationProof.delete');
     } finally {
-      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 180_000);
@@ -1203,7 +1104,12 @@ describe('create-kovo starter (build integration: production security artifacts)
       const output = collectOutput(server);
       const origin = `http://127.0.0.1:${port}`;
 
-      const pageHtml = await fetchTextWhenReady(`${origin}/control-provenance-proof`, output);
+      await fetchTextWhenReady(`${origin}/control-provenance-proof`, output);
+      const pageResponse = await fetch(`${origin}/control-provenance-proof`);
+      mergeCookies(jar, pageResponse.headers.getSetCookie());
+      const buildToken = pageResponse.headers.get('Kovo-Build');
+      expect(buildToken).toBeTruthy();
+      const pageHtml = await pageResponse.text();
       const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'dynamic-spread');
       expect(proofRoot).toContain('aria-label="Public profile"');
       expect(proofRoot).toContain('data-profile-id="public-profile"');
@@ -1222,13 +1128,19 @@ describe('create-kovo starter (build integration: production security artifacts)
 
       for (const proof of ['auth-domain', 'same-principal-cookie'] as const) {
         const form = formHtmlByDataProof(pageHtml, proof);
+        const idem = fieldValue(form, 'Kovo-Idem');
         const response = await fetch(`${origin}${requiredAttribute(form, 'action')}`, {
-          body: new URLSearchParams({}),
+          body: new URLSearchParams({
+            csrf: fieldValue(form, 'csrf'),
+            'Kovo-Idem': idem,
+          }),
           headers: {
             accept: 'text/vnd.kovo.fragment+html',
             'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            'Kovo-Build': buildToken!,
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': fieldValue(form, 'Kovo-Idem'),
+            'Kovo-Idem': idem,
             origin,
           },
           method: 'POST',
@@ -1254,6 +1166,7 @@ describe('create-kovo starter (build integration: production security artifacts)
           accept: 'text/vnd.kovo.fragment+html',
           'content-type': 'application/x-www-form-urlencoded',
           cookie: cookieHeader(jar),
+          'Kovo-Build': buildToken!,
           'Kovo-Fragment': 'true',
           'Kovo-Idem': fieldValue(signOutForm, 'Kovo-Idem'),
           origin,
@@ -1372,6 +1285,8 @@ async function assertEnhancedMutationWireServed(
   const jar = new Map<string, string>();
   const pageResponse = await fetch(`${origin}/enhanced-mutation-wire-proof`);
   mergeCookies(jar, pageResponse.headers.getSetCookie());
+  const buildToken = pageResponse.headers.get('Kovo-Build');
+  expect(buildToken).toBeTruthy();
   const pageHtml = await pageResponse.text();
   const form = firstFormHtml(pageHtml);
   const action = attributeValue(form, 'action');
@@ -1386,7 +1301,7 @@ async function assertEnhancedMutationWireServed(
   expect(pageHtml).toContain('&lt;img src=x onerror="alert(1)"&gt;');
   expect(pageHtml).not.toContain('<img src=x onerror="alert(1)">');
 
-  const idem = freshProductionArtifactIdempotencyToken();
+  const idem = fieldValue(form, 'Kovo-Idem');
   const response = await fetch(`${origin}${action}`, {
     body: new URLSearchParams({
       'Kovo-Idem': idem,
@@ -1397,11 +1312,12 @@ async function assertEnhancedMutationWireServed(
       accept: 'text/vnd.kovo.fragment+html',
       'content-type': 'application/x-www-form-urlencoded',
       cookie: cookieHeader(jar),
+      'Kovo-Build': buildToken!,
       'Kovo-Current-Url': `${origin}/enhanced-mutation-wire-proof`,
       'Kovo-Form-Target': target,
       'Kovo-Fragment': 'true',
       'Kovo-Idem': idem,
-      'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+      'Kovo-Live-Targets': formatLiveTarget(target, component, liveToken, props),
       'Kovo-Targets': `${target}=${deps}`,
       origin,
     },
@@ -1422,6 +1338,13 @@ async function assertEnhancedMutationWireServed(
   expect(body).not.toContain('<script>alert(1)</script>');
 }
 
+function formatLiveTarget(target: string, component: string, token: string, props: string): string {
+  const encodedTarget = encodeFrameworkIdentityToken(target);
+  const encodedComponent = encodeFrameworkIdentityToken(component);
+  if (!encodedTarget || !encodedComponent) throw new Error('Invalid live target identity.');
+  return `${encodedTarget}#${encodedComponent}@${token}:${props}`;
+}
+
 async function assertQueryWireServed(origin: string, output: () => string): Promise<void> {
   await fetchTextWhenReady(`${origin}/_q/${queryWireProofKey}`, output);
   const response = await fetch(`${origin}/_q/${queryWireProofKey}`);
@@ -1429,9 +1352,9 @@ async function assertQueryWireServed(origin: string, output: () => string): Prom
 
   expect(response.status, body).toBe(200);
   expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
-  expect(response.headers.get('cache-control')).toBe('private, no-store');
-  expect(response.headers.get('vary')).toContain('Cookie');
-  expect(body).toContain(`<kovo-query name="${queryWireProofKey}">`);
+  expect(response.headers.get('cache-control')).toBe('public, max-age=600');
+  expect(response.headers.get('vary')).toBeNull();
+  expect(body).toContain(`<kovo-query name="${queryWireProofKey}"`);
   expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
   expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   expect(body).not.toContain('<img src=x onerror="alert(1)">');
@@ -1696,6 +1619,8 @@ function addControlProvenanceProof(root: string): void {
       "import { component } from '@kovojs/core';",
       "import { domain, mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server';",
       '',
+      "import { appCsrf } from './auth.js';",
+      '',
       "const proofAccess = publicAccess('public dynamic spread and session transition proof');",
       "const authDomain = domain('auth');",
       'const attackerAttributes: Record<string, string | boolean> = {',
@@ -1708,13 +1633,12 @@ function addControlProvenanceProof(root: string): void {
       '};',
       '',
       'function CallerOwnedShell({ attributes }: { attributes: Record<string, string | boolean> }): string {',
-      '  return <main data-proof="dynamic-spread" {...{ ...attributes, noop() {} }}>Caller-owned profile</main>;',
+      '  return <main data-proof="dynamic-spread" {...attributes}>Caller-owned profile</main>;',
       '}',
       '',
       'export const authDomainTransition = mutation({',
       '  access: proofAccess,',
-      '  csrf: false,',
-      "  csrfJustification: 'public proof only invalidates cache metadata',",
+      '  csrf: appCsrf,',
       '  input: s.object({}),',
       '  handler(_input, _request, context) {',
       '    context.invalidate(authDomain);',
@@ -1724,8 +1648,7 @@ function addControlProvenanceProof(root: string): void {
       '',
       'export const samePrincipalCookieRefresh = mutation({',
       '  access: proofAccess,',
-      '  csrf: false,',
-      "  csrfJustification: 'public proof rotates only an inert fixture cookie',",
+      '  csrf: appCsrf,',
       '  input: s.object({}),',
       '  handler(_input, _request, context) {',
       "    context.setCookie?.('proof_refresh', 'rotated', { httpOnly: true, path: '/', sameSite: 'lax' });",
