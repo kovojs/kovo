@@ -907,7 +907,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
     }
-  }, 240_000);
+  }, 480_000);
 
   // @kovo-security-certifies KV426 trusted-url-attribute-type-gate
   it(

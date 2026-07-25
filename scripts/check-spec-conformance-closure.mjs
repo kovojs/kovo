@@ -126,7 +126,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'e7ffee6190f6ba8d1b268c7d427f111b926710714bd684de7bcb30572d7ded5c'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '1fd0482b5ac77891f2a7534b80bc7d42059cdb7725528e88cb6498d57a369fc5',
+    '5d08cc92f5f6126563422a907201be02da054db102ae01459cfd837a7ef3e486',
   ],
   [
     'packages/cli/src/commands/compile.ts',

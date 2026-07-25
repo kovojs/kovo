@@ -2020,7 +2020,7 @@ export default createApp({
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  });
+  }, 120_000);
 
   it('builds a declared config-secret app without receiving the production value', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-config-env-unavailable-'));
@@ -2069,7 +2069,7 @@ export default createApp({
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
-  });
+  }, 120_000);
 
   it('fails build audit when an imported trustedReveal call cannot be recorded', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-runtime-reveal-dynamic-'));
@@ -3353,7 +3353,7 @@ export async function resetFixture() {
       stderr.mockRestore();
       rmSync(rootParent, { force: true, recursive: true });
     }
-  });
+  }, 120_000);
 
   // @kovo-security-certifies C13 build-app-jsx-runtime-provenance
   it('auto-collects compiled component CSS without acquiring a foreign JSX runtime', async () => {

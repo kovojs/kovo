@@ -7,12 +7,20 @@ import {
   type KovoGraphOptimisticFact,
 } from './graph-fixtures.ts';
 
+const CONFORMANCE_BUILD_TOKEN = 'conformance-runtime-test-build';
+
+interface QueryIdentityFact {
+  key?: string;
+  name: string;
+}
+
 function sameOriginMutationResponse<ResponseShape extends object>(
   path: string,
   response: ResponseShape,
 ): ResponseShape & {
   headers: { get(name: string): string | null };
   ok: true;
+  redirected: false;
   status: 200;
   url: string;
 } {
@@ -24,10 +32,12 @@ function sameOriginMutationResponse<ResponseShape extends object>(
         if (name.toLowerCase() === 'content-type') {
           return 'text/vnd.kovo.fragment+html';
         }
+        if (name.toLowerCase() === 'kovo-build') return CONFORMANCE_BUILD_TOKEN;
         return responseHeaders?.get?.(name) ?? null;
       },
     },
     ok: true,
+    redirected: false,
     status: 200,
     url: `http://localhost${path}`,
   };
@@ -66,7 +76,7 @@ export interface OptimismCleanupRuntime {
     changes: unknown[];
     fragments: unknown[];
     idem?: string;
-    queries: string[];
+    queries: QueryIdentityFact[];
     targets: unknown[];
   }>;
 }
@@ -81,11 +91,11 @@ export interface EnhancedMutationRuntime {
   };
   submitEnhancedMutation: (options: unknown) => Promise<{
     changes: Array<{ domain: string; keys?: string[] }>;
-    queries: string[];
+    queries: QueryIdentityFact[];
   }>;
   submitOptimisticEnhancedMutation: (options: unknown) => Promise<{
     changes: Array<{ domain: string; keys?: string[] }>;
-    queries: string[];
+    queries: QueryIdentityFact[];
   }>;
 }
 
@@ -182,7 +192,7 @@ export interface OptimismCleanupBehaviorFact {
     changes: unknown[];
     fragments: unknown[];
     idem?: string;
-    queries: string[];
+    queries: QueryIdentityFact[];
     targets: unknown[];
   };
   storeValues: {
@@ -200,21 +210,21 @@ export interface EnhancedMutationBehaviorFact {
     }>;
     fetchHeaders: unknown;
     resultChanges: Array<{ domain: string; keys?: string[] }>;
-    resultQueries: string[];
+    resultQueries: QueryIdentityFact[];
     storeValue: unknown;
   };
   malformedHeader: {
     errorCount: number;
     errorMessagePrefixMatches: boolean;
     resultChanges: Array<{ domain: string; keys?: string[] }>;
-    resultQueries: string[];
+    resultQueries: QueryIdentityFact[];
   };
   optimistic: {
     fetchIdemHeader: unknown;
     pendingAfterResponse: string | null;
     pendingDuringFetch: string | null;
     resultChanges: Array<{ domain: string; keys?: string[] }>;
-    resultQueries: string[];
+    resultQueries: QueryIdentityFact[];
     storeAfterResponse: unknown;
     storeDuringFetch: unknown;
   };
@@ -591,6 +601,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   let fetchStoreDuringOptimism: unknown;
   store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
   const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
     fetch: async () => {
       fetchStoreDuringOptimism = store.get('reviews', 'product:p1');
       return sameOriginMutationResponse('/_m/reviews/add', {
@@ -681,7 +692,11 @@ export async function optimismCleanupBehaviorFact(
   const dispose = runtime.installPagehideOptimismCleanup({
     discardPendingOptimism() {
       const discarded = rebaser.discardPendingOptimism();
-      runtime.stampPendingQueries(pendingRoot, discarded, false);
+      runtime.stampPendingQueries(
+        pendingRoot,
+        (discarded as string[]).map((name) => ({ kind: 'family', name })),
+        false,
+      );
       return discarded;
     },
     root: lifecycleRoot,
@@ -701,6 +716,7 @@ export async function optimismCleanupBehaviorFact(
   const formData = new FormData();
   formData.set('quantity', '2');
   const submit = runtime.submitOptimisticEnhancedMutation({
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
     fetch(_url: string, options: unknown) {
       fetchOptions = options;
       return new Promise((resolve) => {
@@ -718,7 +734,7 @@ export async function optimismCleanupBehaviorFact(
     },
     form: { action: '/_m/cart/add', method: 'post' },
     formData,
-    idem: 'idem_bfcache',
+    idem: 'v1_1750000000000_00000000000000000000000000000021',
     input: { quantity: 2 },
     optimistic: {
       transforms: {
@@ -823,13 +839,15 @@ export async function enhancedMutationBehaviorFact(
     },
     form: { action: '/_m/cart/add', method: 'post' },
     formData: new FormData(),
-    idem: 'idem_change_record',
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
+    idem: 'v1_1750000000000_00000000000000000000000000000022',
     root: noFragmentRoot,
     store: enhancedStore,
   });
 
   const malformedHeaderErrors: Error[] = [];
   const malformedResult = await runtime.submitEnhancedMutation({
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
     fetch: async () =>
       sameOriginMutationResponse('/_m/cart/add', {
         headers: {
@@ -858,6 +876,7 @@ export async function enhancedMutationBehaviorFact(
   let optimisticStoreDuringFetch: unknown;
   let optimisticPendingDuringFetch: string | null = null;
   const optimisticResult = await runtime.submitOptimisticEnhancedMutation({
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
     fetch: async (_url: string, options: { headers?: Record<string, unknown> }) => {
       optimisticFetchIdemHeader = options.headers?.['Kovo-Idem'];
       optimisticStoreDuringFetch = optimisticStore.get('reviews', 'product:p1');
@@ -876,7 +895,7 @@ export async function enhancedMutationBehaviorFact(
     form: { action: '/_m/reviews/add', method: 'post' },
     formData: new FormData(),
     change: { domain: 'product', keys: ['p1'], input: { reviewId: 'draft' } },
-    idem: 'idem_optimistic_change',
+    idem: 'v1_1750000000000_00000000000000000000000000000023',
     input: { reviewId: 'unused' },
     optimistic: {
       keys: { reviews: (change: { keys?: string[] }) => `product:${change.keys?.[0]}` },

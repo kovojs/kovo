@@ -1,16 +1,35 @@
 import { readFileSync } from 'node:fs';
 
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 
-import { galleryInteractiveClientModuleBindings } from '../../examples/gallery/src/app-shell.js';
+import {
+  galleryInteractiveClientModuleBindings,
+  galleryInteractiveSupportClientModuleHrefs,
+} from '../../examples/gallery/src/app-shell.js';
 import { rewriteGalleryClientModuleHrefs } from '../../examples/gallery/src/client-module-manifest.js';
 
 import {
   compileGalleryInteractiveClientModule,
   compileGalleryInteractiveServerModule,
+  registerGalleryInteractiveSupportClientModules,
 } from './gallery.js';
 
 describe('site gallery client module parity', () => {
+  it('registers the same transitive support-module representations as the gallery app shell', () => {
+    const support = registerGalleryInteractiveSupportClientModules(
+      createMemoryVersionedClientModuleRegistry(),
+    );
+    const siteHrefs = [
+      support.runtimeHref,
+      support.primitiveActionsGeneratedHref,
+      support.primitiveActionsHref,
+      ...support.headlessUiModuleHrefs.values(),
+    ];
+
+    expect(new Set(siteHrefs)).toEqual(new Set(galleryInteractiveSupportClientModuleHrefs));
+  });
+
   it('rebases combobox refs to the exact final representation registered by the app shell', () => {
     const demoName = 'combobox-demo';
     const source = readFileSync(

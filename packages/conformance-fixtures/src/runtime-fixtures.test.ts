@@ -461,7 +461,7 @@ describe('@kovojs/test runtime fixture facts', () => {
           headers: {
             Accept: 'text/vnd.kovo.fragment+html',
             'Kovo-Fragment': 'true',
-            'Kovo-Idem': 'idem_bfcache',
+            'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000021',
             'Kovo-Targets': '',
           },
           keepalive: true,
@@ -473,7 +473,7 @@ describe('@kovojs/test runtime fixture facts', () => {
           appliedFragments: [],
           changes: [],
           fragments: [],
-          idem: 'idem_bfcache',
+          idem: 'v1_1750000000000_00000000000000000000000000000021',
           queries: ['cart'],
           targets: [],
         };
@@ -496,7 +496,10 @@ describe('@kovojs/test runtime fixture facts', () => {
         afterPagehide: { 'kovo-deps': 'cart' },
       },
       pendingCounts: { afterSubmit: 1, afterPagehide: 0, afterResponse: 0 },
-      result: { idem: 'idem_bfcache', queries: ['cart'] },
+      result: {
+        idem: 'v1_1750000000000_00000000000000000000000000000021',
+        queries: ['cart'],
+      },
       storeValues: {
         afterSubmit: { count: 3 },
         afterPagehide: { count: 1 },
@@ -551,9 +554,10 @@ describe('@kovojs/test runtime fixture facts', () => {
         const response = await fixtureOptions.fetch('/_m/cart/add', {
           headers: {
             Accept: 'text/vnd.kovo.fragment+html',
+            'Kovo-Build': 'conformance-runtime-test-build',
+            'Kovo-Current-Url': 'http://localhost/',
             'Kovo-Fragment': 'true',
             'Kovo-Idem': fixtureOptions.idem ?? '',
-            'Kovo-Targets': '',
           },
         });
         const body = await response.text();
@@ -567,9 +571,9 @@ describe('@kovojs/test runtime fixture facts', () => {
         if (body.includes('"count":2')) {
           fixtureOptions.store.set('cart', { count: 2 }, 'cart:c1');
           fixtureOptions.broadcast?.publish(body, changes);
-          return { changes, queries: ['cart:c1'] };
+          return { changes, queries: [{ key: 'cart:c1', name: 'cart' }] };
         }
-        return { changes: [], queries: ['cart'] };
+        return { changes: [], queries: [{ name: 'cart' }] };
       },
       async submitOptimisticEnhancedMutation(options) {
         const fixtureOptions = options as {
@@ -598,7 +602,9 @@ describe('@kovojs/test runtime fixture facts', () => {
           element.setAttribute('kovo-pending', '');
         }
         const response = await fixtureOptions.fetch('/_m/reviews/add', {
-          headers: { 'Kovo-Idem': 'idem_optimistic_change' },
+          headers: {
+            'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000023',
+          },
         });
         await response.text();
         fixtureOptions.rebaser.settle('reviews', 'product:p1', {
@@ -609,7 +615,7 @@ describe('@kovojs/test runtime fixture facts', () => {
         }
         return {
           changes: [{ domain: 'product', keys: ['p1'] }],
-          queries: ['reviews:product:p1'],
+          queries: [{ key: 'product:p1', name: 'reviews' }],
         };
       },
     };
@@ -624,26 +630,27 @@ describe('@kovojs/test runtime fixture facts', () => {
         ],
         fetchHeaders: {
           Accept: 'text/vnd.kovo.fragment+html',
+          'Kovo-Build': 'conformance-runtime-test-build',
+          'Kovo-Current-Url': 'http://localhost/',
           'Kovo-Fragment': 'true',
-          'Kovo-Idem': 'idem_change_record',
-          'Kovo-Targets': '',
+          'Kovo-Idem': 'v1_1750000000000_00000000000000000000000000000022',
         },
         resultChanges: [{ domain: 'cart', keys: ['c1'] }],
-        resultQueries: ['cart:c1'],
+        resultQueries: [{ key: 'cart:c1', name: 'cart' }],
         storeValue: { count: 2 },
       },
       malformedHeader: {
         errorCount: 1,
         errorMessagePrefixMatches: true,
         resultChanges: [],
-        resultQueries: ['cart'],
+        resultQueries: [{ name: 'cart' }],
       },
       optimistic: {
-        fetchIdemHeader: 'idem_optimistic_change',
+        fetchIdemHeader: 'v1_1750000000000_00000000000000000000000000000023',
         pendingAfterResponse: null,
         pendingDuringFetch: '',
         resultChanges: [{ domain: 'product', keys: ['p1'] }],
-        resultQueries: ['reviews:product:p1'],
+        resultQueries: [{ key: 'product:p1', name: 'reviews' }],
         storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
         storeDuringFetch: { items: [{ id: 'r1' }, { id: 'draft' }] },
       },

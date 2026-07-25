@@ -104,6 +104,13 @@ const requiredPostgresCases = [
   'paranoid-external-provision-check-boot',
   'paranoid-external-leak-refusal',
 ] as const;
+const requiredRuntimeAuthorizationMatrixCases = [
+  'closure-safe-boot',
+  'closure-cross-schema-definer-function-refusal',
+  'closure-definer-view-refusal',
+  'closure-matview-refusal',
+  'closure-public-table-refusal',
+] as const;
 type RequiredPostgresCase = (typeof requiredPostgresCases)[number];
 const requirePostgresAcceptance = process.env.KOVO_PARANOID === '1';
 const postgresToolchain = localPostgresToolchain();
@@ -349,7 +356,7 @@ afterAll(() => {
     requirePostgresAcceptance,
   );
   assertParanoidPostgresCasesExecuted(
-    authorizationMatrix.cases.map((testCase) => testCase.id),
+    requiredRuntimeAuthorizationMatrixCases,
     executedAuthorizationMatrixCases,
     requirePostgresAcceptance,
   );

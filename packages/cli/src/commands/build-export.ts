@@ -265,10 +265,16 @@ for (let index = 0; index < kovoFrameworkSourcePackages.length; index += 1) {
     // Optional first-party packages that are not in this CLI installation add no trusted entry.
   }
 }
-buildSetAdd(
-  trustedKovoDirectFrameworkEntrySources,
-  realpathSync(requireFromCli.resolve('@kovojs/server/jsx-runtime')),
-);
+try {
+  buildSetAdd(
+    trustedKovoDirectFrameworkEntrySources,
+    realpathSync(requireFromCli.resolve('@kovojs/server/jsx-runtime')),
+  );
+} catch {
+  // The root build artifact deliberately contains package outputs without recreating pnpm's
+  // package-local dependency links. In that verification layout there is no resolvable automatic
+  // JSX runtime to trust; packed/installed CLI layouts resolve and pin it here.
+}
 
 const execFileAsync = promisify(execFile);
 

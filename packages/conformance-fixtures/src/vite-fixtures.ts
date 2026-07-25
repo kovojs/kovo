@@ -406,14 +406,7 @@ export async function viteProductionEmitContractFact(
   const plugin = options.createPlugin();
   const middlewareFact = vitePluginMiddlewareFact(plugin, { root: options.projectRoot });
   const cartEvents: unknown[] = [];
-  const context =
-    options.context ??
-    ({
-      tabsKeyDown(id: unknown) {
-        cartEvents.push(id);
-        return `added:${String(id)}`;
-      },
-    } satisfies Record<string, unknown>);
+  const context = options.context ?? {};
   const handlerTransform = await viteHandlerTransformFactAsync(plugin, {
     id: options.componentId ?? join(options.projectRoot, 'routes/products/product-card.tsx'),
     selector: { tag: 'button' },
@@ -423,7 +416,10 @@ export async function viteProductionEmitContractFact(
     context,
     executeClientModule: options.executeClientModule,
     handlerReference: handlerTransform.handlerReference,
-    invocation: options.invocation ?? { ctx: { params: { id: 'p1' } }, event: 'click' },
+    invocation: options.invocation ?? {
+      ctx: { params: { id: 'p1' }, state: { selectedProductId: '' } },
+      event: 'click',
+    },
     middleware: middlewareFact.middleware,
     runtime: options.runtime,
   });
@@ -450,12 +446,12 @@ export async function viteProductionEmitContractFact(
 
 const productCardSourceFixture = `
 import { component } from '@kovojs/core';
-import { tabsKeyDown as addToCart } from '@kovojs/headless-ui/tabs';
 
 export const ProductCard = component({
-  render: () => (
+  state: () => ({ selectedProductId: '' }),
+  render: ({ product }) => (
     <article>
-      <button onClick={() => addToCart(product.id)}>Add</button>
+      <button onClick={() => { state.selectedProductId = String(product.id); }}>Add</button>
     </article>
   ),
 });

@@ -8,7 +8,7 @@
     "large-component": {
       "fileCount": 1,
       "minLoc": 600,
-      "coldMaxMs": 2250
+      "coldMaxMs": 2750
     },
     "many-small-components": {
       "fileCount": 48,

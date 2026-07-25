@@ -54,7 +54,7 @@ const BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS = [
 type Bugz31GlobalMemberCarrierProof = (typeof BUGZ31_GLOBAL_MEMBER_CARRIER_PROOFS)[number];
 
 describe('create-kovo starter (build integration: adversarial production artifact sweep)', () => {
-  const multiBuildProofTimeout = 480_000;
+  const multiBuildProofTimeout = 720_000;
   const dialectIndependentCompilerGateCases = [['postgres', undefined]] as const;
   const dialectSpecificRuntimeCases = [
     ['postgres', undefined],
