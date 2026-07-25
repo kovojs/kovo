@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { collectFilesAsync } from './lib/source-files.mjs';
+import { canonicalizePackedTarball } from './lib/deterministic-tarball.mjs';
 import { REQUIRED_CLASSIFIER_CORPORA } from './check-security-classifier-corpus.mjs';
 
 const DEFAULT_ROOTS = {
@@ -16,7 +17,7 @@ const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
 const STARTER_SHARD_COUNT = 10;
 const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
-const PACKED_WORKSPACE_PACKAGES = [
+export const packedStarterWorkspacePackages = [
   { name: '@kovojs/core', dir: 'core' },
   { name: '@kovojs/style', dir: 'style' },
   { name: '@kovojs/browser', dir: 'browser' },
@@ -26,6 +27,7 @@ const PACKED_WORKSPACE_PACKAGES = [
   { name: '@kovojs/icons', dir: 'icons' },
   { name: '@kovojs/ui', dir: 'ui' },
   { name: '@kovojs/better-auth', dir: 'better-auth' },
+  { name: '@kovojs/verify', dir: 'verify' },
   { name: '@kovojs/compiler', dir: 'compiler' },
   { name: '@kovojs/cli', dir: 'cli' },
   { name: 'create-kovo', dir: 'create-kovo' },
@@ -734,7 +736,7 @@ export async function packStarterPackages(outputDir) {
   await mkdir(root, { recursive: true });
   const tarballs = {};
 
-  for (const pkg of PACKED_WORKSPACE_PACKAGES) {
+  for (const pkg of packedStarterWorkspacePackages) {
     const packageRoot = path.join(process.cwd(), 'packages', pkg.dir);
     const before = new Set((await readdir(root)).filter((file) => file.endsWith('.tgz')));
     const result = spawnSync('vp', ['exec', 'pnpm', 'pack', '--pack-destination', root], {
@@ -749,6 +751,8 @@ export async function packStarterPackages(outputDir) {
     if (created.length !== 1) {
       throw new Error(`Expected one tarball for ${pkg.name}; found ${created.length}.`);
     }
+    const tarball = path.join(root, created[0]);
+    canonicalizePackedTarball(tarball);
     tarballs[pkg.name] = created[0];
   }
 
