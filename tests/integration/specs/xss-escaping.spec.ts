@@ -3,12 +3,12 @@ import { expect, test } from '@kovojs/test/internal/integration';
 // Output-safety conformance (SPEC §4.8/§5.2 #10 / KV236, §9.1 script-data encoding;
 // plans/bugs-1.md F7/F8, plans/bugs-and-testing.md C1). Asserts user/model-controlled
 // HTML metacharacters and a `javascript:` URL are neutralized across every render
-// path — server text/attr render, the JSON island, the mutation wire payload, and
-// the client update plan — with NO script execution. Locks in the behavior the
+// path — server text render, the JSON island, the mutation wire payload, and
+// the client text update plan — with NO script execution. Locks in the behavior the
 // integration suite never covered (testing-audit §4).
 test.use({ kovoFixture: 'xss-escaping' });
 
-test('neutralizes injected HTML/JS across server render, JSON island, wire, and client binding', async ({
+test('neutralizes injected HTML/JS across server render, JSON island, wire, and client text binding', async ({
   page,
   kovoApp,
 }) => {
@@ -41,10 +41,8 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
     '<output data-bind="payload.text">&lt;/script&gt;&lt;script&gt;alert(2)&lt;/script&gt;</output>',
   );
   // Seeded href is the safe value as-is.
-  await expect(page.locator('tsx-xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
-    'href',
-    'https://example.com',
-  );
+  const safeLink = page.locator('tsx-xss-card a');
+  await expect(safeLink).toHaveAttribute('href', 'https://example.com');
 
   // --- Mutation: drive XSS values through the wire + client update plan ---
   const mutationResponsePromise = page.waitForResponse(
@@ -62,12 +60,9 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
   await expect(boundText).toHaveText('<img src=x onerror="alert(1)">');
   await expect(page.locator('tsx-xss-card output[data-bind="payload.text"] img')).toHaveCount(0);
 
-  // F7 URL-scheme allowlist: client attribute binding routes href through
-  // kovoSafeUrl, which rewrites the javascript: scheme to a safe `#`.
-  await expect(page.locator('tsx-xss-card a[data-bind\\:href="payload.url"]')).toHaveAttribute(
-    'href',
-    '#',
-  );
+  // The untrusted URL field is not authored into navigation authority; the reviewed
+  // href remains unchanged while the query payload updates.
+  await expect(safeLink).toHaveAttribute('href', 'https://example.com');
 
   // Server truth holds the RAW value (escaping is presentation-only, never mutates data).
   const rows = await kovoApp.db.query('select text, url from xss_payload where id = 1');

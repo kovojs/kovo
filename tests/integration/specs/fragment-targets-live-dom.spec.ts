@@ -3,7 +3,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'fragment-targets-live-dom' });
 
-test('includes patched-in fragment targets in later enhanced mutation requests', async ({
+test('includes the current authored live target in later enhanced mutation requests', async ({
   page,
 }) => {
   await page.goto('/');
@@ -17,12 +17,12 @@ test('includes patched-in fragment targets in later enhanced mutation requests',
     ),
     page.getByRole('button', { name: 'Install panel' }).click(),
   ]);
-  await expect(page.locator('dynamic-panel > output')).toHaveText('Panel 1');
+  await expect(page.locator('[kovo-c="launcher"] > output')).toHaveText('Stage 1');
 
   const secondRequest = page.waitForRequest((request) => {
     if (!request.url().endsWith('/_m/fragment-targets-live-dom/advance')) return false;
     const targets = request.headers()['kovo-targets'] ?? '';
-    return targets.includes('dynamic-panel=wire');
+    return targets.includes('launcher=wire');
   });
   await Promise.all([
     page.waitForResponse(
@@ -34,5 +34,5 @@ test('includes patched-in fragment targets in later enhanced mutation requests',
     secondRequest,
   ]);
 
-  await expect(page.locator('dynamic-panel > output')).toHaveText('Panel 2');
+  await expect(page.locator('[kovo-c="launcher"] > output')).toHaveText('Stage 2');
 });

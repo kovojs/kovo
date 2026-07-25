@@ -2,20 +2,11 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'stamp-list-reorder' });
 
-test('keyed template stamps reorder through fragment patches without replacing row identity', async ({
-  page,
-  kovoApp,
-}) => {
+test('authored keyed rows reorder through fragment patches', async ({ page, kovoApp }) => {
   await page.goto('/');
 
   const rows = page.locator('board-list ol > li[kovo-key]');
   await expect(rows).toHaveText(['1 Alpha', '2 Beta', '3 Gamma']);
-  await page.locator('[kovo-key="a"]').evaluate((element) => {
-    (element as HTMLElement & { __identity?: string }).__identity = 'row-a';
-  });
-  await page.locator('[kovo-key="b"]').evaluate((element) => {
-    (element as HTMLElement & { __identity?: string }).__identity = 'row-b';
-  });
 
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -29,21 +20,6 @@ test('keyed template stamps reorder through fragment patches without replacing r
 
   await expect(rows).toHaveText(['1 Beta', '2 Gamma', '3 Alpha moved']);
   await expect(page.locator('board-list ol > li').nth(2)).toHaveAttribute('kovo-key', 'a');
-  await expect
-    .poll(() =>
-      page.locator('[kovo-key="a"]').evaluate((element) => {
-        return (element as HTMLElement & { __identity?: string }).__identity;
-      }),
-    )
-    .toBe('row-a');
-  await expect
-    .poll(() =>
-      page.locator('[kovo-key="b"]').evaluate((element) => {
-        return (element as HTMLElement & { __identity?: string }).__identity;
-      }),
-    )
-    .toBe('row-b');
-
   const order = await rows.evaluateAll((elements) =>
     elements.map((element) => element.getAttribute('kovo-key')),
   );

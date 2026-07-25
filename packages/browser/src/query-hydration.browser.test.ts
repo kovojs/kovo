@@ -86,7 +86,7 @@ describe('query hydration browser runtime', () => {
   it('hydrates newly inserted query scripts through store subscribers and DOM bindings', async () => {
     document.body.innerHTML = [
       '<script kovo-query="cart" data-kovo-query-href="/_q/cart" type="application/json">{"count":1}</script>',
-      '<output data-bind="recommendations.items"></output>',
+      '<section kovo-deps="!recommendations!recommendations%3Ahomepage"><output data-bind="recommendations.items"></output></section>',
     ].join('');
     const store = createQueryStore();
     const cartPlan = vi.fn();

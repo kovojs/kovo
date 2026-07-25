@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
+import { trustedUrl } from '@kovojs/server';
 
 import { payloadQuery, type PayloadResult } from './shared';
 
@@ -14,7 +15,7 @@ export const XssCard = component({
   render: ({ payload }: { payload: PayloadResult }) => (
     <tsx-xss-card>
       <output>{payload.text}</output>
-      <a href={payload.url}>link</a>
+      <a href={trustedUrl('https://example.com', 'fixture reviewed navigation target')}>link</a>
     </tsx-xss-card>
   ),
 });

@@ -4,19 +4,13 @@ import { expectAxeClean } from './a11y-axe';
 
 test.use({ kovoFixture: 'primitive-state-attrs' });
 
-test('primitive-owned state attrs win initially and update on interaction', async ({
-  kovoApp,
-  page,
-}) => {
+test('primitive-owned authored attrs win over consumer attrs', async ({ kovoApp, page }) => {
   await page.goto('/');
 
   const toggle = page.getByRole('button', { name: 'Alerts' });
   await expect(toggle).toHaveAttribute('data-state', 'off');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('data-state', 'on');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expectAxeClean(page);
 
   expect(

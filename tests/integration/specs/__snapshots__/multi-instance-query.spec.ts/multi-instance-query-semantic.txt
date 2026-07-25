@@ -2,7 +2,7 @@
   <script kovo-query="product" type="application/json">
   <script kovo-query="product" type="application/json">
   <script src="/client.ts" type="module">
-  <product-card kovo-c="product-card" kovo-deps="product" kovo-fragment-target="product-card:p1">
+  <product-card kovo-c="product-card" kovo-deps="!product!product%3Ap1" kovo-fragment-target="product-card:p1">
     <h2 data-bind="product.name">
       "Pen"
     <p>

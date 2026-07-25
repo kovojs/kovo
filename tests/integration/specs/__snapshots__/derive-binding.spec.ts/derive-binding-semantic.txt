@@ -5,7 +5,7 @@
     ":"
     <span data-bind="inventory.count">
       "0"
-  <button data-bind:disabled="/derive.ts#Inventory$disableWhenUnavailable" disabled="" type="button">
+  <button data-derive-attr="disabled" data-derive="inventory.InventoryPanel$button_disabled_derive" type="button">
     "Ship order"
   <form action="/_m/derive-binding/sell-out" kovo-fragment-target="sell-out-inventory" method="post">
     <button type="submit">

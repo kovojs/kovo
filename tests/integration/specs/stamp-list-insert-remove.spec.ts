@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'stamp-list-insert-remove' });
 
-test('keyed template stamps insert, remove, and bind item-relative paths through fragment patches', async ({
+test('authored keyed rows insert and remove through fragment patches', async ({
   page,
   kovoApp,
 }) => {

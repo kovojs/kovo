@@ -195,8 +195,10 @@ describe('HMR target snapshot browser security', () => {
     const target = document.createElement('section');
     target.setAttribute('kovo-deps', '!inventory!tenant%3A1 public');
     target.setAttribute('kovo-fragment-target', 'inventory-panel');
+    const consumer = document.createElement('form');
+    consumer.setAttribute('kovo-deps', 'public');
     document.head.append(firstMeta);
-    document.body.append(target);
+    document.body.append(target, consumer);
 
     try {
       expect(reader.dependencyTargets(document)).toEqual([
@@ -217,6 +219,7 @@ describe('HMR target snapshot browser security', () => {
     } finally {
       firstMeta.remove();
       target.remove();
+      consumer.remove();
     }
   });
 

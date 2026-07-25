@@ -28,6 +28,10 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
     '@kovojs/browser/generated':
       'bfcache fixture exercises generated visible-return query refetch hooks, not app-authored public client APIs.',
   },
+  'tests/integration/fixtures/meta-refresh-sink/meta-refresh.ts': {
+    '@kovojs/server/internal/html':
+      'Meta-refresh sink fixture renders a framework-owned HTML value to verify the sink rejects untrusted URL authority.',
+  },
   'tests/integration/fixtures/browser-engine-degradation-matrix/client.ts': {
     '@kovojs/browser/generated':
       'Engine matrix fixture exercises generated query refetch hooks across browser engines, not app-authored public client APIs.',
@@ -37,10 +41,14 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
       'Query refetch fixture exercises generated loader hooks intentionally hidden from the app-facing client entrypoint.',
   },
   'tests/integration/specs/diagnostic-dev-document.spec.ts': {
+    '@kovojs/core/internal/diagnostics':
+      'Dev diagnostic surfacing test constructs registered diagnostics to exercise document rendering through the server middleware.',
     '@kovojs/server/internal/app-shell-vite':
       'Dev diagnostic surfacing test drives the Vite app-shell middleware ABI directly.',
   },
   'tests/integration/specs/diagnostic-warning-nonblocking.spec.ts': {
+    '@kovojs/core/internal/diagnostics':
+      'Dev diagnostic surfacing test constructs registered warnings to verify non-blocking middleware behavior.',
     '@kovojs/server/internal/app-shell-vite':
       'Dev diagnostic surfacing test drives the Vite app-shell middleware ABI directly.',
   },

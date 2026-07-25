@@ -347,17 +347,18 @@ export function createHmrTargetSnapshotReader(
       'inline'
     );
   };
-  const targetIdentity = (element: unknown): string => {
+  const targetIdentity = (element: unknown): string | null => {
     const fragmentTarget = readAttribute(element, 'kovo-fragment-target');
     if (fragmentTarget !== null) return fragmentTarget;
     const id = readAttribute(element, 'id');
     if (id !== null) return id;
-    return readAttribute(element, 'kovo-c') ?? '';
+    return readAttribute(element, 'kovo-c');
   };
   const liveComponentIdentity = (element: unknown): string =>
     readAttribute(element, 'kovo-live-component') ??
     readAttribute(element, 'kovo-c') ??
-    targetIdentity(element);
+    targetIdentity(element) ??
+    '';
 
   const liveTargets = (root: unknown): readonly FrameworkWireEntrySnapshot[] => {
     const seen: string[] = [];
@@ -442,6 +443,7 @@ export function createHmrTargetSnapshotReader(
     for (let index = 0; index < elementCount; index += 1) {
       const element = ownArrayEntry<object>(elements, index);
       const target = targetIdentity(element);
+      if (target === null) continue;
       const dependencies = readDependencies(readAttribute(element, 'kovo-deps'));
       ownArrayLength(dependencies, 'Kovo HMR dependency snapshot', maxCollectionElements);
       if (apply<boolean>(identityIsValid!, codec, [target]) !== true || target === '') {

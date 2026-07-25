@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "5a39d1aa8fac6488af65842fac1ae5beffa8f177f3e5456e481b80d805ab76a3",
+      "sourceTreeSha256": "a2d43b88e4762f5e8dbc4ee9133ac14f19fe06fc516b6ff7236ae32ca0b3a0ac",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -773,7 +773,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "ee39689e4cf85028afd12da379dc18f37e7664a7c3eaf671766b05a6abaa5ece"
+      "sourceTreeSha256": "157b4b4367d0569e811eae3b7e7445a6e4b2d6df815de24faa3fe4fcf610c967"
     },
     {
       "manifestVariants": [

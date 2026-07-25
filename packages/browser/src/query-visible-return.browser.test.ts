@@ -4,7 +4,6 @@ import { createQueryStore } from './client.js';
 import { installKovoLoader } from './generated.js';
 import {
   browserTransportTestBuild,
-  browserTransportTestSourceUrl,
   queryTestResponse,
 } from './runtime-test-fakes.js';
 
@@ -19,6 +18,9 @@ describe('browser query visible-return refetch', () => {
       '<script kovo-query="cart" data-kovo-query-href="/_q/cart" type="application/json">{"count":1}</script>',
     ].join('');
     const store = createQueryStore();
+    const onDocumentRecovery = vi.fn();
+    const onError = vi.fn();
+    const refetchOnFocus = vi.fn();
     let resolveText: ((body: string) => void) | undefined;
     const textDone = new Promise<string>((resolve) => {
       resolveText = resolve;
@@ -35,24 +37,30 @@ describe('browser query visible-return refetch', () => {
       queryRefetch: {
         expectedBuildToken: browserTransportTestBuild,
         fetch,
-        sourceUrl: browserTransportTestSourceUrl,
+        onDocumentRecovery,
+        onError,
       },
       queryStore: store,
+      refetchOnFocus,
       root: document,
     });
 
-    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pageshow'));
     window.dispatchEvent(new Event('focus'));
 
+    await vi.waitFor(() => expect(refetchOnFocus).toHaveBeenCalledWith([{ name: 'cart' }]));
+    expect(onError).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
-    resolveText?.('<kovo-query name="cart">{"count":2}</kovo-query>');
+    resolveText?.('<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>');
     await vi.waitFor(() => expect(store.get('cart')).toEqual({ count: 2 }));
 
     window.dispatchEvent(new Event('focus'));
     await Promise.resolve();
 
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onDocumentRecovery).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
 
     loader.dispose();
     window.dispatchEvent(new Event('focus'));

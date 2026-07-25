@@ -214,8 +214,15 @@ export function installedPackageJson(root: string, packageName: string): Record<
 export function resolveStarterBin(root: string, name: string): string {
   const localBin = join(root, 'node_modules/.bin', name);
   if (existsSync(localBin)) return realpathSync(localBin);
-  const localPackageJson = join(root, 'node_modules', name, 'package.json');
-  if (existsSync(localPackageJson)) {
+  const packageJsonCandidates = [join(root, 'node_modules', name, 'package.json')];
+  const pnpmStore = findPnpmStore(join(root, 'node_modules'));
+  if (pnpmStore) {
+    for (const entry of readdirSync(pnpmStore)) {
+      packageJsonCandidates.push(join(pnpmStore, entry, 'node_modules', name, 'package.json'));
+    }
+  }
+  for (const localPackageJson of packageJsonCandidates) {
+    if (!existsSync(localPackageJson)) continue;
     const packageJson = JSON.parse(readFileSync(localPackageJson, 'utf8')) as {
       bin?: Record<string, string> | string;
     };

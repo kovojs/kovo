@@ -1,22 +1,17 @@
 <board-list kovo-c="board-list" kovo-deps="board" kovo-fragment-target="board-list">
-  <ol aria-label="Board order" data-bind-list="board.items" kovo-key="id">
+  <ol aria-label="Board order">
     <li data-row="b" kovo-key="b">
-      <span data-bind=".rank">
+      <span>
         "1"
-      <span data-bind=".label">
+      <span>
         "Beta"
     <li data-row="c" kovo-key="c">
-      <span data-bind=".rank">
+      <span>
         "2"
-      <span data-bind=".label">
+      <span>
         "Gamma"
     <li data-row="a" kovo-key="a">
-      <span data-bind=".rank">
+      <span>
         "3"
-      <span data-bind=".label">
+      <span>
         "Alpha moved"
-    <template>
-      <li data-row="" kovo-key="">
-        <span data-bind=".rank">
-          "0"
-        <span data-bind=".label">

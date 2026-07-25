@@ -100,17 +100,7 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
 
     renderVersion = 2;
     const refreshRequest = page.waitForRequest(
-      (request) => {
-        if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
-          return false;
-        }
-        const headers = request.headers();
-        return (
-          headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
-          headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
-          headers['kovo-targets']?.includes('hmr-card=hmr') === true
-        );
-      },
+      (request) => request.url().includes('/@kovo/hmr/refresh/live-targets'),
       { timeout: 5_000 },
     );
     const refreshResponse = page.waitForResponse(
@@ -127,7 +117,11 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
       ).__kovoHot;
       hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
     });
-    await Promise.all([refreshRequest, refreshResponse]);
+    const [request] = await Promise.all([refreshRequest, refreshResponse]);
+    const headers = request.headers();
+    expect(headers['kovo-live-targets']).toContain('hmr-card#hmr%2FCard@');
+    expect(headers['kovo-live-targets']).toContain(':{"id":"one"}');
+    expect(headers['kovo-targets']).toContain('hmr-card=hmr');
     await expect(page.locator('#hmr-output')).toHaveText('Version 2');
     await expect(page.locator('#hmr-input')).toHaveValue('user draft');
     await expect(page.locator('#hmr-input')).toBeFocused();
@@ -166,7 +160,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     ) {
       return jsx('section', {
         'kovo-c': 'product-card',
-        'kovo-deps': `product:${product.id}`,
+        'kovo-deps': `!product!product%3A${product.id}`,
         'kovo-fragment-target': 'product-card',
         'kovo-live-component': 'hmr/ProductCard',
         'kovo-live-token': liveTargetToken(app, request, 'product-card', 'hmr/ProductCard', {
@@ -213,19 +207,9 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     await page.locator('#product-note').fill('keep me');
 
     stock = 11;
-    const refreshRequest = page.waitForRequest((request) => {
-      if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
-        return false;
-      }
-      const headers = request.headers();
-      const liveTargets = headers['kovo-live-targets'];
-      const targets = headers['kovo-targets'];
-      return (
-        liveTargets?.includes('product-card#hmr/ProductCard@') === true &&
-        liveTargets?.includes(':{"productId":"p1"}') === true &&
-        targets?.includes('product-card=product:p1') === true
-      );
-    });
+    const refreshRequest = page.waitForRequest((request) =>
+      request.url().includes('/@kovo/hmr/refresh/live-targets'),
+    );
 
     await page.evaluate(() => {
       const hot = (
@@ -235,7 +219,11 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
       ).__kovoHot;
       hot?.['kovo:component-render']?.({ oldFactHash: 'old-query' });
     });
-    await refreshRequest;
+    const request = await refreshRequest;
+    const headers = request.headers();
+    expect(headers['kovo-live-targets']).toContain('product-card#hmr%2FProductCard@');
+    expect(headers['kovo-live-targets']).toContain(':{"productId":"p1"}');
+    expect(headers['kovo-targets']).toContain('product-card=!product!product%3Ap1');
 
     await expect(page.locator('#product-stock')).toHaveText('11');
     await expect(page.locator('#product-note')).toHaveValue('keep me');

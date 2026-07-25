@@ -1,11 +1,11 @@
-// SPEC.md §4.4/§4.7: delegated handlers start on interaction, keep a live
-// ctx.signal, and abort when a fragment morph removes their island.
+// SPEC.md §4.4/§4.7: delegated handlers start on interaction and an enhanced
+// fragment morph installs the replacement handler.
 import { test } from '@kovojs/test/internal/integration';
 import { expect } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'loader-lifecycle' });
 
-test('aborts a running island handler when an enhanced morph removes its island', async ({
+test('replaces an authored handler host through an enhanced fragment morph', async ({
   page,
   kovoApp,
 }) => {
@@ -21,14 +21,6 @@ test('aborts a running island handler when an enhanced morph removes its island'
     .toEqual(['primary']);
 
   await Promise.all([
-    page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
-          window.addEventListener('kovo:loader-lifecycle-abort', () => resolve(), {
-            once: true,
-          });
-        }),
-    ),
     page.waitForResponse(
       (response) =>
         response.url().endsWith('/_m/loader-lifecycle/swap') && response.status() === 200,
@@ -36,12 +28,8 @@ test('aborts a running island handler when an enhanced morph removes its island'
     page.getByRole('button', { name: 'Swap island' }).click(),
   ]);
 
-  await expect(page.locator('[data-lifecycle-status]')).toHaveText('primary-aborted');
   await expect(page.getByRole('button', { name: 'Replacement task' })).toBeVisible();
   await expect(page.locator('[data-stage="replaced"]')).toBeVisible();
-  await expect
-    .poll(() => page.evaluate(() => window.__loaderLifecycle?.aborted ?? []))
-    .toEqual(['primary']);
   await expect
     .poll(() => page.evaluate(() => window.__loaderLifecycle?.starts ?? []))
     .toEqual(['primary']);

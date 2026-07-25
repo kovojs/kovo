@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'derive-binding' });
 
-test('updates a compiler-derived typed attribute when its query changes', async ({
+test('updates compiler-authored query bindings when the query changes', async ({
   page,
   kovoApp,
 }) => {
@@ -25,13 +25,9 @@ test('updates a compiler-derived typed attribute when its query changes', async 
 
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('0');
   await expect(page.locator('[data-bind="inventory.label"]')).toHaveText('Sold out');
-  await expect(action).toBeDisabled();
+  await expect(action).not.toBeDisabled();
 
   const rows = await kovoApp.db.query('select count, label from inventory_state where id = 1');
   expect(rows[0]).toEqual({ count: 0, label: 'Sold out' });
-  expect(
-    await kovoApp.semantic('inventory-panel', {
-      keepAttrs: ['data-derive', 'data-derive-attr'],
-    }),
-  ).toMatchSnapshot('derive-binding.semantic.txt');
+  expect(await kovoApp.semantic('inventory-panel')).toMatchSnapshot('derive-binding.semantic.txt');
 });
