@@ -402,6 +402,37 @@ function canonicalizePackedTarball(tarballPath: string): void {
   );
 }
 
+function materializePackedPackage(tarballPath: string, destination: string): void {
+  const moduleUrl = pathToFileURL(
+    join(process.cwd(), 'scripts', 'lib', 'deterministic-tarball.mjs'),
+  ).href;
+  execStarterCommand(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      [
+        `import { validatedPackageTarballEntries } from ${JSON.stringify(moduleUrl)};`,
+        `import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';`,
+        `import path from 'node:path';`,
+        `const [tarballPath, destination] = process.argv.slice(1);`,
+        `for (const entry of validatedPackageTarballEntries(readFileSync(tarballPath))) {`,
+        `  const relativePath = entry.name.slice('package/'.length);`,
+        `  const target = path.join(destination, ...relativePath.split('/'));`,
+        `  mkdirSync(path.dirname(target), { recursive: true });`,
+        `  writeFileSync(target, entry.data, { flag: 'wx', mode: entry.executable ? 0o755 : 0o644 });`,
+        `}`,
+      ].join('\n'),
+      tarballPath,
+      destination,
+    ],
+    {
+      cwd: process.cwd(),
+      stdio: 'pipe',
+    },
+  );
+}
+
 function readPackedKovoPackageManifest(tarballDir: string): PackedKovoPackages | undefined {
   const manifestPath = join(tarballDir, packedKovoPackageManifest);
   if (!existsSync(manifestPath)) return undefined;
@@ -451,38 +482,11 @@ function scaffoldWithPackedCreateKovo(
   const creatorRoot = mkdtempSync(join(dirname(root), 'create-kovo-bin-'));
   const createKovoTarball = packedPackages.tarballByName.get('create-kovo');
   if (!createKovoTarball) throw new Error('Missing packed create-kovo tarball.');
-
-  writeFileSync(
-    join(creatorRoot, 'package.json'),
-    `${JSON.stringify(
-      {
-        private: true,
-        type: 'module',
-        pnpm: {
-          overrides: tarballOverridesForRoot(creatorRoot, packedPackages),
-        },
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  );
-  execStarterCommand(
-    'pnpm',
-    [
-      '--dir',
-      creatorRoot,
-      'add',
-      '--ignore-workspace',
-      '--save-exact',
-      `create-kovo@${fileSpec(creatorRoot, createKovoTarball)}`,
-    ],
-    {
-      cwd: dirname(root),
-      env: starterInstallEnv(creatorRoot),
-      stdio: 'pipe',
-    },
-  );
+  const coreTarball = packedPackages.tarballByName.get('@kovojs/core');
+  if (!coreTarball) throw new Error('Missing packed @kovojs/core tarball.');
+  const packedCreateKovoRoot = join(creatorRoot, 'node_modules/create-kovo');
+  materializePackedPackage(createKovoTarball, packedCreateKovoRoot);
+  materializePackedPackage(coreTarball, join(creatorRoot, 'node_modules/@kovojs/core'));
 
   const args = [root, '--name', options.name, '--disable-git'];
   if (options.dialect === 'sqlite') {
@@ -494,7 +498,7 @@ function scaffoldWithPackedCreateKovo(
     args.push('--postgres');
   }
 
-  const packedCreateKovoBin = join(creatorRoot, 'node_modules/create-kovo/dist/index.mjs');
+  const packedCreateKovoBin = join(packedCreateKovoRoot, 'dist/index.mjs');
   if (!existsSync(packedCreateKovoBin)) {
     throw new Error('Packed create-kovo install did not materialize dist/index.mjs.');
   }
