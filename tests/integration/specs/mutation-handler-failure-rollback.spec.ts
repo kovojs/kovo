@@ -6,12 +6,19 @@ test.use({ kovoFixture: 'mutation-handler-failure-rollback' });
 
 test('rolls back writes and sanitizes enhanced and no-js mutation failures', async ({
   kovoApp,
+  page,
   request,
 }) => {
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const enhanced = await request.post('/_m/rollback/fail-after-write', {
-    form: { note: 'enhanced' },
+    form: { note: 'enhanced', 'Kovo-Idem': idem },
     headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
       'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
       'Kovo-Targets': 'rollback-status',
     },
   });

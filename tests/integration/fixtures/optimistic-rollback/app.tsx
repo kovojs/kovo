@@ -60,7 +60,7 @@ const homeRoute = route('/', {
     const cart = await readCart(request.db);
     return (
       <>
-        {trustedHtml(renderQueryScript({ name: 'cart', value: cart }))}
+        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }))}
         {trustedHtml('<script type="module" src="/client.ts"></script>')}
         <main>
           {trustedHtml(await renderCartPanel(request.db))}

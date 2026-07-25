@@ -28,9 +28,20 @@ test('fails loudly when a mutation smuggles a write outside its touch set', asyn
   kovoApp,
   request,
 }) => {
+  const documentResponse = await request.get('/');
+  const documentHtml = await documentResponse.text();
+  const build = documentHtml.match(/<meta name="kovo-build" content="([^"]+)"/)?.[1] ?? '';
+  const idem = documentHtml.match(/name="Kovo-Idem" value="([^"]+)"/)?.[1] ?? '';
+  expect(build).not.toBe('');
+  expect(idem).not.toBe('');
   const response = await request.post('/_m/touch-graph-runtime-crosscheck/smuggle', {
-    form: { productId: 'p2' },
-    headers: { 'Kovo-Fragment': 'true' },
+    form: { productId: 'p2', 'Kovo-Idem': idem },
+    headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': documentResponse.url(),
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+    },
   });
 
   expect(response.status()).toBe(500);

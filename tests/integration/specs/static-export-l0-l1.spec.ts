@@ -22,33 +22,29 @@ test('exports L0/L1 documents and serves them without a second render path', asy
 
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts).toEqual(['/docs/index.html', '/index.html', '/search/index.html']);
-    expect(result.clientModules.filter(isAuthoredStaticClientModulePath)).toEqual([
-      '/c/__v/static-export-analytics-1/static-export-analytics.client.js',
-      '/c/__v/static-export-docs-1/static-export-docs.client.js',
-    ]);
+    const authoredClientModules = result.clientModules.filter(isAuthoredStaticClientModulePath);
+    const analyticsModule = authoredClientModules.find((modulePath) =>
+      modulePath.endsWith('/static-export-analytics.client.js'),
+    );
+    const docsModule = authoredClientModules.find((modulePath) =>
+      modulePath.endsWith('/static-export-docs.client.js'),
+    );
+    expect(analyticsModule).toMatch(
+      /^\/c\/__v\/[0-9a-f]{64}\/static-export-analytics\.client\.js$/u,
+    );
+    expect(docsModule).toMatch(/^\/c\/__v\/[0-9a-f]{64}\/static-export-docs\.client\.js$/u);
+    expect(authoredClientModules).toHaveLength(2);
     expect(result.renders).toBe(3);
 
     await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
       '<main data-page="home">',
     );
     await expect(
-      readFile(
-        path.join(
-          outDir,
-          'c',
-          '__v',
-          'static-export-analytics-1',
-          'static-export-analytics.client.js',
-        ),
-        'utf8',
-      ),
+      readFile(path.join(outDir, analyticsModule?.slice(1) ?? ''), 'utf8'),
     ).resolves.toBe('export const staticExportAnalytics = true;');
-    await expect(
-      readFile(
-        path.join(outDir, 'c', '__v', 'static-export-docs-1', 'static-export-docs.client.js'),
-        'utf8',
-      ),
-    ).resolves.toBe('export const staticExportDocs = true;');
+    await expect(readFile(path.join(outDir, docsModule?.slice(1) ?? ''), 'utf8')).resolves.toBe(
+      'export const staticExportDocs = true;',
+    );
 
     const server = await serveStaticDirectory(outDir);
     try {

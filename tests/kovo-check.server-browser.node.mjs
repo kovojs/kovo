@@ -28,7 +28,11 @@ import {
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
-import { createQueryStore, installKovoLoader } from '../dist/browser/src/client.mjs';
+import {
+  createQueryStore,
+  defaultEnhancedFetch,
+  installKovoLoader,
+} from '../dist/browser/src/client.mjs';
 import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
@@ -218,6 +222,7 @@ const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
   createQueryStore,
+  defaultEnhancedFetch,
   derive,
   DomMorphTarget,
   handler: (callback) => (event, ctx) => callback(event, ctx),
@@ -882,7 +887,7 @@ export const CartBadge = component({
           { html: '<section>Replace</section>', target: 'summary' },
         ],
       ],
-      chunkQueries: [['reviews'], ['reviews']],
+      chunkQueries: [[{ name: 'reviews' }], [{ name: 'reviews' }]],
       fragmentHtmlByTarget: {
         reviews: '<article>Initial</article><article>B</article><article>A</article>',
         summary: '<section>Replace</section>',

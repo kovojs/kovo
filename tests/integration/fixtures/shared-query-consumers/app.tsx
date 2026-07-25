@@ -32,7 +32,7 @@ const homeRoute = route('/', {
     const profile = await readProfile(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ name: 'profile', value: profile }))}
+        {trustedHtml(renderQueryScript({ href: '/_q/profile', name: 'profile', value: profile }))}
         <ProfileSummary />
         <ProfileStatus />
         <form mutation={publishProfile} enhance>

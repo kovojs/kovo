@@ -5,7 +5,7 @@ import { boardQuery, type BoardItem, type BoardResult } from './shared';
 
 function BoardRow({ item }: { item: BoardItem }) {
   return (
-    <li data-row={item.id}>
+    <li key={item.id} data-row={item.id}>
       <span>{item.rank}</span> <span>{item.label}</span>
     </li>
   );
@@ -17,7 +17,7 @@ export const BoardList = component({
     <board-list>
       <ol aria-label="Board order">
         {board.items.map((item) => (
-          <BoardRow key={item.id} item={item} />
+          <BoardRow item={item} />
         ))}
       </ol>
     </board-list>

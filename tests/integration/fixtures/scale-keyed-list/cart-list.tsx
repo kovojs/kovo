@@ -5,7 +5,7 @@ import { cartQuery, type CartItem, type CartResult } from './shared';
 
 function CartRow({ item }: { item: CartItem }) {
   return (
-    <li data-row={item.id}>
+    <li key={item.id} data-row={item.id}>
       <span>{item.qty}</span> <span>{item.name}</span>
     </li>
   );
@@ -17,7 +17,7 @@ export const CartList = component({
     <cart-list>
       <ul aria-label="Cart items">
         {cart.items.map((item) => (
-          <CartRow key={item.id} item={item} />
+          <CartRow item={item} />
         ))}
       </ul>
     </cart-list>

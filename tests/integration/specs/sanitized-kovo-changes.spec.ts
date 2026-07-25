@@ -3,10 +3,22 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'sanitized-kovo-changes' });
 
-test('omits mutation input and diagnostics from Kovo-Changes', async ({ request, kovoApp }) => {
+test('omits mutation input and diagnostics from Kovo-Changes', async ({
+  page,
+  request,
+  kovoApp,
+}) => {
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const response = await request.post('/_m/sanitized-kovo-changes/save', {
-    form: { id: 'r1', secret: 'sensitive-token' },
-    headers: { 'Kovo-Fragment': 'true' },
+    form: { id: 'r1', secret: 'sensitive-token', 'Kovo-Idem': idem },
+    headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+    },
   });
 
   expect(response.status()).toBe(200);

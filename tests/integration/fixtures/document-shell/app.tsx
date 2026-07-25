@@ -6,7 +6,7 @@ const shellQuery = { message: 'Shell ready' };
 
 const homeRoute = route('/', {
   meta: { title: 'Document Shell' },
-  page: () => `${renderQueryScript({ name: 'shell', value: shellQuery })}
+  page: () => `${renderQueryScript({ href: '/_q/shell', name: 'shell', value: shellQuery })}
     <main>
       <h1>Document Shell</h1>
       <section kovo-deps="shell">

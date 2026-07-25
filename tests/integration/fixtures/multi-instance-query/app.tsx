@@ -33,8 +33,22 @@ const homeRoute = route('/', {
     const p2 = await readProduct(request.db, 'p2');
     return (
       <main>
-        {trustedHtml(renderQueryScript({ key: 'product:p1', name: 'product', value: p1 }))}
-        {trustedHtml(renderQueryScript({ key: 'product:p2', name: 'product', value: p2 }))}
+        {trustedHtml(
+          renderQueryScript({
+            href: '/_q/product?id=p1',
+            key: 'product:p1',
+            name: 'product',
+            value: p1,
+          }),
+        )}
+        {trustedHtml(
+          renderQueryScript({
+            href: '/_q/product?id=p2',
+            key: 'product:p2',
+            name: 'product',
+            value: p2,
+          }),
+        )}
         {trustedHtml('<script type="module" src="/client.ts"></script>')}
         <ProductCard key="p1" productId="p1" />
         <StaticProductCard key="p2" productId="p2" />

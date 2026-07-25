@@ -7,14 +7,20 @@ test('late mutation fragments request compiler-metadata styles without duplicate
   kovoApp,
   request,
 }) => {
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   // Read the wire through Playwright's API client rather than Chromium's CDP response cache. A
   // loaded browser shard may discard an enhanced-navigation body before `Response.text()` can
   // retrieve it even when the read starts from `waitForResponse`.
   const wireResponse = await request.post('/_m/fragment-style-metadata/reveal', {
-    form: {},
+    form: { 'Kovo-Idem': idem },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
       'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
       'Kovo-Stream': 'true',
     },
   });
@@ -22,7 +28,6 @@ test('late mutation fragments request compiler-metadata styles without duplicate
   const wire = await wireResponse.text();
   expect(wire.match(/href="\/assets\/late-card\.css"/g)).toHaveLength(1);
 
-  await page.goto('/');
   await expect(page.locator('link[rel="stylesheet"][href="/assets/late-card.css"]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Reveal card' }).click();

@@ -1,7 +1,7 @@
 // SPEC.md §11.3: error diagnostics block dev page requests with teaching documents.
 import { createServer, type Server } from 'node:http';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import { createApp, route } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -27,13 +27,17 @@ test('serves a teaching diagnostic document for a route depending on an error mo
   try {
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV225',
-          fileName: 'src/components/cart.tsx',
-          help: 'Move the block element outside the paragraph.',
-          message: 'JSX nesting violates the HTML content model.',
-          start: { column: 7, line: 2 },
-        },
+        createRegisteredDiagnostic(
+          'KV225',
+          {
+            fileName: 'src/components/cart.tsx',
+            start: { column: 7, line: 2 },
+          },
+          {
+            help: 'Move the block element outside the paragraph.',
+            message: 'JSX nesting violates the HTML content model.',
+          },
+        ),
       ],
       fileName: 'src/components/cart.tsx',
       source: 'export function Cart() {\n  return <p><div>bad</div></p>;\n}',
@@ -89,13 +93,14 @@ for (const entry of ERROR_CODES) {
     try {
       diagnostics.recordModuleDiagnostics({
         diagnostics: [
-          {
-            code: entry.code,
-            fileName: 'src/components/cart.tsx',
-            help: entry.help,
-            message: entry.message,
-            start: { column: 3, line: 1 },
-          },
+          createRegisteredDiagnostic(
+            entry.code,
+            {
+              fileName: 'src/components/cart.tsx',
+              start: { column: 3, line: 1 },
+            },
+            { help: entry.help, message: entry.message },
+          ),
         ],
         fileName: 'src/components/cart.tsx',
         source: 'export function Cart() {}',

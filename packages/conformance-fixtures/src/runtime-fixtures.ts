@@ -365,19 +365,34 @@ export async function loaderSmokeBehaviorFact(
 
   const store = runtime.createQueryStore();
   const refetched = await runtime.refetchQueries({
+    expectedBuildToken: CONFORMANCE_BUILD_TOKEN,
     fetch: async (url: string, options: unknown) => {
-      if (url !== '/_q/cart') throw new Error(`Expected cart refetch URL; got ${url}`);
+      if (url !== 'http://localhost/_q/cart') {
+        throw new Error(`Expected cart refetch URL; got ${url}`);
+      }
       assertRefetchOptions(options);
       return {
+        headers: {
+          get(name: string) {
+            if (name.toLowerCase() === 'content-type') {
+              return 'text/html; charset=utf-8';
+            }
+            return name.toLowerCase() === 'kovo-build' ? CONFORMANCE_BUILD_TOKEN : null;
+          },
+        },
         ok: true,
+        redirected: false,
         status: 200,
+        url: 'http://localhost/_q/cart',
         async text() {
-          return '<kovo-query name="cart">{"count":2}</kovo-query>';
+          return '<kovo-query name="cart" href="/_q/cart">{"count":2}</kovo-query>';
         },
       };
     },
-    queries: ['cart'],
+    queries: [{ href: '/_q/cart', name: 'cart' }],
     queryStore: store,
+    sourceUrl: 'http://localhost/',
+    urlForQuery: () => '/_q/cart',
   });
 
   let reconciledItems: LoaderSmokeBehaviorFact['reconciledItems'] = [];
@@ -616,7 +631,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
     form: { action: '/_m/reviews/add', method: 'post' },
     formData: new FormData(),
     change: { domain: 'product', input: { reviewId: 'draft' }, keys: ['p1'] },
-    idem: 'idem_keyed_optimistic',
+    idem: 'v1_1750000000000_00000000000000000000000000000025',
     input: { reviewId: 'ignored' },
     optimistic: {
       keys: { reviews: (change: { keys?: string[] }) => `product:${change.keys?.[0]}` },
@@ -948,9 +963,11 @@ function assertRefetchOptions(options: unknown): void {
     cache: 'no-store',
     headers: {
       Accept: 'text/html',
+      'Kovo-Build': CONFORMANCE_BUILD_TOKEN,
       'Kovo-Fragment': 'true',
     },
     method: 'GET',
+    redirect: 'error',
   };
 
   if (JSON.stringify(options) !== JSON.stringify(expected)) {

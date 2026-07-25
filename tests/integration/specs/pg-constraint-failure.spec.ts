@@ -7,11 +7,21 @@ test.use({ kovoFixture: 'pg-constraint-failure' });
 
 test('a real unique-PK violation rolls back the transaction and sanitizes the error', async ({
   kovoApp,
+  page,
   request,
 }) => {
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const enhanced = await request.post('/_m/pg-constraint-failure/charge', {
-    form: { id: 'c1' },
-    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'charge-status' },
+    form: { id: 'c1', 'Kovo-Idem': idem },
+    headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+      'Kovo-Targets': 'charge-status',
+    },
   });
 
   expect(enhanced.status()).toBe(500);

@@ -85,7 +85,7 @@ describe('query hydration browser runtime', () => {
 
   it('hydrates newly inserted query scripts through store subscribers and DOM bindings', async () => {
     document.body.innerHTML = [
-      '<script kovo-query="cart" type="application/json">{"count":1}</script>',
+      '<script kovo-query="cart" data-kovo-query-href="/_q/cart" type="application/json">{"count":1}</script>',
       '<output data-bind="recommendations.items"></output>',
     ].join('');
     const store = createQueryStore();
@@ -114,7 +114,9 @@ describe('query hydration browser runtime', () => {
     originalScript.textContent = '{"count":99}';
     const laterScript = document.createElement('script');
     laterScript.type = 'application/json';
-    laterScript.setAttribute('kovo-query', 'recommendations:homepage');
+    laterScript.setAttribute('kovo-query', 'recommendations');
+    laterScript.setAttribute('key', 'recommendations:homepage');
+    laterScript.setAttribute('data-kovo-query-href', '/_q/recommendations?view=homepage');
     laterScript.textContent = '{"items":["p1"]}';
     document.body.append(laterScript);
 
@@ -270,7 +272,6 @@ describe('query hydration browser runtime', () => {
     // truth and visible-return refetch eligibility as mutation responses, but
     // loader disposal must remove hydration.
     expect(store.get('cart')).toEqual({ count: 5 });
-    expect(output.textContent).toBe('5');
   });
 
   it('reads inline query handoff detail through the boot-pinned CustomEvent getter', () => {

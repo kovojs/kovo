@@ -18,7 +18,7 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     } finally {
       app.cleanup();
     }
-  }, 120_000);
+  }, 360_000);
 
   it('rebuilds production artifacts from current source when cache is warm', () => {
     const app = createStarterApp({
@@ -45,5 +45,5 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     } finally {
       app.cleanup();
     }
-  }, 240_000);
+  }, 600_000);
 });

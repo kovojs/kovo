@@ -11,13 +11,20 @@ async function postStreamingWire(request: APIRequestContext, body: string) {
   const documentHtml = await documentResponse.text();
   const messages = liveTarget(documentHtml, 'messages');
   const composer = liveTarget(documentHtml, 'composer');
+  const build = attribute(
+    documentHtml.match(/<meta[^>]*name="kovo-build"[^>]*>/)?.[0] ?? '',
+    'content',
+  );
+  const idem = `v1_${Date.now()}_${randomBytes(16).toString('hex')}`;
   const response = await request.post('/_m/chat/send', {
-    form: { body, turns: '1' },
+    form: { body, turns: '1', 'Kovo-Idem': idem },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Build': build,
+      'Kovo-Current-Url': documentResponse.url(),
       'Kovo-Form-Target': 'composer',
       'Kovo-Fragment': 'true',
-      'Kovo-Idem': `v1_${Date.now()}_${randomBytes(16).toString('hex')}`,
+      'Kovo-Idem': idem,
       'Kovo-Live-Targets': `${messages.descriptor}; ${composer.descriptor}`,
       'Kovo-Stream': 'true',
       'Kovo-Targets': `messages=${messages.deps}; composer=${composer.deps}`,

@@ -37,7 +37,7 @@ const homeRoute = route('/', {
     const card = await readCard(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ name: 'card', value: card }))}
+        {trustedHtml(renderQueryScript({ href: '/_q/card', name: 'card', value: card }))}
         {trustedHtml('<script type="module" src="/client.ts"></script>')}
         <BindingCard />
         {trustedHtml(renderStateIsland())}

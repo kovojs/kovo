@@ -53,6 +53,7 @@ const home = route('/', {
     return `<!doctype html>
       <main>
         ${renderQueryScript({
+          href: '/_q/projection-good',
           name: matchingProjection.key,
           value: result.value,
         })}

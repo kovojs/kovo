@@ -23,6 +23,9 @@ declare global {
 }
 
 const store = createQueryStore();
+const expectedBuildToken =
+  document.querySelector<HTMLMetaElement>('meta[name="kovo-build"]')?.content ?? '';
+if (!expectedBuildToken) throw new Error('optimistic rollback requires a document build token');
 const rebaser = new OptimisticRebaser(store);
 const root = Object.assign(new DomMorphRoot(document), {
   querySelectorAll: document.querySelectorAll.bind(document),
@@ -45,6 +48,7 @@ document.getElementById('optimistic-form')?.addEventListener('submit', (event) =
   const quantity = Number(formData.get('quantity') ?? 0);
 
   void submitOptimisticEnhancedMutation({
+    expectedBuildToken,
     fetch: window.fetch.bind(window) as EnhancedMutationFetch,
     form,
     formData,

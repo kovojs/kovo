@@ -2,6 +2,7 @@
 import { createServer, type Server } from 'node:http';
 
 import { createApp, route } from '@kovojs/server';
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,
@@ -26,11 +27,11 @@ test('does not block serving for non-error diagnostics recorded against a route 
   try {
     diagnostics.recordModuleDiagnostics({
       diagnostics: [
-        {
-          code: 'KV210',
-          fileName: 'src/components/cart.tsx',
-          message: 'Anonymous handler; name it for stable identity.',
-        },
+        createRegisteredDiagnostic(
+          'KV210',
+          { fileName: 'src/components/cart.tsx' },
+          { message: 'Anonymous handler; name it for stable identity.' },
+        ),
       ],
       fileName: 'src/components/cart.tsx',
     });

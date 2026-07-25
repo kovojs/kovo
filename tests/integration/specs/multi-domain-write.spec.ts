@@ -30,11 +30,20 @@ test('a two-domain write with both declared fans out to both consumers, no diagn
 });
 
 test('omitting one of two written domains raises KV402 naming the missing domain', async ({
+  page,
   request,
 }) => {
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').first().inputValue();
   const response = await request.post('/_m/multi-domain-write/add-partial', {
-    form: {},
-    headers: { 'Kovo-Fragment': 'true' },
+    form: { 'Kovo-Idem': idem },
+    headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
+    },
   });
 
   expect(response.status()).toBe(500);

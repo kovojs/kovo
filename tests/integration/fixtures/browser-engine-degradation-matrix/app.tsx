@@ -1,17 +1,13 @@
+/** @jsxImportSource @kovojs/server */
 // SPEC.md §8: the cross-engine degradation contract keeps L0 documents, L1
 // forms, and L2 loader enhancements usable outside Chromium.
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, route, s, trustedHtml } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { EngineMatrixCard } from './engine-card';
 import { engineQuery, readEngineState } from './shared';
-
-async function renderEngineCard(db: KovoFixtureRequest['db']): Promise<string> {
-  const engine = await readEngineState(db);
-  return EngineMatrixCard.definition.render({ engine }) as unknown as string;
-}
 
 async function renderInitialReport(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ include_gift: number; quantity: number }>(
@@ -57,20 +53,30 @@ const homeRoute = route('/', {
     const engine = await readEngineState(request.db);
     // This is the suite's deliberate L1 native-form control: the cross-engine spec asserts the
     // browser observes the 303 PRG instead of Kovo's enhanced 200 response.
-    return `${renderQueryScript({ name: 'engine', value: engine })}
-    <script type="module" src="/client.ts"></script>
-    <main>
-      <h1>Engine matrix</h1>
-      <p data-bind="greeting">Welcome</p>
-      <form id="engine-matrix-form" method="post" action="/_m/engine-matrix/submit">
-        <label>Quantity <input name="quantity" type="number" value="2" min="1" /></label>
-        <label><input name="includeGift" type="checkbox" value="true" checked /> Include gift wrap</label>
-        <input name="adminNote" value="do-not-include" disabled />
-        <button type="submit" name="intent" value="confirm">Submit matrix form</button>
-      </form>
-      <div kovo-fragment-target="engine-matrix-report" kovo-deps="engine">${await renderInitialReport(request.db)}</div>
-      <kovo-fragment target="engine-card">${await renderEngineCard(request.db)}</kovo-fragment>
-    </main>`;
+    return (
+      <main>
+        {trustedHtml(renderQueryScript({ href: '/_q/engine', name: 'engine', value: engine }))}
+        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        <h1>Engine matrix</h1>
+        <p data-bind="greeting">Welcome</p>
+        <form id="engine-matrix-form" method="post" action="/_m/engine-matrix/submit">
+          <label>
+            Quantity <input name="quantity" type="number" value="2" min="1" />
+          </label>
+          <label>
+            <input name="includeGift" type="checkbox" value="true" checked /> Include gift wrap
+          </label>
+          <input name="adminNote" value="do-not-include" disabled />
+          <button type="submit" name="intent" value="confirm">
+            Submit matrix form
+          </button>
+        </form>
+        <div kovo-fragment-target="engine-matrix-report" kovo-deps="engine">
+          {trustedHtml(await renderInitialReport(request.db))}
+        </div>
+        <EngineMatrixCard />
+      </main>
+    );
   },
 });
 

@@ -36,7 +36,7 @@ const homeRoute = route('/', {
     const payload = await readPayload(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ name: 'payload', value: payload }))}
+        {trustedHtml(renderQueryScript({ href: '/_q/payload', name: 'payload', value: payload }))}
         {trustedHtml('<script type="module" src="/client.ts"></script>')}
         <XssCard />
         <XssResponseAuthority />

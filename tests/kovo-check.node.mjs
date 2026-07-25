@@ -580,12 +580,16 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Post-parse decisions use typed facts, not source strings',
   ]);
   assert.deepEqual(fact.hardRuleTitlesCovered, [
-    ...fact.compilerRuleTitles,
+    'Source-derived names and content-addressed modules',
+    ...fact.compilerRuleTitles.slice(1),
     'Output safety is contextual and default-on',
     'Security-critical effects lower to a finite compiler-owned IR',
-    'Inputs (mandatory)',
-    'Stamping points (mandatory)',
-    'Comparison (mandatory, server and client)',
+    'Client representation digest',
+    'Render-plan fingerprint',
+    'App build token',
+    'Ownership and finalization',
+    'Two external carriers',
+    'Comparison',
   ]);
   assert.equal(
     fact.compilerRuleItemsMatchTitles,
@@ -788,8 +792,8 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     body: { kind: 'form-data' },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html',
+      'Kovo-Build': 'conformance-runtime-test-build',
       'Kovo-Current-Url': 'http://localhost/cart',
-      'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': generatedIdem,
       'Kovo-Live-Targets':
@@ -836,7 +840,7 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
           value: { id: 'p1', qty: 2 },
         },
       ],
-      refetched: [{ fragments: [], queries: ['cart'] }],
+      refetched: [{ fragments: [], queries: [{ name: 'cart' }] }],
       storeValues: {
         cart: { count: 2 },
       },
@@ -846,12 +850,13 @@ void test('P2 loader smoke evidence is asserted through runtime behavior', async
 
 void test('P3 server renders initial query scripts for document-load hydration', async () => {
   const query = {
+    href: '/_q/cart',
     key: 'cart:c1',
     name: 'cart',
     value: { html: '</script>' },
   };
   const queryScript =
-    '<script type="application/json" kovo-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
+    '<script type="application/json" kovo-query="cart" key="cart:c1" data-kovo-query-href="/_q/cart">{"html":"\\u003c/script>"}</script>';
   const document = renderDocument({
     body: '<main></main>',
     queries: [query],
@@ -871,6 +876,7 @@ void test('P3 server renders initial query scripts for document-load hydration',
       {
         attrs: nullPrototypeRecord({
           'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
+          'data-kovo-query-href': '/_q/cart',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
@@ -882,6 +888,7 @@ void test('P3 server renders initial query scripts for document-load hydration',
       {
         attrs: nullPrototypeRecord({
           'data-kovo-csp-hash': 'sha256-RI5k6RX1M0ro0XMCjumAJoDVyEhUT0DexGgN17O9SSY=',
+          'data-kovo-query-href': '/_q/cart',
           'kovo-query': 'cart',
           key: 'cart:c1',
           type: 'application/json',
@@ -1041,7 +1048,7 @@ void test('P1 compiler validation facts come from reusable fixture behavior', as
       code: 'KV226',
       fileName: 'components/recommendations.tsx',
       help: diagnosticDefinitions.KV226.help,
-      message: `${diagnosticDefinitions.KV226.message} kovo-deps="missingQuery:p1"`,
+      message: `${diagnosticDefinitions.KV226.message} kovo-deps contains a non-canonical identity token. kovo-deps="missingQuery:p1"`,
       severity: 'error',
     },
   ]);
@@ -1484,7 +1491,7 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
   assert.deepEqual(fact.query, {
     endpoint: {
       body:
-        '<kovo-query name="productDetail" key="product:p1" version="3">' +
+        '<kovo-query name="productDetail" key="product:p1" href="/_q/productDetail?id=p1&amp;max=3" version="3">' +
         '{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
       headers: nullPrototypeRecord({
         'Cache-Control': 'private, no-store',
@@ -1603,20 +1610,27 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', as
     await morphFragmentBehaviorFact({
       applyMutationResponseToDom({ body, root, store }) {
         return submitEnhancedMutation({
+          expectedBuildToken: 'conformance-runtime-test-build',
           fetch: async () => ({
             headers: {
               get(name) {
-                return name.toLowerCase() === 'content-type' ? 'text/vnd.kovo.fragment+html' : null;
+                if (name.toLowerCase() === 'content-type') {
+                  return 'text/vnd.kovo.fragment+html';
+                }
+                return name.toLowerCase() === 'kovo-build'
+                  ? 'conformance-runtime-test-build'
+                  : null;
               },
             },
             ok: true,
+            redirected: false,
             status: 200,
             text: async () => body,
             url: 'http://localhost/_m/kovo-check-morph',
           }),
           form: { action: '/_m/kovo-check-morph', method: 'post' },
           formData: new FormData(),
-          idem: 'kovo-check-morph-fixture',
+          idem: 'v1_1750000000000_00000000000000000000000000000024',
           root: {
             ...root,
             querySelectorAll() {
@@ -1726,7 +1740,7 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
       appliedFragments: ['reviews:p1'],
       fetchStoreDuringOptimism: { items: [{ id: 'r1' }, { id: 'draft' }] },
       fragmentHtml: '<section>Reviews ready</section>',
-      queries: ['reviews:product:p1'],
+      queries: [{ key: 'product:p1', name: 'reviews' }],
       storeAfterResponse: { items: [{ id: 'r1' }, { id: 'server' }] },
     },
   });

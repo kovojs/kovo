@@ -8,7 +8,7 @@ test('keyed template stamps insert, remove, and bind item-relative paths through
 }) => {
   await page.goto('/');
 
-  const rows = page.locator('[data-bind-list="cart.items"] > li[kovo-key]');
+  const rows = page.locator('cart-list ul > li[kovo-key]');
   await expect(rows).toHaveText(['2 Adapter', '4 Battery']);
 
   const [insertResponse] = await Promise.all([
@@ -31,7 +31,7 @@ test('keyed template stamps insert, remove, and bind item-relative paths through
     page.getByRole('button', { name: 'Remove item' }).click(),
   ]);
   await expect(rows).toHaveText(['2 Adapter', '1 Cable']);
-  await expect(page.locator('[data-bind-list="cart.items"] > li[kovo-key="b"]')).toHaveCount(0);
+  await expect(page.locator('cart-list li[kovo-key="b"]')).toHaveCount(0);
 
   const keys = await rows.evaluateAll((elements) =>
     elements.map((element) => element.getAttribute('kovo-key')),

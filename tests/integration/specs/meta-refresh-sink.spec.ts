@@ -27,7 +27,8 @@ test('removes external refresh content for the browser-effective attacker-first 
   const attackFirstUrl = probeUrl(kovoApp.origin, 'attack-first', attackerUrl);
   const attackResponse = await request.get(attackFirstUrl);
   const attackHtml = await attackResponse.text();
-  expect(attackHtml).toContain('HTTP-EQUIV="refresh" http-equiv="not-refresh"');
+  expect(attackHtml).toContain('<meta http-equiv="not-refresh">');
+  expect(attackHtml).not.toContain('HTTP-EQUIV');
   expect(attackHtml).not.toContain(`content="0; url=${attackerUrl}"`);
 
   await page.goto(attackFirstUrl);
@@ -39,9 +40,8 @@ test('removes external refresh content for the browser-effective attacker-first 
   const safeFirstUrl = probeUrl(kovoApp.origin, 'safe-first', attackerUrl);
   const safeResponse = await request.get(safeFirstUrl);
   const safeHtml = await safeResponse.text();
-  expect(safeHtml).toContain(
-    `http-equiv="not-refresh" HTTP-EQUIV="refresh" content="0; url=${attackerUrl}"`,
-  );
+  expect(safeHtml).toContain(`<meta http-equiv="not-refresh" content="0; url=${attackerUrl}">`);
+  expect(safeHtml).not.toContain('HTTP-EQUIV');
 
   await page.goto(safeFirstUrl);
   await page.waitForTimeout(350);
@@ -51,7 +51,8 @@ test('removes external refresh content for the browser-effective attacker-first 
 
   const canonicalUrl = probeUrl(kovoApp.origin, 'canonical', attackerUrl);
   const canonicalHtml = await (await request.get(canonicalUrl)).text();
-  expect(canonicalHtml).toContain('http-equiv="refresh"');
+  expect(canonicalHtml).toContain('<meta>');
+  expect(canonicalHtml).not.toContain('http-equiv');
   expect(canonicalHtml).not.toContain(`content="0; url=${attackerUrl}"`);
 });
 
@@ -62,7 +63,8 @@ test('keeps javascript and data refresh controls inert', async ({ kovoApp, page,
   ] as const) {
     const url = probeUrl(kovoApp.origin, 'attack-first', target);
     const html = await (await request.get(url)).text();
-    expect(html).toContain('HTTP-EQUIV="refresh" http-equiv="not-refresh"');
+    expect(html).toContain('<meta http-equiv="not-refresh">');
+    expect(html).not.toContain('HTTP-EQUIV');
     expect(html).not.toContain('JAVASCRIPT_PWNED');
     expect(html).not.toContain('DATA_PWNED');
 

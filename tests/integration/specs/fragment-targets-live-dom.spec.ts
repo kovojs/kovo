@@ -7,7 +7,7 @@ test('includes patched-in fragment targets in later enhanced mutation requests',
   page,
 }) => {
   await page.goto('/');
-  await expect(page.locator('[data-bind="wire.stage"]')).toHaveText('Stage 0');
+  await expect(page.locator('[kovo-c="launcher"] > output')).toHaveText('Stage 0');
 
   await Promise.all([
     page.waitForResponse(
@@ -17,7 +17,7 @@ test('includes patched-in fragment targets in later enhanced mutation requests',
     ),
     page.getByRole('button', { name: 'Install panel' }).click(),
   ]);
-  await expect(page.locator('[data-bind="wire.dynamic"]')).toHaveText('Panel 1');
+  await expect(page.locator('dynamic-panel > output')).toHaveText('Panel 1');
 
   const secondRequest = page.waitForRequest((request) => {
     if (!request.url().endsWith('/_m/fragment-targets-live-dom/advance')) return false;
@@ -34,5 +34,5 @@ test('includes patched-in fragment targets in later enhanced mutation requests',
     secondRequest,
   ]);
 
-  await expect(page.locator('[data-bind="wire.dynamic"]')).toHaveText('Panel 2');
+  await expect(page.locator('dynamic-panel > output')).toHaveText('Panel 2');
 });

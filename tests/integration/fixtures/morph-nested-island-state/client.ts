@@ -14,6 +14,9 @@ declare global {
 }
 
 const store = createQueryStore();
+const expectedBuildToken =
+  document.querySelector<HTMLMetaElement>('meta[name="kovo-build"]')?.content ?? '';
+if (!expectedBuildToken) throw new Error('morph fixture requires a document build token');
 const root = Object.assign(new DomMorphRoot(document), {
   querySelectorAll: document.querySelectorAll.bind(document),
 }) as MorphRoot & TargetCollectorRoot;
@@ -23,6 +26,7 @@ document.getElementById('refresh-parent')?.addEventListener('submit', (event) =>
   const form = event.currentTarget as HTMLFormElement;
 
   void submitEnhancedMutation({
+    expectedBuildToken,
     fetch: window.fetch.bind(window) as EnhancedMutationFetch,
     form,
     formData: new FormData(form),

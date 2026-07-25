@@ -24,6 +24,9 @@ declare global {
 }
 
 const store = createQueryStore();
+const expectedBuildToken =
+  document.querySelector<HTMLMetaElement>('meta[name="kovo-build"]')?.content ?? '';
+if (!expectedBuildToken) throw new Error('optimistic rebase requires a document build token');
 const rebaser = new OptimisticRebaser(store);
 const root = Object.assign(new DomMorphRoot(document), {
   querySelectorAll: document.querySelectorAll.bind(document),
@@ -47,6 +50,7 @@ function installOptimisticSubmit(form: HTMLFormElement): void {
     const delay = Number(formData.get('delay') ?? 0);
 
     void submitOptimisticEnhancedMutation({
+      expectedBuildToken,
       fetch: window.fetch.bind(window) as EnhancedMutationFetch,
       form,
       formData,

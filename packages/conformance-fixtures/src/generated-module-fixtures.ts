@@ -1168,6 +1168,9 @@ export function generatedBootstrapDeferredBehaviorFact(
   const installed = runtime.executeBootstrapModule(
     bootstrap.source,
     {
+      '@kovojs/browser/client': {
+        defaultEnhancedFetch: runtime.runtime.defaultEnhancedFetch,
+      },
       '../components/cart-badge.client.js': {
         CartBadge$queryUpdatePlans: queryUpdatePlans,
       },
@@ -1186,6 +1189,9 @@ export function generatedBootstrapDeferredBehaviorFact(
   const applyingRuntime = runtime.executeBootstrapModule(
     bootstrap.source,
     {
+      '@kovojs/browser/client': {
+        defaultEnhancedFetch: runtime.runtime.defaultEnhancedFetch,
+      },
       '../components/cart-badge.client.js': {
         CartBadge$queryUpdatePlans: queryUpdatePlans,
       },
@@ -1725,6 +1731,13 @@ export async function executeInlineEnhancedFormLoaderFixture(
         return id === 'cart-badge' ? fragmentTarget : null;
       },
       querySelector(selector: string) {
+        if (selector === 'meta[name="kovo-build"]') {
+          return {
+            getAttribute(name: string) {
+              return name === 'content' ? 'conformance-runtime-test-build' : null;
+            },
+          };
+        }
         return selector === '[kovo-fragment-target="cart-list"]' ? appendTarget : null;
       },
       querySelectorAll(selector: string) {
@@ -1745,7 +1758,10 @@ export async function executeInlineEnhancedFormLoaderFixture(
         url,
       });
       return {
-        headers: new Headers({ 'Content-Type': 'text/vnd.kovo.fragment+html' }),
+        headers: new Headers({
+          'Content-Type': 'text/vnd.kovo.fragment+html',
+          'Kovo-Build': 'conformance-runtime-test-build',
+        }),
         ok: true,
         redirected: false,
         status: 200,

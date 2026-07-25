@@ -11,23 +11,29 @@ test('merges handler transport headers on enhanced and no-JS mutation responses'
   const pageResponse = await request.get('/');
   const pageHtml = await pageResponse.text();
   const csrf = /name="kovo-csrf" value="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
+  const build = /<meta name="kovo-build" content="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
+  const idem = /name="Kovo-Idem" value="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
   const target = /kovo-fragment-target="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
   const component = /kovo-live-component="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
   const token = /kovo-live-token="([^"]+)"/.exec(pageHtml)?.[1] ?? '';
   const origin = new URL(pageResponse.url()).origin;
   expect(csrf).toBeTruthy();
+  expect(build).toBeTruthy();
+  expect(idem).toBeTruthy();
   expect(target).toBe('header-status');
   expect(component).toBeTruthy();
   expect(token).toBeTruthy();
 
   const enhanced = await request.post('/_m/mutation-response-headers/touch', {
-    form: { 'kovo-csrf': csrf },
+    form: { 'Kovo-Idem': idem, 'kovo-csrf': csrf },
     headers: {
       ...enhancedMutationHeaders({
         liveTargets: `${target}#${component}@${token}:{}`,
         targets: `${target}=headers`,
       }),
+      'Kovo-Build': build,
       'Kovo-Current-Url': pageResponse.url(),
+      'Kovo-Idem': idem,
       origin,
     },
   });

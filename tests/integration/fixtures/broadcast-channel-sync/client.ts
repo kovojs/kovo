@@ -19,6 +19,9 @@ declare global {
 }
 
 const store = createQueryStore();
+const expectedBuildToken =
+  document.querySelector<HTMLMetaElement>('meta[name="kovo-build"]')?.content ?? '';
+if (!expectedBuildToken) throw new Error('broadcast fixture requires a document build token');
 const root = Object.assign(new DomMorphRoot(document), {
   querySelectorAll: document.querySelectorAll.bind(document),
 }) as MorphRoot & TargetCollectorRoot;
@@ -42,6 +45,7 @@ document.getElementById('presence-form')?.addEventListener('submit', (event) => 
 
   void submitEnhancedMutation({
     broadcast,
+    expectedBuildToken,
     fetch: window.fetch.bind(window) as EnhancedMutationFetch,
     form,
     formData: new FormData(form),

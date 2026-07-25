@@ -8,9 +8,9 @@ test.use({ kovoFixture: 'scale-keyed-list' });
 test('keyed-morph preserves identity across a 300-row list patch', async ({ page, kovoApp }) => {
   await page.goto('/');
 
-  const rows = page.locator('[data-bind-list="cart.items"] > li[kovo-key]');
+  const rows = page.locator('cart-list ul > li[kovo-key]');
   await expect(rows).toHaveCount(300);
-  await expect(page.locator('li[kovo-key="r0"] [data-bind=".qty"]')).toHaveText('0');
+  await expect(page.locator('li[kovo-key="r0"] > span').first()).toHaveText('0');
   await expect(page.locator('li[kovo-key="r150"]')).toHaveCount(1);
 
   await Promise.all([
@@ -24,7 +24,7 @@ test('keyed-morph preserves identity across a 300-row list patch', async ({ page
   // The middle row is gone, the count drops by exactly one, the first row updated in place.
   await expect(rows).toHaveCount(299);
   await expect(page.locator('li[kovo-key="r150"]')).toHaveCount(0);
-  await expect(page.locator('li[kovo-key="r0"] [data-bind=".qty"]')).toHaveText('999');
+  await expect(page.locator('li[kovo-key="r0"] > span').first()).toHaveText('999');
 
   // No mis-keying or duplicate keys at volume: keys are unique and order is preserved.
   const keys = await rows.evaluateAll((els) => els.map((el) => el.getAttribute('kovo-key')));

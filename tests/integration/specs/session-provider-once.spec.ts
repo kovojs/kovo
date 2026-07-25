@@ -53,6 +53,8 @@ test('resolves one session for each guarded route, query, and mutation request',
   expect(routeHtml).toContain('session-provider-once-user');
   const csrfToken = csrfTokenFrom(routeHtml);
   const idemToken = idemTokenFrom(routeHtml);
+  const build = /<meta name="kovo-build" content="([^"]+)"/.exec(routeHtml)?.[1] ?? '';
+  expect(build).not.toBe('');
   expect(await eventKinds(request, 'route')).toEqual(['provider', 'guard:route', 'page:route']);
   expect(await eventSubjects(request, 'route')).toEqual(['session-provider-once-user']);
 
@@ -67,6 +69,8 @@ test('resolves one session for each guarded route, query, and mutation request',
   const mutationResponse = await request.post('/_m/session-once/mutate', {
     form: { 'Kovo-Idem': idemToken, 'kovo-csrf': csrfToken },
     headers: {
+      'Kovo-Build': build,
+      'Kovo-Current-Url': routeResponse.url(),
       'Kovo-Fragment': 'true',
       'Kovo-Idem': idemToken,
       'x-session-case': 'mutation',

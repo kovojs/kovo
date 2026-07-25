@@ -18,7 +18,7 @@ test('keeps optional text and attribute bindings empty or removed across SSR and
 }) => {
   await page.goto('/');
 
-  const serverText = page.locator('deal-card [data-bind="deal.contact?.name"]');
+  const serverText = page.locator('deal-card > output');
   const serverLink = page.locator('deal-card a');
   await expect(serverText).toHaveText('');
   await expect(serverLink).not.toHaveAttribute('href');

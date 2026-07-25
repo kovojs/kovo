@@ -173,6 +173,7 @@ it('keeps generated publish on the witnessed postMessage after late principal st
       'Kovo-Build': BUILD_TOKEN,
     }),
     ok: true,
+    redirected: false,
     status: 200,
     text: async () => fragmentBody(responseValue),
     url: `${senderWindow.location.origin}/_m/private`,

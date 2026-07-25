@@ -8,7 +8,7 @@ test('keyed template stamps reorder through fragment patches without replacing r
 }) => {
   await page.goto('/');
 
-  const rows = page.locator('[data-bind-list="board.items"] > li[kovo-key]');
+  const rows = page.locator('board-list ol > li[kovo-key]');
   await expect(rows).toHaveText(['1 Alpha', '2 Beta', '3 Gamma']);
   await page.locator('[kovo-key="a"]').evaluate((element) => {
     (element as HTMLElement & { __identity?: string }).__identity = 'row-a';
@@ -28,10 +28,7 @@ test('keyed template stamps reorder through fragment patches without replacing r
   expect(body).toContain('<kovo-fragment target="board-list">');
 
   await expect(rows).toHaveText(['1 Beta', '2 Gamma', '3 Alpha moved']);
-  await expect(page.locator('[data-bind-list="board.items"] > li').nth(2)).toHaveAttribute(
-    'kovo-key',
-    'a',
-  );
+  await expect(page.locator('board-list ol > li').nth(2)).toHaveAttribute('kovo-key', 'a');
   await expect
     .poll(() =>
       page.locator('[kovo-key="a"]').evaluate((element) => {

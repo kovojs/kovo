@@ -20,6 +20,7 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const anonymousPage = await request.get('/');
   const anonymousHtml = await anonymousPage.text();
   const anonymousCsrf = /name="kovo-csrf" value="([^"]+)"/.exec(anonymousHtml)?.[1] ?? '';
+  const anonymousBuild = /<meta name="kovo-build" content="([^"]+)"/.exec(anonymousHtml)?.[1] ?? '';
   const publicTarget = liveTarget(anonymousHtml, 'data-public-status');
   const origin = new URL(anonymousPage.url()).origin;
   expect(anonymousCsrf).toBeTruthy();
@@ -30,6 +31,7 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const anonymous = await request.post('/_m/targets/refresh', {
     form: { 'kovo-csrf': anonymousCsrf, value: 'anonymous' },
     headers: {
+      'Kovo-Build': anonymousBuild,
       'Kovo-Current-Url': anonymousPage.url(),
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': [
@@ -57,6 +59,7 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const validAnonymous = await request.post('/_m/targets/refresh', {
     form: { 'kovo-csrf': anonymousCsrf, value: 'anonymous-valid' },
     headers: {
+      'Kovo-Build': anonymousBuild,
       'Kovo-Current-Url': anonymousPage.url(),
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': `${publicTarget.target}#${publicTarget.component}@${publicTarget.token}:{}`,
@@ -76,6 +79,7 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   });
   const authedHtml = await authedPage.text();
   const authedCsrf = /name="kovo-csrf" value="([^"]+)"/.exec(authedHtml)?.[1] ?? '';
+  const authedBuild = /<meta name="kovo-build" content="([^"]+)"/.exec(authedHtml)?.[1] ?? '';
   const privateTarget = liveTarget(authedHtml, 'data-private-panel');
   expect(authedCsrf).toBeTruthy();
   expect(privateTarget.target).toBe('private-panel');
@@ -86,6 +90,7 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
     form: { 'kovo-csrf': authedCsrf, value: 'authed' },
     headers: {
       Cookie: 'kovo_target_session=ada',
+      'Kovo-Build': authedBuild,
       'Kovo-Current-Url': authedPage.url(),
       'Kovo-Fragment': 'true',
       'Kovo-Live-Targets': `${privateTarget.target}#${privateTarget.component}@${privateTarget.token}:{}`,

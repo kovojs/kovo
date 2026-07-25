@@ -7,19 +7,30 @@ test('requires CSRF for enhanced mutation POSTs', async ({ page, request, kovoAp
   await page.goto('/');
 
   const token = await page.locator('input[name="kovo-csrf"]').inputValue();
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
+  const enhancedHeaders = {
+    'Kovo-Build': build,
+    'Kovo-Current-Url': page.url(),
+    'Kovo-Fragment': 'true',
+    'Kovo-Idem': idem,
+    'Kovo-Targets': 'csrf-total',
+  };
   expect(token).not.toBe('');
+  expect(build).not.toBe('');
+  expect(idem).not.toBe('');
   expect(await kovoApp.semantic('form')).not.toContain('kovo-csrf');
 
   const missing = await request.post('/_m/csrf-required/deposit', {
-    form: { amount: 'not-a-number' },
-    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'csrf-total' },
+    form: { amount: 'not-a-number', 'Kovo-Idem': idem },
+    headers: enhancedHeaders,
   });
   expect(missing.status()).toBe(422);
   expect(await missing.text()).toContain('data-error-code="CSRF"');
 
   const invalid = await request.post('/_m/csrf-required/deposit', {
-    form: { amount: '1', 'kovo-csrf': 'invalid-token' },
-    headers: { 'Kovo-Fragment': 'true', 'Kovo-Targets': 'csrf-total' },
+    form: { amount: '1', 'Kovo-Idem': idem, 'kovo-csrf': 'invalid-token' },
+    headers: enhancedHeaders,
   });
   expect(invalid.status()).toBe(422);
   expect(await invalid.text()).toContain('data-error-code="CSRF"');

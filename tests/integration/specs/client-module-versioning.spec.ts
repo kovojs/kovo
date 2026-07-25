@@ -9,19 +9,20 @@ test('serves readable versioned client modules used by on:* refs', async ({
   page,
   request,
 }) => {
-  const moduleResponse = await request.get('/c/__v/a1b2c3d4/versioned.client.js');
+  await page.goto('/');
+  const button = page.getByRole('button', { name: 'Load versioned module' });
+  const handlerRef = await button.getAttribute('on:click');
+  const moduleHref = handlerRef?.split('#')[0] ?? '';
+  expect(moduleHref).toMatch(/^\/c\/__v\/[a-f0-9]+\/versioned\.client\.js$/u);
+
+  const moduleResponse = await request.get(moduleHref);
   expect(moduleResponse.status()).toBe(200);
   expect(moduleResponse.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
   expect(moduleResponse.headers()['content-type']).toBe('text/javascript; charset=utf-8');
   expect(await moduleResponse.text()).toContain('export function mark');
 
-  await page.goto('/');
-  const button = page.getByRole('button', { name: 'Load versioned module' });
-  await expect(button).toHaveAttribute('on:click', '/c/__v/a1b2c3d4/versioned.client.js#mark');
-  await expect(button).toHaveAttribute(
-    'data-kovo-module-allowlist',
-    '/c/__v/a1b2c3d4/versioned.client.js',
-  );
+  await expect(button).toHaveAttribute('on:click', `${moduleHref}#mark`);
+  await expect(button).toHaveAttribute('data-kovo-module-allowlist', moduleHref);
 
   await button.click();
   await expect(page.locator('[data-client-version]')).toHaveText('loaded:a1b2c3d4');

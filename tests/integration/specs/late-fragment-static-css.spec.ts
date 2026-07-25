@@ -16,14 +16,20 @@ test('enhanced mutation fragments deliver static late stylesheet links once', as
 }) => {
   const assetCss = await readFile(fragmentCssAssetPath, 'utf8');
   expect(assetCss).toMatchSnapshot('late-fragment-static-css.css');
+  await page.goto('/');
+  const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
+  const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
 
   // Assert wire bytes through the API client. Chromium may evict a completed enhanced-navigation
   // response body from CDP under a loaded shard even when `text()` starts immediately.
   const wireResponse = await request.post('/_m/late-fragment-static-css/reveal', {
-    form: {},
+    form: { 'Kovo-Idem': idem },
     headers: {
       Accept: 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Build': build,
+      'Kovo-Current-Url': page.url(),
       'Kovo-Fragment': 'true',
+      'Kovo-Idem': idem,
       'Kovo-Stream': 'true',
     },
   });
@@ -33,7 +39,6 @@ test('enhanced mutation fragments deliver static late stylesheet links once', as
   expect(body.match(/href="\/assets\/fragment\.css"/g)).toHaveLength(1);
   expect(body).toContain('<article class="recommendation-card" data-recommendation>');
 
-  await page.goto('/');
   await expect(page.locator('link[href="/assets/fragment.css"]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Show recommendation' }).click();

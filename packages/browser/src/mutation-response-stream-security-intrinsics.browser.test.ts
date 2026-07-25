@@ -7,6 +7,7 @@ import { createQueryStore } from './query-store.js';
 
 const nativeGetReader = ReadableStream.prototype.getReader;
 const nativeStringSlice = String.prototype.slice;
+const BUILD_TOKEN = 'build-stream-security';
 const frames: HTMLIFrameElement[] = [];
 
 afterEach(() => {
@@ -142,7 +143,7 @@ it('pins the generated inline streaming mutation reader before a late getReader 
   // controls; this exercises the shipped source rather than hand-authored IR.
   const frame = await createSameOriginFrame(
     [
-      '<!doctype html><html><head></head><body>',
+      `<!doctype html><html><head><meta name="kovo-build" content="${BUILD_TOKEN}"></head><body>`,
       '<form enhance data-mutation="chat" data-mutation-stream action="/_m/chat" method="post">',
       '<input type="hidden" name="Kovo-Idem" value="v1_1750000000000_000102030405060708090a0b0c0d0e0f">',
       '<button>send</button></form>',
@@ -162,8 +163,10 @@ it('pins the generated inline streaming mutation reader before a late getReader 
     body: safeBody,
     headers: new frameWindow.Headers({
       'Content-Type': 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Build': BUILD_TOKEN,
     }),
     ok: true,
+    redirected: false,
     status: 200,
     url: `${frameWindow.location.origin}/_m/chat`,
   }));

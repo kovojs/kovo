@@ -8,7 +8,7 @@ test('updates text and attribute bindings from current server and state surfaces
 }) => {
   await page.goto('/');
 
-  const queryOutput = page.locator('binding-card [data-bind="card.text"]');
+  const queryOutput = page.locator('binding-card > output');
   const queryButton = page.locator('binding-card > button[type="button"]');
   await expect(queryOutput).toHaveText('Initial text');
   await expect(queryButton).toHaveAttribute('aria-label', 'Initial card');
