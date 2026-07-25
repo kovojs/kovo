@@ -470,13 +470,15 @@ function scaffoldWithPackedCreateKovo(
   execStarterCommand(
     'pnpm',
     [
+      '--dir',
+      creatorRoot,
       'add',
       '--ignore-workspace',
       '--save-exact',
       `create-kovo@${fileSpec(creatorRoot, createKovoTarball)}`,
     ],
     {
-      cwd: creatorRoot,
+      cwd: dirname(root),
       env: starterInstallEnv(creatorRoot),
       stdio: 'pipe',
     },
@@ -492,7 +494,11 @@ function scaffoldWithPackedCreateKovo(
     args.push('--postgres');
   }
 
-  execStarterCommand(resolveStarterBin(creatorRoot, 'create-kovo'), args, {
+  const packedCreateKovoBin = join(creatorRoot, 'node_modules/create-kovo/dist/index.mjs');
+  if (!existsSync(packedCreateKovoBin)) {
+    throw new Error('Packed create-kovo install did not materialize dist/index.mjs.');
+  }
+  execStarterCommand(process.execPath, [packedCreateKovoBin, ...args], {
     cwd: dirname(root),
     env: withStarterBinOnPath(creatorRoot),
     stdio: 'pipe',
