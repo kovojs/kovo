@@ -690,9 +690,7 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
     for (let index = 0; index < translations; index += 1) {
       expect(verifyEmittedTranslation(input).ok).toBe(true);
     }
-    expect(performance.now() - start).toBeLessThan(
-      translations * maxMillisecondsPerTranslation,
-    );
+    expect(performance.now() - start).toBeLessThan(translations * maxMillisecondsPerTranslation);
   });
 
   it('does not hide an escaped exact secret token through late Array.some', () => {
