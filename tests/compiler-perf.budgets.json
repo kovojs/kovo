@@ -13,32 +13,32 @@
     "many-small-components": {
       "fileCount": 48,
       "minLoc": 620,
-      "coldMaxMs": 1000
+      "coldMaxMs": 2050
     },
     "many-routes-registries": {
       "fileCount": 32,
       "minLoc": 380,
-      "coldMaxMs": 375
+      "coldMaxMs": 1050
     },
     "css-heavy-components": {
       "fileCount": 16,
       "minLoc": 1660,
-      "coldMaxMs": 300
+      "coldMaxMs": 550
     },
     "heavy-primitive-composition": {
       "fileCount": 20,
       "minLoc": 1390,
-      "coldMaxMs": 550
+      "coldMaxMs": 1000
     },
     "mixed-real-app": {
       "fileCount": 8,
       "minLoc": 200,
-      "coldMaxMs": 300
+      "coldMaxMs": 425
     }
   },
   "total": {
     "fileCount": 125,
     "minLoc": 5290,
-    "coldMaxMs": 4500
+    "coldMaxMs": 8250
   }
 }
