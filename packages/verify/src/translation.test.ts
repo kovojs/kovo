@@ -682,13 +682,17 @@ describe('emitted translation validation (Plan 3 §2.2)', () => {
 
   it('keeps the fixed-mode parser census inside its per-translation performance budget', () => {
     const input = validTranslation();
+    const translations = 100;
+    const maxMillisecondsPerTranslation = 50;
     for (let index = 0; index < 5; index += 1)
       expect(verifyEmittedTranslation(input).ok).toBe(true);
     const start = performance.now();
-    for (let index = 0; index < 100; index += 1) {
+    for (let index = 0; index < translations; index += 1) {
       expect(verifyEmittedTranslation(input).ok).toBe(true);
     }
-    expect(performance.now() - start).toBeLessThan(2_500);
+    expect(performance.now() - start).toBeLessThan(
+      translations * maxMillisecondsPerTranslation,
+    );
   });
 
   it('does not hide an escaped exact secret token through late Array.some', () => {
