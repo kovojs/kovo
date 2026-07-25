@@ -1,6 +1,6 @@
 {
   "schema": "kovo.plan3-security-gate-budgets/v1",
-  "budgetVersion": "2026-07-23.1",
+  "budgetVersion": "2026-07-24.1",
   "intendedRunner": {
     "architecture": "x64",
     "ciImage": "github-actions/ubuntu-24.04",
@@ -891,12 +891,12 @@
     },
     {
       "id": "metric-e-rounds",
-      "budgetVersion": 2,
+      "budgetVersion": 3,
       "planSections": ["convergence-e"],
       "ciJob": "static-core",
       "entrypoint": "pnpm run check:metric-e-rounds",
       "groups": [],
-      "wallTimeCeilingMs": 300000,
+      "wallTimeCeilingMs": 360000,
       "peakRssCeilingMiB": 1536,
       "buildTime": {
         "status": "not-applicable",
