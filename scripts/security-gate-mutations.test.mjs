@@ -758,7 +758,7 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
-          name: 'security-test-build-gate/drop-generated-paranoid-acceptance-proof-enrollment',
+          name: 'security-test-build-gate/drop-generated-paranoid-closure-proof-enrollment',
           status: 'killed',
         }),
         expect.objectContaining({
