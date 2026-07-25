@@ -1,4 +1,5 @@
 // SPEC.md §9.1/§10.3: duplicate Kovo-Idem submissions replay without re-running writes.
+import { enhancedMutationHeaders } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'idempotent-mutation' });
@@ -14,25 +15,25 @@ test('replays duplicate idempotency keys without executing the write twice', asy
   const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
   const target = page.locator('[kovo-fragment-target="idem-status"]');
-  const liveTarget = [
-    await target.getAttribute('kovo-fragment-target'),
-    '#',
-    await target.getAttribute('kovo-live-component'),
-    '@',
-    await target.getAttribute('kovo-live-token'),
-    ':',
-    (await target.getAttribute('kovo-props')) ?? '{}',
-  ].join('');
+  const targetName = (await target.getAttribute('kovo-fragment-target')) ?? '';
+  const component = (await target.getAttribute('kovo-live-component')) ?? '';
+  const attestation = (await target.getAttribute('kovo-live-token')) ?? '';
+  const props = JSON.parse((await target.getAttribute('kovo-props')) ?? '{}') as Record<
+    string,
+    unknown
+  >;
+  const mutationHeaders = enhancedMutationHeaders({
+    liveTargets: [{ attestation, component, props, target: targetName }],
+    targets: [{ queries: 'idem', target: targetName }],
+  });
 
   const first = await request.post('/_m/idempotent-mutation/record', {
     form: { note: 'first', 'kovo-csrf': token },
     headers: {
+      ...mutationHeaders,
       'Kovo-Build': build,
-      'Kovo-Fragment': 'true',
       'Kovo-Idem': idem,
       'Kovo-Current-Url': page.url(),
-      'Kovo-Live-Targets': liveTarget,
-      'Kovo-Targets': 'idem-status=idem',
       origin,
     },
   });
@@ -44,12 +45,10 @@ test('replays duplicate idempotency keys without executing the write twice', asy
   const duplicate = await request.post('/_m/idempotent-mutation/record', {
     form: { note: 'first', 'kovo-csrf': token },
     headers: {
+      ...mutationHeaders,
       'Kovo-Build': build,
-      'Kovo-Fragment': 'true',
       'Kovo-Idem': idem,
       'Kovo-Current-Url': page.url(),
-      'Kovo-Live-Targets': liveTarget,
-      'Kovo-Targets': 'idem-status=idem',
       origin,
     },
   });

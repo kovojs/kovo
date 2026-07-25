@@ -96,7 +96,7 @@ describe('query hydration browser runtime', () => {
     if (!output) throw new Error('missing recommendations binding output');
 
     store.subscribe('cart', cartPlan);
-    store.subscribe('recommendations', recommendationsPlan, 'homepage');
+    store.subscribe('recommendations', recommendationsPlan, 'recommendations:homepage');
 
     const loader = installKovoLoader({
       importModule: vi.fn(),
@@ -132,7 +132,7 @@ describe('query hydration browser runtime', () => {
     // query apply path without replaying already observed server script nodes,
     // including canonical instance keys from SPEC.md §10.2.
     expect(store.get('cart')).toEqual({ count: 1 });
-    expect(store.get('recommendations', 'homepage')).toEqual({ items: ['p1'] });
+    expect(store.get('recommendations', 'recommendations:homepage')).toEqual({ items: ['p1'] });
     expect(output.textContent).toBe('["p1"]');
     expect(cartPlan).toHaveBeenCalledTimes(1);
     expect(recommendationsPlan).toHaveBeenCalledWith({ items: ['p1'] });

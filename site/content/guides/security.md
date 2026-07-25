@@ -196,14 +196,14 @@ If a machine client still uses `mutation()` and your app configures a replay sto
 the verified caller:
 
 ```ts
-import { guard, mutation, s } from '@kovojs/server';
+import { mutation, s } from '@kovojs/server';
 
 declare function verifySignedImportRequest(request: Request): boolean;
 
-export const importRows = mutation('import/rows', {
+export const importRows = mutation({
   csrf: false,
   csrfJustification: 'the gateway verifies a signed X-Import-Key header',
-  guard: guard('verified signed import request', verifySignedImportRequest),
+  guard: verifySignedImportRequest,
   input: s.object({ batchId: s.string() }),
   machineReplayPrincipal: (request) => request.headers.get('X-Import-Tenant') ?? '',
   handler: (input) => input,
@@ -458,7 +458,7 @@ Do not hand-build storage URLs or raw download endpoints. Use a framework downlo
 short-lived signed URL from the request context.
 
 ```ts
-import { createStorageDownloadEndpoint, guards, route } from '@kovojs/server';
+import { createStorageDownloadEndpoint, guards, route, scopedKey } from '@kovojs/server';
 
 export const downloads = createStorageDownloadEndpoint({
   basePath: '/downloads',
@@ -471,7 +471,7 @@ export const invoiceRoute = route('/account/invoice', {
   guard: guards.authed(),
   page: async ({ signUrl }, req: { session: { user: { id?: string } } }) => {
     const signed = await signUrl!({
-      key: `invoices/${req.session.user.id}/latest.pdf`,
+      key: scopedKey(req, `invoices/${req.session.user.id}/latest.pdf`),
       scope: 'invoice-download',
       expiresIn: 10 * 60 * 1000,
     });

@@ -1,5 +1,6 @@
 // SPEC.md §9.1/§10.3: simultaneous enhanced submissions with one Kovo-Idem
 // execute once and replay the reserved response to the duplicate.
+import { enhancedMutationHeaders } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-idempotency-concurrent' });
@@ -17,25 +18,25 @@ test('coalesces concurrent duplicate enhanced mutation submissions', async ({
   const idem = await page.locator('input[name="Kovo-Idem"]').inputValue();
   const build = (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '';
   const target = page.locator('[kovo-fragment-target="idem-concurrent-status"]');
-  const liveTarget = [
-    await target.getAttribute('kovo-fragment-target'),
-    '#',
-    await target.getAttribute('kovo-live-component'),
-    '@',
-    await target.getAttribute('kovo-live-token'),
-    ':',
-    (await target.getAttribute('kovo-props')) ?? '{}',
-  ].join('');
+  const targetName = (await target.getAttribute('kovo-fragment-target')) ?? '';
+  const component = (await target.getAttribute('kovo-live-component')) ?? '';
+  const attestation = (await target.getAttribute('kovo-live-token')) ?? '';
+  const props = JSON.parse((await target.getAttribute('kovo-props')) ?? '{}') as Record<
+    string,
+    unknown
+  >;
+  const mutationHeaders = enhancedMutationHeaders({
+    liveTargets: [{ attestation, component, props, target: targetName }],
+    targets: [{ queries: 'idem', target: targetName }],
+  });
   const post = () =>
     request.post('/_m/mutation-idempotency-concurrent/record', {
       form: { note: 'race', 'Kovo-Idem': idem, 'kovo-csrf': token },
       headers: {
+        ...mutationHeaders,
         'Kovo-Build': build,
-        'Kovo-Fragment': 'true',
         'Kovo-Idem': idem,
         'Kovo-Current-Url': page.url(),
-        'Kovo-Live-Targets': liveTarget,
-        'Kovo-Targets': 'idem-concurrent-status=idem',
         origin,
       },
     });

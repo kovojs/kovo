@@ -1069,7 +1069,7 @@ function installInlineKovoLoader(im) {
   const hsa = frameworkWireTargetCodec.attestationIsValid;
   const hsc = frameworkWireTargetCodec.componentIsValid;
   const targetIdentity = (el) =>
-    ras(el, 'kovo-fragment-target') ?? ras(el, 'id') ?? ras(el, 'kovo-c') ?? '';
+    ras(el, 'kovo-fragment-target') ?? ras(el, 'id') ?? ras(el, 'kovo-c');
   const liveTargetIdentity = (el) =>
     ras(el, 'kovo-live-component') ??
     ras(el, 'kovo-c') ??
@@ -1092,7 +1092,8 @@ function installInlineKovoLoader(im) {
       if (!el) continue;
       const deps = rd(ras(el, 'kovo-deps'));
       const target = targetIdentity(el);
-      if (!hsaf(target) || !target) {
+      if (target === null) continue;
+      if (!hsaf(target)) {
         throw new TypeError('Kovo target metadata contains an invalid target identity.');
       }
       if (hasSnapshotValue(seen, target)) {

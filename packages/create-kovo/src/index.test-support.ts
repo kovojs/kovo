@@ -224,6 +224,12 @@ export function resolveStarterBin(root: string, name: string): string {
       const packageBin = join(dirname(localPackageJson), bin);
       if (existsSync(packageBin)) return realpathSync(packageBin);
     }
+    // pnpm preserves the workspace-facing source bin in packed package metadata.
+    // Published create-kovo tarballs omit src/ and carry the runnable artifact in dist/.
+    if (name === 'create-kovo') {
+      const packedBin = join(dirname(localPackageJson), 'dist/index.mjs');
+      if (existsSync(packedBin)) return realpathSync(packedBin);
+    }
   }
   return resolveBin(name);
 }

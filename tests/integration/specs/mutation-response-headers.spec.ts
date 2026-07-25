@@ -28,8 +28,8 @@ test('merges handler transport headers on enhanced and no-JS mutation responses'
     form: { 'Kovo-Idem': idem, 'kovo-csrf': csrf },
     headers: {
       ...enhancedMutationHeaders({
-        liveTargets: `${target}#${component}@${token}:{}`,
-        targets: `${target}=headers`,
+        liveTargets: [{ attestation: token, component, target }],
+        targets: [{ queries: 'headers', target }],
       }),
       'Kovo-Build': build,
       'Kovo-Current-Url': pageResponse.url(),

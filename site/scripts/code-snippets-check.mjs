@@ -1041,6 +1041,7 @@ export const parseComponentXml: any;
 export const queue: any;
 export const query: any;
 export const publicAccess: any;
+export const publicScopedKey: any;
 export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;
@@ -1068,6 +1069,7 @@ export const respond: {
 };
 export const route: any;
 export const s: any;
+export const scopedKey: any;
 export const safeRichHtml: any;
 export const serverValue: any;
 export const selectTriggerAttributes: any;

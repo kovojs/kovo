@@ -115,6 +115,7 @@ To serve the file back, mount a storage download endpoint and mint the URL from 
 import {
   createMemoryStorage,
   createStorageDownloadEndpoint,
+  publicScopedKey,
   route,
   type SigningKeyRing,
 } from '@kovojs/server';
@@ -132,7 +133,10 @@ export const avatarDownloads = createStorageDownloadEndpoint({
 
 export const profileRoute = route('/account/avatar', {
   page: async ({ signUrl }) => {
-    const signed = await signUrl!({ key: 'avatars/example.png', expiresIn: 60_000 });
+    const signed = await signUrl!({
+      key: publicScopedKey('avatars/example.png'),
+      expiresIn: 60_000,
+    });
     return <a href={signed.url}>Download avatar</a>;
   },
 });

@@ -1,5 +1,6 @@
 // SPEC.md §6.5/§9.1: spoofed Kovo-Targets cannot force unauthorized fragment
 // refreshes or leak protected fragment data.
+import { enhancedMutationHeaders } from '@kovojs/test/headers';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'mutation-targets-malicious' });
@@ -31,17 +32,35 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const anonymous = await request.post('/_m/targets/refresh', {
     form: { 'kovo-csrf': anonymousCsrf, value: 'anonymous' },
     headers: {
+      ...enhancedMutationHeaders({
+        liveTargets: [
+          {
+            attestation: publicTarget.token,
+            component: publicTarget.component,
+            target: publicTarget.target,
+          },
+          {
+            attestation: 'forged',
+            component: publicTarget.component,
+            target: publicTarget.target,
+          },
+          {
+            attestation: 'forged',
+            component: 'private-panel',
+            target: 'private-panel',
+          },
+          'bad-target"]',
+        ],
+        targets: [
+          { queries: 'publicTarget', target: publicTarget.target },
+          { target: publicTarget.target },
+          { target: 'unknown-target' },
+          { queries: 'privateTarget', target: 'private-panel' },
+          'bad-target"]',
+        ],
+      }),
       'Kovo-Build': anonymousBuild,
       'Kovo-Current-Url': anonymousPage.url(),
-      'Kovo-Fragment': 'true',
-      'Kovo-Live-Targets': [
-        `${publicTarget.target}#${publicTarget.component}@${publicTarget.token}:{}`,
-        `${publicTarget.target}#${publicTarget.component}@forged:{}`,
-        'private-panel#private-panel@forged:{}',
-        'bad-target"]',
-      ].join('; '),
-      'Kovo-Targets':
-        'public-status; public-status=publicTarget; unknown-target; private-panel=privateTarget; bad-target"]',
       origin,
     },
   });
@@ -59,11 +78,18 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const validAnonymous = await request.post('/_m/targets/refresh', {
     form: { 'kovo-csrf': anonymousCsrf, value: 'anonymous-valid' },
     headers: {
+      ...enhancedMutationHeaders({
+        liveTargets: [
+          {
+            attestation: publicTarget.token,
+            component: publicTarget.component,
+            target: publicTarget.target,
+          },
+        ],
+        targets: [{ queries: 'publicTarget', target: publicTarget.target }],
+      }),
       'Kovo-Build': anonymousBuild,
       'Kovo-Current-Url': anonymousPage.url(),
-      'Kovo-Fragment': 'true',
-      'Kovo-Live-Targets': `${publicTarget.target}#${publicTarget.component}@${publicTarget.token}:{}`,
-      'Kovo-Targets': `${publicTarget.target}=publicTarget`,
       origin,
     },
   });
@@ -89,12 +115,19 @@ test('ignores malformed, duplicate, unknown, and unauthorized mutation targets s
   const authed = await request.post('/_m/targets/refresh', {
     form: { 'kovo-csrf': authedCsrf, value: 'authed' },
     headers: {
+      ...enhancedMutationHeaders({
+        liveTargets: [
+          {
+            attestation: privateTarget.token,
+            component: privateTarget.component,
+            target: privateTarget.target,
+          },
+        ],
+        targets: [{ queries: 'privateTarget', target: privateTarget.target }],
+      }),
       Cookie: 'kovo_target_session=ada',
       'Kovo-Build': authedBuild,
       'Kovo-Current-Url': authedPage.url(),
-      'Kovo-Fragment': 'true',
-      'Kovo-Live-Targets': `${privateTarget.target}#${privateTarget.component}@${privateTarget.token}:{}`,
-      'Kovo-Targets': `${privateTarget.target}=privateTarget`,
       origin,
     },
   });

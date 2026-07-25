@@ -91,6 +91,20 @@ describe('mutation targets', () => {
     );
   });
 
+  it('ignores dependency consumers that have no fragment target identity', () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement({ 'kovo-deps': 'recommendations' }),
+      new FakeTargetElement({
+        'kovo-deps': 'cart',
+        'kovo-fragment-target': 'cart',
+        'kovo-live-token': 'tok_cart',
+      }),
+    ]);
+
+    expect(readLiveTargetSnapshot(root).header).toBe('cart=cart');
+    expect(readLiveTargetSnapshot(root).liveHeader).toBe('cart#cart@tok_cart:{}');
+  });
+
   it('rejects duplicate target identities atomically instead of choosing one descriptor', () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement({

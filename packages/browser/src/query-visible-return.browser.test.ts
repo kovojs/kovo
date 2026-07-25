@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './client.js';
 import { installKovoLoader } from './generated.js';
+import {
+  browserTransportTestBuild,
+  browserTransportTestSourceUrl,
+  queryTestResponse,
+} from './runtime-test-fakes.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -9,21 +14,29 @@ afterEach(() => {
 
 describe('browser query visible-return refetch', () => {
   it('refetches typed reads on document visible-return without a window focus duplicate', async () => {
-    document.body.innerHTML =
-      '<script kovo-query="cart" type="application/json">{"count":1}</script>';
+    document.body.innerHTML = [
+      `<meta name="kovo-build" content="${browserTransportTestBuild}">`,
+      '<script kovo-query="cart" data-kovo-query-href="/_q/cart" type="application/json">{"count":1}</script>',
+    ].join('');
     const store = createQueryStore();
     let resolveText: ((body: string) => void) | undefined;
     const textDone = new Promise<string>((resolve) => {
       resolveText = resolve;
     });
-    const fetch = vi.fn(async () => ({
-      status: 200,
-      text: () => textDone,
-    }));
+    const fetch = vi.fn(async (url: string) =>
+      queryTestResponse(url, {
+        status: 200,
+        text: () => textDone,
+      }),
+    );
 
     const loader = installKovoLoader({
       importModule: vi.fn(),
-      queryRefetch: { fetch },
+      queryRefetch: {
+        expectedBuildToken: browserTransportTestBuild,
+        fetch,
+        sourceUrl: browserTransportTestSourceUrl,
+      },
       queryStore: store,
       root: document,
     });

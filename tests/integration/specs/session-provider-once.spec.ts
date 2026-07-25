@@ -42,9 +42,7 @@ function idemTokenFrom(html: string): string {
   return match[1]!;
 }
 
-test('resolves one session for each guarded route, query, and mutation request', async ({
-  request,
-}) => {
+test('resolves one session subject for each guarded shell evaluation', async ({ request }) => {
   const routeResponse = await request.get('/route', {
     headers: { 'x-session-case': 'route' },
   });
@@ -82,6 +80,8 @@ test('resolves one session for each guarded route, query, and mutation request',
     'provider',
     'guard:mutation',
     'handler:mutation',
+    'provider',
+    'guard:route',
   ]);
   expect(await eventSubjects(request, 'mutation')).toEqual(['session-provider-once-user']);
 });

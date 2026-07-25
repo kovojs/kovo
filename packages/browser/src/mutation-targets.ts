@@ -87,6 +87,10 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     // SPEC.md §9.1: Kovo-Targets is read from the live DOM so patched-in
     // fragment targets participate in the stateless enhanced mutation request.
     const target = readTargetIdentity(element);
+    // Query-plan consumers and enhanced forms may carry kovo-deps without being
+    // independently renderable fragment targets. They inform local query
+    // application but contribute no Kovo-Targets authority.
+    if (target === null) continue;
     const deps = readQueryDependencyIdentities(readRuntimeElementAttribute(element, 'kovo-deps'));
     if (!frameworkWireIdentityIsValid(target)) {
       throw new TypeError('Kovo target collection contains an invalid target identity.');

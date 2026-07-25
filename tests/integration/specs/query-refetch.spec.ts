@@ -31,7 +31,11 @@ test('visible-return refetch updates bound query consumers from typed-read truth
   expect(new URL(page.url()).pathname).toBe('/');
 
   const response = await page.request.get('/_q/refetch', {
-    headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+    headers: {
+      Accept: 'text/html',
+      'Kovo-Build': (await page.locator('meta[name="kovo-build"]').getAttribute('content')) ?? '',
+      'Kovo-Fragment': 'true',
+    },
   });
   expect(response.status()).toBe(200);
   await expect(response.text()).resolves.toMatch(
