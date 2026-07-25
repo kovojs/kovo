@@ -773,7 +773,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "9636feb81d114d85ae8af3f194725c71ff8f5a0df1159664c7fa59d243cd450c"
+      "sourceTreeSha256": "4061e28e3f03926e401831ee2df9d5a7cb57af8df50f3d3025ce1a53c7ff8899"
     },
     {
       "manifestVariants": [
