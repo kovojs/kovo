@@ -54,9 +54,9 @@
       "state": "closed-pending-publication",
       "openedOn": "2026-07-17",
       "closedOn": "2026-07-18",
-      "archiveBy": "2026-07-25",
+      "archiveBy": "2026-08-15",
       "archivePath": "plans/history/bugz-33.md",
-      "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
+      "summary": "Reviewed 2026-07-26: remediation remains complete; publish the exact verified tip, observe required CI, then archive."
     },
     {
       "path": "plans/bugz-34.md",
@@ -64,9 +64,9 @@
       "state": "closed-pending-publication",
       "openedOn": "2026-07-18",
       "closedOn": "2026-07-18",
-      "archiveBy": "2026-07-25",
+      "archiveBy": "2026-08-16",
       "archivePath": "plans/history/bugz-34.md",
-      "summary": "Remediation is complete; publish the exact verified tip, observe required CI, then archive."
+      "summary": "Reviewed 2026-07-26: remediation remains complete; publish the exact verified tip, observe required CI, then archive."
     },
     {
       "path": "plans/bugz-35.md",
