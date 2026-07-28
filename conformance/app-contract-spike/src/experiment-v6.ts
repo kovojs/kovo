@@ -45,14 +45,25 @@ export async function runD1V6Experiment(
   if (dirname(root) !== temporaryRoot) {
     throw new Error('D1 v6 deterministic fixture escaped the operating-system temp root.');
   }
-  await rm(root, {
-    force: true,
-    maxRetries: 5,
-    recursive: true,
-    retryDelay: 50,
-  });
-  await mkdir(root, { recursive: true });
+  const lock = join(temporaryRoot, 'kovo-app-contract-d1-v6-2123d1860.lock');
   try {
+    await mkdir(lock);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(
+        'D1 v6 deterministic fixture is already owned by another measurement process.',
+      );
+    }
+    throw error;
+  }
+  try {
+    await rm(root, {
+      force: true,
+      maxRetries: 5,
+      recursive: true,
+      retryDelay: 50,
+    });
+    await mkdir(root, { recursive: true });
     const artifacts = await buildAndPackFresh(root);
     const packed = await loadAuthenticatedPackedCompiler(artifacts);
     const fixture = await createPrototypeFixture(root, artifacts);
@@ -335,6 +346,7 @@ export async function runD1V6Experiment(
       recursive: true,
       retryDelay: 50,
     });
+    await rm(lock, { force: true, recursive: true });
   }
 }
 
