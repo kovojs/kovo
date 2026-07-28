@@ -524,7 +524,22 @@ function canonicalizeFactorySource(value: string): string {
   );
   const factoryBindings = new Map<string, DeclarationFamily>();
   const appBindings = new Set<string>();
+  const generatedSpanProperties = new Set<ts.PropertyAssignment>();
   for (const statement of sourceFile.statements) {
+    if (isGeneratedSecurityManifest(statement)) {
+      const collectGeneratedSpans = (node: ts.Node): void => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          propertyNameText(node.name) !== undefined &&
+          spanKey(propertyNameText(node.name))
+        ) {
+          generatedSpanProperties.add(node);
+          return;
+        }
+        ts.forEachChild(node, collectGeneratedSpans);
+      };
+      collectGeneratedSpans(statement.declarationList.declarations[0]!.initializer!);
+    }
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteralLike(statement.moduleSpecifier) ||
@@ -574,6 +589,9 @@ function canonicalizeFactorySource(value: string): string {
   const transformed = ts.transform(sourceFile, [
     (context) => {
       const visitor: ts.Visitor = (node) => {
+        if (ts.isPropertyAssignment(node) && generatedSpanProperties.has(node)) {
+          return undefined;
+        }
         if (ts.isNoSubstitutionTemplateLiteral(node)) {
           const canonical = canonicalizeFactorySource(node.text);
           if (canonical !== node.text) {
@@ -595,13 +613,58 @@ function canonicalizeFactorySource(value: string): string {
     },
   ]);
   try {
-    if (exactCallees.size === 0 && !nestedTemplateChanged) return value;
+    if (
+      exactCallees.size === 0 &&
+      generatedSpanProperties.size === 0 &&
+      !nestedTemplateChanged
+    ) {
+      return value;
+    }
     return ts
       .createPrinter({ newLine: ts.NewLineKind.LineFeed, removeComments: false })
       .printFile(transformed.transformed[0] as ts.SourceFile);
   } finally {
     transformed.dispose();
   }
+}
+
+function isGeneratedSecurityManifest(
+  statement: ts.Statement,
+): statement is ts.VariableStatement & {
+  readonly declarationList: ts.VariableDeclarationList & {
+    readonly declarations: readonly [
+      ts.VariableDeclaration & { readonly initializer: ts.CallExpression },
+    ];
+  };
+} {
+  if (
+    !ts.isVariableStatement(statement) ||
+    statement.declarationList.declarations.length !== 1
+  ) {
+    return false;
+  }
+  const declaration = statement.declarationList.declarations[0]!;
+  if (
+    !ts.isIdentifier(declaration.name) ||
+    declaration.name.text !== '__kovoSecurityOperationManifest_v1' ||
+    !declaration.initializer ||
+    !ts.isCallExpression(declaration.initializer)
+  ) {
+    return false;
+  }
+  const callee = declaration.initializer.expression;
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === 'Object' &&
+    callee.name.text === 'freeze'
+  );
+}
+
+function propertyNameText(name: ts.PropertyName): string | undefined {
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)
+    ? name.text
+    : undefined;
 }
 
 function canonicalImportDeclaration(
