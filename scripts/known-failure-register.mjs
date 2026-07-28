@@ -7,6 +7,9 @@ import { pathToFileURL } from 'node:url';
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
 export const KNOWN_FAILURE_REGISTER_SCHEMA = 'kovo-known-failures/v1';
+export const DESIRED_BEHAVIOR_EXIT_CODE = 0;
+export const REPRODUCED_DEFECT_EXIT_CODE = 1;
+export const INFRASTRUCTURE_ERROR_EXIT_CODE = 2;
 export const BASELINE_KNOWN_FAILURE_IDS = Object.freeze([
   'KF-DEVEX-001',
   'KF-DEVEX-002',
@@ -19,6 +22,58 @@ export const BASELINE_KNOWN_FAILURE_IDS = Object.freeze([
   'KF-DEVEX-009',
   'KF-DEVEX-010',
 ]);
+export const BASELINE_KNOWN_FAILURE_OWNERSHIP = Object.freeze({
+  'KF-DEVEX-001': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 development-origin work item',
+    scorecardGates: ['G1'],
+  }),
+  'KF-DEVEX-002': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 dev-reporter work item',
+    scorecardGates: ['G2'],
+  }),
+  'KF-DEVEX-003': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 help/version exit-contract work item',
+    scorecardGates: ['G5'],
+  }),
+  'KF-DEVEX-004': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 source-proof work item',
+    scorecardGates: ['G7'],
+  }),
+  'KF-DEVEX-005': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 transactional-build work item',
+    scorecardGates: ['G8'],
+  }),
+  'KF-DEVEX-006': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 source/deployment-proof split work item',
+    scorecardGates: ['G1', 'G7'],
+  }),
+  'KF-DEVEX-007': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 kovo-add source-closure work item',
+    scorecardGates: ['G4'],
+  }),
+  'KF-DEVEX-008': Object.freeze({
+    fixTrack: 'Track 5',
+    owner: 'Track 5b test-harness batch',
+    scorecardGates: ['G24'],
+  }),
+  'KF-DEVEX-009': Object.freeze({
+    fixTrack: 'Track 3',
+    owner: 'Track 3 version-matched agent-docs work item',
+    scorecardGates: ['G13'],
+  }),
+  'KF-DEVEX-010': Object.freeze({
+    fixTrack: 'Track 1',
+    owner: 'Track 1 diagnostic-empathy work item',
+    scorecardGates: ['G9'],
+  }),
+});
 
 const REGISTER_PATH = 'scripts/known-failure-register.json';
 const PROBE_DIRECTORY = 'scripts/known-failure-probes';
@@ -52,6 +107,9 @@ export function validateKnownFailureRegister(register, options = {}) {
   if (register?.schema !== KNOWN_FAILURE_REGISTER_SCHEMA) {
     findings.push(`schema must be ${KNOWN_FAILURE_REGISTER_SCHEMA}`);
   }
+  if (Object.hasOwn(register ?? {}, 'protocol')) {
+    findings.push('protocol is runner-owned and must not be redefined by register data');
+  }
   if (!Array.isArray(register?.entries)) {
     findings.push('entries must be an array');
     return findings;
@@ -70,6 +128,28 @@ export function validateKnownFailureRegister(register, options = {}) {
     if (!STATES.has(entry.state)) findings.push(`${entry.id}: invalid state ${entry.state}`);
     if (!substantive(entry.desiredBehavior)) {
       findings.push(`${entry.id}: desiredBehavior must be substantive`);
+    }
+    const expectedOwnership = BASELINE_KNOWN_FAILURE_OWNERSHIP[entry.id];
+    if (entry.owner !== expectedOwnership?.owner) {
+      findings.push(`${entry.id}: owner must match its charter implementation work item`);
+    }
+    if (entry.childLedger !== 'devex-gates.md') {
+      findings.push(`${entry.id}: childLedger must be the Track 2 ledger devex-gates.md`);
+    }
+    if (!substantive(entry.observedLayer, 4)) {
+      findings.push(`${entry.id}: observedLayer must identify the observed packed layer`);
+    }
+    if (!substantive(entry.retirementCondition, 24)) {
+      findings.push(`${entry.id}: retirementCondition must be substantive`);
+    }
+    if (
+      entry.planOwnership?.registerTrack !== 'Track 0' ||
+      entry.planOwnership?.reproducerTrack !== 'Track 2' ||
+      entry.planOwnership?.fixTrack !== expectedOwnership?.fixTrack ||
+      JSON.stringify(entry.planOwnership?.scorecardGates) !==
+        JSON.stringify(expectedOwnership?.scorecardGates)
+    ) {
+      findings.push(`${entry.id}: planOwnership must match the charter track and scorecard gates`);
     }
 
     const probe = entry.probe;
@@ -152,6 +232,9 @@ export function runKnownFailureProbes(register, options = {}) {
   const findings = validateKnownFailureRegister(register, { repoRoot });
   if (findings.length > 0) {
     return {
+      schemaValid: false,
+      executableClosureComplete: false,
+      availableProbesPass: false,
       pass: false,
       findings,
       results: [],
@@ -183,21 +266,13 @@ export function runKnownFailureProbes(register, options = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: entry.probe.timeoutMs,
     });
-    if (
-      result.status === register.protocol.reproducedDefectExitCode &&
-      !result.signal &&
-      !result.error
-    ) {
+    if (result.status === REPRODUCED_DEFECT_EXIT_CODE && !result.signal && !result.error) {
       results.push({
         id: entry.id,
         status: 'xfail',
         detail: (result.stderr || result.stdout || '').trim(),
       });
-    } else if (
-      result.status === register.protocol.desiredBehaviorExitCode &&
-      !result.signal &&
-      !result.error
-    ) {
+    } else if (result.status === DESIRED_BEHAVIOR_EXIT_CODE && !result.signal && !result.error) {
       results.push({
         id: entry.id,
         status: 'xpass',
@@ -214,8 +289,17 @@ export function runKnownFailureProbes(register, options = {}) {
       });
     }
   }
+  const executableClosureComplete = results.every(
+    (result) => result.status === 'retired' || ['xfail', 'xpass'].includes(result.status),
+  );
+  const availableProbesPass = results.every((result) =>
+    ['pending-repro', 'retired', 'xfail'].includes(result.status),
+  );
   return {
-    pass: results.every((result) => ['pending-repro', 'retired', 'xfail'].includes(result.status)),
+    schemaValid: true,
+    executableClosureComplete,
+    availableProbesPass,
+    pass: executableClosureComplete && availableProbesPass,
     findings: [],
     results,
   };
@@ -236,8 +320,8 @@ function parseArgs(argv) {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--check') args.check = true;
-    else if (arg === '--run') args.run = true;
+    if (arg === '--validate-schema') args.validateSchema = true;
+    else if (arg === '--run-available') args.runAvailable = true;
     else if (arg === '--require-executable') args.requireExecutable = true;
     else if (arg === '--json') args.json = true;
     else if (arg === '--register') args.register = argv[++index];
@@ -250,10 +334,10 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    'Usage: node scripts/known-failure-register.mjs [--check | --run] [options]',
+    'Usage: node scripts/known-failure-register.mjs [--validate-schema | --run-available | --require-executable] [options]',
     '',
-    '  --check                  Validate schema and missing/stale probe mappings.',
-    '  --run                    Run executable expected-failure probes.',
+    '  --validate-schema        Validate data and mappings; does not claim executable closure.',
+    '  --run-available          Run available expected-failure probes; remains red while gaps exist.',
     '  --packed-manifest <file> Supply the packed-public-packages manifest to packed probes.',
     '  --require-executable     Fail while any entry still has a pending repro gap.',
     '  --json                   Emit machine-readable results.',
@@ -280,13 +364,14 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
     return 1;
   }
   const summary = knownFailureSummary(register);
-  if (args.requireExecutable && summary['pending-repro'] > 0) {
+  const executableClosureComplete = summary['pending-repro'] === 0;
+  if (args.requireExecutable && !executableClosureComplete) {
     process.stderr.write(
       `known-failures/v1\nFAIL pending-repro=${summary['pending-repro']} (repro coverage is incomplete)\n`,
     );
     return 1;
   }
-  if (args.run) {
+  if (args.runAvailable) {
     const result = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: args.packedManifest,
@@ -296,7 +381,13 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
       process.stdout.write(
         `known-failures/v1 ${result.results
           .map((item) => `${item.id}=${item.status}`)
-          .join(' ')}\n${result.pass ? 'OK' : 'FAIL'}\n`,
+          .join(' ')}\n${
+          result.executableClosureComplete
+            ? result.pass
+              ? 'EXECUTABLE_CLOSURE_COMPLETE'
+              : 'EXECUTABLE_CLOSURE_FAILED'
+            : `EXECUTABLE_CLOSURE_INCOMPLETE pending-repro=${summary['pending-repro']}`
+        }\n`,
       );
     }
     return result.pass ? 0 : 1;
@@ -305,15 +396,18 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
     schema: register.schema,
     total: register.entries.length,
     ...summary,
-    reproCoverageComplete: summary['pending-repro'] === 0,
+    schemaValid: true,
+    executableClosureComplete,
   };
   if (args.json) process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
   else {
     process.stdout.write(
-      `known-failures/v1 total=${output.total} executable=${output.executable} pending-repro=${output['pending-repro']} retired=${output.retired}\nOK\n`,
+      `known-failures/v1 total=${output.total} executable=${output.executable} pending-repro=${output['pending-repro']} retired=${output.retired}\nSCHEMA_VALID\n${
+        executableClosureComplete ? 'EXECUTABLE_CLOSURE_COMPLETE' : 'EXECUTABLE_CLOSURE_INCOMPLETE'
+      }\n`,
     );
   }
-  return 0;
+  return args.validateSchema ? 0 : executableClosureComplete ? 0 : 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

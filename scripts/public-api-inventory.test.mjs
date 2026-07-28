@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -88,6 +88,38 @@ describe('public API inventory', () => {
         mkdirSync(path.dirname(absolute), { recursive: true });
         writeFileSync(absolute, "import { feature } from '@fixture/api/feature';\nvoid feature;\n");
       }
+      const declaredPacked = path.join(hostileRoot, 'examples/release-consumer-shadow');
+      mkdirSync(declaredPacked, { recursive: true });
+      writeFileSync(
+        path.join(declaredPacked, '.kovo-public-api-inventory.json'),
+        `${JSON.stringify({
+          schema: 'kovo-public-api-inventory-exclusion/v1',
+          kind: 'packed-fixture',
+        })}\n`,
+      );
+      writeFileSync(
+        path.join(declaredPacked, 'hostile.ts'),
+        "import { feature } from '@fixture/api/feature';\nvoid feature;\n",
+      );
+      const declaredThrowaway = path.join(hostileRoot, 'examples/local-evaluation-copy');
+      mkdirSync(declaredThrowaway, { recursive: true });
+      writeFileSync(
+        path.join(declaredThrowaway, 'package.json'),
+        `${JSON.stringify({
+          name: 'innocently-named-copy',
+          private: true,
+          kovoInventory: { consumerKind: 'throwaway-app' },
+        })}\n`,
+      );
+      writeFileSync(
+        path.join(declaredThrowaway, 'hostile.ts'),
+        "import { feature } from '@fixture/api/feature';\nvoid feature;\n",
+      );
+      symlinkSync(
+        path.join(hostileRoot, 'examples/authored/src'),
+        path.join(hostileRoot, 'examples/authored/dependency-copy'),
+        'dir',
+      );
 
       const inventory = buildPublicApiInventory({ repoRoot: hostileRoot });
       const excluded = inventory.exclusions.map((entry) => [
@@ -103,6 +135,9 @@ describe('public API inventory', () => {
           ['examples/authored/.cache', 'generated-dist-cache'],
           ['examples/packed-app', 'packed-or-throwaway'],
           ['examples/throwaway-app', 'packed-or-throwaway'],
+          ['examples/release-consumer-shadow', 'declared-packed-fixture'],
+          ['examples/local-evaluation-copy', 'declared-throwaway-app'],
+          ['examples/authored/dependency-copy', 'symbolic-link'],
         ]),
       );
       const feature = inventory.exportedDeclarations.find(

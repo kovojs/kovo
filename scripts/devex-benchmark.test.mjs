@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
+  createRunnerFingerprint,
   evaluateBudgets,
   median,
   medianAbsoluteDeviation,
@@ -84,25 +85,41 @@ describe('DevEx benchmark foundation', () => {
     expect(budgets.runner.status).toBe('unratified');
   });
 
+  it('requires at least five statistical samples and validates the runner block', () => {
+    const tooFew = structuredClone(budgets);
+    tooFew.procedure.minimumStatisticalSamples = 4;
+    expect(validateBudgets(tooFew)).toContain(
+      'procedure.minimumStatisticalSamples must be at least 5',
+    );
+
+    const inventedRunner = structuredClone(budgets);
+    inventedRunner.runner.fingerprint = createRunnerFingerprint({
+      name: 'not-ratified',
+      platform: 'linux',
+      arch: 'x64',
+      node: 'v24.0.0',
+      cpuModel: 'fixture',
+    });
+    expect(validateBudgets(inventedRunner)).toContain(
+      'runner.fingerprint must be null until ratification',
+    );
+  });
+
   it('ratifies only from a prior multi-sample baseline plus an explicit target proposal', () => {
     const report = benchmarkReport({
       'check.cold.durationMs': [100, 101, 102, 103, 130],
     });
-    const ratified = ratifyBudgets(budgets, report, {
-      schema: 'kovo-devex-budget-proposal/v1',
-      runner: 'pinned-linux-x64',
-      metrics: {
-        'check.cold.durationMs': {
-          budget: 90,
-          noiseMultiplier: 3,
-          statistic: 'median',
-          targetRationale: 'Keep the packed cold check below the measured baseline.',
-        },
+    const { ratified, validationOptions } = ratifyFixtureBudgets(report, {
+      'check.cold.durationMs': {
+        budget: 90,
+        noiseMultiplier: 3,
+        statistic: 'median',
+        targetRationale: 'Keep the packed cold check below the measured baseline.',
       },
     });
 
     expect(ratified.metrics['check.cold.durationMs'].ratification).toMatchObject({
-      runner: 'pinned-linux-x64',
+      runnerFingerprint: report.runner,
       baseline: 102,
       sampleCount: 5,
       statistic: 'median',
@@ -110,30 +127,75 @@ describe('DevEx benchmark foundation', () => {
       noise: 1,
       noiseMultiplier: 3,
       threshold: 93,
+      baselineReport: {
+        path: 'baselines/fixture.json',
+        schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
+        scenario: 'fixture',
+      },
     });
-    expect(validateBudgets(ratified)).toEqual([]);
+    expect(validateBudgets(ratified, validationOptions)).toEqual([]);
+  });
+
+  it('rejects ratification records that are not bound to the recorded baseline bytes', () => {
+    const report = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(report, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
+      },
+    });
+
+    expect(validateBudgets(ratified)).toContain(
+      'check.cold.durationMs.ratification baseline report provenance could not be verified: baselines/fixture.json',
+    );
+    const invented = structuredClone(ratified);
+    invented.metrics['check.cold.durationMs'].ratification.baseline = 1;
+    expect(validateBudgets(invented, validationOptions)).toContain(
+      'check.cold.durationMs.ratification.baseline does not match its baseline report',
+    );
+    const changedRunner = structuredClone(ratified);
+    changedRunner.runner.fingerprint.cpuModel = 'hand-edited';
+    expect(validateBudgets(changedRunner, validationOptions)).toEqual(
+      expect.arrayContaining([
+        'runner.fingerprint.id does not match its platform/CPU/Node identity',
+        'check.cold.durationMs.ratification runner differs from budgets.runner',
+      ]),
+    );
   });
 
   it('refuses to ratify a statistical metric from a single noisy sample', () => {
+    const report = benchmarkReport({ 'check.cold.durationMs': [100] });
+    const source = baselineOptions(report);
     expect(() =>
-      ratifyBudgets(budgets, benchmarkReport({ 'check.cold.durationMs': [100] }), {
-        schema: 'kovo-devex-budget-proposal/v1',
-        runner: 'pinned-linux-x64',
-        metrics: {
-          'check.cold.durationMs': {
-            budget: 90,
-            noiseMultiplier: 3,
-            targetRationale: 'A target that still needs a real baseline sample set.',
+      ratifyBudgets(
+        budgets,
+        report,
+        {
+          schema: 'kovo-devex-budget-proposal/v1',
+          runnerFingerprint: report.runner,
+          metrics: {
+            'check.cold.durationMs': {
+              budget: 90,
+              noiseMultiplier: 3,
+              targetRationale: 'A target that still needs a real baseline sample set.',
+            },
           },
         },
-      }),
+        source.ratificationOptions,
+      ),
     ).toThrow('has 1 baseline samples; 5 required');
   });
 
-  it('refuses to ratify or evaluate measurements from a differently named runner', () => {
+  it('refuses to ratify or evaluate measurements from any different runner identity field', () => {
+    const defaultReport = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
     const proposal = {
       schema: 'kovo-devex-budget-proposal/v1',
-      runner: 'pinned-linux-x64',
+      runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
           budget: 100,
@@ -142,56 +204,52 @@ describe('DevEx benchmark foundation', () => {
         },
       },
     };
-    expect(() =>
-      ratifyBudgets(
-        budgets,
-        benchmarkReport({ 'check.cold.durationMs': [100, 101, 102, 103, 104] }, 'another-runner'),
-        proposal,
-      ),
-    ).toThrow('does not match proposal runner');
-
-    const ratified = ratifyBudgets(
-      budgets,
-      benchmarkReport({ 'check.cold.durationMs': [100, 101, 102, 103, 104] }),
-      proposal,
+    const anotherRunnerReport = benchmarkReport(
+      { 'check.cold.durationMs': [100, 101, 102, 103, 104] },
+      { cpuModel: 'different-cpu' },
     );
+    const anotherSource = baselineOptions(anotherRunnerReport);
+    expect(() =>
+      ratifyBudgets(budgets, anotherRunnerReport, proposal, anotherSource.ratificationOptions),
+    ).toThrow('baseline runner fingerprint does not match proposal.runnerFingerprint');
+
+    const source = baselineOptions(defaultReport);
+    const ratified = ratifyBudgets(budgets, defaultReport, proposal, source.ratificationOptions);
     const evaluation = evaluateBudgets(
       ratified,
-      benchmarkReport({ 'check.cold.durationMs': [90, 91, 92, 93, 94] }, 'another-runner'),
+      benchmarkReport({ 'check.cold.durationMs': [90, 91, 92, 93, 94] }, { node: 'v25.0.0' }),
+      source.validationOptions,
     );
     expect(evaluation.pass).toBe(false);
     expect(
       evaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
     ).toMatchObject({
       status: 'runner-mismatch',
-      expectedRunner: 'pinned-linux-x64',
-      actualRunner: 'another-runner',
+      expectedRunner: defaultReport.runner,
+      actualRunner: expect.objectContaining({ node: 'v25.0.0' }),
     });
   });
 
   it('gates only ratified metrics and detects a statistically derived breach', () => {
-    const ratified = ratifyBudgets(
-      budgets,
-      benchmarkReport({ 'check.cold.durationMs': [100, 101, 102, 103, 104] }),
-      {
-        schema: 'kovo-devex-budget-proposal/v1',
-        runner: 'pinned-linux-x64',
-        metrics: {
-          'check.cold.durationMs': {
-            budget: 100,
-            noiseMultiplier: 2,
-            targetRationale: 'Hold the packed cold check near the measured median.',
-          },
-        },
+    const report = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(report, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
       },
-    );
+    });
     const passing = evaluateBudgets(
       ratified,
       benchmarkReport({ 'check.cold.durationMs': [99, 100, 101, 102, 103] }),
+      validationOptions,
     );
     const breach = evaluateBudgets(
       ratified,
       benchmarkReport({ 'check.cold.durationMs': [110, 111, 112, 113, 114] }),
+      validationOptions,
     );
 
     expect(passing.pass).toBe(true);
@@ -203,24 +261,80 @@ describe('DevEx benchmark foundation', () => {
       breach.results.find((result) => result.metric === 'check.cold.durationMs'),
     ).toMatchObject({ status: 'breach', observed: 112, threshold: 102 });
   });
+
+  it('makes evaluation red when a statistical report has fewer than five samples', () => {
+    const report = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(report, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
+      },
+    });
+    const evaluation = evaluateBudgets(
+      ratified,
+      benchmarkReport({ 'check.cold.durationMs': [99, 100, 101, 102] }),
+      validationOptions,
+    );
+
+    expect(evaluation.pass).toBe(false);
+    expect(
+      evaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({
+      status: 'insufficient-samples',
+      actualSamples: 4,
+      requiredSamples: 5,
+    });
+  });
 });
 
-function benchmarkReport(metricSamples, runnerName = 'pinned-linux-x64') {
+function benchmarkReport(metricSamples, runnerOverrides = {}) {
   return {
     schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
     scenario: 'fixture',
-    runner: {
-      name: runnerName,
+    runner: createRunnerFingerprint({
+      name: 'pinned-linux-x64',
       platform: 'linux',
       arch: 'x64',
       node: 'v24.0.0',
       cpuModel: 'fixture',
-    },
+      ...runnerOverrides,
+    }),
     metrics: Object.fromEntries(
       Object.entries(metricSamples).map(([metric, samples]) => [
         metric,
         { unit: metric.endsWith('Bytes') ? 'bytes' : 'ms', samples },
       ]),
     ),
+  };
+}
+
+function baselineOptions(report) {
+  const baselineReportPath = 'baselines/fixture.json';
+  const baselineReportBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
+  return {
+    ratificationOptions: { baselineReportPath, baselineReportBytes },
+    validationOptions: {
+      baselineReports: new Map([[baselineReportPath, baselineReportBytes]]),
+    },
+  };
+}
+
+function ratifyFixtureBudgets(report, metrics) {
+  const source = baselineOptions(report);
+  return {
+    ratified: ratifyBudgets(
+      budgets,
+      report,
+      {
+        schema: 'kovo-devex-budget-proposal/v1',
+        runnerFingerprint: report.runner,
+        metrics,
+      },
+      source.ratificationOptions,
+    ),
+    validationOptions: source.validationOptions,
   };
 }

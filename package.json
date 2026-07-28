@@ -38,7 +38,7 @@
     "check:declassification-census": "node scripts/security-cost-budget-runner.mjs --gate declassification-census",
     "check:decided-surface": "node scripts/security-cost-budget-runner.mjs --gate decided-surface",
     "check:decided-surface-artifact": "node scripts/decided-surface-gate.mjs --check-artifact",
-    "check:devex-foundation": "node scripts/devex-benchmark.mjs --check-budgets && node scripts/public-api-inventory.mjs --check && node scripts/known-failure-register.mjs --check && vitest --run scripts/devex-benchmark.test.mjs scripts/public-api-inventory.test.mjs scripts/known-failure-register.test.mjs --reporter=dot",
+    "test:devex-foundation-schema": "node scripts/devex-benchmark.mjs --check-budgets && node scripts/public-api-inventory.mjs --check && node scripts/known-failure-register.mjs --validate-schema && vitest --run scripts/devex-benchmark.test.mjs scripts/public-api-inventory.test.mjs scripts/known-failure-register.test.mjs --reporter=dot",
     "check:security-event-answerability": "node scripts/security-cost-budget-runner.mjs --gate security-event-answerability",
     "check:protocol-alphabet": "node scripts/security-cost-budget-runner.mjs --gate protocol-alphabet",
     "check:model-honesty-boundary": "node scripts/security-cost-budget-runner.mjs --gate model-honesty-boundary",

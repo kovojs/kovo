@@ -16,6 +16,7 @@ import { normalizePackageExports, resolveSourceExportTarget } from './package-ex
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
 export const PUBLIC_API_INVENTORY_SCHEMA = 'kovo-public-api-inventory/v1';
+export const PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA = 'kovo-public-api-inventory-exclusion/v1';
 
 export const CONSUMER_AREAS = Object.freeze([
   'authoredExamples',
@@ -46,6 +47,11 @@ const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
   'generated',
   'node_modules',
   'out',
+]);
+const EXCLUSION_MARKER = '.kovo-public-api-inventory.json';
+const DECLARED_CONSUMER_EXCLUSIONS = new Map([
+  ['packed-fixture', 'declared-packed-fixture'],
+  ['throwaway-app', 'declared-throwaway-app'],
 ]);
 
 function compareStrings(left, right) {
@@ -289,10 +295,47 @@ function addEvidence(evidence, area, relativeFile) {
   if (!bucket.files.includes(relativeFile)) bucket.files.push(relativeFile);
 }
 
-function excludedDirectoryReason(name) {
+function declaredConsumerExclusion(directory) {
+  const markerPath = path.join(directory, EXCLUSION_MARKER);
+  if (existsSync(markerPath)) {
+    const markerStat = lstatSync(markerPath);
+    if (!markerStat.isFile() || markerStat.isSymbolicLink()) {
+      throw new Error(`${markerPath}: inventory exclusion marker must be a regular file`);
+    }
+    const marker = readJson(markerPath);
+    if (marker.schema !== PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA) {
+      throw new Error(`${markerPath}: schema must be ${PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA}`);
+    }
+    const reason = DECLARED_CONSUMER_EXCLUSIONS.get(marker.kind);
+    if (!reason) throw new Error(`${markerPath}: kind must be packed-fixture or throwaway-app`);
+    return reason;
+  }
+
+  const packageJsonPath = path.join(directory, 'package.json');
+  if (!existsSync(packageJsonPath)) return null;
+  const packageJsonStat = lstatSync(packageJsonPath);
+  if (!packageJsonStat.isFile() || packageJsonStat.isSymbolicLink()) return null;
+  const kind = readJson(packageJsonPath)?.kovoInventory?.consumerKind;
+  if (kind === undefined) return null;
+  const reason = DECLARED_CONSUMER_EXCLUSIONS.get(kind);
+  if (!reason) {
+    throw new Error(
+      `${packageJsonPath}: kovoInventory.consumerKind must be packed-fixture or throwaway-app`,
+    );
+  }
+  return reason;
+}
+
+function excludedDirectoryReason(directory, name) {
   if (name === 'node_modules') return 'nested-dependency';
   if (ALWAYS_EXCLUDED_DIRECTORIES.has(name)) return 'generated-dist-cache';
-  if (/^(?:packed|throwaway)(?:[-_.].*)?$/u.test(name) || name === 'scratch') {
+  const declared = declaredConsumerExclusion(directory);
+  if (declared !== null) return declared;
+  if (
+    /^(?:(?:packed|throwaway)(?:[-_.].*)?|scratch|(?:temp|tmp)(?:[-_.]app)?|tarball[-_.]consumer)$/u.test(
+      name,
+    )
+  ) {
     return 'packed-or-throwaway';
   }
   return null;
@@ -341,9 +384,15 @@ function walkConsumerFiles(repoRoot) {
       compareStrings(left.name, right.name),
     )) {
       const absolute = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) continue;
+      if (entry.isSymbolicLink()) {
+        excludedDirectories.push({
+          path: path.relative(repoRoot, absolute).split(path.sep).join('/'),
+          reason: 'symbolic-link',
+        });
+        continue;
+      }
       if (entry.isDirectory()) {
-        const reason = excludedDirectoryReason(entry.name);
+        const reason = excludedDirectoryReason(absolute, entry.name);
         if (reason !== null) {
           excludedDirectories.push({
             path: path.relative(repoRoot, absolute).split(path.sep).join('/'),

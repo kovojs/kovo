@@ -1,9 +1,19 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
@@ -16,6 +26,7 @@ export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v1';
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
+const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -33,6 +44,65 @@ function writeJson(filePath, value) {
 
 function finiteNonNegative(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function sha256(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+function sameJson(left, right) {
+  return isDeepStrictEqual(left, right);
+}
+
+function safeRepositoryRelativePath(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !path.isAbsolute(value) &&
+    value.split(/[\\/]/u).every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+  );
+}
+
+function runnerIdentity(fingerprint) {
+  return {
+    name: fingerprint?.name,
+    platform: fingerprint?.platform,
+    arch: fingerprint?.arch,
+    node: fingerprint?.node,
+    cpuModel: fingerprint?.cpuModel,
+  };
+}
+
+/** Create the immutable identity used to compare baseline and evaluation runners. */
+export function createRunnerFingerprint(identity) {
+  const normalized = runnerIdentity(identity);
+  return {
+    ...normalized,
+    id: sha256(Buffer.from(JSON.stringify(normalized))),
+  };
+}
+
+function validateRunnerFingerprint(fingerprint, label, options = {}) {
+  const findings = [];
+  for (const field of ['name', 'platform', 'arch', 'node', 'cpuModel']) {
+    if (typeof fingerprint?.[field] !== 'string' || fingerprint[field].trim().length === 0) {
+      findings.push(`${label}.${field} must be a non-empty string`);
+    }
+  }
+  if (findings.length === 0) {
+    const expected = createRunnerFingerprint(fingerprint);
+    if (fingerprint.id !== expected.id) {
+      findings.push(`${label}.id does not match its platform/CPU/Node identity`);
+    }
+  }
+  const allowed = new Set(['id', 'name', 'platform', 'arch', 'node', 'cpuModel']);
+  for (const field of Object.keys(fingerprint ?? {})) {
+    if (!allowed.has(field)) findings.push(`${label}.${field} is not part of the runner identity`);
+  }
+  if (options.requireNamed && fingerprint?.name?.trim().length === 0) {
+    findings.push(`${label}.name is required for ratification`);
+  }
+  return findings;
 }
 
 export function median(values) {
@@ -117,14 +187,14 @@ export function validateBenchmarkScenario(scenario) {
   return findings;
 }
 
-function runnerFingerprint(runnerName) {
-  return {
+function currentRunnerFingerprint(runnerName) {
+  return createRunnerFingerprint({
     name: runnerName ?? null,
     platform: process.platform,
     arch: process.arch,
     node: process.version,
     cpuModel: os.cpus()[0]?.model ?? 'unknown',
-  };
+  });
 }
 
 function timeInvocation(command, platform) {
@@ -271,22 +341,128 @@ export function runBenchmarkScenario(scenario, options = {}) {
   return {
     schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
     scenario: scenario.name,
-    runner: runnerFingerprint(scenario.runnerName),
+    runner: currentRunnerFingerprint(scenario.runnerName),
     sampleCount: samples,
     commands,
     metrics,
   };
 }
 
-export function validateBudgets(budgets) {
+function baselineSourceBytes(record, options) {
+  const sourcePath = record?.baselineReport?.path;
+  if (!safeRepositoryRelativePath(sourcePath)) return null;
+  const supplied = options.baselineReports?.get(sourcePath);
+  if (supplied !== undefined) {
+    return Buffer.isBuffer(supplied) ? supplied : Buffer.from(supplied);
+  }
+  if (!options.repoRoot) return null;
+  const absolute = path.resolve(options.repoRoot, sourcePath);
+  const root = path.resolve(options.repoRoot);
+  if (!existsSync(root) || !lstatSync(root).isDirectory()) return null;
+  if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) return null;
+  if (
+    !existsSync(absolute) ||
+    !lstatSync(absolute).isFile() ||
+    lstatSync(absolute).isSymbolicLink()
+  ) {
+    return null;
+  }
+  const realRoot = realpathSync(root);
+  const realSource = realpathSync(absolute);
+  if (realSource === realRoot || !realSource.startsWith(`${realRoot}${path.sep}`)) return null;
+  return readFileSync(absolute);
+}
+
+function validateRatificationProvenance(metricId, metric, record, budgets, options) {
+  const findings = [];
+  const source = record?.baselineReport;
+  if (!safeRepositoryRelativePath(source?.path)) {
+    findings.push(`${metricId}.ratification.baselineReport.path must be repository-relative`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(source?.sha256 ?? '')) {
+    findings.push(`${metricId}.ratification.baselineReport.sha256 is invalid`);
+  }
+  if (source?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
+    findings.push(
+      `${metricId}.ratification.baselineReport.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`,
+    );
+  }
+  if (typeof source?.scenario !== 'string' || source.scenario.trim().length === 0) {
+    findings.push(`${metricId}.ratification.baselineReport.scenario is required`);
+  }
+  if (findings.length > 0) return findings;
+
+  const bytes = baselineSourceBytes(record, options);
+  if (bytes === null) {
+    findings.push(
+      `${metricId}.ratification baseline report provenance could not be verified: ${source.path}`,
+    );
+    return findings;
+  }
+  if (sha256(bytes) !== source.sha256) {
+    findings.push(`${metricId}.ratification baseline report digest does not match ${source.path}`);
+    return findings;
+  }
+
+  let report;
+  try {
+    report = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    findings.push(`${metricId}.ratification baseline report is not valid JSON`);
+    return findings;
+  }
+  if (report.schema !== source.schema || report.scenario !== source.scenario) {
+    findings.push(`${metricId}.ratification baseline report identity does not match provenance`);
+  }
+  findings.push(...validateRunnerFingerprint(report.runner, `${metricId}.baselineReport.runner`));
+  if (!sameJson(report.runner, record.runnerFingerprint)) {
+    findings.push(`${metricId}.ratification runner does not match its baseline report`);
+  }
+  const baselineMetric = report.metrics?.[metricId];
+  if (baselineMetric?.unit !== metric.unit) {
+    findings.push(`${metricId}.ratification baseline metric unit does not match budget unit`);
+  }
+  const samples = baselineMetric?.samples;
+  const requiredSamples =
+    metric.sampling === 'deterministic'
+      ? 1
+      : Number.isInteger(budgets.procedure?.minimumStatisticalSamples)
+        ? budgets.procedure.minimumStatisticalSamples
+        : Number.POSITIVE_INFINITY;
+  if (
+    !Array.isArray(samples) ||
+    samples.length < requiredSamples ||
+    samples.some((value) => !finiteNonNegative(value))
+  ) {
+    findings.push(
+      `${metricId}.ratification baseline report must contain ${requiredSamples} valid samples`,
+    );
+    return findings;
+  }
+  if (!STATISTICS.has(record.statistic)) return findings;
+  const expectedBaseline = statisticValue(samples, record.statistic);
+  const expectedNoise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
+  if (record.sampleCount !== samples.length) {
+    findings.push(`${metricId}.ratification.sampleCount does not match its baseline report`);
+  }
+  if (record.baseline !== expectedBaseline) {
+    findings.push(`${metricId}.ratification.baseline does not match its baseline report`);
+  }
+  if (record.noise !== expectedNoise) {
+    findings.push(`${metricId}.ratification.noise does not match its baseline report`);
+  }
+  return findings;
+}
+
+export function validateBudgets(budgets, options = {}) {
   const findings = [];
   if (budgets?.schema !== DEVEX_BUDGETS_SCHEMA) {
     findings.push(`schema must be ${DEVEX_BUDGETS_SCHEMA}`);
   }
   if (!Number.isInteger(budgets?.procedure?.minimumStatisticalSamples)) {
     findings.push('procedure.minimumStatisticalSamples must be an integer');
-  } else if (budgets.procedure.minimumStatisticalSamples < 2) {
-    findings.push('procedure.minimumStatisticalSamples must be at least 2');
+  } else if (budgets.procedure.minimumStatisticalSamples < 5) {
+    findings.push('procedure.minimumStatisticalSamples must be at least 5');
   }
   if (!STATISTICS.has(budgets?.procedure?.statistic)) {
     findings.push('procedure.statistic must be median or p95');
@@ -296,6 +472,28 @@ export function validateBudgets(budgets) {
   }
   if (budgets?.procedure?.thresholdFormula !== 'budget + noiseMultiplier * noise') {
     findings.push('procedure.thresholdFormula must be budget + noiseMultiplier * noise');
+  }
+  if (!RUNNER_STATUSES.has(budgets?.runner?.status)) {
+    findings.push('runner.status must be unratified or ratified');
+  }
+  if (
+    !Array.isArray(budgets?.runner?.requirements) ||
+    budgets.runner.requirements.length === 0 ||
+    budgets.runner.requirements.some(
+      (requirement) => typeof requirement !== 'string' || requirement.trim().length < 12,
+    )
+  ) {
+    findings.push('runner.requirements must contain substantive pinning requirements');
+  }
+  if (budgets?.runner?.status === 'unratified' && budgets.runner.fingerprint !== null) {
+    findings.push('runner.fingerprint must be null until ratification');
+  }
+  if (budgets?.runner?.status === 'ratified') {
+    findings.push(
+      ...validateRunnerFingerprint(budgets.runner.fingerprint, 'runner.fingerprint', {
+        requireNamed: true,
+      }),
+    );
   }
   if (!budgets?.metrics || typeof budgets.metrics !== 'object' || Array.isArray(budgets.metrics)) {
     findings.push('metrics must be an object');
@@ -332,7 +530,11 @@ export function validateBudgets(budgets) {
         findings.push(`${metricId}.ratification.threshold does not match the recorded formula`);
       }
     }
-    if (!Number.isInteger(record.sampleCount) || record.sampleCount <= 0) {
+    const requiredSamples =
+      metric.sampling === 'deterministic'
+        ? 1
+        : (budgets.procedure?.minimumStatisticalSamples ?? Number.POSITIVE_INFINITY);
+    if (!Number.isInteger(record.sampleCount) || record.sampleCount < requiredSamples) {
       findings.push(`${metricId}.ratification.sampleCount invalid`);
     }
     if (!STATISTICS.has(record.statistic)) {
@@ -341,9 +543,29 @@ export function validateBudgets(budgets) {
     if (!finiteNonNegative(record.baseline)) {
       findings.push(`${metricId}.ratification.baseline invalid`);
     }
-    if (typeof record.runner !== 'string' || record.runner.length === 0) {
-      findings.push(`${metricId}.ratification.runner is required`);
+    findings.push(
+      ...validateRunnerFingerprint(
+        record.runnerFingerprint,
+        `${metricId}.ratification.runnerFingerprint`,
+        { requireNamed: true },
+      ),
+    );
+    if (
+      budgets?.runner?.status === 'ratified' &&
+      !sameJson(record.runnerFingerprint, budgets.runner.fingerprint)
+    ) {
+      findings.push(`${metricId}.ratification runner differs from budgets.runner`);
     }
+    findings.push(...validateRatificationProvenance(metricId, metric, record, budgets, options));
+  }
+  const ratifiedMetricCount = Object.values(budgets.metrics).filter(
+    (metric) => metric?.ratification !== null,
+  ).length;
+  if (budgets?.runner?.status === 'unratified' && ratifiedMetricCount > 0) {
+    findings.push('runner.status cannot be unratified while metric ratifications exist');
+  }
+  if (budgets?.runner?.status === 'ratified' && ratifiedMetricCount === 0) {
+    findings.push('runner.status cannot be ratified without at least one metric ratification');
   }
   return findings;
 }
@@ -353,15 +575,19 @@ function validateProposal(proposal) {
   if (proposal?.schema !== DEVEX_BUDGET_PROPOSAL_SCHEMA) {
     findings.push(`proposal.schema must be ${DEVEX_BUDGET_PROPOSAL_SCHEMA}`);
   }
-  if (typeof proposal?.runner !== 'string' || proposal.runner.trim().length === 0) {
-    findings.push('proposal.runner must be a non-empty string');
-  }
+  findings.push(
+    ...validateRunnerFingerprint(proposal?.runnerFingerprint, 'proposal.runnerFingerprint', {
+      requireNamed: true,
+    }),
+  );
   if (
     !proposal?.metrics ||
     typeof proposal.metrics !== 'object' ||
     Array.isArray(proposal.metrics)
   ) {
     findings.push('proposal.metrics must be an object');
+  } else if (Object.keys(proposal.metrics).length === 0) {
+    findings.push('proposal.metrics must contain at least one metric');
   }
   return findings;
 }
@@ -370,25 +596,55 @@ function validateProposal(proposal) {
  * Ratification is deliberately a second operation over an already-recorded baseline. A proposal
  * supplies the product target and rationale; the harness never invents a threshold from one run.
  */
-export function ratifyBudgets(budgets, baselineReport, proposal) {
-  const findings = [...validateBudgets(budgets), ...validateProposal(proposal)];
+export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
+  const findings = [
+    ...validateBudgets(budgets, {
+      baselineReports: options.baselineReports,
+      repoRoot: options.repoRoot,
+    }),
+    ...validateProposal(proposal),
+  ];
   if (baselineReport?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
     findings.push(`baseline report schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`);
   }
+  findings.push(...validateRunnerFingerprint(baselineReport?.runner, 'baselineReport.runner'));
+  if (!safeRepositoryRelativePath(options.baselineReportPath)) {
+    findings.push('baselineReportPath must be a repository-relative path');
+  }
+  if (!Buffer.isBuffer(options.baselineReportBytes)) {
+    findings.push('baselineReportBytes must contain the recorded baseline report');
+  } else {
+    try {
+      if (!sameJson(JSON.parse(options.baselineReportBytes.toString('utf8')), baselineReport)) {
+        findings.push('baselineReportBytes do not contain baselineReport');
+      }
+    } catch {
+      findings.push('baselineReportBytes are not valid JSON');
+    }
+  }
   if (findings.length > 0)
     throw new Error(`Cannot ratify DevEx budgets:\n- ${findings.join('\n- ')}`);
-  if (baselineReport.runner?.name !== proposal.runner) {
-    throw new Error(
-      `baseline runner ${JSON.stringify(baselineReport.runner?.name)} does not match proposal runner ${JSON.stringify(proposal.runner)}`,
-    );
+  if (!sameJson(baselineReport.runner, proposal.runnerFingerprint)) {
+    throw new Error('baseline runner fingerprint does not match proposal.runnerFingerprint');
+  }
+  if (
+    budgets.runner.status === 'ratified' &&
+    !sameJson(budgets.runner.fingerprint, baselineReport.runner)
+  ) {
+    throw new Error('baseline runner fingerprint does not match the existing ratified runner');
   }
 
   const updated = structuredClone(budgets);
   updated.runner = {
     status: 'ratified',
-    name: proposal.runner,
+    fingerprint: structuredClone(baselineReport.runner),
     requirements: budgets.runner?.requirements ?? [],
-    baselineFingerprint: baselineReport.runner,
+  };
+  const baselineReportSource = {
+    path: options.baselineReportPath.split(path.sep).join('/'),
+    sha256: sha256(options.baselineReportBytes),
+    schema: baselineReport.schema,
+    scenario: baselineReport.scenario,
   };
 
   for (const [metricId, proposed] of Object.entries(proposal.metrics)) {
@@ -396,6 +652,9 @@ export function ratifyBudgets(budgets, baselineReport, proposal) {
     if (!metric) throw new Error(`proposal references unknown metric: ${metricId}`);
     const baselineMetric = baselineReport.metrics?.[metricId];
     const samples = baselineMetric?.samples;
+    if (baselineMetric?.unit !== metric.unit) {
+      throw new Error(`${metricId} baseline unit does not match the budget unit`);
+    }
     if (
       !Array.isArray(samples) ||
       samples.length === 0 ||
@@ -428,9 +687,8 @@ export function ratifyBudgets(budgets, baselineReport, proposal) {
     const noise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
     const budget = proposed.budget;
     metric.ratification = {
-      runner: proposal.runner,
-      baselineReportSchema: baselineReport.schema,
-      baselineScenario: baselineReport.scenario,
+      runnerFingerprint: structuredClone(baselineReport.runner),
+      baselineReport: structuredClone(baselineReportSource),
       sampleCount: samples.length,
       statistic,
       baseline: statisticValue(samples, statistic),
@@ -442,18 +700,25 @@ export function ratifyBudgets(budgets, baselineReport, proposal) {
       threshold: budget + noiseMultiplier * noise,
     };
   }
-  const validation = validateBudgets(updated);
+  const validation = validateBudgets(updated, {
+    baselineReports: new Map([[baselineReportSource.path, options.baselineReportBytes]]),
+    repoRoot: options.repoRoot,
+  });
   if (validation.length > 0) {
     throw new Error(`Ratified DevEx budgets are invalid:\n- ${validation.join('\n- ')}`);
   }
   return updated;
 }
 
-export function evaluateBudgets(budgets, report) {
-  const findings = validateBudgets(budgets);
+export function evaluateBudgets(budgets, report, options = {}) {
+  const findings = validateBudgets(budgets, options);
   if (findings.length > 0) throw new Error(`Invalid DevEx budgets:\n- ${findings.join('\n- ')}`);
   if (report?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
     throw new Error(`report.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`);
+  }
+  const runnerFindings = validateRunnerFingerprint(report.runner, 'report.runner');
+  if (runnerFindings.length > 0) {
+    throw new Error(`Invalid benchmark runner:\n- ${runnerFindings.join('\n- ')}`);
   }
   const results = [];
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
@@ -461,12 +726,12 @@ export function evaluateBudgets(budgets, report) {
       results.push({ metric: metricId, status: 'unratified' });
       continue;
     }
-    if (report.runner?.name !== metric.ratification.runner) {
+    if (!sameJson(report.runner, metric.ratification.runnerFingerprint)) {
       results.push({
         metric: metricId,
         status: 'runner-mismatch',
-        expectedRunner: metric.ratification.runner,
-        actualRunner: report.runner?.name ?? null,
+        expectedRunner: metric.ratification.runnerFingerprint,
+        actualRunner: report.runner,
       });
       continue;
     }
@@ -475,6 +740,27 @@ export function evaluateBudgets(budgets, report) {
       results.push({
         metric: metricId,
         status: 'missing',
+        threshold: metric.ratification.threshold,
+      });
+      continue;
+    }
+    if (report.metrics[metricId].unit !== metric.unit) {
+      results.push({
+        metric: metricId,
+        status: 'unit-mismatch',
+        expectedUnit: metric.unit,
+        actualUnit: report.metrics[metricId].unit ?? null,
+      });
+      continue;
+    }
+    const requiredSamples =
+      metric.sampling === 'deterministic' ? 1 : budgets.procedure.minimumStatisticalSamples;
+    if (samples.length < requiredSamples || samples.some((value) => !finiteNonNegative(value))) {
+      results.push({
+        metric: metricId,
+        status: 'insufficient-samples',
+        requiredSamples,
+        actualSamples: samples.length,
         threshold: metric.ratification.threshold,
       });
       continue;
@@ -490,7 +776,10 @@ export function evaluateBudgets(budgets, report) {
   }
   return {
     pass: results.every(
-      (result) => !['breach', 'missing', 'runner-mismatch'].includes(result.status),
+      (result) =>
+        !['breach', 'insufficient-samples', 'missing', 'runner-mismatch', 'unit-mismatch'].includes(
+          result.status,
+        ),
     ),
     results,
   };
@@ -539,7 +828,9 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
   }
   const budgets = readJson(path.resolve(args.budgets));
   if (args.checkBudgets) {
-    const findings = validateBudgets(budgets);
+    const findings = validateBudgets(budgets, {
+      repoRoot: path.dirname(path.resolve(args.budgets)),
+    });
     if (findings.length > 0) {
       process.stderr.write(`${findings.join('\n')}\n`);
       return 1;
@@ -547,7 +838,11 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     process.stdout.write(
       `devex-budgets/v1 metrics=${Object.keys(budgets.metrics).length} ratified=${
         Object.values(budgets.metrics).filter((metric) => metric.ratification !== null).length
-      }\nOK\n`,
+      }\nSCHEMA_VALID\n${
+        Object.values(budgets.metrics).some((metric) => metric.ratification !== null)
+          ? 'RATIFIED_BUDGETS_PRESENT'
+          : 'BUDGETS_UNRATIFIED'
+      }\n`,
     );
     return 0;
   }
@@ -555,10 +850,19 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     if (!args.baseline || !args.proposal) {
       throw new Error('--ratify requires --baseline and --proposal');
     }
+    const budgetsRoot = path.dirname(path.resolve(args.budgets));
+    const baselinePath = path.resolve(args.baseline);
+    const relativeBaselinePath = path.relative(budgetsRoot, baselinePath);
+    const baselineBytes = readFileSync(baselinePath);
     const updated = ratifyBudgets(
       budgets,
-      readJson(path.resolve(args.baseline)),
+      JSON.parse(baselineBytes.toString('utf8')),
       readJson(path.resolve(args.proposal)),
+      {
+        baselineReportPath: relativeBaselinePath,
+        baselineReportBytes: baselineBytes,
+        repoRoot: budgetsRoot,
+      },
     );
     if (args.write) writeJson(args.budgets, updated);
     else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
@@ -573,7 +877,11 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     root: path.dirname(scenarioPath),
     samples: args.samples,
   });
-  if (args.evaluate) report.evaluation = evaluateBudgets(budgets, report);
+  if (args.evaluate) {
+    report.evaluation = evaluateBudgets(budgets, report, {
+      repoRoot: path.dirname(path.resolve(args.budgets)),
+    });
+  }
   if (args.output) writeJson(args.output, report);
   else process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   return report.evaluation?.pass === false ? 1 : 0;
