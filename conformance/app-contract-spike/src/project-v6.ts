@@ -1,5 +1,5 @@
-import { readFile, readdir } from 'node:fs/promises';
-import { relative } from 'node:path';
+import { readFile, readdir, symlink, unlink } from 'node:fs/promises';
+import { basename, dirname, join, relative } from 'node:path';
 
 import {
   fileSubject,
@@ -53,6 +53,8 @@ interface PublicCompiler {
 
 export interface PrototypeProject {
   readonly compilerProject: CompilerOwnedProject;
+  readonly familyCompilerProjects: Readonly<Record<AppContractArm, CompilerOwnedProject>>;
+  readonly familyLogicalEntries: Readonly<Record<DeclarationFamily, string>>;
   readonly packed: LoadedPackedCompiler;
   readonly publicCompiler: PublicCompiler;
   readonly rootNames: readonly string[];
@@ -96,8 +98,32 @@ export async function createPrototypeProject(
     packed.internal,
     'createCompilerOwnedAppContractProject',
   ) as (options: { readonly rootNames: readonly string[] }) => CompilerOwnedProject;
+  const familyLogicalEntries = Object.fromEntries(
+    declarationFamilies.map((family) => {
+      const authored = fixture.familyEntries[family]['arm-a'];
+      return [family, join(fixture.app, 'src/families/.d1-canonical', basename(authored))];
+    }),
+  ) as unknown as Record<DeclarationFamily, string>;
+  const familyCompilerProjects = {} as Record<AppContractArm, CompilerOwnedProject>;
+  const canonicalDirectory = dirname(familyLogicalEntries.query);
+  for (const arm of ['arm-a', 'arm-b'] as const) {
+    try {
+      await unlink(canonicalDirectory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    await symlink(dirname(fixture.familyEntries.query[arm]), canonicalDirectory, 'dir');
+    familyCompilerProjects[arm] = createProject({
+      rootNames: [
+        ...rootNames.filter((fileName) => !fileName.includes('/src/families/')),
+        ...Object.values(familyLogicalEntries),
+      ],
+    });
+  }
   return {
     compilerProject: createProject({ rootNames }),
+    familyCompilerProjects,
+    familyLogicalEntries,
     packed,
     publicCompiler: {
       compileComponentModule: requiredFunction(packed.root, 'compileComponentModule') as (options: {
@@ -153,7 +179,9 @@ export async function familyEvidence(
   const fileName = fixture.familyEntries[family][arm];
   const source = await readFile(fileName, 'utf8');
   if (arm !== 'baseline') {
-    const resolved = project.compilerProject.compileEntry(fileName);
+    const resolved = project.familyCompilerProjects[arm].compileEntry(
+      project.familyLogicalEntries[family],
+    );
     if (resolved.diagnostics.length > 0) {
       throw new Error(`D1 v6 ${arm} ${family} failed: ${JSON.stringify(resolved.diagnostics)}`);
     }
@@ -182,7 +210,7 @@ export async function familyEvidence(
   // Baseline uses the Arm A filename as the virtual compiler filename. Both authored variants have
   // identical imports and differ only at the factory callee, so full emitted IR can be compared
   // after the preregistered callee-syntax/source-span canonicalization.
-  const virtualFileName = arm === 'baseline' ? fixture.familyEntries[family]['arm-a'] : fileName;
+  const virtualFileName = project.familyLogicalEntries[family];
   const component = project.publicCompiler.compileComponentModule({
     fileName: virtualFileName,
     source,
@@ -219,7 +247,9 @@ export async function combinedGraphEvidence(
     const fileName = fixture.familyEntries[family][arm];
     const source = await readFile(fileName, 'utf8');
     if (arm !== 'baseline') {
-      const resolved = project.compilerProject.compileEntry(fileName);
+      const resolved = project.familyCompilerProjects[arm].compileEntry(
+        project.familyLogicalEntries[family],
+      );
       if (resolved.diagnostics.length > 0) {
         throw new Error(
           `D1 v6 combined ${arm} graph rejected ${family}: ${JSON.stringify(resolved.diagnostics)}`,
@@ -229,7 +259,7 @@ export async function combinedGraphEvidence(
       if (resolved.route) routePages.push(resolved.route);
       continue;
     }
-    const virtualFileName = arm === 'baseline' ? fixture.familyEntries[family]['arm-a'] : fileName;
+    const virtualFileName = project.familyLogicalEntries[family];
     components.push(
       project.publicCompiler.compileComponentModule({
         fileName: virtualFileName,
@@ -451,7 +481,11 @@ function normalizeCalleeSyntax(value: string): string {
       '/** @jsxImportSource @kovojs/server */\n',
     );
   for (const family of declarationFamilies) {
-    normalized = normalized.replaceAll(`app.${family}`, family);
+    const title = `${family[0]!.toUpperCase()}${family.slice(1)}`;
+    normalized = normalized
+      .replaceAll(`app.${family}`, family)
+      .replaceAll(`direct${title}(`, `${family}(`)
+      .replaceAll(`generated${title}(`, `${family}(`);
   }
   normalized = normalized.replaceAll('return `\n', 'return `').replaceAll(/\n{3,}/gu, '\n\n');
   return normalized.startsWith('\n') ? normalized.slice(1) : normalized;
