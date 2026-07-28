@@ -739,11 +739,7 @@ export function validateKovoBrowserWorkload(manifest, consumerFiles) {
       findings.push(`Kovo packed workload consumer is missing required app source: ${required}`);
     }
   }
-  if (
-    !sameJson(manifest?.browserBootstrap, [
-      'dist/.kovo/client/generated/app.client.js',
-    ])
-  ) {
+  if (!sameJson(manifest?.browserBootstrap, ['dist/.kovo/client/generated/app.client.js'])) {
     findings.push(
       'Kovo packed workload browser bootstrap must name the canonical compiler-generated app bootstrap',
     );
@@ -1035,10 +1031,7 @@ function phaseCensus(observations, samples) {
     }
     digestByRevision.set(observation.revision, observation.analysisDigest);
   }
-  if (
-    digestByRevision.size !== 2 ||
-    digestByRevision.get(0) === digestByRevision.get(1)
-  ) {
+  if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
     throw new Error('benchmark phase census did not prove two distinct analyzed source revisions');
   }
   return {
@@ -1097,8 +1090,7 @@ function validatePhaseCensus(census, sampleCount, label) {
         phase,
         role: 'timed',
         sampleIndex,
-        revision:
-          phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0,
+        revision: phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0,
       });
     }
   }
@@ -1133,10 +1125,7 @@ function validatePhaseCensus(census, sampleCount, label) {
       }
       digestByRevision.set(observed.revision, observed.analysisDigest);
     }
-    if (
-      digestByRevision.size !== 2 ||
-      digestByRevision.get(0) === digestByRevision.get(1)
-    ) {
+    if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
       findings.push(`${label}.analysisInputs must prove two distinct analyzed source revisions`);
     }
   }
@@ -1253,8 +1242,7 @@ export function runBenchmarkScenario(scenario, options = {}) {
               phase,
               role: 'prime',
               revision,
-              analysisDigest:
-                evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
+              analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
               clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
               sampleIndex: index,
             });
@@ -1276,8 +1264,7 @@ export function runBenchmarkScenario(scenario, options = {}) {
             phase,
             role: 'timed',
             revision,
-            analysisDigest:
-              evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
+            analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
             clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
             sampleIndex: index,
           });

@@ -427,9 +427,7 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain(
       "path.resolve('node_modules/@kovojs/cli/dist/bin.mjs')",
     );
-    expect(kovoPackedWorkloadSource).toContain(
-      "SOURCE_PATH = 'src/components/counter-island.tsx'",
-    );
+    expect(kovoPackedWorkloadSource).toContain("SOURCE_PATH = 'src/components/counter-island.tsx'");
     expect(kovoPackedWorkloadSource).toContain("'build', './src/app.tsx'");
     expect(kovoPackedWorkloadSource).toContain("'dist/.kovo/graph.json'");
     expect(kovoPackedProfileSource).toContain("phase === 'oneFileIncremental'");
@@ -905,8 +903,7 @@ function fixtureAnalysisInputs(sampleCount) {
           clientDigest: 'f'.repeat(64),
         });
       }
-      const revision =
-        phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0;
+      const revision = phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0;
       inputs.push({
         phase,
         role: 'timed',

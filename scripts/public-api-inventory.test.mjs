@@ -258,15 +258,9 @@ describe('public API inventory', () => {
       );
       expect(feature?.consumerImports).toBe(14);
       expect(feature?.consumers.authoredExamples.files).toEqual(
-        expect.arrayContaining([
-          ...coincidentalAuthoredFiles,
-          ...coincidentalNestedOutputNames,
-        ]),
+        expect.arrayContaining([...coincidentalAuthoredFiles, ...coincidentalNestedOutputNames]),
       );
-      for (const relative of [
-        ...coincidentalAuthoredFiles,
-        ...coincidentalNestedOutputNames,
-      ]) {
+      for (const relative of [...coincidentalAuthoredFiles, ...coincidentalNestedOutputNames]) {
         expect(excluded.some(([directory]) => relative.startsWith(`${directory}/`))).toBe(false);
       }
       expect(JSON.stringify(feature?.consumers)).not.toContain('hostile');

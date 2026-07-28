@@ -130,7 +130,7 @@ try {
   }
   if (outcome === null) {
     infrastructureFailure(`packed kovo ${mode} returned an unclassified contract shape`, {
-      ...(result ?? {}),
+      ...result,
       status: result?.status ?? null,
       stderr: result?.stderr ?? '',
       stdout: result?.stdout ?? '',
@@ -266,8 +266,8 @@ function starterTestSurfaceOutcome(nodeModules) {
   if (internalMock) return 'defect-reproduced';
   if (
     source.includes("spawn('kovo', ['dev', './src/app.tsx']") &&
-    source.includes("fetch(`${appOrigin}/api/health`)") &&
-    source.includes("fetch(`${appOrigin}/login`)")
+    source.includes('fetch(`${appOrigin}/api/health`)') &&
+    source.includes('fetch(`${appOrigin}/login`)')
   ) {
     return 'desired-behavior';
   }
@@ -335,7 +335,7 @@ function recursiveRegularFiles(root) {
       else if (entry.isFile()) files.push(absolute);
     }
   }
-  return files.sort();
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 function emitResult(id, outcome) {

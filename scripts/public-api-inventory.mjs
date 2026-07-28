@@ -432,10 +432,7 @@ function rootOwnedOutputDirectory(relative) {
   if (segments[0] === 'examples' || segments[0] === 'packages') {
     return segments.length === 3;
   }
-  return (
-    ['site', 'docs', 'tests', 'conformance'].includes(segments[0]) &&
-    segments.length === 2
-  );
+  return ['site', 'docs', 'tests', 'conformance'].includes(segments[0]) && segments.length === 2;
 }
 
 function excludedDirectoryReason(repoRoot, directory, reviewedExclusions) {
