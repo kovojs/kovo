@@ -141,7 +141,6 @@ describe('known-failure register', () => {
       spawnSync: () => processResult(0),
     });
 
-    expect(xfail.availableProbesPass).toBe(true);
     expect(xfail.executableClosureComplete).toBe(false);
     expect(xfail.pass).toBe(false);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([

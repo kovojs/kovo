@@ -234,7 +234,6 @@ export function runKnownFailureProbes(register, options = {}) {
     return {
       schemaValid: false,
       executableClosureComplete: false,
-      availableProbesPass: false,
       pass: false,
       findings,
       results: [],
@@ -292,14 +291,13 @@ export function runKnownFailureProbes(register, options = {}) {
   const executableClosureComplete = results.every(
     (result) => result.status === 'retired' || ['xfail', 'xpass'].includes(result.status),
   );
-  const availableProbesPass = results.every((result) =>
+  const executableOutcomesAccepted = results.every((result) =>
     ['pending-repro', 'retired', 'xfail'].includes(result.status),
   );
   return {
     schemaValid: true,
     executableClosureComplete,
-    availableProbesPass,
-    pass: executableClosureComplete && availableProbesPass,
+    pass: executableClosureComplete && executableOutcomesAccepted,
     findings: [],
     results,
   };
