@@ -1,9 +1,9 @@
 {
-  "schema": "kovo-devex-benchmark-scenario/v3",
+  "schema": "kovo-devex-benchmark-scenario/v4",
   "name": "deterministic-harness-fixture",
   "profile": {
-    "id": "kovo-packed-check/v1",
-    "commandDigest": "sha256:003e5f954bf9d69c89fbc647b960418c900283e869fbd290cbdd0202ff79274c"
+    "id": "kovo-packed-check/v2",
+    "commandDigest": "sha256:b94057b8feffac33d32a833c1c9cc62a66eba93864e19bf19000183f222ede0b"
   },
   "environment": {
     "runnerName": "fixture-runner",
@@ -19,7 +19,7 @@
     "sourceTree": "clean",
     "workloadManifest": {
       "path": "packed-workload.json",
-      "sha256": "sha256:8ebfd51a0915a7dda215b7b3796dfb4254db2f0075515cd7ab147b7a7e56e731"
+      "sha256": "sha256:73037c182388f1645abd3188d1b4c12845d56bb013556309a3a8d870482eb92f"
     },
     "packedArtifacts": [
       {

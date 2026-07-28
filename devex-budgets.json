@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budgets/v4",
+  "schema": "kovo-devex-budgets/v5",
   "runner": {
     "status": "unratified",
     "fingerprint": null
@@ -55,6 +55,48 @@
       "direction": "max",
       "sampling": "statistical",
       "provisionalTarget": null,
+      "ratification": null
+    },
+    "create.install.cold.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "create.install.installedBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "dev.editToDiagnostic.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 1000,
+      "ratification": null
+    },
+    "dev.editToServedResult.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 500,
+      "ratification": null
+    },
+    "dev.ready.cold.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 15000,
+      "ratification": null
+    },
+    "dev.ready.warm.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 5000,
       "ratification": null
     },
     "browser.bootstrapBytes": {

@@ -1,7 +1,7 @@
 {
   "schema": "kovo-devex-scenario-recipe/v1",
   "name": "kovo-packed-check",
-  "profile": "kovo-packed-check/v1",
+  "profile": "kovo-packed-check/v2",
   "producer": "kovo-clean-source-pack/v1",
   "consumerSource": "scripts/devex-workloads/kovo-packed-check/package",
   "output": ".release/devex/kovo-packed-scenario.json"

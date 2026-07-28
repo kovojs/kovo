@@ -43,6 +43,14 @@ const kovoPackedProfileSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/profile.mjs'),
   'utf8',
 );
+const kovoPackedWorkloadSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/workload.mjs'),
+  'utf8',
+);
+const kovoPackedBrowserBuildSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/build-browser.mjs'),
+  'utf8',
+);
 const devexBenchmarkSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-benchmark.mjs'),
   'utf8',
@@ -135,7 +143,7 @@ describe('DevEx benchmark foundation', () => {
     expect(stageRoots.size).toBe(15);
     expect(invocations.filter((item) => item.role === 'prime')).toHaveLength(10);
     expect(report.phaseCensus).toEqual({
-      schema: 'kovo-devex-phase-census/v1',
+      schema: 'kovo-devex-phase-census/v2',
       samples: 5,
       counts: {
         cold: { prime: 0, timed: 5 },
@@ -143,6 +151,7 @@ describe('DevEx benchmark foundation', () => {
         oneFileIncremental: { prime: 5, timed: 5 },
       },
       incrementalRevisions: [1, 0, 1, 0, 1],
+      analysisInputs: fixtureAnalysisInputs(5),
     });
     expect(report.metrics['browser.bootstrapBytes']).toEqual({
       unit: 'bytes',
@@ -300,9 +309,9 @@ describe('DevEx benchmark foundation', () => {
         files,
       };
       const fakeWorkload = {
-        schema: 'kovo-devex-packed-workload/v1',
+        schema: 'kovo-devex-packed-workload/v2',
         profile: {
-          id: 'kovo-packed-check/v1',
+          id: 'kovo-packed-check/v2',
           commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
         },
         entrypoint: 'profile.mjs',
@@ -410,20 +419,27 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoScenarioRecipe).toEqual({
       schema: 'kovo-devex-scenario-recipe/v1',
       name: 'kovo-packed-check',
-      profile: 'kovo-packed-check/v1',
+      profile: 'kovo-packed-check/v2',
       producer: 'kovo-clean-source-pack/v1',
       consumerSource: 'scripts/devex-workloads/kovo-packed-check/package',
       output: '.release/devex/kovo-packed-scenario.json',
     });
-    expect(kovoPackedProfileSource).toContain(
+    expect(kovoPackedWorkloadSource).toContain(
       "path.resolve('node_modules/@kovojs/cli/dist/bin.mjs')",
     );
-    expect(kovoPackedProfileSource).toContain("const sourcePath = 'src/check-subject.ts'");
+    expect(kovoPackedWorkloadSource).toContain(
+      "SOURCE_PATH = 'src/components/counter-island.tsx'",
+    );
+    expect(kovoPackedWorkloadSource).toContain("'build', './src/app.tsx'");
+    expect(kovoPackedWorkloadSource).toContain("'dist/.kovo/graph.json'");
     expect(kovoPackedProfileSource).toContain("phase === 'oneFileIncremental'");
-    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v1');
+    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v2');
     expect(kovoPackedProfileSource).not.toContain('packages/cli');
+    expect(kovoPackedWorkloadSource).not.toContain("writeFileSync('graph.json'");
+    expect(kovoPackedBrowserBuildSource).toContain('emitQueryPlanBootstrapModule');
+    expect(kovoPackedBrowserBuildSource).toContain("'generated/app.client.js'");
     expect(devexBenchmarkSource).toContain(
-      "browserBootstrap: ['dist/client/browser-bootstrap.mjs']",
+      "browserBootstrap: ['dist/.kovo/client/generated/app.client.js']",
     );
     expect(kovoPackedProfileSource).not.toContain('workspace:');
     expect(devexBenchmarkSource).toContain("['worktree', 'add', '--detach'");
@@ -441,8 +457,40 @@ describe('DevEx benchmark foundation', () => {
     expect(budgets.runner.status).toBe('unratified');
   });
 
-  it('closes the v4 metric vocabulary against invented and deleted gates', () => {
-    expect(budgets.schema).toBe('kovo-devex-budgets/v4');
+  it('closes the v5 metric vocabulary against invented and deleted gates', () => {
+    expect(budgets.schema).toBe('kovo-devex-budgets/v5');
+    expect(budgets.metrics).toMatchObject({
+      'create.install.cold.durationMs': {
+        unit: 'ms',
+        sampling: 'statistical',
+        ratification: null,
+      },
+      'create.install.installedBytes': {
+        unit: 'bytes',
+        sampling: 'deterministic',
+        ratification: null,
+      },
+      'dev.editToDiagnostic.durationMs': {
+        unit: 'ms',
+        provisionalTarget: 1000,
+        ratification: null,
+      },
+      'dev.editToServedResult.durationMs': {
+        unit: 'ms',
+        provisionalTarget: 500,
+        ratification: null,
+      },
+      'dev.ready.cold.durationMs': {
+        unit: 'ms',
+        provisionalTarget: 15000,
+        ratification: null,
+      },
+      'dev.ready.warm.durationMs': {
+        unit: 'ms',
+        provisionalTarget: 5000,
+        ratification: null,
+      },
+    });
     const invented = structuredClone(budgets);
     invented.metrics['invented.fastEnough'] = {
       unit: 'ms',
@@ -452,24 +500,35 @@ describe('DevEx benchmark foundation', () => {
       ratification: null,
     };
     expect(validateBudgets(invented)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v4 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v5 vocabulary'),
     );
 
     const deleted = structuredClone(budgets);
     delete deleted.metrics['check.cold.durationMs'];
     expect(validateBudgets(deleted)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v4 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v5 vocabulary'),
     );
   });
 
   it('rejects source bootstrap stubs in place of emitted browser assets', () => {
     const sourceFiles = [
       { path: 'browser-bootstrap.mjs', sha256: `sha256:${'a'.repeat(64)}`, executable: false },
+      ...[
+        'build-browser.mjs',
+        'profile.mjs',
+        'src/app.tsx',
+        'src/components/counter-island.tsx',
+        'workload.mjs',
+      ].map((file) => ({
+        path: file,
+        sha256: `sha256:${'b'.repeat(64)}`,
+        executable: false,
+      })),
     ];
     expect(
       validateKovoBrowserWorkload(
         {
-          browserBuild: { command: ['node', 'bundle-browser.mjs'], cwd: '.' },
+          browserBuild: { command: ['node', 'build-browser.mjs'], cwd: '.' },
           browserBootstrap: ['browser-bootstrap.mjs'],
         },
         sourceFiles,
@@ -480,8 +539,8 @@ describe('DevEx benchmark foundation', () => {
     expect(
       validateKovoBrowserWorkload(
         {
-          browserBuild: { command: ['node', 'bundle-browser.mjs'], cwd: '.' },
-          browserBootstrap: ['dist/client/browser-bootstrap.mjs'],
+          browserBuild: { command: ['node', 'build-browser.mjs'], cwd: '.' },
+          browserBootstrap: ['dist/.kovo/client/generated/app.client.js'],
         },
         sourceFiles,
       ),
@@ -501,7 +560,7 @@ describe('DevEx benchmark foundation', () => {
         budgets,
         forged,
         {
-          schema: 'kovo-devex-budget-proposal/v4',
+          schema: 'kovo-devex-budget-proposal/v5',
           runnerFingerprint: forged.runner,
           metrics: {
             'check.cold.durationMs': {
@@ -667,7 +726,7 @@ describe('DevEx benchmark foundation', () => {
       'check.cold.durationMs': [100, 101, 102, 103, 104],
     });
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v4',
+      schema: 'kovo-devex-budget-proposal/v5',
       runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
@@ -830,6 +889,37 @@ describe('DevEx benchmark foundation', () => {
   });
 });
 
+function fixtureAnalysisInputs(sampleCount) {
+  const inputs = [];
+  for (const phase of ['cold', 'warm', 'oneFileIncremental']) {
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+      const baseline = sampleIndex % 2;
+      if (phase !== 'cold') {
+        const revision = phase === 'oneFileIncremental' ? baseline : 0;
+        inputs.push({
+          phase,
+          role: 'prime',
+          sampleIndex,
+          revision,
+          analysisDigest: `sha256:${String(revision).repeat(64)}`,
+          clientDigest: 'f'.repeat(64),
+        });
+      }
+      const revision =
+        phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0;
+      inputs.push({
+        phase,
+        role: 'timed',
+        sampleIndex,
+        revision,
+        analysisDigest: `sha256:${String(revision).repeat(64)}`,
+        clientDigest: 'f'.repeat(64),
+      });
+    }
+  }
+  return inputs;
+}
+
 function benchmarkReport(metricSamples, options = {}) {
   const definition = structuredClone(options.definition ?? scenario);
   const sampleCount = Math.max(...Object.values(metricSamples).map((samples) => samples.length));
@@ -868,7 +958,7 @@ function benchmarkReport(metricSamples, options = {}) {
     }),
     sampleCount,
     phaseCensus: {
-      schema: 'kovo-devex-phase-census/v1',
+      schema: 'kovo-devex-phase-census/v2',
       samples: sampleCount,
       counts: {
         cold: { prime: 0, timed: sampleCount },
@@ -878,6 +968,7 @@ function benchmarkReport(metricSamples, options = {}) {
       incrementalRevisions: Array.from({ length: sampleCount }, (_, index) =>
         index % 2 === 0 ? 1 : 0,
       ),
+      analysisInputs: fixtureAnalysisInputs(sampleCount),
     },
     commands: {
       cold: { command: ['node', 'profile.mjs', 'cold'], cwd: '.' },

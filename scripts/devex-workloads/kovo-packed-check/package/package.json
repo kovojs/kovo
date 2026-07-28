@@ -2,5 +2,12 @@
   "name": "@kovojs/devex-packed-check-consumer",
   "version": "1.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@kovojs/browser": "0.2.0",
+    "@kovojs/cli": "0.2.0",
+    "@kovojs/compiler": "0.2.0",
+    "@kovojs/core": "0.2.0",
+    "@kovojs/server": "0.2.0"
+  }
 }

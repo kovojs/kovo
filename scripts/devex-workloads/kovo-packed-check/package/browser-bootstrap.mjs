@@ -1,1 +1,0 @@
-import '@kovojs/browser/client';
