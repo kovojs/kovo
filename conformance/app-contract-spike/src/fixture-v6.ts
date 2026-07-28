@@ -457,12 +457,12 @@ async function generateBoundContract(options: {
       options.artifacts.packages.server.packedContents.digest,
     )},`,
     '});',
-    'export const endpoint = app.endpoint;',
-    'export const layout = app.layout;',
-    'export const mutation = app.mutation;',
-    'export const query = app.query;',
-    'export const route = app.route;',
-    'export const task = app.task;',
+    'export const endpoint: typeof app.endpoint = app.endpoint;',
+    'export const layout: typeof app.layout = app.layout;',
+    'export const mutation: typeof app.mutation = app.mutation;',
+    'export const query: typeof app.query = app.query;',
+    'export const route: typeof app.route = app.route;',
+    'export const task: typeof app.task = app.task;',
     '',
   ].join('\n');
   const manifest = {
