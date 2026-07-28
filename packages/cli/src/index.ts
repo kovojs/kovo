@@ -22,14 +22,21 @@ import {
   runCompileCommand,
 } from './commands/compile.js';
 import {
-  formatNoArgsMessage,
+  commandRequestToArgv,
+  formatCommandHelp,
+  formatRootHelp,
   formatUnknownCommandMessage,
+  isKovoCompletionShell,
   isAsyncCommand,
+  KOVO_CLI_VERSION,
+  renderShellCompletion,
   resolveCommand,
   UPDATE_DOCS_USAGE,
   type KovoAsyncCommandName,
+  type KovoSemanticCommandRequest,
   type KovoSyncCommandName,
 } from './commands-manifest.js';
+import { formatKovoDiagnostics, KOVO_DIAGNOSTIC_VERSION } from './diagnostic.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
   captureKovoCommandSecurityDisposition,
@@ -61,11 +68,18 @@ import {
 } from './sources-sinks.js';
 
 export {
+  commandRequestToArgv,
   compileComponentV1,
   createKovoMcpServer,
+  formatCommandHelp,
+  formatRootHelp,
+  formatKovoDiagnostics,
   kovoAudit,
   kovoCheck,
   kovoExplain,
+  KOVO_CLI_VERSION,
+  KOVO_DIAGNOSTIC_VERSION,
+  renderShellCompletion,
   runMcpStdioServer,
   runUpdateDocsCommand,
 };
@@ -76,6 +90,14 @@ export type {
   CompileComponentV1Result,
   KovoMcpToolName,
 } from './commands/mcp.js';
+export type { KovoCompletionShell, KovoSemanticCommandRequest } from './commands-manifest.js';
+export type {
+  KovoDiagnosticCategory,
+  KovoDiagnosticEnvelope,
+  KovoDiagnosticFormat,
+  KovoDiagnosticRecord,
+  KovoDiagnosticSourceAnchor,
+} from './diagnostic.js';
 export type {
   ExplainKind,
   KovoAuditOptions,
@@ -236,15 +258,12 @@ export function main(
   args: readonly string[] = process.argv.slice(2),
   security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): number {
-  if (args.length === 0) {
-    process.stdout.write(formatNoArgsMessage());
-    return 0;
-  }
+  const metaResult = runMetaInvocation(args);
+  if (metaResult !== undefined) return metaResult;
 
   const command = resolveCommand(args[0]);
   if (command === undefined) {
-    process.stderr.write(formatUnknownCommandMessage(args[0] ?? ''));
-    return 1;
+    return writeUsageError(formatUnknownCommandMessage(args[0] ?? ''));
   }
 
   if (command.name === 'compile' && args.length === 1) return writeUsageError(compileUsage());
@@ -263,6 +282,9 @@ export async function mainAsync(
   args: readonly string[] = process.argv.slice(2),
   security: KovoCommandSecurityDisposition = captureKovoCommandSecurityDisposition(),
 ): Promise<number> {
+  const metaResult = runMetaInvocation(args);
+  if (metaResult !== undefined) return metaResult;
+
   const command = resolveCommand(args[0]);
   if (command?.name === 'explain' && args.includes('--attest')) {
     const parsed = parseAttestArgs(args.slice(1));
@@ -288,12 +310,74 @@ export async function mainAsync(
 
 /**
  * Run the same command dispatcher as the `kovo` executable and return its exit
- * code. Generated app maintenance scripts use this when they need the command
- * facade in-process, for example to run `kovo export --vite` after loading the
- * CLI through Vite SSR.
+ * code from a semantic command request. Programmatic callers name command
+ * concepts (`out`, `preset`), while only the bin adapter handles argv spellings
+ * (`--out`, `--preset`).
  */
-export async function runKovoCommand(args: readonly string[]): Promise<number> {
-  return await mainAsync(args);
+export async function runKovoCommand(request: KovoSemanticCommandRequest): Promise<number> {
+  return await mainAsync(commandRequestToArgv(request));
+}
+
+function runMetaInvocation(args: readonly string[]): 0 | 2 | undefined {
+  const [first, ...rest] = args;
+  if (first === undefined) return writeInformational(formatRootHelp());
+
+  if (first === '--help' || first === '-h') {
+    if (rest.length > 0) {
+      return writeUsageError('kovo: --help does not accept arguments.\n');
+    }
+    return writeInformational(formatRootHelp());
+  }
+
+  if (first === 'help') {
+    if (rest.length === 0) return writeInformational(formatRootHelp());
+    if (rest.length > 1) return writeUsageError('kovo: help accepts at most one command.\n');
+    if (rest[0] === 'completion') {
+      return writeInformational('Usage:\n  kovo completion <bash|zsh|fish>\n');
+    }
+    if (rest[0] === 'help') return writeInformational(formatRootHelp());
+    if (rest[0] === 'version') {
+      return writeInformational('Usage:\n  kovo --version\n  kovo version\n');
+    }
+    const command = resolveCommand(rest[0]);
+    if (!command) return writeUsageError(formatUnknownCommandMessage(rest[0] ?? ''));
+    return writeInformational(formatCommandHelp(command.name));
+  }
+
+  if (first === '--version' || first === '-V' || first === 'version') {
+    if (rest.length > 0) return writeUsageError('kovo: version does not accept arguments.\n');
+    return writeInformational(`kovo ${KOVO_CLI_VERSION}\n`);
+  }
+
+  if (first === 'completion') {
+    if (rest.length === 1 && isKovoCompletionShell(rest[0])) {
+      return writeInformational(renderShellCompletion(rest[0]));
+    }
+    if (rest.length === 1 && (rest[0] === '--help' || rest[0] === '-h')) {
+      return writeInformational('Usage:\n  kovo completion <bash|zsh|fish>\n');
+    }
+    if (rest.length === 1 && rest[0] === '--version') {
+      return writeInformational(`kovo ${KOVO_CLI_VERSION}\n`);
+    }
+    return writeUsageError('kovo: completion requires bash, zsh, or fish.\n');
+  }
+
+  const command = resolveCommand(first);
+  if (
+    command !== undefined &&
+    rest.some((argument) => argument === '--help' || argument === '-h')
+  ) {
+    return writeInformational(formatCommandHelp(command.name));
+  }
+  if (command !== undefined && rest.some((argument) => argument === '--version')) {
+    return writeInformational(`kovo ${KOVO_CLI_VERSION}\n`);
+  }
+  return undefined;
+}
+
+function writeInformational(output: string): 0 {
+  process.stdout.write(output);
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

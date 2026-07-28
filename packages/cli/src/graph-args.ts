@@ -9,6 +9,7 @@ import {
   parsedBooleanOption,
   parseCommandArgv,
 } from './commands-manifest.js';
+import { writeUsageError } from './shared.js';
 
 /**
  * The kind of graph subject a targeted `kovo explain` describes — a component,
@@ -204,15 +205,13 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
   if ('message' in error) {
-    process.stderr.write(`${error.message}\n`);
-    return 1;
+    return writeUsageError(error.message);
   }
   const message =
     error.kind === 'unsupported-family'
       ? `kovo: unsupported check family ${stableArg(error.family)}. expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
-  process.stderr.write(message);
-  return 1;
+  return writeUsageError(message);
 }
 
 type AuditArgParseResult =

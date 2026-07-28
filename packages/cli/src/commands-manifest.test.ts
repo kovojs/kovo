@@ -27,6 +27,7 @@ import {
   commandArgvError,
   COMPILE_ARGV_SPECS,
   formatNoArgsMessage,
+  formatRootHelp,
   formatUnknownCommandMessage,
   parsedBooleanOption,
   parsedStringListOption,
@@ -95,24 +96,24 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, dev, check, db, compile, fix, explain, incident, export, mcp, update-docs\n',
+      'kovo: add, audit, build, check, compile, db, dev, explain, export, fix, incident, mcp, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, build, dev, db, compile, fix, explain, check, audit, incident, export, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, audit, build, check, compile, db, dev, explain, export, fix, incident, mcp, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
     expect(noArgs.result).toBe(0);
-    expect(noArgs.stdout).toBe(formatNoArgsMessage());
+    expect(noArgs.stdout).toBe(formatRootHelp());
     expect(noArgs.stderr).toBe('');
 
     const unknown = captureWrites(() => main(['nope']));
-    expect(unknown.result).toBe(1);
+    expect(unknown.result).toBe(2);
     expect(unknown.stdout).toBe('');
     expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
 
     const advisorySync = captureWrites(() => main(['check', 'advisories']));
-    expect(advisorySync.result).toBe(1);
+    expect(advisorySync.result).toBe(2);
     expect(advisorySync.stdout).toBe('');
     expect(advisorySync.stderr).toBe(
       'kovo: check advisories is asynchronous; call mainAsync() instead.\n',
@@ -189,13 +190,13 @@ describe('commands manifest', () => {
     expect(byName.build?.usage).toBe(BUILD_USAGE);
     expect(byName.dev?.usage).toBe(DEV_USAGE);
     expect(byName.db?.usage).toBe(DB_USAGE);
-    expect(byName.compile?.usage).toBe(COMPILE_USAGE);
+    expect(byName.compile?.usage).toEqual(COMPILE_USAGE);
     expect(byName.fix?.usage).toBe(FIX_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
     expect(byName.incident?.usage).toBe(INCIDENT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
     expect(byName['update-docs']?.usage).toBe(UPDATE_DOCS_USAGE);
-    expect(byName.explain?.usage).toBe(EXPLAIN_USAGE);
+    expect(byName.explain?.usage).toEqual(EXPLAIN_USAGE);
   });
 
   it('the bin references the manifest usage constants (no inline drift)', () => {

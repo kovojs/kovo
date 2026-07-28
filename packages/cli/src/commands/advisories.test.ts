@@ -266,7 +266,7 @@ describe('advisory argv grammar', () => {
   it('is dispatched asynchronously without treating advisories as a graph family', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      await expect(mainAsync(['check', 'advisories', '--unknown'])).resolves.toBe(1);
+      await expect(mainAsync(['check', 'advisories', '--unknown'])).resolves.toBe(2);
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         'unknown check advisories option',
       );

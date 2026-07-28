@@ -11,6 +11,7 @@ import {
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { installAgentDocsSnapshot } from '../docs-store.js';
 import { readCliPackageVersion } from '../package-version.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import type { KovoCheckResult } from '../shared.js';
 
 export interface UpdateDocsOptions {
@@ -68,7 +69,7 @@ export async function runUpdateDocsCommand(
     return {
       exitCode: 0,
       output: [
-        'kovo-update-docs/v1',
+        requireKovoCommandResultProtocol('update-docs'),
         `OK source=installed-package version=${snapshot.version} files=${installed.files}`,
         `OK snapshot=${installed.snapshotDigest} current=${installed.pointerPath}`,
         '',
@@ -77,7 +78,7 @@ export async function runUpdateDocsCommand(
   } catch (error) {
     return {
       exitCode: 1,
-      output: `kovo-update-docs/v1\nERROR ${
+      output: `${requireKovoCommandResultProtocol('update-docs')}\nERROR ${
         error instanceof Error ? error.message : String(error)
       }\n`,
     };

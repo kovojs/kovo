@@ -132,6 +132,7 @@ import {
   parseCommandArgv,
   requireSinglePositional,
 } from '../commands-manifest.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
@@ -6379,7 +6380,7 @@ function kovoExportResult(
   result: StaticExportResult,
   options: KovoExportOptions,
 ): KovoExportCommandResult {
-  const lines = ['kovo-export/v1'];
+  const lines = [requireKovoCommandResultProtocol('export')];
   const diagnostics = registeredStaticExportResultDiagnostics(result.diagnostics);
 
   for (const artifact of result.artifacts) {
@@ -6590,7 +6591,11 @@ function exportErrorResult(
     );
     return {
       error: buildJoinStrings(
-        appendDense(['kovo-export/v1'], diagnosticLines, 'Static-export error lines'),
+        appendDense(
+          [requireKovoCommandResultProtocol('export')],
+          diagnosticLines,
+          'Static-export error lines',
+        ),
         '\n',
         'Static-export error lines',
       ),

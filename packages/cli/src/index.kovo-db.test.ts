@@ -641,7 +641,7 @@ describe('kovo db', () => {
   it('prints usage for missing db actions', async () => {
     const output = await captureWrites(() => mainAsync(['db']));
 
-    expect(output.result).toBe(1);
+    expect(output.result).toBe(2);
     expect(output.stdout).toBe('');
     expect(output.stderr).toContain('kovo: db requires provision, migrate, generate, or check.');
     expect(output.stderr).toContain('usage: kovo db provision|migrate|generate|check');

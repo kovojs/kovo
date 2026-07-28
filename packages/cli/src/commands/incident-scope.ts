@@ -13,6 +13,7 @@ import {
   parsedStringOption,
   parseCommandArgv,
 } from '../commands-manifest.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import { readBoundedRegularFile } from './bounded-regular-file.js';
@@ -208,7 +209,7 @@ export function runIncidentScopeCommand(
     return { exitCode: status === 'unanswerable' ? 1 : 0, output: `${output}\n` };
   } catch (error) {
     return {
-      error: `kovo-incident-scope/v1\nERROR ${error instanceof Error ? error.message : String(error)}`,
+      error: `${requireKovoCommandResultProtocol('incident')}\nERROR ${error instanceof Error ? error.message : String(error)}`,
       exitCode: 1,
     };
   }
