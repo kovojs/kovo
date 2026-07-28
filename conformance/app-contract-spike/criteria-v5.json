@@ -1,0 +1,319 @@
+{
+  "schema": "kovo.app-contract-d1-criteria/v5",
+  "status": "pre-registered-before-v5-prototype-implementation",
+  "preRegisteredAt": "2026-07-28",
+  "frameworkSourceBaselineCommit": "2123d186086a23d48cb89f266d83b09e1120da78",
+  "supersedes": "kovo.app-contract-d1-criteria/v4",
+  "invalidatedEvidence": {
+    "v1": "In-memory aliases, unbound re-exports, source rewrites, and local type mocks did not exercise either proposed contract.",
+    "v2": "Real current packages were measured without implementing either proposed app-bound compiler prototype.",
+    "v3": "Caller-supplied structural source spans could claim arbitrary framework exports through compiler entrypoints.",
+    "v4": "The matrix executed workspace compiler source instead of the authenticated packed compiler, duplicate-copy discovery missed re-export chains, unsupported app-derived receivers could fail open without diagnostics, and the evaluator did not require exact IR/graph or owner/source/package bindings."
+  },
+  "declarationFamilies": [
+    "endpoint",
+    "layout",
+    "mutation",
+    "query",
+    "route",
+    "task"
+  ],
+  "immutableReceiverContract": {
+    "bindingKind": "const",
+    "initializer": "one direct defineKovo object-literal call resolved to one physical @kovojs/server package",
+    "acceptedReferenceForms": [
+      "ordinary local import",
+      "named re-export",
+      "star re-export",
+      "aliased import",
+      "monorepo shared-package import"
+    ],
+    "rejectedReferenceForms": {
+      "destructured factory": "D1A003",
+      "wrapper result": "D1A001",
+      "dynamic factory selection": "D1A002",
+      "mutable receiver declaration": "D1A004",
+      "reassigned receiver": "D1A005",
+      "joined receiver aliases": "D1A006",
+      "object-derived receiver": "D1A007",
+      "array-derived receiver": "D1A007",
+      "wrapper-returned receiver": "D1A007",
+      "computed factory access": "D1A008"
+    },
+    "unprovedAppDerivedCallMustDiagnose": true,
+    "unrelatedSameNamedMemberMustRemainUnrecognized": true
+  },
+  "matrix": {
+    "ordinary-local-import": {
+      "arm-a": "accept",
+      "arm-b": "reject:D1B201"
+    },
+    "named-re-export": {
+      "arm-a": "accept",
+      "arm-b": "reject:D1B201"
+    },
+    "star-re-export": {
+      "arm-a": "accept",
+      "arm-b": "reject:D1B201"
+    },
+    "aliased-import": {
+      "arm-a": "accept",
+      "arm-b": "reject:D1B201"
+    },
+    "destructured-factory": {
+      "arm-a": "reject:D1A003",
+      "arm-b": "reject:D1B201"
+    },
+    "wrapper-function": {
+      "arm-a": "reject:D1A001",
+      "arm-b": "reject:D1B201"
+    },
+    "dynamic-factory-selection": {
+      "arm-a": "reject:D1A002",
+      "arm-b": "reject:D1B201"
+    },
+    "object-derived-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B201"
+    },
+    "array-derived-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B201"
+    },
+    "wrapper-returned-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B201"
+    },
+    "computed-factory-access": {
+      "arm-a": "reject:D1A008",
+      "arm-b": "reject:D1B201"
+    },
+    "monorepo-shared-app-package": {
+      "arm-a": "accept",
+      "arm-b": "reject:D1B201"
+    },
+    "mutable-receiver": {
+      "arm-a": "reject:D1A004",
+      "arm-b": "reject:D1B201"
+    },
+    "reassigned-receiver": {
+      "arm-a": "reject:D1A005",
+      "arm-b": "reject:D1B201"
+    },
+    "joined-receiver": {
+      "arm-a": "reject:D1A006",
+      "arm-b": "reject:D1B201"
+    },
+    "duplicate-direct-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-named-reexport-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-star-reexport-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-same-owner-key-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    }
+  },
+  "resolverIntegrityMutations": {
+    "duplicate-span": "D1A101",
+    "overlapping-span": "D1A102",
+    "wrong-node-span": "D1A103",
+    "stale-source-reparse": "D1A104",
+    "blank-owner-key": "D1A105",
+    "blank-server-package-root": "D1A106"
+  },
+  "publicForgeryNegatives": {
+    "fakeAccessAsPublicAccess": {
+      "entrypoints": [
+        "compileComponentModule",
+        "compileRouteModule"
+      ],
+      "expectedIdentity": "unrecognized",
+      "expectedPublicAccess": false
+    },
+    "fakeHtmlAsTrustedHtml": {
+      "entrypoint": "compileComponentModule",
+      "expectedIdentity": "unrecognized",
+      "requiredDiagnosticCodes": [
+        "KV236",
+        "KV426"
+      ]
+    },
+    "forbiddenOptionNames": [
+      "frameworkIdentityOverrides",
+      "registerFrameworkIdentityOverrides",
+      "FrameworkIdentityOverride"
+    ]
+  },
+  "packedCompilerContract": {
+    "entrypoints": [
+      "@kovojs/compiler",
+      "@kovojs/compiler/internal"
+    ],
+    "resolvedRealpathsMustBeUnderExtractedPackage": true,
+    "resolvedFilesMustMatchPackedSubjects": true,
+    "workspaceSourceResolutionForbidden": true,
+    "matrixCompilerAndForgeryMustUsePackedEntrypoints": true
+  },
+  "semanticEquivalenceContract": {
+    "baselineAndArmACanonicalIrMustMatchExactly": true,
+    "baselineAndArmACanonicalGraphMustMatchExactly": true,
+    "canonicalizationMayRemoveOnly": [
+      "callee syntax",
+      "source spans"
+    ],
+    "mutations": {
+      "ir-add": "D1E101",
+      "ir-delete": "D1E102",
+      "ir-change": "D1E103",
+      "graph-add": "D1E104",
+      "graph-delete": "D1E105",
+      "graph-change": "D1E106"
+    }
+  },
+  "evidenceBindingContract": {
+    "compiledOwnerMustEqualRuntimeOwner": true,
+    "generatedOwnerMustEqualRuntimeOwner": true,
+    "matrixAndFamilySourcesRequireAuthenticatedFileSubjects": true,
+    "serverCopyDigestsMustEqualAuthenticatedPackedServer": true,
+    "mutations": {
+      "runtime-owner": "D1E201",
+      "matrix-source": "D1E202",
+      "server-copy-digest": "D1E203",
+      "packed-compiler-entrypoint": "D1E204"
+    }
+  },
+  "armBContract": {
+    "identityEngine": "existing-free-function-import-identity-engine",
+    "newIdentityClassesAllowed": 0,
+    "callerIdentityFactsAllowed": 0,
+    "generatedBoundModuleExpectedOutcome": "reject:D1B201",
+    "ineligibleWhenExistingEngineDoesNotRecognizeGeneratedBinding": true,
+    "generatedArtifactMutations": {
+      "provider-source-digest": "D1B101",
+      "config-source-digest": "D1B102",
+      "compiler-source-digest": "D1B103",
+      "server-packed-contents-digest": "D1B104",
+      "generated-module-digest": "D1B105",
+      "completion-token": "D1B106"
+    }
+  },
+  "workload": {
+    "matrixCases": 19,
+    "matrixArms": 2,
+    "generatedMatrixFiles": 38,
+    "declarationFamilies": 6,
+    "familyVariants": 3,
+    "generatedFamilyFiles": 18,
+    "generatedRuntimeFiles": 2,
+    "generatedProviderFiles": 2,
+    "generatedBoundModules": 3,
+    "typeMeasurementVariants": 3,
+    "declarationFilesPerVariant": 12,
+    "declarationsPerFile": 4,
+    "generatedTypeDeclarationFiles": 36,
+    "generatedTypeDeclarations": 144
+  },
+  "semanticThresholds": {
+    "matrixMatchesExact": 38,
+    "armACompilerAndGraphFamiliesExact": 6,
+    "armBCompilerAndGraphFamiliesExact": 0,
+    "runtimeOwnedFamiliesExact": 6,
+    "assembledHandleCountExact": 6,
+    "providerDefinitionCountExact": 2,
+    "providerEvaluationDuringDeclarationImportExact": 0,
+    "duplicatePhysicalServerCopiesExact": 2,
+    "duplicateDiagnosticCountExact": 1,
+    "resolverIntegrityMutationsExact": 6,
+    "publicForgeryNegativesExact": 2,
+    "generatedDigestMutationsExact": 6,
+    "semanticEquivalenceMutationsExact": 6,
+    "evidenceBindingMutationsExact": 4,
+    "packedCompilerEntrypointsExact": 2
+  },
+  "performanceThresholds": {
+    "coldTscRepeats": 6,
+    "warmTscRepeats": 6,
+    "coldCompletionRepeats": 6,
+    "warmCompletionRepeats": 30,
+    "coldTscP50DeltaPercentMaximum": 10,
+    "warmTscP50DeltaPercentMaximum": 15,
+    "coldCompletionP50DeltaPercentMaximum": 20,
+    "warmCompletionP95MillisecondsMaximum": 5,
+    "warmCompletionP95DeltaPercentMaximum": 50,
+    "declarationBytesDeltaPercentMaximum": 35,
+    "completionCandidateCountMustEqualBaseline": true,
+    "completionCandidateDigestMustEqualBaseline": true,
+    "completeSixOrderBlocksRequired": true,
+    "runnerMetadataRequired": [
+      "architecture",
+      "cpuModel",
+      "nodeVersion",
+      "operatingSystem",
+      "typescriptVersion"
+    ]
+  },
+  "diagnosticThresholds": {
+    "misspelledProperty": "lod",
+    "suggestedProperty": "load",
+    "typescriptCode": 2561,
+    "spanLength": 3,
+    "messageCharactersMaximum": 700,
+    "matrixDiagnosticSpanCharactersMaximum": 64,
+    "matrixDiagnosticMessageCharactersMaximum": 700,
+    "crossAppDiagnosticCode": "D1OWN001",
+    "duplicatePackageDiagnosticCode": "D1X001"
+  },
+  "artifactThresholds": {
+    "exactPackageNames": [
+      "@kovojs/browser",
+      "@kovojs/compiler",
+      "@kovojs/core",
+      "@kovojs/server"
+    ],
+    "freshBuildRequired": true,
+    "frameworkHeadCommitRequired": true,
+    "frameworkSourceTreeCleanRequired": true,
+    "frameworkSourceFileSubjectsRequired": true,
+    "packedContentFileSubjectsRequired": true,
+    "sourceRewriteCountExact": 0,
+    "tarballByteDigestClaim": "excluded-nondeterministic-container-bytes",
+    "generatedManifestCompletedToken": "complete",
+    "generatedManifestDigestFieldsRequired": [
+      "compilerSourceSha256",
+      "configSha256",
+      "generatedModuleSha256",
+      "providerSourceSha256",
+      "serverPackedContentsSha256"
+    ]
+  },
+  "schemas": {
+    "criteria": "kovo.app-contract-d1-criteria/v5",
+    "rawEvidence": "kovo.app-contract-d1-raw-evidence/v5",
+    "evaluation": "kovo.app-contract-d1-evaluation/v5",
+    "fileSubject": "kovo.app-contract-d1-file-subject/v1",
+    "contentSubject": "kovo.app-contract-d1-content-subject/v1",
+    "compilerResolver": "kovo.app-contract-d1-compiler-resolver/v2",
+    "generatedManifest": "kovo.generated-app-contract/v5",
+    "runtimeOverlay": "kovo.app-contract-d1-synthetic-runtime-overlay/v2",
+    "canonicalSemantics": "kovo.app-contract-d1-canonical-semantics/v1",
+    "packedCompiler": "kovo.app-contract-d1-packed-compiler/v1",
+    "runner": "kovo.app-contract-d1-runner/v1"
+  },
+  "decisionRule": [
+    "Reject malformed, surplus-keyed, unauthenticated, internally inconsistent, semantically non-equivalent, or incomplete evidence before assigning a verdict.",
+    "Arm A is eligible only when the authenticated packed compiler/internal entrypoints execute the exact-source resolver, every app-derived unsupported call fails closed, all duplicate-copy forms reject, all six canonical IR/graph subjects equal baseline, owner/source/package bindings hold, runtime ownership and artifact gates pass, public identity forgery remains closed, and all performance gates pass.",
+    "Arm B is eligible only if the existing free-function import identity engine recognizes the genuine generated bound module without injected identity facts or a new identity class, in addition to all other gates.",
+    "Select Arm A when Arm A alone or both arms are eligible.",
+    "Otherwise select Arm B when Arm B alone is eligible.",
+    "If neither arm is eligible, derive the generic fallback proposal for plan-owner review without editing or asserting G22-G24.",
+    "No D1 decision may be claimed until every v5 evaluator adversarial mutation test passes and measure:verify succeeds twice consecutively from a clean tree."
+  ]
+}
