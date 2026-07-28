@@ -152,6 +152,19 @@ describe('site export CSS guards', () => {
     expect(source).not.toContain('runExportCommandStructured');
   });
 
+  it('loads the TypeScript-backed content pipeline only after source hooks and runtime lock', () => {
+    const source = readFileSync(resolve(siteRoot, 'scripts/export-static.mjs'), 'utf8');
+    const hookIndex = source.indexOf('registerHooks({');
+    const lockIndex = source.indexOf('await securityLockedViteRuntime();');
+    const pipelineImportIndex = source.indexOf("await import('./content-pipeline.mjs')");
+    const pipelineRunIndex = source.indexOf('if (!skipPipeline) await runContentPipeline();');
+
+    expect(hookIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeGreaterThan(hookIndex);
+    expect(pipelineImportIndex).toBeGreaterThan(lockIndex);
+    expect(pipelineRunIndex).toBeGreaterThan(pipelineImportIndex);
+  });
+
   it('stages only the finite public evidence linked from the analyzable-fragment register', async () => {
     const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-site-security-evidence-'));
     try {

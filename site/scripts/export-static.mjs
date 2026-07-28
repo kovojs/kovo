@@ -12,7 +12,6 @@ import {
   securityLockedViteRuntime,
 } from '../../scripts/lib/secure-vite-runtime.mjs';
 
-import { runContentPipeline } from './content-pipeline.mjs';
 import { writeScriptArtifacts } from '../../scripts/output-staging.mjs';
 
 registerHooks({
@@ -328,6 +327,12 @@ export async function exportSiteStaticApp({
   // Establish the compiler/server realm lock before evaluating the trusted app
   // or server graph (SPEC §6.6 rule 6).
   await securityLockedViteRuntime();
+  // The content pipeline reaches repository-authored TypeScript through the CLI reference
+  // generator. Import it only after both the source-resolution hook and runtime lock exist, so a
+  // clean checkout never depends on stray sibling `.js` files or evaluates CLI authority early.
+  const runContentPipeline = skipPipeline
+    ? undefined
+    : (await import('./content-pipeline.mjs')).runContentPipeline;
   if (!skipPipeline) await runContentPipeline();
   // The export owns the whole static-host directory; clear stale routes/assets
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
