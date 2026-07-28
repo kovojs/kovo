@@ -474,6 +474,16 @@ function normalizeCalleeSyntax(value: string): string {
         );
       return names.length > 0 ? `import { ${names.join(', ')} } from '@kovojs/server';` : '';
     })
+    .replaceAll(/import \{ ([^}]+) \} from '#kovo';\n?/gu, (_match, rawNames: string) => {
+      const names = rawNames
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => {
+          const imported = name.split(/\s+as\s+/u)[0];
+          return imported !== undefined && !declarationFamilies.includes(imported as DeclarationFamily);
+        });
+      return names.length > 0 ? `import { ${names.join(', ')} } from '#kovo';` : '';
+    })
     .replaceAll(/"end":\d+/gu, '"end":0')
     .replaceAll(/"start":\d+/gu, '"start":0')
     .replaceAll(
