@@ -978,7 +978,7 @@ async function writeFamilyFixtures(
 }
 
 function familySource(family: DeclarationFamily, variant: AppContractArm | 'baseline'): string {
-  const directFactory = `direct${family[0]!.toUpperCase()}${family.slice(1)}`;
+  const directFactory = family;
   const generatedFactory = `generated${family[0]!.toUpperCase()}${family.slice(1)}`;
   const factory =
     variant === 'arm-a'
@@ -987,8 +987,8 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
         ? generatedFactory
         : directFactory;
   const imports = [
-    `import { ${family} as ${directFactory}, publicAccess${
-      family === 'layout' ? ', route as directRoute' : ''
+    `import { ${directFactory}, publicAccess${
+      family === 'layout' ? ', route' : ''
     } } from '@kovojs/server';`,
     `import { ${family} as ${generatedFactory}${
       family === 'layout' ? ', route as generatedRoute' : ''
@@ -1001,7 +1001,7 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
         ? 'app.route'
         : variant === 'arm-b'
           ? 'generatedRoute'
-          : 'directRoute';
+          : 'route';
     return [
       '/** @jsxImportSource @kovojs/server */',
       imports,
