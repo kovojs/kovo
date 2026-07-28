@@ -89,6 +89,69 @@ export function assertPackedMcpLifecycle(stdout) {
   }
 }
 
+export function assertPackedDocsJourney(updateStdout, docsStdout, consumerRoot) {
+  if (
+    !/^kovo-update-docs\/v1\nOK source=installed-package version=[^\s]+ files=\d+\nOK snapshot=sha256:[a-f0-9]{64} current=\.kovo\/docs\/current\.json\n$/u.test(
+      updateStdout,
+    )
+  ) {
+    throw new Error('Packed kovo update-docs did not authenticate and select its bundled snapshot');
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(docsStdout);
+  } catch {
+    throw new Error('Packed kovo docs emitted non-JSON output for --format json');
+  }
+  if (
+    payload?.version !== 'kovo-docs/v1' ||
+    !Array.isArray(payload.results) ||
+    payload.results.length === 0 ||
+    payload.results.length > 5
+  ) {
+    throw new Error('Packed kovo docs did not return a bounded kovo-docs/v1 result');
+  }
+
+  const snapshotDigests = new Set();
+  for (const result of payload.results) {
+    if (
+      typeof result?.path !== 'string' ||
+      result.path.startsWith('/') ||
+      result.path.split('/').includes('..') ||
+      typeof result.excerpt !== 'string' ||
+      result.excerpt.length === 0 ||
+      result.excerpt.includes('Bundled starter placeholder') ||
+      !/^sha256:[a-f0-9]{64}$/u.test(result.sha256) ||
+      !/^sha256:[a-f0-9]{64}$/u.test(result.snapshotDigest) ||
+      typeof result.version !== 'string' ||
+      result.version.length === 0
+    ) {
+      throw new Error('Packed kovo docs returned malformed, unsafe, or placeholder content');
+    }
+    snapshotDigests.add(result.snapshotDigest);
+  }
+  if (snapshotDigests.size !== 1) {
+    throw new Error('Packed kovo docs mixed results from more than one authenticated snapshot');
+  }
+
+  const pointer = JSON.parse(
+    readFileSync(path.join(consumerRoot, '.kovo', 'docs', 'current.json'), 'utf8'),
+  );
+  const [snapshotDigest] = snapshotDigests;
+  if (pointer?.snapshotDigest !== snapshotDigest) {
+    throw new Error('Packed kovo docs result does not match the selected snapshot pointer');
+  }
+  const agents = readFileSync(path.join(consumerRoot, 'AGENTS.md'), 'utf8');
+  const digestDirectory = snapshotDigest.slice('sha256:'.length);
+  if (
+    !agents.includes(`./.kovo/docs/snapshots/${digestDirectory}/kovo-rules.md`) ||
+    agents.includes('Bundled starter placeholder')
+  ) {
+    throw new Error('Packed kovo update-docs did not install authenticated agent instructions');
+  }
+}
+
 export function checkPackedCliConsumer() {
   const rootManifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const packedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -117,6 +180,20 @@ export function checkPackedCliConsumer() {
 
     const lockfileText = readFileSync(path.join(consumerRoot, 'pnpm-lock.yaml'), 'utf8');
     assertPackedCliDependencyClosure(lockfileText);
+
+    const updateDocs = runCommand(
+      'pnpm',
+      ['exec', 'kovo', 'update-docs'],
+      consumerRoot,
+      'authenticated docs install',
+    );
+    const docs = runCommand(
+      'pnpm',
+      ['exec', 'kovo', 'docs', 'quickstart', '--format', 'json'],
+      consumerRoot,
+      'bounded local docs retrieval',
+    );
+    assertPackedDocsJourney(updateDocs.stdout, docs.stdout, consumerRoot);
 
     const lifecycle = runCommand(
       'pnpm',
