@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budgets/v3",
+  "schema": "kovo-devex-budgets/v4",
   "runner": {
     "status": "unratified",
     "fingerprint": null

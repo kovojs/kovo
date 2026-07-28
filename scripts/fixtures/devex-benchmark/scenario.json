@@ -3,7 +3,7 @@
   "name": "deterministic-harness-fixture",
   "profile": {
     "id": "kovo-packed-check/v1",
-    "commandDigest": "sha256:c5e75a95455141399414f4784c0ecc2cf6b64dc2d1674b7725b44b34cb1acbd0"
+    "commandDigest": "sha256:003e5f954bf9d69c89fbc647b960418c900283e869fbd290cbdd0202ff79274c"
   },
   "environment": {
     "runnerName": "fixture-runner",
@@ -19,7 +19,7 @@
     "sourceTree": "clean",
     "workloadManifest": {
       "path": "packed-workload.json",
-      "sha256": "sha256:60dc691135d58066a13049a853b06a6ddffb29d7fd5b2c82059b13b80921be40"
+      "sha256": "sha256:8ebfd51a0915a7dda215b7b3796dfb4254db2f0075515cd7ab147b7a7e56e731"
     },
     "packedArtifacts": [
       {

@@ -2,7 +2,7 @@
   "schema": "kovo-devex-packed-workload/v1",
   "profile": {
     "id": "kovo-packed-check/v1",
-    "commandDigest": "sha256:c5e75a95455141399414f4784c0ecc2cf6b64dc2d1674b7725b44b34cb1acbd0"
+    "commandDigest": "sha256:003e5f954bf9d69c89fbc647b960418c900283e869fbd290cbdd0202ff79274c"
   },
   "entrypoint": "profile.mjs",
   "artifacts": [

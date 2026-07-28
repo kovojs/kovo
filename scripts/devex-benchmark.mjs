@@ -38,20 +38,27 @@ import {
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 import { releasePackages } from './release-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v3';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v4';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v3';
 export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v3';
-export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v3';
+export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v4';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v1';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
 const PACKED_PROFILE_ID = 'kovo-packed-check/v1';
 const KOVO_FRESH_PACK_PRODUCER_ID = 'kovo-clean-source-pack/v1';
+const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
+const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v1';
+const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
+const BROWSER_BUILD_COMMAND = Object.freeze({
+  command: Object.freeze(['node', 'bundle-browser.mjs']),
+  cwd: '.',
+});
 const PACKED_PROFILE_COMMANDS = Object.freeze(
   Object.fromEntries(
     PHASES.map((phase) => [
@@ -63,6 +70,24 @@ const PACKED_PROFILE_COMMANDS = Object.freeze(
     ]),
   ),
 );
+const DEVEX_METRIC_CONTRACT = Object.freeze({
+  'browser.bootstrapBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
+  'check.cold.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
+  'check.cold.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+  'check.oneFileIncremental.durationMs': Object.freeze({
+    sampling: 'statistical',
+    unit: 'ms',
+  }),
+  'check.oneFileIncremental.peakRssBytes': Object.freeze({
+    sampling: 'statistical',
+    unit: 'bytes',
+  }),
+  'check.warm.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
+  'check.warm.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+  'docs.snapshot.compressedBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
+  'docs.snapshot.installedBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
+  'ui.fullCatalog.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+});
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -110,7 +135,12 @@ export function benchmarkScenarioDigest(scenario) {
 }
 
 export const DEVEX_PACKED_PROFILE_COMMAND_DIGEST = sha256(
-  Buffer.from(canonicalJson(PACKED_PROFILE_COMMANDS)),
+  Buffer.from(
+    canonicalJson({
+      browserBuild: BROWSER_BUILD_COMMAND,
+      phases: PACKED_PROFILE_COMMANDS,
+    }),
+  ),
 );
 
 function safeRepositoryRelativePath(value) {
@@ -313,6 +343,55 @@ function validateBenchmarkProvenance(provenance, label) {
   return findings;
 }
 
+function expectedKovoReleasePackages() {
+  return releasePackages()
+    .map((pkg) => pkg.name)
+    .sort(compareStrings);
+}
+
+function createKovoProducerAttestation(provenance) {
+  const releasePackageNames = expectedKovoReleasePackages();
+  return {
+    schema: KOVO_PRODUCER_ATTESTATION_SCHEMA,
+    producer: KOVO_FRESH_PACK_PRODUCER_ID,
+    consumer: KOVO_BENCHMARK_CONSUMER,
+    releasePackages: releasePackageNames,
+    sourceCommit: provenance.sourceCommit,
+    workloadManifestSha256: provenance.workloadManifest.sha256,
+    profileCommandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+    browserBuildCommandDigest: sha256(Buffer.from(canonicalJson(BROWSER_BUILD_COMMAND))),
+    artifactCensusSha256: sha256(Buffer.from(canonicalJson(provenance.packedArtifacts))),
+    supportFileCensusSha256: sha256(Buffer.from(canonicalJson(provenance.supportFiles))),
+  };
+}
+
+function validateKovoProductionScenario(scenario, label = 'scenario') {
+  const findings = [];
+  const expectedArtifactNames = [KOVO_BENCHMARK_CONSUMER, ...expectedKovoReleasePackages()].sort(
+    compareStrings,
+  );
+  const actualArtifactNames = (scenario?.provenance?.packedArtifacts ?? [])
+    .map((artifact) => artifact.name)
+    .sort(compareStrings);
+  if (!sameJson(actualArtifactNames, expectedArtifactNames)) {
+    findings.push(
+      `${label}.provenance.packedArtifacts must contain the exact code-owned Kovo release and benchmark consumer census`,
+    );
+  }
+  let expectedAttestation;
+  try {
+    expectedAttestation = createKovoProducerAttestation(scenario.provenance);
+  } catch {
+    expectedAttestation = null;
+  }
+  if (!sameJson(scenario?.provenance?.producerAttestation, expectedAttestation)) {
+    findings.push(
+      `${label}.provenance.producerAttestation must match the code-owned authenticated producer and artifact census`,
+    );
+  }
+  return findings;
+}
+
 export function validateBenchmarkScenario(scenario) {
   const findings = [];
   if (scenario?.schema !== DEVEX_BENCHMARK_SCENARIO_SCHEMA) {
@@ -334,6 +413,9 @@ export function validateBenchmarkScenario(scenario) {
     if (!allowedFields.has(field)) {
       findings.push(`scenario.${field} is not part of the packed benchmark contract`);
     }
+  }
+  if (scenario?.name === 'kovo-packed-check') {
+    findings.push(...validateKovoProductionScenario(scenario));
   }
   return findings;
 }
@@ -603,6 +685,38 @@ function validatePackedWorkloadManifest(manifest) {
       'workload manifest browserBootstrap must contain unique canonical relative paths',
     );
   }
+  if (manifest?.browserBuild !== undefined) {
+    try {
+      validateCommand(manifest.browserBuild?.command, 'workload manifest browserBuild.command');
+    } catch (error) {
+      findings.push(error.message);
+    }
+    if (
+      manifest.browserBuild?.cwd !== '.' &&
+      !safeRepositoryRelativePath(manifest.browserBuild?.cwd)
+    ) {
+      findings.push('workload manifest browserBuild.cwd must be . or a canonical relative path');
+    }
+  }
+  return findings;
+}
+
+export function validateKovoBrowserWorkload(manifest, consumerFiles) {
+  const findings = [];
+  if (!sameJson(manifest?.browserBuild, BROWSER_BUILD_COMMAND)) {
+    findings.push('Kovo packed workload browser build must match the code-owned bundle command');
+  }
+  for (const relative of manifest?.browserBootstrap ?? []) {
+    if (
+      !relative.startsWith('dist/client/') ||
+      consumerFiles.some((file) => file.path === relative)
+    ) {
+      findings.push(
+        'Kovo packed workload browser bootstrap must name emitted client assets, not packed source files',
+      );
+      break;
+    }
+  }
   return findings;
 }
 
@@ -642,6 +756,12 @@ function readPackedWorkloadManifest(scenario, root) {
   const consumer = manifest.artifacts.find((artifact) => artifact.role === 'consumer');
   if (!sameJson(consumer.files, scenario.provenance.supportFiles)) {
     throw new Error('packed workload support files do not match scenario provenance');
+  }
+  if (scenario.name === 'kovo-packed-check') {
+    const browserFindings = validateKovoBrowserWorkload(manifest, consumer.files);
+    if (browserFindings.length > 0) {
+      throw new Error(browserFindings.join('\n'));
+    }
   }
   return { bytes, manifest };
 }
@@ -788,8 +908,10 @@ function stagePackedWorkload(scenario, root, repositoryRoot) {
       linkDeclaredExternalDependencies(stageRoot, repositoryRoot, packedPackages, packedManifests);
     }
     regularFileInsideRoot(stageRoot, manifest.entrypoint, 'packed profile entrypoint');
-    for (const bootstrap of manifest.browserBootstrap) {
-      regularFileInsideRoot(stageRoot, bootstrap, 'browser bootstrap file');
+    if (manifest.browserBuild === undefined) {
+      for (const bootstrap of manifest.browserBootstrap) {
+        regularFileInsideRoot(stageRoot, bootstrap, 'browser bootstrap file');
+      }
     }
     return { manifest, stageRoot };
   } catch (error) {
@@ -804,6 +926,119 @@ function commandCwdInsideStage(stageRoot, relative) {
     kind: 'directory',
     label: 'benchmark command cwd',
   });
+}
+
+function assertProfileInvocation(result, context, requireMarker) {
+  if (result.exitCode !== 0 || result.signal || result.error) {
+    throw new Error(
+      `${context.phase} ${context.role} sample ${context.sampleIndex + 1} failed: exit=${String(
+        result.exitCode,
+      )} signal=${String(result.signal)} ${result.error ?? result.stderr ?? ''}`.trim(),
+    );
+  }
+  if (!requireMarker) return null;
+  const marker =
+    /^kovo-benchmark-phase\/v1 phase=(cold|warm|oneFileIncremental) revision=([01]) edit=(baseline|applied)\r?\n?$/u.exec(
+      result.stdout ?? '',
+    );
+  if (!marker || marker[1] !== context.executionPhase) {
+    throw new Error(
+      `${context.phase} ${context.role} sample ${context.sampleIndex + 1} did not return the code-owned phase marker`,
+    );
+  }
+  const revision = Number(marker[2]);
+  const expectedEdit = context.executionPhase === 'oneFileIncremental' ? 'applied' : 'baseline';
+  if (marker[3] !== expectedEdit || revision !== context.expectedRevision) {
+    throw new Error(
+      `${context.phase} ${context.role} sample ${context.sampleIndex + 1} returned the wrong edit revision`,
+    );
+  }
+  return revision;
+}
+
+function phaseCensus(observations, samples) {
+  const expected = {
+    cold: { prime: 0, timed: samples },
+    warm: { prime: samples, timed: samples },
+    oneFileIncremental: { prime: samples, timed: samples },
+  };
+  const counts = Object.fromEntries(PHASES.map((phase) => [phase, { prime: 0, timed: 0 }]));
+  const incrementalRevisions = [];
+  for (const observation of observations) {
+    counts[observation.phase][observation.role] += 1;
+    if (observation.phase === 'oneFileIncremental' && observation.role === 'timed') {
+      incrementalRevisions.push(observation.revision);
+    }
+  }
+  if (!sameJson(counts, expected)) {
+    throw new Error(
+      'benchmark phase census does not contain every required prime and timed sample',
+    );
+  }
+  const expectedRevisions = Array.from({ length: samples }, (_, index) =>
+    index % 2 === 0 ? 1 : 0,
+  );
+  if (!sameJson(incrementalRevisions, expectedRevisions)) {
+    throw new Error('incremental benchmark edits did not alternate across restored source samples');
+  }
+  return {
+    schema: KOVO_PHASE_CENSUS_SCHEMA,
+    samples,
+    counts,
+    incrementalRevisions,
+  };
+}
+
+function validatePhaseCensus(census, sampleCount, label) {
+  const findings = [];
+  if (
+    census?.schema !== KOVO_PHASE_CENSUS_SCHEMA ||
+    !Number.isInteger(sampleCount) ||
+    census?.samples !== sampleCount
+  ) {
+    findings.push(`${label} must bind the report sample count`);
+    return findings;
+  }
+  const expectedCounts = {
+    cold: { prime: 0, timed: sampleCount },
+    warm: { prime: sampleCount, timed: sampleCount },
+    oneFileIncremental: { prime: sampleCount, timed: sampleCount },
+  };
+  if (!sameJson(census.counts, expectedCounts)) {
+    findings.push(`${label}.counts must contain every required prime and timed sample`);
+  }
+  const expectedRevisions = Array.from({ length: sampleCount }, (_, index) =>
+    index % 2 === 0 ? 1 : 0,
+  );
+  if (!sameJson(census.incrementalRevisions, expectedRevisions)) {
+    findings.push(`${label}.incrementalRevisions must prove alternating restored source edits`);
+  }
+  return findings;
+}
+
+function emitBrowserBundle(manifest, stageRoot, options = {}) {
+  if (manifest.browserBuild === undefined) return;
+  const cwd = commandCwdInsideStage(stageRoot, manifest.browserBuild.cwd);
+  const spawn = options.spawnSync ?? spawnSync;
+  const [executable, ...args] = manifest.browserBuild.command;
+  const result = spawn(executable, args, {
+    cwd,
+    encoding: 'utf8',
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0 || result.signal || result.error) {
+    throw new Error(
+      `browser bundle failed: ${
+        result.error?.message ??
+        result.signal ??
+        result.stderr?.trim() ??
+        result.stdout?.trim() ??
+        `exit ${String(result.status)}`
+      }`,
+    );
+  }
 }
 
 /**
@@ -833,7 +1068,6 @@ export function runBenchmarkScenario(scenario, options = {}) {
   }
   const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
   let acquired = null;
-  let staged = null;
   try {
     let executionScenario = scenario;
     let executionRoot = root;
@@ -851,39 +1085,79 @@ export function runBenchmarkScenario(scenario, options = {}) {
       executionRoot = acquired.root;
       executionRepositoryRoot = acquired.repositoryRoot;
     }
-    staged = stagePackedWorkload(executionScenario, executionRoot, executionRepositoryRoot);
     const measure = options.measure ?? ((command, context) => measureCommand(command, context));
     const metrics = {};
     const commands = expectedScenarioCommands();
+    const observations = [];
+    const requireMarker = executionScenario.name === 'kovo-packed-check';
 
     for (const phase of PHASES) {
       const phaseConfig = commands[phase];
-      const cwd = commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd);
       const durationSamples = [];
       const rssSamples = [];
       for (let index = 0; index < samples; index += 1) {
-        const result = measure(phaseConfig.command, {
-          cwd,
-          phase,
-          sampleIndex: index,
-          stageRoot: staged.stageRoot,
-        });
-        if (result.exitCode !== 0 || result.signal || result.error) {
-          throw new Error(
-            `${phase} sample ${index + 1} failed: exit=${String(result.exitCode)} signal=${String(
-              result.signal,
-            )} ${result.error ?? result.stderr ?? ''}`.trim(),
-          );
-        }
-        if (!finiteNonNegative(result.durationMs)) {
-          throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
-        }
-        durationSamples.push(result.durationMs);
-        if (result.peakRssBytes !== null && result.peakRssBytes !== undefined) {
-          if (!finiteNonNegative(result.peakRssBytes)) {
-            throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+        const staged = stagePackedWorkload(
+          executionScenario,
+          executionRoot,
+          executionRepositoryRoot,
+        );
+        try {
+          const cwd = commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd);
+          const baseline = index % 2;
+          const invocationEnv =
+            phase === 'oneFileIncremental'
+              ? { KOVO_DEVEX_EDIT_BASELINE: String(baseline) }
+              : undefined;
+          if (phase !== 'cold') {
+            const primeContext = {
+              cwd,
+              env: invocationEnv,
+              executionPhase: 'warm',
+              expectedRevision: phase === 'oneFileIncremental' ? baseline : 0,
+              phase,
+              role: 'prime',
+              sampleIndex: index,
+              stageRoot: staged.stageRoot,
+            };
+            const prime = measure(commands.warm.command, primeContext);
+            const revision = assertProfileInvocation(prime, primeContext, requireMarker);
+            observations.push({
+              phase,
+              role: 'prime',
+              revision: revision ?? primeContext.expectedRevision,
+              sampleIndex: index,
+            });
           }
-          rssSamples.push(result.peakRssBytes);
+          const timedContext = {
+            cwd,
+            env: invocationEnv,
+            executionPhase: phase,
+            expectedRevision: phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0,
+            phase,
+            role: 'timed',
+            sampleIndex: index,
+            stageRoot: staged.stageRoot,
+          };
+          const result = measure(phaseConfig.command, timedContext);
+          const revision = assertProfileInvocation(result, timedContext, requireMarker);
+          observations.push({
+            phase,
+            role: 'timed',
+            revision: revision ?? timedContext.expectedRevision,
+            sampleIndex: index,
+          });
+          if (!finiteNonNegative(result.durationMs)) {
+            throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
+          }
+          durationSamples.push(result.durationMs);
+          if (result.peakRssBytes !== null && result.peakRssBytes !== undefined) {
+            if (!finiteNonNegative(result.peakRssBytes)) {
+              throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+            }
+            rssSamples.push(result.peakRssBytes);
+          }
+        } finally {
+          rmSync(staged.stageRoot, { recursive: true, force: true });
         }
       }
       metrics[`check.${phase}.durationMs`] = {
@@ -898,16 +1172,31 @@ export function runBenchmarkScenario(scenario, options = {}) {
       };
     }
 
-    const browser = browserBootstrapBytes(staged.manifest.browserBootstrap, {
-      root: staged.stageRoot,
-    });
+    const browserStage = stagePackedWorkload(
+      executionScenario,
+      executionRoot,
+      executionRepositoryRoot,
+    );
+    let browser;
+    try {
+      emitBrowserBundle(browserStage.manifest, browserStage.stageRoot, {
+        spawnSync: options.spawnSync,
+      });
+      browser = browserBootstrapBytes(browserStage.manifest.browserBootstrap, {
+        root: browserStage.stageRoot,
+      });
+    } finally {
+      rmSync(browserStage.stageRoot, { recursive: true, force: true });
+    }
     metrics['browser.bootstrapBytes'] = {
       unit: 'bytes',
       samples: [browser.bytes],
       summary: sampleSummary([browser.bytes]),
       files: browser.files,
     };
-    const consumer = staged.manifest.artifacts.find((artifact) => artifact.role === 'consumer');
+    const { manifest } = readPackedWorkloadManifest(executionScenario, executionRoot);
+    const consumer = manifest.artifacts.find((artifact) => artifact.role === 'consumer');
+    const census = phaseCensus(observations, samples);
 
     return {
       schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
@@ -925,14 +1214,17 @@ export function runBenchmarkScenario(scenario, options = {}) {
         commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
         packedArtifacts: structuredClone(scenario.provenance.packedArtifacts),
         supportFiles: structuredClone(consumer.files),
+        ...(scenario.provenance.producerAttestation === undefined
+          ? {}
+          : { producerAttestation: structuredClone(scenario.provenance.producerAttestation) }),
       },
       runner: environmentRunnerFingerprint(observedEnvironment),
       sampleCount: samples,
+      phaseCensus: census,
       commands,
       metrics,
     };
   } finally {
-    if (staged !== null) rmSync(staged.stageRoot, { recursive: true, force: true });
     if (acquired !== null) acquired.dispose();
   }
 }
@@ -955,6 +1247,9 @@ function expectedReportProvenance(scenario) {
       sha256: artifact.sha256,
     })),
     supportFiles: structuredClone(scenario.provenance.supportFiles),
+    ...(scenario.provenance.producerAttestation === undefined
+      ? {}
+      : { producerAttestation: structuredClone(scenario.provenance.producerAttestation) }),
   };
 }
 
@@ -983,6 +1278,13 @@ function validateBenchmarkReportIdentity(report, label = 'report') {
   }
   if (!sameJson(report.commands, expectedScenarioCommands())) {
     findings.push(`${label}.commands do not match its full scenario definition`);
+  }
+  if (!Number.isInteger(report.sampleCount) || report.sampleCount <= 0) {
+    findings.push(`${label}.sampleCount must be a positive integer`);
+  } else {
+    findings.push(
+      ...validatePhaseCensus(report.phaseCensus, report.sampleCount, `${label}.phaseCensus`),
+    );
   }
   return findings;
 }
@@ -1042,6 +1344,11 @@ function validateWorkloadIdentity(identity, label) {
       `${label}.provenance.supportFiles`,
     ),
   );
+  if (identity?.scenario?.name === 'kovo-packed-check') {
+    findings.push(
+      ...validateKovoProductionScenario({ provenance: identity.provenance }, `${label}.scenario`),
+    );
+  }
   return findings;
 }
 
@@ -1225,7 +1532,20 @@ export function validateBudgets(budgets, options = {}) {
     findings.push('metrics must be an object');
     return findings;
   }
+  const expectedMetricIds = Object.keys(DEVEX_METRIC_CONTRACT).sort(compareStrings);
+  const actualMetricIds = Object.keys(budgets.metrics).sort(compareStrings);
+  if (!sameJson(actualMetricIds, expectedMetricIds)) {
+    findings.push(
+      `metrics must contain the exact ${DEVEX_BUDGETS_SCHEMA} vocabulary: ${expectedMetricIds.join(', ')}`,
+    );
+  }
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
+    const contract = DEVEX_METRIC_CONTRACT[metricId];
+    if (contract && (metric?.unit !== contract.unit || metric?.sampling !== contract.sampling)) {
+      findings.push(
+        `${metricId} must retain unit=${contract.unit} and sampling=${contract.sampling}`,
+      );
+    }
     if (!METRIC_UNITS.has(metric?.unit)) findings.push(`${metricId}.unit must be bytes or ms`);
     if (metric?.direction !== 'max') findings.push(`${metricId}.direction must be max`);
     if (!['deterministic', 'statistical'].includes(metric?.sampling)) {
@@ -1741,7 +2061,7 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
   try {
     const consumerTarball = packWithoutLifecycleScripts(
       {
-        name: '@kovojs/devex-packed-check-consumer',
+        name: KOVO_BENCHMARK_CONSUMER,
         version: '1.0.0',
         dirPath: path.join(repositoryRoot, recipe.consumerSource),
       },
@@ -1755,7 +2075,7 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
     const consumerBytes = readPackageTarballSnapshot(consumerDestination);
     const artifacts = [
       workloadArtifact(
-        '@kovojs/devex-packed-check-consumer',
+        KOVO_BENCHMARK_CONSUMER,
         'consumer',
         path.relative(outputRoot, consumerDestination).split(path.sep).join('/'),
         consumerBytes,
@@ -1790,7 +2110,8 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
       },
       entrypoint: 'profile.mjs',
       artifacts,
-      browserBootstrap: ['browser-bootstrap.mjs'],
+      browserBuild: structuredClone(BROWSER_BUILD_COMMAND),
+      browserBootstrap: ['dist/client/browser-bootstrap.mjs'],
     };
     const manifestFindings = validatePackedWorkloadManifest(workloadManifest);
     if (manifestFindings.length > 0) {
@@ -1806,6 +2127,21 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
     writeJson(workloadManifestPath, workloadManifest);
     const workloadManifestBytes = readFileSync(workloadManifestPath);
     const consumer = artifacts[0];
+    const provenance = {
+      sourceCommit: environment.sourceCommit,
+      sourceTree: environment.sourceTree,
+      workloadManifest: {
+        path: path.basename(workloadManifestPath),
+        sha256: sha256(workloadManifestBytes),
+      },
+      packedArtifacts: artifacts.map(({ name, path: artifactPath, sha256: digest }) => ({
+        name,
+        path: artifactPath,
+        sha256: digest,
+      })),
+      supportFiles: structuredClone(consumer.files),
+    };
+    provenance.producerAttestation = createKovoProducerAttestation(provenance);
     const scenario = {
       schema: DEVEX_BENCHMARK_SCENARIO_SCHEMA,
       name: recipe.name,
@@ -1819,20 +2155,7 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
         packageManager: environment.packageManager,
         osImage: environment.osImage,
       },
-      provenance: {
-        sourceCommit: environment.sourceCommit,
-        sourceTree: environment.sourceTree,
-        workloadManifest: {
-          path: path.basename(workloadManifestPath),
-          sha256: sha256(workloadManifestBytes),
-        },
-        packedArtifacts: artifacts.map(({ name, path: artifactPath, sha256: digest }) => ({
-          name,
-          path: artifactPath,
-          sha256: digest,
-        })),
-        supportFiles: structuredClone(consumer.files),
-      },
+      provenance,
     };
     const scenarioFindings = validateBenchmarkScenario(scenario);
     if (scenarioFindings.length > 0) {
@@ -2037,8 +2360,17 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     const relativeBaselinePath = path.relative(budgetsRoot, baselinePath);
     const baselineBytes = readFileSync(baselinePath);
     const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
-    if (baselineReport?.scenario?.name !== 'kovo-packed-check') {
-      throw new Error('production ratification accepts only the code-owned fresh Kovo scenario');
+    const productionScenarioFindings =
+      baselineReport?.scenario?.name === 'kovo-packed-check'
+        ? validateKovoProductionScenario(
+            baselineReport.scenario.definition,
+            'baselineReport.scenario',
+          )
+        : ['baselineReport.scenario.name must be kovo-packed-check'];
+    if (productionScenarioFindings.length > 0) {
+      throw new Error(
+        `production ratification accepts only the authenticated code-owned Kovo producer:\n- ${productionScenarioFindings.join('\n- ')}`,
+      );
     }
     const updated = ratifyBudgets(budgets, baselineReport, readJson(path.resolve(args.proposal)), {
       baselineReportPath: relativeBaselinePath,

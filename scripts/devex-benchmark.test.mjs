@@ -27,6 +27,7 @@ import {
   ratifyBudgets,
   runBenchmarkScenario,
   validateBudgets,
+  validateKovoBrowserWorkload,
 } from './devex-benchmark.mjs';
 import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
@@ -66,14 +67,23 @@ describe('DevEx benchmark foundation', () => {
       warm: { durationMs: 10, peakRssBytes: 2000 },
       oneFileIncremental: { durationMs: 2, peakRssBytes: 1000 },
     };
+    const stageRoots = new Set();
+    const invocations = [];
     const report = runBenchmarkScenario(scenario, {
       root: fixtureRoot,
       samples: 5,
       observedEnvironment,
       allowFixtureScenario: true,
       measure(command, context) {
-        expect(command).toEqual(['node', 'profile.mjs', context.phase]);
+        expect(command).toEqual(['node', 'profile.mjs', context.executionPhase]);
         expect(path.basename(context.cwd)).toMatch(/^kovo-devex-benchmark-/u);
+        stageRoots.add(context.stageRoot);
+        invocations.push({
+          phase: context.phase,
+          role: context.role,
+          sampleIndex: context.sampleIndex,
+          baseline: context.env?.KOVO_DEVEX_EDIT_BASELINE ?? null,
+        });
         expect(readFileSync(path.join(context.cwd, 'profile.mjs'), 'utf8')).toContain(
           'kovo-check-input',
         );
@@ -122,6 +132,18 @@ describe('DevEx benchmark foundation', () => {
       medianAbsoluteDeviation: 1,
     });
     expect(report.metrics['check.oneFileIncremental.durationMs'].summary.median).toBe(4);
+    expect(stageRoots.size).toBe(15);
+    expect(invocations.filter((item) => item.role === 'prime')).toHaveLength(10);
+    expect(report.phaseCensus).toEqual({
+      schema: 'kovo-devex-phase-census/v1',
+      samples: 5,
+      counts: {
+        cold: { prime: 0, timed: 5 },
+        warm: { prime: 5, timed: 5 },
+        oneFileIncremental: { prime: 5, timed: 5 },
+      },
+      incrementalRevisions: [1, 0, 1, 0, 1],
+    });
     expect(report.metrics['browser.bootstrapBytes']).toEqual({
       unit: 'bytes',
       samples: [49],
@@ -351,9 +373,9 @@ describe('DevEx benchmark foundation', () => {
             throw new Error('forged workload must not drive measurement');
           },
         }),
-      ).toThrow('does not match artifacts freshly produced from the exact clean source revision');
+      ).toThrow('exact code-owned Kovo release and benchmark consumer census');
       expect(measured).toBe(false);
-      expect(disposed).toBe(true);
+      expect(disposed).toBe(false);
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });
     }
@@ -396,7 +418,13 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedProfileSource).toContain(
       "path.resolve('node_modules/@kovojs/cli/dist/bin.mjs')",
     );
+    expect(kovoPackedProfileSource).toContain("const sourcePath = 'src/check-subject.ts'");
+    expect(kovoPackedProfileSource).toContain("phase === 'oneFileIncremental'");
+    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v1');
     expect(kovoPackedProfileSource).not.toContain('packages/cli');
+    expect(devexBenchmarkSource).toContain(
+      "browserBootstrap: ['dist/client/browser-bootstrap.mjs']",
+    );
     expect(kovoPackedProfileSource).not.toContain('workspace:');
     expect(devexBenchmarkSource).toContain("['worktree', 'add', '--detach'");
     expect(devexBenchmarkSource).toContain(
@@ -411,6 +439,81 @@ describe('DevEx benchmark foundation', () => {
       true,
     );
     expect(budgets.runner.status).toBe('unratified');
+  });
+
+  it('closes the v4 metric vocabulary against invented and deleted gates', () => {
+    expect(budgets.schema).toBe('kovo-devex-budgets/v4');
+    const invented = structuredClone(budgets);
+    invented.metrics['invented.fastEnough'] = {
+      unit: 'ms',
+      direction: 'max',
+      sampling: 'statistical',
+      provisionalTarget: 1,
+      ratification: null,
+    };
+    expect(validateBudgets(invented)).toContainEqual(
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v4 vocabulary'),
+    );
+
+    const deleted = structuredClone(budgets);
+    delete deleted.metrics['check.cold.durationMs'];
+    expect(validateBudgets(deleted)).toContainEqual(
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v4 vocabulary'),
+    );
+  });
+
+  it('rejects source bootstrap stubs in place of emitted browser assets', () => {
+    const sourceFiles = [
+      { path: 'browser-bootstrap.mjs', sha256: `sha256:${'a'.repeat(64)}`, executable: false },
+    ];
+    expect(
+      validateKovoBrowserWorkload(
+        {
+          browserBuild: { command: ['node', 'bundle-browser.mjs'], cwd: '.' },
+          browserBootstrap: ['browser-bootstrap.mjs'],
+        },
+        sourceFiles,
+      ),
+    ).toContain(
+      'Kovo packed workload browser bootstrap must name emitted client assets, not packed source files',
+    );
+    expect(
+      validateKovoBrowserWorkload(
+        {
+          browserBuild: { command: ['node', 'bundle-browser.mjs'], cwd: '.' },
+          browserBootstrap: ['dist/client/browser-bootstrap.mjs'],
+        },
+        sourceFiles,
+      ),
+    ).toEqual([]);
+  });
+
+  it('rejects a renamed fixture report as a production Kovo baseline', () => {
+    const forgedDefinition = structuredClone(scenario);
+    forgedDefinition.name = 'kovo-packed-check';
+    const forged = benchmarkReport(
+      { 'check.cold.durationMs': [1, 1, 1, 1, 1] },
+      { definition: forgedDefinition },
+    );
+    const source = baselineOptions(forged);
+    expect(() =>
+      ratifyBudgets(
+        budgets,
+        forged,
+        {
+          schema: 'kovo-devex-budget-proposal/v4',
+          runnerFingerprint: forged.runner,
+          metrics: {
+            'check.cold.durationMs': {
+              budget: 1,
+              noiseMultiplier: 0,
+              targetRationale: 'A cheap fixture must not become a production baseline.',
+            },
+          },
+        },
+        source.ratificationOptions,
+      ),
+    ).toThrow('exact code-owned Kovo release and benchmark consumer census');
   });
 
   it('represents deterministic documentation snapshot sizes without inventing thresholds', () => {
@@ -552,7 +655,7 @@ describe('DevEx benchmark foundation', () => {
         budgets,
         report,
         {
-          schema: 'kovo-devex-budget-proposal/v3',
+          schema: 'kovo-devex-budget-proposal/v4',
           runnerFingerprint: report.runner,
           metrics: {
             'check.cold.durationMs': {
@@ -572,7 +675,7 @@ describe('DevEx benchmark foundation', () => {
       'check.cold.durationMs': [100, 101, 102, 103, 104],
     });
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v3',
+      schema: 'kovo-devex-budget-proposal/v4',
       runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
@@ -663,6 +766,14 @@ describe('DevEx benchmark foundation', () => {
     expect(() => evaluateBudgets(ratified, forgedDigest, validationOptions)).toThrow(
       'report.scenario.digest does not match its full definition',
     );
+
+    const forgedPhaseCensus = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forgedPhaseCensus.phaseCensus.incrementalRevisions = [0, 0, 0, 0, 0];
+    expect(() => evaluateBudgets(ratified, forgedPhaseCensus, validationOptions)).toThrow(
+      'report.phaseCensus.incrementalRevisions must prove alternating restored source edits',
+    );
   });
 
   it('gates only ratified metrics and detects a statistically derived breach', () => {
@@ -727,6 +838,7 @@ describe('DevEx benchmark foundation', () => {
 
 function benchmarkReport(metricSamples, options = {}) {
   const definition = structuredClone(options.definition ?? scenario);
+  const sampleCount = Math.max(...Object.values(metricSamples).map((samples) => samples.length));
   const runnerEnvironment = {
     ...definition.environment,
     ...options.runnerOverrides,
@@ -747,6 +859,9 @@ function benchmarkReport(metricSamples, options = {}) {
       commandDigest: definition.profile.commandDigest,
       packedArtifacts: structuredClone(definition.provenance.packedArtifacts),
       supportFiles: structuredClone(definition.provenance.supportFiles),
+      ...(definition.provenance.producerAttestation === undefined
+        ? {}
+        : { producerAttestation: structuredClone(definition.provenance.producerAttestation) }),
     },
     runner: createRunnerFingerprint({
       name: runnerEnvironment.runnerName,
@@ -757,7 +872,19 @@ function benchmarkReport(metricSamples, options = {}) {
       packageManager: runnerEnvironment.packageManager,
       osImage: runnerEnvironment.osImage,
     }),
-    sampleCount: Math.max(...Object.values(metricSamples).map((samples) => samples.length)),
+    sampleCount,
+    phaseCensus: {
+      schema: 'kovo-devex-phase-census/v1',
+      samples: sampleCount,
+      counts: {
+        cold: { prime: 0, timed: sampleCount },
+        warm: { prime: sampleCount, timed: sampleCount },
+        oneFileIncremental: { prime: sampleCount, timed: sampleCount },
+      },
+      incrementalRevisions: Array.from({ length: sampleCount }, (_, index) =>
+        index % 2 === 0 ? 1 : 0,
+      ),
+    },
     commands: {
       cold: { command: ['node', 'profile.mjs', 'cold'], cwd: '.' },
       warm: { command: ['node', 'profile.mjs', 'warm'], cwd: '.' },
@@ -793,7 +920,7 @@ function ratifyFixtureBudgets(report, metrics) {
       budgets,
       report,
       {
-        schema: 'kovo-devex-budget-proposal/v3',
+        schema: 'kovo-devex-budget-proposal/v4',
         runnerFingerprint: report.runner,
         metrics,
       },
