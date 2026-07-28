@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const SOURCE_PATH = 'src/components/counter-island.tsx';
@@ -82,18 +82,30 @@ function failBuild(result) {
   );
 }
 
+function materializeAuthenticatedLockfile() {
+  const expected = readFileSync('benchmark-lock.yaml');
+  let observed;
+  try {
+    observed = readFileSync('pnpm-lock.yaml');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    writeFileSync('pnpm-lock.yaml', expected, { flag: 'wx' });
+    observed = readFileSync('pnpm-lock.yaml');
+  }
+  if (!observed.equals(expected)) {
+    throw new Error('packed Kovo app lockfile does not match its authenticated source bytes');
+  }
+}
+
 export function runVerifiedBuild() {
+  materializeAuthenticatedLockfile();
   const cli = path.resolve('node_modules/@kovojs/cli/dist/bin.mjs');
-  const result = spawnSync(
-    process.execPath,
-    [cli, 'build', './src/app.tsx', '--out', './dist'],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const result = spawnSync(process.execPath, [cli, 'build', './src/app.tsx', '--out', './dist'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   failBuild(result);
   if (!/^kovo-build\/v1\r?\n/mu.test(result.stdout ?? '')) {
     throw new Error('packed Kovo app build returned an unrecognized result');

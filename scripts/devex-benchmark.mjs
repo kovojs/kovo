@@ -728,6 +728,7 @@ export function validateKovoBrowserWorkload(manifest, consumerFiles) {
     );
   }
   const requiredConsumerFiles = new Set([
+    'benchmark-lock.yaml',
     'build-browser.mjs',
     'profile.mjs',
     'src/app.tsx',
@@ -2190,11 +2191,24 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
 
   const temporaryPackRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-consumer-pack-'));
   try {
+    const consumerSourceRoot = path.join(temporaryPackRoot, 'consumer-source');
+    copyRegularDirectory(
+      nonSymlinkDescendant(repositoryRoot, recipe.consumerSource, {
+        kind: 'directory',
+        label: 'Kovo benchmark consumer source',
+      }),
+      consumerSourceRoot,
+      'Kovo benchmark consumer source',
+    );
+    copyFileSync(
+      regularFileInsideRoot(repositoryRoot, 'pnpm-lock.yaml', 'Kovo benchmark source lockfile'),
+      path.join(consumerSourceRoot, 'benchmark-lock.yaml'),
+    );
     const consumerTarball = packWithoutLifecycleScripts(
       {
         name: KOVO_BENCHMARK_CONSUMER,
         version: '1.0.0',
-        dirPath: path.join(repositoryRoot, recipe.consumerSource),
+        dirPath: consumerSourceRoot,
       },
       temporaryPackRoot,
     );
@@ -2298,6 +2312,30 @@ function materializeFreshKovoScenario(repositoryRoot, environment) {
     return { outputRoot, scenario, scenarioPath, workloadManifest, workloadManifestPath };
   } finally {
     rmSync(temporaryPackRoot, { recursive: true, force: true });
+  }
+}
+
+function copyRegularDirectory(source, destination, label) {
+  const sourceStat = lstatSync(source);
+  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular non-symlink directory`);
+  }
+  mkdirSync(destination, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
+    const sourceEntry = path.join(source, entry.name);
+    const destinationEntry = path.join(destination, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`${label} contains a symbolic link: ${entry.name}`);
+    }
+    if (entry.isDirectory()) {
+      copyRegularDirectory(sourceEntry, destinationEntry, `${label}/${entry.name}`);
+    } else if (entry.isFile()) {
+      copyFileSync(sourceEntry, destinationEntry);
+    } else {
+      throw new Error(`${label} contains a non-regular entry: ${entry.name}`);
+    }
   }
 }
 

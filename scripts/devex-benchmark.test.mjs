@@ -512,6 +512,7 @@ describe('DevEx benchmark foundation', () => {
     const sourceFiles = [
       { path: 'browser-bootstrap.mjs', sha256: `sha256:${'a'.repeat(64)}`, executable: false },
       ...[
+        'benchmark-lock.yaml',
         'build-browser.mjs',
         'profile.mjs',
         'src/app.tsx',
