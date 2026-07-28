@@ -655,6 +655,16 @@ function providerContext(options: {
           stringLiteralProperty(appObject, 'appId'),
         foundApp: Boolean(appObject && ts.isObjectLiteralExpression(appObject)),
         foundImport: Boolean(providerImport),
+        appArgumentKind: appArgument && ts.SyntaxKind[appArgument.kind],
+        appExportName: options.appExportName,
+        appInitializerKind: appInitializer && ts.SyntaxKind[appInitializer.kind],
+        declarations: providerAst.statements
+          .filter(ts.isVariableStatement)
+          .flatMap((statement) =>
+            statement.declarationList.declarations.map((declaration) =>
+              ts.isIdentifier(declaration.name) ? declaration.name.text : declaration.name.getText(),
+            ),
+          ),
         provider:
           appObject &&
           ts.isObjectLiteralExpression(appObject) &&
