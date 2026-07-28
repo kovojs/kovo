@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlAssetInventory, summarizeAxeResult } from './fcp-harness.mjs';
+import { htmlAssetInventory, runFcpHarness, summarizeAxeResult } from './fcp-harness.mjs';
 
 describe('fcp harness HTML asset inventory', () => {
   it('classifies deferred stylesheets, noscript fallbacks, modulepreloads, and inline bytes', () => {
@@ -110,5 +110,23 @@ describe('fcp harness HTML asset inventory', () => {
       ],
     });
     expect(result.passes).toEqual([{ id: 'document-title', nodes: 1 }]);
+  });
+
+  it('rejects accessibility requests that cannot produce browser evidence before I/O', async () => {
+    await expect(
+      runFcpHarness({
+        accessibility: true,
+        browser: false,
+        terminalState: { name: 'ready', selector: 'main' },
+        url: 'http://unreachable.invalid/',
+      }),
+    ).rejects.toThrow('accessibility capture requires browser mode');
+
+    await expect(
+      runFcpHarness({
+        accessibility: true,
+        url: 'http://unreachable.invalid/',
+      }),
+    ).rejects.toThrow('accessibility capture requires an explicit terminal state');
   });
 });

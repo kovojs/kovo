@@ -17,6 +17,7 @@ const axeRequire = createRequire(new URL('../tests/integration/package.json', im
 const wcagTags = Object.freeze(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
 
 export async function runFcpHarness(options) {
+  validateAccessibilityOptions(options);
   const url = new URL(options.url);
   const outputDir = options.outputDir ?? defaultOutputDir(url);
   mkdirSync(outputDir, { recursive: true });
@@ -209,15 +210,6 @@ function runLighthouse(url, outputDir) {
 }
 
 async function runBrowserSmoke(url, outputDir, options = {}) {
-  if (
-    options.accessibility === true &&
-    (typeof options.terminalState?.name !== 'string' ||
-      options.terminalState.name.trim().length === 0 ||
-      typeof options.terminalState?.selector !== 'string' ||
-      options.terminalState.selector.trim().length === 0)
-  ) {
-    throw new Error('accessibility capture requires an explicit terminal state name and selector');
-  }
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   const results = [];
@@ -528,6 +520,26 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function validateAccessibilityOptions(options) {
+  if (options.accessibility !== true) {
+    if (options.terminalState !== undefined) {
+      throw new Error('terminal-state capture requires accessibility mode');
+    }
+    return;
+  }
+  if (options.browser === false) {
+    throw new Error('accessibility capture requires browser mode');
+  }
+  if (
+    typeof options.terminalState?.name !== 'string' ||
+    options.terminalState.name.trim().length === 0 ||
+    typeof options.terminalState?.selector !== 'string' ||
+    options.terminalState.selector.trim().length === 0
+  ) {
+    throw new Error('accessibility capture requires an explicit terminal state name and selector');
+  }
+}
+
 function parseCliArgs(args) {
   const options = { accessibility: false, browser: true, lighthouse: false };
   for (let index = 0; index < args.length; index += 1) {
@@ -624,6 +636,12 @@ function parseCliArgs(args) {
   }
   if (options.accessibility && (!options.terminalState?.name || !options.terminalState?.selector)) {
     throw new Error('--a11y requires --terminal-name and --terminal-selector.');
+  }
+  if (options.accessibility && options.browser === false) {
+    throw new Error('--a11y cannot be combined with --no-browser.');
+  }
+  if (!options.accessibility && options.terminalState !== undefined) {
+    throw new Error('--terminal-name and --terminal-selector require --a11y.');
   }
   return options;
 }
