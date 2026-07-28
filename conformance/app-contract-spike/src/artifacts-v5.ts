@@ -116,6 +116,13 @@ export async function loadAuthenticatedPackedCompiler(
     join(dependencyDirectory, '@kovojs/core'),
     'dir',
   );
+  for (const dependency of ['style', 'verify'] as const) {
+    await symlink(
+      await realpath(join(repoRoot, `node_modules/@kovojs/${dependency}`)),
+      join(dependencyDirectory, `@kovojs/${dependency}`),
+      'dir',
+    );
+  }
   await symlink(
     await realpath(join(repoRoot, 'node_modules/typescript')),
     join(dependencyDirectory, 'typescript'),
