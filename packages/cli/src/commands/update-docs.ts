@@ -10,7 +10,6 @@ import {
 
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { installAgentDocsSnapshot } from '../docs-store.js';
-import { readCliPackageVersion } from '../package-version.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { readCliPackageVersion } from '../package-version.js';
 import type { CliProcessResult } from '../shared.js';

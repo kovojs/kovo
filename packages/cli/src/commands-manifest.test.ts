@@ -14,6 +14,7 @@ import {
   COMMANDS_MANIFEST,
   DB_USAGE,
   DEV_USAGE,
+  DOCS_USAGE,
   EXPLAIN_USAGE,
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
@@ -42,6 +43,7 @@ describe('commands manifest', () => {
     './index.ts',
     './commands/build-export.ts',
     './commands/dev.ts',
+    './commands/docs.ts',
     './commands/compile.ts',
     './commands/db.ts',
     './commands/fix.ts',
@@ -75,6 +77,7 @@ describe('commands manifest', () => {
         'compile',
         'db',
         'dev',
+        'docs',
         'explain',
         'export',
         'fix',
@@ -87,10 +90,10 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, check, compile, db, dev, explain, export, fix, incident, mcp, update-docs\n',
+      'kovo: add, audit, build, check, compile, db, dev, docs, explain, export, fix, incident, mcp, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, audit, build, check, compile, db, dev, explain, export, fix, incident, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, audit, build, check, compile, db, dev, docs, explain, export, fix, incident, mcp, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
@@ -111,10 +114,21 @@ describe('commands manifest', () => {
     );
   });
 
-  it('marks the async-dispatched commands (add, build, dev, db, compile, fix, export, mcp, update-docs) as async', () => {
+  it('marks the async-dispatched commands (including docs) as async', () => {
     const asyncNames = COMMANDS_MANIFEST.filter(isAsyncManifestEntry).map((entry) => entry.name);
     expect(asyncNames.sort()).toEqual(
-      ['add', 'build', 'compile', 'db', 'dev', 'export', 'fix', 'mcp', 'update-docs'].sort(),
+      [
+        'add',
+        'build',
+        'compile',
+        'db',
+        'dev',
+        'docs',
+        'export',
+        'fix',
+        'mcp',
+        'update-docs',
+      ].sort(),
     );
   });
 
@@ -138,6 +152,7 @@ describe('commands manifest', () => {
     expect(DB_USAGE).toBe(
       'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--system-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
     );
+    expect(DOCS_USAGE).toBe('usage: kovo docs <task> [--limit <count>] [--format <human|json>]');
     expect(COMPILE_USAGE[0]).toBe(
       'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
     );
@@ -181,6 +196,7 @@ describe('commands manifest', () => {
     expect(byName.build?.usage).toBe(BUILD_USAGE);
     expect(byName.dev?.usage).toBe(DEV_USAGE);
     expect(byName.db?.usage).toBe(DB_USAGE);
+    expect(byName.docs?.usage).toBe(DOCS_USAGE);
     expect(byName.compile?.usage).toEqual(COMPILE_USAGE);
     expect(byName.fix?.usage).toBe(FIX_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
@@ -324,6 +340,15 @@ describe('commands manifest', () => {
     });
     expect(parseKovoCommandInvocation('mcp', ['surplus'])).toMatchObject({
       error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('docs', [])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('docs', ['quickstart', '--limit', '9'])).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining('integer from 1 through 8'),
       ok: false,
     });
     expect(parseKovoCommandInvocation('update-docs', ['surplus'])).toMatchObject({

@@ -150,6 +150,18 @@ const exitsWithUnknown = Object.freeze({
   unknown: 2,
 } as const);
 
+/**
+ * Freeze the complete framework-owned semantic graph before any adapter builds
+ * registries or rendered output from it. TypeScript readonly modifiers are
+ * author-time guardrails; this runtime freeze prevents an imported schema
+ * reference from changing parser, help, completion, or reference behavior.
+ */
+function deepFreezeSemanticSchema<const Value>(schema: Value): Value {
+  if (schema === null || typeof schema !== 'object' || Object.isFrozen(schema)) return schema;
+  for (const child of Object.values(schema)) deepFreezeSemanticSchema(child);
+  return Object.freeze(schema);
+}
+
 function value<
   const Kind extends KovoCommandValueKind,
   const Label extends string,
@@ -447,10 +459,10 @@ const compileOptions = [
 ] as const;
 
 /**
- * @internal Complete semantic command AST. Its 13 capability commands are
+ * @internal Complete semantic command AST. Its 14 capability commands are
  * intentionally grouped into daily/build, inspect/security, and agent/operator.
  */
-export const KOVO_COMMAND_SCHEMA = [
+export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     async: true,
@@ -897,6 +909,48 @@ export const KOVO_COMMAND_SCHEMA = [
   },
   {
     aliases: [],
+    async: true,
+    category: 'agent-operator',
+    examples: [
+      'kovo docs quickstart',
+      'kovo docs "authenticated mutation" --limit 3 --format json',
+    ],
+    exits,
+    name: 'docs',
+    options: [
+      flag('limit', ['--limit'], 'Maximum number of authenticated local results.', {
+        category: 'selection',
+        invalidValueMessage: 'kovo: docs --limit must be an integer from 1 through 8.\n',
+        missingValueMessage: 'kovo: docs --limit requires an integer from 1 through 8.\n',
+        value: value('integer', 'count', { default: 5, maximum: 8, minimum: 1 }),
+      }),
+      flag('format', ['--format'], 'Select human or machine-readable output.', {
+        category: 'output',
+        invalidValueMessage: 'kovo: docs --format requires human or json.\n',
+        missingValueMessage: 'kovo: docs --format requires human or json.\n',
+        value: value('enum', 'human|json', { default: 'human', values: ['human', 'json'] }),
+      }),
+    ],
+    order: 75,
+    referenceUsage: 'inline',
+    resultProtocol: 'kovo-docs/v1',
+    summary: 'Search the exact version-matched local Kovo documentation snapshot.',
+    usage: [
+      {
+        id: 'docs',
+        tokens: [
+          argument('task', value('string', 'task'), {
+            missingValueMessage: 'kovo: docs requires a task.\n',
+            unexpectedValueMessage: 'kovo: docs accepts one task.\n',
+          }),
+          option('limit'),
+          option('format'),
+        ],
+      },
+    ],
+  },
+  {
+    aliases: [],
     category: 'inspect-security',
     examples: [
       'kovo explain component Cart graph.json',
@@ -1197,7 +1251,7 @@ export const KOVO_COMMAND_SCHEMA = [
     summary: 'Refresh version-matched agent-readable Kovo documentation.',
     usage: [{ id: 'update-docs', tokens: [] }],
   },
-] as const satisfies readonly KovoCommandSchemaEntry[];
+] as const satisfies readonly KovoCommandSchemaEntry[]);
 
 const capabilityAndMetaCommandNames = [
   ...KOVO_COMMAND_SCHEMA.map((entry) => entry.name),
@@ -1211,7 +1265,7 @@ const capabilityAndMetaCommandNames = [
  * validation. Help, version, completion, capability parsing, and references
  * project from this object.
  */
-export const KOVO_CLI_SCHEMA = Object.freeze({
+export const KOVO_CLI_SCHEMA = deepFreezeSemanticSchema({
   commands: KOVO_COMMAND_SCHEMA,
   globalOptions: [
     flag('help', ['--help', '-h'], 'Show generated help.'),

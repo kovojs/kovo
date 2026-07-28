@@ -67,6 +67,9 @@ export const DEV_USAGE = renderInlineUsage(requireCommand('dev'));
 /** @internal Usage line emitted for `kovo db`. */
 export const DB_USAGE = renderInlineUsage(requireCommand('db'));
 
+/** @internal Usage line emitted for authenticated local docs retrieval. */
+export const DOCS_USAGE = renderInlineUsage(requireCommand('docs'));
+
 /** @internal Usage forms emitted for `kovo compile`. */
 export const COMPILE_USAGE = renderMultilineUsage(requireCommand('compile'));
 

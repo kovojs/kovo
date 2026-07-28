@@ -39,6 +39,7 @@ import {
   type KovoSyncCommandName,
 } from './commands-manifest.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
+import { runDocsCommand } from './commands/docs.js';
 import {
   captureKovoCommandSecurityDisposition,
   type KovoCommandSecurityDisposition,
@@ -228,6 +229,20 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     const parsed = parseDevArgs(args, security.invocationCwd);
     if (!parsed.ok) return writeUsageError(parsed.message, 'dev');
     return writeCommandResult(await runDevCommand(parsed.options, security), 'runtime', 'dev');
+  },
+  async docs(args, security) {
+    const parsed = parseKovoCommandInvocation('docs', args);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'docs');
+    return writeCommandResult(
+      await runDocsCommand({
+        cwd: security.invocationCwd,
+        format: parsed.value.options.format,
+        limit: parsed.value.options.limit,
+        task: parsed.value.arguments.task,
+      }),
+      'config',
+      'docs',
+    );
   },
   async compile(args) {
     const parsed = parseCompileArgs(args);

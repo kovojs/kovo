@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { searchInstalledAgentDocs } from '../docs-store.js';
 import { readCliPackageVersion } from '../package-version.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import type { CliProcessResult } from '../shared.js';
+
+const docsOutputVersion = requireKovoCommandResultProtocol('docs');
 
 export interface DocsCommandOptions {
   cwd?: string;
@@ -37,7 +40,7 @@ export async function runDocsCommand(options: DocsCommandOptions): Promise<CliPr
       exitCode: 0,
       output:
         options.format === 'json'
-          ? `${JSON.stringify({ results: records, version: 'kovo-docs/v1' })}\n`
+          ? `${JSON.stringify({ results: records, version: docsOutputVersion })}\n`
           : renderHumanDocsResults(records),
     };
   } catch (error) {
@@ -45,17 +48,17 @@ export async function runDocsCommand(options: DocsCommandOptions): Promise<CliPr
     if (options.format === 'json') {
       return {
         exitCode: 2,
-        output: `${JSON.stringify({ error: { message }, version: 'kovo-docs/v1' })}\n`,
+        output: `${JSON.stringify({ error: { message }, version: docsOutputVersion })}\n`,
       };
     }
-    return { exitCode: 2, output: `kovo-docs/v1\nERROR ${message}\n` };
+    return { exitCode: 2, output: `${docsOutputVersion}\nERROR ${message}\n` };
   }
 }
 
 function renderHumanDocsResults(results: readonly DocsResultRecord[]): string {
-  if (results.length === 0) return 'kovo-docs/v1\nNO_MATCH\n';
+  if (results.length === 0) return `${docsOutputVersion}\nNO_MATCH\n`;
   return [
-    'kovo-docs/v1',
+    docsOutputVersion,
     `snapshot=${results[0]!.snapshotDigest} version=${results[0]!.version} results=${results.length}`,
     ...results.flatMap((result) => [
       '',

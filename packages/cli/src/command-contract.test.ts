@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { kovoCommandExitCode, KOVO_CLI_SCHEMA, KOVO_COMMAND_SCHEMA } from './command-schema.js';
 import {
@@ -10,14 +10,15 @@ import {
   formatCommandHelp,
   formatRootHelp,
   KOVO_CLI_VERSION,
+  type KovoSemanticCommandRequest,
   parseKovoCommandInvocation,
   parseKovoMetaInvocation,
   renderShellCompletion,
 } from './commands-manifest.js';
-import { main, mainAsync } from './index.js';
+import { main, mainAsync, runKovoCommand } from './index.js';
 
 describe('semantic CLI contract', () => {
-  it('keeps all 13 capability commands in one categorized, versioned schema', () => {
+  it('keeps all 14 capability commands in one categorized, versioned schema', () => {
     expect(
       KOVO_COMMAND_SCHEMA.map(
         (entry) => `${entry.category}:${entry.name}:${entry.resultProtocol ?? 'none'}`,
@@ -31,6 +32,7 @@ describe('semantic CLI contract', () => {
         "agent-operator:compile:kovo-compile/v1",
         "agent-operator:db:kovo-db/v1",
         "daily-build:dev:none",
+        "agent-operator:docs:kovo-docs/v1",
         "inspect-security:explain:kovo-explain/v1",
         "daily-build:export:kovo-export/v1",
         "agent-operator:fix:none",
@@ -40,7 +42,7 @@ describe('semantic CLI contract', () => {
       ]
     `);
 
-    expect(new Set(KOVO_COMMAND_SCHEMA.map((entry) => entry.name)).size).toBe(13);
+    expect(new Set(KOVO_COMMAND_SCHEMA.map((entry) => entry.name)).size).toBe(14);
     for (const entry of KOVO_COMMAND_SCHEMA) {
       expect(entry.aliases).toEqual([...new Set(entry.aliases)]);
       expect(entry.examples.length).toBeGreaterThan(0);
@@ -64,6 +66,25 @@ describe('semantic CLI contract', () => {
         }
       }
     }
+  });
+
+  it('deep-freezes the semantic graph before adapters consume it', () => {
+    const pending: unknown[] = [KOVO_CLI_SCHEMA];
+    const visited = new Set<object>();
+    while (pending.length > 0) {
+      const value = pending.pop();
+      if (value === null || typeof value !== 'object' || visited.has(value)) continue;
+      visited.add(value);
+      expect(Object.isFrozen(value)).toBe(true);
+      pending.push(...Object.values(value));
+    }
+
+    const rootHelp = formatRootHelp();
+    expect(Reflect.set(KOVO_COMMAND_SCHEMA[0], 'summary', 'mutated after import')).toBe(false);
+    expect(() =>
+      (KOVO_COMMAND_SCHEMA[0].aliases as unknown as string[]).push('mutated-alias'),
+    ).toThrow(TypeError);
+    expect(formatRootHelp()).toBe(rootHelp);
   });
 
   it('projects command reference data from the same schema', () => {
@@ -153,6 +174,22 @@ describe('semantic CLI contract', () => {
     expect(parseKovoCommandInvocation('dev', ['src/app.tsx', '--port', '4173'])).toMatchObject({
       ok: true,
       value: { options: { port: 4173 } },
+    });
+    expect(
+      parseKovoCommandInvocation('docs', [
+        'authenticated mutation',
+        '--limit=3',
+        '--format',
+        'json',
+      ]),
+    ).toEqual({
+      ok: true,
+      value: {
+        arguments: { task: 'authenticated mutation' },
+        command: 'docs',
+        form: 'docs',
+        options: { format: 'json', limit: 3 },
+      },
     });
     expect(parseKovoCommandInvocation('dev', ['src/app.tsx', '--port', '65536'])).toMatchObject({
       error: 'usage',
@@ -251,6 +288,8 @@ describe('semantic CLI contract', () => {
   });
 
   it('serializes semantic programmatic requests without exposing argv-shaped option keys', () => {
+    expectTypeOf(runKovoCommand).parameter(0).toEqualTypeOf<KovoSemanticCommandRequest>();
+
     expect(
       commandRequestToArgv({
         arguments: { appModule: './src/app.tsx' },
@@ -335,6 +374,7 @@ describe('semantic CLI contract', () => {
       ['compile'],
       ['db'],
       ['dev'],
+      ['docs'],
       ['explain'],
       ['export'],
       ['fix'],
