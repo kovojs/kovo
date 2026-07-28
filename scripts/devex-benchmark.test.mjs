@@ -514,7 +514,7 @@ describe('DevEx benchmark foundation', () => {
         source.ratificationOptions,
       ),
     ).toThrow(
-      'production baseline ratification requires the exact scenario authenticated by the fresh code-owned pack producer',
+      'budget ratification requires the exact production scenario authenticated by the fresh code-owned pack producer',
     );
   });
 
@@ -651,24 +651,14 @@ describe('DevEx benchmark foundation', () => {
 
   it('refuses to ratify a statistical metric from a single noisy sample', () => {
     const report = benchmarkReport({ 'check.cold.durationMs': [100] });
-    const source = baselineOptions(report);
     expect(() =>
-      ratifyBudgets(
-        budgets,
-        report,
-        {
-          schema: 'kovo-devex-budget-proposal/v4',
-          runnerFingerprint: report.runner,
-          metrics: {
-            'check.cold.durationMs': {
-              budget: 90,
-              noiseMultiplier: 3,
-              targetRationale: 'A target that still needs a real baseline sample set.',
-            },
-          },
+      ratifyFixtureBudgets(report, {
+        'check.cold.durationMs': {
+          budget: 90,
+          noiseMultiplier: 3,
+          targetRationale: 'A target that still needs a real baseline sample set.',
         },
-        source.ratificationOptions,
-      ),
+      }),
     ).toThrow('has 1 baseline samples; 5 required');
   });
 
@@ -696,10 +686,12 @@ describe('DevEx benchmark foundation', () => {
     const anotherSource = baselineOptions(anotherRunnerReport);
     expect(() =>
       ratifyBudgets(budgets, anotherRunnerReport, proposal, anotherSource.ratificationOptions),
-    ).toThrow('baseline runner fingerprint does not match proposal.runnerFingerprint');
+    ).toThrow(
+      'budget ratification requires the exact production scenario authenticated by the fresh code-owned pack producer',
+    );
 
     const source = baselineOptions(defaultReport);
-    const ratified = ratifyBudgets(budgets, defaultReport, proposal, source.ratificationOptions);
+    const { ratified } = ratifyFixtureBudgets(defaultReport, proposal.metrics);
     const anotherNodeScenario = structuredClone(scenario);
     anotherNodeScenario.environment.node = 'v25.0.0';
     const evaluation = evaluateBudgets(
@@ -917,17 +909,58 @@ function baselineOptions(report) {
 
 function ratifyFixtureBudgets(report, metrics) {
   const source = baselineOptions(report);
-  return {
-    ratified: ratifyBudgets(
-      budgets,
-      report,
-      {
-        schema: 'kovo-devex-budget-proposal/v4',
-        runnerFingerprint: report.runner,
-        metrics,
+  const ratified = structuredClone(budgets);
+  const workloadIdentity = {
+    scenario: {
+      name: report.scenario.name,
+      digest: report.scenario.digest,
+    },
+    provenance: structuredClone(report.provenance),
+  };
+  ratified.runner = {
+    status: 'ratified',
+    fingerprint: structuredClone(report.runner),
+  };
+  ratified.workload = {
+    status: 'ratified',
+    identity: workloadIdentity,
+  };
+  for (const [metricId, proposal] of Object.entries(metrics)) {
+    const metric = ratified.metrics[metricId];
+    const samples = report.metrics?.[metricId]?.samples;
+    const requiredSamples =
+      metric.sampling === 'deterministic' ? 1 : ratified.procedure.minimumStatisticalSamples;
+    if (!Array.isArray(samples) || samples.length < requiredSamples) {
+      throw new Error(
+        `${metricId} has ${samples?.length ?? 0} baseline samples; ${requiredSamples} required`,
+      );
+    }
+    const statistic = proposal.statistic ?? ratified.procedure.statistic;
+    const baseline = statistic === 'p95' ? percentile(samples, 0.95) : median(samples);
+    const noise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
+    metric.ratification = {
+      runnerFingerprint: structuredClone(report.runner),
+      workloadIdentity: structuredClone(workloadIdentity),
+      baselineReport: {
+        path: source.ratificationOptions.baselineReportPath,
+        sha256: digest(source.ratificationOptions.baselineReportBytes),
+        schema: report.schema,
+        scenarioName: report.scenario.name,
+        scenarioDigest: report.scenario.digest,
       },
-      source.ratificationOptions,
-    ),
+      sampleCount: samples.length,
+      statistic,
+      baseline,
+      targetRationale: proposal.targetRationale,
+      budget: proposal.budget,
+      noiseStatistic: ratified.procedure.noiseStatistic,
+      noise,
+      noiseMultiplier: proposal.noiseMultiplier,
+      threshold: proposal.budget + proposal.noiseMultiplier * noise,
+    };
+  }
+  return {
+    ratified,
     validationOptions: source.validationOptions,
   };
 }

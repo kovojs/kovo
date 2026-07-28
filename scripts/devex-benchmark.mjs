@@ -1657,12 +1657,12 @@ function validateProposal(proposal) {
  */
 export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   if (
-    baselineReport?.scenario?.name === 'kovo-packed-check' &&
-    (!authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
-      !sameJson(baselineReport.scenario.definition, options.authenticatedProductionScenario))
+    baselineReport?.scenario?.name !== 'kovo-packed-check' ||
+    !authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
+    !sameJson(baselineReport.scenario.definition, options.authenticatedProductionScenario)
   ) {
     throw new Error(
-      'production baseline ratification requires the exact scenario authenticated by the fresh code-owned pack producer',
+      'budget ratification requires the exact production scenario authenticated by the fresh code-owned pack producer',
     );
   }
   const findings = [
