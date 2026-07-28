@@ -30,6 +30,9 @@ import {
   outputVersion,
   type KovoExplainOptions,
 } from '../graph-output.js';
+import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
+import { searchInstalledAgentDocs } from '../docs-store.js';
+import { readCliPackageVersion } from '../package-version.js';
 import {
   byteLength,
   compileOutputVersion,
@@ -98,6 +101,7 @@ export interface CompileComponentV1Result {
 export type KovoMcpToolName =
   | 'compile_component'
   | 'kovo_check'
+  | 'kovo_docs'
   | 'kovo_explain'
   | 'list_diagnostics';
 
@@ -239,7 +243,7 @@ export function createKovoMcpServer(invocationCwd: string): FiniteMcpStdioServer
       return mcpToolResult(asMcpStructuredContent(await callMcpTool(name, args, workspaceRoot)));
     },
     instructions:
-      'Kovo diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
+      'Kovo diagnostics and version-matched local-docs surface. Tools wrap existing compile/check/explain/docs APIs; SPEC §11.3 keeps severity policy in @kovojs/core.',
     maxLineBytes: MCP_MAX_LINE_BYTES,
     serverInfo: { name: 'kovo', version: mcpOutputVersion },
     tools: listing.tools,
@@ -281,6 +285,7 @@ async function callMcpTool(
     );
   }
   if (name === 'kovo_check') return runKovoCheckTool(args);
+  if (name === 'kovo_docs') return await runKovoDocsTool(args, workspaceRoot);
   if (name === 'kovo_explain') return runKovoExplainTool(args);
   if (name === 'list_diagnostics') {
     assertExactKeys(assertToolArgs(args, 'list_diagnostics'), [], 'list_diagnostics arguments');
@@ -318,6 +323,19 @@ function listMcpTools(): {
         description: 'Run kovoCheck against a bounded inline graph.',
         inputSchema: graphToolSchema({ family: { enum: ['all', 'coverage', 'optimistic'] } }),
         name: 'kovo_check',
+      },
+      {
+        description: 'Search the exact version-matched local Kovo docs snapshot.',
+        inputSchema: {
+          additionalProperties: false,
+          properties: {
+            limit: { maximum: 8, minimum: 1, type: 'integer' },
+            task: { maxLength: 256, minLength: 1, type: 'string' },
+          },
+          required: ['task'],
+          type: 'object',
+        },
+        name: 'kovo_docs',
       },
       {
         description: 'Run kovoExplain against a bounded inline graph.',
@@ -388,6 +406,42 @@ function runKovoCheckTool(args: unknown): KovoCheckResult & { version: typeof ou
   const family = assertKovoCheckFamily(options.family);
   const result = kovoCheck(graph, { family });
   return { ...result, version: outputVersion };
+}
+
+async function runKovoDocsTool(
+  args: unknown,
+  workspaceRoot: McpWorkspaceRoot,
+): Promise<{
+  results: Awaited<ReturnType<typeof searchInstalledAgentDocs>>;
+  version: 'kovo-docs/v1';
+}> {
+  const options = assertToolArgs(args, 'kovo_docs');
+  assertExactKeys(options, ['limit', 'task'], 'kovo_docs arguments');
+  if (typeof options.task !== 'string') {
+    throw new Error('kovo_docs task must be a string');
+  }
+  if (buildByteLength(options.task) < 1 || buildByteLength(options.task) > 256) {
+    throw new Error('kovo_docs task must be 1..256 UTF-8 bytes');
+  }
+  if (
+    options.limit !== undefined &&
+    (!Number.isSafeInteger(options.limit) ||
+      (options.limit as number) < 1 ||
+      (options.limit as number) > 8)
+  ) {
+    throw new Error('kovo_docs limit must be an integer from 1 through 8');
+  }
+  const version = readCliPackageVersion();
+  const expectedSnapshot = readInstalledAgentDocsSnapshot({ expectedVersion: version });
+  return {
+    results: await searchInstalledAgentDocs({
+      cwd: workspaceRoot.canonicalRoot,
+      expectedSnapshot,
+      ...(options.limit === undefined ? {} : { limit: options.limit as number }),
+      task: options.task,
+    }),
+    version: 'kovo-docs/v1',
+  };
 }
 
 function runKovoExplainTool(

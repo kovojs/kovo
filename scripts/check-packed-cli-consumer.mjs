@@ -30,6 +30,7 @@ export const forbiddenPackedCliDependencies = Object.freeze([
 const expectedMcpTools = Object.freeze([
   'compile_component',
   'kovo_check',
+  'kovo_docs',
   'kovo_explain',
   'list_diagnostics',
 ]);

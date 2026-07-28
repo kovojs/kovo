@@ -52,6 +52,7 @@ describe('packed CLI consumer proof', () => {
           { name: 'kovo_explain' },
           { name: 'compile_component' },
           { name: 'kovo_check' },
+          { name: 'kovo_docs' },
         ],
       },
     };

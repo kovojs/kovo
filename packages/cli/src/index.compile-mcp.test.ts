@@ -267,6 +267,29 @@ export const Shell = component({
               "name": "kovo_check",
             },
             {
+              "description": "Search the exact version-matched local Kovo docs snapshot.",
+              "inputSchema": {
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "task": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "task",
+                ],
+                "type": "object",
+              },
+              "name": "kovo_docs",
+            },
+            {
               "description": "Run kovoExplain against a bounded inline graph.",
               "inputSchema": {
                 "additionalProperties": false,

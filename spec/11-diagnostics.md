@@ -157,12 +157,16 @@ its next delimiter, and then resumes. Direct and tool-provided JSON is snapshott
 descriptors before field reads and is limited to 128 container levels, 65,536 value/member nodes,
 and an exact non-allocating estimate no larger than the applicable serialized line ceiling.
 
-The CLI adapter has four tools and an exact, non-extensible argument language:
+The CLI adapter has five tools and an exact, non-extensible argument language:
 
 - `compile_component` accepts only `fileName` and inline `source`. `sourceProvenance` is implicitly
   `app`; package-prefix, query-shape, and registry fact carriers are not protocol inputs.
 - `kovo_check` accepts only an optional `family` (`all`, `coverage`, or `optimistic`) and an optional
   inline `graph`.
+- `kovo_docs` accepts a required 1..256-byte task string and an optional result limit from one
+  through eight. It searches only the digest-authenticated local snapshot selected by
+  `kovo update-docs`; the result includes the exact Kovo version, snapshot digest, file digest, and
+  bounded excerpt. It has no network or caller-selected path input.
 - `kovo_explain` accepts only an optional inline `graph` plus one exact options mode: agent,
   endpoints, access/unguarded/unscoped audit, or a `kind`/`target` lookup. Surplus option fields and
   multiple modes are errors.
