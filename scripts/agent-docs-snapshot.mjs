@@ -15,6 +15,7 @@ import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { generateApiReference } from '../site/scripts/api-ref.mjs';
+import { buildLlmsFull, buildLlmsIndex } from '../site/scripts/llms.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './lib/repo-root.mjs';
 
@@ -47,7 +48,7 @@ export function buildAgentDocsSnapshot({
   assertSourceCommit(sourceCommit);
   assertVersion(version);
   const authored = collectAuthoredDocs(root, { apiDirectory });
-  const generated = generateAgentViews(authored);
+  const generated = generateAgentViews(authored, { version });
   const files = new Map(authored);
   for (const [filePath, source] of generated) {
     if (files.has(filePath)) {
@@ -275,30 +276,17 @@ export function digestPublicManifest(root) {
   return sha256(canonicalJson({ packages, schema: 'kovo.public-manifest-subject/v1' }));
 }
 
-export function generateAgentViews(authored) {
+export function generateAgentViews(authored, { version } = {}) {
   const pages = [...authored]
     .sort(([left], [right]) => compareUtf8(left, right))
     .map(([filePath, source]) => ({
+      body: source,
       description: markdownFrontmatterValue(source, 'description'),
+      mirror: `/${filePath}`,
       path: filePath,
-      source,
       title: markdownTitle(source, filePath),
+      url: `/${filePath}`,
     }));
-  const llmsIndex = [
-    '# Kovo',
-    '',
-    'Version-bound local documentation installed from the exact Kovo CLI package.',
-    '',
-    ...pages.flatMap((page) => [
-      `- [${page.title}](./${page.path})${page.description ? ` — ${page.description}` : ''}`,
-    ]),
-    '',
-  ].join('\n');
-  const llmsFull = [
-    '# Kovo full documentation snapshot',
-    '',
-    ...pages.flatMap((page) => [`<!-- source: ${page.path} -->`, '', page.source.trimEnd(), '']),
-  ].join('\n');
   const grouped = new Map();
   for (const page of pages) {
     const group = page.path.includes('/') ? page.path.split('/')[0] : 'root';
@@ -306,6 +294,24 @@ export function generateAgentViews(authored) {
     groupPages.push(page);
     grouped.set(group, groupPages);
   }
+  const sections = [...grouped]
+    .sort(([left], [right]) => compareUtf8(left, right))
+    .map(([group, groupPages]) => ({
+      pages: groupPages,
+      title: group,
+    }));
+  // Reuse the website's canonical agent renderers against the exact same authenticated corpus.
+  // A local "." origin keeps every link inside the selected content-addressed snapshot.
+  const llmsIndex = buildLlmsIndex(sections, {
+    origin: '.',
+    specMirror: '/spec.md',
+    version,
+  });
+  const llmsFull = buildLlmsFull(sections, {
+    origin: '.',
+    renderBody: (page) => page.body,
+    version,
+  });
   const rules = [
     '# Kovo Docs',
     '',

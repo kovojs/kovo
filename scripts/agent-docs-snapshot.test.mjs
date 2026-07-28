@@ -57,6 +57,15 @@ describe('agent docs snapshot', () => {
     expect(decoded.files.find((file) => file.path === 'guides/quickstart.md')?.content).toContain(
       'Build the first page.',
     );
+    expect(decoded.files.find((file) => file.path === 'llms.txt')?.content).toContain(
+      'Version: 1.2.3',
+    );
+    expect(decoded.files.find((file) => file.path === 'llms.txt')?.content).toContain(
+      '[Quickstart](./guides/quickstart.md)',
+    );
+    expect(decoded.files.find((file) => file.path === 'llms-full.txt')?.content).toContain(
+      'URL: ./api/core.md',
+    );
     expect(gunzipSync(first.compressed).toString('utf8')).not.toContain(firstRoot);
     expect(gunzipSync(first.compressed).toString('utf8')).not.toContain(secondRoot);
   });
