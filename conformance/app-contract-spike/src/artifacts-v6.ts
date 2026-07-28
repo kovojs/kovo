@@ -370,7 +370,7 @@ function canonicalizeTarball(tarball: string): void {
     [
       '--input-type=module',
       '--eval',
-      'import { canonicalizePackedTarball } from process.argv[1]; canonicalizePackedTarball(process.argv[2]);',
+      'const { canonicalizePackedTarball } = await import(process.argv[1]); canonicalizePackedTarball(process.argv[2]);',
       pathToFileURL(helper).href,
       tarball,
     ],
