@@ -9,6 +9,12 @@ import { performance } from 'node:perf_hooks';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 
 const defaultAcceptEncoding = 'br,gzip';
+const defaultMaxDecodedBodyBytes = 16 * 1024 * 1024;
+const defaultMaxEncodedBodyBytes = 8 * 1024 * 1024;
+const defaultRequestTimeoutMs = 15_000;
+const hardMaxDecodedBodyBytes = 64 * 1024 * 1024;
+const hardMaxEncodedBodyBytes = 32 * 1024 * 1024;
+const hardMaxRequestTimeoutMs = 60_000;
 const defaultViewports = [
   { height: 844, name: 'mobile', width: 390 },
   { height: 900, name: 'desktop', width: 1440 },
@@ -18,21 +24,23 @@ const wcagTags = Object.freeze(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wca
 
 export async function runFcpHarness(options) {
   validateAccessibilityOptions(options);
+  const probeOptions = validatedProbeOptions(options);
   const url = new URL(options.url);
   const outputDir = options.outputDir ?? defaultOutputDir(url);
   mkdirSync(outputDir, { recursive: true });
 
-  const documentProbe = await probeUrl(url, {
-    acceptEncoding: options.acceptEncoding ?? defaultAcceptEncoding,
-  });
-  const documentHtml = decodeProbeBody(documentProbe).toString('utf8');
+  const documentProbe = await probeUrl(url, probeOptions);
+  assertSuccessfulProbe(documentProbe, 'document');
+  const documentBody = decodeProbeBody(documentProbe, probeOptions);
+  const documentHtml = documentBody.toString('utf8');
   const inventory = htmlAssetInventory(documentHtml, url);
   const assetProbes = [];
 
   for (const assetUrl of inventory.criticalAssetUrls) {
-    assetProbes.push(
-      await probeUrl(assetUrl, { acceptEncoding: options.acceptEncoding ?? defaultAcceptEncoding }),
-    );
+    const assetProbe = await probeUrl(assetUrl, probeOptions);
+    assertSuccessfulProbe(assetProbe, 'critical asset');
+    const assetBody = decodeProbeBody(assetProbe, probeOptions);
+    assetProbes.push(probeSummary(assetProbe, assetBody));
   }
 
   const browser =
@@ -40,61 +48,95 @@ export async function runFcpHarness(options) {
       ? undefined
       : await runBrowserSmoke(url, outputDir, {
           accessibility: options.accessibility === true,
+          requestTimeoutMs: probeOptions.requestTimeoutMs,
           terminalState: options.terminalState,
         });
-  const lighthouse = options.lighthouse ? runLighthouse(url, outputDir) : undefined;
+  const lighthouse = options.lighthouse
+    ? await (options.runLighthouse ?? runLighthouse)(url, outputDir)
+    : undefined;
   const result = {
-    assetProbes: assetProbes.map(probeSummary),
+    assetProbes,
     browser,
-    document: probeSummary(documentProbe),
+    document: probeSummary(documentProbe, documentBody),
     inventory,
     lighthouse,
     outputDir,
+    probeLimits: {
+      maxDecodedBodyBytes: probeOptions.maxDecodedBodyBytes,
+      maxEncodedBodyBytes: probeOptions.maxEncodedBodyBytes,
+      requestTimeoutMs: probeOptions.requestTimeoutMs,
+    },
     url: url.href,
   };
   if (browser && options.accessibility === true) {
     result.browserGate = browserGateResult(browser);
   }
+  result.gate = fcpGateResult(result, { lighthouseRequested: options.lighthouse === true });
 
   writeFileSync(join(outputDir, 'summary.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
 export async function probeUrl(url, options = {}, redirectCount = 0) {
+  const probeOptions = validatedProbeOptions(options);
   const target = new URL(url);
   const transport = target.protocol === 'https:' ? httpsRequest : httpRequest;
   const startedAt = performance.now();
 
   return await new Promise((resolve, reject) => {
+    let settled = false;
+    let timeout;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
     const request = transport(
       target,
       {
         headers: {
-          'Accept-Encoding': options.acceptEncoding ?? defaultAcceptEncoding,
+          'Accept-Encoding': probeOptions.acceptEncoding,
           'User-Agent': 'kovo-fcp-harness/1',
         },
       },
       (response) => {
         const chunks = [];
+        let encodedBytes = 0;
         let firstByteAt;
         response.once('data', () => {
           firstByteAt = performance.now();
         });
-        response.on('data', (chunk) => chunks.push(chunk));
-        response.on('error', reject);
+        response.on('data', (chunk) => {
+          encodedBytes += chunk.byteLength;
+          if (encodedBytes > probeOptions.maxEncodedBodyBytes) {
+            response.destroy(
+              new Error(
+                `${target.href}: encoded response exceeded ${probeOptions.maxEncodedBodyBytes} bytes`,
+              ),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on('error', (error) => settle(reject, error));
         response.on('end', async () => {
           const status = response.statusCode ?? 0;
           const location = readHeader(response.headers, 'location');
           if (status >= 300 && status < 400 && location && redirectCount < 5) {
+            clearTimeout(timeout);
             try {
-              resolve(await probeUrl(new URL(location, target), options, redirectCount + 1));
+              settle(
+                resolve,
+                await probeUrl(new URL(location, target), probeOptions, redirectCount + 1),
+              );
             } catch (error) {
-              reject(error);
+              settle(reject, error);
             }
             return;
           }
           const endedAt = performance.now();
-          resolve({
+          settle(resolve, {
             body: Buffer.concat(chunks),
             headers: normalizedHeaders(response.headers),
             status,
@@ -109,7 +151,13 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
         });
       },
     );
-    request.on('error', reject);
+    request.on('error', (error) => settle(reject, error));
+    timeout = setTimeout(() => {
+      request.destroy(
+        new Error(`${target.href}: request exceeded ${probeOptions.requestTimeoutMs} ms`),
+      );
+    }, probeOptions.requestTimeoutMs);
+    timeout.unref?.();
     request.end();
   });
 }
@@ -228,7 +276,16 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
       });
       page.on('pageerror', (error) => pageErrors.push(error.message));
 
-      await page.goto(url.href, { waitUntil: 'load' });
+      const navigation = await page.goto(url.href, {
+        timeout: options.requestTimeoutMs,
+        waitUntil: 'load',
+      });
+      const navigationStatus = navigation?.status() ?? 0;
+      if (navigationStatus < 200 || navigationStatus >= 300) {
+        throw new Error(
+          `browser document request returned non-success status ${navigationStatus}: ${url.href}`,
+        );
+      }
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
       const terminalState =
         options.accessibility === true
@@ -399,11 +456,28 @@ function browserGateResult(browserResults) {
   return { failures, pass: failures.length === 0 };
 }
 
-function probeSummary(probe) {
+export function fcpGateResult(result, options = {}) {
+  const failures = [];
+  if (result.browserGate?.pass === false) {
+    failures.push(...result.browserGate.failures.map((failure) => `browser: ${failure}`));
+  }
+  if (options.lighthouseRequested === true && result.lighthouse?.ok !== true) {
+    failures.push(
+      `lighthouse: ${result.lighthouse?.error?.trim() || 'requested run did not succeed'}`,
+    );
+  }
+  return { failures, pass: failures.length === 0 };
+}
+
+export function fcpHarnessExitCode(result) {
+  return result.gate?.pass === false ? 1 : 0;
+}
+
+function probeSummary(probe, decodedBody) {
   return {
     contentEncoding: readHeader(probe.headers, 'content-encoding') ?? null,
     contentType: readHeader(probe.headers, 'content-type') ?? null,
-    decodedBytes: decodeProbeBody(probe).byteLength,
+    decodedBytes: decodedBody.byteLength,
     encodedBytes: probe.body.byteLength,
     headers: probe.headers,
     status: probe.status,
@@ -413,12 +487,35 @@ function probeSummary(probe) {
   };
 }
 
-function decodeProbeBody(probe) {
+function decodeProbeBody(probe, options = {}) {
+  const { maxDecodedBodyBytes } = validatedProbeOptions(options);
   const encoding = (readHeader(probe.headers, 'content-encoding') ?? '').toLowerCase();
-  if (encoding === 'br') return brotliDecompressSync(probe.body);
-  if (encoding === 'gzip') return gunzipSync(probe.body);
-  if (encoding === 'deflate') return inflateSync(probe.body);
-  return probe.body;
+  if ((encoding === '' || encoding === 'identity') && probe.body.byteLength > maxDecodedBodyBytes) {
+    throw new Error(`${probe.url}: decoded response exceeded ${maxDecodedBodyBytes} bytes`);
+  }
+  if (encoding === '' || encoding === 'identity') return probe.body;
+  if (!['br', 'gzip', 'deflate'].includes(encoding)) {
+    throw new Error(`${probe.url}: unsupported content encoding ${JSON.stringify(encoding)}`);
+  }
+  try {
+    if (encoding === 'br') {
+      return brotliDecompressSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+    }
+    if (encoding === 'gzip') {
+      return gunzipSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+    }
+    return inflateSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+  } catch (error) {
+    if (
+      error?.code === 'ERR_BUFFER_TOO_LARGE' ||
+      /larger than .*maxOutputLength|Cannot create a Buffer larger than/u.test(error?.message ?? '')
+    ) {
+      throw new Error(`${probe.url}: decoded response exceeded ${maxDecodedBodyBytes} bytes`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 function readOpeningTags(html, tagName) {
@@ -532,6 +629,48 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function boundedPositiveInteger(value, fallback, maximum, label) {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved <= 0 || resolved > maximum) {
+    throw new Error(`${label} must be a positive integer no greater than ${maximum}`);
+  }
+  return resolved;
+}
+
+function validatedProbeOptions(options = {}) {
+  const acceptEncoding = options.acceptEncoding ?? defaultAcceptEncoding;
+  if (typeof acceptEncoding !== 'string' || acceptEncoding.trim().length === 0) {
+    throw new Error('acceptEncoding must be a non-empty string');
+  }
+  return {
+    acceptEncoding,
+    maxDecodedBodyBytes: boundedPositiveInteger(
+      options.maxDecodedBodyBytes,
+      defaultMaxDecodedBodyBytes,
+      hardMaxDecodedBodyBytes,
+      'maxDecodedBodyBytes',
+    ),
+    maxEncodedBodyBytes: boundedPositiveInteger(
+      options.maxEncodedBodyBytes,
+      defaultMaxEncodedBodyBytes,
+      hardMaxEncodedBodyBytes,
+      'maxEncodedBodyBytes',
+    ),
+    requestTimeoutMs: boundedPositiveInteger(
+      options.requestTimeoutMs,
+      defaultRequestTimeoutMs,
+      hardMaxRequestTimeoutMs,
+      'requestTimeoutMs',
+    ),
+  };
+}
+
+function assertSuccessfulProbe(probe, label) {
+  if (probe.status < 200 || probe.status >= 300) {
+    throw new Error(`${label} request returned non-success status ${probe.status}: ${probe.url}`);
+  }
+}
+
 function validateAccessibilityOptions(options) {
   if (options.accessibility !== true) {
     if (options.terminalState !== undefined) {
@@ -597,6 +736,48 @@ function parseCliArgs(args) {
       if (!options.acceptEncoding) throw new Error('Missing value for --accept-encoding.');
       continue;
     }
+    if (arg === '--request-timeout-ms') {
+      options.requestTimeoutMs = parseCliPositiveInteger(args[index + 1], '--request-timeout-ms');
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--request-timeout-ms=')) {
+      options.requestTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--request-timeout-ms='.length),
+        '--request-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--max-encoded-body-bytes') {
+      options.maxEncodedBodyBytes = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-encoded-body-bytes',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-encoded-body-bytes=')) {
+      options.maxEncodedBodyBytes = parseCliPositiveInteger(
+        arg.slice('--max-encoded-body-bytes='.length),
+        '--max-encoded-body-bytes',
+      );
+      continue;
+    }
+    if (arg === '--max-decoded-body-bytes') {
+      options.maxDecodedBodyBytes = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-decoded-body-bytes',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-decoded-body-bytes=')) {
+      options.maxDecodedBodyBytes = parseCliPositiveInteger(
+        arg.slice('--max-decoded-body-bytes='.length),
+        '--max-decoded-body-bytes',
+      );
+      continue;
+    }
     if (arg === '--terminal-name') {
       const name = args[index + 1];
       if (!name) throw new Error('Missing value for --terminal-name.');
@@ -643,7 +824,7 @@ function parseCliArgs(args) {
   }
   if (!options.url) {
     throw new Error(
-      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
+      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--request-timeout-ms <ms>] [--max-encoded-body-bytes <bytes>] [--max-decoded-body-bytes <bytes>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
     );
   }
   if (options.accessibility && (!options.terminalState?.name || !options.terminalState?.selector)) {
@@ -658,6 +839,13 @@ function parseCliArgs(args) {
   return options;
 }
 
+function parseCliPositiveInteger(value, option) {
+  if (!/^[1-9]\d*$/u.test(value ?? '')) {
+    throw new Error(`${option} requires a positive integer.`);
+  }
+  return Number(value);
+}
+
 function printTextSummary(result) {
   const lines = [
     'kovo-fcp-harness/v1',
@@ -669,6 +857,9 @@ function printTextSummary(result) {
     `document-content-encoding=${result.document.contentEncoding ?? '-'}`,
     `document-vary=${result.document.vary ?? '-'}`,
     `document-ttfb-ms=${result.document.timings.ttfbMs ?? '-'}`,
+    `request-timeout-ms=${result.probeLimits.requestTimeoutMs}`,
+    `max-encoded-body-bytes=${result.probeLimits.maxEncodedBodyBytes}`,
+    `max-decoded-body-bytes=${result.probeLimits.maxDecodedBodyBytes}`,
     `inline-style-bytes=${result.inventory.inlineStyleBytes}`,
     `inline-script-bytes=${result.inventory.inlineScriptBytes}`,
     `body-bytes=${result.inventory.bodyBytes}`,
@@ -734,6 +925,10 @@ function printTextSummary(result) {
       );
     }
   }
+  lines.push(
+    `fcp-gate-pass=${result.gate.pass}`,
+    `fcp-gate-failures=${result.gate.failures.join(';') || '-'}`,
+  );
 
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -744,7 +939,7 @@ if (import.meta.url === new URL(process.argv[1], 'file:').href) {
     const result = await runFcpHarness(options);
     if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else printTextSummary(result);
-    if (result.browserGate?.pass === false) process.exitCode = 1;
+    process.exitCode = fcpHarnessExitCode(result);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
