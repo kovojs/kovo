@@ -8279,7 +8279,6 @@
       "templates/src/schema.sqlite.ts",
       "templates/src/schema.ts",
       "templates/src/styles.css",
-      "templates/src/test-setup.ts",
       "templates/src/theme.ts",
       "templates/tsconfig.json",
       "templates/vite.config.ts"
