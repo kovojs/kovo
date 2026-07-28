@@ -1,11 +1,12 @@
 {
   "schema": "kovo-known-failures/v1",
+  "ownershipLedger": "plans/devex-gates.md",
   "entries": [
     {
       "id": "KF-DEVEX-001",
       "title": "Fresh SQLite scaffold requires an undeclared auth-origin fix",
       "owner": "Track 1 development-origin work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed SQLite scaffold login journey",
       "retirementCondition": "The packed SQLite golden journey reaches login without an undocumented origin edit and its regression test passes.",
       "planOwnership": {
@@ -28,7 +29,7 @@
       "id": "KF-DEVEX-002",
       "title": "Dev server stays silent for at least 75 seconds after listen",
       "owner": "Track 1 dev-reporter work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed dev-server readiness output",
       "retirementCondition": "The packed dev journey emits the required ready line immediately after socket bind and passes the ratified G2 timing gate.",
       "planOwnership": {
@@ -51,7 +52,7 @@
       "id": "KF-DEVEX-003",
       "title": "CLI help exits 1",
       "owner": "Track 1 help/version exit-contract work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed CLI process contract",
       "retirementCondition": "Every packed help path writes usage to stdout and exits zero under the CLI exit-code contract suite.",
       "planOwnership": {
@@ -79,7 +80,7 @@
       "id": "KF-DEVEX-004",
       "title": "Bare check with no graph reports OK",
       "owner": "Track 1 source-proof work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed CLI graph-input validation",
       "retirementCondition": "A packed empty consumer fails closed without source graph or explicit artifact and the adversarial G7 suite passes.",
       "planOwnership": {
@@ -107,7 +108,7 @@
       "id": "KF-DEVEX-005",
       "title": "Failed build can leave a plausible graph under dist/.kovo",
       "owner": "Track 1 transactional-build work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed build artifact promotion",
       "retirementCondition": "A deterministic failed packed build leaves the last good dist byte-identical and promotes no graph beneath dist/.kovo.",
       "planOwnership": {
@@ -130,7 +131,7 @@
       "id": "KF-DEVEX-006",
       "title": "Fresh-app check is coupled to KV417 trusted-boundary setup",
       "owner": "Track 1 source/deployment-proof split work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed starter source-check path",
       "retirementCondition": "Both freshly packed scaffold variants complete the quick source check without deployment-only KV417 setup while builds remain fail-closed.",
       "planOwnership": {
@@ -153,7 +154,7 @@
       "id": "KF-DEVEX-007",
       "title": "Full 44-component catalog check reaches 4.4-4.8 GiB and OOMs",
       "owner": "Track 1 kovo-add source-closure work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed full-catalog check process",
       "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget.",
       "planOwnership": {
@@ -176,7 +177,7 @@
       "id": "KF-DEVEX-008",
       "title": "Starter tests import an internal classifier mock",
       "owner": "Track 5b test-harness batch",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed starter test harness",
       "retirementCondition": "The packed starter test run uses only the public inferred artifact-scoped harness and contains no internal classifier mock.",
       "planOwnership": {
@@ -199,7 +200,7 @@
       "id": "KF-DEVEX-009",
       "title": "update-docs reports success after writing placeholder-only content",
       "owner": "Track 3 version-matched agent-docs work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed offline agent-docs command",
       "retirementCondition": "The packed offline update-docs command fails closed whenever version-matched substantive local documentation cannot be produced.",
       "planOwnership": {
@@ -222,7 +223,7 @@
       "id": "KF-DEVEX-010",
       "title": "Opaque trusted-boundary path returns an internal 500",
       "owner": "Track 1 diagnostic-empathy work item",
-      "childLedger": "devex-gates.md",
+      "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed request-runtime diagnostic path",
       "retirementCondition": "The minimized packed request receives the intended safe diagnostic or response and never an unexplained internal 500.",
       "planOwnership": {

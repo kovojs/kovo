@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -77,6 +77,7 @@ export const BASELINE_KNOWN_FAILURE_OWNERSHIP = Object.freeze({
 
 const REGISTER_PATH = 'scripts/known-failure-register.json';
 const PROBE_DIRECTORY = 'scripts/known-failure-probes';
+const OWNERSHIP_LEDGER = 'plans/devex-gates.md';
 const STATES = new Set(['executable', 'pending-repro', 'retired']);
 
 function compareStrings(left, right) {
@@ -100,6 +101,69 @@ function relativeProbeFiles(repoRoot) {
     .sort(compareStrings);
 }
 
+function resolveOwnershipLedger(repoRoot, register, options) {
+  if (register?.ownershipLedger !== OWNERSHIP_LEDGER) {
+    return {
+      finding: `ownershipLedger must be ${OWNERSHIP_LEDGER}`,
+      text: null,
+    };
+  }
+  if (options.ledgerResolver) {
+    const resolved = options.ledgerResolver({
+      claimedPath: register.ownershipLedger,
+      repoRoot,
+    });
+    return typeof resolved === 'string'
+      ? { finding: null, text: resolved }
+      : {
+          finding: `${register.ownershipLedger}: ownership ledger could not be resolved`,
+          text: null,
+        };
+  }
+  const absolute = path.resolve(repoRoot, register.ownershipLedger);
+  if (
+    !absolute.startsWith(`${repoRoot}${path.sep}`) ||
+    !existsSync(absolute) ||
+    !lstatSync(absolute).isFile() ||
+    lstatSync(absolute).isSymbolicLink()
+  ) {
+    return {
+      finding: `${register.ownershipLedger}: ownership ledger must exist as a regular repository file`,
+      text: null,
+    };
+  }
+  return { finding: null, text: readFileSync(absolute, 'utf8') };
+}
+
+function ownershipLedgerFindings(register, ledgerText) {
+  const findings = [];
+  if (!ledgerText.includes('plans/worldclass-devex.md') || !ledgerText.includes('Track 2')) {
+    findings.push(`${OWNERSHIP_LEDGER}: must identify the Track 2 charter`);
+  }
+  const lines = ledgerText.split(/\r?\n/u);
+  for (const entry of register.entries) {
+    const ownership = BASELINE_KNOWN_FAILURE_OWNERSHIP[entry.id];
+    if (!ownership) continue;
+    const line = lines.find((candidate) => candidate.includes(entry.id));
+    if (!line) {
+      findings.push(`${OWNERSHIP_LEDGER}: missing ownership row for ${entry.id}`);
+      continue;
+    }
+    if (!line.includes(ownership.owner) || !line.includes(ownership.fixTrack)) {
+      findings.push(`${OWNERSHIP_LEDGER}: ${entry.id} does not name its implementation owner`);
+    }
+    if (!line.includes('Track 2')) {
+      findings.push(`${OWNERSHIP_LEDGER}: ${entry.id} does not name Track 2 as repro owner`);
+    }
+    for (const gate of ownership.scorecardGates) {
+      if (!new RegExp(`\\b${gate}\\b`, 'u').test(line)) {
+        findings.push(`${OWNERSHIP_LEDGER}: ${entry.id} does not name scorecard gate ${gate}`);
+      }
+    }
+  }
+  return findings;
+}
+
 /** Validate schema, the closed baseline denominator, and both missing and stale probe mappings. */
 export function validateKnownFailureRegister(register, options = {}) {
   const repoRoot = path.resolve(options.repoRoot ?? defaultRepoRoot);
@@ -114,6 +178,9 @@ export function validateKnownFailureRegister(register, options = {}) {
     findings.push('entries must be an array');
     return findings;
   }
+  const ownershipLedger = resolveOwnershipLedger(repoRoot, register, options);
+  if (ownershipLedger.finding) findings.push(ownershipLedger.finding);
+  else findings.push(...ownershipLedgerFindings(register, ownershipLedger.text));
 
   const ids = new Set();
   const registeredPaths = new Set();
@@ -133,8 +200,8 @@ export function validateKnownFailureRegister(register, options = {}) {
     if (entry.owner !== expectedOwnership?.owner) {
       findings.push(`${entry.id}: owner must match its charter implementation work item`);
     }
-    if (entry.childLedger !== 'devex-gates.md') {
-      findings.push(`${entry.id}: childLedger must be the Track 2 ledger devex-gates.md`);
+    if (entry.childLedger !== OWNERSHIP_LEDGER) {
+      findings.push(`${entry.id}: childLedger must be ${OWNERSHIP_LEDGER}`);
     }
     if (!substantive(entry.observedLayer, 4)) {
       findings.push(`${entry.id}: observedLayer must identify the observed packed layer`);
@@ -229,7 +296,10 @@ function substituteCommand(command, options) {
  */
 export function runKnownFailureProbes(register, options = {}) {
   const repoRoot = path.resolve(options.repoRoot ?? defaultRepoRoot);
-  const findings = validateKnownFailureRegister(register, { repoRoot });
+  const findings = validateKnownFailureRegister(register, {
+    repoRoot,
+    ledgerResolver: options.ledgerResolver,
+  });
   if (findings.length > 0) {
     return {
       schemaValid: false,
@@ -323,6 +393,7 @@ function parseArgs(argv) {
     else if (arg === '--require-executable') args.requireExecutable = true;
     else if (arg === '--json') args.json = true;
     else if (arg === '--register') args.register = argv[++index];
+    else if (arg === '--ownership-ledger') args.ownershipLedger = argv[++index];
     else if (arg === '--packed-manifest') args.packedManifest = argv[++index];
     else if (arg === '--help' || arg === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
@@ -337,6 +408,7 @@ function usage() {
     '  --validate-schema        Validate data and mappings; does not claim executable closure.',
     '  --run-available          Run available expected-failure probes; remains red while gaps exist.',
     '  --packed-manifest <file> Supply the packed-public-packages manifest to packed probes.',
+    '  --ownership-ledger <file> Inject a ledger fixture; integration defaults to plans/devex-gates.md.',
     '  --require-executable     Fail while any entry still has a pending repro gap.',
     '  --json                   Emit machine-readable results.',
     '',
@@ -352,7 +424,10 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
   const registerPath = path.resolve(args.register);
   const register = readJson(registerPath);
   const repoRoot = path.resolve(path.dirname(registerPath), '..');
-  const findings = validateKnownFailureRegister(register, { repoRoot });
+  const ledgerResolver = args.ownershipLedger
+    ? () => readFileSync(path.resolve(args.ownershipLedger), 'utf8')
+    : undefined;
+  const findings = validateKnownFailureRegister(register, { repoRoot, ledgerResolver });
   if (findings.length > 0) {
     if (args.json) process.stdout.write(`${JSON.stringify({ pass: false, findings }, null, 2)}\n`);
     else
@@ -373,6 +448,7 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
     const result = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: args.packedManifest,
+      ledgerResolver,
     });
     if (args.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else {

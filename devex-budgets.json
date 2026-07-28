@@ -1,12 +1,12 @@
 {
-  "schema": "kovo-devex-budgets/v1",
+  "schema": "kovo-devex-budgets/v2",
   "runner": {
     "status": "unratified",
-    "fingerprint": null,
-    "requirements": [
-      "Pin the OS image, architecture, CPU class, Node version, package-manager version, and packed fixture digest.",
-      "If GitHub-hosted infrastructure is selected, record its measured noise floor before ratifying any budget."
-    ]
+    "fingerprint": null
+  },
+  "workload": {
+    "status": "unratified",
+    "identity": null
   },
   "procedure": {
     "minimumStatisticalSamples": 5,

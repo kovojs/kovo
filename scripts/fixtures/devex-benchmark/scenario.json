@@ -1,7 +1,25 @@
 {
-  "schema": "kovo-devex-benchmark-scenario/v1",
+  "schema": "kovo-devex-benchmark-scenario/v2",
   "name": "deterministic-harness-fixture",
-  "runnerName": "fixture-runner",
+  "environment": {
+    "runnerName": "fixture-runner",
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.0.0",
+    "cpuModel": "fixture-cpu",
+    "packageManager": "pnpm@10.12.1",
+    "osImage": "fixture-linux@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "provenance": {
+    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "packedArtifacts": [
+      {
+        "name": "@fixture/packed-app",
+        "path": "packed-fixture.tgz",
+        "sha256": "sha256:19608fec7aafb69d7c7632da15c444df408d3bf038644e8a99382704dc1406f7"
+      }
+    ]
+  },
   "phases": {
     "cold": {
       "command": ["node", "workload.mjs", "cold"]

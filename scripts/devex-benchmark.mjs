@@ -18,10 +18,10 @@ import { isDeepStrictEqual } from 'node:util';
 import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v1';
-export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v1';
-export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v1';
-export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v1';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v2';
+export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v2';
+export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v2';
+export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v2';
 
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
 const METRIC_UNITS = new Set(['bytes', 'ms']);
@@ -54,6 +54,25 @@ function sameJson(left, right) {
   return isDeepStrictEqual(left, right);
 }
 
+function canonicalJson(value) {
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort(compareStrings)
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  throw new TypeError('benchmark identity contains a non-JSON value');
+}
+
+export function benchmarkScenarioDigest(scenario) {
+  return sha256(Buffer.from(canonicalJson(scenario)));
+}
+
 function safeRepositoryRelativePath(value) {
   return (
     typeof value === 'string' &&
@@ -70,6 +89,8 @@ function runnerIdentity(fingerprint) {
     arch: fingerprint?.arch,
     node: fingerprint?.node,
     cpuModel: fingerprint?.cpuModel,
+    packageManager: fingerprint?.packageManager,
+    osImage: fingerprint?.osImage,
   };
 }
 
@@ -84,7 +105,15 @@ export function createRunnerFingerprint(identity) {
 
 function validateRunnerFingerprint(fingerprint, label, options = {}) {
   const findings = [];
-  for (const field of ['name', 'platform', 'arch', 'node', 'cpuModel']) {
+  for (const field of [
+    'name',
+    'platform',
+    'arch',
+    'node',
+    'cpuModel',
+    'packageManager',
+    'osImage',
+  ]) {
     if (typeof fingerprint?.[field] !== 'string' || fingerprint[field].trim().length === 0) {
       findings.push(`${label}.${field} must be a non-empty string`);
     }
@@ -92,10 +121,19 @@ function validateRunnerFingerprint(fingerprint, label, options = {}) {
   if (findings.length === 0) {
     const expected = createRunnerFingerprint(fingerprint);
     if (fingerprint.id !== expected.id) {
-      findings.push(`${label}.id does not match its platform/CPU/Node identity`);
+      findings.push(`${label}.id does not match its OS/platform/CPU/Node/package-manager identity`);
     }
   }
-  const allowed = new Set(['id', 'name', 'platform', 'arch', 'node', 'cpuModel']);
+  const allowed = new Set([
+    'id',
+    'name',
+    'platform',
+    'arch',
+    'node',
+    'cpuModel',
+    'packageManager',
+    'osImage',
+  ]);
   for (const field of Object.keys(fingerprint ?? {})) {
     if (!allowed.has(field)) findings.push(`${label}.${field} is not part of the runner identity`);
   }
@@ -155,6 +193,71 @@ function validateCommand(command, label) {
   }
 }
 
+function validatePinnedEnvironment(environment, label) {
+  const findings = [];
+  for (const field of ['runnerName', 'platform', 'arch', 'node', 'cpuModel']) {
+    if (typeof environment?.[field] !== 'string' || environment[field].trim().length === 0) {
+      findings.push(`${label}.${field} must be a non-empty string`);
+    }
+  }
+  if (
+    !/^[a-z0-9][a-z0-9._-]*@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(
+      environment?.packageManager ?? '',
+    )
+  ) {
+    findings.push(`${label}.packageManager must pin an exact semantic version`);
+  }
+  if (!/^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/u.test(environment?.osImage ?? '')) {
+    findings.push(`${label}.osImage must be an immutable image name@sha256 digest`);
+  }
+  return findings;
+}
+
+function validatePackedArtifacts(artifacts, label) {
+  const findings = [];
+  if (!Array.isArray(artifacts) || artifacts.length === 0) {
+    return [`${label} must contain at least one packed tarball`];
+  }
+  const names = new Set();
+  const paths = new Set();
+  for (const [index, artifact] of artifacts.entries()) {
+    const prefix = `${label}[${index}]`;
+    if (typeof artifact?.name !== 'string' || artifact.name.trim().length === 0) {
+      findings.push(`${prefix}.name must be a non-empty string`);
+    } else if (names.has(artifact.name)) {
+      findings.push(`${prefix}.name is duplicated`);
+    } else {
+      names.add(artifact.name);
+    }
+    if (!safeRepositoryRelativePath(artifact?.path) || !artifact.path.endsWith('.tgz')) {
+      findings.push(`${prefix}.path must be a repository-relative .tgz path`);
+    } else if (paths.has(artifact.path)) {
+      findings.push(`${prefix}.path is duplicated`);
+    } else {
+      paths.add(artifact.path);
+    }
+    if (!/^sha256:[0-9a-f]{64}$/u.test(artifact?.sha256 ?? '')) {
+      findings.push(`${prefix}.sha256 must be an exact SHA-256 digest`);
+    }
+  }
+  return findings;
+}
+
+function validGitObjectId(value) {
+  return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(value ?? '');
+}
+
+function validateBenchmarkProvenance(provenance, label) {
+  const findings = [];
+  if (!validGitObjectId(provenance?.sourceCommit)) {
+    findings.push(`${label}.sourceCommit must be an exact Git object ID`);
+  }
+  findings.push(
+    ...validatePackedArtifacts(provenance?.packedArtifacts, `${label}.packedArtifacts`),
+  );
+  return findings;
+}
+
 export function validateBenchmarkScenario(scenario) {
   const findings = [];
   if (scenario?.schema !== DEVEX_BENCHMARK_SCENARIO_SCHEMA) {
@@ -163,6 +266,8 @@ export function validateBenchmarkScenario(scenario) {
   if (typeof scenario?.name !== 'string' || scenario.name.trim().length === 0) {
     findings.push('scenario.name must be a non-empty string');
   }
+  findings.push(...validatePinnedEnvironment(scenario?.environment, 'scenario.environment'));
+  findings.push(...validateBenchmarkProvenance(scenario?.provenance, 'scenario.provenance'));
   for (const phase of PHASES) {
     try {
       validateCommand(scenario?.phases?.[phase]?.command, `scenario.phases.${phase}.command`);
@@ -178,23 +283,95 @@ export function validateBenchmarkScenario(scenario) {
   ) {
     findings.push('scenario.browserBootstrap.files must be a non-empty string array');
   }
-  if (
-    scenario?.runnerName !== undefined &&
-    (typeof scenario.runnerName !== 'string' || scenario.runnerName.trim().length === 0)
-  ) {
-    findings.push('scenario.runnerName must be a non-empty string when provided');
-  }
   return findings;
 }
 
-function currentRunnerFingerprint(runnerName) {
-  return createRunnerFingerprint({
-    name: runnerName ?? null,
+function currentBenchmarkEnvironment(options = {}) {
+  if (options.observedEnvironment) return structuredClone(options.observedEnvironment);
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const sourceCommit = checkedCommandOutput('git', ['rev-parse', 'HEAD'], repositoryRoot);
+  const rootManifest = readJson(path.join(repositoryRoot, 'package.json'));
+  const packageManagerName = String(rootManifest.packageManager ?? '').split('@')[0];
+  if (!packageManagerName) throw new Error('root package.json must pin packageManager');
+  const packageManagerVersion = checkedCommandOutput(
+    packageManagerName,
+    ['--version'],
+    repositoryRoot,
+  );
+  const osImage = process.env.KOVO_DEVEX_OS_IMAGE;
+  const runnerName = process.env.KOVO_DEVEX_RUNNER_NAME;
+  if (!osImage || !runnerName) {
+    throw new Error(
+      'benchmarking requires KOVO_DEVEX_OS_IMAGE and KOVO_DEVEX_RUNNER_NAME to identify the pinned runner',
+    );
+  }
+  return {
+    runnerName,
+    sourceCommit,
+    packageManager: `${packageManagerName}@${packageManagerVersion}`,
+    osImage,
     platform: process.platform,
     arch: process.arch,
     node: process.version,
     cpuModel: os.cpus()[0]?.model ?? 'unknown',
+  };
+}
+
+function checkedCommandOutput(executable, args, cwd) {
+  const result = spawnSync(executable, args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  if (result.status !== 0 || result.signal || result.error) {
+    throw new Error(
+      `${executable} ${args.join(' ')} failed while resolving benchmark provenance: ${
+        result.error?.message ?? result.signal ?? result.stderr ?? `exit ${String(result.status)}`
+      }`,
+    );
+  }
+  return result.stdout.trim();
+}
+
+function environmentRunnerFingerprint(environment) {
+  return createRunnerFingerprint({
+    name: environment.runnerName,
+    platform: environment.platform,
+    arch: environment.arch,
+    node: environment.node,
+    cpuModel: environment.cpuModel,
+    packageManager: environment.packageManager,
+    osImage: environment.osImage,
+  });
+}
+
+function observedEnvironmentFindings(scenario, observed) {
+  const findings = validatePinnedEnvironment(observed, 'observedEnvironment');
+  if (!validGitObjectId(observed?.sourceCommit)) {
+    findings.push('observedEnvironment.sourceCommit must be an exact Git object ID');
+  }
+  for (const field of [
+    'runnerName',
+    'platform',
+    'arch',
+    'node',
+    'cpuModel',
+    'packageManager',
+    'osImage',
+  ]) {
+    if (observed?.[field] !== scenario.environment[field]) {
+      findings.push(
+        `observedEnvironment.${field}=${JSON.stringify(observed?.[field])} does not match scenario.environment.${field}`,
+      );
+    }
+  }
+  if (observed?.sourceCommit !== scenario.provenance.sourceCommit) {
+    findings.push(
+      `observedEnvironment.sourceCommit=${JSON.stringify(observed?.sourceCommit)} does not match scenario.provenance.sourceCommit`,
+    );
+  }
+  return findings;
 }
 
 function timeInvocation(command, platform) {
@@ -269,6 +446,38 @@ function sampleSummary(samples) {
   };
 }
 
+function verifiedPackedArtifacts(artifacts, root) {
+  const realRoot = realpathSync(root);
+  return artifacts.map((artifact) => {
+    const absolute = path.resolve(root, artifact.path);
+    if (absolute === root || !absolute.startsWith(`${root}${path.sep}`)) {
+      throw new Error(`packed artifact path escapes scenario root: ${artifact.path}`);
+    }
+    if (
+      !existsSync(absolute) ||
+      !lstatSync(absolute).isFile() ||
+      lstatSync(absolute).isSymbolicLink()
+    ) {
+      throw new Error(`packed artifact must be a regular non-symlink file: ${artifact.path}`);
+    }
+    const realArtifact = realpathSync(absolute);
+    if (!realArtifact.startsWith(`${realRoot}${path.sep}`)) {
+      throw new Error(`packed artifact resolves outside scenario root: ${artifact.path}`);
+    }
+    const observedDigest = sha256(readFileSync(absolute));
+    if (observedDigest !== artifact.sha256) {
+      throw new Error(
+        `packed artifact digest mismatch for ${artifact.path}: expected ${artifact.sha256}, observed ${observedDigest}`,
+      );
+    }
+    return {
+      name: artifact.name,
+      path: artifact.path.split(path.sep).join('/'),
+      sha256: observedDigest,
+    };
+  });
+}
+
 /**
  * Run all three scorecard timing profiles. Tests inject `measure` so statistical and schema
  * behavior are deterministic; production calls use the real monotonic/RSS measurement.
@@ -282,6 +491,14 @@ export function runBenchmarkScenario(scenario, options = {}) {
     throw new Error('samples must be a positive integer');
   }
   const root = path.resolve(options.root ?? defaultRepoRoot);
+  const observedEnvironment = currentBenchmarkEnvironment(options);
+  const environmentFindings = observedEnvironmentFindings(scenario, observedEnvironment);
+  if (environmentFindings.length > 0) {
+    throw new Error(
+      `Benchmark environment does not match the pinned scenario:\n- ${environmentFindings.join('\n- ')}`,
+    );
+  }
+  const packedArtifacts = verifiedPackedArtifacts(scenario.provenance.packedArtifacts, root);
   const measure = options.measure ?? ((command, context) => measureCommand(command, context));
   const metrics = {};
   const commands = {};
@@ -340,12 +557,116 @@ export function runBenchmarkScenario(scenario, options = {}) {
 
   return {
     schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
-    scenario: scenario.name,
-    runner: currentRunnerFingerprint(scenario.runnerName),
+    scenario: {
+      name: scenario.name,
+      digest: benchmarkScenarioDigest(scenario),
+      definition: structuredClone(scenario),
+    },
+    provenance: {
+      sourceCommit: observedEnvironment.sourceCommit,
+      packageManager: observedEnvironment.packageManager,
+      osImage: observedEnvironment.osImage,
+      packedArtifacts,
+    },
+    runner: environmentRunnerFingerprint(observedEnvironment),
     sampleCount: samples,
     commands,
     metrics,
   };
+}
+
+function expectedScenarioCommands(scenario) {
+  return Object.fromEntries(
+    PHASES.map((phase) => [
+      phase,
+      {
+        command: [...scenario.phases[phase].command],
+        cwd: scenario.phases[phase].cwd ?? '.',
+      },
+    ]),
+  );
+}
+
+function expectedReportProvenance(scenario) {
+  return {
+    sourceCommit: scenario.provenance.sourceCommit,
+    packageManager: scenario.environment.packageManager,
+    osImage: scenario.environment.osImage,
+    packedArtifacts: scenario.provenance.packedArtifacts.map((artifact) => ({
+      name: artifact.name,
+      path: artifact.path.split(path.sep).join('/'),
+      sha256: artifact.sha256,
+    })),
+  };
+}
+
+function validateBenchmarkReportIdentity(report, label = 'report') {
+  const findings = [];
+  if (report?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
+    findings.push(`${label}.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`);
+  }
+  const definition = report?.scenario?.definition;
+  const scenarioFindings = validateBenchmarkScenario(definition);
+  findings.push(...scenarioFindings.map((finding) => `${label}.${finding}`));
+  if (scenarioFindings.length > 0) return findings;
+  const expectedDigest = benchmarkScenarioDigest(definition);
+  if (report.scenario.name !== definition.name) {
+    findings.push(`${label}.scenario.name does not match its definition`);
+  }
+  if (report.scenario.digest !== expectedDigest) {
+    findings.push(`${label}.scenario.digest does not match its full definition`);
+  }
+  if (!sameJson(report.provenance, expectedReportProvenance(definition))) {
+    findings.push(`${label}.provenance does not match its scenario definition`);
+  }
+  findings.push(...validateRunnerFingerprint(report.runner, `${label}.runner`));
+  if (!sameJson(report.runner, environmentRunnerFingerprint(definition.environment))) {
+    findings.push(`${label}.runner does not match its scenario environment`);
+  }
+  if (!sameJson(report.commands, expectedScenarioCommands(definition))) {
+    findings.push(`${label}.commands do not match its full scenario definition`);
+  }
+  return findings;
+}
+
+function workloadIdentity(report) {
+  return {
+    scenario: {
+      name: report.scenario.name,
+      digest: report.scenario.digest,
+    },
+    provenance: structuredClone(report.provenance),
+  };
+}
+
+function validateWorkloadIdentity(identity, label) {
+  const findings = [];
+  if (typeof identity?.scenario?.name !== 'string' || identity.scenario.name.trim().length === 0) {
+    findings.push(`${label}.scenario.name must be a non-empty string`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(identity?.scenario?.digest ?? '')) {
+    findings.push(`${label}.scenario.digest must be an exact SHA-256 digest`);
+  }
+  if (!validGitObjectId(identity?.provenance?.sourceCommit)) {
+    findings.push(`${label}.provenance.sourceCommit must be an exact Git object ID`);
+  }
+  if (
+    !/^[a-z0-9][a-z0-9._-]*@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(
+      identity?.provenance?.packageManager ?? '',
+    )
+  ) {
+    findings.push(`${label}.provenance.packageManager must pin an exact semantic version`);
+  }
+  if (!/^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/u.test(identity?.provenance?.osImage ?? '')) {
+    findings.push(`${label}.provenance.osImage must be an immutable image digest`);
+  }
+  findings.push(
+    ...validatePackedArtifacts(
+      identity?.provenance?.packedArtifacts,
+      `${label}.provenance.packedArtifacts`,
+    ),
+  );
+  return findings;
 }
 
 function baselineSourceBytes(record, options) {
@@ -387,8 +708,11 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
       `${metricId}.ratification.baselineReport.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`,
     );
   }
-  if (typeof source?.scenario !== 'string' || source.scenario.trim().length === 0) {
-    findings.push(`${metricId}.ratification.baselineReport.scenario is required`);
+  if (typeof source?.scenarioName !== 'string' || source.scenarioName.trim().length === 0) {
+    findings.push(`${metricId}.ratification.baselineReport.scenarioName is required`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(source?.scenarioDigest ?? '')) {
+    findings.push(`${metricId}.ratification.baselineReport.scenarioDigest is invalid`);
   }
   if (findings.length > 0) return findings;
 
@@ -411,12 +735,31 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
     findings.push(`${metricId}.ratification baseline report is not valid JSON`);
     return findings;
   }
-  if (report.schema !== source.schema || report.scenario !== source.scenario) {
+  const reportIdentityFindings = validateBenchmarkReportIdentity(
+    report,
+    `${metricId}.ratification.baselineReport`,
+  );
+  findings.push(...reportIdentityFindings);
+  if (reportIdentityFindings.length > 0) return findings;
+  if (
+    report.schema !== source.schema ||
+    report.scenario?.name !== source.scenarioName ||
+    report.scenario?.digest !== source.scenarioDigest
+  ) {
     findings.push(`${metricId}.ratification baseline report identity does not match provenance`);
   }
-  findings.push(...validateRunnerFingerprint(report.runner, `${metricId}.baselineReport.runner`));
   if (!sameJson(report.runner, record.runnerFingerprint)) {
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
+  }
+  const reportWorkloadIdentity = workloadIdentity(report);
+  if (!sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
+    findings.push(`${metricId}.ratification workload does not match its baseline report`);
+  }
+  if (
+    budgets?.workload?.status === 'ratified' &&
+    !sameJson(reportWorkloadIdentity, budgets.workload.identity)
+  ) {
+    findings.push(`${metricId}.ratification workload differs from budgets.workload`);
   }
   const baselineMetric = report.metrics?.[metricId];
   if (baselineMetric?.unit !== metric.unit) {
@@ -476,15 +819,6 @@ export function validateBudgets(budgets, options = {}) {
   if (!RUNNER_STATUSES.has(budgets?.runner?.status)) {
     findings.push('runner.status must be unratified or ratified');
   }
-  if (
-    !Array.isArray(budgets?.runner?.requirements) ||
-    budgets.runner.requirements.length === 0 ||
-    budgets.runner.requirements.some(
-      (requirement) => typeof requirement !== 'string' || requirement.trim().length < 12,
-    )
-  ) {
-    findings.push('runner.requirements must contain substantive pinning requirements');
-  }
   if (budgets?.runner?.status === 'unratified' && budgets.runner.fingerprint !== null) {
     findings.push('runner.fingerprint must be null until ratification');
   }
@@ -494,6 +828,22 @@ export function validateBudgets(budgets, options = {}) {
         requireNamed: true,
       }),
     );
+  }
+  if (!RUNNER_STATUSES.has(budgets?.workload?.status)) {
+    findings.push('workload.status must be unratified or ratified');
+  }
+  if (budgets?.workload?.status === 'unratified' && budgets.workload.identity !== null) {
+    findings.push('workload.identity must be null until ratification');
+  }
+  if (budgets?.workload?.status === 'ratified') {
+    findings.push(...validateWorkloadIdentity(budgets.workload.identity, 'workload.identity'));
+  }
+  if (
+    RUNNER_STATUSES.has(budgets?.runner?.status) &&
+    RUNNER_STATUSES.has(budgets?.workload?.status) &&
+    budgets.runner.status !== budgets.workload.status
+  ) {
+    findings.push('runner.status and workload.status must advance together');
   }
   if (!budgets?.metrics || typeof budgets.metrics !== 'object' || Array.isArray(budgets.metrics)) {
     findings.push('metrics must be an object');
@@ -550,11 +900,23 @@ export function validateBudgets(budgets, options = {}) {
         { requireNamed: true },
       ),
     );
+    findings.push(
+      ...validateWorkloadIdentity(
+        record.workloadIdentity,
+        `${metricId}.ratification.workloadIdentity`,
+      ),
+    );
     if (
       budgets?.runner?.status === 'ratified' &&
       !sameJson(record.runnerFingerprint, budgets.runner.fingerprint)
     ) {
       findings.push(`${metricId}.ratification runner differs from budgets.runner`);
+    }
+    if (
+      budgets?.workload?.status === 'ratified' &&
+      !sameJson(record.workloadIdentity, budgets.workload.identity)
+    ) {
+      findings.push(`${metricId}.ratification workload differs from budgets.workload`);
     }
     findings.push(...validateRatificationProvenance(metricId, metric, record, budgets, options));
   }
@@ -604,10 +966,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     }),
     ...validateProposal(proposal),
   ];
-  if (baselineReport?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
-    findings.push(`baseline report schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`);
-  }
-  findings.push(...validateRunnerFingerprint(baselineReport?.runner, 'baselineReport.runner'));
+  findings.push(...validateBenchmarkReportIdentity(baselineReport, 'baselineReport'));
   if (!safeRepositoryRelativePath(options.baselineReportPath)) {
     findings.push('baselineReportPath must be a repository-relative path');
   }
@@ -633,18 +992,28 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   ) {
     throw new Error('baseline runner fingerprint does not match the existing ratified runner');
   }
+  if (
+    budgets.workload.status === 'ratified' &&
+    !sameJson(budgets.workload.identity, workloadIdentity(baselineReport))
+  ) {
+    throw new Error('baseline workload identity does not match the existing ratified workload');
+  }
 
   const updated = structuredClone(budgets);
   updated.runner = {
     status: 'ratified',
     fingerprint: structuredClone(baselineReport.runner),
-    requirements: budgets.runner?.requirements ?? [],
+  };
+  updated.workload = {
+    status: 'ratified',
+    identity: workloadIdentity(baselineReport),
   };
   const baselineReportSource = {
     path: options.baselineReportPath.split(path.sep).join('/'),
     sha256: sha256(options.baselineReportBytes),
     schema: baselineReport.schema,
-    scenario: baselineReport.scenario,
+    scenarioName: baselineReport.scenario.name,
+    scenarioDigest: baselineReport.scenario.digest,
   };
 
   for (const [metricId, proposed] of Object.entries(proposal.metrics)) {
@@ -688,6 +1057,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     const budget = proposed.budget;
     metric.ratification = {
       runnerFingerprint: structuredClone(baselineReport.runner),
+      workloadIdentity: workloadIdentity(baselineReport),
       baselineReport: structuredClone(baselineReportSource),
       sampleCount: samples.length,
       statistic,
@@ -713,17 +1083,24 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
 export function evaluateBudgets(budgets, report, options = {}) {
   const findings = validateBudgets(budgets, options);
   if (findings.length > 0) throw new Error(`Invalid DevEx budgets:\n- ${findings.join('\n- ')}`);
-  if (report?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
-    throw new Error(`report.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`);
+  const reportFindings = validateBenchmarkReportIdentity(report);
+  if (reportFindings.length > 0) {
+    throw new Error(`Invalid benchmark report:\n- ${reportFindings.join('\n- ')}`);
   }
-  const runnerFindings = validateRunnerFingerprint(report.runner, 'report.runner');
-  if (runnerFindings.length > 0) {
-    throw new Error(`Invalid benchmark runner:\n- ${runnerFindings.join('\n- ')}`);
-  }
+  const reportWorkload = workloadIdentity(report);
   const results = [];
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
     if (metric.ratification === null) {
       results.push({ metric: metricId, status: 'unratified' });
+      continue;
+    }
+    if (!sameJson(reportWorkload, metric.ratification.workloadIdentity)) {
+      results.push({
+        metric: metricId,
+        status: 'scenario-mismatch',
+        expectedWorkload: metric.ratification.workloadIdentity,
+        actualWorkload: reportWorkload,
+      });
       continue;
     }
     if (!sameJson(report.runner, metric.ratification.runnerFingerprint)) {
@@ -777,9 +1154,14 @@ export function evaluateBudgets(budgets, report, options = {}) {
   return {
     pass: results.every(
       (result) =>
-        !['breach', 'insufficient-samples', 'missing', 'runner-mismatch', 'unit-mismatch'].includes(
-          result.status,
-        ),
+        ![
+          'breach',
+          'insufficient-samples',
+          'missing',
+          'runner-mismatch',
+          'scenario-mismatch',
+          'unit-mismatch',
+        ].includes(result.status),
     ),
     results,
   };
@@ -836,7 +1218,7 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
       return 1;
     }
     process.stdout.write(
-      `devex-budgets/v1 metrics=${Object.keys(budgets.metrics).length} ratified=${
+      `${DEVEX_BUDGETS_SCHEMA} metrics=${Object.keys(budgets.metrics).length} ratified=${
         Object.values(budgets.metrics).filter((metric) => metric.ratification !== null).length
       }\nSCHEMA_VALID\n${
         Object.values(budgets.metrics).some((metric) => metric.ratification !== null)

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
+  benchmarkScenarioDigest,
   createRunnerFingerprint,
   evaluateBudgets,
   median,
@@ -20,6 +21,10 @@ const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = fileURLToPath(new URL('./fixtures/devex-benchmark/', import.meta.url));
 const scenario = JSON.parse(readFileSync(path.join(fixtureRoot, 'scenario.json'), 'utf8'));
 const budgets = JSON.parse(readFileSync(path.join(repoRoot, 'devex-budgets.json'), 'utf8'));
+const observedEnvironment = {
+  ...scenario.environment,
+  sourceCommit: scenario.provenance.sourceCommit,
+};
 
 describe('DevEx benchmark foundation', () => {
   it('computes the registered robust statistics deterministically', () => {
@@ -38,6 +43,7 @@ describe('DevEx benchmark foundation', () => {
     const report = runBenchmarkScenario(scenario, {
       root: fixtureRoot,
       samples: 5,
+      observedEnvironment,
       measure(_command, context) {
         const base = phaseValues[context.phase];
         return {
@@ -52,6 +58,24 @@ describe('DevEx benchmark foundation', () => {
     });
 
     expect(report.schema).toBe(DEVEX_BENCHMARK_REPORT_SCHEMA);
+    expect(report.scenario).toMatchObject({
+      name: scenario.name,
+      digest: benchmarkScenarioDigest(scenario),
+      definition: scenario,
+    });
+    expect(report.provenance).toEqual({
+      sourceCommit: scenario.provenance.sourceCommit,
+      packageManager: scenario.environment.packageManager,
+      osImage: scenario.environment.osImage,
+      packedArtifacts: scenario.provenance.packedArtifacts,
+    });
+    expect(report.runner).toMatchObject({
+      platform: 'linux',
+      cpuModel: 'fixture-cpu',
+      node: 'v24.0.0',
+      packageManager: 'pnpm@10.12.1',
+      osImage: scenario.environment.osImage,
+    });
     expect(report.metrics['check.cold.durationMs'].samples).toEqual([30, 31, 32, 33, 34]);
     expect(report.metrics['check.warm.peakRssBytes'].summary).toMatchObject({
       count: 5,
@@ -77,6 +101,32 @@ describe('DevEx benchmark foundation', () => {
     });
   });
 
+  it('refuses forged source and packed-artifact provenance before measuring', () => {
+    const wrongCommit = structuredClone(scenario);
+    wrongCommit.provenance.sourceCommit = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    expect(() =>
+      runBenchmarkScenario(wrongCommit, {
+        root: fixtureRoot,
+        observedEnvironment,
+        measure: () => {
+          throw new Error('measurement must not start');
+        },
+      }),
+    ).toThrow('does not match scenario.provenance.sourceCommit');
+
+    const wrongArtifact = structuredClone(scenario);
+    wrongArtifact.provenance.packedArtifacts[0].sha256 = `sha256:${'0'.repeat(64)}`;
+    expect(() =>
+      runBenchmarkScenario(wrongArtifact, {
+        root: fixtureRoot,
+        observedEnvironment,
+        measure: () => {
+          throw new Error('measurement must not start');
+        },
+      }),
+    ).toThrow('packed artifact digest mismatch');
+  });
+
   it('keeps every provisional budget non-binding before baseline ratification', () => {
     expect(validateBudgets(budgets)).toEqual([]);
     expect(Object.values(budgets.metrics).every((metric) => metric.ratification === null)).toBe(
@@ -99,6 +149,9 @@ describe('DevEx benchmark foundation', () => {
       arch: 'x64',
       node: 'v24.0.0',
       cpuModel: 'fixture',
+      packageManager: 'pnpm@10.12.1',
+      osImage:
+        'fixture-linux@sha256:1111111111111111111111111111111111111111111111111111111111111111',
     });
     expect(validateBudgets(inventedRunner)).toContain(
       'runner.fingerprint must be null until ratification',
@@ -130,7 +183,8 @@ describe('DevEx benchmark foundation', () => {
       baselineReport: {
         path: 'baselines/fixture.json',
         schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
-        scenario: 'fixture',
+        scenarioName: scenario.name,
+        scenarioDigest: benchmarkScenarioDigest(scenario),
       },
     });
     expect(validateBudgets(ratified, validationOptions)).toEqual([]);
@@ -160,7 +214,7 @@ describe('DevEx benchmark foundation', () => {
     changedRunner.runner.fingerprint.cpuModel = 'hand-edited';
     expect(validateBudgets(changedRunner, validationOptions)).toEqual(
       expect.arrayContaining([
-        'runner.fingerprint.id does not match its platform/CPU/Node identity',
+        'runner.fingerprint.id does not match its OS/platform/CPU/Node/package-manager identity',
         'check.cold.durationMs.ratification runner differs from budgets.runner',
       ]),
     );
@@ -174,7 +228,7 @@ describe('DevEx benchmark foundation', () => {
         budgets,
         report,
         {
-          schema: 'kovo-devex-budget-proposal/v1',
+          schema: 'kovo-devex-budget-proposal/v2',
           runnerFingerprint: report.runner,
           metrics: {
             'check.cold.durationMs': {
@@ -189,12 +243,12 @@ describe('DevEx benchmark foundation', () => {
     ).toThrow('has 1 baseline samples; 5 required');
   });
 
-  it('refuses to ratify or evaluate measurements from any different runner identity field', () => {
+  it('refuses to ratify or evaluate a differently pinned runner/scenario identity', () => {
     const defaultReport = benchmarkReport({
       'check.cold.durationMs': [100, 101, 102, 103, 104],
     });
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v1',
+      schema: 'kovo-devex-budget-proposal/v2',
       runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
@@ -204,9 +258,11 @@ describe('DevEx benchmark foundation', () => {
         },
       },
     };
+    const anotherRunnerScenario = structuredClone(scenario);
+    anotherRunnerScenario.environment.cpuModel = 'different-cpu';
     const anotherRunnerReport = benchmarkReport(
       { 'check.cold.durationMs': [100, 101, 102, 103, 104] },
-      { cpuModel: 'different-cpu' },
+      { definition: anotherRunnerScenario },
     );
     const anotherSource = baselineOptions(anotherRunnerReport);
     expect(() =>
@@ -215,19 +271,74 @@ describe('DevEx benchmark foundation', () => {
 
     const source = baselineOptions(defaultReport);
     const ratified = ratifyBudgets(budgets, defaultReport, proposal, source.ratificationOptions);
+    const anotherNodeScenario = structuredClone(scenario);
+    anotherNodeScenario.environment.node = 'v25.0.0';
     const evaluation = evaluateBudgets(
       ratified,
-      benchmarkReport({ 'check.cold.durationMs': [90, 91, 92, 93, 94] }, { node: 'v25.0.0' }),
+      benchmarkReport(
+        { 'check.cold.durationMs': [90, 91, 92, 93, 94] },
+        { definition: anotherNodeScenario },
+      ),
       source.validationOptions,
     );
     expect(evaluation.pass).toBe(false);
     expect(
       evaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
     ).toMatchObject({
-      status: 'runner-mismatch',
-      expectedRunner: defaultReport.runner,
-      actualRunner: expect.objectContaining({ node: 'v25.0.0' }),
+      status: 'scenario-mismatch',
+      expectedWorkload: expect.objectContaining({
+        scenario: expect.objectContaining({ digest: defaultReport.scenario.digest }),
+      }),
+      actualWorkload: expect.objectContaining({
+        scenario: expect.objectContaining({ digest: benchmarkScenarioDigest(anotherNodeScenario) }),
+      }),
     });
+  });
+
+  it('rejects a cheap scenario on the same runner and forged report provenance', () => {
+    const baseline = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(baseline, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
+      },
+    });
+    const cheapScenario = structuredClone(scenario);
+    cheapScenario.phases.cold.command = ['node', '-e', 'void 0'];
+    const cheapReport = benchmarkReport(
+      { 'check.cold.durationMs': [1, 1, 1, 1, 1] },
+      { definition: cheapScenario },
+    );
+    const cheapEvaluation = evaluateBudgets(ratified, cheapReport, validationOptions);
+    expect(cheapEvaluation.pass).toBe(false);
+    expect(
+      cheapEvaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({ status: 'scenario-mismatch' });
+
+    const forged = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forged.provenance.sourceCommit = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    expect(() => evaluateBudgets(ratified, forged, validationOptions)).toThrow(
+      'report.provenance does not match its scenario definition',
+    );
+    const forgedArtifact = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forgedArtifact.provenance.packedArtifacts[0].sha256 = `sha256:${'f'.repeat(64)}`;
+    expect(() => evaluateBudgets(ratified, forgedArtifact, validationOptions)).toThrow(
+      'report.provenance does not match its scenario definition',
+    );
+    const forgedDigest = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forgedDigest.scenario.digest = `sha256:${'0'.repeat(64)}`;
+    expect(() => evaluateBudgets(ratified, forgedDigest, validationOptions)).toThrow(
+      'report.scenario.digest does not match its full definition',
+    );
   });
 
   it('gates only ratified metrics and detects a statistically derived breach', () => {
@@ -290,18 +401,44 @@ describe('DevEx benchmark foundation', () => {
   });
 });
 
-function benchmarkReport(metricSamples, runnerOverrides = {}) {
+function benchmarkReport(metricSamples, options = {}) {
+  const definition = structuredClone(options.definition ?? scenario);
+  const runnerEnvironment = {
+    ...definition.environment,
+    ...options.runnerOverrides,
+  };
   return {
     schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
-    scenario: 'fixture',
+    scenario: {
+      name: definition.name,
+      digest: benchmarkScenarioDigest(definition),
+      definition,
+    },
+    provenance: {
+      sourceCommit: definition.provenance.sourceCommit,
+      packageManager: definition.environment.packageManager,
+      osImage: definition.environment.osImage,
+      packedArtifacts: structuredClone(definition.provenance.packedArtifacts),
+    },
     runner: createRunnerFingerprint({
-      name: 'pinned-linux-x64',
-      platform: 'linux',
-      arch: 'x64',
-      node: 'v24.0.0',
-      cpuModel: 'fixture',
-      ...runnerOverrides,
+      name: runnerEnvironment.runnerName,
+      platform: runnerEnvironment.platform,
+      arch: runnerEnvironment.arch,
+      node: runnerEnvironment.node,
+      cpuModel: runnerEnvironment.cpuModel,
+      packageManager: runnerEnvironment.packageManager,
+      osImage: runnerEnvironment.osImage,
     }),
+    sampleCount: Math.max(...Object.values(metricSamples).map((samples) => samples.length)),
+    commands: Object.fromEntries(
+      ['cold', 'warm', 'oneFileIncremental'].map((phase) => [
+        phase,
+        {
+          command: [...definition.phases[phase].command],
+          cwd: definition.phases[phase].cwd ?? '.',
+        },
+      ]),
+    ),
     metrics: Object.fromEntries(
       Object.entries(metricSamples).map(([metric, samples]) => [
         metric,
@@ -329,7 +466,7 @@ function ratifyFixtureBudgets(report, metrics) {
       budgets,
       report,
       {
-        schema: 'kovo-devex-budget-proposal/v1',
+        schema: 'kovo-devex-budget-proposal/v2',
         runnerFingerprint: report.runner,
         metrics,
       },

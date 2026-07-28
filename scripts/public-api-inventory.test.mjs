@@ -76,7 +76,7 @@ describe('public API inventory', () => {
     });
   });
 
-  it('excludes hostile nested dependencies and generated, dist, cache, packed, and throwaway trees', () => {
+  it('uses objective/declared exclusions while preserving coincidentally named authored consumers', () => {
     const hostileRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-public-inventory-hostile-'));
     try {
       cpSync(fixtureRoot, hostileRoot, { recursive: true });
@@ -84,6 +84,19 @@ describe('public API inventory', () => {
         'examples/authored/node_modules/dependency/hostile.ts',
         'examples/authored/dist/hostile.ts',
       ]) {
+        const absolute = path.join(hostileRoot, relative);
+        mkdirSync(path.dirname(absolute), { recursive: true });
+        writeFileSync(absolute, "import { feature } from '@fixture/api/feature';\nvoid feature;\n");
+      }
+      const coincidentalAuthoredFiles = [
+        'examples/packed-release-notes/authored.ts',
+        'examples/throwaway-ideas/authored.ts',
+        'examples/scratch/authored.ts',
+        'examples/temp-app/authored.ts',
+        'examples/tmp-app/authored.ts',
+        'examples/tarball-consumer/authored.ts',
+      ];
+      for (const relative of coincidentalAuthoredFiles) {
         const absolute = path.join(hostileRoot, relative);
         mkdirSync(path.dirname(absolute), { recursive: true });
         writeFileSync(absolute, "import { feature } from '@fixture/api/feature';\nvoid feature;\n");
@@ -133,8 +146,8 @@ describe('public API inventory', () => {
           ['examples/authored/dist', 'generated-dist-cache'],
           ['examples/authored/generated', 'generated-dist-cache'],
           ['examples/authored/.cache', 'generated-dist-cache'],
-          ['examples/packed-app', 'packed-or-throwaway'],
-          ['examples/throwaway-app', 'packed-or-throwaway'],
+          ['examples/packed-app', 'declared-packed-fixture'],
+          ['examples/throwaway-app', 'declared-throwaway-app'],
           ['examples/release-consumer-shadow', 'declared-packed-fixture'],
           ['examples/local-evaluation-copy', 'declared-throwaway-app'],
           ['examples/authored/dependency-copy', 'symbolic-link'],
@@ -143,7 +156,13 @@ describe('public API inventory', () => {
       const feature = inventory.exportedDeclarations.find(
         (item) => item.specifier === '@fixture/api/feature' && item.symbol === 'feature',
       );
-      expect(feature?.consumerImports).toBe(5);
+      expect(feature?.consumerImports).toBe(11);
+      expect(feature?.consumers.authoredExamples.files).toEqual(
+        expect.arrayContaining(coincidentalAuthoredFiles),
+      );
+      for (const relative of coincidentalAuthoredFiles) {
+        expect(excluded.some(([directory]) => relative.startsWith(`${directory}/`))).toBe(false);
+      }
       expect(JSON.stringify(feature?.consumers)).not.toContain('hostile');
     } finally {
       rmSync(hostileRoot, { recursive: true, force: true });

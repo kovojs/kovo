@@ -329,16 +329,7 @@ function declaredConsumerExclusion(directory) {
 function excludedDirectoryReason(directory, name) {
   if (name === 'node_modules') return 'nested-dependency';
   if (ALWAYS_EXCLUDED_DIRECTORIES.has(name)) return 'generated-dist-cache';
-  const declared = declaredConsumerExclusion(directory);
-  if (declared !== null) return declared;
-  if (
-    /^(?:(?:packed|throwaway)(?:[-_.].*)?|scratch|(?:temp|tmp)(?:[-_.]app)?|tarball[-_.]consumer)$/u.test(
-      name,
-    )
-  ) {
-    return 'packed-or-throwaway';
-  }
-  return null;
+  return declaredConsumerExclusion(directory);
 }
 
 function consumerArea(relativeFile) {
