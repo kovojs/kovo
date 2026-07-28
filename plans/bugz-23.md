@@ -2,7 +2,7 @@
 
 Created 2026-07-01. Source of truth remains `SPEC.md`. These confirmed defects came from an
 exhaustive dogfood pass against local `main` after `plans/fundamental-fixes.md` and
-`plans/capability-surface-redesign.md` were marked complete. Companion papercuts:
+the Capability Surface Redesign ledger (now in `plans/archive.md`) were marked complete. Companion papercuts:
 `plans/papercuts-22.md`.
 
 ## Scope
@@ -29,7 +29,7 @@ dist/.kovo/graph.json` still prints `OK`.
     consumes graph diagnostics and other findings (`packages/cli/src/graph-output.ts:772-814`) but
     never fails on `graph.handlerWriteSinks`; those same facts are only rendered by
     `kovo explain --endpoints` (`packages/cli/src/graph-output.ts:336-365`).
-  - Why it matters: `plans/capability-surface-redesign.md` records mutation direct-DB gates as
+  - Why it matters: the archived Capability Surface Redesign ledger records mutation direct-DB gates as
     completed, and `SPEC.md` §10.3/§11.4 require mutation/domain writes and audit output to stay
     complete. A green build/check can now ship a direct mutation DB write that the framework itself
     has recognized as a write sink.

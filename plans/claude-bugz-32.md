@@ -1,7 +1,7 @@
 # Round-11 Soundness Bugz 32
 
 Created 2026-07-03. Source of truth remains `SPEC.md`. Security fail-opens found dogfooding AFTER
-`plans/fundamental-fixes-followup-6.md` + `plans/postgres-v1-devex.md` (the engine-choke re-architecture:
+`plans/fundamental-fixes-followup-6.md` + the archived Postgres v1 DevEx ledger (the engine-choke re-architecture:
 Postgres RLS/roles/column-privileges as the sole door, SQLite quarantined) landed on `origin/main` (`c27edd34c`).
 All reproduced under `KOVO_PARANOID=1` with a served cross-owner/secret leak on the prod artifact. Over-blocks +
 ergonomics are in `plans/claude-papercuts-30.md`. Dogfooded in an isolated worktree at `origin/main`;

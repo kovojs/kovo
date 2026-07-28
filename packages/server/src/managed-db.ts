@@ -227,7 +227,7 @@ export interface PostgresRlsDiagnosticReadClient {
   query(query: unknown, params?: unknown[], queryOptions?: unknown): unknown;
 }
 
-/** Dev-only diagnostics for empty owner-scoped Postgres reads (plans/postgres-v1-devex.md DEC-F1). */
+/** Dev-only diagnostics for empty owner-scoped Postgres reads (archived Postgres v1 DEC-F1). */
 export interface PostgresRlsSilentDenyDiagnosticsOptions {
   /**
    * Defaults to true outside `NODE_ENV=production` when this object is present. Production disables

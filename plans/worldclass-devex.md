@@ -1,6 +1,6 @@
 # World-class Kovo developer experience and API
 
-Status: **proposed active roadmap**
+Status: **active roadmap**
 
 Created: 2026-07-27. Merged 2026-07-28 with the independently reviewed alternative
 (`plans/worldclass-devex-claude.md`, now retired into this file): same destination and evidence,
@@ -47,37 +47,37 @@ The scorecard is the acceptance contract, not an aspirational dashboard: atomic 
 command or artifact each. Tier 1 gates are independent of the new app contract and ship
 continuously; tier 2 gates are renegotiated (not silently dropped) only if both D1 spike arms fail
 and the double-failure fallback is selected — adopting Arm B keeps tier 2 as written. Numeric
-budgets marked *(prov.)* are provisional until Track 2 records packed-tarball
+budgets marked _(prov.)_ are provisional until Track 2 records packed-tarball
 baselines on the named runner and ratifies each number with a recorded derivation in
 `devex-budgets.json`; performance gates run on a named runner and pinned packed-tarball fixtures so
 hardware and workspace linking do not make the numbers meaningless.
 
-| ID | Tier | Gate | Proof |
-| --- | --- | --- | --- |
-| G1 | 1 | Both packed scaffold variants pass create→install→dev→login→CRUD→test→check→build with only creator-emitted instructions | golden-journey runner exit 0 |
-| G2 | 1 | Ready line ≤15s cold / 5s warm *(prov.)*; URL, mode, DB posture, devtool link always printed | journey-runner timing record |
-| G3 | 1 | Edit-to-diagnostic p95 ≤1s; edit-to-served-result p95 ≤500ms *(prov.)* | `scripts/devex-benchmark.mjs` |
-| G4 | 1 | `kovo check` ≤30s cold / 10s warm / 2s one-file *(prov.)*, with a phase census proving no diagnostic-producing phase was dropped | benchmark + phase-census test |
-| G5 | 1 | All help/version paths exit 0 on stdout; usage/config mistakes exit 2; proof/build findings exit 1 | CLI exit-code contract test |
-| G6 | 1 | One semantic command AST derives argv parsing, help, completion, and command reference | schema-derivation snapshot tests |
-| G7 | 1 | Missing, stale, partial, or failed-build graph input is an error, never `OK`; built artifacts require explicit `--artifact` | adversarial graph-input suite |
-| G8 | 1 | Builds are transactional; a failed build leaves the last good `dist` untouched and no artifacts under `dist/.kovo` | staging-promotion test |
-| G9 | 1 | First-run failures (7 classes) and the top-20 authoring diagnostics each render one safe cause, one source/config anchor, one executable next step | diagnostic empathy suite |
-| G10 | 1 | Packed starter renders a styled, WCAG-checked UI via public component/style API | journey-runner screenshot + a11y check |
-| G11 | 1 | create→build→deploy→public-URL-200 journey on one blessed Node host | packed deploy journey |
-| G12 | 1 | An agent completes scaffold→edit→check→fix using only JSON diagnostics and local docs, offline | agent-journey fixture |
-| G13 | 1 | Docs/API references carry source digests; every sample compiles from packed dist or has a reviewed skip class; `update-docs` never reports success for placeholders | docs gates in CI |
-| G14 | 1 | Concept inventory (framework imports + config keys + prompts + env edits before first authenticated CRUD) recorded and ratcheting down | journey-runner concept census |
-| G15 | 1 | Devtool auto-mounts at `/__kovo` in dev, linked from the ready line; provably absent from production and static-export artifacts | mount test + artifact census |
-| G16 | 1 | Cold `pnpm create` install time and install size within ratified budgets *(prov.)* | journey runner + size report |
-| G17 | 1 | Recursive-publicness ratchet descends monotonically from 532 to zero; no fix accepted by widening the public surface without a ledger `keep` row | api-surface gate + ledger cross-check |
-| G18 | 1 | Zero unapproved `any` in app-public declarations (AST gate, reviewed exception file with owner + expiry) | packed-declaration gate |
-| G19 | 1 | Public style values opaque; literal/cast forgery fails runtime acceptance; extracted CSS byte-equivalent | style batch packed tests |
-| G20 | 1 | One narrow custom-shell installer; manual store/root/transport assembly gone | browser/client batch packed tests |
-| G21 | 1 | `kovo-verify` help/exit/JSON contract stable; tarball has no Kovo runtime dependency | verifier acceptance suite |
-| G22 | 2 | Server root ≤120 names, core root ≤60, each retained root name backed by a decision-ledger row with compiling packed example + contract test | ledger gate — the ledger, not the count, is the gate |
-| G23 | 2 | Starter and one advanced example declare app context once: no manual `MutationContext`/`QueryLoadContext`/`Reader`/`ComponentRenderSlots`, registry augmentation, explicit app generics, or casts | grep-clean + typecheck of starter/example |
-| G24 | 2 | Starter tests use the public inferred harness with a digest-verified proof graph; no internal mocks | packed starter test run |
+| ID  | Tier | Gate                                                                                                                                                                                              | Proof                                                |
+| --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| G1  | 1    | Both packed scaffold variants pass create→install→dev→login→CRUD→test→check→build with only creator-emitted instructions                                                                          | golden-journey runner exit 0                         |
+| G2  | 1    | Ready line ≤15s cold / 5s warm _(prov.)_; URL, mode, DB posture, devtool link always printed                                                                                                      | journey-runner timing record                         |
+| G3  | 1    | Edit-to-diagnostic p95 ≤1s; edit-to-served-result p95 ≤500ms _(prov.)_                                                                                                                            | `scripts/devex-benchmark.mjs`                        |
+| G4  | 1    | `kovo check` ≤30s cold / 10s warm / 2s one-file _(prov.)_, with a phase census proving no diagnostic-producing phase was dropped                                                                  | benchmark + phase-census test                        |
+| G5  | 1    | All help/version paths exit 0 on stdout; usage/config mistakes exit 2; proof/build findings exit 1                                                                                                | CLI exit-code contract test                          |
+| G6  | 1    | One semantic command AST derives argv parsing, help, completion, and command reference                                                                                                            | schema-derivation snapshot tests                     |
+| G7  | 1    | Missing, stale, partial, or failed-build graph input is an error, never `OK`; built artifacts require explicit `--artifact`                                                                       | adversarial graph-input suite                        |
+| G8  | 1    | Builds are transactional; a failed build leaves the last good `dist` untouched and no artifacts under `dist/.kovo`                                                                                | staging-promotion test                               |
+| G9  | 1    | First-run failures (7 classes) and the top-20 authoring diagnostics each render one safe cause, one source/config anchor, one executable next step                                                | diagnostic empathy suite                             |
+| G10 | 1    | Packed starter renders a styled, WCAG-checked UI via public component/style API                                                                                                                   | journey-runner screenshot + a11y check               |
+| G11 | 1    | create→build→deploy→public-URL-200 journey on one blessed Node host                                                                                                                               | packed deploy journey                                |
+| G12 | 1    | An agent completes scaffold→edit→check→fix using only JSON diagnostics and local docs, offline                                                                                                    | agent-journey fixture                                |
+| G13 | 1    | Docs/API references carry source digests; every sample compiles from packed dist or has a reviewed skip class; `update-docs` never reports success for placeholders                               | docs gates in CI                                     |
+| G14 | 1    | Concept inventory (framework imports + config keys + prompts + env edits before first authenticated CRUD) recorded and ratcheting down                                                            | journey-runner concept census                        |
+| G15 | 1    | Devtool auto-mounts at `/__kovo` in dev, linked from the ready line; provably absent from production and static-export artifacts                                                                  | mount test + artifact census                         |
+| G16 | 1    | Cold `pnpm create` install time and install size within ratified budgets _(prov.)_                                                                                                                | journey runner + size report                         |
+| G17 | 1    | Recursive-publicness ratchet descends monotonically from 532 to zero; no fix accepted by widening the public surface without a ledger `keep` row                                                  | api-surface gate + ledger cross-check                |
+| G18 | 1    | Zero unapproved `any` in app-public declarations (AST gate, reviewed exception file with owner + expiry)                                                                                          | packed-declaration gate                              |
+| G19 | 1    | Public style values opaque; literal/cast forgery fails runtime acceptance; extracted CSS byte-equivalent                                                                                          | style batch packed tests                             |
+| G20 | 1    | One narrow custom-shell installer; manual store/root/transport assembly gone                                                                                                                      | browser/client batch packed tests                    |
+| G21 | 1    | `kovo-verify` help/exit/JSON contract stable; tarball has no Kovo runtime dependency                                                                                                              | verifier acceptance suite                            |
+| G22 | 2    | Server root ≤120 names, core root ≤60, each retained root name backed by a decision-ledger row with compiling packed example + contract test                                                      | ledger gate — the ledger, not the count, is the gate |
+| G23 | 2    | Starter and one advanced example declare app context once: no manual `MutationContext`/`QueryLoadContext`/`Reader`/`ComponentRenderSlots`, registry augmentation, explicit app generics, or casts | grep-clean + typecheck of starter/example            |
+| G24 | 2    | Starter tests use the public inferred harness with a digest-verified proof graph; no internal mocks                                                                                               | packed starter test run                              |
 
 Counts are discovery signals, not goals by themselves. UI components and icon glyphs are naturally
 wide generated families. The root budgets exist to protect the daily path; a symbol may move to a
@@ -105,28 +105,28 @@ Track 2 fixes the scanner and recomputes demand evidence before it drives a publ
 
 ### Public-surface findings
 
-| Surface | Finding | Decision direction |
-| --- | --- | --- |
-| `@kovojs/server` | 554 exported declarations across public paths; 356 of this package's recursive leaks. `KovoApp` exposes framework assembly, `createApp` has five generics, and app context is repeated throughout the starter. | Make the app value opaque, infer one app contract, keep daily declarations at root, and move advanced task families with their supporting types to focused subpaths. |
-| `@kovojs/core` | 149 root exports mix component/form/navigation authoring with security, storage, webhooks, diagnostics, and inference plumbing. A conservative audit found 39 definite removals and 30 decisions that still need a user story. | Root becomes component/form/navigation essentials; use `/security`, `/storage`, `/webhooks`, and `/diagnostics`; internalize inferred helper graphs. |
-| `@kovojs/browser/client` | 17 exports expose manual query-store/root/transport assembly; the audit found no unconditional keep in the current shape. | Replace with one narrow installer for custom shells and keep generated bootstrap as the owner of browser runtime state. |
-| `@kovojs/style` | Public types/records expose `$$css`, `__rules`, source markers, and an undocumented raw tuple; two similarly named theme APIs have different purposes and one lacks an app user story. (Reconcile against `plans/api-cleanup.md` 9B's opaque-brand evidence from freshly packed dist — Track 0.) | Return a module-private-symbol-backed opaque handle, retain `defineTheme`, and prove/rename or remove the variable-override API. |
-| `@kovojs/better-auth` | Root exposes 38 names, including backend-specific generated bindings and internal request/credential carriers. | Root contains human auth/guard configuration; generated bindings move behind a generated/runtime boundary and converge on a backend-neutral shape. |
-| `@kovojs/drizzle` | Runtime metadata is public; column annotations admit typo-prone strings/`unknown`; optional structural brands and `getSQL(): any` weaken author-time safety. | Move runtime metadata internal and bind annotations/SQL handles to concrete Drizzle identities with private witnesses while retaining runtime/AST proof. |
-| `@kovojs/test` | Low-level HTML/header helpers have real use, but the high-level harness accepts copied graph facts and returns `unknown`; `/test-case` casts incomplete options. | Make the harness app/artifact-scoped and inferred, move useful server-testing helpers here, and remove `/test-case` unless a clean Vitest fixture emerges. |
-| UI/headless/icons | The component-per-subpath shape is sound. Card anatomy is contradictory; orphan generated transition ABI needs reclassification (the "44 orphan transition types" count is unreproduced — Track 0 reconciles it against api-audit's completed ~266-type removal); catalogs are missing; `IconRenderResult = object` is too broad. | Keep component/prop and glyph families, retain separate owning generators with one catalog schema, reclassify proven-orphan ABI, and use the canonical render result. |
-| CLI/verifier | The CLI exposes flag-shaped option interfaces and duplicated grammar. `@kovojs/verify` is a coherent independent family but lacks a usable front door. | One discriminated command/result grammar; keep the verifier family and give its CLI stable help, flag order, JSON, exit codes, docs, and examples. |
+| Surface                  | Finding                                                                                                                                                                                                                                                                                                                           | Decision direction                                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kovojs/server`         | 554 exported declarations across public paths; 356 of this package's recursive leaks. `KovoApp` exposes framework assembly, `createApp` has five generics, and app context is repeated throughout the starter.                                                                                                                    | Make the app value opaque, infer one app contract, keep daily declarations at root, and move advanced task families with their supporting types to focused subpaths.  |
+| `@kovojs/core`           | 149 root exports mix component/form/navigation authoring with security, storage, webhooks, diagnostics, and inference plumbing. A conservative audit found 39 definite removals and 30 decisions that still need a user story.                                                                                                    | Root becomes component/form/navigation essentials; use `/security`, `/storage`, `/webhooks`, and `/diagnostics`; internalize inferred helper graphs.                  |
+| `@kovojs/browser/client` | 17 exports expose manual query-store/root/transport assembly; the audit found no unconditional keep in the current shape.                                                                                                                                                                                                         | Replace with one narrow installer for custom shells and keep generated bootstrap as the owner of browser runtime state.                                               |
+| `@kovojs/style`          | Freshly packed public declarations expose `$$css`, `data-style-src`, `__rules`, `__styleKey`, and an undocumented raw tuple; two similarly named theme APIs have different purposes and one lacks an app user story. The archived API-cleanup 9B opaque-brand claim did not survive packed-artifact verification.                 | Return a module-private-symbol-backed opaque handle, retain `defineTheme`, and prove/rename or remove the variable-override API.                                      |
+| `@kovojs/better-auth`    | Root exposes 38 names, including backend-specific generated bindings and internal request/credential carriers.                                                                                                                                                                                                                    | Root contains human auth/guard configuration; generated bindings move behind a generated/runtime boundary and converge on a backend-neutral shape.                    |
+| `@kovojs/drizzle`        | Runtime metadata is public; column annotations admit typo-prone strings/`unknown`; optional structural brands and `getSQL(): any` weaken author-time safety.                                                                                                                                                                      | Move runtime metadata internal and bind annotations/SQL handles to concrete Drizzle identities with private witnesses while retaining runtime/AST proof.              |
+| `@kovojs/test`           | Low-level HTML/header helpers have real use, but the high-level harness accepts copied graph facts and returns `unknown`; `/test-case` casts incomplete options.                                                                                                                                                                  | Make the harness app/artifact-scoped and inferred, move useful server-testing helpers here, and remove `/test-case` unless a clean Vitest fixture emerges.            |
+| UI/headless/icons        | The component-per-subpath shape is sound. Card anatomy is contradictory; orphan generated transition ABI needs reclassification (the "44 orphan transition types" count is unreproduced — Track 0 reconciles it against api-audit's completed ~266-type removal); catalogs are missing; `IconRenderResult = object` is too broad. | Keep component/prop and glyph families, retain separate owning generators with one catalog schema, reclassify proven-orphan ABI, and use the canonical render result. |
+| CLI/verifier             | The CLI exposes flag-shaped option interfaces and duplicated grammar. `@kovojs/verify` is a coherent independent family but lacks a usable front door.                                                                                                                                                                            | One discriminated command/result grammar; keep the verifier family and give its CLI stable help, flag order, JSON, exit codes, docs, and examples.                    |
 
 The provisional conservative symbol triage below ranks whether a capability deserves human public
 API, not whether its current name, signature, or root placement should survive. Track 2's cleaned
 consumer evidence must reconfirm borderline decisions before Track 5 acts on them:
 
-| Audited slice | Keep capability | Needs a user-story/shape decision | Remove or demote from human public API |
-| --- | ---: | ---: | ---: |
-| Core/style/browser/client (224 names) | 105 | 55 | 64 |
-| Server/Better Auth/Drizzle/test (695 names) | 403 | 235 | 57 |
-| CLI import API (21 names) | 5 | 16 | 0 |
-| Standalone verifier (11 names) | 11 | 0 | 0 |
+| Audited slice                               | Keep capability | Needs a user-story/shape decision | Remove or demote from human public API |
+| ------------------------------------------- | --------------: | --------------------------------: | -------------------------------------: |
+| Core/style/browser/client (224 names)       |             105 |                                55 |                                     64 |
+| Server/Better Auth/Drizzle/test (695 names) |             403 |                               235 |                                     57 |
+| CLI import API (21 names)                   |               5 |                                16 |                                      0 |
+| Standalone verifier (11 names)              |              11 |                                 0 |                                      0 |
 
 The generated UI and icon families were reviewed as families: retain the 414 component/prop/style
 exports and 1,737 glyph functions plus `IconProps`; reclassify proven-orphan headless transition
@@ -138,8 +138,7 @@ Preserve `create-kovo` as bin-only and `@kovojs/compiler` as zero-public-export 
 - The generated starter carries exactly 1,413 lines of copied framework checking/orchestration
   across three scripts. That logic belongs in the versioned CLI; an app should own declarative
   policy, not a private build system. (One script, `check-parallel.mjs`, was deliberately shipped
-  by `plans/fast-kovo-check2.md` item C; this plan supersedes that decision — record the
-  supersession there.)
+  by archived fast-check round 2 item C; this plan supersedes that decision.)
 - The starter manually augments `QueryRegistry` and `InvalidationSets`, annotates read-only DB and
   mutation failure context types, and imports an internal classifier module in test setup. These
   are all framework-derivable facts.
@@ -202,7 +201,8 @@ import { defineKovo } from '@kovojs/server';
 import { appAuth, appCsrf, appDb, appEnv } from './runtime.js';
 
 export const app = defineKovo({
-  appId: 'contacts',
+  // Generated once by create-kovo; production live-target identity remains UUIDv4.
+  appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
   auth: appAuth,
   csrf: appCsrf,
   db: appDb,
@@ -305,25 +305,25 @@ resolve each before implementation:
 
 The target package topology is:
 
-| Public home | Owns |
-| --- | --- |
-| `@kovojs/core` | Component, form, error-boundary, link/href, redirect, and essential JSON/render types. |
-| `@kovojs/core/security` | Secret/untrusted/redacted values and reviewed declassification constructors. |
-| `@kovojs/core/storage` | Storage capabilities and concrete adapters. |
-| `@kovojs/core/webhooks` | Verifier construction and webhook verification types. |
-| `@kovojs/core/diagnostics` | Stable diagnostic code/result types used by tool integrators. |
-| `@kovojs/server` | `defineKovo`, schemas, ordinary route/layout/query/mutation/endpoint declarations, explicit access/posture constructors, and common responses. |
-| Focused `@kovojs/server/*` task paths | Build/vite, custom adapters/assembly, security, Postgres lifecycle, tasks, agents, storage HTTP adapters, render-tree, static export, and other advanced capability families. No generic `/advanced` or `/types`. |
-| `@kovojs/browser` | App-authored handlers, derives, optimism, and trusted output constructors. |
-| `@kovojs/browser/client` | At most one custom-shell installer plus the few callback/result types an installer user must name. |
-| `@kovojs/style` | `create`, `attrs`, vars/keyframes/theme functions, tokens, and opaque input/handle types; at most 15 directly documented root names. |
-| `@kovojs/test/*` | Inferred harness plus focused HTML/header/database helpers; no parallel server-testing home. |
-| `@kovojs/ui/<component>` and `@kovojs/headless-ui/<primitive>` | Component/prop and attribute-builder contracts generated from one anatomy manifest. |
-| `@kovojs/icons/<glyph>` | Generated glyph functions with `IconProps` and the canonical render-result contract. |
+| Public home                                                    | Owns                                                                                                                                                                                                              |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kovojs/core`                                                 | Component, form, error-boundary, link/href, redirect, and essential JSON/render types.                                                                                                                            |
+| `@kovojs/core/security`                                        | Secret/untrusted/redacted values and reviewed declassification constructors.                                                                                                                                      |
+| `@kovojs/core/storage`                                         | Storage capabilities and concrete adapters.                                                                                                                                                                       |
+| `@kovojs/core/webhooks`                                        | Verifier construction and webhook verification types.                                                                                                                                                             |
+| `@kovojs/core/diagnostics`                                     | Stable diagnostic code/result types used by tool integrators.                                                                                                                                                     |
+| `@kovojs/server`                                               | `defineKovo`, schemas, ordinary route/layout/query/mutation/endpoint declarations, explicit access/posture constructors, and common responses.                                                                    |
+| Focused `@kovojs/server/*` task paths                          | Build/vite, custom adapters/assembly, security, Postgres lifecycle, tasks, agents, storage HTTP adapters, render-tree, static export, and other advanced capability families. No generic `/advanced` or `/types`. |
+| `@kovojs/browser`                                              | App-authored handlers, derives, optimism, and trusted output constructors.                                                                                                                                        |
+| `@kovojs/browser/client`                                       | At most one custom-shell installer plus the few callback/result types an installer user must name.                                                                                                                |
+| `@kovojs/style`                                                | `create`, `attrs`, vars/keyframes/theme functions, tokens, and opaque input/handle types; at most 15 directly documented root names.                                                                              |
+| `@kovojs/test/*`                                               | Inferred harness plus focused HTML/header/database helpers; no parallel server-testing home.                                                                                                                      |
+| `@kovojs/ui/<component>` and `@kovojs/headless-ui/<primitive>` | Component/prop and attribute-builder contracts generated from one anatomy manifest.                                                                                                                               |
+| `@kovojs/icons/<glyph>`                                        | Generated glyph functions with `IconProps` and the canonical render-result contract.                                                                                                                              |
 
 ## Decision gates
 
-- [ ] **D1 — app-contract shape (timebox: 2 calendar weeks of spike effort).** Build *two* spike
+- [ ] **D1 — app-contract shape (timebox: 2 calendar weeks of spike effort).** Build _two_ spike
       arms and compare on the same fixture matrix:
   - Arm A: receiver provenance for `app.route/layout/query/mutation/endpoint/task` — the compiler
     proves the receiver originates from the app-authored `defineKovo` call across ordinary local
@@ -344,10 +344,12 @@ The target package topology is:
     app-context generic threaded through the existing free-function primitives plus
     compiler-generated (never hand-authored) registry augmentation, and renegotiate G22-G24 with
     revised targets recorded in this file.
-- [ ] **D2 — release model.** Per-batch removals land continuously on `main`; exactly **one**
+- [x] **D2 — release model.** Per-batch removals land continuously on `main`; exactly **one**
       published breaking technical-preview minor ships the cumulative cut together with
       `kovo fix api-v1`. Interim publishes, if any, are documented as unstable snapshots in
       `STABILITY.md`.
+  - Decision: implementation batches merge and push after major verified milestones, as requested
+    at roadmap activation; package publication remains the single cumulative capstone action.
 
 ## Implementation roadmap
 
@@ -359,22 +361,33 @@ and generated examples.
 
 ### Track 0 — Adoption hygiene (S; do these when this plan is adopted)
 
-- [ ] Repoint perf ownership from `plans/fast-kovo-check2.md` (its open items are deliberately
-      deferred/rejected) to `plans/fast-kovo-check3.md`, including its open lighter-loader
-      follow-up; record the check3 measurements (commerce cold ~9.4s → ~6.5-7s) as the feasibility
-      evidence for G4.
-- [ ] Resolve the unresolved merge-conflict markers in `plans/postgres-v1-devex.md` (lines
+- [x] Repoint perf ownership from archived fast-check round 2 to
+      `plans/fast-kovo-check3.md`: port the still-live cosmetic absolute-path cache-value cleanup
+      beside the open lighter-loader follow-up, retain the explicit tsgo/teardown/respawn
+      rejections as history, and record the check3 measurements (commerce cold ~9.4s →
+      ~6.5-7s) as the feasibility evidence for G4.
+  - Evidence: `plans/fast-kovo-check3.md` now owns open items 4 and 5, records the
+    ~9.4s→~6.5-7s cold result, and makes the tsgo rejection explicit; the round-2 ledger is
+    summarized in `plans/archive.md`.
+- [x] Resolve the unresolved merge-conflict markers in the Postgres v1 DevEx ledger (lines
       ~131-153) and archive it plus the other completed-but-unarchived ledgers (`api-audit.md`,
       `api-cleanup.md`, `audit-plan.md`, `capability-surface-redesign.md`, `better-docs.md`,
       `better-testing.md`), porting still-live decisions into the Track 5 decision ledger.
       Note the `better-docs.md` name collision: `plans/archive.md` already records a retired ledger
       by that name.
-- [ ] Reconcile three stale or unreproducible claims before they drive decisions: (a) the style
-      `$$css`/`__rules` exposure claim vs `plans/api-cleanup.md` 9B's 2026-06-29 opaque-brand
+  - Evidence: `plans/archive.md` records the eight reconciled ledgers; the completed side of the
+    Postgres DEC-G conflict was retained, and `plans/api-surface-foundations.md` plus the 5a/5b/5c
+    ledgers own the live decisions.
+- [x] Reconcile three stale or unreproducible claims before they drive decisions: (a) the style
+      `$$css`/`__rules` exposure claim vs archived API-cleanup 9B's 2026-06-29 opaque-brand
       evidence — recompute from freshly packed dist, not local `dist/`; (b) the "44 orphan headless
       transition types" figure, which no current artifact reproduces (likely conflated with
       api-audit's completed ~266-type removal and the 44 `*Styles` tables); (c) label the
       "524 names" vs "554 declarations" units wherever cited.
+  - Evidence: fresh style/headless tarballs show the style internals/raw tuple and 31 exported
+    `*Move*`/`*Typeahead*` option/result types rather than 44; removal remains gated on mechanical
+    value/signature/generated-facade reachability. The manifest inventory reports 524 server-root
+    names and 554 server declarations across all public subpaths.
 - [ ] Create the known-failure register: one ID per confirmed baseline defect (auth-origin fix
       required, silent 75s dev start, help exit 1, vacuous check `OK`, `dist/.kovo` stale graph,
       KV417 coupling in fresh-app check, 4.4-4.8 GiB catalog OOM, internal classifier mock in
@@ -496,7 +509,7 @@ granularity).
   - `--dry-run` performs zero filesystem/process writes, catalog/list equals the registry, and
     failure output distinguishes completed from planned work.
   - Close the known 4.4-4.8 GiB OOM here, beside its cause: fix source-closure scanning so the
-    Track 2 all-44-component fixture typechecks/checks/builds within peak RSS ≤2.0 GiB *(prov.)*
+    Track 2 all-44-component fixture typechecks/checks/builds within peak RSS ≤2.0 GiB _(prov.)_
     (or a lower ratified value in `devex-budgets.json`) even when copied components are not
     imported. (Track 2 keeps only the reproducer + failing
     test; the register lists the OOM as expected-failing until this lands.)
@@ -533,7 +546,7 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
     time and install size (G16), and the agent-journey fixture (G12, with Track 3).
 - [ ] (M) Add `scripts/devex-benchmark.mjs` and `devex-budgets.json`: report cold, warm, and
       one-file-incremental timings plus peak RSS and browser bootstrap bytes (G3, G4). Record
-      baselines *first*, then ratify each budget with a recorded derivation (baseline, target
+      baselines _first_, then ratify each budget with a recorded derivation (baseline, target
       rationale, noise allowance, sample count N, statistic, threshold = budget + k·noise) — a
       failure is a statistically significant budget breach under that recorded procedure, not a
       single noisy sample. Name the runner: provision a pinned reference runner or explicitly
@@ -585,8 +598,8 @@ size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
       already exists; cite and reuse it.
 - [ ] (S) Add the agent-journey fixture (G12) to the golden-journey runner: scaffold→edit→check→fix
       using only JSON diagnostics and local docs, offline.
-Standing rule for Track 5 (not a one-shot checkbox — each batch's own checklist carries the
-proof): every breaking batch regenerates the snapshot in the same checkpoint.
+      Standing rule for Track 5 (not a one-shot checkbox — each batch's own checklist carries the
+      proof): every breaking batch regenerates the snapshot in the same checkpoint.
 
 - [ ] **Track 3 exit:** G12 green; G13's snapshot and `update-docs` clauses green from packed
       artifacts (no placeholder snapshot can report success). G13's digest-emission and
@@ -935,23 +948,23 @@ ambiguous rewrites, land coherent package checkpoints, and run the full scorecar
 
 ## Cross-cutting risk register
 
-| Risk | Failure mode | Required mitigation / proving evidence |
-| --- | --- | --- |
-| Security simplification becomes security weakening | A convenient facade bypasses provenance, CSRF, access, SQL, confidential-data, or fail-closed runtime checks. | Compiler symbol-identity fixtures, adversarial sink tests, byte-equivalent diagnostics, runtime-floor tests, and emitted-artifact inspection for every facade batch. |
-| Type system is sold as proof | Branded values are forged or a cast bypasses a claimed security boundary. | Private witnesses plus runtime validation; docs explicitly label types defense-in-depth; AST/provenance remains authoritative under `SPEC.md` §2/§6.6. |
-| The D1 bet fails late or ambiguously | Tracks 4-5b stall on an unproven compiler capability. | Timebox + pre-registered pass criteria + Arm B built in the same spike, so failure selects a fallback instead of stalling; tier-2 gates renegotiate, tier-1 gates ship regardless. |
-| Type inference cost | Editors stall or error messages expand into internal conditional types. | Named opaque public results, positive/negative fixture corpus, numeric language-service latency and diagnostic-size budgets from the D1 baseline. |
-| Subpath fragmentation | Root looks smaller but users must guess among many homes. | Semantic task paths only, one canonical home, generated task index, no `/types` or `/advanced`, real example required per path; the decision ledger is the gate. |
-| Duplicate module identity | Private symbols/WeakMaps differ across duplicate package copies. | Peer/lock coherence, `kovo doctor` duplicate detection, packed duplicate-copy adversarial test, actionable hard failure. |
-| Browser/server boundary regression | A re-export pulls `node:crypto`, storage, DB, or filesystem code into browser bundles. | Per-entry browser bundle and side-effect tests; Node-builtin scan; size budget. |
-| Unsound caching | Fast check uses stale source/config/compiler/security facts. | Content-address every input, explicit completed-build token, mutation/adversarial cache suite, source-first default. |
-| Local defaults leak into production | Loopback origin, embedded DB, weak secrets, or relaxed retention reaches deploy. | Loopback-only derivation, production refusal tests, explicit preset/posture build gate, no compatibility fallback. |
-| Diagnostic disclosure | Runtime error detail leaks credentials, SQL, secret values, or private paths. | Central safe-cause registry, redaction/hostile-value tests, correlation to server-only detail. |
-| Devtool ships to production | Source and runtime graph become an exposed endpoint or asset. | Production bundle/route census and HTTP probes across Node/static/preset outputs. |
-| Documentation drift | Generated pages, READMEs, local docs, and code teach different APIs. | Deterministic generation plus source digest, packed compilation, owning manifests, version display, no successful placeholder snapshot. |
-| Migration damages intent | Codemod guesses at a security or deployment decision. | Mechanical rewrites only; structured refusal for ambiguous semantics; clean-worktree/diff preview and rollback instructions. |
-| The gate suite makes CI unaffordable | Per-PR wall-clock grows until gates get skipped. | Track 2's CI meta-budget with an explicit per-PR vs nightly split. |
-| Charter/child-ledger drift | Child ledgers diverge from the scorecard. | Each child ledger names its charter gates (G-IDs); the capstone exit requires per-gate proof, so drift surfaces as a red gate. |
+| Risk                                               | Failure mode                                                                                                  | Required mitigation / proving evidence                                                                                                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Security simplification becomes security weakening | A convenient facade bypasses provenance, CSRF, access, SQL, confidential-data, or fail-closed runtime checks. | Compiler symbol-identity fixtures, adversarial sink tests, byte-equivalent diagnostics, runtime-floor tests, and emitted-artifact inspection for every facade batch.               |
+| Type system is sold as proof                       | Branded values are forged or a cast bypasses a claimed security boundary.                                     | Private witnesses plus runtime validation; docs explicitly label types defense-in-depth; AST/provenance remains authoritative under `SPEC.md` §2/§6.6.                             |
+| The D1 bet fails late or ambiguously               | Tracks 4-5b stall on an unproven compiler capability.                                                         | Timebox + pre-registered pass criteria + Arm B built in the same spike, so failure selects a fallback instead of stalling; tier-2 gates renegotiate, tier-1 gates ship regardless. |
+| Type inference cost                                | Editors stall or error messages expand into internal conditional types.                                       | Named opaque public results, positive/negative fixture corpus, numeric language-service latency and diagnostic-size budgets from the D1 baseline.                                  |
+| Subpath fragmentation                              | Root looks smaller but users must guess among many homes.                                                     | Semantic task paths only, one canonical home, generated task index, no `/types` or `/advanced`, real example required per path; the decision ledger is the gate.                   |
+| Duplicate module identity                          | Private symbols/WeakMaps differ across duplicate package copies.                                              | Peer/lock coherence, `kovo doctor` duplicate detection, packed duplicate-copy adversarial test, actionable hard failure.                                                           |
+| Browser/server boundary regression                 | A re-export pulls `node:crypto`, storage, DB, or filesystem code into browser bundles.                        | Per-entry browser bundle and side-effect tests; Node-builtin scan; size budget.                                                                                                    |
+| Unsound caching                                    | Fast check uses stale source/config/compiler/security facts.                                                  | Content-address every input, explicit completed-build token, mutation/adversarial cache suite, source-first default.                                                               |
+| Local defaults leak into production                | Loopback origin, embedded DB, weak secrets, or relaxed retention reaches deploy.                              | Loopback-only derivation, production refusal tests, explicit preset/posture build gate, no compatibility fallback.                                                                 |
+| Diagnostic disclosure                              | Runtime error detail leaks credentials, SQL, secret values, or private paths.                                 | Central safe-cause registry, redaction/hostile-value tests, correlation to server-only detail.                                                                                     |
+| Devtool ships to production                        | Source and runtime graph become an exposed endpoint or asset.                                                 | Production bundle/route census and HTTP probes across Node/static/preset outputs.                                                                                                  |
+| Documentation drift                                | Generated pages, READMEs, local docs, and code teach different APIs.                                          | Deterministic generation plus source digest, packed compilation, owning manifests, version display, no successful placeholder snapshot.                                            |
+| Migration damages intent                           | Codemod guesses at a security or deployment decision.                                                         | Mechanical rewrites only; structured refusal for ambiguous semantics; clean-worktree/diff preview and rollback instructions.                                                       |
+| The gate suite makes CI unaffordable               | Per-PR wall-clock grows until gates get skipped.                                                              | Track 2's CI meta-budget with an explicit per-PR vs nightly split.                                                                                                                 |
+| Charter/child-ledger drift                         | Child ledgers diverge from the scorecard.                                                                     | Each child ledger names its charter gates (G-IDs); the capstone exit requires per-gate proof, so drift surfaces as a red gate.                                                     |
 
 ## Sequencing and existing-plan ownership
 
@@ -966,7 +979,7 @@ contract; recipes/catalogs wait for Track 5's public shape. The capstone is the 
 release gate. Critical path: **D1 spike → 5b server/harness batches → capstone**; everything else
 is slack to schedule around it.
 
-When adopted, this file becomes the charter: each track seeds a child ledger with
+This file is the charter. Each track owns a child ledger with
 one-proof-one-box granularity (suggested: `devex-first-loop.md`, `devex-gates.md`,
 `devex-agent-loop.md`, `app-contract.md`, one ledger per Track 5 batch group,
 `devex-feel-and-teach.md`), and this file keeps the scorecard, decision gates, track exits, and
@@ -980,8 +993,8 @@ sequencing. These ledgers retain implementation detail until compacted:
   decide those contracts.
 - `plans/example-readability.md` and `plans/awesome-examples.md`: example presentation and
   coverage.
-- `plans/api-audit.md` and `plans/api-cleanup.md`: historical surface decisions (archive per
-  Track 0); this plan supersedes only the new world-class targets, not verified evidence.
+- `plans/api-surface-foundations.md` and the 5a/5b/5c child ledgers: current public-surface
+  ownership. Historical audit/cleanup evidence is summarized in `plans/archive.md`.
 
 Checkpoint commits should be closure-oriented: measurement gates, first-run journey, CLI/source
 truth, app contract, one coherent package-surface batch, test harness, feedback surfaces, docs,

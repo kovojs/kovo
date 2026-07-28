@@ -1,7 +1,7 @@
 # Round-11 Papercuts 30
 
 Created 2026-07-03. Source of truth remains `SPEC.md`. Over-block + dev-tooling + honesty-gap items from the Round-11
-acceptance dogfood AFTER `plans/fundamental-fixes-followup-6.md` + `plans/postgres-v1-devex.md` landed on
+acceptance dogfood AFTER `plans/fundamental-fixes-followup-6.md` + the archived Postgres v1 DevEx ledger landed on
 `origin/main` (`c27edd34c`). Security fail-opens are in `plans/claude-bugz-32.md`. Dogfooded in an isolated
 `origin/main` worktree; `/Users/mini/kovo` untouched. Line numbers cite `origin/main`.
 

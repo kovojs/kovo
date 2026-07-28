@@ -2,7 +2,7 @@
 
 Created 2026-07-01. Source of truth remains `SPEC.md`. This ledger captures the non-security
 result of an exhaustive local dogfood pass after `plans/fundamental-fixes.md` and
-`plans/capability-surface-redesign.md` were marked complete. The one confirmed security/soundness
+the Capability Surface Redesign ledger (now in `plans/archive.md`) were marked complete. The one confirmed security/soundness
 gap from this pass is filed in `plans/bugz-23.md`.
 
 ## Scope

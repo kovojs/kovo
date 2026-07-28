@@ -706,7 +706,7 @@ export async function runBuildCommand(
       () => {},
       () => {},
     );
-    // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
+    // Archived fast-kovo-check2 #A dedup: the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
     // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
     // analysis in each — the SAME analysis runKovoBuildCheckPreflight runs authoritatively just
@@ -897,7 +897,7 @@ export async function runBuildCommand(
     }
 
     if (options.check) {
-      // plans/fast-kovo-check2.md #6: validate-only. Every diagnostic-producing phase has
+      // Archived fast-kovo-check2 #6: validate-only. Every diagnostic-producing phase has
       // already run by this point — the tsc preflight, the kovo-check security gate
       // (which throws fail-closed on KV407/KV414/etc.), the client/server compiler transform
       // that raises KV235, and the preset inspection above. `--check` skips ONLY the
@@ -1360,7 +1360,7 @@ async function runTypeScriptBuildPreflight(
   }
 
   // Incremental preflight: persist a `.tsbuildinfo` under the gitignored `.kovo/cache` so a
-  // warm rebuild only re-checks changed files (plans/fast-kovo-check2.md #2). `--noEmit` is
+  // warm rebuild only re-checks changed files (archived fast-kovo-check2 #2). `--noEmit` is
   // kept, so only the build-info is written, never JS; tsc still invalidates by file content,
   // so type errors continue to surface on the affected files.
   // The TypeScript subprocess must never receive the project-controlled cache path directly:

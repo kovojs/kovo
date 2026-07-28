@@ -1,6 +1,6 @@
 # Plan: Make `kovo build` faster (round 3)
 
-Status: **#1 + #3 implemented & merged; #2 not chosen; #4 → lighter-loader follow-up (see below)**
+Status: **#1 + #3 implemented & merged; #2 rejected; #4 + cache-value portability cleanup remain**
 Owner: perf
 
 ## Implementation status (2026-06-29)
@@ -8,6 +8,12 @@ Owner: perf
 Implemented this round: **#1 (drizzle memo)** + **#3 (overlap tsc preflight)**. Combined on
 commerce: cold `kovo build` ~9.4s → **~6.5–7s**, warm ~2.6s → **~2.0s**, byte-identical KV
 diagnostics, drizzle suite 620/620, create-kovo build gate green.
+
+- **Round-2 ownership port:** the only still-live `fast-kovo-check2.md` item is the cosmetic
+  absolute path in persistent compiler-cache result values. Cross-path cache hits are already
+  proven; the remaining cleanup belongs here beside the lighter-loader work. The round-2
+  teardown, native-loader, and rejected experiment notes remain historical in
+  `plans/archive.md`.
 
 - **#2 (tsgo):** not chosen this round (#3 covers the tsc preflight at lower risk / no native dep).
 - **#4 (skip the vite load):** pursuing the **lighter-loader** variant (keep evaluating the app
@@ -60,8 +66,11 @@ and **do not stack** (pick one as primary); item 1 is independent and **stacks**
     profile prediction). **The biggest win and the lowest risk — do this first.** Scales with app size
     (more functions ⇒ larger absolute saving).
 
-- [ ] **2. Use `@typescript/native-preview` (tsgo) for the `tsc --noEmit` preflight** (JS-`tsc` fallback).
-      Est: **cold ~−1.6s (~17–19%)** and **warm ~−0.6s (~24%)** · Effort: low · Risk: medium · Confidence: high.
+- [x] **2. Reject `@typescript/native-preview` (tsgo) for the `tsc --noEmit` preflight.**
+  - Decision: #3 overlaps the existing TypeScript preflight with independent work, preserving the
+    supported compiler and avoiding a second native/fallback path. Reconsider only with a new
+    measured budget breach and equivalent toolchain coverage.
+  - Historical estimate: **cold ~−1.6s (~17–19%)** and **warm ~−0.6s (~24%)**.
   - The preflight itself drops **~5×**: isolated tsc 1.93–2.17s → tsgo 0.35–0.44s cold (0.77s → 0.17s
     warm). Helps **both** cold and warm because the preflight runs on every build. tsgo already ships in
     the repo root **and both starter templates**, so it's available where it matters.
@@ -98,6 +107,11 @@ and **do not stack** (pick one as primary); item 1 is independent and **stacks**
     so this is the one item with no measured number. Needs a dedicated follow-up spike: the open question
     is whether the app object can be obtained without evaluating `createApp` under the kovo compiler
     transform. Highest ceiling, highest uncertainty.
+
+- [ ] **5. Remove the remaining absolute path from persistent compiler-cache result values.**
+  - The key and cross-path hit behavior are already portable; this is a value/provenance cleanup.
+    Prove a cache generated in one absolute worktree contains no first-worktree path, restores in a
+    second path, remains a hit, and emits byte-identical diagnostics.
 
 ### Combined potential
 

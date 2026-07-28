@@ -77,7 +77,7 @@ if (
 // other `kovo` command is one-shot — once `mainAsync` resolves the command result is
 // fully written, so exit promptly instead of waiting out a multi-second event-loop
 // drain on handles the run can't reach (a loaded app module's top-level resources such
-// as a PGlite client, plus vite-plus build servers). See plans/fast-kovo-check2.md #1:
+// as a PGlite client, plus vite-plus build servers). See the archived fast-kovo-check2 #1:
 // this collapsed a ~14.3s warm `kovo build` to ~3.6s with byte-identical diagnostics.
 // NOTE: this file is also copied verbatim to a `.mjs` and run as plain JavaScript by the
 // "does not respawn for a compiled JavaScript bin entrypoint" test, so it must stay free of
