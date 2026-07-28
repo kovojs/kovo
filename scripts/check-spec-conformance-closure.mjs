@@ -102,7 +102,7 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/inline-loader.ts#20f1d4a5dfc82c788169bbbf007314ede0a76e284689ff210367268bf10bcd01#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/db.ts#8cb5a33986098b921ad4f966323cb98db810dddcd36578071fc772ab7d92b28e#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
+  'packages/cli/src/commands/db.ts#7eedbb67422433d5e6f6a41045a1e07a231b53d71482285ca4a3ebb60694549a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
@@ -113,7 +113,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
     'packages/cli/src/add-catalog.ts',
-    'b97ffe89a21a03af3f358f60cb65104fa0959776ad7224e0d2678a239a781b86',
+    '4223c4e089295aecd0aa972fa96e8a1f2fb36dbe3e967e2027e823b3df798683',
   ],
   [
     'packages/cli/src/artifact-provenance.ts',
@@ -126,15 +126,15 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'e7ffee6190f6ba8d1b268c7d427f111b926710714bd684de7bcb30572d7ded5c'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '0f0e2f128f0e3a6e3e5a0e26d120e9244222d36844309b6bba8c7948e2a29a16',
+    '88312547faf8c82900a6c244e7a20bc1fb145378eacd1d0e91b2b7028a7a231d',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    'c66fe4ae7cf3b1088d1773dc977e12c221d6289012eea212acb0a68d3567d6af',
+    'a41cd5fb427ac2864a9c0908b5ffcec48d2352a823402082f3323ee7538da3c8',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    'fa8ed63059c63d8e7cca89e3325f7b887ccd34dfcf80464bdc1c27aaa70b6eea',
+    '031422631615a9c5a6905e4424abd5cfe173ab5ced05dc5cc06da562cec8199c',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
@@ -197,12 +197,16 @@ const reviewedExcludedSourceReachability = new Set([
 // outer-owner digests; any new shape or owner edit must be reviewed explicitly.
 const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
+    'packages/cli/src/diagnostic.ts#literal#74be49f28556e2044cf422927305cac86f122d481acc1743dd23066e9c6245a6#5bf626e300991ec51af8087f8dd448707e3bfca3067fe1a22d30d7d6649b8f4f',
+    'Module-private kovo-diagnostic/v1 constructor; exact own data is copied into a frozen record whose authority is realm-local registry membership, with registered KV severity/help owned by the core registry.',
+  ],
+  [
     'packages/cli/src/diagnostic.ts#literal#34451147e5e32b9200d3542bc28e57a9df9d336aa4b9c9428601e5ba339b5170#da1c062242e8492954ca9ba18856be3ed89831f697a06081eff40fe28aff4083',
-    'Transport-neutral kovo-diagnostic/v1 constructor; registered KV severity/help are registry-owned and CLI codes are namespace-checked.',
+    'Invocation-error projection into the module-private kovo-diagnostic/v1 constructor.',
   ],
   [
     'packages/cli/src/diagnostic.ts#literal#6469ce0e5e5ba5a70063e8b2c9e081dc2b2be75400017a5ad7875cf03afde043#80d3b843265fbbf3e9ff3188dfaba07ec29bb21a96ea4e3194ce5c5637dee8df',
-    'Framework command-finding projection into the reviewed kovo-diagnostic/v1 constructor.',
+    'Framework command-finding projection into the module-private kovo-diagnostic/v1 constructor.',
   ],
   [
     'packages/cli/src/commands/build-export.ts#literal#5a87391d0ef0e56239bd18530c212e8579a9935ef567ce1b48212149b66d386b#58a0b16ea437f43a43903be9c7b70f0cd5f652b934c66534eed982e5efca03b2',

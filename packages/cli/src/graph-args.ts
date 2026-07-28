@@ -1,14 +1,4 @@
-import {
-  AUDIT_ARGV_SPEC,
-  AUDIT_USAGE,
-  CHECK_ARGV_SPEC,
-  CHECK_USAGE,
-  commandArgvError,
-  EXPLAIN_ARGV_SPEC,
-  EXPLAIN_USAGE_LINE,
-  parsedBooleanOption,
-  parseCommandArgv,
-} from './commands-manifest.js';
+import { parseKovoCommandInvocation } from './commands-manifest.js';
 import { writeUsageError } from './shared.js';
 
 /**
@@ -176,42 +166,35 @@ export function isExplainKind(value: string | undefined): value is ExplainKind {
 type CheckArgParseResult =
   | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
   | { environment: true; inputPath: string | undefined; ok: true }
-  | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false }
   | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
-  const parsed = parseCommandArgv(args, CHECK_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('check', parsed, `kovo: ${CHECK_USAGE}`);
+  const parsed = parseKovoCommandInvocation('check', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
 
-  if (parsed.value.positionals[0] === 'env') {
-    if (parsed.value.positionals.length > 2) {
-      return { family: 'env', kind: 'too-many-args', ok: false };
-    }
-    return { environment: true, inputPath: parsed.value.positionals[1], ok: true };
+  if (parsed.value.form === 'environment') {
+    return {
+      environment: true,
+      inputPath: parsed.value.arguments.deployment,
+      ok: true,
+    };
+  }
+  if (parsed.value.form === 'advisories') {
+    return {
+      message: 'kovo: check advisories requires asynchronous command dispatch.\n',
+      ok: false,
+    };
   }
 
-  const family = checkFamilyArg(parsed.value.positionals[0]);
-  if (family !== 'all') {
-    if (parsed.value.positionals.length > 2) {
-      return { family: parsed.value.positionals[0], kind: 'too-many-args', ok: false };
-    }
-    return { family, inputPath: parsed.value.positionals[1], ok: true };
-  }
-  if (parsed.value.positionals.length > 1) {
-    return { family: parsed.value.positionals[0], kind: 'unsupported-family', ok: false };
-  }
-  return { family, inputPath: parsed.value.positionals[0], ok: true };
+  return {
+    family: parsed.value.arguments.family ?? 'all',
+    inputPath: parsed.value.arguments.graph,
+    ok: true,
+  };
 }
 
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
-  if ('message' in error) {
-    return writeUsageError(error.message);
-  }
-  const message =
-    error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableArg(error.family)}. expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n`
-      : `kovo: ${CHECK_USAGE}\n`;
-  return writeUsageError(message);
+  return writeUsageError(error.message, 'check');
 }
 
 type AuditArgParseResult =
@@ -219,15 +202,12 @@ type AuditArgParseResult =
   | { message: string; ok: false };
 
 export function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
-  const parsed = parseCommandArgv(args, AUDIT_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('audit', parsed, AUDIT_USAGE);
-  if (parsed.value.positionals.length > 1) {
-    return { message: `kovo: ${AUDIT_USAGE}`, ok: false };
-  }
+  const parsed = parseKovoCommandInvocation('audit', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
 
   return {
-    failOnFindings: parsedBooleanOption(parsed.value, 'failOnFindings'),
-    inputPath: parsed.value.positionals[0],
+    failOnFindings: parsed.value.options.failOnFindings,
+    inputPath: parsed.value.arguments.graph,
     ok: true,
   };
 }
@@ -237,233 +217,123 @@ type ExplainArgParseResult =
   | { message: string; ok: false };
 
 export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
-  const parsed = parseCommandArgv(args, EXPLAIN_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('explain', parsed, `kovo: usage: ${EXPLAIN_USAGE_LINE}`);
+  const parsed = parseKovoCommandInvocation('explain', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
 
-  const flags = {
-    has: (flag: string) => parsedBooleanOption(parsed.value, flag),
-  };
-  const positional = parsed.value.positionals;
-  const modeFlags = [
-    'access',
-    'agent',
-    'authLifecycle',
-    'authorization',
-    'capabilities',
-    'cookies',
-    'endpoints',
-    'grants',
-    'modelBoundaries',
-    'revealed',
-    'sourcesSinks',
-    'tasks',
-    'trust',
-    'unguarded',
-    'unscoped',
-  ].filter((flag) => flags.has(flag));
-  if (modeFlags.length > 1) return explainUsage();
-
-  if (flags.has('authLifecycle')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 0
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
+  const invocation = parsed.value;
+  switch (invocation.form) {
+    case 'target':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: {
+          kind: invocation.arguments.kind,
+          layouts: invocation.options.layouts,
+          optimistic: invocation.options.optimistic,
+          target: invocation.arguments.target,
+        },
+      };
+    case 'document':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { document: true },
+      };
+    case 'sources-sinks':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { sourcesSinks: true },
+      };
+    case 'tasks':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { tasks: true },
+      };
+    case 'agent':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { agent: true },
+      };
+    case 'grants':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { grants: true },
+      };
+    case 'endpoints':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { endpoints: true },
+      };
+    case 'revealed':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { revealed: true },
+      };
+    case 'trust':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { trust: true },
+      };
+    case 'capabilities':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { capabilities: true },
+      };
+    case 'cookies':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { cookies: true },
+      };
+    case 'authorization':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: { authorization: true },
+      };
+    case 'access':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: {
+          access: true,
+          failOnFindings: invocation.options.failOnFindings,
+        },
+      };
+    case 'unguarded':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: {
+          failOnFindings: invocation.options.failOnFindings,
+          unguarded: true,
+        },
+      };
+    case 'unscoped':
+      return {
+        inputPath: invocation.arguments.graph,
+        ok: true,
+        options: {
+          failOnFindings: invocation.options.failOnFindings,
+          unscoped: true,
+        },
+      };
+    case 'auth-lifecycle':
+      return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
+    case 'model-boundaries':
+      return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
+    case 'attest':
+      return {
+        message: 'kovo: explain --attest requires asynchronous command dispatch.\n',
+        ok: false,
+      };
   }
-
-  if (flags.has('agent')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { agent: true } };
-  }
-
-  if (flags.has('authorization')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { authorization: true } };
-  }
-
-  if (flags.has('grants')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { grants: true } };
-  }
-
-  if (flags.has('modelBoundaries')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 0
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
-  }
-
-  if (flags.has('access')) {
-    if (flags.has('layouts') || flags.has('optimistic') || positional.length > 1) {
-      return explainUsage();
-    }
-    return {
-      inputPath: positional[0],
-      ok: true,
-      options: { access: true, failOnFindings: flags.has('failOnFindings') },
-    };
-  }
-
-  if (flags.has('sourcesSinks')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 0
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: undefined, ok: true, options: { sourcesSinks: true } };
-  }
-
-  if (flags.has('tasks')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { tasks: true } };
-  }
-
-  if (flags.has('endpoints')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { endpoints: true } };
-  }
-
-  if (flags.has('revealed')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { revealed: true } };
-  }
-
-  if (flags.has('trust')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { trust: true } };
-  }
-
-  if (flags.has('capabilities')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { capabilities: true } };
-  }
-
-  if (flags.has('cookies')) {
-    if (
-      flags.has('failOnFindings') ||
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      positional.length > 1
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: positional[0], ok: true, options: { cookies: true } };
-  }
-
-  if (flags.has('unguarded') || flags.has('unscoped')) {
-    if (flags.has('layouts') || flags.has('optimistic') || positional.length > 1) {
-      return explainUsage();
-    }
-    const options = flags.has('unguarded')
-      ? ({ failOnFindings: flags.has('failOnFindings'), unguarded: true } as const)
-      : ({ failOnFindings: flags.has('failOnFindings'), unscoped: true } as const);
-    return { inputPath: positional[0], ok: true, options };
-  }
-
-  if (flags.has('failOnFindings')) return explainUsage();
-
-  const [kind, target, inputPath, extra] = positional;
-  if (kind === 'document') {
-    if (
-      flags.has('layouts') ||
-      flags.has('optimistic') ||
-      (target === undefined ? false : inputPath !== undefined)
-    ) {
-      return explainUsage();
-    }
-    return { inputPath: target, ok: true, options: { document: true } };
-  }
-  if (!isExplainKind(kind) || !target || extra) return explainUsage();
-  if (flags.has('layouts') && kind !== 'page') return explainUsage();
-  if (flags.has('optimistic') && kind !== 'mutation') return explainUsage();
-
-  return {
-    inputPath,
-    ok: true,
-    options: {
-      kind,
-      layouts: flags.has('layouts'),
-      optimistic: flags.has('optimistic'),
-      target,
-    },
-  };
-}
-
-function explainUsage(): ExplainArgParseResult {
-  return {
-    message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`,
-    ok: false,
-  };
-}
-
-function stableArg(value: string | undefined): string {
-  return value === undefined ? '-' : JSON.stringify(value);
 }

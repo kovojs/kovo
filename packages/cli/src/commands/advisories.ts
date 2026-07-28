@@ -8,14 +8,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 import type { KovoArtifactProvenance } from '@kovojs/core/internal/graph';
 
-import {
-  ADVISORY_ARGV_SPEC,
-  ADVISORY_USAGE,
-  commandArgvError,
-  parsedStringOption,
-  parseCommandArgv,
-  requiredParsedStringOption,
-} from '../commands-manifest.js';
+import { parseKovoCommandFormInvocation } from '../commands-manifest.js';
 import { discoverGraphInputPaths } from '../graph-input.js';
 import type { CliCommandResult, CliProcessResult } from '../shared.js';
 import { readBoundedRegularFile } from './bounded-regular-file.js';
@@ -98,23 +91,18 @@ interface ParsedSemver {
 
 /** @internal Parse `kovo check advisories` through the manifest-owned grammar. */
 export function parseAdvisoryArgs(args: readonly string[]): AdvisoryArgParseResult {
-  const parsed = parseCommandArgv(args, ADVISORY_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('check advisories', parsed, ADVISORY_USAGE);
-  if (parsed.value.positionals[0] !== 'advisories' || parsed.value.positionals.length > 2) {
-    return { message: `kovo: ${ADVISORY_USAGE}`, ok: false };
-  }
-  const severity = requiredParsedStringOption(parsed.value, 'severityFloor') as AdvisorySeverity;
-  const attestation = parsedStringOption(parsed.value, 'attestation');
-  const feed = parsedStringOption(parsed.value, 'feed');
-  const graphPath = parsed.value.positionals[1];
+  const parsed = parseKovoCommandFormInvocation('check', 'advisories', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const { attestation, feed, severityFloor, state } = parsed.value.options;
+  const graphPath = parsed.value.arguments.graph;
   return {
     ok: true,
     options: {
       ...(attestation === undefined ? {} : { attestation }),
       ...(feed === undefined ? {} : { feed }),
       ...(graphPath === undefined ? {} : { graphPath }),
-      severityFloor: severity,
-      statePath: requiredParsedStringOption(parsed.value, 'state'),
+      severityFloor,
+      statePath: state,
     },
   };
 }

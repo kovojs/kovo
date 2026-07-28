@@ -13,14 +13,7 @@ import {
   type SafeComponentFixEdit,
 } from '@kovojs/compiler/internal';
 
-import {
-  commandArgvError,
-  FIX_ARGV_SPEC,
-  FIX_USAGE,
-  parsedBooleanOption,
-  parseCommandArgv,
-  requireSinglePositional,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import type { CliCommandResult } from '../shared.js';
 
 /** @internal Parsed options for the source-rewrite and corpus-report modes. */
@@ -35,27 +28,19 @@ export type FixArgParseResult =
 
 /** @internal Parse `kovo fix` through the manifest-owned argv grammar. */
 export function parseFixArgs(args: readonly string[]): FixArgParseResult {
-  const parsed = parseCommandArgv(args, FIX_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('fix', parsed, FIX_USAGE);
-  const costReport = parsedBooleanOption(parsed.value, 'costReport');
-  const check = parsedBooleanOption(parsed.value, 'check');
-  if (costReport) {
-    if (check || parsed.value.positionals.length > 0) {
-      return {
-        message: `kovo: fix --cost-report does not accept a source path or --check.\n${FIX_USAGE}`,
-        ok: false,
-      };
-    }
+  const parsed = parseKovoCommandInvocation('fix', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  if (parsed.value.form === 'cost-report') {
     return { ok: true, options: { costReport: true } };
   }
 
-  const sourcePath = requireSinglePositional(parsed.value, {
-    label: 'authored source path',
-    name: 'fix',
-    usage: FIX_USAGE,
-  });
-  if (!sourcePath.ok) return sourcePath;
-  return { ok: true, options: { check, sourcePath: sourcePath.value } };
+  return {
+    ok: true,
+    options: {
+      check: parsed.value.options.check,
+      sourcePath: parsed.value.arguments.source,
+    },
+  };
 }
 
 /**

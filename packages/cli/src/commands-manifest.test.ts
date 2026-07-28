@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADD_USAGE,
-  ADVISORY_ARGV_SPEC,
   ADVISORY_USAGE,
   AUDIT_USAGE,
   BUILD_USAGE,
@@ -13,7 +12,6 @@ import {
   COMPILE_USAGE,
   COMPILE_USAGE_LINE,
   COMMANDS_MANIFEST,
-  DB_ARGV_SPEC,
   DB_USAGE,
   DEV_USAGE,
   EXPLAIN_USAGE,
@@ -23,17 +21,10 @@ import {
   INCIDENT_USAGE,
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
-  BUILD_ARGV_SPEC,
-  commandArgvError,
-  COMPILE_ARGV_SPECS,
   formatNoArgsMessage,
   formatRootHelp,
   formatUnknownCommandMessage,
-  parsedBooleanOption,
-  parsedStringListOption,
-  parsedStringOption,
-  parseCommandArgv,
-  requireSinglePositional,
+  parseKovoCommandInvocation,
   resolveCommand,
 } from './commands-manifest.js';
 import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
@@ -199,66 +190,59 @@ describe('commands manifest', () => {
     expect(byName.explain?.usage).toEqual(EXPLAIN_USAGE);
   });
 
-  it('the bin references the manifest usage constants (no inline drift)', () => {
-    // The bin must import the usage constants from the manifest rather than
-    // hard-coding the usage literals, so they cannot diverge.
+  it('routes command modules through the semantic parser without local argv specs', () => {
     expect(cliCommandSource).toMatch(/from '\.\.?\/commands-manifest\.js'/);
-    for (const constant of [
-      'ADD_USAGE',
-      'ADVISORY_USAGE',
-      'BUILD_USAGE',
-      'COMPILE_USAGE',
-      'DB_USAGE',
-      'DEV_USAGE',
-      'EXPORT_USAGE',
-      'FIX_USAGE',
-      'INCIDENT_USAGE',
-      'MCP_USAGE',
-      'UPDATE_DOCS_USAGE',
-    ]) {
-      expect(cliCommandSource, `CLI command modules should reference ${constant}`).toContain(
-        constant,
-      );
-    }
+    expect(cliCommandSource).toContain('parseKovoCommandInvocation');
+    expect(cliCommandSource).not.toContain('parseCommandArgv');
+    expect(cliCommandSource).not.toMatch(/\b[A-Z][A-Z_]+_ARGV_SPEC\b/u);
+    expect(cliCommandSource).not.toContain('validatePositionals');
   });
 
-  it('parses command argv from manifest-owned flag specs', () => {
-    const build = parseCommandArgv(
-      ['src/app.tsx', '--out=dist-prod', '--check', '--preset', 'node', '--no-cache'],
-      BUILD_ARGV_SPEC,
-    );
-    expect(build).toEqual(expect.objectContaining({ ok: true }));
-    if (build.ok) {
-      expect(build.value.positionals).toEqual(['src/app.tsx']);
-      expect(parsedStringOption(build.value, 'out')).toBe('dist-prod');
-      expect(parsedStringOption(build.value, 'preset')).toBe('node');
-      expect(parsedBooleanOption(build.value, 'check')).toBe(true);
-      expect(parsedBooleanOption(build.value, 'cache')).toBe(false);
-    }
+  it('parses every concrete form into semantic arguments and options', () => {
+    expect(
+      parseKovoCommandInvocation('build', [
+        'src/app.tsx',
+        '--out=dist-prod',
+        '--check',
+        '--preset',
+        'node',
+        '--no-cache',
+      ]),
+    ).toEqual({
+      ok: true,
+      value: {
+        arguments: { appModule: 'src/app.tsx' },
+        command: 'build',
+        form: 'build',
+        options: { cache: false, check: true, out: 'dist-prod', preset: 'node' },
+      },
+    });
 
-    const route = parseCommandArgv(
-      [
+    expect(
+      parseKovoCommandInvocation('compile', [
+        'route',
         'src/route.tsx',
         '--rewrite',
         'Cart=./cart.js',
         '--rewrite=Shell=./shell.js',
         '--out',
         'dist/route.tsx',
-      ],
-      COMPILE_ARGV_SPECS.route,
-    );
-    expect(route).toEqual(expect.objectContaining({ ok: true }));
-    if (route.ok) {
-      expect(route.value.positionals).toEqual(['src/route.tsx']);
-      expect(parsedStringListOption(route.value, 'rewrite')).toEqual([
-        'Cart=./cart.js',
-        'Shell=./shell.js',
-      ]);
-      expect(parsedStringOption(route.value, 'out')).toBe('dist/route.tsx');
-    }
+      ]),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        arguments: { source: 'src/route.tsx' },
+        command: 'compile',
+        form: 'route',
+        options: {
+          out: 'dist/route.tsx',
+          rewrite: ['Cart=./cart.js', 'Shell=./shell.js'],
+        },
+      },
+    });
 
-    const advisories = parseCommandArgv(
-      [
+    expect(
+      parseKovoCommandInvocation('check', [
         'advisories',
         '.kovo/graph.json',
         '--feed=https://example.test/feed.json',
@@ -267,29 +251,24 @@ describe('commands manifest', () => {
         '--state',
         '.kovo/advisory-state.json',
         '--severity-floor=critical',
-      ],
-      ADVISORY_ARGV_SPEC,
-    );
-    expect(advisories).toEqual(expect.objectContaining({ ok: true }));
-    if (advisories.ok) {
-      expect(advisories.value.positionals).toEqual(['advisories', '.kovo/graph.json']);
-      expect(parsedStringOption(advisories.value, 'feed')).toBe('https://example.test/feed.json');
-      expect(parsedStringOption(advisories.value, 'severityFloor')).toBe('critical');
-    }
-
-    expect(parseCommandArgv(['--out='], BUILD_ARGV_SPEC)).toEqual({
-      error: 'missing-value',
-      message: 'kovo: build --out requires a directory.\n',
-      ok: false,
-    });
-    expect(parseCommandArgv(['--check=false'], BUILD_ARGV_SPEC)).toEqual({
-      error: 'unknown-option',
-      ok: false,
-      option: '--check=false',
+      ]),
+    ).toEqual({
+      ok: true,
+      value: {
+        arguments: { graph: '.kovo/graph.json' },
+        command: 'check',
+        form: 'advisories',
+        options: {
+          attestation: 'bundle.json',
+          feed: 'https://example.test/feed.json',
+          severityFloor: 'critical',
+          state: '.kovo/advisory-state.json',
+        },
+      },
     });
 
-    const db = parseCommandArgv(
-      [
+    expect(
+      parseKovoCommandInvocation('db', [
         'migrate',
         '--schema',
         'src/schema.ts',
@@ -298,65 +277,72 @@ describe('commands manifest', () => {
         '.kovo/pglite',
         '--migrations',
         'migrations',
-      ],
-      DB_ARGV_SPEC,
-    );
-    expect(db).toEqual(expect.objectContaining({ ok: true }));
-    if (db.ok) {
-      expect(db.value.positionals).toEqual(['migrate']);
-      expect(parsedStringOption(db.value, 'schema')).toBe('src/schema.ts');
-      expect(parsedStringOption(db.value, 'driver')).toBe('pglite');
-      expect(parsedStringOption(db.value, 'dataDir')).toBe('.kovo/pglite');
-      expect(parsedStringOption(db.value, 'migrations')).toBe('migrations');
-    }
+      ]),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        arguments: { action: 'migrate' },
+        command: 'db',
+        form: 'db',
+        options: {
+          dataDir: '.kovo/pglite',
+          driver: 'pglite',
+          migrations: 'migrations',
+          schema: 'src/schema.ts',
+        },
+      },
+    });
   });
 
-  it('renders shared argv errors and single-positional diagnostics', () => {
-    const missing = parseCommandArgv(['--out'], BUILD_ARGV_SPEC);
-    expect(missing).toEqual(
-      expect.objectContaining({
-        error: 'missing-value',
-        ok: false,
-      }),
-    );
-    if (!missing.ok) {
-      expect(commandArgvError('build', missing, 'usage: kovo build <app-module>')).toEqual({
-        message: 'kovo: build --out requires a directory.\nusage: kovo build <app-module>',
-        ok: false,
-      });
-    }
-
-    const unknown = parseCommandArgv(['--wat'], BUILD_ARGV_SPEC);
-    if (!unknown.ok) {
-      expect(commandArgvError('build', unknown, 'usage: kovo build <app-module>')).toEqual({
-        message: 'kovo: unknown build option "--wat".\nusage: kovo build <app-module>',
-        ok: false,
-      });
-    }
-
-    const parsed = parseCommandArgv(['one.tsx', 'two.tsx'], BUILD_ARGV_SPEC);
-    expect(parsed).toEqual({
-      error: 'invalid-value',
-      message: 'kovo: build accepts one app module path.\n',
+  it('rejects missing values, boolean equals, surplus positionals, and form collisions', () => {
+    expect(parseKovoCommandInvocation('build', ['--out='])).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining('kovo: build --out requires a directory.'),
       ok: false,
     });
-
-    expect(
-      requireSinglePositional(
-        {
-          arguments: new Map(),
-          options: new Map(),
-          positionals: ['one.tsx', 'two.tsx'],
-        },
-        {
-          label: 'app module path',
-          name: 'build',
-          usage: 'usage: kovo build <app-module>',
-        },
-      ),
-    ).toEqual({
-      message: 'kovo: build accepts one app module path.\nusage: kovo build <app-module>',
+    expect(parseKovoCommandInvocation('build', ['src/app.tsx', '--check=false'])).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining('kovo: unknown build option "--check=false".'),
       ok: false,
+    });
+    expect(parseKovoCommandInvocation('build', ['one.tsx', 'two.tsx'])).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining('kovo: build accepts one app module path.'),
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('explain', ['--tasks', '--agent'])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('explain', [])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('fix', [])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('mcp', ['surplus'])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('update-docs', ['surplus'])).toMatchObject({
+      error: 'usage',
+      ok: false,
+    });
+    expect(
+      parseKovoCommandInvocation('explain', [
+        '--attest=https://app.example',
+        '--artifact=graph.json',
+        `--trust-anchor=sha256:${'a'.repeat(64)}`,
+      ]),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        command: 'explain',
+        form: 'attest',
+        options: { attest: 'https://app.example' },
+      },
     });
   });
 });

@@ -121,18 +121,7 @@ import {
 } from '@kovojs/server/internal/runtime-registry-wire';
 import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
-import {
-  BUILD_ARGV_SPEC,
-  BUILD_USAGE,
-  commandArgvError,
-  EXPORT_ARGV_SPEC,
-  EXPORT_USAGE,
-  parsedBooleanOption,
-  parsedStringArgument,
-  parsedStringOption,
-  parseCommandArgv,
-  requiredParsedStringOption,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
@@ -564,35 +553,21 @@ interface SelectedKovoBuildPreset {
 }
 
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
-  const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
-  if (!parsed.ok) return buildArgvError(parsed);
-
-  const appModule = parsedStringArgument(parsed.value, 'appModule');
-  if (appModule === undefined) throw new TypeError('Kovo build schema omitted appModule.');
-  const presetValue = parsedStringOption(parsed.value, 'preset');
-  const preset = presetValue as KovoBuildPresetName | undefined;
+  const parsed = parseKovoCommandInvocation('build', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const appModule = parsed.value.arguments.appModule;
+  const preset = parsed.value.options.preset;
 
   return {
     ok: true,
     options: {
       appModulePath: appModule,
-      cache: parsedBooleanOption(parsed.value, 'cache'),
-      check: parsedBooleanOption(parsed.value, 'check'),
-      outDir: requiredParsedStringOption(parsed.value, 'out'),
+      cache: parsed.value.options.cache,
+      check: parsed.value.options.check,
+      outDir: parsed.value.options.out,
       ...(preset === undefined ? {} : { preset }),
     },
   };
-}
-
-function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('build', error, buildUsage());
-}
-
-function buildUsage(): string {
-  return buildJoinStrings([BUILD_USAGE, ''], '\n', 'Build usage lines');
 }
 
 function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
@@ -600,21 +575,18 @@ function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefine
 }
 
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
-  const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
-  if (!parsed.ok) return exportArgvError(parsed);
-
-  const appModule = parsedStringArgument(parsed.value, 'appModule');
-  if (appModule === undefined) throw new TypeError('Kovo export schema omitted appModule.');
-
-  const assetBase = parsedStringOption(parsed.value, 'assetBase');
-  const distDir = parsedStringOption(parsed.value, 'dist');
-  const manifestFile = parsedStringOption(parsed.value, 'manifest');
-  const origin = parsedStringOption(parsed.value, 'origin');
-  const root = parsedStringOption(parsed.value, 'root');
-  const vite = parsedBooleanOption(parsed.value, 'vite');
-  const onNonExportable = parsedBooleanOption(parsed.value, 'skipNonExportable')
-    ? ('skip' as const)
-    : undefined;
+  const parsed = parseKovoCommandInvocation('export', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const appModule = parsed.value.arguments.appModule;
+  const {
+    assetBase,
+    dist: distDir,
+    manifest: manifestFile,
+    origin,
+    root,
+    vite,
+  } = parsed.value.options;
+  const onNonExportable = parsed.value.options.skipNonExportable ? ('skip' as const) : undefined;
 
   return {
     ok: true,
@@ -625,22 +597,11 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
-      outDir: requiredParsedStringOption(parsed.value, 'out'),
+      outDir: parsed.value.options.out,
       ...(root === undefined ? {} : { root }),
       ...(vite ? { vite } : {}),
     },
   };
-}
-
-function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('export', error, exportUsage());
-}
-
-function exportUsage(): string {
-  return buildJoinStrings([EXPORT_USAGE, ''], '\n', 'Export usage lines');
 }
 
 export async function runBuildCommand(

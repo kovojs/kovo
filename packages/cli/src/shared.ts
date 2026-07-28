@@ -1,6 +1,10 @@
 import { Buffer } from 'node:buffer';
 
-import { requireKovoCommandResultProtocol } from './command-schema.js';
+import {
+  kovoCommandExitCode,
+  requireKovoCommandResultProtocol,
+  type KovoCommandName,
+} from './command-schema.js';
 import {
   commandFindingDiagnostic,
   formatKovoDiagnostics,
@@ -16,8 +20,6 @@ import {
  * emit (SPEC.md §11.4 verification surface; §1.1 proof claims).
  */
 export interface KovoCheckResult {
-  /** Stable records used to render non-success output on every transport. */
-  readonly diagnostics?: readonly KovoDiagnosticRecord[];
   exitCode: 0 | 1;
   output: string;
 }
@@ -27,7 +29,7 @@ export type CliCommandResult =
   | {
       readonly diagnostics?: readonly KovoDiagnosticRecord[];
       error: string;
-      exitCode: 1;
+      exitCode: 1 | 2;
     };
 
 /**
@@ -37,6 +39,19 @@ export type CliCommandResult =
  */
 export type CliProcessResult =
   | CliCommandResult
+  | {
+      readonly diagnostics?: readonly KovoDiagnosticRecord[];
+      exitCode: 2;
+      output: string;
+    };
+
+type NormalizedCliProcessResult =
+  | (KovoCheckResult & { readonly diagnostics?: readonly KovoDiagnosticRecord[] })
+  | {
+      readonly diagnostics?: readonly KovoDiagnosticRecord[];
+      error: string;
+      exitCode: 1 | 2;
+    }
   | {
       readonly diagnostics?: readonly KovoDiagnosticRecord[];
       exitCode: 2;
@@ -53,21 +68,37 @@ export const dbOutputVersion = requireKovoCommandResultProtocol('db');
 export function writeCommandResult(
   result: CliProcessResult,
   category: Exclude<KovoDiagnosticCategory, 'usage'> = 'proof',
+  command?: KovoCommandName,
+  exitTwoClass: 'unknown' | 'usage' = 'usage',
 ): 0 | 1 | 2 {
   const normalized = normalizeCommandResultDiagnostics(result, category);
   if ('error' in normalized) {
     process.stderr.write(normalized.error);
-    return 1;
+  } else {
+    const stream = normalized.exitCode === 0 ? process.stdout : process.stderr;
+    stream.write(normalized.output);
   }
 
-  const stream = normalized.exitCode === 0 ? process.stdout : process.stderr;
-  stream.write(normalized.output);
-  return normalized.exitCode;
+  if (command === undefined) return normalized.exitCode;
+  const exitClass =
+    normalized.exitCode === 0 ? 'success' : normalized.exitCode === 1 ? 'finding' : exitTwoClass;
+  const schemaExitCode = kovoCommandExitCode(command, exitClass);
+  if (schemaExitCode !== normalized.exitCode) {
+    throw new TypeError(
+      `Kovo ${command} result exit ${normalized.exitCode} contradicts schema class ${exitClass}.`,
+    );
+  }
+  return schemaExitCode;
 }
 
-export function writeUsageError(message: string): 2 {
+export function writeUsageError(message: string, command?: KovoCommandName): 2 {
   process.stderr.write(formatKovoDiagnostics([usageDiagnostic(message)], 'human'));
-  return 2;
+  if (command === undefined) return 2;
+  const exitCode = kovoCommandExitCode(command, 'usage');
+  if (exitCode !== 2) {
+    throw new TypeError(`Kovo ${command} usage exit ${exitCode} contradicts the CLI contract.`);
+  }
+  return exitCode;
 }
 
 /**
@@ -77,9 +108,9 @@ export function writeUsageError(message: string): 2 {
 export function normalizeCommandResultDiagnostics(
   result: CliProcessResult,
   category: Exclude<KovoDiagnosticCategory, 'usage'>,
-): CliProcessResult {
+): NormalizedCliProcessResult {
   if (result.exitCode === 0) return result;
-  const existing = result.diagnostics;
+  const existing = 'diagnostics' in result ? result.diagnostics : undefined;
   const diagnostics =
     existing === undefined || existing.length === 0
       ? Object.freeze([
@@ -87,9 +118,9 @@ export function normalizeCommandResultDiagnostics(
         ])
       : existing;
   const human = formatKovoDiagnostics(diagnostics, 'human');
-  const normalized: CliProcessResult =
+  const normalized: NormalizedCliProcessResult =
     'error' in result
-      ? { error: human, exitCode: 1 as const }
+      ? { error: human, exitCode: result.exitCode }
       : result.exitCode === 2
         ? { exitCode: 2 as const, output: human }
         : { exitCode: 1 as const, output: human };

@@ -14,17 +14,7 @@ import type {
 
 type DevPluginEnvironment = Parameters<NonNullable<Plugin['applyToEnvironment']>>[0];
 
-import {
-  DEV_ARGV_SPEC,
-  DEV_USAGE,
-  commandArgvError,
-  parseCommandArgv,
-  parsedBooleanOption,
-  parsedIntegerOption,
-  parsedStringArgument,
-  parsedStringOption,
-  requiredParsedStringOption,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import {
@@ -102,14 +92,11 @@ export function parseDevArgs(
   args: readonly string[],
   invocationCwd = kovoCommandBootSecurityDisposition.invocationCwd,
 ): DevArgParseResult {
-  const parsed = parseCommandArgv(args, DEV_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('dev', parsed, DEV_USAGE);
-  const app = parsedStringArgument(parsed.value, 'appModule');
-  if (app === undefined) throw new TypeError('Kovo dev schema omitted appModule.');
-  const root = resolve(invocationCwd, requiredParsedStringOption(parsed.value, 'root'));
-  const port = parsedIntegerOption(parsed.value, 'port');
-  const config = parsedStringOption(parsed.value, 'config');
-  const host = parsedStringOption(parsed.value, 'host');
+  const parsed = parseKovoCommandInvocation('dev', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const app = parsed.value.arguments.appModule;
+  const root = resolve(invocationCwd, parsed.value.options.root);
+  const { config, host, port } = parsed.value.options;
 
   return {
     ok: true,
@@ -117,10 +104,10 @@ export function parseDevArgs(
       appModulePath: resolve(root, app),
       ...(config === undefined ? {} : { configFile: resolve(root, config) }),
       ...(host === undefined ? {} : { host }),
-      mode: requiredParsedStringOption(parsed.value, 'mode'),
+      mode: parsed.value.options.mode,
       ...(port === undefined ? {} : { port }),
       root,
-      strictPort: parsedBooleanOption(parsed.value, 'strictPort'),
+      strictPort: parsed.value.options.strictPort,
     },
   };
 }
@@ -223,7 +210,7 @@ export async function runDevCommand(
   } catch (error) {
     return {
       error: `kovo dev failed: ${error instanceof Error ? error.message : String(error)}`,
-      exitCode: 1,
+      exitCode: 2,
     };
   }
 }

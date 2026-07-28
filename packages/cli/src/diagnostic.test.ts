@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import {
+  assertKovoDiagnosticEnvelope,
   createKovoDiagnostic,
   createKovoDiagnosticEnvelope,
   formatKovoDiagnostics,
@@ -94,6 +95,102 @@ describe('kovo-diagnostic/v1', () => {
         severity: 'warn',
       }),
     ).toThrow(/severity is registry-owned/u);
+  });
+
+  it('rejects unknown registry codes and forged registry-owned fields', () => {
+    expect(() =>
+      createKovoDiagnostic({
+        category: 'proof',
+        code: 'KV999',
+        message: 'unknown registry code',
+      }),
+    ).toThrow(/not registered/u);
+    expect(() =>
+      createKovoDiagnostic({
+        category: 'proof',
+        code: 'KV436',
+        help: 'forged help',
+        message: 'wrong registry help',
+      }),
+    ).toThrow(/help is registry-owned/u);
+    expect(() =>
+      createKovoDiagnostic({
+        category: 'proof',
+        code: 'KV436',
+        message: 'wrong registry severity',
+        severity: 'notice',
+      }),
+    ).toThrow(/severity is registry-owned/u);
+  });
+
+  it('accepts only exact, typed own-data construction fields', () => {
+    expect(() =>
+      createKovoDiagnostic({
+        category: 'proof',
+        code: 'KV436',
+        message: 'surplus data',
+        secret: 'must not cross the boundary',
+      } as never),
+    ).toThrow(/surplus field "secret"/u);
+
+    for (const input of [
+      { category: 'bogus', code: 'KV436', message: 'bad category' },
+      { category: 'proof', code: 'KV436', message: 42 },
+      {
+        category: 'runtime',
+        code: 'KOVO_RUNTIME',
+        message: 'bad severity',
+        severity: 'fatal',
+      },
+      {
+        category: 'runtime',
+        code: 'KOVO_RUNTIME',
+        help: 42,
+        message: 'bad help',
+        severity: 'error',
+      },
+      {
+        category: 'proof',
+        code: 'KV436',
+        message: 'bad source',
+        source: { end: '2', file: 'src/app.ts', start: 1 },
+      },
+    ]) {
+      expect(() => createKovoDiagnostic(input as never)).toThrow(TypeError);
+    }
+
+    const inherited = Object.assign(Object.create({ category: 'proof' }) as object, {
+      code: 'KV436',
+      message: 'inherited category',
+    });
+    expect(() => createKovoDiagnostic(inherited as never)).toThrow(/custom prototype/u);
+
+    let getterCalled = false;
+    const accessor = {
+      category: 'proof',
+      code: 'KV436',
+      get message() {
+        getterCalled = true;
+        return 'accessor';
+      },
+    };
+    expect(() => createKovoDiagnostic(accessor as never)).toThrow(/own data field/u);
+    expect(getterCalled).toBe(false);
+  });
+
+  it('does not transfer authority through copies, lookalikes, or prototypes', () => {
+    const copy = { ...diagnostic };
+    expect(() => createKovoDiagnosticEnvelope([copy])).toThrow(/registry identity/u);
+    expect(() => formatKovoDiagnostics([copy], 'human')).toThrow(/registry identity/u);
+
+    const inherited = Object.create(diagnostic) as KovoDiagnosticEnvelope;
+    expect(() => formatKovoDiagnostics([inherited as never], 'json')).toThrow(/registry identity/u);
+    expect(() =>
+      assertKovoDiagnosticEnvelope({
+        diagnostics: [diagnostic],
+        version: KOVO_DIAGNOSTIC_VERSION,
+      }),
+    ).toThrow(/envelope lacks local registry identity/u);
   });
 
   it('gives invocation errors a stable code, help, and category', () => {

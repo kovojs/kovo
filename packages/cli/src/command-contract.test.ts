@@ -3,22 +3,15 @@ import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
 
-import { KOVO_CLI_SCHEMA, KOVO_COMMAND_SCHEMA } from './command-schema.js';
+import { kovoCommandExitCode, KOVO_CLI_SCHEMA, KOVO_COMMAND_SCHEMA } from './command-schema.js';
 import {
-  BUILD_ARGV_SPEC,
   COMMANDS_MANIFEST,
-  DEV_ARGV_SPEC,
-  EXPORT_ARGV_SPEC,
   commandRequestToArgv,
   formatCommandHelp,
   formatRootHelp,
   KOVO_CLI_VERSION,
-  parseCommandArgv,
+  parseKovoCommandInvocation,
   parseKovoMetaInvocation,
-  parsedBooleanOption,
-  parsedIntegerOption,
-  parsedStringArgument,
-  parsedStringOption,
   renderShellCompletion,
 } from './commands-manifest.js';
 import { main, mainAsync } from './index.js';
@@ -52,6 +45,9 @@ describe('semantic CLI contract', () => {
       expect(entry.aliases).toEqual([...new Set(entry.aliases)]);
       expect(entry.examples.length).toBeGreaterThan(0);
       expect(entry.exits).toMatchObject({ finding: 1, success: 0, usage: 2 });
+      expect(kovoCommandExitCode(entry.name, 'success')).toBe(0);
+      expect(kovoCommandExitCode(entry.name, 'finding')).toBe(1);
+      expect(kovoCommandExitCode(entry.name, 'usage')).toBe(2);
       expect(entry.usage.length).toBeGreaterThan(0);
       if (entry.resultProtocol !== null) {
         expect(entry.resultProtocol).toMatch(/^[a-z][a-z0-9-]*\/v\d+$/u);
@@ -127,37 +123,44 @@ describe('semantic CLI contract', () => {
   });
 
   it('materializes typed defaults, enum/range validation, repetition, and polarity in one parser', () => {
-    const build = parseCommandArgv(['src/app.tsx', '--no-cache'], BUILD_ARGV_SPEC);
-    expect(build).toMatchObject({ ok: true });
-    if (build.ok) {
-      expect(parsedStringArgument(build.value, 'appModule')).toBe('src/app.tsx');
-      expect(parsedStringOption(build.value, 'out')).toBe('dist');
-      expect(parsedBooleanOption(build.value, 'cache')).toBe(false);
-    }
-    expect(parseCommandArgv(['src/app.tsx', '--preset', 'unknown'], BUILD_ARGV_SPEC)).toMatchObject(
-      {
-        error: 'invalid-value',
-        ok: false,
+    expect(parseKovoCommandInvocation('build', ['src/app.tsx', '--no-cache'])).toEqual({
+      ok: true,
+      value: {
+        arguments: { appModule: 'src/app.tsx' },
+        command: 'build',
+        form: 'build',
+        options: {
+          cache: false,
+          check: false,
+          out: 'dist',
+          preset: undefined,
+        },
       },
-    );
+    });
     expect(
-      parseCommandArgv(['src/app.tsx', '--out', 'one', '--out', 'two'], BUILD_ARGV_SPEC),
-    ).toEqual({
-      error: 'repeated-option',
+      parseKovoCommandInvocation('build', ['src/app.tsx', '--preset', 'unknown']),
+    ).toMatchObject({
+      error: 'usage',
       ok: false,
-      option: '--out',
+    });
+    expect(
+      parseKovoCommandInvocation('build', ['src/app.tsx', '--out', 'one', '--out', 'two']),
+    ).toMatchObject({
+      error: 'usage',
+      ok: false,
     });
 
-    const dev = parseCommandArgv(['src/app.tsx', '--port', '4173'], DEV_ARGV_SPEC);
-    expect(dev).toMatchObject({ ok: true });
-    if (dev.ok) expect(parsedIntegerOption(dev.value, 'port')).toBe(4173);
-    expect(parseCommandArgv(['src/app.tsx', '--port', '65536'], DEV_ARGV_SPEC)).toMatchObject({
-      error: 'invalid-value',
+    expect(parseKovoCommandInvocation('dev', ['src/app.tsx', '--port', '4173'])).toMatchObject({
+      ok: true,
+      value: { options: { port: 4173 } },
+    });
+    expect(parseKovoCommandInvocation('dev', ['src/app.tsx', '--port', '65536'])).toMatchObject({
+      error: 'usage',
       ok: false,
     });
     expect(
-      parseCommandArgv(['src/app.tsx', '--origin', 'not-an-absolute-url'], EXPORT_ARGV_SPEC),
-    ).toMatchObject({ error: 'invalid-value', ok: false });
+      parseKovoCommandInvocation('export', ['src/app.tsx', '--origin', 'not-an-absolute-url']),
+    ).toMatchObject({ error: 'usage', ok: false });
   });
 
   it('derives multiline root and subcommand help and keeps every help/version path informational', () => {
@@ -250,26 +253,26 @@ describe('semantic CLI contract', () => {
   it('serializes semantic programmatic requests without exposing argv-shaped option keys', () => {
     expect(
       commandRequestToArgv({
+        arguments: { appModule: './src/app.tsx' },
         command: 'build',
-        kind: 'command',
-        operands: ['./src/app.tsx'],
+        form: 'build',
         options: { cache: false, check: true, out: 'dist-prod', preset: 'node' },
       }),
     ).toEqual([
       'build',
       './src/app.tsx',
-      '--no-cache',
-      '--check',
       '--out',
       'dist-prod',
       '--preset',
       'node',
+      '--check',
+      '--no-cache',
     ]);
     expect(
       commandRequestToArgv({
+        arguments: { source: 'src/app.tsx' },
         command: 'compile',
-        kind: 'command',
-        operands: ['route', 'src/app.tsx'],
+        form: 'route',
         options: {
           out: 'dist/app.tsx',
           rewrite: ['Cart=./cart.js', 'Shell=./shell.js'],
@@ -288,24 +291,27 @@ describe('semantic CLI contract', () => {
     ]);
     expect(
       commandRequestToArgv({
+        arguments: { appModule: './src/app.tsx' },
         command: 'dev',
-        kind: 'command',
-        operands: ['./src/app.tsx'],
+        form: 'dev',
         options: { port: 4173, strictPort: true },
       }),
     ).toEqual(['dev', './src/app.tsx', '--port', '4173', '--strict-port']);
     expect(() =>
       commandRequestToArgv({
+        arguments: { appModule: './src/app.tsx' },
         command: 'build',
-        kind: 'command',
-        // @ts-expect-error argv spellings are deliberately absent from the semantic API.
+        form: 'build',
+        // @ts-expect-error argv spellings are deliberately absent from semantic form options.
         options: { '--out': 'dist' },
       }),
-    ).toThrow(/Unknown kovo build semantic option "--out"/u);
+    ).toThrow(/Unknown Kovo build options field "--out"/u);
     expect(() =>
       commandRequestToArgv({
+        arguments: { appModule: './src/app.tsx' },
         command: 'build',
-        kind: 'command',
+        form: 'build',
+        // @ts-expect-error enum literals are derived from the schema.
         options: { preset: 'not-a-preset' },
       }),
     ).toThrow(/requires node, vercel, or cloudflare/u);
@@ -321,6 +327,28 @@ describe('semantic CLI contract', () => {
       stdout: '',
     });
 
+    const usageMistakes = [
+      ['add'],
+      ['audit', '--not-an-option'],
+      ['build'],
+      ['check', '--not-an-option'],
+      ['compile'],
+      ['db'],
+      ['dev'],
+      ['explain'],
+      ['export'],
+      ['fix'],
+      ['incident'],
+      ['mcp', 'surplus'],
+      ['update-docs', 'surplus'],
+    ] as const;
+    for (const args of usageMistakes) {
+      const captured = await captureWritesAsync(() => mainAsync(args));
+      expect(captured.result, args.join(' ')).toBe(2);
+      expect(captured.stdout, args.join(' ')).toBe('');
+      expect(captured.stderr.length, args.join(' ')).toBeGreaterThan(0);
+    }
+
     const missingBuild = await captureWritesAsync(() => mainAsync(['build']));
     expect(missingBuild).toMatchObject({ result: 2, stdout: '' });
     expect(missingBuild.stderr).toContain('kovo: build requires an app module path.');
@@ -332,6 +360,26 @@ describe('semantic CLI contract', () => {
     expect(invalidDevConfig.stderr).toContain(
       'kovo: dev --port must be an integer from 0 through 65535.',
     );
+
+    const invalidAttestation = await captureWritesAsync(() =>
+      mainAsync([
+        'explain',
+        '--attest=https://app.example',
+        '--artifact=graph.json',
+        '--trust-anchor=invalid',
+      ]),
+    );
+    expect(invalidAttestation).toMatchObject({ result: 2, stdout: '' });
+    expect(invalidAttestation.stderr).toContain(
+      'kovo: --trust-anchor must be a sha256 fingerprint.',
+    );
+
+    const missingDbSchema = join(tmpdir(), 'kovo-command-contract-missing-schema.ts');
+    const invalidDbConfig = await captureWritesAsync(() =>
+      mainAsync(['db', 'check', '--schema', missingDbSchema]),
+    );
+    expect(invalidDbConfig).toMatchObject({ result: 2, stdout: '' });
+    expect(invalidDbConfig.stderr.length).toBeGreaterThan(0);
 
     const missingGraph = join(tmpdir(), 'kovo-command-contract-missing-graph.json');
     const proofFailure = captureWrites(() => main(['check', missingGraph]));

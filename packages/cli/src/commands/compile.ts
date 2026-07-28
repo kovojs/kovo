@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 import type {
   AlgebraicQueryShape,
@@ -28,24 +28,15 @@ import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/f
 
 import {
   availableAddComponents,
-  isAddComponentName,
   normalizedVendoredUiComponentSource,
   vendoredUiComponents,
   type AddComponentName,
 } from '../add-catalog.js';
 import {
-  ADD_ARGV_SPEC,
   ADD_USAGE,
-  COMPILE_ARGV_SPECS,
   COMPILE_USAGE,
   COMPILE_USAGE_LINE,
-  commandArgvError,
-  parsedBooleanOption,
-  parsedStringListOption,
-  parsedStringOption,
-  parseCommandArgv,
-  requiredParsedStringOption,
-  requireSinglePositional,
+  parseKovoCommandInvocation,
 } from '../commands-manifest.js';
 import { compileFrameworkComponentModule } from './mcp.js';
 import {
@@ -57,44 +48,21 @@ import {
   stableText,
   stableValue,
 } from '../shared.js';
-import { findNearestFile, isRecord, readJsonRecord } from '../tooling.js';
+import { findNearestFile, isRecord } from '../tooling.js';
 import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
+import { readCliPackageVersion } from '../package-version.js';
 
 const requireFromCli = createRequire(import.meta.url);
-const cliPackageManifest = readCliPackageManifest();
+const cliPackageVersion = readCliPackageVersion();
 
 function drizzleStaticSqlSafetyErrorExit(
   sqlSafetyErrors: readonly SqlSafetyDiagnosticLike[],
 ): { exitCode: 1 } | undefined {
   if (sqlSafetyErrors.length > 0) return { exitCode: 1 };
   return undefined;
-}
-
-function readCliPackageManifest(): { version?: string } {
-  const candidates = [
-    // Source/tests: packages/cli/src/commands/compile.ts.
-    new URL('../../package.json', import.meta.url),
-    // Published package: node_modules/@kovojs/cli/dist/*.mjs.
-    new URL('../package.json', import.meta.url),
-    // CI build artifact: repo checkout plus top-level dist/*.mjs chunks.
-    new URL('../packages/cli/package.json', import.meta.url),
-    // Unbundled build shapes used by some local diagnostics.
-    new URL('../../../package.json', import.meta.url),
-    new URL('./package.json', import.meta.url),
-  ];
-
-  for (const candidate of candidates) {
-    const read = readJsonRecord(fileURLToPath(candidate));
-    if (!read.ok && read.error.kind === 'not-found') continue;
-    if (!read.ok)
-      throw new Error(`Unable to read @kovojs/cli package manifest: ${read.error.kind}`);
-    return read.value;
-  }
-
-  return {};
 }
 
 export const addCommandShell = {
@@ -189,39 +157,21 @@ type CompileArgParseResult =
   | { message: string; ok: false };
 
 export function parseAddArgs(args: readonly string[]): AddArgParseResult {
-  const parsed = parseCommandArgv(args, ADD_ARGV_SPEC);
-  if (!parsed.ok) return addArgvError(parsed);
+  const parsed = parseKovoCommandInvocation('add', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
 
   const components: AddComponentName[] = [];
-  for (const component of parsed.value.positionals) {
-    if (!isAddComponentName(component)) {
-      return {
-        message: `kovo: unknown component ${stableValue(component)}. available: ${availableAddComponents()}.`,
-        ok: false,
-      };
-    }
-
+  for (const component of parsed.value.arguments.components) {
     if (!components.includes(component)) components.push(component);
-  }
-
-  if (components.length === 0) {
-    return { message: `kovo: add requires at least one component.\n${addUsage()}`, ok: false };
   }
 
   return {
     ok: true,
     options: {
       components,
-      outDir: requiredParsedStringOption(parsed.value, 'out'),
+      outDir: parsed.value.options.out,
     },
   };
-}
-
-function addArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('add', error, addUsage());
 }
 
 export function addUsage(): string {
@@ -500,7 +450,7 @@ function inferAddDependencySpec(manifest: Record<string, unknown>, packageName: 
   if (packageName.startsWith('@kovojs/')) {
     const inferredKovoSpec = inferExistingKovoPackageSpec(manifest, packageName);
     if (inferredKovoSpec) return inferredKovoSpec;
-    if (cliPackageManifest.version) return cliPackageManifest.version;
+    return cliPackageVersion;
   }
   const existingVersion = findDeclaredPackageSpec(manifest, packageName);
   if (existingVersion) return existingVersion;
@@ -580,262 +530,137 @@ function packageManagerName(manifest: Record<string, unknown>): 'bun' | 'npm' | 
 }
 
 export function parseCompileArgs(args: readonly string[]): CompileArgParseResult {
-  const target = args[0];
-  if (!target || target === '--help' || target === '-h') {
-    return { message: compileUsage(), ok: false };
-  }
+  const parsed = parseKovoCommandInvocation('compile', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
 
-  if (!isCompileTarget(target)) {
-    return {
-      message: `kovo: unknown compile target ${stableValue(target)}.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
+  const invocation = parsed.value;
+  switch (invocation.form) {
+    case 'component': {
+      const allowedDiagnosticCodes: DiagnosticCode[] = [];
+      for (const code of invocation.options.allowDiagnostic) {
+        if (!isDiagnosticCode(code)) {
+          return {
+            message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(code)}.\n`,
+            ok: false,
+          };
+        }
+        allowedDiagnosticCodes.push(code);
+      }
 
-  if (target === 'component') return parseCompileComponentArgs(args.slice(1));
-  if (target === 'route') return parseCompileRouteArgs(args.slice(1));
-  if (target === 'graph') return parseCompileGraphArgs(args.slice(1));
-  if (target === 'mutation-inputs') return parseCompileMutationInputsArgs(args.slice(1));
-  if (target === 'drizzle-static') return parseCompileDrizzleStaticArgs(args.slice(1));
-  if (target === 'drizzle-optimistic') return parseCompileDrizzleOptimisticArgs(args.slice(1));
-  return parseCompilePackageCssArgs(args.slice(1));
-}
-
-function compileArgvError(
-  target: CompileTarget,
-  error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>,
-): { message: string; ok: false } {
-  return commandArgvError(`compile ${target}`, error, compileUsage());
-}
-
-function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.component);
-  if (!parsed.ok) return compileArgvError('component', parsed);
-
-  const sourcePath = requireSinglePositional(parsed.value, {
-    label: 'source path',
-    name: 'compile component',
-    usage: compileUsage(),
-  });
-  if (!sourcePath.ok) return sourcePath;
-
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return { message: `kovo: compile component requires --out.\n${compileUsage()}`, ok: false };
-
-  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
-  const fileName = parsedStringOption(parsed.value, 'fileName');
-  const queryShapeFactsPath = parsedStringOption(parsed.value, 'queryShapeFacts');
-  const registryFactsPath = parsedStringOption(parsed.value, 'registryFacts');
-  const allowedDiagnosticCodes: DiagnosticCode[] = [];
-  for (const code of parsedStringListOption(parsed.value, 'allowDiagnostic')) {
-    if (!isDiagnosticCode(code)) {
       return {
-        message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(code)}.\n`,
-        ok: false,
+        ok: true,
+        options: {
+          allowedDiagnosticCodes,
+          check: invocation.options.check,
+          emitClientFiles: invocation.options.emitClientFiles,
+          ...(invocation.options.factsOut === undefined
+            ? {}
+            : { factsOutPath: invocation.options.factsOut }),
+          fixpoint: invocation.options.fixpoint,
+          ...(invocation.options.fileName === undefined
+            ? {}
+            : { fileName: invocation.options.fileName }),
+          outPath: invocation.options.out,
+          ...(invocation.options.queryShapeFacts === undefined
+            ? {}
+            : { queryShapeFactsPath: invocation.options.queryShapeFacts }),
+          ...(invocation.options.registryFacts === undefined
+            ? {}
+            : { registryFactsPath: invocation.options.registryFacts }),
+          renderEquivalence: invocation.options.renderEquivalence,
+          sourcePath: invocation.arguments.source,
+          target: 'component',
+        },
       };
     }
-    allowedDiagnosticCodes.push(code);
+    case 'route': {
+      const componentImportRewrites: RouteComponentImportRewrite[] = [];
+      for (const value of invocation.options.rewrite) {
+        const rewrite = parseRouteRewrite(value);
+        if (!rewrite.ok) return rewrite;
+        componentImportRewrites.push(rewrite.value);
+      }
+
+      return {
+        ok: true,
+        options: {
+          ...(invocation.options.artifactFileName === undefined
+            ? {}
+            : { artifactFileName: invocation.options.artifactFileName }),
+          check: invocation.options.check,
+          componentImportRewrites,
+          ...(invocation.options.factsOut === undefined
+            ? {}
+            : { factsOutPath: invocation.options.factsOut }),
+          ...(invocation.options.fileName === undefined
+            ? {}
+            : { fileName: invocation.options.fileName }),
+          outPath: invocation.options.out,
+          sourcePath: invocation.arguments.source,
+          target: 'route',
+        },
+      };
+    }
+    case 'graph':
+      return {
+        ok: true,
+        options: {
+          check: invocation.options.check,
+          inputPath: invocation.arguments.input,
+          outPath: invocation.options.out,
+          target: 'graph',
+        },
+      };
+    case 'mutation-inputs':
+      return {
+        ok: true,
+        options: {
+          check: invocation.options.check,
+          ...(invocation.options.fileName === undefined
+            ? {}
+            : { fileName: invocation.options.fileName }),
+          outPath: invocation.options.out,
+          sourcePath: invocation.arguments.source,
+          target: 'mutation-inputs',
+        },
+      };
+    case 'drizzle-static':
+      return {
+        ok: true,
+        options: {
+          check: invocation.options.check,
+          inputPath: invocation.arguments.input,
+          outPath: invocation.options.out,
+          target: 'drizzle-static',
+        },
+      };
+    case 'drizzle-optimistic':
+      return {
+        ok: true,
+        options: {
+          check: invocation.options.check,
+          ...(invocation.options.factsOut === undefined
+            ? {}
+            : { factsOutPath: invocation.options.factsOut }),
+          inputPath: invocation.arguments.input,
+          outPath: invocation.options.out,
+          target: 'drizzle-optimistic',
+        },
+      };
+    case 'package-css':
+      return {
+        ok: true,
+        options: {
+          check: invocation.options.check,
+          ...(invocation.options.entry === undefined
+            ? {}
+            : { entryPath: invocation.options.entry }),
+          outPath: invocation.options.out,
+          packageName: invocation.arguments.package,
+          target: 'package-css',
+        },
+      };
   }
-
-  return {
-    ok: true,
-    options: {
-      allowedDiagnosticCodes,
-      check: parsedBooleanOption(parsed.value, 'check'),
-      emitClientFiles: parsedBooleanOption(parsed.value, 'emitClientFiles'),
-      ...(factsOutPath === undefined ? {} : { factsOutPath }),
-      fixpoint: parsedBooleanOption(parsed.value, 'fixpoint'),
-      ...(fileName === undefined ? {} : { fileName }),
-      outPath,
-      ...(queryShapeFactsPath === undefined ? {} : { queryShapeFactsPath }),
-      ...(registryFactsPath === undefined ? {} : { registryFactsPath }),
-      renderEquivalence: parsedBooleanOption(parsed.value, 'renderEquivalence'),
-      sourcePath: sourcePath.value,
-      target: 'component',
-    },
-  };
-}
-
-function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.route);
-  if (!parsed.ok) return compileArgvError('route', parsed);
-
-  const sourcePath = requireSinglePositional(parsed.value, {
-    label: 'source path',
-    name: 'compile route',
-    usage: compileUsage(),
-  });
-  if (!sourcePath.ok) return sourcePath;
-
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return { message: `kovo: compile route requires --out.\n${compileUsage()}`, ok: false };
-
-  const componentImportRewrites: RouteComponentImportRewrite[] = [];
-  for (const value of parsedStringListOption(parsed.value, 'rewrite')) {
-    const rewrite = parseRouteRewrite(value);
-    if (!rewrite.ok) return rewrite;
-    componentImportRewrites.push(rewrite.value);
-  }
-
-  const artifactFileName = parsedStringOption(parsed.value, 'artifactFileName');
-  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
-  const fileName = parsedStringOption(parsed.value, 'fileName');
-
-  return {
-    ok: true,
-    options: {
-      ...(artifactFileName === undefined ? {} : { artifactFileName }),
-      check: parsedBooleanOption(parsed.value, 'check'),
-      componentImportRewrites,
-      ...(factsOutPath === undefined ? {} : { factsOutPath }),
-      ...(fileName === undefined ? {} : { fileName }),
-      outPath,
-      sourcePath: sourcePath.value,
-      target: 'route',
-    },
-  };
-}
-
-function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.graph);
-  if (!parsed.ok) return compileArgvError('graph', parsed);
-
-  const inputPath = requireSinglePositional(parsed.value, {
-    label: 'input path',
-    name: 'compile graph',
-    usage: compileUsage(),
-  });
-  if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
-
-  return {
-    ok: true,
-    options: {
-      check: parsedBooleanOption(parsed.value, 'check'),
-      inputPath: inputPath.value,
-      outPath,
-      target: 'graph',
-    },
-  };
-}
-
-function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['mutation-inputs']);
-  if (!parsed.ok) return compileArgvError('mutation-inputs', parsed);
-
-  const sourcePath = requireSinglePositional(parsed.value, {
-    label: 'source path',
-    name: 'compile mutation-inputs',
-    usage: compileUsage(),
-  });
-  if (!sourcePath.ok) return sourcePath;
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return {
-      message: `kovo: compile mutation-inputs requires --out.\n${compileUsage()}`,
-      ok: false,
-    };
-  const fileName = parsedStringOption(parsed.value, 'fileName');
-
-  return {
-    ok: true,
-    options: {
-      check: parsedBooleanOption(parsed.value, 'check'),
-      ...(fileName === undefined ? {} : { fileName }),
-      outPath,
-      sourcePath: sourcePath.value,
-      target: 'mutation-inputs',
-    },
-  };
-}
-
-function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['drizzle-optimistic']);
-  if (!parsed.ok) return compileArgvError('drizzle-optimistic', parsed);
-
-  const inputPath = requireSinglePositional(parsed.value, {
-    label: 'input path',
-    name: 'compile drizzle-optimistic',
-    usage: compileUsage(),
-  });
-  if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return {
-      message: `kovo: compile drizzle-optimistic requires --out.\n${compileUsage()}`,
-      ok: false,
-    };
-  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
-
-  return {
-    ok: true,
-    options: {
-      check: parsedBooleanOption(parsed.value, 'check'),
-      ...(factsOutPath === undefined ? {} : { factsOutPath }),
-      inputPath: inputPath.value,
-      outPath,
-      target: 'drizzle-optimistic',
-    },
-  };
-}
-
-function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['drizzle-static']);
-  if (!parsed.ok) return compileArgvError('drizzle-static', parsed);
-
-  const inputPath = requireSinglePositional(parsed.value, {
-    label: 'input path',
-    name: 'compile drizzle-static',
-    usage: compileUsage(),
-  });
-  if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return {
-      message: `kovo: compile drizzle-static requires --out.\n${compileUsage()}`,
-      ok: false,
-    };
-
-  return {
-    ok: true,
-    options: {
-      check: parsedBooleanOption(parsed.value, 'check'),
-      inputPath: inputPath.value,
-      outPath,
-      target: 'drizzle-static',
-    },
-  };
-}
-
-function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseResult {
-  const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['package-css']);
-  if (!parsed.ok) return compileArgvError('package-css', parsed);
-
-  const packageName = requireSinglePositional(parsed.value, {
-    label: 'package name',
-    name: 'compile package-css',
-    usage: compileUsage(),
-  });
-  if (!packageName.ok) return packageName;
-  const outPath = parsedStringOption(parsed.value, 'out');
-  if (!outPath)
-    return { message: `kovo: compile package-css requires --out.\n${compileUsage()}`, ok: false };
-  const entryPath = parsedStringOption(parsed.value, 'entry');
-
-  return {
-    ok: true,
-    options: {
-      check: parsedBooleanOption(parsed.value, 'check'),
-      ...(entryPath === undefined ? {} : { entryPath }),
-      outPath,
-      packageName: packageName.value,
-      target: 'package-css',
-    },
-  };
 }
 
 function parseRouteRewrite(
@@ -852,18 +677,6 @@ function parseRouteRewrite(
     ok: true,
     value: { localName: value.slice(0, separator), specifier: value.slice(separator + 1) },
   };
-}
-
-function isCompileTarget(value: string): value is CompileTarget {
-  return (
-    value === 'component' ||
-    value === 'drizzle-static' ||
-    value === 'drizzle-optimistic' ||
-    value === 'route' ||
-    value === 'graph' ||
-    value === 'mutation-inputs' ||
-    value === 'package-css'
-  );
 }
 
 export function compileUsage(): string {

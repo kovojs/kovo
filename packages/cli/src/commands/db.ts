@@ -24,15 +24,7 @@ import { collectRuntimeRegistryFacts } from '@kovojs/server/internal/data-plane-
 import { installGeneratedTableSecurityManifestForCommand } from '@kovojs/server/internal/execution';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
-import {
-  commandArgvError,
-  DB_ARGV_SPEC,
-  DB_USAGE,
-  parsedStringArgument,
-  parsedStringOption,
-  parseCommandArgv,
-  requiredParsedStringOption,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
 import {
@@ -90,26 +82,24 @@ interface LoadedDbConfig {
 type DbArgParseResult = { ok: true; options: KovoDbOptions } | { message: string; ok: false };
 
 export function parseDbArgs(args: readonly string[]): DbArgParseResult {
-  const parsed = parseCommandArgv(args, DB_ARGV_SPEC);
-  if (!parsed.ok) return dbArgvError(parsed);
-
-  const actionValue = parsedStringArgument(parsed.value, 'action');
-  if (actionValue === undefined) throw new TypeError('Kovo db schema omitted action.');
-  const action = actionValue as KovoDbAction;
-
-  const driverValue = parsedStringOption(parsed.value, 'driver');
-  const driver = driverValue as KovoPostgresRuntimeDriver | undefined;
-
-  const adminDatabaseUrl = parsedStringOption(parsed.value, 'adminDatabaseUrl');
-  const dataDir = parsedStringOption(parsed.value, 'dataDir');
-  const databaseUrl = parsedStringOption(parsed.value, 'databaseUrl');
-  const readerRole = parsedStringOption(parsed.value, 'readerRole');
-  const systemDatabaseUrl = parsedStringOption(parsed.value, 'systemDatabaseUrl');
-  const writerRole = parsedStringOption(parsed.value, 'writerRole');
+  const parsed = parseKovoCommandInvocation('db', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const action = parsed.value.arguments.action;
+  const {
+    adminDatabaseUrl,
+    dataDir,
+    databaseUrl,
+    driver,
+    migrations: migrationsDir,
+    readerRole,
+    schema: schemaPath,
+    systemDatabaseUrl,
+    writerRole,
+  } = parsed.value.options;
   const options: KovoDbOptions = {
     action,
-    migrationsDir: requiredParsedStringOption(parsed.value, 'migrations'),
-    schemaPath: requiredParsedStringOption(parsed.value, 'schema'),
+    migrationsDir,
+    schemaPath,
   };
   if (adminDatabaseUrl !== undefined) options.adminDatabaseUrl = adminDatabaseUrl;
   if (dataDir !== undefined) options.dataDir = dataDir;
@@ -150,7 +140,7 @@ export async function runDbCommand(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
-      exitCode: 1,
+      exitCode: 2,
     };
   } finally {
     releaseTableSecurityManifest?.();
@@ -198,17 +188,6 @@ function resolveDbCommandDriver(
     );
   }
   return parsed;
-}
-
-function dbArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('db', error, dbUsage());
-}
-
-function dbUsage(): string {
-  return [DB_USAGE, ''].join('\n');
 }
 
 function parsePostgresRuntimeDriver(value: string): KovoPostgresRuntimeDriver | undefined {

@@ -15,7 +15,6 @@ import { parseAdvisoryArgs, runAdvisoryCheck } from './commands/advisories.js';
 import { parseFixArgs, runFixCommand } from './commands/fix.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
 import {
-  compileUsage,
   parseAddArgs,
   parseCompileArgs,
   runAddCommand,
@@ -29,16 +28,16 @@ import {
   formatRootHelp,
   formatUnknownCommandMessage,
   isAsyncCommand,
+  isAsyncKovoCommandInvocation,
   KOVO_CLI_VERSION,
+  parseKovoCommandInvocation,
   parseKovoMetaInvocation,
   renderShellCompletion,
   resolveCommand,
-  UPDATE_DOCS_USAGE,
   type KovoAsyncCommandName,
   type KovoSemanticCommandRequest,
   type KovoSyncCommandName,
 } from './commands-manifest.js';
-import { formatKovoDiagnostics, KOVO_DIAGNOSTIC_VERSION } from './diagnostic.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
   captureKovoCommandSecurityDisposition,
@@ -75,12 +74,10 @@ export {
   createKovoMcpServer,
   formatCommandHelp,
   formatRootHelp,
-  formatKovoDiagnostics,
   kovoAudit,
   kovoCheck,
   kovoExplain,
   KOVO_CLI_VERSION,
-  KOVO_DIAGNOSTIC_VERSION,
   renderShellCompletion,
   runMcpStdioServer,
   runUpdateDocsCommand,
@@ -93,13 +90,6 @@ export type {
   KovoMcpToolName,
 } from './commands/mcp.js';
 export type { KovoCompletionShell, KovoSemanticCommandRequest } from './commands-manifest.js';
-export type {
-  KovoDiagnosticCategory,
-  KovoDiagnosticEnvelope,
-  KovoDiagnosticFormat,
-  KovoDiagnosticRecord,
-  KovoDiagnosticSourceAnchor,
-} from './diagnostic.js';
 export type {
   ExplainKind,
   KovoAuditOptions,
@@ -135,7 +125,7 @@ type AsyncCommandHandler = (
 const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   audit(args, security) {
     const parsed = parseAuditArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'audit');
     return writeCommandResult(
       runGraphCommand(
         parsed.inputPath,
@@ -143,6 +133,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         security.invocationCwd,
       ),
       'proof',
+      'audit',
     );
   },
   check(args, security) {
@@ -156,6 +147,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
           security.invocationEnv,
         ),
         'proof',
+        'check',
       );
     }
     const { family, inputPath } = parsed;
@@ -166,10 +158,14 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
           () => ({ exitCode: 0, output: '' }),
           security.invocationCwd,
         );
-        if (input.exitCode !== 0) return writeCommandResult(input, 'proof');
+        if (input.exitCode !== 0) return writeCommandResult(input, 'proof', 'check');
       }
       const driftScan = scanSourceSinkDrift(security.invocationCwd);
-      return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }), 'proof');
+      return writeCommandResult(
+        sourcesSinksCheckResult(outputVersion, { driftScan }),
+        'proof',
+        'check',
+      );
     }
     return writeCommandResult(
       runGraphCommand(
@@ -182,13 +178,14 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         security.invocationCwd,
       ),
       'proof',
+      'check',
     );
   },
   explain(args, security) {
     const parsed = parseExplainArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'explain');
     if ('authLifecycle' in parsed.options || 'modelBoundaries' in parsed.options) {
-      return writeCommandResult(kovoExplain({}, parsed.options), 'proof');
+      return writeCommandResult(kovoExplain({}, parsed.options), 'proof', 'explain');
     }
     return writeCommandResult(
       runGraphCommand(
@@ -197,14 +194,16 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         security.invocationCwd,
       ),
       'proof',
+      'explain',
     );
   },
   incident(args, security) {
     const parsed = parseIncidentArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'incident');
     return writeCommandResult(
       runIncidentScopeCommand(parsed.options, security.invocationCwd, security.invocationEnv),
       'proof',
+      'incident',
     );
   },
 };
@@ -212,45 +211,50 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
 const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> = {
   async add(args) {
     const parsed = parseAddArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runAddCommand(parsed.options), 'build');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'add');
+    return writeCommandResult(await runAddCommand(parsed.options), 'build', 'add');
   },
   async build(args, security) {
     const parsed = parseBuildArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runBuildCommand(parsed.options, security), 'build');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'build');
+    return writeCommandResult(await runBuildCommand(parsed.options, security), 'build', 'build');
   },
   async db(args, security) {
     const parsed = parseDbArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runDbCommand(parsed.options, security), 'config');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'db');
+    return writeCommandResult(await runDbCommand(parsed.options, security), 'config', 'db');
   },
   async dev(args, security) {
     const parsed = parseDevArgs(args, security.invocationCwd);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runDevCommand(parsed.options, security), 'runtime');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'dev');
+    return writeCommandResult(await runDevCommand(parsed.options, security), 'runtime', 'dev');
   },
   async compile(args) {
     const parsed = parseCompileArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runCompileCommand(parsed.options), 'build');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'compile');
+    return writeCommandResult(await runCompileCommand(parsed.options), 'build', 'compile');
   },
   async export(args, security) {
     const parsed = parseExportArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runExportCommand(parsed.options, security), 'build');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'export');
+    return writeCommandResult(await runExportCommand(parsed.options, security), 'build', 'export');
   },
   async fix(args, security) {
     const parsed = parseFixArgs(args);
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runFixCommand(parsed.options, security.invocationCwd), 'build');
+    if (!parsed.ok) return writeUsageError(parsed.message, 'fix');
+    return writeCommandResult(
+      await runFixCommand(parsed.options, security.invocationCwd),
+      'build',
+      'fix',
+    );
   },
   async mcp(args, security) {
     return runMcpCommand(args, security.invocationCwd);
   },
   async 'update-docs'(args) {
-    if (args.length > 0) return writeUsageError(UPDATE_DOCS_USAGE);
-    return writeCommandResult(await runUpdateDocsCommand(), 'config');
+    const parsed = parseKovoCommandInvocation('update-docs', args);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'update-docs');
+    return writeCommandResult(await runUpdateDocsCommand(), 'config', 'update-docs');
   },
 };
 
@@ -273,9 +277,16 @@ export function main(
     return writeUsageError(formatUnknownCommandMessage(args[0] ?? ''));
   }
 
-  if (command.name === 'compile' && args.length === 1) return writeUsageError(compileUsage());
-  if (command.name === 'check' && args[1] === 'advisories') {
-    return writeUsageError('kovo: check advisories is asynchronous; call mainAsync() instead.');
+  const parsed = parseKovoCommandInvocation(command.name, args.slice(1));
+  if (!parsed.ok) return writeUsageError(parsed.message, command.name);
+  if (isAsyncKovoCommandInvocation(parsed.value)) {
+    if (!isAsyncCommand(command)) {
+      return writeUsageError(
+        `kovo: ${command.name} ${parsed.value.form} is asynchronous; call mainAsync() instead.\n`,
+        command.name,
+      );
+    }
+    throw new Error(`kovo ${command.name} is asynchronous; call mainAsync() instead.`);
   }
   if (isAsyncCommand(command)) {
     throw new Error(`kovo ${command.name} is asynchronous; call mainAsync() instead.`);
@@ -293,27 +304,41 @@ export async function mainAsync(
   if (metaResult !== undefined) return metaResult;
 
   const command = resolveCommand(args[0]);
-  if (command?.name === 'explain' && args.includes('--attest')) {
+  if (command === undefined) {
+    return writeUsageError(formatUnknownCommandMessage(args[0] ?? ''));
+  }
+  const parsedInvocation = parseKovoCommandInvocation(command.name, args.slice(1));
+  if (!parsedInvocation.ok) return writeUsageError(parsedInvocation.message, command.name);
+  const invocation = parsedInvocation.value;
+
+  if (invocation.command === 'explain' && invocation.form === 'attest') {
     const parsed = parseAttestArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'explain');
     return writeCommandResult(
       await runAttestCommand(parsed.options, security.invocationCwd),
       'proof',
+      'explain',
     );
   }
-  if (command?.name === 'check' && args[1] === 'advisories') {
+  if (invocation.command === 'check' && invocation.form === 'advisories') {
     const parsed = parseAdvisoryArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'check');
     return writeCommandResult(
       await runAdvisoryCheck(parsed.options, security.invocationCwd),
       'proof',
+      'check',
+      'unknown',
     );
   }
-  if (!command || !isAsyncCommand(command)) {
-    if (command?.name === 'check' && args[1] === 'sources-sinks') {
+  if (!isAsyncCommand(command)) {
+    if (invocation.command === 'check' && invocation.form === 'graph') {
+      const parsed = parseCheckArgs(args.slice(1));
+      if (!parsed.ok || !('family' in parsed) || parsed.family !== 'sources-sinks') {
+        return main(args, security);
+      }
       const driftScan = scanSourceSinkDrift(security.invocationCwd);
       await writeSourcesSinksArtifact(security.invocationCwd, { driftScan });
-    } else if (command?.name === 'explain' && args.includes('--sources-sinks')) {
+    } else if (invocation.command === 'explain' && invocation.form === 'sources-sinks') {
       await writeSourcesSinksArtifact(security.invocationCwd);
     }
     return main(args, security);

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-
 import {
   KOVO_CLI_SCHEMA,
   KOVO_COMMAND_SCHEMA,
@@ -13,6 +11,7 @@ import {
   type KovoMetaCommandName,
   type KovoMetaCommandSchemaEntry,
 } from './command-schema.js';
+import { readCliPackageVersion } from './package-version.js';
 
 export type {
   KovoAsyncCommandName,
@@ -95,98 +94,172 @@ export interface CommandFlag {
   readonly flag: string;
 }
 
-/** @internal Coarse argv carrier kind used after semantic schema projection. */
-export type CommandArgvOptionKind = 'boolean' | 'value';
-
-/** @internal One option projected from a semantic command node for argv parsing. */
-export interface CommandArgvOptionSpec {
-  readonly aliases: readonly string[];
-  readonly booleanValue?: boolean;
-  readonly category?: KovoCommandOptionSchema['category'];
-  readonly defaultValue?: boolean | number | string;
-  readonly enumValues?: readonly string[];
-  readonly flag: `--${string}`;
-  readonly id: string;
-  readonly invalidValueMessage?: string;
-  readonly kind: CommandArgvOptionKind;
-  readonly maximum?: number;
-  readonly minimum?: number;
-  readonly repeat?: boolean;
-  readonly requiresValueMessage?: string;
-  readonly valueKind?: Exclude<KovoCommandOptionSchema['value'], undefined>['kind'];
+type SemanticScalarValue<Schema> = Schema extends {
+  readonly values: readonly (infer Value extends string)[];
 }
+  ? Value
+  : Schema extends { readonly kind: 'integer' }
+    ? number
+    : string;
 
-/** @internal One command or command-form argv parser schema. */
-export interface CommandArgvSpec {
-  readonly command: KovoCommandName | KovoMetaCommandName;
-  readonly options: readonly CommandArgvOptionSpec[];
-  readonly requiredOptions?: readonly string[];
-  readonly usageForm?: string;
-  readonly validatePositionals?: boolean;
+type SemanticArgumentValue<Token> = Token extends {
+  readonly repeatable: true;
+  readonly value: infer Schema;
 }
+  ? readonly SemanticScalarValue<Schema>[]
+  : Token extends { readonly value: infer Schema }
+    ? SemanticScalarValue<Schema>
+    : never;
 
-/** @internal One value produced by the semantic argv parser. */
-export type ParsedCommandValue = boolean | number | string | readonly (number | string)[];
-
-/** @internal Parsed argv result before command-specific semantic validation. */
-export interface ParsedCommandArgv {
-  readonly arguments: ReadonlyMap<string, number | string | readonly (number | string)[]>;
-  readonly options: ReadonlyMap<string, ParsedCommandValue>;
-  readonly positionals: readonly string[];
+type FormArgumentToken<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
 }
+  ? Extract<Token, { readonly kind: 'argument' }>
+  : never;
 
-/** @internal Shared argv parser result. */
-export type ParseCommandArgvResult =
-  | { readonly ok: true; readonly value: ParsedCommandArgv }
-  | { readonly error: 'help'; readonly ok: false }
-  | { readonly error: 'invalid-value'; readonly message: string; readonly ok: false }
-  | { readonly error: 'missing-value'; readonly message: string; readonly ok: false }
-  | { readonly error: 'repeated-option'; readonly ok: false; readonly option: string }
-  | { readonly error: 'unknown-option'; readonly ok: false; readonly option: string };
+type RequiredFormArguments<Form> = {
+  readonly [Token in FormArgumentToken<Form> as Token extends { readonly required: true }
+    ? Token['name']
+    : never]: SemanticArgumentValue<Token>;
+};
 
-/** @internal Check graph-mode flags. */
-export const CHECK_ARGV_SPEC = argvSpec('check', []);
+type OptionalFormArguments<Form> = {
+  readonly [Token in FormArgumentToken<Form> as Token extends { readonly required: false }
+    ? Token['name']
+    : never]?: SemanticArgumentValue<Token>;
+};
 
-/** @internal Advisory-check flags. */
-export const ADVISORY_ARGV_SPEC = argvSpecForUsage('check', 'advisories');
+type FormOptionToken<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
+}
+  ? Token extends { readonly kind: 'option' }
+    ? Token
+    : Token extends { readonly kind: 'group'; readonly tokens: readonly (infer GroupToken)[] }
+      ? GroupToken
+      : never
+  : never;
 
-/** @internal Audit flags. */
-export const AUDIT_ARGV_SPEC = argvSpec('audit');
+type FormOptionId<Form> =
+  FormOptionToken<Form> extends infer Token
+    ? Token extends { readonly option: infer Id extends string }
+      ? Id
+      : never
+    : never;
 
-/** @internal Explain flags. */
-export const EXPLAIN_ARGV_SPEC = argvSpec('explain');
+type EntryOption<Entry, Id extends string> = Entry extends {
+  readonly options: readonly (infer Option)[];
+}
+  ? Extract<Option, { readonly id: Id }>
+  : never;
 
-/** @internal Incident flags. */
-export const INCIDENT_ARGV_SPEC = argvSpec('incident');
+type SemanticOptionValue<Option> = Option extends {
+  readonly value: infer Schema;
+}
+  ? Option extends { readonly repeatable: true }
+    ? readonly SemanticScalarValue<Schema>[]
+    : SemanticScalarValue<Schema>
+  : boolean;
 
-/** @internal Add flags. */
-export const ADD_ARGV_SPEC = argvSpec('add');
+type RequiredOptionIdFromToken<Token> = Token extends {
+  readonly kind: 'option';
+  readonly option: infer Id extends string;
+  readonly required: true;
+}
+  ? Id
+  : Token extends {
+        readonly kind: 'group';
+        readonly required: true;
+        readonly tokens: readonly (infer GroupToken)[];
+      }
+    ? GroupToken extends {
+        readonly option: infer Id extends string;
+        readonly required: true;
+      }
+      ? Id
+      : never
+    : never;
 
-/** @internal Build flags. */
-export const BUILD_ARGV_SPEC = argvSpec('build');
+type RequiredFormOptionId<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
+}
+  ? RequiredOptionIdFromToken<Token>
+  : never;
 
-/** @internal Fix flags. */
-export const FIX_ARGV_SPEC = argvSpec('fix');
+type SemanticFormOptions<Entry, Form> = {
+  readonly [Id in FormOptionId<Form>]?: SemanticOptionValue<EntryOption<Entry, Id>>;
+} & {
+  readonly [Id in RequiredFormOptionId<Form>]-?: SemanticOptionValue<EntryOption<Entry, Id>>;
+};
 
-/** @internal Dev flags. */
-export const DEV_ARGV_SPEC = argvSpec('dev');
+type ParsedFormOptions<Entry, Form> = {
+  readonly [Id in FormOptionId<Form>]: EntryOption<Entry, Id> extends {
+    readonly value: infer Schema;
+  }
+    ? EntryOption<Entry, Id> extends { readonly repeatable: true }
+      ? readonly SemanticScalarValue<Schema>[]
+      : Id extends RequiredFormOptionId<Form>
+        ? SemanticScalarValue<Schema>
+        : EntryOption<Entry, Id> extends { readonly value: { readonly default: unknown } }
+          ? SemanticScalarValue<Schema>
+          : SemanticScalarValue<Schema> | undefined
+    : boolean;
+};
 
-/** @internal DB flags. */
-export const DB_ARGV_SPEC = argvSpec('db');
+type CommandForm<Entry> = Entry extends { readonly usage: readonly (infer Form)[] } ? Form : never;
 
-/** @internal Export flags. */
-export const EXPORT_ARGV_SPEC = argvSpec('export');
+type ParsedInvocationFor<Entry, Form> = Entry extends {
+  readonly name: infer Name extends KovoCommandName;
+}
+  ? Form extends { readonly id: infer Id extends string }
+    ? {
+        readonly arguments: RequiredFormArguments<Form> & OptionalFormArguments<Form>;
+        readonly command: Name;
+        readonly form: Id;
+        readonly options: ParsedFormOptions<Entry, Form>;
+      }
+    : never
+  : never;
 
-/** @internal Compile-form flags, each derived from the referenced option ids. */
-export const COMPILE_ARGV_SPECS = Object.freeze({
-  component: argvSpecForUsage('compile', 'component'),
-  'drizzle-optimistic': argvSpecForUsage('compile', 'drizzle-optimistic'),
-  'drizzle-static': argvSpecForUsage('compile', 'drizzle-static'),
-  graph: argvSpecForUsage('compile', 'graph'),
-  'mutation-inputs': argvSpecForUsage('compile', 'mutation-inputs'),
-  'package-css': argvSpecForUsage('compile', 'package-css'),
-  route: argvSpecForUsage('compile', 'route'),
-});
+/** @internal Form-discriminated semantic result produced by the command AST parser. */
+export type KovoParsedCommandInvocation<
+  Name extends KovoCommandName = KovoCommandName,
+  Entry extends KovoCommandEntry = Extract<KovoCommandEntry, { readonly name: Name }>,
+> = CommandForm<Entry> extends infer Form ? ParsedInvocationFor<Entry, Form> : never;
+
+/** @internal Exact success/error result of schema-owned command parsing. */
+export type KovoCommandInvocationParseResult<Name extends KovoCommandName = KovoCommandName> =
+  | { readonly ok: true; readonly value: KovoParsedCommandInvocation<Name> }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false };
+
+type KovoCommandFormId<Name extends KovoCommandName> = KovoParsedCommandInvocation<Name>['form'];
+
+type SemanticRequestOptions<Entry, Form> = [RequiredFormOptionId<Form>] extends [never]
+  ? { readonly options?: SemanticFormOptions<Entry, Form> }
+  : { readonly options: SemanticFormOptions<Entry, Form> };
+
+type SemanticRequestFor<Entry, Form> = Entry extends {
+  readonly name: infer Name extends KovoCommandName;
+}
+  ? Form extends { readonly id: infer Id extends string }
+    ? {
+        readonly arguments: RequiredFormArguments<Form> & OptionalFormArguments<Form>;
+        readonly command: Name;
+        readonly form: Id;
+      } & SemanticRequestOptions<Entry, Form>
+    : never
+  : never;
+
+/**
+ * @internal Precise programmatic command union. Forms, enum literals, argument
+ * names, repeats, and semantic boolean polarity all derive from the same AST.
+ */
+export type KovoSemanticCommandRequest = KovoCommandEntry extends infer Entry
+  ? Entry extends KovoCommandEntry
+    ? CommandForm<Entry> extends infer Form
+      ? SemanticRequestFor<Entry, Form>
+      : never
+    : never
+  : never;
 
 /** @internal One command-reference projection. */
 export interface CommandManifestEntry {
@@ -426,10 +499,13 @@ export type KovoMetaInvocationParseResult =
 export function isKovoCompletionShell(value: string | undefined): value is KovoCompletionShell {
   const completion = requireMetaCommand('completion');
   const shell = completion.usage[0]?.tokens.find(
-    (token): token is Extract<KovoCommandUsageToken, { kind: 'argument' }> =>
-      token.kind === 'argument' && token.name === 'shell',
+    (token) => token.kind === 'argument' && token.name === 'shell',
   );
-  return shell?.value.values?.includes(value ?? '') === true;
+  return (
+    value !== undefined &&
+    shell?.kind === 'argument' &&
+    shell.value.values?.some((candidate) => candidate === value) === true
+  );
 }
 
 /** @internal Parse root aliases, meta commands, and capability help/version from the CLI AST. */
@@ -467,24 +543,23 @@ export function parseKovoMetaInvocation(args: readonly string[]): KovoMetaInvoca
             : { kind: 'version' },
       };
     }
-    const parsed = parseCommandArgv(rest, metaArgvSpec(meta));
-    if (!parsed.ok) {
-      return {
-        message: commandArgvError(meta.name, parsed, formatMetaCommandUsage(meta)).message,
-        ok: false,
-      };
-    }
+    const parsed = parseEntryInvocation(meta, rest);
+    if (!parsed.ok) return { message: parsed.message, ok: false };
     if (meta.name === 'version') {
       return { handled: true, ok: true, value: { kind: 'version' } };
     }
     if (meta.name === 'completion') {
-      const shell = parsedStringArgument(parsed.value, 'shell');
+      const shell =
+        typeof parsed.value.arguments.shell === 'string' ? parsed.value.arguments.shell : undefined;
       if (!isKovoCompletionShell(shell)) {
         throw new TypeError('Kovo completion schema admitted an unsupported shell.');
       }
       return { handled: true, ok: true, value: { kind: 'completion', shell } };
     }
-    const target = parsedStringArgument(parsed.value, 'command');
+    const target =
+      typeof parsed.value.arguments.command === 'string'
+        ? parsed.value.arguments.command
+        : undefined;
     if (target === undefined) {
       return { handled: true, ok: true, value: { kind: 'root-help' } };
     }
@@ -530,288 +605,603 @@ export function renderShellCompletion(shell: KovoCompletionShell): string {
   return renderZshCompletion();
 }
 
-/** @internal Parse command argv from a semantic-schema projection. */
-export function parseCommandArgv(
-  args: readonly string[],
-  spec: CommandArgvSpec,
-): ParseCommandArgvResult {
-  const optionSpecs = new Map<string, CommandArgvOptionSpec>();
-  for (const option of spec.options) {
-    optionSpecs.set(option.flag, option);
-    for (const alias of option.aliases) optionSpecs.set(alias, option);
-  }
-  const options = new Map<string, ParsedCommandValue>();
-  const positionals: string[] = [];
+type ParsedSemanticValue = boolean | number | string | readonly (number | string)[];
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-    if (arg === '--help' || arg === '-h') return { error: 'help', ok: false };
+interface TokenizedCommandArgv {
+  readonly options: ReadonlyMap<string, ParsedSemanticValue>;
+  readonly positionals: readonly string[];
+}
 
-    const equalsIndex = arg.indexOf('=');
-    const flagToken = equalsIndex > 0 ? arg.slice(0, equalsIndex) : arg;
-    const optionSpec = flagToken.startsWith('-') ? optionSpecs.get(flagToken) : undefined;
-    if (optionSpec) {
-      if (optionSpec.kind === 'boolean') {
-        if (equalsIndex > 0) return { error: 'unknown-option', ok: false, option: arg };
-        if (options.has(optionSpec.id)) {
-          return { error: 'repeated-option', ok: false, option: optionSpec.flag };
-        }
-        options.set(optionSpec.id, optionSpec.booleanValue ?? true);
-        continue;
-      }
+interface ParsedEntryForm {
+  readonly arguments: Readonly<Record<string, number | string | readonly (number | string)[]>>;
+  readonly form: KovoCommandUsageForm;
+  readonly options: Readonly<Record<string, ParsedSemanticValue | undefined>>;
+  readonly score: number;
+}
 
-      const rawValue = equalsIndex > 0 ? arg.slice(equalsIndex + 1) : args[index + 1];
-      if (!rawValue) {
-        return {
-          error: 'missing-value',
-          message:
-            optionSpec.requiresValueMessage ?? `kovo: ${optionSpec.flag} requires a value.\n`,
-          ok: false,
-        };
-      }
-      if (equalsIndex <= 0) index += 1;
-      const parsedValue = parseArgvValue(rawValue, optionSpec);
-      if (!parsedValue.ok) return parsedValue;
-      if (optionSpec.repeat) {
-        const previous = options.get(optionSpec.id);
-        const values =
-          previous === undefined
-            ? []
-            : Array.isArray(previous)
-              ? [...previous]
-              : [String(previous)];
-        values.push(parsedValue.value);
-        options.set(optionSpec.id, values);
-      } else {
-        if (options.has(optionSpec.id)) {
-          return { error: 'repeated-option', ok: false, option: optionSpec.flag };
-        }
-        options.set(optionSpec.id, parsedValue.value);
-      }
-      continue;
-    }
+interface FormParseFailure {
+  readonly message: string;
+  readonly priority: number;
+  readonly score: number;
+}
 
-    if (arg.startsWith('-')) return { error: 'unknown-option', ok: false, option: arg };
-    positionals.push(arg);
-  }
-
-  for (const optionSpec of spec.options) {
-    if (optionSpec.defaultValue !== undefined && !options.has(optionSpec.id)) {
-      options.set(optionSpec.id, optionSpec.defaultValue);
-    }
-  }
-  for (const requiredOption of spec.requiredOptions ?? []) {
-    if (options.has(requiredOption)) continue;
-    const optionSpec = spec.options.find((candidate) => candidate.id === requiredOption);
-    return {
-      error: 'missing-value',
-      message:
-        optionSpec?.requiresValueMessage ??
-        `kovo: ${optionSpec?.flag ?? requiredOption} is required.\n`,
-      ok: false,
+type EntryInvocationParseResult =
+  | { readonly ok: true; readonly value: ParsedEntryForm }
+  | {
+      readonly error: 'help' | 'usage';
+      readonly message: string;
+      readonly ok: false;
+      readonly priority?: number;
+      readonly score?: number;
     };
-  }
 
-  const parsedArguments =
-    spec.validatePositionals === true
-      ? parseUsageFormArguments(spec, positionals)
-      : {
-          ok: true as const,
-          value: new Map<string, number | string | readonly (number | string)[]>(),
-        };
-  if (!parsedArguments.ok) return parsedArguments;
-
+/** @internal Parse and select one concrete command form from the semantic AST. */
+export function parseKovoCommandInvocation<Name extends KovoCommandName>(
+  name: Name,
+  args: readonly string[],
+): KovoCommandInvocationParseResult<Name> {
+  const entry = requireCommand(name);
+  const parsed = parseEntryInvocation(entry, args);
+  if (!parsed.ok) return parsed;
   return {
     ok: true,
     value: {
-      arguments: parsedArguments.value,
+      arguments: parsed.value.arguments,
+      command: name,
+      form: parsed.value.form.id,
+      options: parsed.value.options,
+    } as KovoParsedCommandInvocation<Name>,
+  };
+}
+
+/**
+ * @internal Parse one known command form with form-scoped option diagnostics
+ * and usage, while retaining the same semantic AST as whole-command dispatch.
+ */
+export function parseKovoCommandFormInvocation<
+  Name extends KovoCommandName,
+  Form extends KovoCommandFormId<Name>,
+>(
+  name: Name,
+  formId: Form,
+  args: readonly string[],
+):
+  | {
+      readonly ok: true;
+      readonly value: Extract<KovoParsedCommandInvocation<Name>, { readonly form: Form }>;
+    }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false } {
+  const entry = requireCommand(name);
+  const form = entry.usage.find((candidate) => candidate.id === formId);
+  if (form === undefined) {
+    throw new TypeError(`Missing Kovo command usage form ${name}/${formId}.`);
+  }
+  const usage = `usage: ${renderFormUsageLine(entry, form)}`;
+  const admittedOptionIds = new Set(formOptionIds(form));
+  const tokenized = tokenizeCommandArgv(entry, args, usage, {
+    displayName: `${entry.name} ${form.id}`,
+    options: entry.options.filter((option) => admittedOptionIds.has(option.id)),
+  });
+  if (!tokenized.ok) return tokenized;
+  const parsed = parseEntryForm(entry, form, tokenized.value, usage);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    value: {
+      arguments: parsed.value.arguments,
+      command: name,
+      form: form.id,
+      options: parsed.value.options,
+    } as Extract<KovoParsedCommandInvocation<Name>, { readonly form: Form }>,
+  };
+}
+
+/** @internal True when a parsed command form requires the async dispatcher. */
+export function isAsyncKovoCommandInvocation(invocation: KovoParsedCommandInvocation): boolean {
+  const entry = requireCommand(invocation.command);
+  if ('async' in entry && entry.async === true) return true;
+  return entry.usage.some(
+    (form) => form.id === invocation.form && 'async' in form && form.async === true,
+  );
+}
+
+/** @internal Serialize one precise semantic form request through the same AST parser. */
+export function commandRequestToArgv(request: KovoSemanticCommandRequest): string[] {
+  const entry = requireCommand(request.command);
+  const form = entry.usage.find((candidate) => candidate.id === request.form);
+  if (form === undefined) {
+    throw new TypeError(
+      `Unknown kovo ${entry.name} semantic form ${JSON.stringify(request.form)}.`,
+    );
+  }
+  const semanticArguments = request.arguments as Readonly<Record<string, unknown>>;
+  const semanticOptions = (request.options ?? {}) as Readonly<Record<string, unknown>>;
+  const argv: string[] = [];
+  const admittedArguments = new Set<string>();
+  for (const token of positionalFormTokens(form)) {
+    if (token.kind === 'literal') {
+      argv.push(token.value);
+      continue;
+    }
+    admittedArguments.add(token.name);
+    const argumentValue = semanticArguments[token.name];
+    if (token.repeatable) {
+      if (!Array.isArray(argumentValue)) {
+        throw new TypeError(`Kovo ${entry.name} form ${form.id} requires ${token.name} values.`);
+      }
+      for (const item of argumentValue) argv.push(serializeSemanticValue(item, token.value));
+      continue;
+    }
+    if (argumentValue === undefined) {
+      if (token.required) {
+        throw new TypeError(`Kovo ${entry.name} form ${form.id} requires argument ${token.name}.`);
+      }
+      continue;
+    }
+    argv.push(serializeSemanticValue(argumentValue, token.value));
+  }
+  rejectSurplusSemanticKeys(semanticArguments, admittedArguments, `${entry.name} arguments`);
+
+  const admittedOptions = new Set(formOptionIds(form));
+  rejectSurplusSemanticKeys(semanticOptions, admittedOptions, `${entry.name} options`);
+  for (const rawOption of entry.options) {
+    const option: KovoCommandOptionSchema = rawOption;
+    if (!admittedOptions.has(option.id)) continue;
+    const optionValue = semanticOptions[option.id];
+    if (optionValue === undefined) continue;
+    if (option.value === undefined) {
+      if (typeof optionValue !== 'boolean') {
+        throw new TypeError(`Kovo option ${option.flags[0]} is boolean.`);
+      }
+      if (optionValue === (option.booleanValue ?? true)) argv.push(option.flags[0]);
+      continue;
+    }
+    const values = Array.isArray(optionValue) ? optionValue : [optionValue];
+    if (!option.repeatable && values.length > 1) {
+      throw new TypeError(`Kovo option ${option.flags[0]} is not repeatable.`);
+    }
+    for (const item of values) {
+      argv.push(option.flags[0], serializeSemanticValue(item, option.value));
+    }
+  }
+
+  const verified = parseKovoCommandInvocation(entry.name, argv);
+  if (!verified.ok || verified.value.form !== form.id) {
+    throw new TypeError(
+      verified.ok
+        ? `Kovo semantic request selected ${verified.value.form}, expected ${form.id}.`
+        : verified.message.trim(),
+    );
+  }
+  return [entry.name, ...argv];
+}
+
+function parseEntryInvocation(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+): EntryInvocationParseResult {
+  const literalForm = literalPrefixedForm(entry, args);
+  const forms = literalForm === undefined ? entry.usage : [literalForm];
+  const usage =
+    literalForm === undefined
+      ? entryUsageForError(entry)
+      : `usage: ${renderFormUsageLine(entry, literalForm)}`;
+  const admittedOptionIds =
+    literalForm === undefined ? undefined : new Set(formOptionIds(literalForm));
+  const tokenized = tokenizeCommandArgv(entry, args, usage, {
+    ...(literalForm === undefined ? {} : { displayName: `${entry.name} ${literalForm.id}` }),
+    ...(admittedOptionIds === undefined
+      ? {}
+      : { options: entry.options.filter((option) => admittedOptionIds.has(option.id)) }),
+  });
+  if (!tokenized.ok) return tokenized;
+  const successes: ParsedEntryForm[] = [];
+  const failures: FormParseFailure[] = [];
+  for (const form of forms) {
+    const parsed = parseEntryForm(entry, form, tokenized.value, usage);
+    if (parsed.ok) successes.push(parsed.value);
+    else
+      failures.push({
+        message: parsed.message,
+        priority: parsed.priority ?? 0,
+        score: parsed.score ?? 0,
+      });
+  }
+  if (successes.length > 0) {
+    successes.sort((left, right) => right.score - left.score);
+    return { ok: true, value: successes[0]! };
+  }
+  failures.sort((left, right) => right.priority - left.priority || right.score - left.score);
+  const failure = failures[0];
+  return {
+    error: 'usage',
+    message: failure?.message ?? usage,
+    ok: false,
+    ...(failure === undefined ? {} : { priority: failure.priority, score: failure.score }),
+  };
+}
+
+function literalPrefixedForm(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+): KovoCommandUsageForm | undefined {
+  const first = args[0];
+  if (first === undefined || first.startsWith('-')) return undefined;
+  const candidates = entry.usage.filter((form) => {
+    const positional = positionalFormTokens(form);
+    return positional[0]?.kind === 'literal' && positional[0].value === first;
+  });
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function tokenizeCommandArgv(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+  usage: string,
+  context: {
+    readonly displayName?: string;
+    readonly options?: readonly KovoCommandOptionSchema[];
+  } = {},
+):
+  | { readonly ok: true; readonly value: TokenizedCommandArgv }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false } {
+  const optionsByFlag = new Map<string, KovoCommandOptionSchema>();
+  for (const option of context.options ?? entry.options) {
+    for (const flag of option.flags) optionsByFlag.set(flag, option);
+  }
+  const displayName = context.displayName ?? entry.name;
+  const options = new Map<string, ParsedSemanticValue>();
+  const positionals: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === undefined) continue;
+    if (argument === '--help' || argument === '-h') {
+      return { error: 'help', message: usage, ok: false };
+    }
+    const equalsIndex = argument.indexOf('=');
+    const flag = equalsIndex > 0 ? argument.slice(0, equalsIndex) : argument;
+    const schema = flag.startsWith('-') ? optionsByFlag.get(flag) : undefined;
+    if (schema === undefined) {
+      if (argument.startsWith('-')) {
+        return {
+          error: 'usage',
+          message: `kovo: unknown ${displayName} option ${stableValue(argument)}.\n${usage}`,
+          ok: false,
+        };
+      }
+      positionals.push(argument);
+      continue;
+    }
+    if (schema.value === undefined) {
+      if (equalsIndex > 0) {
+        return {
+          error: 'usage',
+          message: `kovo: unknown ${displayName} option ${stableValue(argument)}.\n${usage}`,
+          ok: false,
+        };
+      }
+      if (options.has(schema.id)) {
+        return {
+          error: 'usage',
+          message: `kovo: ${displayName} option ${schema.flags[0]} may appear only once.\n${usage}`,
+          ok: false,
+        };
+      }
+      options.set(schema.id, schema.booleanValue ?? true);
+      continue;
+    }
+    const following = args[index + 1];
+    const rawValue = equalsIndex > 0 ? argument.slice(equalsIndex + 1) : following;
+    const followingFlag =
+      equalsIndex <= 0 && following !== undefined
+        ? optionsByFlag.get(
+            following.includes('=') ? following.slice(0, following.indexOf('=')) : following,
+          )
+        : undefined;
+    if (rawValue === undefined || rawValue.length === 0 || followingFlag !== undefined) {
+      return {
+        error: 'usage',
+        message: appendUsage(
+          schema.missingValueMessage ?? `kovo: ${schema.flags[0]} requires a value.\n`,
+          usage,
+        ),
+        ok: false,
+      };
+    }
+    if (equalsIndex <= 0) index += 1;
+    const parsed = parseSemanticValue(rawValue, schema.value);
+    if (!parsed.ok) {
+      return {
+        error: 'usage',
+        message: appendUsage(
+          schema.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
+            `kovo: ${schema.flags[0]} requires ${valueSchemaExpectation(schema.value)}; received ${stableValue(rawValue)}.\n`,
+          usage,
+        ),
+        ok: false,
+      };
+    }
+    if (!schema.repeatable && options.has(schema.id)) {
+      return {
+        error: 'usage',
+        message: `kovo: ${displayName} option ${schema.flags[0]} may appear only once.\n${usage}`,
+        ok: false,
+      };
+    }
+    if (schema.repeatable) {
+      const previous = options.get(schema.id);
+      const values = Array.isArray(previous) ? [...previous] : [];
+      values.push(parsed.value);
+      options.set(schema.id, values);
+    } else {
+      options.set(schema.id, parsed.value);
+    }
+  }
+  return {
+    ok: true,
+    value: {
       options,
-      positionals,
+      positionals: Object.freeze(positionals),
     },
   };
 }
 
-/** @internal Render a shared argv parse error. */
-export function commandArgvError(
-  name: string,
-  error: Exclude<ParseCommandArgvResult, { ok: true }>,
+function parseEntryForm(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  form: KovoCommandUsageForm,
+  tokenized: TokenizedCommandArgv,
   usage: string,
-): { message: string; ok: false } {
-  if (error.error === 'help') return { message: usage, ok: false };
-  if (error.error === 'missing-value' || error.error === 'invalid-value') {
-    return { message: appendUsage(error.message, usage), ok: false };
-  }
-  if (error.error === 'repeated-option') {
-    return {
-      message: `kovo: ${name} option ${error.option} may appear only once.\n${usage}`,
-      ok: false,
-    };
-  }
-  return {
-    message: `kovo: unknown ${name} option ${stableValue(error.option)}.\n${usage}`,
-    ok: false,
-  };
-}
-
-/** @internal Require exactly one positional argument. */
-export function requireSinglePositional(
-  parsed: ParsedCommandArgv,
-  options: {
-    readonly label: string;
-    readonly name: string;
-    readonly usage: string;
-  },
-): { ok: true; value: string } | { message: string; ok: false } {
-  const [value, extra] = parsed.positionals;
-  if (extra) {
-    return {
-      message: `kovo: ${options.name} accepts one ${options.label}.\n${options.usage}`,
-      ok: false,
-    };
-  }
-  if (!value) {
-    return {
-      message: `kovo: ${options.name} requires ${articleFor(options.label)} ${options.label}.\n${options.usage}`,
-      ok: false,
-    };
-  }
-  return { ok: true, value };
-}
-
-/** @internal True when a parsed boolean option appeared. */
-export function parsedBooleanOption(parsed: ParsedCommandArgv, id: string): boolean {
-  return parsed.options.get(id) === true;
-}
-
-/** @internal Return a parsed scalar option. */
-export function parsedStringOption(parsed: ParsedCommandArgv, id: string): string | undefined {
-  const optionValue = parsed.options.get(id);
-  return typeof optionValue === 'string' ? optionValue : undefined;
-}
-
-/** @internal Return a parsed integer option. */
-export function parsedIntegerOption(parsed: ParsedCommandArgv, id: string): number | undefined {
-  const optionValue = parsed.options.get(id);
-  return typeof optionValue === 'number' ? optionValue : undefined;
-}
-
-/** @internal Return a parsed repeatable option. */
-export function parsedStringListOption(parsed: ParsedCommandArgv, id: string): string[] {
-  const optionValue = parsed.options.get(id);
-  if (Array.isArray(optionValue)) {
-    return optionValue.filter((value): value is string => typeof value === 'string');
-  }
-  return typeof optionValue === 'string' ? [optionValue] : [];
-}
-
-/** @internal Return a schema-validated named positional argument. */
-export function parsedStringArgument(parsed: ParsedCommandArgv, id: string): string | undefined {
-  const value = parsed.arguments.get(id);
-  return typeof value === 'string' ? value : undefined;
-}
-
-/** @internal Require a schema default or explicit string option. */
-export function requiredParsedStringOption(parsed: ParsedCommandArgv, id: string): string {
-  const value = parsedStringOption(parsed, id);
-  if (value === undefined) {
-    throw new TypeError(`Kovo command schema did not produce required option ${id}.`);
-  }
-  return value;
-}
-
-/**
- * @internal Semantic programmatic request. Option keys are schema ids
- * (`out`, `severityFloor`), never argv spellings (`--out`,
- * `--severity-floor`).
- */
-type KovoSemanticScalarOptionValue<Option> = Option extends {
-  readonly value: { readonly kind: 'integer' };
-}
-  ? number
-  : string;
-
-type KovoSemanticOptionValue<Option extends KovoCommandOptionSchema> = Option extends {
-  readonly value: KovoCommandOptionSchema['value'];
-}
-  ? Option extends { readonly repeatable: true }
-    ? readonly KovoSemanticScalarOptionValue<Option>[]
-    : KovoSemanticScalarOptionValue<Option>
-  : boolean;
-
-type KovoSemanticCommandOptions<Entry extends KovoCommandEntry> = {
-  readonly [Option in Entry['options'][number] as Option['id']]?: KovoSemanticOptionValue<Option>;
-};
-
-/**
- * @internal
- *
- * Semantic programmatic request whose option keys are schema ids rather than
- * argv spellings.
- */
-export type KovoSemanticCommandRequest = {
-  [Entry in KovoCommandEntry as Entry['name']]: {
-    readonly command: Entry['name'];
-    readonly kind: 'command';
-    readonly operands?: readonly string[];
-    readonly options?: KovoSemanticCommandOptions<Entry>;
-  };
-}[KovoCommandEntry['name']];
-
-/** @internal Serialize a semantic request through the command AST into canonical argv. */
-export function commandRequestToArgv(request: KovoSemanticCommandRequest): string[] {
-  const entry = requireCommand(request.command);
-  const byId = new Map<string, KovoCommandOptionSchema>(
-    entry.options.map((item) => [item.id, item]),
-  );
-  const argv: string[] = [entry.name, ...(request.operands ?? [])];
-  const semanticOptions = request.options as
-    | Readonly<Record<string, boolean | number | string | readonly (number | string)[] | undefined>>
-    | undefined;
-  for (const [id, optionValue] of Object.entries(semanticOptions ?? {}).sort(([a], [b]) =>
-    a.localeCompare(b),
-  )) {
-    if (optionValue === undefined) continue;
-    const schema = byId.get(id);
-    if (!schema) {
-      throw new TypeError(`Unknown kovo ${entry.name} semantic option ${JSON.stringify(id)}.`);
+): EntryInvocationParseResult {
+  const admittedOptionIds = new Set(formOptionIds(form));
+  for (const optionId of tokenized.options.keys()) {
+    if (!admittedOptionIds.has(optionId)) {
+      return { error: 'usage', message: usage, ok: false, priority: 5, score: 0 };
     }
-    const canonicalFlag = schema.flags[0];
-    if (schema.value === undefined) {
-      if (typeof optionValue !== 'boolean') {
-        throw new TypeError(`Kovo option ${canonicalFlag} is boolean.`);
+  }
+  const semanticArguments: Record<string, number | string | readonly (number | string)[]> = {};
+  const positionalTokens = positionalFormTokens(form);
+  let position = 0;
+  let score = 0;
+  for (const [tokenIndex, token] of positionalTokens.entries()) {
+    if (token.kind === 'literal') {
+      if (tokenized.positionals[position] !== token.value) {
+        return { error: 'usage', message: usage, ok: false, priority: 10, score };
       }
-      if (optionValue === (schema.booleanValue ?? true)) argv.push(canonicalFlag);
+      position += 1;
+      score += 100;
       continue;
     }
-    if (typeof optionValue === 'boolean') {
-      throw new TypeError(`Kovo option ${canonicalFlag} requires ${schema.value.label}.`);
-    }
-    const values = Array.isArray(optionValue) ? optionValue : [optionValue];
-    if (!schema.repeatable && values.length > 1) {
-      throw new TypeError(`Kovo option ${canonicalFlag} is not repeatable.`);
-    }
-    for (const item of values) {
-      if (schema.value.kind === 'integer') {
-        if (typeof item !== 'number' || !Number.isSafeInteger(item)) {
-          throw new TypeError(`Kovo option ${canonicalFlag} requires an integer.`);
+    if (token.repeatable) {
+      const values: (number | string)[] = [];
+      for (; position < tokenized.positionals.length; position += 1) {
+        const rawValue = tokenized.positionals[position]!;
+        const parsed = parseSemanticValue(rawValue, token.value);
+        if (!parsed.ok) {
+          return formValueFailure(entry, token, rawValue, usage, score);
         }
-      } else if (typeof item !== 'string') {
-        throw new TypeError(`Kovo option ${canonicalFlag} requires ${schema.value.label}.`);
+        values.push(parsed.value);
+        score += token.value.kind === 'enum' ? 20 : 1;
       }
-      if (
-        schema.value.kind === 'enum' &&
-        schema.value.values !== undefined &&
-        !schema.value.values.includes(String(item))
-      ) {
-        throw new TypeError(
-          `Kovo option ${canonicalFlag} requires ${sentenceList(schema.value.values)}.`,
-        );
+      if (token.required && values.length === 0) {
+        return formMissingArgument(entry, token, usage, score);
       }
-      argv.push(canonicalFlag, String(item));
+      semanticArguments[token.name] = Object.freeze(values);
+      continue;
+    }
+    const rawValue = tokenized.positionals[position];
+    if (rawValue === undefined) {
+      if (token.required) return formMissingArgument(entry, token, usage, score);
+      continue;
+    }
+    const parsed = parseSemanticValue(rawValue, token.value);
+    if (!parsed.ok) {
+      const laterCapacity = positionalCapacity(positionalTokens.slice(tokenIndex + 1));
+      const remaining = tokenized.positionals.length - position;
+      if (!token.required && remaining <= laterCapacity) continue;
+      return formValueFailure(entry, token, rawValue, usage, score);
+    }
+    semanticArguments[token.name] = parsed.value;
+    position += 1;
+    score += token.value.kind === 'enum' ? 20 : 1;
+  }
+  if (position < tokenized.positionals.length) {
+    const argumentToken = positionalTokens.find(
+      (token): token is Extract<KovoCommandUsageToken, { kind: 'argument' }> =>
+        token.kind === 'argument',
+    );
+    return {
+      error: 'usage',
+      message:
+        argumentToken?.unexpectedValueMessage === undefined
+          ? prefixUsage(usage, argumentToken?.usageErrorPrefix)
+          : appendUsage(argumentToken.unexpectedValueMessage, usage),
+      ok: false,
+      priority: 12,
+      score,
+    };
+  }
+
+  const semanticOptions: Record<string, ParsedSemanticValue | undefined> = {};
+  for (const optionId of admittedOptionIds) {
+    const schema = entry.options.find((option) => option.id === optionId) as
+      | KovoCommandOptionSchema
+      | undefined;
+    if (schema === undefined) {
+      throw new TypeError(`Kovo ${entry.name}/${form.id} references unknown option ${optionId}.`);
+    }
+    const explicit = tokenized.options.get(optionId);
+    if (explicit !== undefined) {
+      semanticOptions[optionId] = Array.isArray(explicit) ? Object.freeze([...explicit]) : explicit;
+    } else if (schema.value?.default !== undefined) {
+      semanticOptions[optionId] = schema.value.default;
+    } else if (schema.repeatable) {
+      semanticOptions[optionId] = Object.freeze([]);
+    } else if (schema.value === undefined) {
+      semanticOptions[optionId] = schema.defaultBoolean ?? !(schema.booleanValue ?? true);
+    } else {
+      semanticOptions[optionId] = undefined;
     }
   }
-  return argv;
+  for (const token of form.tokens) {
+    if (token.kind === 'option' && token.required) {
+      const schema = entry.options.find((option) => option.id === token.option) as
+        | KovoCommandOptionSchema
+        | undefined;
+      if (!tokenized.options.has(token.option)) {
+        return requiredOptionFailure(entry, schema, usage, score);
+      }
+      score += 50;
+    }
+    if (token.kind === 'group') {
+      const groupWasSelected = token.tokens.some((member) => tokenized.options.has(member.option));
+      if (!token.required && !groupWasSelected) continue;
+      for (const member of token.tokens) {
+        if (!member.required || tokenized.options.has(member.option)) continue;
+        const schema = entry.options.find((option) => option.id === member.option) as
+          | KovoCommandOptionSchema
+          | undefined;
+        return requiredOptionFailure(entry, schema, usage, score);
+      }
+    }
+  }
+  for (const constraint of form.optionRequiresArgument ?? []) {
+    if (
+      semanticOptions[constraint.option] === true &&
+      !constraint.values.includes(String(semanticArguments[constraint.argument]))
+    ) {
+      return { error: 'usage', message: usage, ok: false, priority: 30, score };
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      arguments: Object.freeze(semanticArguments),
+      form,
+      options: Object.freeze(semanticOptions),
+      score,
+    },
+  };
+}
+
+function formMissingArgument(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  token: Extract<KovoCommandUsageToken, { kind: 'argument' }>,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message: appendUsage(
+      token.missingValueMessage ??
+        `kovo: ${entry.name} requires ${articleFor(token.value.label)} ${token.value.label}.\n`,
+      usage,
+    ),
+    ok: false,
+    priority: 25,
+    score,
+  };
+}
+
+function formValueFailure(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  token: Extract<KovoCommandUsageToken, { kind: 'argument' }>,
+  rawValue: string,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message:
+      token.invalidValueMessage !== undefined && token.invalidValueUsage === 'omit'
+        ? token.invalidValueMessage.replaceAll('{value}', stableValue(rawValue))
+        : appendUsage(
+            token.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
+              `kovo: ${entry.name} requires ${valueSchemaExpectation(token.value)}; received ${stableValue(rawValue)}.\n`,
+            usage,
+          ),
+    ok: false,
+    priority: token.invalidValueMessage === undefined ? 20 : 35,
+    score,
+  };
+}
+
+function requiredOptionFailure(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  schema: KovoCommandOptionSchema | undefined,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message: appendUsage(
+      schema?.missingValueMessage ??
+        `kovo: ${entry.name} requires ${schema?.flags[0] ?? 'an option'}.\n`,
+      usage,
+    ),
+    ok: false,
+    priority: 25,
+    score,
+  };
+}
+
+function positionalFormTokens(
+  form: KovoCommandUsageForm,
+): readonly (
+  | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+  | Extract<KovoCommandUsageToken, { kind: 'literal' }>
+)[] {
+  return form.tokens.filter(
+    (
+      token,
+    ): token is
+      | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+      | Extract<KovoCommandUsageToken, { kind: 'literal' }> =>
+      token.kind === 'argument' || token.kind === 'literal',
+  );
+}
+
+function positionalCapacity(
+  tokens: readonly (
+    | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+    | Extract<KovoCommandUsageToken, { kind: 'literal' }>
+  )[],
+): number {
+  return tokens.some((token) => token.kind === 'argument' && token.repeatable)
+    ? Number.POSITIVE_INFINITY
+    : tokens.length;
+}
+
+function formOptionIds(form: KovoCommandUsageForm): string[] {
+  return form.tokens.flatMap((token) => {
+    if (token.kind === 'option') return [token.option];
+    if (token.kind === 'group') return token.tokens.map((member) => member.option);
+    return [];
+  });
+}
+
+function entryUsageForError(entry: KovoCommandEntry | KovoMetaCommandSchemaEntry): string {
+  const usage = `usage: ${renderJoinedUsage(entry)}`;
+  return 'usageErrorPrefix' in entry ? prefixUsage(usage, entry.usageErrorPrefix) : usage;
+}
+
+function serializeSemanticValue(value: unknown, schema: KovoCommandValueSchema): string {
+  const rawValue = typeof value === 'number' ? String(value) : value;
+  if (typeof rawValue !== 'string' || !parseSemanticValue(rawValue, schema).ok) {
+    throw new TypeError(`Kovo semantic value requires ${valueSchemaExpectation(schema)}.`);
+  }
+  return rawValue;
+}
+
+function rejectSurplusSemanticKeys(
+  value: Readonly<Record<string, unknown>>,
+  admitted: ReadonlySet<string>,
+  label: string,
+): void {
+  for (const key of Object.keys(value)) {
+    if (!admitted.has(key)) {
+      throw new TypeError(`Unknown Kovo ${label} field ${JSON.stringify(key)}.`);
+    }
+  }
 }
 
 function requireCommand<Name extends KovoCommandName>(
@@ -830,228 +1220,10 @@ function requireMetaCommand<Name extends KovoMetaCommandName>(
   return entry as Extract<(typeof KOVO_CLI_SCHEMA.metaCommands)[number], { name: Name }>;
 }
 
-function requireCliEntry(
-  name: KovoCommandName | KovoMetaCommandName,
-): KovoCommandEntry | KovoMetaCommandSchemaEntry {
-  const capability = KOVO_COMMAND_SCHEMA.find((candidate) => candidate.name === name);
-  if (capability !== undefined) return capability;
-  const meta = KOVO_CLI_SCHEMA.metaCommands.find((candidate) => candidate.name === name);
-  if (meta !== undefined) return meta;
-  throw new TypeError(`Missing Kovo CLI schema for ${name}.`);
-}
-
 function requireUsageForm(command: KovoCommandName, id: string): KovoCommandUsageForm {
   const form = requireCommand(command).usage.find((candidate) => candidate.id === id);
   if (!form) throw new TypeError(`Missing Kovo command usage form ${command}/${id}.`);
   return form;
-}
-
-function argvSpec(command: KovoCommandName, optionIds?: readonly string[]): CommandArgvSpec {
-  const entry = requireCommand(command);
-  const acceptedIds = optionIds === undefined ? undefined : new Set(optionIds);
-  const soleForm = entry.usage.length === 1 ? entry.usage[0] : undefined;
-  return Object.freeze({
-    command,
-    options: Object.freeze(
-      entry.options
-        .filter((item) => acceptedIds === undefined || acceptedIds.has(item.id))
-        .map(argvOptionSpec),
-    ),
-    ...(soleForm === undefined
-      ? {}
-      : {
-          requiredOptions: requiredUsageOptionIds(soleForm),
-          usageForm: soleForm.id,
-          validatePositionals: true,
-        }),
-  });
-}
-
-function argvSpecForUsage(command: KovoCommandName, formId: string): CommandArgvSpec {
-  const form = requireUsageForm(command, formId);
-  const optionIds = form.tokens
-    .filter(
-      (token): token is Extract<KovoCommandUsageToken, { kind: 'option' }> =>
-        token.kind === 'option',
-    )
-    .map((token) => token.option);
-  return Object.freeze({
-    ...argvSpec(command, optionIds),
-    requiredOptions: requiredUsageOptionIds(form),
-    usageForm: formId,
-    validatePositionals: false,
-  });
-}
-
-function metaArgvSpec(entry: KovoMetaCommandSchemaEntry): CommandArgvSpec {
-  const form = entry.usage[0];
-  if (form === undefined) throw new TypeError(`Missing Kovo meta usage form for ${entry.name}.`);
-  return Object.freeze({
-    command: entry.name,
-    options: Object.freeze(entry.options.map(argvOptionSpec)),
-    requiredOptions: requiredUsageOptionIds(form),
-    usageForm: form.id,
-    validatePositionals: true,
-  });
-}
-
-function formatMetaCommandUsage(entry: KovoMetaCommandSchemaEntry): string {
-  return entry.usage.map((form) => `usage: ${renderFormUsageLine(entry, form)}`).join('\n');
-}
-
-function argvOptionSpec(schema: KovoCommandOptionSchema): CommandArgvOptionSpec {
-  return Object.freeze({
-    aliases: Object.freeze(schema.flags.slice(1)),
-    ...(schema.booleanValue === undefined ? {} : { booleanValue: schema.booleanValue }),
-    ...(schema.category === undefined ? {} : { category: schema.category }),
-    ...(schema.value?.default === undefined && schema.defaultBoolean === undefined
-      ? {}
-      : { defaultValue: schema.value?.default ?? schema.defaultBoolean }),
-    ...(schema.value?.values === undefined ? {} : { enumValues: schema.value.values }),
-    flag: schema.flags[0],
-    id: schema.id,
-    ...(schema.invalidValueMessage === undefined
-      ? {}
-      : { invalidValueMessage: schema.invalidValueMessage }),
-    kind: schema.value === undefined ? 'boolean' : 'value',
-    ...(schema.value?.maximum === undefined ? {} : { maximum: schema.value.maximum }),
-    ...(schema.value?.minimum === undefined ? {} : { minimum: schema.value.minimum }),
-    ...(schema.repeatable ? { repeat: true } : {}),
-    ...(schema.missingValueMessage === undefined
-      ? {}
-      : { requiresValueMessage: schema.missingValueMessage }),
-    ...(schema.value === undefined ? {} : { valueKind: schema.value.kind }),
-  });
-}
-
-function parseArgvValue(
-  rawValue: string,
-  schema: CommandArgvOptionSpec,
-):
-  | { readonly error: 'invalid-value'; readonly message: string; readonly ok: false }
-  | { readonly ok: true; readonly value: number | string } {
-  const parsed = parseSemanticValue(rawValue, {
-    kind: schema.valueKind ?? 'string',
-    label: schema.flag,
-    ...(schema.enumValues === undefined ? {} : { values: schema.enumValues }),
-    ...(schema.maximum === undefined ? {} : { maximum: schema.maximum }),
-    ...(schema.minimum === undefined ? {} : { minimum: schema.minimum }),
-  });
-  if (parsed.ok) return parsed;
-  return {
-    error: 'invalid-value',
-    message:
-      schema.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
-      `kovo: ${schema.flag} requires ${valueExpectation(schema)}; received ${stableValue(rawValue)}.\n`,
-    ok: false,
-  };
-}
-
-function parseUsageFormArguments(
-  spec: CommandArgvSpec,
-  positionals: readonly string[],
-):
-  | { readonly error: 'invalid-value'; readonly message: string; readonly ok: false }
-  | { readonly error: 'missing-value'; readonly message: string; readonly ok: false }
-  | {
-      readonly ok: true;
-      readonly value: Map<string, number | string | readonly (number | string)[]>;
-    } {
-  const entry = requireCliEntry(spec.command);
-  const form = entry.usage.find((candidate) => candidate.id === spec.usageForm);
-  if (form === undefined) {
-    throw new TypeError(`Missing Kovo command usage form ${spec.command}/${spec.usageForm}.`);
-  }
-  const semanticArguments = new Map<string, number | string | readonly (number | string)[]>();
-  const usageTokens: readonly KovoCommandUsageToken[] = form.tokens;
-  const positionalTokens = usageTokens.filter(
-    (
-      token,
-    ): token is
-      | Extract<KovoCommandUsageToken, { kind: 'argument' }>
-      | Extract<KovoCommandUsageToken, { kind: 'literal' }> =>
-      token.kind === 'argument' || token.kind === 'literal',
-  );
-  let position = 0;
-  for (const token of positionalTokens) {
-    if (token.kind === 'literal') {
-      if (positionals[position] !== token.value) {
-        return {
-          error: 'invalid-value',
-          message: `kovo: ${entry.name} requires ${token.value}.\n`,
-          ok: false,
-        };
-      }
-      position += 1;
-      continue;
-    }
-
-    if (token.repeatable) {
-      const values: (number | string)[] = [];
-      for (; position < positionals.length; position += 1) {
-        const parsed = parseSemanticValue(positionals[position]!, token.value);
-        if (!parsed.ok) {
-          return {
-            error: 'invalid-value',
-            message:
-              token.invalidValueMessage ??
-              `kovo: ${entry.name} requires ${valueSchemaExpectation(token.value)}.\n`,
-            ok: false,
-          };
-        }
-        values.push(parsed.value);
-      }
-      if (token.required && values.length === 0) {
-        return {
-          error: 'missing-value',
-          message:
-            token.missingValueMessage ??
-            `kovo: ${entry.name} requires ${articleFor(token.value.label)} ${token.value.label}.\n`,
-          ok: false,
-        };
-      }
-      semanticArguments.set(token.name, values);
-      continue;
-    }
-
-    const rawValue = positionals[position];
-    if (rawValue === undefined) {
-      if (!token.required) continue;
-      return {
-        error: 'missing-value',
-        message:
-          token.missingValueMessage ??
-          `kovo: ${entry.name} requires ${articleFor(token.value.label)} ${token.value.label}.\n`,
-        ok: false,
-      };
-    }
-    const parsed = parseSemanticValue(rawValue, token.value);
-    if (!parsed.ok) {
-      return {
-        error: 'invalid-value',
-        message:
-          token.invalidValueMessage ??
-          `kovo: ${entry.name} requires ${valueSchemaExpectation(token.value)}; received ${stableValue(rawValue)}.\n`,
-        ok: false,
-      };
-    }
-    semanticArguments.set(token.name, parsed.value);
-    position += 1;
-  }
-  if (position < positionals.length) {
-    const argumentToken = positionalTokens.find(
-      (token): token is Extract<KovoCommandUsageToken, { kind: 'argument' }> =>
-        token.kind === 'argument',
-    );
-    return {
-      error: 'invalid-value',
-      message:
-        argumentToken?.unexpectedValueMessage ??
-        `kovo: ${entry.name} received unexpected argument ${stableValue(positionals[position])}.\n`,
-      ok: false,
-    };
-  }
-  return { ok: true, value: semanticArguments };
 }
 
 function parseSemanticValue(
@@ -1083,28 +1255,6 @@ function parseSemanticValue(
   return { ok: true, value: rawValue };
 }
 
-function requiredUsageOptionIds(form: KovoCommandUsageForm): readonly string[] {
-  return Object.freeze(
-    form.tokens.flatMap((token) => {
-      if (token.kind === 'option') return token.required ? [token.option] : [];
-      if (token.kind !== 'group' || !token.required) return [];
-      return token.tokens.filter((item) => item.required).map((item) => item.option);
-    }),
-  );
-}
-
-function valueExpectation(schema: CommandArgvOptionSpec): string {
-  if (schema.enumValues !== undefined) return sentenceList(schema.enumValues);
-  if (schema.valueKind === 'integer') {
-    if (schema.minimum !== undefined && schema.maximum !== undefined) {
-      return `an integer from ${schema.minimum} through ${schema.maximum}`;
-    }
-    return 'an integer';
-  }
-  if (schema.valueKind === 'url') return 'an absolute URL';
-  return schema.valueKind ?? 'a value';
-}
-
 function valueSchemaExpectation(schema: KovoCommandValueSchema): string {
   if (schema.values !== undefined) return sentenceList(schema.values);
   return schema.kind === 'integer' ? 'an integer' : schema.label;
@@ -1114,7 +1264,7 @@ function renderInlineUsage(entry: KovoCommandSchemaEntry): string {
   return `usage: ${renderJoinedUsage(entry)}`;
 }
 
-function renderJoinedUsage(entry: KovoCommandSchemaEntry): string {
+function renderJoinedUsage(entry: KovoRenderableCommandSchema): string {
   return entry.usage.map((form) => renderFormUsageLine(entry, form)).join(' | ');
 }
 
@@ -1148,7 +1298,7 @@ function renderUsageToken(
   if (token.kind === 'literal') return token.value;
   if (token.kind === 'argument') {
     const core =
-      token.value.kind === 'enum' && token.value.values
+      token.value.kind === 'enum' && token.value.values && token.value.usage !== 'label'
         ? token.value.values.join('|')
         : !token.required && token.value.kind === 'path'
           ? token.value.label
@@ -1181,7 +1331,7 @@ function referenceFlags(entry: KovoRenderableCommandSchema): readonly CommandFla
         const syntax =
           token.kind === 'literal'
             ? token.value
-            : token.value.kind === 'enum' && token.value.values
+            : token.value.kind === 'enum' && token.value.values && token.value.usage !== 'label'
               ? token.value.values.join('|')
               : `<${token.value.label}${token.repeatable ? '...' : ''}>`;
         if (!seen.has(syntax)) {
@@ -1345,13 +1495,7 @@ function orderedCommands(): KovoCommandEntry[] {
 }
 
 function readCliVersion(): string {
-  const parsed = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
-    version?: unknown;
-  };
-  if (typeof parsed.version !== 'string' || parsed.version.length === 0) {
-    throw new TypeError('@kovojs/cli package.json must contain a version.');
-  }
-  return parsed.version;
+  return readCliPackageVersion();
 }
 
 function sentenceList(values: readonly string[]): string {
@@ -1372,6 +1516,10 @@ function appendUsage(message: string, usage: string): string {
   const normalizedUsage = usage.trim();
   if (normalizedUsage.length === 0 || message.includes(normalizedUsage)) return message;
   return `${message.trimEnd()}\n${usage}`;
+}
+
+function prefixUsage(usage: string, prefix: 'kovo' | undefined): string {
+  return prefix === 'kovo' && !usage.startsWith('kovo: ') ? `kovo: ${usage}` : usage;
 }
 
 function fishEscape(value: string): string {

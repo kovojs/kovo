@@ -9,6 +9,7 @@
  * protocol versions are adapters over those facts. This keeps the command line
  * inspectable without making an argv-shaped interface the programmatic API.
  */
+import { KOVO_ADD_COMPONENT_NAMES } from './add-component-names.js';
 
 /** @internal Human-facing command groups used by root help and generated references. */
 export type KovoCommandCategory = 'agent-operator' | 'daily-build' | 'inspect-security';
@@ -36,6 +37,7 @@ export interface KovoCommandValueSchema {
   readonly label: string;
   readonly maximum?: number;
   readonly minimum?: number;
+  readonly usage?: 'label';
   readonly values?: readonly string[];
 }
 
@@ -73,12 +75,14 @@ export type KovoCommandUsageToken =
   | {
       readonly description?: string;
       readonly invalidValueMessage?: string;
+      readonly invalidValueUsage?: 'omit';
       readonly kind: 'argument';
       readonly missingValueMessage?: string;
       readonly name: string;
       readonly repeatable?: boolean;
       readonly required: boolean;
       readonly unexpectedValueMessage?: string;
+      readonly usageErrorPrefix?: 'kovo';
       readonly value: KovoCommandValueSchema;
     }
   | {
@@ -95,7 +99,15 @@ export type KovoCommandUsageToken =
 
 /** @internal One valid command shape. */
 export interface KovoCommandUsageForm {
+  /** This form requires the asynchronous dispatcher even when sibling forms do not. */
+  readonly async?: true;
   readonly id: string;
+  /** Cross-field grammar that remains semantic rather than argv-shaped. */
+  readonly optionRequiresArgument?: readonly {
+    readonly argument: string;
+    readonly option: string;
+    readonly values: readonly string[];
+  }[];
   readonly summary?: string;
   readonly tokens: readonly KovoCommandUsageToken[];
 }
@@ -114,6 +126,7 @@ export interface KovoCommandSchemaEntry {
   readonly resultProtocol: string | null;
   readonly summary: string;
   readonly usage: readonly KovoCommandUsageForm[];
+  readonly usageErrorPrefix?: 'kovo';
 }
 
 /** @internal One framework-owned meta command handled before capability dispatch. */
@@ -137,31 +150,48 @@ const exitsWithUnknown = Object.freeze({
   unknown: 2,
 } as const);
 
-function value(
-  kind: KovoCommandValueKind,
-  label: string,
-  options: {
+function value<
+  const Kind extends KovoCommandValueKind,
+  const Label extends string,
+  const Options extends {
     readonly default?: number | string;
     readonly maximum?: number;
     readonly minimum?: number;
+    readonly usage?: 'label';
     readonly values?: readonly string[];
   } = {},
-): KovoCommandValueSchema {
+>(
+  kind: Kind,
+  label: Label,
+  options: Options = {} as Options,
+): Readonly<{ kind: Kind; label: Label }> & Options {
   return { kind, label, ...options };
 }
 
-function argument(
-  name: string,
-  schema: KovoCommandValueSchema,
-  options: {
+function argument<
+  const Name extends string,
+  const Schema,
+  const Options extends {
     readonly description?: string;
     readonly invalidValueMessage?: string;
+    readonly invalidValueUsage?: 'omit';
     readonly missingValueMessage?: string;
     readonly repeatable?: boolean;
     readonly required?: boolean;
     readonly unexpectedValueMessage?: string;
+    readonly usageErrorPrefix?: 'kovo';
   } = {},
-): KovoCommandUsageToken {
+>(
+  name: Name,
+  schema: Schema,
+  options: Options = {} as Options,
+): Readonly<{
+  kind: 'argument';
+  name: Name;
+  required: Options extends { readonly required: infer Required extends boolean } ? Required : true;
+  value: Schema;
+}> &
+  Omit<Options, 'required'> {
   return {
     kind: 'argument',
     name,
@@ -171,6 +201,9 @@ function argument(
     ...(options.invalidValueMessage === undefined
       ? {}
       : { invalidValueMessage: options.invalidValueMessage }),
+    ...(options.invalidValueUsage === undefined
+      ? {}
+      : { invalidValueUsage: options.invalidValueUsage }),
     ...(options.missingValueMessage === undefined
       ? {}
       : { missingValueMessage: options.missingValueMessage }),
@@ -178,10 +211,24 @@ function argument(
     ...(options.unexpectedValueMessage === undefined
       ? {}
       : { unexpectedValueMessage: options.unexpectedValueMessage }),
-  };
+    ...(options.usageErrorPrefix === undefined
+      ? {}
+      : { usageErrorPrefix: options.usageErrorPrefix }),
+  } as Readonly<{
+    kind: 'argument';
+    name: Name;
+    required: Options extends { readonly required: infer Required extends boolean }
+      ? Required
+      : true;
+    value: Schema;
+  }> &
+    Omit<Options, 'required'>;
 }
 
-function literal(value: string, description?: string): KovoCommandUsageToken {
+function literal<const Value extends string>(
+  value: Value,
+  description?: string,
+): Readonly<{ description?: string; kind: 'literal'; value: Value }> {
   return {
     kind: 'literal',
     value,
@@ -189,24 +236,33 @@ function literal(value: string, description?: string): KovoCommandUsageToken {
   };
 }
 
-function option(option: string, required = false, valueLabel?: string): KovoCommandUsageToken {
+function option<const Option extends string, const Required extends boolean = false>(
+  option: Option,
+  required: Required = false as Required,
+  valueLabel?: string,
+): Readonly<{ kind: 'option'; option: Option; valueLabel?: string }> &
+  (Required extends true ? Readonly<{ required: true }> : unknown) {
   return {
     kind: 'option',
     option,
     ...(required ? { required: true } : {}),
     ...(valueLabel === undefined ? {} : { valueLabel }),
-  };
+  } as Readonly<{ kind: 'option'; option: Option; valueLabel?: string }> &
+    (Required extends true ? Readonly<{ required: true }> : unknown);
 }
 
-function optionGroup(
-  tokens: readonly {
+function optionGroup<
+  const Tokens extends readonly {
     readonly kind: 'option';
     readonly option: string;
     readonly required?: boolean;
     readonly valueLabel?: string;
   }[],
-  required = false,
-): KovoCommandUsageToken {
+  const Required extends boolean = false,
+>(
+  tokens: Tokens,
+  required: Required = false as Required,
+): Readonly<{ kind: 'group'; required: Required; tokens: Tokens }> {
   return { kind: 'group', required, tokens };
 }
 
@@ -417,10 +473,19 @@ export const KOVO_COMMAND_SCHEMA = [
       {
         id: 'components',
         tokens: [
-          argument('components', value('enum', 'component'), {
-            description: 'One or more component catalog names.',
-            repeatable: true,
-          }),
+          argument(
+            'components',
+            value('enum', 'component', {
+              usage: 'label',
+              values: KOVO_ADD_COMPONENT_NAMES,
+            }),
+            {
+              description: 'One or more component catalog names.',
+              invalidValueMessage: `kovo: unknown component {value}. available: ${KOVO_ADD_COMPONENT_NAMES.join(', ')}.\n`,
+              invalidValueUsage: 'omit',
+              repeatable: true,
+            },
+          ),
           option('out'),
         ],
       },
@@ -446,7 +511,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'audit',
         tokens: [
           option('failOnFindings'),
-          argument('graph', value('path', 'graph.json'), { required: false }),
+          argument('graph', value('path', 'graph.json'), {
+            required: false,
+            usageErrorPrefix: 'kovo',
+          }),
         ],
       },
     ],
@@ -515,6 +583,7 @@ export const KOVO_COMMAND_SCHEMA = [
     referenceUsage: 'inline',
     resultProtocol: 'kovo-check/v1',
     summary: 'Run consistency, security, environment, and advisory verification.',
+    usageErrorPrefix: 'kovo',
     usage: [
       {
         id: 'graph',
@@ -526,6 +595,9 @@ export const KOVO_COMMAND_SCHEMA = [
             }),
             {
               description: 'Select one focused graph-verification family.',
+              invalidValueMessage:
+                'kovo: unsupported check family {value}. expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n',
+              invalidValueUsage: 'omit',
               required: false,
             },
           ),
@@ -541,6 +613,7 @@ export const KOVO_COMMAND_SCHEMA = [
         ],
       },
       {
+        async: true,
         id: 'advisories',
         summary: 'Authenticate and match the signed Kovo advisory feed.',
         tokens: [
@@ -575,7 +648,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'component',
         tokens: [
           literal('component', 'Lower one authored component.'),
-          argument('source', value('path', 'source.tsx')),
+          argument('source', value('path', 'source.tsx'), {
+            missingValueMessage: 'kovo: compile component requires a source path.\n',
+            unexpectedValueMessage: 'kovo: compile component accepts one source path.\n',
+          }),
           option('out', true, 'artifact.tsx'),
           option('fileName'),
           option('check'),
@@ -592,7 +668,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'route',
         tokens: [
           literal('route', 'Lower one authored route.'),
-          argument('source', value('path', 'source.tsx')),
+          argument('source', value('path', 'source.tsx'), {
+            missingValueMessage: 'kovo: compile route requires a source path.\n',
+            unexpectedValueMessage: 'kovo: compile route accepts one source path.\n',
+          }),
           option('out', true, 'artifact.tsx'),
           option('fileName'),
           option('artifactFileName'),
@@ -605,7 +684,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'graph',
         tokens: [
           literal('graph', 'Compile a graph input artifact.'),
-          argument('input', value('path', 'input.json')),
+          argument('input', value('path', 'input.json'), {
+            missingValueMessage: 'kovo: compile graph requires an input path.\n',
+            unexpectedValueMessage: 'kovo: compile graph accepts one input path.\n',
+          }),
           option('out', true, 'graph.json'),
           option('check'),
         ],
@@ -614,7 +696,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'mutation-inputs',
         tokens: [
           literal('mutation-inputs', 'Extract mutation-input facts.'),
-          argument('source', value('path', 'source.ts')),
+          argument('source', value('path', 'source.ts'), {
+            missingValueMessage: 'kovo: compile mutation-inputs requires a source path.\n',
+            unexpectedValueMessage: 'kovo: compile mutation-inputs accepts one source path.\n',
+          }),
           option('out', true, 'facts.json'),
           option('fileName'),
           option('check'),
@@ -624,7 +709,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'drizzle-static',
         tokens: [
           literal('drizzle-static', 'Derive static Drizzle facts.'),
-          argument('input', value('path', 'input.json')),
+          argument('input', value('path', 'input.json'), {
+            missingValueMessage: 'kovo: compile drizzle-static requires an input path.\n',
+            unexpectedValueMessage: 'kovo: compile drizzle-static accepts one input path.\n',
+          }),
           option('out', true, 'facts.json'),
           option('check'),
         ],
@@ -633,7 +721,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'drizzle-optimistic',
         tokens: [
           literal('drizzle-optimistic', 'Derive a Drizzle optimistic transform.'),
-          argument('input', value('path', 'input.json')),
+          argument('input', value('path', 'input.json'), {
+            missingValueMessage: 'kovo: compile drizzle-optimistic requires an input path.\n',
+            unexpectedValueMessage: 'kovo: compile drizzle-optimistic accepts one input path.\n',
+          }),
           option('out', true, 'artifact.ts'),
           option('factsOut'),
           option('check'),
@@ -643,7 +734,10 @@ export const KOVO_COMMAND_SCHEMA = [
         id: 'package-css',
         tokens: [
           literal('package-css', 'Extract CSS for a public component package.'),
-          argument('package', value('string', 'package')),
+          argument('package', value('string', 'package'), {
+            missingValueMessage: 'kovo: compile package-css requires a package name.\n',
+            unexpectedValueMessage: 'kovo: compile package-css accepts one package name.\n',
+          }),
           option('out', true, 'file.css'),
           option('entry'),
           option('check'),
@@ -816,9 +910,14 @@ export const KOVO_COMMAND_SCHEMA = [
     referenceUsage: 'multiline',
     resultProtocol: 'kovo-explain/v1',
     summary: 'Render stable proof facts for a subject or security review.',
+    usageErrorPrefix: 'kovo',
     usage: [
       {
         id: 'target',
+        optionRequiresArgument: [
+          { argument: 'kind', option: 'optimistic', values: ['mutation'] },
+          { argument: 'kind', option: 'layouts', values: ['page'] },
+        ],
         tokens: [
           argument(
             'kind',
@@ -840,33 +939,104 @@ export const KOVO_COMMAND_SCHEMA = [
           argument('graph', value('path', 'graph.json'), { required: false }),
         ],
       },
-      ...[
-        ['sources-sinks', 'sourcesSinks'],
-        ['tasks', 'tasks'],
-        ['agent', 'agent'],
-        ['grants', 'grants'],
-        ['endpoints', 'endpoints'],
-        ['revealed', 'revealed'],
-        ['trust', 'trust'],
-        ['capabilities', 'capabilities'],
-        ['cookies', 'cookies'],
-        ['authorization', 'authorization'],
-        ['access', 'access'],
-        ['unguarded', 'unguarded'],
-        ['unscoped', 'unscoped'],
-      ].map(([id, optionId]) => ({
-        id: id!,
+      {
+        id: 'sources-sinks',
         tokens: [
-          option(optionId!, true),
-          ...(id === 'access' || id === 'unguarded' || id === 'unscoped'
-            ? [option('failOnFindings')]
-            : []),
+          option('sourcesSinks', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
         ],
-      })),
+      },
+      {
+        id: 'tasks',
+        tokens: [
+          option('tasks', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'agent',
+        tokens: [
+          option('agent', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'grants',
+        tokens: [
+          option('grants', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'endpoints',
+        tokens: [
+          option('endpoints', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'revealed',
+        tokens: [
+          option('revealed', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'trust',
+        tokens: [
+          option('trust', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'capabilities',
+        tokens: [
+          option('capabilities', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'cookies',
+        tokens: [
+          option('cookies', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'authorization',
+        tokens: [
+          option('authorization', true),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'access',
+        tokens: [
+          option('access', true),
+          option('failOnFindings'),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'unguarded',
+        tokens: [
+          option('unguarded', true),
+          option('failOnFindings'),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
+      {
+        id: 'unscoped',
+        tokens: [
+          option('unscoped', true),
+          option('failOnFindings'),
+          argument('graph', value('path', 'graph.json'), { required: false }),
+        ],
+      },
       { id: 'auth-lifecycle', tokens: [option('authLifecycle', true)] },
       { id: 'model-boundaries', tokens: [option('modelBoundaries', true)] },
       {
+        async: true,
         id: 'attest',
         tokens: [
           option('attest', true),
@@ -1116,6 +1286,25 @@ export type KovoAsyncCommandName = Extract<KovoCommandEntry, { async: true }>['n
 
 /** @internal Commands whose handlers are synchronous. */
 export type KovoSyncCommandName = Exclude<KovoCommandEntry, { async: true }>['name'];
+
+/** @internal Result classes whose numeric status is owned by the command schema. */
+export type KovoCommandExitClass = 'finding' | 'success' | 'unknown' | 'usage';
+
+/** @internal Resolve one process exit code through the named command's schema. */
+export function kovoCommandExitCode(
+  name: KovoCommandName,
+  outcome: KovoCommandExitClass,
+): 0 | 1 | 2 {
+  const entry = KOVO_COMMAND_SCHEMA.find((candidate) => candidate.name === name);
+  if (entry === undefined) throw new TypeError(`Missing Kovo command schema for ${name}.`);
+  if (outcome === 'unknown') {
+    if (!('unknown' in entry.exits) || entry.exits.unknown !== 2) {
+      throw new TypeError(`Kovo command ${name} does not admit an UNKNOWN result.`);
+    }
+    return entry.exits.unknown;
+  }
+  return entry.exits[outcome];
+}
 
 /** @internal Resolve the schema-owned result protocol for one command. */
 export function kovoCommandResultProtocol(name: KovoCommandName): string | null {
