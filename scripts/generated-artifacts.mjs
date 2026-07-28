@@ -9,6 +9,7 @@ export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
 });
 
 export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
+  cliSemanticCommandRequest: 'cli-semantic-command-request',
   diagnosticRegistry: 'diagnostic-registry',
   frameworkExportPosture: 'framework-export-posture',
   icons: 'icons',
@@ -56,6 +57,17 @@ export const generatedArtifactInventory = Object.freeze([
     gitPathspecs: Object.freeze(['packages/create-kovo/templates/graph.json']),
     pathPatterns: Object.freeze([/^packages\/create-kovo\/templates\/graph\.json$/]),
     spec: 'SPEC.md §5.2 rule 8',
+  },
+  {
+    id: 'cli-semantic-command-request-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.cliSemanticCommandRequest,
+    generatorCheckCommand: Object.freeze(['pnpm', 'generate:cli-command-request', '--', '--check']),
+    pathPatterns: Object.freeze([/^packages\/cli\/src\/semantic-command-request\.generated\.ts$/]),
+    spec: 'SPEC.md §1.3 / §11 semantic command and diagnostic tooling surface',
   },
   {
     id: 'framework-public-runtime-export-posture',

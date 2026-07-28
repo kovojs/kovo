@@ -32,6 +32,10 @@ describe('generated-artifacts policy manifest', () => {
         categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
+        path: 'packages/cli/src/semantic-command-request.generated.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
         path: 'packages/compiler/src/security/framework-public-runtime-export-posture.generated.ts',
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
@@ -100,6 +104,17 @@ describe('generated-artifacts policy manifest', () => {
   });
 
   it('routes committed generated framework artifacts to their generator checks', () => {
+    expect(
+      generatedArtifactPoliciesForGenerator(
+        GENERATED_ARTIFACT_GENERATORS.cliSemanticCommandRequest,
+      ).map((entry) => entry.id),
+    ).toEqual(['cli-semantic-command-request-generated-source']);
+    expect(
+      generatedArtifactGeneratorCheckCommand(
+        GENERATED_ARTIFACT_GENERATORS.cliSemanticCommandRequest,
+      ),
+    ).toEqual(['pnpm', 'generate:cli-command-request', '--', '--check']);
+
     expect(
       generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.diagnosticRegistry).map(
         (entry) => entry.id,

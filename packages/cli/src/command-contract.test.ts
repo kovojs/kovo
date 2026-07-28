@@ -1,12 +1,15 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { kovoCommandExitCode, KOVO_CLI_SCHEMA, KOVO_COMMAND_SCHEMA } from './command-schema.js';
 import {
+  assertUniqueKovoCommandVocabulary,
   COMMANDS_MANIFEST,
   commandRequestToArgv,
+  type DerivedKovoSemanticCommandRequest,
   formatCommandHelp,
   formatRootHelp,
   KOVO_CLI_VERSION,
@@ -14,6 +17,7 @@ import {
   parseKovoCommandInvocation,
   parseKovoMetaInvocation,
   renderShellCompletion,
+  resolveKovoBinInvocationPosture,
 } from './commands-manifest.js';
 import { main, mainAsync, runKovoCommand } from './index.js';
 
@@ -47,6 +51,8 @@ describe('semantic CLI contract', () => {
       expect(entry.aliases).toEqual([...new Set(entry.aliases)]);
       expect(entry.examples.length).toBeGreaterThan(0);
       expect(entry.exits).toMatchObject({ finding: 1, success: 0, usage: 2 });
+      expect(['locked-before-dispatch', 'unlocked']).toContain(entry.compilerRealm);
+      expect(['long-lived', 'one-shot']).toContain(entry.processLifecycle);
       expect(kovoCommandExitCode(entry.name, 'success')).toBe(0);
       expect(kovoCommandExitCode(entry.name, 'finding')).toBe(1);
       expect(kovoCommandExitCode(entry.name, 'usage')).toBe(2);
@@ -96,9 +102,11 @@ describe('semantic CLI contract', () => {
       expect(reference).toMatchObject({
         aliases: schema.aliases,
         category: schema.category,
+        compilerRealm: schema.compilerRealm,
         examples: schema.examples,
         exits: schema.exits,
         name: schema.name,
+        processLifecycle: schema.processLifecycle,
         resultProtocol: schema.resultProtocol,
         summary: schema.summary,
       });
@@ -106,6 +114,40 @@ describe('semantic CLI contract', () => {
         expect(reference.flags.some((row) => row.flag.includes(option.flags[0]))).toBe(true);
       }
     }
+  });
+
+  it('derives executable lockdown and lifecycle posture through canonical names and aliases', () => {
+    for (const entry of KOVO_COMMAND_SCHEMA) {
+      for (const name of [entry.name, ...entry.aliases]) {
+        expect(resolveKovoBinInvocationPosture([name]), name).toEqual({
+          compilerRealm: entry.compilerRealm,
+          processLifecycle: entry.processLifecycle,
+        });
+      }
+    }
+    for (const args of [
+      [],
+      ['--help'],
+      ['help', 'build'],
+      ['build', '--help'],
+      ['build', '--version'],
+    ] as const) {
+      expect(resolveKovoBinInvocationPosture(args)).toEqual({
+        compilerRealm: 'unlocked',
+        processLifecycle: 'one-shot',
+      });
+    }
+    expect(resolveKovoBinInvocationPosture(['build', '--not-an-option'])).toEqual({
+      compilerRealm: 'locked-before-dispatch',
+      processLifecycle: 'one-shot',
+    });
+
+    expect(() =>
+      assertUniqueKovoCommandVocabulary([
+        { aliases: ['shared'], name: 'first' },
+        { aliases: [], name: 'shared' },
+      ]),
+    ).toThrow(/owned by both first and shared/u);
   });
 
   it('owns global aliases and meta-command validation in the CLI AST', () => {
@@ -288,6 +330,7 @@ describe('semantic CLI contract', () => {
   });
 
   it('serializes semantic programmatic requests without exposing argv-shaped option keys', () => {
+    expectTypeOf<KovoSemanticCommandRequest>().toEqualTypeOf<DerivedKovoSemanticCommandRequest>();
     expectTypeOf(runKovoCommand).parameter(0).toEqualTypeOf<KovoSemanticCommandRequest>();
 
     expect(
@@ -328,14 +371,6 @@ describe('semantic CLI contract', () => {
       '--rewrite',
       'Shell=./shell.js',
     ]);
-    expect(
-      commandRequestToArgv({
-        arguments: { appModule: './src/app.tsx' },
-        command: 'dev',
-        form: 'dev',
-        options: { port: 4173, strictPort: true },
-      }),
-    ).toEqual(['dev', './src/app.tsx', '--port', '4173', '--strict-port']);
     expect(() =>
       commandRequestToArgv({
         arguments: { appModule: './src/app.tsx' },
@@ -420,6 +455,25 @@ describe('semantic CLI contract', () => {
     );
     expect(invalidDbConfig).toMatchObject({ result: 2, stdout: '' });
     expect(invalidDbConfig.stderr.length).toBeGreaterThan(0);
+
+    const missingRegistryFacts = join(
+      tmpdir(),
+      'kovo-command-contract-missing-registry-facts.json',
+    );
+    const invalidCompileConfig = await captureWritesAsync(() =>
+      mainAsync([
+        'compile',
+        'component',
+        fileURLToPath(new URL('../../create-kovo/templates/src/app.tsx', import.meta.url)),
+        '--out',
+        join(tmpdir(), 'kovo-command-contract-component.tsx'),
+        '--registry-facts',
+        missingRegistryFacts,
+        '--check',
+      ]),
+    );
+    expect(invalidCompileConfig).toMatchObject({ result: 2, stdout: '' });
+    expect(invalidCompileConfig.stderr).toContain('cannot read JSON input');
 
     const missingGraph = join(tmpdir(), 'kovo-command-contract-missing-graph.json');
     const proofFailure = captureWrites(() => main(['check', missingGraph]));

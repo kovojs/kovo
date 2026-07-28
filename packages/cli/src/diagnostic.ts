@@ -2,20 +2,25 @@
 import type { DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
-/** @internal Stable CLI diagnostic wire version. The eventual public owner is core/diagnostics. */
+/** Stable wire version accepted by Kovo's public human, JSON, and GitHub renderers. */
 export const KOVO_DIAGNOSTIC_VERSION = 'kovo-diagnostic/v1' as const;
 
-/** @internal Exact authored-source anchor using zero-based UTF-16 offsets. */
+/** Exact authored-source anchor using zero-based UTF-16 offsets. */
 export interface KovoDiagnosticSourceAnchor {
   readonly end: number;
   readonly file: string;
   readonly start: number;
 }
 
-/** @internal Stable categories used to classify CLI process behavior. */
+/** Stable categories used to classify CLI process behavior. */
 export type KovoDiagnosticCategory = 'build' | 'config' | 'proof' | 'runtime' | 'usage';
 
-/** @internal One registry-authenticated, transport-neutral CLI record. */
+/**
+ * One registry-authenticated, transport-neutral CLI record.
+ *
+ * Severity and help for registered `KV###` diagnostics come from Kovo's
+ * diagnostic registry; presentation adapters do not re-derive them.
+ */
 export interface KovoDiagnosticRecord {
   readonly category: KovoDiagnosticCategory;
   readonly code: string;
@@ -26,16 +31,16 @@ export interface KovoDiagnosticRecord {
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
 }
 
-/** @internal Serialized diagnostic envelope for CLI adapters. */
+/** Serialized `kovo-diagnostic/v1` envelope emitted by machine-readable adapters. */
 export interface KovoDiagnosticEnvelope {
   readonly diagnostics: readonly KovoDiagnosticRecord[];
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
 }
 
-/** @internal Presentation adapters supported by the private CLI record. */
+/** Presentation adapters supported by {@link formatKovoDiagnostics}. */
 export type KovoDiagnosticFormat = 'github' | 'human' | 'json';
 
-/** @internal Inputs accepted by the realm-local diagnostic constructor. */
+/** Inputs accepted by {@link createKovoDiagnostic}. */
 export type KovoDiagnosticConstruction = {
   readonly category: KovoDiagnosticCategory;
   readonly code: string;
@@ -56,7 +61,7 @@ const diagnosticRegistry = new WeakSet<object>();
 const envelopeRegistry = new WeakSet<object>();
 
 /**
- * @internal Construct one realm-local CLI record from exact own data.
+ * Construct one realm-local CLI record from exact own data.
  *
  * The returned object's authority is its membership in `diagnosticRegistry`, not
  * its structural fields. Copies and lookalikes cannot cross this boundary.
@@ -140,7 +145,10 @@ export function assertKovoDiagnosticEnvelope(value: unknown): KovoDiagnosticEnve
   return value as KovoDiagnosticEnvelope;
 }
 
-/** @internal Render only records authenticated by this module's private registry. */
+/**
+ * Render records created by this module as human text, the versioned JSON
+ * envelope, or escaped GitHub workflow commands.
+ */
 export function formatKovoDiagnostics(
   diagnostics: readonly KovoDiagnosticRecord[],
   format: KovoDiagnosticFormat,
@@ -326,13 +334,16 @@ function formatGithubDiagnostic(diagnostic: KovoDiagnosticRecord): string {
       : diagnostic.severity === 'warn'
         ? 'warning'
         : 'notice';
-  const source =
-    diagnostic.source === undefined ? '' : ` file=${githubProperty(diagnostic.source.file)}`;
+  const properties: string[] = [];
+  if (diagnostic.source !== undefined) {
+    properties.push(`file=${githubProperty(diagnostic.source.file)}`);
+  }
   const title = githubProperty(`${diagnostic.code} ${diagnostic.category}`);
+  properties.push(`title=${title}`);
   const body = githubMessage(
     `${diagnostic.message}${diagnostic.help === undefined ? '' : ` ${diagnostic.help}`}`,
   );
-  return `::${level}${source},title=${title}::${body}\n`;
+  return `::${level} ${properties.join(',')}::${body}\n`;
 }
 
 function githubProperty(value: string): string {

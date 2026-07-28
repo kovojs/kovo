@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertPackedCliDependencyClosure,
+  assertPackedCliProcessContract,
   assertPackedDocsJourney,
   assertPackedMcpLifecycle,
+  assertPackedSemanticApiBoundary,
   productionDependencyNamesFromLockfile,
 } from './check-packed-cli-consumer.mjs';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,6 +21,66 @@ ${packages.map((name) => `  '${name}@1.0.0': {}`).join('\n')}
 }
 
 describe('packed CLI consumer proof', () => {
+  it('enforces informational, usage/config, and finding process contracts', () => {
+    const result = (status, stdout = '', stderr = '') => ({
+      error: undefined,
+      signal: null,
+      status,
+      stderr,
+      stdout,
+    });
+    const rootHelp = 'Kovo 0.2.0\n\nUsage:\n  kovo <command> [options]\n';
+    const observations = {
+      buildHelp: result(
+        0,
+        'kovo build — Prove and build\n\nUsage:\n  kovo build <app-module>\n\nExit codes: 0 success/help/version; 1 proof or build findings; 2 usage/config error\n',
+      ),
+      compileConfig: result(2, '', 'kovo: missing registry facts\n'),
+      config: result(2, '', 'kovo: missing schema\n'),
+      finding: result(1, '', 'kovo: input file not found\n'),
+      help: result(0, rootHelp),
+      root: result(0, rootHelp),
+      rootHelp: result(0, rootHelp),
+      usage: result(2, '', 'kovo: unknown command\n'),
+      version: result(0, 'kovo 0.2.0\n'),
+    };
+
+    expect(() => assertPackedCliProcessContract(observations)).not.toThrow();
+    expect(() =>
+      assertPackedCliProcessContract({
+        ...observations,
+        rootHelp: result(1, '', rootHelp),
+      }),
+    ).toThrow('must exit 0 with stdout only');
+    expect(() =>
+      assertPackedCliProcessContract({
+        ...observations,
+        config: result(1, '', 'kovo: missing schema\n'),
+      }),
+    ).toThrow('must exit 2 with stderr only');
+    expect(() =>
+      assertPackedCliProcessContract({
+        ...observations,
+        compileConfig: result(1, '', 'kovo: missing registry facts\n'),
+      }),
+    ).toThrow('must exit 2 with stderr only');
+    expect(() =>
+      assertPackedCliProcessContract({
+        ...observations,
+        finding: result(0, 'OK\n', ''),
+      }),
+    ).toThrow('must exit 1 with stderr only');
+  });
+
+  it('requires the packed public semantic API to close its bootstrap boundary', () => {
+    expect(() =>
+      assertPackedSemanticApiBoundary('packed-semantic-api-boundary/v1 OK\n'),
+    ).not.toThrow();
+    expect(() => assertPackedSemanticApiBoundary('intercepted=true\n')).toThrow(
+      'did not reject caller execution before lockdown',
+    );
+  });
+
   it('reads the finite production graph and rejects every removed SDK subtree family', () => {
     expect(productionDependencyNamesFromLockfile(lockfile('@kovojs/cli', 'esbuild'))).toEqual([
       '@kovojs/cli',

@@ -30,6 +30,12 @@ export interface KovoCommandExitBehavior {
   readonly unknown?: 2;
 }
 
+/** @internal Compiler-realm posture the executable must establish before dispatch. */
+export type KovoCommandCompilerRealm = 'locked-before-dispatch' | 'unlocked';
+
+/** @internal Process lifetime owned by one command invocation. */
+export type KovoCommandProcessLifecycle = 'long-lived' | 'one-shot';
+
 /** @internal A value accepted by a positional argument or option. */
 export interface KovoCommandValueSchema {
   readonly default?: number | string;
@@ -117,11 +123,13 @@ export interface KovoCommandSchemaEntry {
   readonly aliases: readonly string[];
   readonly async?: true;
   readonly category: KovoCommandCategory;
+  readonly compilerRealm: KovoCommandCompilerRealm;
   readonly examples: readonly string[];
   readonly exits: KovoCommandExitBehavior;
   readonly name: string;
   readonly options: readonly KovoCommandOptionSchema[];
   readonly order: number;
+  readonly processLifecycle: KovoCommandProcessLifecycle;
   readonly referenceUsage: 'inline' | 'multiline';
   readonly resultProtocol: string | null;
   readonly summary: string;
@@ -467,6 +475,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'daily-build',
+    compilerRealm: 'unlocked',
     examples: ['kovo add button', 'kovo add button card --out src/components/ui'],
     exits,
     name: 'add',
@@ -478,6 +487,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 10,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-add/v1',
     summary: 'Copy public @kovojs/ui component source into an application.',
@@ -506,6 +516,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     category: 'inspect-security',
+    compilerRealm: 'unlocked',
     examples: ['kovo audit', 'kovo audit --fail-on-findings graph.json'],
     exits,
     name: 'audit',
@@ -515,6 +526,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 20,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-audit/v1',
     summary: 'Run security and access audits over an app graph.',
@@ -535,6 +547,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'daily-build',
+    compilerRealm: 'locked-before-dispatch',
     examples: ['kovo build ./src/app.tsx --out dist', 'kovo build ./src/app.tsx --check'],
     exits,
     name: 'build',
@@ -560,6 +573,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 30,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-build/v1',
     summary: 'Prove and build an authored Kovo app for deployment.',
@@ -582,6 +596,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     category: 'inspect-security',
+    compilerRealm: 'unlocked',
     examples: [
       'kovo check',
       'kovo check coverage graph.json',
@@ -592,6 +607,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     name: 'check',
     options: checkOptions,
     order: 40,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-check/v1',
     summary: 'Run consistency, security, environment, and advisory verification.',
@@ -643,6 +659,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'unlocked',
     examples: [
       'kovo compile component src/cart.tsx --out dist/cart.tsx --check',
       'kovo compile route src/app.tsx --out dist/app.kovo-route.tsx',
@@ -652,6 +669,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     name: 'compile',
     options: compileOptions,
     order: 50,
+    processLifecycle: 'one-shot',
     referenceUsage: 'multiline',
     resultProtocol: 'kovo-compile/v1',
     summary: 'Emit compiler-owned artifacts without importing compiler internals.',
@@ -761,6 +779,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'locked-before-dispatch',
     examples: ['kovo db provision --schema src/schema.ts', 'kovo db check --driver pglite'],
     exits,
     name: 'db',
@@ -815,6 +834,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 60,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-db/v1',
     summary: 'Provision, migrate, generate, or verify a Kovo database.',
@@ -851,6 +871,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'daily-build',
+    compilerRealm: 'locked-before-dispatch',
     examples: ['kovo dev ./src/app.tsx', 'kovo dev ./src/app.tsx --port 4173 --strict-port'],
     exits,
     name: 'dev',
@@ -886,6 +907,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 70,
+    processLifecycle: 'long-lived',
     referenceUsage: 'inline',
     resultProtocol: null,
     summary: 'Start the bootstrap-first Kovo development server.',
@@ -911,6 +933,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'unlocked',
     examples: [
       'kovo docs quickstart',
       'kovo docs "authenticated mutation" --limit 3 --format json',
@@ -932,6 +955,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 75,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-docs/v1',
     summary: 'Search the exact version-matched local Kovo documentation snapshot.',
@@ -952,6 +976,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     category: 'inspect-security',
+    compilerRealm: 'unlocked',
     examples: [
       'kovo explain component Cart graph.json',
       'kovo explain --capabilities',
@@ -961,6 +986,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     name: 'explain',
     options: explainOptions,
     order: 80,
+    processLifecycle: 'one-shot',
     referenceUsage: 'multiline',
     resultProtocol: 'kovo-explain/v1',
     summary: 'Render stable proof facts for a subject or security review.',
@@ -1106,6 +1132,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'daily-build',
+    compilerRealm: 'locked-before-dispatch',
     examples: ['kovo export ./src/app.ts --out dist'],
     exits,
     name: 'export',
@@ -1146,6 +1173,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 90,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-export/v1',
     summary: 'Export a Kovo app as static hosting output.',
@@ -1172,6 +1200,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'locked-before-dispatch',
     examples: ['kovo fix src/components/cart.tsx', 'kovo fix --cost-report'],
     exits,
     name: 'fix',
@@ -1184,6 +1213,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 100,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: null,
     summary: 'Apply only compiler-proven safe TSX/JSX rewrites.',
@@ -1198,6 +1228,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     category: 'inspect-security',
+    compilerRealm: 'unlocked',
     examples: ['kovo incident scope advisory.json --events security-events.json'],
     exits,
     name: 'incident',
@@ -1209,6 +1240,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       }),
     ],
     order: 110,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-incident-scope/v1',
     summary: 'Scope an advisory over a tamper-evident security-event export.',
@@ -1227,11 +1259,13 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'unlocked',
     examples: ['kovo mcp'],
     exits,
     name: 'mcp',
     options: [],
     order: 120,
+    processLifecycle: 'long-lived',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-mcp/v1',
     summary: 'Serve the finite Kovo MCP protocol over stdio.',
@@ -1241,11 +1275,13 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     aliases: [],
     async: true,
     category: 'agent-operator',
+    compilerRealm: 'unlocked',
     examples: ['kovo update-docs'],
     exits,
     name: 'update-docs',
     options: [],
     order: 130,
+    processLifecycle: 'one-shot',
     referenceUsage: 'inline',
     resultProtocol: 'kovo-update-docs/v1',
     summary: 'Refresh version-matched agent-readable Kovo documentation.',

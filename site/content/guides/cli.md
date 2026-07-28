@@ -52,17 +52,17 @@ So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script
 
 ## `kovo` — the framework CLI
 
-`kovo` with no arguments lists its subcommands:
+`kovo` with no arguments prints categorized root help. Its current capability commands are:
 
-```sh
-$ kovo
-kovo: add, audit, build, dev, check, db, compile, explain, export, mcp, update-docs
-```
+- Daily and build: `add`, `build`, `dev`, `export`
+- Inspect and security: `audit`, `check`, `explain`, `incident`
+- Agent and operator: `compile`, `db`, `docs`, `fix`, `mcp`, `update-docs`
 
-Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
-`kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
-Every command also accepts `--help` or `-h`; use that for the exact flag surface, and use the
-[CLI API reference](/api/cli/) when you need the programmatic command wrappers.
+One-shot inspection and build commands emit stable, versioned, diffable results where their help
+names a result protocol (`kovo-check/v1`, `kovo-explain/v1`, `kovo-db/v1`, …). Long-lived commands
+such as `dev`, and commands that do not yet name a result protocol, are not covered by that claim.
+Every command accepts `--help` or `-h`; use that for the exact flag surface, and use the
+[CLI API reference](/api/cli/) for the public semantic command facade.
 
 ## Start the app with `kovo dev`
 
@@ -361,6 +361,30 @@ facts. Requests, compiler source/AST work, graph joins, output size, and calls p
 fail-closed limits. Start `kovo mcp` from the workspace whose package manifests compilation may
 inspect; that canonical directory is pinned before the first request.
 
+## Run a command from TypeScript
+
+Use `runKovoCommand` when a tool needs the real Kovo command contract without constructing argv.
+The discriminated request type derives its form names, arguments, option names, enum values, and
+boolean polarity from the same schema as help and completion:
+
+```ts
+import { runKovoCommand } from '@kovojs/cli';
+
+const exitCode = await runKovoCommand({
+  arguments: { appModule: './src/app.tsx' },
+  command: 'build',
+  form: 'build',
+  options: { check: true, out: 'dist', preset: 'node' },
+});
+```
+
+For a valid one-shot semantic request, the call writes the command's normal stdout or stderr and
+resolves to `0`, `1`, or `2`. Invalid JavaScript objects are rejected before dispatch. Long-lived
+`dev` and `mcp` processes stay on the executable surface until Kovo has an explicit abort/disposal
+contract. Use `createKovoDiagnostic` plus `formatKovoDiagnostics` when your integration needs a
+registry-authenticated `kovo-diagnostic/v1` record rendered as human text, JSON, or a GitHub
+annotation. The public module does not expose the argv dispatcher.
+
 ## How they compose
 
 ```
@@ -379,7 +403,7 @@ to debug touch-graph consistency, optimistic exhaustiveness, and update coverage
 ## Next
 
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — interpreting the output in depth.
-- [CLI API reference](/api/cli/) — programmatic command wrappers and manifest-backed command data.
+- [CLI API reference](/api/cli/) — the one-shot semantic command facade and verifier helpers.
 - [create-kovo command reference](/api/create-kovo/) — scaffold flags, dialects, and write safety.
 - [Deployment](/guides/deployment/) — `kovo build` presets and `kovo export`.
 - [Testing](/guides/testing/) — what `vp test` runs and the browser-free verification surface.
@@ -392,8 +416,8 @@ rely on), and `kovo explain` sub-commands: SPEC §5.1–5.3. The verification su
 checking, `kovo check`, graph queries over `kovo explain`, and the `--endpoints` machine-ingress
 audit: SPEC §11.4. Diagnostic severities and blocking policy: SPEC §11.3. Static export (`kovo
 export`, KV229) and the request shell: SPEC §9.5. The CLI command surface (subcommands, flags,
-positional sub-checks) is verified against `packages/cli/src/commands-manifest.ts` and the
-`index.kovo-*.test.ts` suites.
+positional sub-checks) is derived from `packages/cli/src/command-schema.ts` and verified by the
+command-contract and `index.kovo-*.test.ts` suites.
 
 API reference: [@kovojs/ui](/api/ui/), [@kovojs/cli](/api/cli/), [create-kovo](/api/create-kovo/).
 

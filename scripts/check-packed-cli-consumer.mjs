@@ -152,6 +152,68 @@ export function assertPackedDocsJourney(updateStdout, docsStdout, consumerRoot) 
   }
 }
 
+export function assertPackedCliProcessContract(observations) {
+  const informational = [
+    ['kovo', observations.root],
+    ['kovo --help', observations.rootHelp],
+    ['kovo help', observations.help],
+    ['kovo build --help', observations.buildHelp],
+    ['kovo --version', observations.version],
+  ];
+  for (const [label, result] of informational) {
+    assertCompletedProcess(result, label);
+    if (result.status !== 0 || result.stderr !== '' || result.stdout.length === 0) {
+      throw new Error(
+        `Packed ${label} must exit 0 with stdout only; observed status=${String(result.status)}`,
+      );
+    }
+  }
+  if (
+    observations.root.stdout !== observations.rootHelp.stdout ||
+    observations.root.stdout !== observations.help.stdout
+  ) {
+    throw new Error('Packed root help paths do not render the same schema-owned output');
+  }
+  if (
+    !observations.buildHelp.stdout.includes('kovo build') ||
+    !observations.buildHelp.stdout.includes('Exit codes:')
+  ) {
+    throw new Error('Packed command help is missing generated usage or exit behavior');
+  }
+  if (!/^kovo \d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\n$/u.test(observations.version.stdout)) {
+    throw new Error('Packed kovo --version output is not the installed semantic version');
+  }
+
+  for (const [label, result] of [
+    ['unknown command', observations.usage],
+    ['invalid config', observations.config],
+    ['invalid compile config', observations.compileConfig],
+  ]) {
+    assertCompletedProcess(result, label);
+    if (result.status !== 2 || result.stdout !== '' || result.stderr.length === 0) {
+      throw new Error(
+        `Packed ${label} must exit 2 with stderr only; observed status=${String(result.status)}`,
+      );
+    }
+  }
+  assertCompletedProcess(observations.finding, 'proof finding');
+  if (
+    observations.finding.status !== 1 ||
+    observations.finding.stdout !== '' ||
+    observations.finding.stderr.length === 0
+  ) {
+    throw new Error(
+      `Packed proof finding must exit 1 with stderr only; observed status=${String(observations.finding.status)}`,
+    );
+  }
+}
+
+export function assertPackedSemanticApiBoundary(stdout) {
+  if (stdout !== 'packed-semantic-api-boundary/v1 OK\n') {
+    throw new Error('Packed semantic CLI API did not reject caller execution before lockdown');
+  }
+}
+
 export function checkPackedCliConsumer() {
   const rootManifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const packedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -180,6 +242,59 @@ export function checkPackedCliConsumer() {
 
     const lockfileText = readFileSync(path.join(consumerRoot, 'pnpm-lock.yaml'), 'utf8');
     assertPackedCliDependencyClosure(lockfileText);
+    writeFileSync(
+      path.join(consumerRoot, 'component.tsx'),
+      'export const Component = () => null;\n',
+      'utf8',
+    );
+
+    assertPackedCliProcessContract({
+      buildHelp: captureCommand('pnpm', ['exec', 'kovo', 'build', '--help'], consumerRoot),
+      config: captureCommand(
+        'pnpm',
+        ['exec', 'kovo', 'db', 'check', '--schema', 'missing-schema.ts'],
+        consumerRoot,
+      ),
+      compileConfig: captureCommand(
+        'pnpm',
+        [
+          'exec',
+          'kovo',
+          'compile',
+          'component',
+          'component.tsx',
+          '--out',
+          'component.generated.tsx',
+          '--registry-facts',
+          'missing-registry-facts.json',
+          '--check',
+        ],
+        consumerRoot,
+      ),
+      finding: captureCommand(
+        'pnpm',
+        ['exec', 'kovo', 'check', 'missing-graph.json'],
+        consumerRoot,
+      ),
+      help: captureCommand('pnpm', ['exec', 'kovo', 'help'], consumerRoot),
+      root: captureCommand('pnpm', ['exec', 'kovo'], consumerRoot),
+      rootHelp: captureCommand('pnpm', ['exec', 'kovo', '--help'], consumerRoot),
+      usage: captureCommand('pnpm', ['exec', 'kovo', 'not-a-command'], consumerRoot),
+      version: captureCommand('pnpm', ['exec', 'kovo', '--version'], consumerRoot),
+    });
+
+    writeFileSync(
+      path.join(consumerRoot, 'semantic-api-boundary.mjs'),
+      semanticApiBoundarySource(),
+      'utf8',
+    );
+    const semanticApiBoundary = runCommand(
+      'node',
+      ['semantic-api-boundary.mjs'],
+      consumerRoot,
+      'semantic API bootstrap boundary',
+    );
+    assertPackedSemanticApiBoundary(semanticApiBoundary.stdout);
 
     const updateDocs = runCommand(
       'pnpm',
@@ -226,6 +341,72 @@ export function checkPackedCliConsumer() {
   } finally {
     rmSync(consumerRoot, { force: true, recursive: true });
   }
+}
+
+function semanticApiBoundarySource() {
+  return `import { runKovoCommand } from '@kovojs/cli';
+
+let accessorRan = false;
+const accessorRequest = {
+  arguments: {},
+  form: 'graph',
+  options: {},
+};
+Object.defineProperty(accessorRequest, 'command', {
+  enumerable: true,
+  get() {
+    accessorRan = true;
+    const nativeFind = Array.prototype.find;
+    Array.prototype.find = function interceptedFind(...args) {
+      Array.prototype.find = nativeFind;
+      return Reflect.apply(nativeFind, this, args);
+    };
+    return 'check';
+  },
+});
+await runKovoCommand(accessorRequest).then(
+  () => { throw new Error('accessor request was accepted'); },
+  (error) => {
+    if (!(error instanceof TypeError)) throw error;
+  },
+);
+if (accessorRan) throw new Error('semantic request accessor ran before lockdown');
+
+let proxyTrapped = false;
+const proxyRequest = new Proxy(
+  { arguments: {}, command: 'check', form: 'graph', options: {} },
+  {
+    get() {
+      proxyTrapped = true;
+      throw new Error('proxy get trap ran');
+    },
+    getOwnPropertyDescriptor() {
+      proxyTrapped = true;
+      throw new Error('proxy descriptor trap ran');
+    },
+    ownKeys() {
+      proxyTrapped = true;
+      throw new Error('proxy ownKeys trap ran');
+    },
+  },
+);
+await runKovoCommand(proxyRequest).then(
+  () => { throw new Error('proxy request was accepted'); },
+  (error) => {
+    if (!(error instanceof TypeError)) throw error;
+  },
+);
+if (proxyTrapped) throw new Error('semantic request proxy trap ran before lockdown');
+
+const exit = await runKovoCommand({
+  arguments: { appModule: './definitely-missing-app.tsx' },
+  command: 'build',
+  form: 'build',
+  options: { check: true },
+});
+if (exit !== 1 && exit !== 2) throw new Error('semantic build returned an invalid exit');
+process.stdout.write('packed-semantic-api-boundary/v1 OK\\n');
+`;
 }
 
 function packedCliConsumerManifest(packedPackages, packageManager) {
@@ -281,6 +462,23 @@ function runCommand(command, args, cwd, label, input) {
     );
   }
   return result;
+}
+
+function captureCommand(command, args, cwd) {
+  return spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function assertCompletedProcess(result, label) {
+  if (result?.error || result?.signal || typeof result?.status !== 'number') {
+    throw new Error(
+      `Packed ${label} did not complete normally: ${result?.error?.message ?? result?.signal ?? '<no status>'}`,
+    );
+  }
 }
 
 function compareStrings(left, right) {

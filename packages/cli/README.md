@@ -1,6 +1,7 @@
 # @kovojs/cli
 
-The `kovo` command and its programmatic verifier API. Use it to explain an app
+The `kovo` command and its curated programmatic API. Use it to run one-shot
+semantic commands without spelling argv, render versioned diagnostics, explain an app
 graph, run framework audits, update agent docs, add copy-in UI, and export static
 output.
 
@@ -17,6 +18,17 @@ const graph = JSON.parse(await readFile('graph.json', 'utf8'));
 
 const explain = kovoExplain(graph, { kind: 'page', target: '/' });
 const check = kovoCheck(graph);
+```
+
+```ts
+import { runKovoCommand } from '@kovojs/cli';
+
+const exitCode = await runKovoCommand({
+  arguments: { appModule: './src/app.tsx' },
+  command: 'build',
+  form: 'build',
+  options: { check: true, out: 'dist', preset: 'node' },
+});
 ```
 
 ## Reference

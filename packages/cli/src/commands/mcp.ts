@@ -20,7 +20,7 @@ import type {
   FiniteMcpToolResult,
 } from '@kovojs/core/internal/mcp-stdio';
 
-import { parseKovoCommandInvocation } from '../commands-manifest.js';
+import { DOCS_RESULT_PROTOCOL, parseKovoCommandInvocation } from '../commands-manifest.js';
 import { kovoCommandExitCode } from '../command-schema.js';
 import {
   checkFamilyArg,
@@ -404,7 +404,7 @@ async function runKovoDocsTool(
   workspaceRoot: McpWorkspaceRoot,
 ): Promise<{
   results: Awaited<ReturnType<typeof searchInstalledAgentDocs>>;
-  version: 'kovo-docs/v1';
+  version: typeof DOCS_RESULT_PROTOCOL;
 }> {
   const options = assertToolArgs(args, 'kovo_docs');
   assertExactKeys(options, ['limit', 'task'], 'kovo_docs arguments');
@@ -431,7 +431,7 @@ async function runKovoDocsTool(
       ...(options.limit === undefined ? {} : { limit: options.limit as number }),
       task: options.task,
     }),
-    version: 'kovo-docs/v1',
+    version: DOCS_RESULT_PROTOCOL,
   };
 }
 

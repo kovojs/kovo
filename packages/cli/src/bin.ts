@@ -54,37 +54,34 @@ const commandSecurityDisposition = Object.freeze({
 // Import the complete trusted dispatcher graph before lockdown so framework modules that capture
 // Web/Node controls from data descriptors see the host-native descriptors. No authored module is
 // evaluated by this import; command dispatch below is the first authored-evaluation boundary.
-const { mainAsync } = await import('./index.js');
+const { mainAsync, resolveKovoBinInvocationPosture } = await import('./index.js');
+const commandArgs = process.argv.slice(2);
+const invocationPosture = resolveKovoBinInvocationPosture(commandArgs);
 
 // SPEC §5.2 / §6.6 rule 6: supported commands that evaluate authored modules lock the shared
 // compiler realm at the last trusted boundary, before invoking the dispatcher. The lock also
 // completes the verifier-owned one-shot transition from its fresh import-time parser census to the
 // exact post-lock census; no authored module is evaluated between those states. Direct imports of
-// `@kovojs/cli/internal` are tooling APIs, not the supported security runner.
-if (
-  process.argv[2] === 'build' ||
-  process.argv[2] === 'db' ||
-  process.argv[2] === 'dev' ||
-  process.argv[2] === 'export' ||
-  process.argv[2] === 'fix'
-) {
+// `@kovojs/cli/internal` are tooling APIs, not the supported security runner. The semantic command
+// schema owns this posture, including aliases, so dispatch and lockdown cannot drift.
+if (invocationPosture.compilerRealm === 'locked-before-dispatch') {
   const { lockCompilerSecurityRealm } =
     await import('@kovojs/compiler/internal/security-bootstrap');
   lockCompilerSecurityRealm();
 }
 
-// `kovo mcp` is a long-lived stdio server: its `mainAsync` reads until stdin reaches EOF. Every
-// other `kovo` command is one-shot — once `mainAsync` resolves the command result is
-// fully written, so exit promptly instead of waiting out a multi-second event-loop
+// Long-lived commands (currently the dev server and MCP stdio server) retain their event loop.
+// Every one-shot command exits after `mainAsync` resolves the fully written command result,
+// instead of waiting out a multi-second event-loop
 // drain on handles the run can't reach (a loaded app module's top-level resources such
 // as a PGlite client, plus vite-plus build servers). See plans/fast-kovo-check2.md #1:
 // this collapsed a ~14.3s warm `kovo build` to ~3.6s with byte-identical diagnostics.
 // NOTE: this file is also copied verbatim to a `.mjs` and run as plain JavaScript by the
 // "does not respawn for a compiled JavaScript bin entrypoint" test, so it must stay free of
 // TypeScript-only syntax (no type annotations / type arguments). Lean on contextual typing.
-const isLongLivedCommand = process.argv[2] === 'mcp' || process.argv[2] === 'dev';
+const isLongLivedCommand = invocationPosture.processLifecycle === 'long-lived';
 
-void mainAsync(undefined, commandSecurityDisposition).then(async (exitCode) => {
+void mainAsync(commandArgs, commandSecurityDisposition).then(async (exitCode) => {
   process.exitCode = exitCode;
   if (isLongLivedCommand) return;
   // Flush stdout/stderr (an empty write's callback fires after the buffer drains to the fd)

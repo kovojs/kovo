@@ -1,13 +1,16 @@
 /**
  * Public API of the `@kovojs/cli` package.
  *
- * The `kovo` CLI is primarily a bin (`kovo check`, `kovo explain`, `kovo audit`,
- * `kovo export`, `kovo add`, `kovo mcp`). This module exposes the small
- * documented library surface for verifiers. Generated app maintenance scripts
- * that need the command-equivalent facade use the internal subpath instead of
- * widening the app-facing root API.
+ * The `kovo` CLI is primarily a bin. This curated module exposes its semantic
+ * command facade, versioned diagnostic record, and in-process graph verifiers;
+ * it never exposes the argv dispatcher or transport internals.
  */
-export { kovoCheck, kovoExplain } from './index.js';
+export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
+export {
+  createKovoDiagnostic,
+  formatKovoDiagnostics,
+  KOVO_DIAGNOSTIC_VERSION,
+} from './diagnostic.js';
 
 export type {
   ExplainKind,
@@ -18,6 +21,7 @@ export type {
   KovoCheckFamily,
   KovoCheckInput,
   KovoCheckResult,
+  KovoCommandExitCode,
   KovoDocumentExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainInput,
@@ -29,4 +33,13 @@ export type {
   KovoTargetExplainOptions,
   KovoUnguardedExplainOptions,
   KovoUnscopedExplainOptions,
+  KovoSemanticCommandRequest,
 } from './index.js';
+export type {
+  KovoDiagnosticCategory,
+  KovoDiagnosticConstruction,
+  KovoDiagnosticEnvelope,
+  KovoDiagnosticFormat,
+  KovoDiagnosticRecord,
+  KovoDiagnosticSourceAnchor,
+} from './diagnostic.js';

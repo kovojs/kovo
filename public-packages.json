@@ -2136,7 +2136,7 @@
       "apiRef": {
         "order": 9,
         "slug": "cli",
-        "description": "Programmatic verifiers behind the kovo CLI: kovoCheck and kovoExplain over the compiler's app graph."
+        "description": "Semantic command execution, versioned diagnostics, and in-process graph verifiers behind the kovo CLI."
       }
     },
     {

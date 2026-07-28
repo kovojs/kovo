@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@kovojs/core';
+import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -33,6 +34,7 @@ import {
   parseKovoCommandInvocation,
   parseKovoMetaInvocation,
   renderShellCompletion,
+  resolveKovoBinInvocationPosture,
   resolveCommand,
   type KovoAsyncCommandName,
   type KovoSemanticCommandRequest,
@@ -44,6 +46,7 @@ import {
   captureKovoCommandSecurityDisposition,
   type KovoCommandSecurityDisposition,
 } from './commands/security-disposition.js';
+import { snapshotKovoSemanticCommandRequest } from './semantic-command-request-snapshot.js';
 import {
   compileComponentV1,
   createKovoMcpServer,
@@ -80,6 +83,7 @@ export {
   kovoExplain,
   KOVO_CLI_VERSION,
   renderShellCompletion,
+  resolveKovoBinInvocationPosture,
   runMcpStdioServer,
   runUpdateDocsCommand,
 };
@@ -365,11 +369,44 @@ export async function mainAsync(
  * Run the same command dispatcher as the `kovo` executable and return its exit
  * code from a semantic command request. Programmatic callers name command
  * concepts (`out`, `preset`), while only the bin adapter handles argv spellings
- * (`--out`, `--preset`).
+ * (`--out`, `--preset`). The call writes the command's normal stdout/stderr and
+ * resolves after one-shot output is complete. Long-lived `dev` and `mcp`
+ * processes remain executable-only until Kovo exposes an explicit
+ * abort/disposal contract.
+ *
+ * Commands that evaluate authored modules establish the same irreversible
+ * compiler-realm lock as the executable before dispatch (SPEC.md §5.2 and §6.6).
  */
-export async function runKovoCommand(request: KovoSemanticCommandRequest): Promise<number> {
-  return await mainAsync(commandRequestToArgv(request));
+export async function runKovoCommand(
+  request: KovoSemanticCommandRequest,
+): Promise<KovoCommandExitCode> {
+  // Snapshot caller data without invoking accessors or Proxy traps. Only this inert copy is read
+  // while choosing command posture, so a semantic request cannot run authored code in the
+  // bootstrap-before-lock gap (SPEC §6.6 rule 6).
+  const snapshot = snapshotKovoSemanticCommandRequest(request);
+  const command = resolveCommand(snapshot.command);
+  if (command === undefined) {
+    throw new TypeError(`Unknown Kovo semantic command ${JSON.stringify(snapshot.command)}.`);
+  }
+  if (command.processLifecycle !== 'one-shot') {
+    throw new TypeError(
+      `Kovo ${command.name} is long-lived and cannot run through runKovoCommand(). Use the kovo executable.`,
+    );
+  }
+  if (command.compilerRealm === 'locked-before-dispatch') {
+    lockCompilerSecurityRealm();
+  }
+  const security = captureKovoCommandSecurityDisposition();
+  const args = commandRequestToArgv(snapshot);
+  const exitCode = await mainAsync(args, security);
+  if (exitCode !== 0 && exitCode !== 1 && exitCode !== 2) {
+    throw new TypeError(`Kovo command returned unsupported exit code ${String(exitCode)}.`);
+  }
+  return exitCode;
 }
+
+/** Stable process exit codes returned by {@link runKovoCommand}. */
+export type KovoCommandExitCode = 0 | 1 | 2;
 
 function runMetaInvocation(args: readonly string[]): 0 | 2 | undefined {
   const parsed = parseKovoMetaInvocation(args);

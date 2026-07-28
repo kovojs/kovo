@@ -419,7 +419,7 @@ granularity).
       through them. The schema carries aliases, argument kind, enum,
       default, repeatability, category, examples, exit behavior, and result-protocol version;
       programmatic API consumes the semantic discriminated union, not argv-shaped flag interfaces.
-  - Group the 13 current capabilities into daily/build, inspect/security, and agent/operator
+  - Group the 14 current capabilities into daily/build, inspect/security, and agent/operator
     sections without removing advanced commands.
 - [ ] (S) Make `kovo`, `kovo --help`, `kovo help`, `kovo <command> --help`, and `kovo --version`
       write to stdout and exit 0; usage/config mistakes exit 2 and proof/build findings exit 1

@@ -186,38 +186,58 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
 
     const runDdlProof = (probeNickname = false): void => {
       writeFileSync(
-        join(root, 'src/ddl-proof.test.ts'),
+        join(root, 'ddl-proof.mjs'),
         [
-          "import { describe, expect, it } from 'vitest';",
-          "import { appRuntimeDbReady } from './_kovo/app-runtime-db.js';",
-          "import { readonlyAppDb } from './db.js';",
-          "import { contacts } from './schema.js';",
+          "import { createServer } from 'vite';",
           '',
-          "describe('starter DDL proof', () => {",
-          "  it('boots and exposes the expected schema', async () => {",
-          '    await appRuntimeDbReady;',
-          !probeNickname
-            ? '    expect(true).toBe(true);'
-            : [
-                '    // SPEC §10.3/KV433: schema probes stay on the read-only Drizzle surface.',
-                '    const rows = await readonlyAppDb',
-                '      .select({ nickname: contacts.nickname })',
-                '      .from(contacts)',
-                '      .limit(1);',
-                '    // FORCE RLS hides protected seed rows from this unprincipaled schema probe.',
-                '    expect(rows).toEqual([]);',
-              ].join('\n'),
-          '  });',
+          'const vite = await createServer({',
+          "  appType: 'custom',",
+          '  configFile: false,',
+          "  logLevel: 'silent',",
+          '  root: process.cwd(),',
+          '  server: { hmr: false, middlewareMode: true, watch: null },',
+          '  ssr: { noExternal: [/^@kovojs\\//] },',
           '});',
+          '',
+          'try {',
+          '  // SPEC §6.6 rule 6: lock the isolated SSR realm before authored app modules.',
+          "  await vite.ssrLoadModule('@kovojs/server/runtime-bootstrap');",
+          '  const { appRuntimeDbReady } = await vite.ssrLoadModule(',
+          "    '/src/_kovo/app-runtime-db.ts',",
+          '  );',
+          '  await appRuntimeDbReady;',
+          !probeNickname
+            ? "  process.stdout.write('starter-ddl-proof/v1 OK\\n');"
+            : [
+                "  const { readonlyAppDb } = await vite.ssrLoadModule('/src/db.ts');",
+                "  const { contacts } = await vite.ssrLoadModule('/src/schema.ts');",
+                '  // SPEC §10.3/KV433: schema probes stay on the read-only Drizzle surface.',
+                '  const rows = await readonlyAppDb',
+                '    .select({ nickname: contacts.nickname })',
+                '    .from(contacts)',
+                '    .limit(1);',
+                '  // FORCE RLS hides protected seed rows from this unprincipaled schema probe.',
+                '  if (!Array.isArray(rows) || rows.length !== 0) {',
+                '    throw new Error(`Expected no visible rows, received ${JSON.stringify(rows)}.`);',
+                '  }',
+                "  process.stdout.write('starter-ddl-proof/v1 OK\\n');",
+              ].join('\n'),
+          '} finally {',
+          '  await vite.close();',
+          '}',
+          '// The generated runtime intentionally exposes no database shutdown authority.',
+          '// This isolated one-shot proof exits after Vite closes, as Vitest did previously.',
+          'process.exit(0);',
           '',
         ].join('\n'),
         'utf8',
       );
-      execFileSync(resolveBin('vitest'), ['--run', 'src/ddl-proof.test.ts'], {
+      const stdout = execFileSync(process.execPath, ['ddl-proof.mjs'], {
         cwd: root,
         env: { ...withRepoBinOnPath(), KOVO_DATA_DIR: '.kovo/pglite' },
-        stdio: 'pipe',
+        encoding: 'utf8',
       });
+      expect(stdout).toBe('starter-ddl-proof/v1 OK\n');
     };
 
     try {

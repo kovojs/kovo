@@ -696,7 +696,7 @@ export async function runCompileCommand(options: CompileCommandOptions): Promise
   } catch (error) {
     return {
       error: `kovo: compile failed: ${error instanceof Error ? error.message : String(error)}`,
-      exitCode: 1,
+      exitCode: error instanceof CompileConfigurationError ? 2 : 1,
     };
   }
 }
@@ -707,7 +707,7 @@ async function runCompileComponentCommand(
   const { assertFixpoint, assertRenderEquivalence } = await import('@kovojs/compiler');
   const compileOptions: CompileComponentOptions = {
     fileName: options.fileName ?? options.sourcePath,
-    source: readFileSync(options.sourcePath, 'utf8'),
+    source: readCompileInputFile(options.sourcePath),
   };
   if (options.registryFactsPath !== undefined) {
     compileOptions.registryFacts = readJsonFile(options.registryFactsPath) as NonNullable<
@@ -779,7 +779,7 @@ async function runCompileRouteCommand(
       ? {}
       : { componentImportRewrites: options.componentImportRewrites }),
     fileName: options.fileName ?? options.sourcePath,
-    source: readFileSync(options.sourcePath, 'utf8'),
+    source: readCompileInputFile(options.sourcePath),
   });
   if (result.diagnostics.length > 0) return compileDiagnosticResult(result.diagnostics);
   const source = result.files[0]?.source;
@@ -819,7 +819,7 @@ async function runCompileMutationInputsCommand(
     [
       ...mutationInputFactsFromSource(
         options.fileName ?? options.sourcePath,
-        readFileSync(options.sourcePath, 'utf8'),
+        readCompileInputFile(options.sourcePath),
       ).values(),
     ].map((fact) => [
       fact.key,
@@ -1030,9 +1030,12 @@ async function runCompileDrizzleStaticCommand(
     const queries = (input.invalidation.queries ?? output.queryDomains) as Parameters<
       typeof deriveInvalidationRegistry
     >[0]['queries'];
-    if (touchGraph === undefined)
-      throw new Error('drizzle-static invalidation requires touchGraph');
-    if (queries === undefined) throw new Error('drizzle-static invalidation requires queries');
+    if (touchGraph === undefined) {
+      throw new CompileConfigurationError('drizzle-static invalidation requires touchGraph');
+    }
+    if (queries === undefined) {
+      throw new CompileConfigurationError('drizzle-static invalidation requires queries');
+    }
     const invalidationRegistry = deriveInvalidationRegistry({
       mutations: input.invalidation.mutations as Parameters<
         typeof deriveInvalidationRegistry
@@ -1059,8 +1062,9 @@ async function runCompileDrizzleStaticCommand(
     const touchGraph = (input.serializeTouchGraph.touchGraph ?? output.touchGraph) as Parameters<
       typeof serializeTouchGraph
     >[0];
-    if (touchGraph === undefined)
-      throw new Error('drizzle-static serializeTouchGraph requires touchGraph');
+    if (touchGraph === undefined) {
+      throw new CompileConfigurationError('drizzle-static serializeTouchGraph requires touchGraph');
+    }
     const source = serializeTouchGraph(touchGraph);
     output.touchGraphSource =
       input.serializeTouchGraph.exportName === undefined
@@ -1640,7 +1644,12 @@ async function runCompilePackageCssCommand(
   const result = extractPackageComponentCss(options.packageName, {
     fileName: entryPath,
     packagePrefixDiscoveryRoot: dirname(resolve(entryPath)),
-    source: existsSync(entryPath) ? readFileSync(entryPath, 'utf8') : '',
+    source:
+      options.entryPath === undefined
+        ? existsSync(entryPath)
+          ? readFileSync(entryPath, 'utf8')
+          : ''
+        : readCompileInputFile(entryPath),
   });
   if (!result.css) throw new Error(`no CSS extracted for ${options.packageName}`);
 
@@ -1760,8 +1769,26 @@ function assertCompileResultDiagnostics(
   }
 }
 
+class CompileConfigurationError extends Error {}
+
+function readCompileInputFile(path: string): string {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (error) {
+    throw new CompileConfigurationError(
+      `cannot read input ${JSON.stringify(path)}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 function readJsonFile(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  } catch (error) {
+    throw new CompileConfigurationError(
+      `cannot read JSON input ${JSON.stringify(path)}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function queryDomainsFromStaticFacts(

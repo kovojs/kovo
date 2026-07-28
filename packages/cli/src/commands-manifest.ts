@@ -1,9 +1,12 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import {
   KOVO_CLI_SCHEMA,
   KOVO_COMMAND_SCHEMA,
+  type KovoCommandCompilerRealm,
   type KovoCommandEntry,
   type KovoCommandName,
   type KovoCommandOptionSchema,
+  type KovoCommandProcessLifecycle,
   type KovoCommandSchemaEntry,
   type KovoCommandUsageForm,
   type KovoCommandUsageToken,
@@ -12,6 +15,10 @@ import {
   type KovoMetaCommandSchemaEntry,
 } from './command-schema.js';
 import { readCliPackageVersion } from './package-version.js';
+import type { KovoSemanticCommandRequest } from './semantic-command-request.generated.js';
+
+const nativeMapGet = Map.prototype.get;
+const nativeReflectApply = Reflect.apply;
 
 export type {
   KovoAsyncCommandName,
@@ -19,6 +26,7 @@ export type {
   KovoCommandName,
   KovoSyncCommandName,
 } from './command-schema.js';
+export type { KovoSemanticCommandRequest } from './semantic-command-request.generated.js';
 
 /**
  * @internal
@@ -69,6 +77,9 @@ export const DB_USAGE = renderInlineUsage(requireCommand('db'));
 
 /** @internal Usage line emitted for authenticated local docs retrieval. */
 export const DOCS_USAGE = renderInlineUsage(requireCommand('docs'));
+
+/** @internal Schema-owned authenticated local-docs result protocol. */
+export const DOCS_RESULT_PROTOCOL = requireCommand('docs').resultProtocol;
 
 /** @internal Usage forms emitted for `kovo compile`. */
 export const COMPILE_USAGE = renderMultilineUsage(requireCommand('compile'));
@@ -252,14 +263,13 @@ type SemanticRequestFor<Entry, Form> = Entry extends {
     : never
   : never;
 
-/**
- * @internal Precise programmatic command union. Forms, enum literals, argument
- * names, repeats, and semantic boolean polarity all derive from the same AST.
- */
-export type KovoSemanticCommandRequest = KovoCommandEntry extends infer Entry
+/** @internal Mapped oracle used to prove the generated public union matches the command AST. */
+export type DerivedKovoSemanticCommandRequest = KovoCommandEntry extends infer Entry
   ? Entry extends KovoCommandEntry
-    ? CommandForm<Entry> extends infer Form
-      ? SemanticRequestFor<Entry, Form>
+    ? Entry extends { readonly processLifecycle: 'one-shot' }
+      ? CommandForm<Entry> extends infer Form
+        ? SemanticRequestFor<Entry, Form>
+        : never
       : never
     : never
   : never;
@@ -269,11 +279,13 @@ export interface CommandManifestEntry {
   readonly aliases: readonly string[];
   readonly async?: boolean;
   readonly category: KovoCommandSchemaEntry['category'];
+  readonly compilerRealm: KovoCommandCompilerRealm;
   readonly examples: readonly string[];
   readonly exits: KovoCommandSchemaEntry['exits'];
   readonly flags: readonly CommandFlag[];
   readonly name: KovoCommandName;
   readonly noArgsOrder: number;
+  readonly processLifecycle: KovoCommandProcessLifecycle;
   readonly resultProtocol: string | null;
   readonly summary: string;
   readonly unknownOrder: number;
@@ -290,11 +302,13 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = Object.freeze(
       aliases: entry.aliases,
       ...('async' in entry && entry.async ? { async: true } : {}),
       category: entry.category,
+      compilerRealm: entry.compilerRealm,
       examples: entry.examples,
       exits: entry.exits,
       flags: referenceFlags(entry),
       name: entry.name,
       noArgsOrder: entry.order,
+      processLifecycle: entry.processLifecycle,
       resultProtocol: entry.resultProtocol,
       summary: entry.summary,
       unknownOrder: entry.order,
@@ -305,6 +319,8 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = Object.freeze(
     }),
   ),
 );
+
+assertUniqueKovoCommandVocabulary([...KOVO_COMMAND_SCHEMA, ...KOVO_CLI_SCHEMA.metaCommands]);
 
 const COMMAND_REGISTRY = new Map<KovoCommandName, KovoCommandEntry>(
   KOVO_COMMAND_SCHEMA.map((entry) => [entry.name, entry]),
@@ -329,18 +345,71 @@ const GLOBAL_OPTION_REGISTRY = new Map<string, KovoCommandOptionSchema>(
 /** @internal Resolve a canonical command name or declared alias. */
 export function resolveCommand(name: string | undefined): KovoCommandEntry | undefined {
   if (name === undefined) return undefined;
-  return COMMAND_REGISTRY.get(name as KovoCommandName) ?? COMMAND_ALIAS_REGISTRY.get(name);
+  return mapGet(COMMAND_REGISTRY, name as KovoCommandName) ?? mapGet(COMMAND_ALIAS_REGISTRY, name);
 }
 
 function resolveMetaCommand(name: string | undefined): KovoMetaCommandSchemaEntry | undefined {
   if (name === undefined) return undefined;
   return (
-    META_COMMAND_REGISTRY.get(name as KovoMetaCommandName) ?? META_COMMAND_ALIAS_REGISTRY.get(name)
+    mapGet(META_COMMAND_REGISTRY, name as KovoMetaCommandName) ??
+    mapGet(META_COMMAND_ALIAS_REGISTRY, name)
   );
 }
 
 function globalOptionForFlag(flag: string): KovoCommandOptionSchema | undefined {
-  return GLOBAL_OPTION_REGISTRY.get(flag);
+  return mapGet(GLOBAL_OPTION_REGISTRY, flag);
+}
+
+function mapGet<Key, Value>(map: ReadonlyMap<Key, Value>, key: Key): Value | undefined {
+  return nativeReflectApply(nativeMapGet, map, [key]) as Value | undefined;
+}
+
+/** @internal Executable posture derived from a canonical command or declared alias. */
+export interface KovoBinInvocationPosture {
+  readonly compilerRealm: KovoCommandCompilerRealm;
+  readonly processLifecycle: KovoCommandProcessLifecycle;
+}
+
+const META_INVOCATION_POSTURE: KovoBinInvocationPosture = Object.freeze({
+  compilerRealm: 'unlocked',
+  processLifecycle: 'one-shot',
+});
+
+/**
+ * @internal Resolve executable security and lifetime behavior through the same
+ * schema and alias registries as dispatch. Informational/meta paths never
+ * evaluate authored modules and therefore retain the one-shot unlocked posture.
+ */
+export function resolveKovoBinInvocationPosture(args: readonly string[]): KovoBinInvocationPosture {
+  const meta = parseKovoMetaInvocation(args);
+  if (meta.ok && meta.handled) return META_INVOCATION_POSTURE;
+  const command = resolveCommand(args[0]);
+  if (command === undefined) return META_INVOCATION_POSTURE;
+  return Object.freeze({
+    compilerRealm: command.compilerRealm,
+    processLifecycle: command.processLifecycle,
+  });
+}
+
+/**
+ * @internal Reject command, meta-command, or alias collisions before any
+ * adapter creates a lossy Map from the semantic vocabulary.
+ */
+export function assertUniqueKovoCommandVocabulary(
+  entries: readonly { readonly aliases: readonly string[]; readonly name: string }[],
+): void {
+  const ownerByToken = new Map<string, string>();
+  for (const entry of entries) {
+    for (const token of [entry.name, ...entry.aliases]) {
+      const owner = ownerByToken.get(token);
+      if (owner !== undefined) {
+        throw new TypeError(
+          `Kovo command token ${JSON.stringify(token)} is owned by both ${owner} and ${entry.name}.`,
+        );
+      }
+      ownerByToken.set(token, entry.name);
+    }
+  }
 }
 
 function requestedGlobalOptions(args: readonly string[]): KovoCommandOptionSchema[] {
@@ -858,7 +927,7 @@ function tokenizeCommandArgv(
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === undefined) continue;
-    if (argument === '--help' || argument === '-h') {
+    if (globalOptionForFlag(argument)?.id === 'help') {
       return { error: 'help', message: usage, ok: false };
     }
     const equalsIndex = argument.indexOf('=');

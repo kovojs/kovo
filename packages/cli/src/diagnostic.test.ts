@@ -54,6 +54,17 @@ describe('kovo-diagnostic/v1', () => {
     expect(formatKovoDiagnostics([concise], 'github')).toBe(
       '::error file=src/queries.ts,title=KOVO_PROOF proof::Missing explicit access decision. Add an explicit access decision.\n',
     );
+
+    const sourceLess = createKovoDiagnostic({
+      category: 'proof',
+      code: 'KOVO_PROOF',
+      help: 'Add an explicit access decision.',
+      message: 'Missing explicit access decision.',
+      severity: 'error',
+    });
+    expect(formatKovoDiagnostics([sourceLess], 'github')).toBe(
+      '::error title=KOVO_PROOF proof::Missing explicit access decision. Add an explicit access decision.\n',
+    );
   });
 
   it('escapes hostile GitHub command bytes and preserves non-error severity', () => {
@@ -228,8 +239,12 @@ describe('kovo-diagnostic/v1', () => {
         ],
         version: KOVO_DIAGNOSTIC_VERSION,
       });
-      expect(formatCommandResultDiagnostics(result, 'github', category)).toContain(
-        output.trimEnd().replaceAll('\n', '%0A'),
+      expect(formatCommandResultDiagnostics(result, 'github', category)).toBe(
+        `::error title=${code} ${category}::${output.replaceAll('\n', '%0A')} ${
+          category === 'proof'
+            ? 'Inspect the cited source proof and rerun the command.'
+            : 'Resolve the reported command finding and rerun the command.'
+        }\n`,
       );
       expect(normalized.exitCode).toBe(1);
       expect(normalized.diagnostics).toEqual(json.diagnostics);

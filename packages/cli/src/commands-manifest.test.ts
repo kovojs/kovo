@@ -39,7 +39,13 @@ import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
  *   (b) each manifest usage string is the literal the CLI actually emits.
  */
 describe('commands manifest', () => {
+  const binSource = readFileSync(fileURLToPath(new URL('./bin.ts', import.meta.url)), 'utf8');
+  const commandManifestSource = readFileSync(
+    fileURLToPath(new URL('./commands-manifest.ts', import.meta.url)),
+    'utf8',
+  );
   const cliCommandSource = [
+    './bin.ts',
     './index.ts',
     './commands/build-export.ts',
     './commands/dev.ts',
@@ -212,6 +218,24 @@ describe('commands manifest', () => {
     expect(cliCommandSource).not.toContain('parseCommandArgv');
     expect(cliCommandSource).not.toMatch(/\b[A-Z][A-Z_]+_ARGV_SPEC\b/u);
     expect(cliCommandSource).not.toContain('validatePositionals');
+  });
+
+  it('derives executable posture and parser help aliases without bin-local command facts', () => {
+    expect(binSource).toContain('resolveKovoBinInvocationPosture(commandArgs)');
+    expect(binSource).not.toMatch(/process\.argv\[2\]\s*===/u);
+    expect(binSource).not.toMatch(/const isLongLivedCommand = .*['"](?:dev|mcp)['"]/u);
+
+    const tokenizerStart = commandManifestSource.indexOf('function tokenizeCommandArgv(');
+    const tokenizerEnd = commandManifestSource.indexOf(
+      '\nfunction parseEntryForm(',
+      tokenizerStart,
+    );
+    expect(tokenizerStart).toBeGreaterThanOrEqual(0);
+    expect(tokenizerEnd).toBeGreaterThan(tokenizerStart);
+    const tokenizerSource = commandManifestSource.slice(tokenizerStart, tokenizerEnd);
+    expect(tokenizerSource).toContain("globalOptionForFlag(argument)?.id === 'help'");
+    expect(tokenizerSource).not.toContain("argument === '--help'");
+    expect(tokenizerSource).not.toContain("argument === '-h'");
   });
 
   it('parses every concrete form into semantic arguments and options', () => {
