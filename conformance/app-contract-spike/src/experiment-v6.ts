@@ -601,6 +601,7 @@ async function executeMutationCoverage(
   };
   const execute = async (mutation: Mutation): Promise<boolean> => {
     const mutated = structuredClone(evidence) as Mutable<D1RawEvidenceV6>;
+    stabilizePerformanceForMutationEvaluation(mutated);
     const mutableAuthority = cloneSealedAuthority(authority);
     mutation(mutated, mutableAuthority);
     try {
@@ -641,6 +642,7 @@ async function executeMutationCoverage(
     mutate: (value: Mutable<D1RawEvidenceV6>) => void,
   ): Promise<string> => {
     const value = structuredClone(evidence) as Mutable<D1RawEvidenceV6>;
+    stabilizePerformanceForMutationEvaluation(value);
     mutate(value);
     return (
       await evaluateD1V6(criteria, value, cloneSealedAuthority(authority))
@@ -671,6 +673,27 @@ async function executeMutationCoverage(
       },
     },
   };
+}
+
+function stabilizePerformanceForMutationEvaluation(
+  evidence: Mutable<D1RawEvidenceV6>,
+): void {
+  const declarationBytes = evidence.measurements.baseline.declarationBytes;
+  for (const measurement of Object.values(evidence.measurements)) {
+    for (const sample of [
+      ...measurement.coldTscSamples,
+      ...measurement.warmTscSamples,
+      ...measurement.coldCompletionSamples,
+      ...measurement.warmCompletionSamples,
+    ]) {
+      sample.milliseconds = 1;
+    }
+    measurement.coldTscP50Ms = 1;
+    measurement.warmTscP50Ms = 1;
+    measurement.coldCompletionP50Ms = 1;
+    measurement.warmCompletionP95Ms = 1;
+    measurement.declarationBytes = declarationBytes;
+  }
 }
 
 function mutateCanonicalSubject(
