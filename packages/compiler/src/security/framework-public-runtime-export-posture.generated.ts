@@ -32,7 +32,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-28.1' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-28.3' as const;
 
 // Exact package-name closures for first-party packages with no app-public runtime surface.
 // The analyzer executable is authenticated by the release/install channel, not by itself.
@@ -5648,7 +5648,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.2.0", [
     ["sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a", [
 
-    ], ["kovo-packed-tree-sha256:3cc231c75a44ffdc925f21e98b9fd2c32a3a1d40775f93ee61918703863618ad","kovo-source-tree-sha256:d131958c5ae76b666a05530157b743ab752b9c8fe9db3c254bc09a84b022a368"]],
+    ], ["kovo-packed-tree-sha256:3cc231c75a44ffdc925f21e98b9fd2c32a3a1d40775f93ee61918703863618ad","kovo-source-tree-sha256:aacc0db0d3a3bfaeafae5a22c3edefe4d68fb62d5ea6a52b33abb6f0a9dee354"]],
     ["sha256:7e12bd4ad88296e801d099e9479c8ac74041631b8c5a39e9de873eef8e9f1873", [
 
     ], ["kovo-packed-tree-sha256:3cc231c75a44ffdc925f21e98b9fd2c32a3a1d40775f93ee61918703863618ad"]],
@@ -5719,7 +5719,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     ["./client",["<module>","defaultEnhancedFetch"]],
   ]],
   ["@kovojs/cli", "request-closed", ["database-driver","dynamic-loader","filesystem","network","process","vm","worker"], "none", "The CLI library surface is build-time authority and is not a request-handler capability door.", [
-    [".",["<module>","kovoCheck","kovoExplain"]],
+    [".",["<module>","kovoCheck","kovoExplain","runKovoCommand"]],
   ]],
   ["@kovojs/core", "authority-free", [], "none", null, [
     [".",["drainSecretRevealAuditFacts"]],

@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.1",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.3",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "d131958c5ae76b666a05530157b743ab752b9c8fe9db3c254bc09a84b022a368",
+      "sourceTreeSha256": "aacc0db0d3a3bfaeafae5a22c3edefe4d68fb62d5ea6a52b33abb6f0a9dee354",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -836,19 +836,27 @@
             "surface": "build-compiler"
           },
           "members": {
-            ".": ["<module>", "kovoCheck", "kovoExplain"]
+            ".": [
+              "<module>",
+              "kovoCheck",
+              "kovoExplain",
+              "runKovoCommand"
+            ]
           },
           "review": {
-            "basis": "The CLI library surface is build-time authority and is not a request-handler capability door.",
-            "evidence": ["packages/cli/src/api.ts", "packages/cli/src/index.ts"],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "basis": "The one-shot semantic command facade and graph verifiers are build-time authority and are not request-handler capability doors.",
+            "evidence": [
+              "packages/cli/src/api.ts",
+              "packages/cli/src/index.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-28"
           },
           "rootKind": "none",
           "securityRole": "request-closed",
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
         }
       ],
-      "sourceTreeSha256": "abba2170d693862fc7644807224e46c6620002f0f52a1c43a91622abb9833f30"
+      "sourceTreeSha256": "adfbab88fe14835d80c647ba8bef678f5b2a3bc48d7935df01d2283f85fcb1bb"
     },
     {
       "manifestVariants": [

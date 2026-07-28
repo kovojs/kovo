@@ -2729,6 +2729,9 @@ describe('kovo check', () => {
       writeFileSync(
         join(parent, 'index.js'),
         [
+          'export function resolveKovoBinInvocationPosture() {',
+          "  return { compilerRealm: 'unlocked', processLifecycle: 'one-shot' };",
+          '}',
           'export async function mainAsync() {',
           '  console.log(process.env.KOVO_CLI_TRANSFORM_TYPES ?? "unset");',
           '  return 0;',
