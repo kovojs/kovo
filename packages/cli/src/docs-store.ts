@@ -54,11 +54,13 @@ export interface AgentDocsSearchResult {
  * corpus; the previous pointer remains authoritative.
  */
 export async function installAgentDocsSnapshot({
+  beforeSelect,
   cwd,
   fileSystem,
   output,
   snapshot,
 }: {
+  beforeSelect?: (prepared: InstallAgentDocsResult) => Promise<void> | void;
   cwd: string;
   fileSystem?: FrameworkFileSystemBoundary;
   output?: FrameworkOutputFileSystemBoundary;
@@ -100,16 +102,20 @@ export async function installAgentDocsSnapshot({
     sourceCommit: snapshot.sourceCommit,
     version: snapshot.version,
   };
-  await readBoundary.updateDurableFile(
-    '.kovo/docs/current.json',
-    () => `${canonicalJson(pointer)}\n`,
-  );
-  return Object.freeze({
+  const result = Object.freeze({
     directory,
     files: snapshot.files.length,
     pointerPath: '.kovo/docs/current.json' as const,
     snapshotDigest: snapshot.snapshotDigest,
   });
+  // Callers that must update a companion file can do so after every immutable snapshot byte has
+  // been proved but before the one authoritative pointer selects it.
+  await beforeSelect?.(result);
+  await readBoundary.updateDurableFile(
+    '.kovo/docs/current.json',
+    () => `${canonicalJson(pointer)}\n`,
+  );
+  return result;
 }
 
 /** @internal Authenticate and return the active content-addressed manifest. */

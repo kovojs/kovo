@@ -1,24 +1,18 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import { Buffer as NativeBuffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import {
-  bundledKovoDocsMirrorFiles,
-  defaultKovoRulesSource,
-  renderKovoRulesBlock,
-  replaceKovoRulesBlock,
-} from '@kovojs/core/internal/agent-docs';
+import { renderKovoRulesBlock, replaceKovoRulesBlock } from '@kovojs/core/internal/agent-docs';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
+import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
+import { installAgentDocsSnapshot } from '../docs-store.js';
+import { readCliPackageVersion } from '../package-version.js';
 import type { KovoCheckResult } from '../shared.js';
 
 export interface UpdateDocsOptions {
   cwd?: string;
   version?: string;
-}
-
-interface ResolvedDocs {
-  files: Map<string, string>;
 }
 
 const nativeBufferFrom = NativeBuffer.from;
@@ -30,37 +24,44 @@ export async function runUpdateDocsCommand(
   options: UpdateDocsOptions = {},
 ): Promise<KovoCheckResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const output = createFrameworkOutputFileSystemBoundary(cwd);
-  const version = options.version ?? readCliPackageVersion();
-  // Agent instructions are executable authority for coding agents. Refresh only from the exact
-  // versioned CLI package the user installed; accepting live website bytes here would create an
-  // unpinned second software supply chain inside AGENTS.md.
-  const resolved = bundledDocs(version);
-  const kovoRulesSource =
-    resolved.files.get('kovo-rules.md') ??
-    bundledKovoDocsMirrorFiles({ version }).find((file) => file.path === 'kovo-rules.md')?.source ??
-    '';
-  const rulesBlock = renderKovoRulesBlock({
-    rulesSource: kovoRulesSource,
-    source: defaultKovoRulesSource,
-    version,
-  });
-
   try {
+    const output = createFrameworkOutputFileSystemBoundary(cwd);
+    const version = options.version ?? readCliPackageVersion();
+    // Agent instructions are executable authority for coding agents. Authenticate only the exact
+    // versioned snapshot beside the executing CLI; mutable website bytes are never an input.
+    const snapshot = readInstalledAgentDocsSnapshot({ expectedVersion: version });
+    const kovoRules = snapshot.files.find((file) => file.path === 'kovo-rules.md');
+    if (kovoRules === undefined) {
+      throw new TypeError('authenticated docs snapshot is missing kovo-rules.md');
+    }
+    const digestDirectory = `.kovo/docs/snapshots/${snapshot.snapshotDigest.slice(
+      'sha256:'.length,
+    )}`;
+    const rulesBlock = renderKovoRulesBlock({
+      rulesSource: kovoRules.content,
+      source: `./${digestDirectory}/kovo-rules.md`,
+      version,
+    });
     const agentsBytes = await output.fileBytes('AGENTS.md');
     const currentAgents = agentsBytes === undefined ? '' : utf8Text(agentsBytes);
-    await output.writeFile('AGENTS.md', replaceKovoRulesBlock(currentAgents, rulesBlock));
-
-    for (const [path, source] of resolved.files) {
-      await output.writeFile(`.kovo/docs/${path}`, source);
-    }
+    // Validate marker structure before any snapshot write. The companion AGENTS.md update then
+    // runs after every immutable file is digest-proved but before current.json selects the corpus.
+    const nextAgents = replaceKovoRulesBlock(currentAgents, rulesBlock);
+    const installed = await installAgentDocsSnapshot({
+      beforeSelect: async () => {
+        await output.writeFile('AGENTS.md', nextAgents);
+      },
+      cwd,
+      output,
+      snapshot,
+    });
 
     return {
       exitCode: 0,
       output: [
         'kovo-update-docs/v1',
-        `OK source=installed-package files=${resolved.files.size}`,
-        'OK refreshed from versioned CLI snapshot',
+        `OK source=installed-package version=${snapshot.version} files=${installed.files}`,
+        `OK snapshot=${installed.snapshotDigest} current=${installed.pointerPath}`,
         '',
       ].join('\n'),
     };
@@ -74,21 +75,7 @@ export async function runUpdateDocsCommand(
   }
 }
 
-function bundledDocs(version: string): ResolvedDocs {
-  return {
-    files: new Map(bundledKovoDocsMirrorFiles({ version }).map((file) => [file.path, file.source])),
-  };
-}
-
 function utf8Text(bytes: Uint8Array): string {
   const buffer = nativeReflectApply(nativeBufferFrom, NativeBuffer, [bytes]) as Buffer;
   return nativeReflectApply(nativeBufferToString, buffer, ['utf8']) as string;
-}
-
-function readCliPackageVersion(): string {
-  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version?: string;
-  };
-  if (!pkg.version) throw new Error('@kovojs/cli package.json is missing version');
-  return pkg.version;
 }

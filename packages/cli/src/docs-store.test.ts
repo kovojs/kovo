@@ -81,6 +81,37 @@ describe('installed agent docs store', () => {
     ).toBe(first.snapshotDigest);
   });
 
+  it('runs companion updates after proof and keeps the prior pointer if they fail', async () => {
+    const root = fixtureRoot();
+    const first = fixtureSnapshot(root);
+    await installAgentDocsSnapshot({ cwd: root, snapshot: first });
+    writeFileSync(
+      path.join(root, 'site/content/guides/quickstart.md'),
+      '# Quickstart\n\nPrepared second snapshot.\n',
+    );
+    const second = fixtureSnapshot(root);
+    let preparedDirectory = '';
+
+    await expect(
+      installAgentDocsSnapshot({
+        beforeSelect(prepared) {
+          preparedDirectory = prepared.directory;
+          expect(existsSync(path.join(root, prepared.directory, 'guides/quickstart.md'))).toBe(
+            true,
+          );
+          throw new Error('injected companion update failure');
+        },
+        cwd: root,
+        snapshot: second,
+      }),
+    ).rejects.toThrow('injected companion update failure');
+
+    expect(preparedDirectory).toContain(second.snapshotDigest.slice('sha256:'.length));
+    expect(
+      (await readActiveAgentDocsManifest({ cwd: root, expectedVersion: '1.2.3' })).snapshotDigest,
+    ).toBe(first.snapshotDigest);
+  });
+
   it('rejects a modified active file before returning a search result', async () => {
     const root = fixtureRoot();
     const snapshot = fixtureSnapshot(root);
