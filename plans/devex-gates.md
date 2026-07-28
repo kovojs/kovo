@@ -8,6 +8,22 @@ statistic, noise allowance, rationale, and binding threshold.
 
 ## Known failures
 
+The baseline ID denominator is closed and ownership is explicit: Track 2 owns each packed
+reproducer, while the named implementation work item owns retirement.
+
+| ID           | Reproducer owner | Fix track | Implementation owner                            | Gates  |
+| ------------ | ---------------- | --------- | ----------------------------------------------- | ------ |
+| KF-DEVEX-001 | Track 2          | Track 1   | Track 1 development-origin work item            | G1     |
+| KF-DEVEX-002 | Track 2          | Track 1   | Track 1 dev-reporter work item                  | G2     |
+| KF-DEVEX-003 | Track 2          | Track 1   | Track 1 help/version exit-contract work item    | G5     |
+| KF-DEVEX-004 | Track 2          | Track 1   | Track 1 source-proof work item                  | G7     |
+| KF-DEVEX-005 | Track 2          | Track 1   | Track 1 transactional-build work item           | G8     |
+| KF-DEVEX-006 | Track 2          | Track 1   | Track 1 source/deployment-proof split work item | G1, G7 |
+| KF-DEVEX-007 | Track 2          | Track 1   | Track 1 kovo-add source-closure work item       | G4     |
+| KF-DEVEX-008 | Track 2          | Track 5   | Track 5b test-harness batch                     | G24    |
+| KF-DEVEX-009 | Track 2          | Track 3   | Track 3 version-matched agent-docs work item    | G13    |
+| KF-DEVEX-010 | Track 2          | Track 1   | Track 1 diagnostic-empathy work item            | G9     |
+
 - [ ] Add a versioned machine-readable register for each confirmed baseline defect.
 - [ ] Give every entry a stable ID, owner, observed layer, expected-failure probe, retirement
       condition, and scorecard/track owner.
