@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, realpath, symlink } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -72,13 +72,33 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
   const packed = {} as Record<(typeof packageNames)[number], PackedArtifact>;
   for (const packageName of packageNames) {
     const name = `@kovojs/${packageName}`;
-    const destination = join(root, 'packed', packageName);
-    await mkdir(destination, { recursive: true });
-    const args = ['--filter', name, 'pack', '--pack-destination', destination];
+    const stagingDestination = join(root, 'staging-packs', packageName);
+    await mkdir(stagingDestination, { recursive: true });
+    const args = ['--filter', name, 'pack', '--pack-destination', stagingDestination];
     run('pnpm', args, repoRoot);
     buildCommands.push(`pnpm ${args.join(' ')}`);
+    const stagingTarballName = (await readdir(stagingDestination)).find((entry) =>
+      entry.endsWith('.tgz'),
+    );
+    if (!stagingTarballName) throw new Error(`Fresh pack for ${name} did not emit a tarball.`);
+    const stagedExtraction = join(root, 'staged', packageName);
+    await mkdir(stagedExtraction, { recursive: true });
+    run(
+      'tar',
+      ['-xzf', join(stagingDestination, stagingTarballName), '-C', stagedExtraction],
+      repoRoot,
+    );
+    const stagedPackageRoot = await realpath(join(stagedExtraction, 'package'));
+    await canonicalizePublishedDependencyOrder(stagedPackageRoot);
+    buildCommands.push(`canonicalize ${name} published dependency order`);
+
+    const destination = join(root, 'packed', packageName);
+    await mkdir(destination, { recursive: true });
+    const repackArgs = ['pack', '--ignore-scripts', '--pack-destination', destination];
+    run('npm', repackArgs, stagedPackageRoot);
+    buildCommands.push(`npm ${repackArgs.join(' ')}`);
     const tarballName = (await readdir(destination)).find((entry) => entry.endsWith('.tgz'));
-    if (!tarballName) throw new Error(`Fresh pack for ${name} did not emit a tarball.`);
+    if (!tarballName) throw new Error(`Deterministic repack for ${name} did not emit a tarball.`);
     const tarball = join(destination, tarballName);
     const extracted = join(root, 'extracted', packageName);
     await mkdir(extracted, { recursive: true });
@@ -103,6 +123,31 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
     frameworkSourceTreeClean,
     packages: packed,
   };
+}
+
+async function canonicalizePublishedDependencyOrder(packageRoot: string): Promise<void> {
+  const manifestPath = join(packageRoot, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+  for (const field of [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+    'peerDependenciesMeta',
+  ] as const) {
+    const value = manifest[field];
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue;
+    manifest[field] = Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    );
+  }
+  const serialized = `${JSON.stringify(manifest, null, 2)}\n`;
+  if (serialized.includes('"workspace:')) {
+    throw new Error('D1 v5 staged published manifest retained a workspace protocol.');
+  }
+  await writeFile(manifestPath, serialized);
 }
 
 export async function loadAuthenticatedPackedCompiler(
