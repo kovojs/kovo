@@ -421,9 +421,14 @@ granularity).
       programmatic API consumes the semantic discriminated union, not argv-shaped flag interfaces.
   - Group the 14 current capabilities into daily/build, inspect/security, and agent/operator
     sections without removing advanced commands.
-- [ ] (S) Make `kovo`, `kovo --help`, `kovo help`, `kovo <command> --help`, and `kovo --version`
+  - Partial evidence: the schema, generated argv/request union, help, completion, and command
+    reference pass the 67-test CLI semantic suite. The parent remains open because the existing
+    diagnostic projection is not yet authoritative for severity, help, and exact source ranges.
+- [x] (S) Make `kovo`, `kovo --help`, `kovo help`, `kovo <command> --help`, and `kovo --version`
       write to stdout and exit 0; usage/config mistakes exit 2 and proof/build findings exit 1
       (G5).
+  - Evidence: the 34-test CLI exit suite covers the stdout/zero matrix and build/export
+    configuration-versus-finding split.
 - [ ] (S) Give `kovo dev` a framework-owned reporter that always prints the local/network URL,
       mode, app entry, DB posture, devtool URL, and readiness duration after the socket is bound
       (G2). Keep framework noise collapsible under `--debug`; do not suppress the readiness line
@@ -467,11 +472,14 @@ granularity).
       `vp check`, copied scripts, or `kovo build`; update the `vp`-naming evidence in
       `rules/v1-acceptance.md` 16.6,
       `rules/prelaunch-checklist.md`, and `rules/docs-style.md` when the scaffold changes.
-- [ ] (M) Make Kovo's Vitest/test bootstrap establish the real framework runtime ordering before
+- [x] (M) Make Kovo's Vitest/test bootstrap establish the real framework runtime ordering before
       eager app evaluation, then delete the starter's internal classifier mock and `isKovoApp`
       implementation assertion. Until Track 4 lands, the starter uses a packed black-box HTTP
       journey with public Response/HTML assertions; Track 5b upgrades it to the final inferred
       harness.
+  - Evidence: focused scaffold/DDL tests and the packed starter runtime journey prove
+    bootstrap-before-authored-module ordering, no setup mock/internal import/`isKovoApp`, and
+    public HTTP assertions (`SPEC.md` §6.6/§12).
 - [ ] (S) Make `create-kovo` offer a small interactive choice set derived from one schema: app
       name, supported dialect, install choice, Git choice, and deployment target/retention posture.
   - Maintain one excellent secure-data starter for v1, with Postgres/PGlite-dev and explicitly
@@ -589,13 +597,21 @@ size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
       compressed tarball/install-size budget, ratified per Track 2's derivation procedure in
       `devex-budgets.json`, so version-matched context does not turn the CLI into an unbounded
       docs payload.
-- [ ] (M) Make `kovo update-docs` atomically install that exact snapshot under `.kovo/docs`; never
+  - Partial evidence: clean-root determinism and every authenticated manifest/content field pass;
+    the packed snapshot contains 77 files. The parent remains open until size budgets are
+    baseline-derived and ratified.
+- [x] (M) Make `kovo update-docs` atomically install that exact snapshot under `.kovo/docs`; never
       fetch mutable live docs during the command and never report success for placeholder-only
       content (G13).
-- [ ] (M) Add bounded `kovo docs <task>` and MCP retrieval over the same installed snapshot, with
+  - Evidence: the 29-test agent-docs suite proves atomic replacement, no live fetch, and rejection
+    of placeholder, partial, digest-mismatched, and wrong-version snapshots.
+- [x] (M) Add bounded `kovo docs <task>` and MCP retrieval over the same installed snapshot, with
       version/digest shown in results.
-- [ ] (S) Generate `llms.txt`/`llms-full.txt` from the same snapshot — `site/scripts/llms.mjs`
+  - Evidence: CLI and MCP retrieval tests share the authenticated docs-store implementation and
+    return bounded results with snapshot identity.
+- [x] (S) Generate `llms.txt`/`llms-full.txt` from the same snapshot — `site/scripts/llms.mjs`
       already exists; cite and reuse it.
+  - Evidence: `site/scripts/llms.test.mjs` and snapshot-generator tests prove one canonical corpus.
 - [ ] (S) Add the agent-journey fixture (G12) to the golden-journey runner: scaffold→edit→check→fix
       using only JSON diagnostics and local docs, offline.
       Standing rule for Track 5 (not a one-shot checkbox — each batch's own checklist carries the

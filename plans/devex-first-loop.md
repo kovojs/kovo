@@ -8,15 +8,26 @@ proof; shared root verification belongs in the latest-verification block.
 
 ## Command contract
 
-- [ ] Define one semantic command/discriminant model for all current CLI capabilities.
-- [ ] Derive argv parsing from that model, including aliases, required values, enums, defaults,
+- [x] Define one semantic command/discriminant model for all current CLI capabilities.
+  - Evidence: `packages/cli/src/command-schema.ts` owns all 14 commands; the CLI semantic suite in
+    Latest verification proves the generated exhaustive request union.
+- [x] Derive argv parsing from that model, including aliases, required values, enums, defaults,
       repeatability, categories, examples, and exit behavior.
-- [ ] Derive root and subcommand help from that model.
-- [ ] Derive shell-completion data and the authored command-reference input from that model.
+  - Evidence: `packages/cli/src/command-contract.test.ts` proves aliases, exact value grammars,
+    repeatables, defaults, and schema-correlated requests.
+- [x] Derive root and subcommand help from that model.
+  - Evidence: the CLI semantic and exit suites prove root/subcommand help is rendered from the
+    command schema.
+- [x] Derive shell-completion data and the authored command-reference input from that model.
+  - Evidence: `packages/cli/src/commands-manifest.test.ts` and `site/scripts/cli-ref.mjs` prove both
+    derived surfaces use the same manifest.
 - [ ] Publish the framework-owned `kovo-diagnostic/v1` record and render human, JSON, and GitHub
       adapters without re-deriving severity, help, or source ranges.
-- [ ] Make root help, `help`, command help, and version write to stdout and exit 0.
-- [ ] Make usage/config errors exit 2 and proof/build findings exit 1.
+- [x] Make root help, `help`, command help, and version write to stdout and exit 0.
+  - Evidence: the CLI exit suite in Latest verification passes the stdout/exit-zero matrix.
+- [x] Make usage/config errors exit 2 and proof/build findings exit 1.
+  - Evidence: `packages/cli/src/commands/build-export-exit-contract.test.ts` plus the CLI exit suite
+    prove configuration failures exit 2 and findings exit 1.
 - [ ] Normalize `kovo explain` on one subcommand/discriminant grammar while preserving or
       explicitly versioning `kovo-explain/v1`.
 
@@ -47,8 +58,11 @@ proof; shared root verification belongs in the latest-verification block.
       starter scripts into versioned Kovo commands.
 - [ ] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
       evidence contracts in the same checkpoint.
-- [ ] Make framework test bootstrap establish runtime ordering before eager app evaluation, then
+- [x] Make framework test bootstrap establish runtime ordering before eager app evaluation, then
       remove the starter classifier mock and `isKovoApp` assertion.
+  - Evidence: the starter scaffold census proves the generated test owns a bootstrap-first public
+    HTTP journey with no setup mock/internal import; the DDL proof locks the runtime before loading
+    authored modules.
 - [ ] Drive creator prompts and non-interactive flags from one schema.
 - [ ] Record the supported v1 host-OS posture and add the chosen smoke journey or explicit
       non-support statement.
@@ -82,4 +96,15 @@ proof; shared root verification belongs in the latest-verification block.
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+- **CLI semantic suite:** `pnpm exec vitest run` over the 11 command/schema/docs boundary files
+  passed (11 files, 67 tests).
+- **CLI exit suite:** `pnpm exec vitest run` over command-contract, build/export-exit, and export
+  behavior passed (3 files, 34 tests).
+- **Starter scaffold census:** focused `packages/create-kovo/src/index.test.ts` passed (1 test,
+  35 skipped).
+- **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
+  (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
+- `pnpm run check:publish` packed and attested all 14 public packages; the packed CLI consumer
+  installed with 265 production dependencies and zero advisories.
+- `pnpm run check:spec-conformance-closure` passed (92 codes, 72 error classes, 201 throw sites;
+  37 evidence files, 108 witnesses, 6 mandatory cases).
