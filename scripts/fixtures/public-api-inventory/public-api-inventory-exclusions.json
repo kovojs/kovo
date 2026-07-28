@@ -1,0 +1,15 @@
+{
+  "schema": "kovo-public-api-inventory-exclusions/v1",
+  "directories": [
+    {
+      "path": "examples/packed-app",
+      "kind": "packed-fixture",
+      "rationale": "Generated packed-consumer fixture; it is not authored product demand."
+    },
+    {
+      "path": "examples/throwaway-app",
+      "kind": "throwaway-app",
+      "rationale": "Disposable local evaluation app; it is not maintained product demand."
+    }
+  ]
+}

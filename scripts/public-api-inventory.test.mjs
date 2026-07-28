@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,13 +187,6 @@ describe('public API inventory', () => {
       const declaredPacked = path.join(hostileRoot, 'examples/release-consumer-shadow');
       mkdirSync(declaredPacked, { recursive: true });
       writeFileSync(
-        path.join(declaredPacked, '.kovo-public-api-inventory.json'),
-        `${JSON.stringify({
-          schema: 'kovo-public-api-inventory-exclusion/v1',
-          kind: 'packed-fixture',
-        })}\n`,
-      );
-      writeFileSync(
         path.join(declaredPacked, 'hostile.ts'),
         "import { feature } from '@fixture/api/feature';\nvoid feature;\n",
       );
@@ -196,7 +197,6 @@ describe('public API inventory', () => {
         `${JSON.stringify({
           name: 'innocently-named-copy',
           private: true,
-          kovoInventory: { consumerKind: 'throwaway-app' },
         })}\n`,
       );
       writeFileSync(
@@ -208,6 +208,21 @@ describe('public API inventory', () => {
         path.join(hostileRoot, 'examples/authored/dependency-copy'),
         'dir',
       );
+      const exclusionsPath = path.join(hostileRoot, 'public-api-inventory-exclusions.json');
+      const exclusions = JSON.parse(readFileSync(exclusionsPath, 'utf8'));
+      exclusions.directories.push(
+        {
+          path: 'examples/release-consumer-shadow',
+          kind: 'packed-fixture',
+          rationale: 'Generated release-consumer fixture excluded by central review.',
+        },
+        {
+          path: 'examples/local-evaluation-copy',
+          kind: 'throwaway-app',
+          rationale: 'Disposable evaluation copy excluded by central review.',
+        },
+      );
+      writeFileSync(exclusionsPath, `${JSON.stringify(exclusions, null, 2)}\n`);
 
       const inventory = buildPublicApiInventory({ repoRoot: hostileRoot });
       const excluded = inventory.exclusions.map((entry) => [
@@ -239,6 +254,47 @@ describe('public API inventory', () => {
         expect(excluded.some(([directory]) => relative.startsWith(`${directory}/`))).toBe(false);
       }
       expect(JSON.stringify(feature?.consumers)).not.toContain('hostile');
+    } finally {
+      rmSync(hostileRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects local exclusion markers and package declarations under authored roots', () => {
+    const hostileRoot = mkdtempSync(
+      path.join(os.tmpdir(), 'kovo-public-inventory-local-exclusion-'),
+    );
+    try {
+      cpSync(fixtureRoot, hostileRoot, { recursive: true });
+      const hiddenRoot = path.join(hostileRoot, 'examples/authored-hidden');
+      mkdirSync(hiddenRoot, { recursive: true });
+      writeFileSync(
+        path.join(hiddenRoot, '.kovo-public-api-inventory.json'),
+        `${JSON.stringify({
+          schema: 'kovo-public-api-inventory-exclusion/v1',
+          kind: 'packed-fixture',
+        })}\n`,
+      );
+      writeFileSync(
+        path.join(hiddenRoot, 'hostile.ts'),
+        "import { feature } from '@fixture/api/feature';\nvoid feature;\n",
+      );
+
+      expect(() => buildPublicApiInventory({ repoRoot: hostileRoot })).toThrow(
+        'local inventory exclusion markers are forbidden',
+      );
+
+      rmSync(path.join(hiddenRoot, '.kovo-public-api-inventory.json'));
+      writeFileSync(
+        path.join(hiddenRoot, 'package.json'),
+        `${JSON.stringify({
+          name: 'hostile-authored-copy',
+          private: true,
+          kovoInventory: { consumerKind: 'throwaway-app' },
+        })}\n`,
+      );
+      expect(() => buildPublicApiInventory({ repoRoot: hostileRoot })).toThrow(
+        'local kovoInventory exclusions are forbidden',
+      );
     } finally {
       rmSync(hostileRoot, { recursive: true, force: true });
     }

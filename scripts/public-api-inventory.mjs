@@ -16,7 +16,7 @@ import { normalizePackageExports, resolveSourceExportTarget } from './package-ex
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
 export const PUBLIC_API_INVENTORY_SCHEMA = 'kovo-public-api-inventory/v1';
-export const PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA = 'kovo-public-api-inventory-exclusion/v1';
+export const PUBLIC_API_INVENTORY_EXCLUSIONS_SCHEMA = 'kovo-public-api-inventory-exclusions/v1';
 
 export const CONSUMER_AREAS = Object.freeze([
   'authoredExamples',
@@ -30,6 +30,14 @@ export const CONSUMER_AREAS = Object.freeze([
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const DOC_EXTENSIONS = new Set(['.md', '.mdx']);
 const ENTRYPOINT_EVIDENCE = '<entrypoint-only>';
+const CONSUMER_SCAN_ROOTS = Object.freeze([
+  'examples',
+  'site',
+  'docs',
+  'packages',
+  'tests',
+  'conformance',
+]);
 const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
   '.cache',
   '.git',
@@ -50,6 +58,7 @@ const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
   'out',
 ]);
 const EXCLUSION_MARKER = '.kovo-public-api-inventory.json';
+const REVIEWED_EXCLUSIONS_FILE = 'public-api-inventory-exclusions.json';
 const DECLARED_CONSUMER_EXCLUSIONS = new Map([
   ['packed-fixture', 'declared-packed-fixture'],
   ['throwaway-app', 'declared-throwaway-app'],
@@ -327,41 +336,103 @@ function addEvidence(evidence, area, relativeFile) {
   if (!bucket.files.includes(relativeFile)) bucket.files.push(relativeFile);
 }
 
-function declaredConsumerExclusion(directory) {
+function canonicalConsumerDirectory(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !path.isAbsolute(value) &&
+    !value.includes('\\') &&
+    path.posix.normalize(value) === value &&
+    value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..') &&
+    CONSUMER_SCAN_ROOTS.some((scanRoot) => value.startsWith(`${scanRoot}/`) && value !== scanRoot)
+  );
+}
+
+function reviewedConsumerExclusions(repoRoot) {
+  const manifestPath = path.join(repoRoot, REVIEWED_EXCLUSIONS_FILE);
+  if (!existsSync(manifestPath)) {
+    throw new Error(`${REVIEWED_EXCLUSIONS_FILE}: reviewed inventory exclusions are required`);
+  }
+  const stat = lstatSync(manifestPath);
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error(`${REVIEWED_EXCLUSIONS_FILE}: must be a regular file`);
+  }
+  const manifest = readJson(manifestPath);
+  if (manifest.schema !== PUBLIC_API_INVENTORY_EXCLUSIONS_SCHEMA) {
+    throw new Error(
+      `${REVIEWED_EXCLUSIONS_FILE}: schema must be ${PUBLIC_API_INVENTORY_EXCLUSIONS_SCHEMA}`,
+    );
+  }
+  if (!Array.isArray(manifest.directories)) {
+    throw new Error(`${REVIEWED_EXCLUSIONS_FILE}: directories must be an array`);
+  }
+  const exclusions = new Map();
+  for (const [index, entry] of manifest.directories.entries()) {
+    const label = `${REVIEWED_EXCLUSIONS_FILE}: directories[${index}]`;
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      Array.isArray(entry) ||
+      !canonicalConsumerDirectory(entry.path)
+    ) {
+      throw new Error(`${label}.path must be a canonical directory below a consumer scan root`);
+    }
+    if (exclusions.has(entry.path)) {
+      throw new Error(`${label}.path is duplicated: ${entry.path}`);
+    }
+    const reason = DECLARED_CONSUMER_EXCLUSIONS.get(entry.kind);
+    if (!reason) {
+      throw new Error(`${label}.kind must be packed-fixture or throwaway-app`);
+    }
+    if (typeof entry.rationale !== 'string' || entry.rationale.trim().length < 20) {
+      throw new Error(`${label}.rationale must explain why authored evidence is excluded`);
+    }
+    const absolute = path.join(repoRoot, ...entry.path.split('/'));
+    if (
+      !existsSync(absolute) ||
+      !lstatSync(absolute).isDirectory() ||
+      lstatSync(absolute).isSymbolicLink()
+    ) {
+      throw new Error(`${label}.path must name an existing non-symlink directory`);
+    }
+    for (const existing of exclusions.keys()) {
+      if (entry.path.startsWith(`${existing}/`) || existing.startsWith(`${entry.path}/`)) {
+        throw new Error(`${label}.path overlaps another reviewed exclusion: ${existing}`);
+      }
+    }
+    exclusions.set(entry.path, { ...entry, reason });
+  }
+  return exclusions;
+}
+
+function rejectLocalConsumerExclusion(directory, repoRoot) {
   const markerPath = path.join(directory, EXCLUSION_MARKER);
   if (existsSync(markerPath)) {
-    const markerStat = lstatSync(markerPath);
-    if (!markerStat.isFile() || markerStat.isSymbolicLink()) {
-      throw new Error(`${markerPath}: inventory exclusion marker must be a regular file`);
-    }
-    const marker = readJson(markerPath);
-    if (marker.schema !== PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA) {
-      throw new Error(`${markerPath}: schema must be ${PUBLIC_API_INVENTORY_EXCLUSION_SCHEMA}`);
-    }
-    const reason = DECLARED_CONSUMER_EXCLUSIONS.get(marker.kind);
-    if (!reason) throw new Error(`${markerPath}: kind must be packed-fixture or throwaway-app`);
-    return reason;
+    const relative = path.relative(repoRoot, markerPath).split(path.sep).join('/');
+    throw new Error(
+      `${relative}: local inventory exclusion markers are forbidden; review ${REVIEWED_EXCLUSIONS_FILE}`,
+    );
   }
 
   const packageJsonPath = path.join(directory, 'package.json');
-  if (!existsSync(packageJsonPath)) return null;
+  if (!existsSync(packageJsonPath)) return;
   const packageJsonStat = lstatSync(packageJsonPath);
-  if (!packageJsonStat.isFile() || packageJsonStat.isSymbolicLink()) return null;
+  if (!packageJsonStat.isFile() || packageJsonStat.isSymbolicLink()) return;
   const kind = readJson(packageJsonPath)?.kovoInventory?.consumerKind;
-  if (kind === undefined) return null;
-  const reason = DECLARED_CONSUMER_EXCLUSIONS.get(kind);
-  if (!reason) {
+  if (kind !== undefined) {
+    const relative = path.relative(repoRoot, packageJsonPath).split(path.sep).join('/');
     throw new Error(
-      `${packageJsonPath}: kovoInventory.consumerKind must be packed-fixture or throwaway-app`,
+      `${relative}: local kovoInventory exclusions are forbidden; review ${REVIEWED_EXCLUSIONS_FILE}`,
     );
   }
-  return reason;
 }
 
-function excludedDirectoryReason(directory, name) {
+function excludedDirectoryReason(repoRoot, directory, name, reviewedExclusions) {
+  rejectLocalConsumerExclusion(directory, repoRoot);
   if (name === 'node_modules') return 'nested-dependency';
   if (ALWAYS_EXCLUDED_DIRECTORIES.has(name)) return 'generated-dist-cache';
-  return declaredConsumerExclusion(directory);
+  const relative = path.relative(repoRoot, directory).split(path.sep).join('/');
+  return reviewedExclusions.get(relative)?.reason ?? null;
 }
 
 function consumerArea(relativeFile) {
@@ -394,7 +465,8 @@ function consumerArea(relativeFile) {
 }
 
 function walkConsumerFiles(repoRoot) {
-  const scanRoots = ['examples', 'site', 'docs', 'packages', 'tests', 'conformance'];
+  const reviewedExclusions = reviewedConsumerExclusions(repoRoot);
+  const consumedExclusions = new Set();
   const files = [];
   const excludedDirectories = [];
   const seenDirectories = new Set();
@@ -415,12 +487,14 @@ function walkConsumerFiles(repoRoot) {
         continue;
       }
       if (entry.isDirectory()) {
-        const reason = excludedDirectoryReason(absolute, entry.name);
+        const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
+        const reason = excludedDirectoryReason(repoRoot, absolute, entry.name, reviewedExclusions);
         if (reason !== null) {
           excludedDirectories.push({
-            path: path.relative(repoRoot, absolute).split(path.sep).join('/'),
+            path: relative,
             reason,
           });
+          if (reviewedExclusions.has(relative)) consumedExclusions.add(relative);
         } else {
           walk(absolute);
         }
@@ -435,9 +509,16 @@ function walkConsumerFiles(repoRoot) {
     }
   }
 
-  for (const scanRoot of scanRoots) {
+  for (const scanRoot of CONSUMER_SCAN_ROOTS) {
     const absolute = path.join(repoRoot, scanRoot);
     if (existsSync(absolute) && lstatSync(absolute).isDirectory()) walk(absolute);
+  }
+  for (const relative of reviewedExclusions.keys()) {
+    if (!consumedExclusions.has(relative)) {
+      throw new Error(
+        `${REVIEWED_EXCLUSIONS_FILE}: reviewed directory was not reached: ${relative}`,
+      );
+    }
   }
   for (const name of ['README.md', 'README.mdx']) {
     const absolute = path.join(repoRoot, name);
