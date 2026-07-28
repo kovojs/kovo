@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
+import ts from 'typescript';
+
 import type { AppContractArm, PrototypeFixture } from './fixture-v6.ts';
 
 export interface RuntimeArmEvidence {
@@ -22,9 +24,18 @@ export async function runtimeEvidence(
     '',
   );
   await writeFile(providerRuntimeFile, providerRuntimeSource);
+  const appRuntimeFile = join(fixture.app, 'src/kovo.js');
+  const appRuntimeSource = ts.transpileModule(await readFile(fixture.providerFile, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: fixture.providerFile,
+  }).outputText;
+  await writeFile(appRuntimeFile, appRuntimeSource);
   const script = join(fixture.app, `runtime-evidence-${arm}.mjs`);
   const runtimeSpecifier = moduleRelative(fixture.app, fixture.runtimeEntries[arm]);
-  const providerSpecifier = moduleRelative(fixture.app, fixture.providerFile);
+  const providerSpecifier = moduleRelative(fixture.app, appRuntimeFile);
   await writeFile(
     script,
     [
