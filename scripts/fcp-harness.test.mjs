@@ -7,8 +7,11 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import {
+  browserGateResult,
+  fcpGateResult,
   fcpHarnessExitCode,
   htmlAssetInventory,
+  runLighthouse,
   runFcpHarness,
   summarizeAxeResult,
 } from './fcp-harness.mjs';
@@ -176,6 +179,44 @@ describe('fcp harness HTML asset inventory', () => {
     );
   });
 
+  it('bounds the number of critical asset probes before making asset requests', async () => {
+    await expect(
+      runFcpHarness({
+        browser: false,
+        maxCriticalAssetCount: Number.MAX_SAFE_INTEGER,
+        url: 'http://unreachable.invalid/',
+      }),
+    ).rejects.toThrow('maxCriticalAssetCount must be a positive integer no greater than');
+
+    const requestedPaths = [];
+    await withHarnessServer(
+      (request, response) => {
+        requestedPaths.push(request.url);
+        response.writeHead(200, { 'Content-Type': 'text/html' });
+        response.end(
+          [
+            '<html><body>ready',
+            '<script src="/one.js"></script>',
+            '<script src="/two.js"></script>',
+            '<script src="/three.js"></script>',
+            '</body></html>',
+          ].join(''),
+        );
+      },
+      async ({ outputDir, url }) => {
+        await expect(
+          runFcpHarness({
+            browser: false,
+            maxCriticalAssetCount: 2,
+            outputDir,
+            url,
+          }),
+        ).rejects.toThrow('critical asset inventory contains 3 URLs, exceeding the limit of 2');
+      },
+    );
+    expect(requestedPaths).toEqual(['/']);
+  });
+
   it('bounds request duration and encoded response bodies', async () => {
     await expect(
       runFcpHarness({
@@ -241,6 +282,69 @@ describe('fcp harness HTML asset inventory', () => {
     );
   });
 
+  it('fails browser evidence without accessibility when text, console, page, or FCP facts fail', async () => {
+    await withHarnessServer(
+      (_request, response) => {
+        response.writeHead(200, { 'Content-Type': 'text/html' });
+        response.end('<html><body>ready</body></html>');
+      },
+      async ({ outputDir, url }) => {
+        const result = await runFcpHarness({
+          outputDir,
+          runBrowserSmoke: async () => [
+            {
+              consoleErrors: ['console exploded'],
+              firstViewportTextVisible: false,
+              pageErrors: ['page exploded'],
+              paintEntries: [],
+              screenshot: {
+                bytes: 1,
+                sha256: `sha256:${'a'.repeat(64)}`,
+              },
+              viewport: { name: 'hostile' },
+            },
+          ],
+          url,
+        });
+
+        expect(result.browserGate).toEqual({
+          failures: [
+            'hostile: first viewport has no text',
+            'hostile: 1 console error(s)',
+            'hostile: 1 page error(s)',
+            'hostile: first-contentful-paint was not observed',
+          ],
+          pass: false,
+        });
+        expect(result.gate.failures).toEqual(
+          result.browserGate.failures.map((failure) => `browser: ${failure}`),
+        );
+        expect(fcpHarnessExitCode(result)).toBe(1);
+      },
+    );
+  });
+
+  it('accepts complete browser evidence without requiring accessibility-only facts', () => {
+    expect(
+      browserGateResult(
+        [
+          {
+            consoleErrors: [],
+            firstViewportTextVisible: true,
+            pageErrors: [],
+            paintEntries: [{ name: 'first-contentful-paint', startTime: 0 }],
+            screenshot: {
+              bytes: 1,
+              sha256: `sha256:${'a'.repeat(64)}`,
+            },
+            viewport: { name: 'desktop' },
+          },
+        ],
+        { accessibilityRequested: false },
+      ),
+    ).toEqual({ failures: [], pass: true });
+  });
+
   it('makes a requested Lighthouse failure fail the harness gate and CLI status', async () => {
     await withHarnessServer(
       (_request, response) => {
@@ -265,6 +369,102 @@ describe('fcp harness HTML asset inventory', () => {
           pass: false,
         });
         expect(fcpHarnessExitCode(result)).toBe(1);
+      },
+    );
+  });
+
+  it.each([
+    ['missing', null],
+    ['not finite', Number.NaN],
+    ['negative', -1],
+  ])('rejects %s Lighthouse first-contentful-paint evidence', (_label, fcpMs) => {
+    expect(
+      fcpGateResult(
+        {
+          lighthouse: {
+            audits: { fcpMs },
+            ok: true,
+          },
+        },
+        { lighthouseRequested: true },
+      ),
+    ).toEqual({
+      failures: ['lighthouse: first-contentful-paint is missing or invalid'],
+      pass: false,
+    });
+  });
+
+  it('passes the bounded timeout to the Lighthouse subprocess and fails a timeout closed', () => {
+    const outputDir = mkdtempSync(path.join(os.tmpdir(), 'kovo-fcp-lighthouse-test-'));
+    let spawnOptions;
+    try {
+      const result = runLighthouse(new URL('https://example.test/'), outputDir, {
+        spawn: (_command, _args, options) => {
+          spawnOptions = options;
+          return {
+            error: Object.assign(new Error('spawn timed out'), { code: 'ETIMEDOUT' }),
+            status: null,
+            stderr: '',
+            stdout: '',
+          };
+        },
+        timeoutMs: 37,
+      });
+
+      expect(spawnOptions).toMatchObject({ encoding: 'utf8', timeout: 37 });
+      expect(result).toMatchObject({
+        error: 'lighthouse exceeded 37 ms',
+        ok: false,
+      });
+    } finally {
+      rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces one global deadline across browser and Lighthouse operations', async () => {
+    await withHarnessServer(
+      (_request, response) => {
+        response.writeHead(200, { 'Content-Type': 'text/html' });
+        response.end('<html><body>ready</body></html>');
+      },
+      async ({ outputDir, url }) => {
+        await expect(
+          runFcpHarness({
+            harnessTimeoutMs: 25,
+            outputDir,
+            runBrowserSmoke: async () => await new Promise(() => undefined),
+            url,
+          }),
+        ).rejects.toThrow('FCP harness exceeded 25 ms global deadline');
+
+        await expect(
+          runFcpHarness({
+            browser: false,
+            harnessTimeoutMs: 25,
+            lighthouse: true,
+            lighthouseTimeoutMs: 1_000,
+            outputDir,
+            runLighthouse: async () => await new Promise(() => undefined),
+            url,
+          }),
+        ).rejects.toThrow('FCP harness exceeded 25 ms global deadline');
+      },
+    );
+  });
+
+  it('lets the global deadline preempt a longer per-request timeout', async () => {
+    await withHarnessServer(
+      () => undefined,
+      async ({ outputDir, url }) => {
+        await expect(
+          runFcpHarness({
+            browser: false,
+            harnessTimeoutMs: 25,
+            outputDir,
+            requestTimeoutMs: 1_000,
+            url,
+          }),
+        ).rejects.toThrow('FCP harness exceeded 25 ms global deadline');
       },
     );
   });

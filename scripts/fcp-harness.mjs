@@ -9,9 +9,15 @@ import { performance } from 'node:perf_hooks';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 
 const defaultAcceptEncoding = 'br,gzip';
+const defaultHarnessTimeoutMs = 180_000;
+const defaultLighthouseTimeoutMs = 120_000;
+const defaultMaxCriticalAssetCount = 64;
 const defaultMaxDecodedBodyBytes = 16 * 1024 * 1024;
 const defaultMaxEncodedBodyBytes = 8 * 1024 * 1024;
 const defaultRequestTimeoutMs = 15_000;
+const hardMaxHarnessTimeoutMs = 10 * 60_000;
+const hardMaxLighthouseTimeoutMs = 5 * 60_000;
+const hardMaxCriticalAssetCount = 256;
 const hardMaxDecodedBodyBytes = 64 * 1024 * 1024;
 const hardMaxEncodedBodyBytes = 32 * 1024 * 1024;
 const hardMaxRequestTimeoutMs = 60_000;
@@ -24,36 +30,81 @@ const wcagTags = Object.freeze(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wca
 
 export async function runFcpHarness(options) {
   validateAccessibilityOptions(options);
-  const probeOptions = validatedProbeOptions(options);
+  const limits = validatedHarnessLimits(options);
+  const controller = new AbortController();
+  const deadlineAt = performance.now() + limits.harnessTimeoutMs;
+  const deadlineError = new Error(
+    `FCP harness exceeded ${limits.harnessTimeoutMs} ms global deadline`,
+  );
+  let deadlineTimer;
+  const deadline = new Promise((_, reject) => {
+    deadlineTimer = setTimeout(() => {
+      controller.abort(deadlineError);
+      reject(deadlineError);
+    }, limits.harnessTimeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      runFcpHarnessWithinDeadline(options, limits, controller.signal, deadlineAt),
+      deadline,
+    ]);
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
+}
+
+async function runFcpHarnessWithinDeadline(options, limits, signal, deadlineAt) {
   const url = new URL(options.url);
   const outputDir = options.outputDir ?? defaultOutputDir(url);
   mkdirSync(outputDir, { recursive: true });
 
-  const documentProbe = await probeUrl(url, probeOptions);
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const documentProbe = await probeUrl(url, { ...limits, signal });
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
   assertSuccessfulProbe(documentProbe, 'document');
-  const documentBody = decodeProbeBody(documentProbe, probeOptions);
+  const documentBody = decodeProbeBody(documentProbe, limits);
   const documentHtml = documentBody.toString('utf8');
   const inventory = htmlAssetInventory(documentHtml, url);
+  if (inventory.criticalAssetUrls.length > limits.maxCriticalAssetCount) {
+    throw new Error(
+      `${url.href}: critical asset inventory contains ${inventory.criticalAssetUrls.length} URLs, exceeding the limit of ${limits.maxCriticalAssetCount}`,
+    );
+  }
   const assetProbes = [];
 
   for (const assetUrl of inventory.criticalAssetUrls) {
-    const assetProbe = await probeUrl(assetUrl, probeOptions);
+    remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+    const assetProbe = await probeUrl(assetUrl, { ...limits, signal });
+    remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
     assertSuccessfulProbe(assetProbe, 'critical asset');
-    const assetBody = decodeProbeBody(assetProbe, probeOptions);
+    const assetBody = decodeProbeBody(assetProbe, limits);
     assetProbes.push(probeSummary(assetProbe, assetBody));
   }
 
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const browserRunner = options.runBrowserSmoke ?? runBrowserSmoke;
   const browser =
     options.browser === false
       ? undefined
-      : await runBrowserSmoke(url, outputDir, {
+      : await browserRunner(url, outputDir, {
           accessibility: options.accessibility === true,
-          requestTimeoutMs: probeOptions.requestTimeoutMs,
+          requestTimeoutMs: limits.requestTimeoutMs,
+          signal,
           terminalState: options.terminalState,
         });
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const lighthouseRunner = options.runLighthouse ?? runLighthouse;
   const lighthouse = options.lighthouse
-    ? await (options.runLighthouse ?? runLighthouse)(url, outputDir)
+    ? await lighthouseRunner(url, outputDir, {
+        signal,
+        timeoutMs: Math.min(
+          limits.lighthouseTimeoutMs,
+          remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs),
+        ),
+      })
     : undefined;
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
   const result = {
     assetProbes,
     browser,
@@ -62,23 +113,31 @@ export async function runFcpHarness(options) {
     lighthouse,
     outputDir,
     probeLimits: {
-      maxDecodedBodyBytes: probeOptions.maxDecodedBodyBytes,
-      maxEncodedBodyBytes: probeOptions.maxEncodedBodyBytes,
-      requestTimeoutMs: probeOptions.requestTimeoutMs,
+      harnessTimeoutMs: limits.harnessTimeoutMs,
+      lighthouseTimeoutMs: limits.lighthouseTimeoutMs,
+      maxCriticalAssetCount: limits.maxCriticalAssetCount,
+      maxDecodedBodyBytes: limits.maxDecodedBodyBytes,
+      maxEncodedBodyBytes: limits.maxEncodedBodyBytes,
+      requestTimeoutMs: limits.requestTimeoutMs,
     },
     url: url.href,
   };
-  if (browser && options.accessibility === true) {
-    result.browserGate = browserGateResult(browser);
+  if (options.browser !== false) {
+    result.browserGate = browserGateResult(browser, {
+      accessibilityRequested: options.accessibility === true,
+    });
   }
   result.gate = fcpGateResult(result, { lighthouseRequested: options.lighthouse === true });
 
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
   writeFileSync(join(outputDir, 'summary.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
 export async function probeUrl(url, options = {}, redirectCount = 0) {
   const probeOptions = validatedProbeOptions(options);
+  const signal = options.signal;
+  throwIfAborted(signal);
   const target = new URL(url);
   const transport = target.protocol === 'https:' ? httpsRequest : httpRequest;
   const startedAt = performance.now();
@@ -90,6 +149,7 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      signal?.removeEventListener('abort', abortRequest);
       callback(value);
     };
     const request = transport(
@@ -128,7 +188,11 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
             try {
               settle(
                 resolve,
-                await probeUrl(new URL(location, target), probeOptions, redirectCount + 1),
+                await probeUrl(
+                  new URL(location, target),
+                  { ...probeOptions, signal },
+                  redirectCount + 1,
+                ),
               );
             } catch (error) {
               settle(reject, error);
@@ -151,6 +215,10 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
         });
       },
     );
+    const abortRequest = () => {
+      request.destroy(abortReason(signal));
+    };
+    signal?.addEventListener('abort', abortRequest, { once: true });
     request.on('error', (error) => settle(reject, error));
     timeout = setTimeout(() => {
       request.destroy(
@@ -216,9 +284,16 @@ export function htmlAssetInventory(html, baseUrl) {
   };
 }
 
-function runLighthouse(url, outputDir) {
+export function runLighthouse(url, outputDir, options = {}) {
   const outputPath = join(outputDir, 'lighthouse.json');
-  const result = spawnSync(
+  const spawn = options.spawn ?? spawnSync;
+  const timeoutMs = boundedPositiveInteger(
+    options.timeoutMs,
+    defaultLighthouseTimeoutMs,
+    hardMaxLighthouseTimeoutMs,
+    'lighthouseTimeoutMs',
+  );
+  const result = spawn(
     'npx',
     [
       '--yes',
@@ -230,11 +305,20 @@ function runLighthouse(url, outputDir) {
       '--chrome-flags=--headless=new --no-sandbox',
       '--quiet',
     ],
-    { encoding: 'utf8' },
+    {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+    },
   );
   if (result.status !== 0) {
+    const timedOut = result.error?.code === 'ETIMEDOUT';
     return {
-      error: result.stderr || result.stdout || `lighthouse exited ${result.status}`,
+      error:
+        result.stderr ||
+        result.stdout ||
+        (timedOut
+          ? `lighthouse exceeded ${timeoutMs} ms`
+          : result.error?.message || `lighthouse exited ${result.status}`),
       outputPath,
       ok: false,
     };
@@ -260,6 +344,10 @@ function runLighthouse(url, outputDir) {
 async function runBrowserSmoke(url, outputDir, options = {}) {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
+  const closeOnAbort = () => {
+    void browser.close().catch(() => undefined);
+  };
+  options.signal?.addEventListener('abort', closeOnAbort, { once: true });
   const results = [];
   const axePath = options.accessibility === true ? axeRequire.resolve('axe-core/axe.min.js') : null;
   const axeSource = axePath === null ? null : readFileSync(axePath, 'utf8');
@@ -267,7 +355,9 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
     axeSource === null ? null : `sha256:${createHash('sha256').update(axeSource).digest('hex')}`;
 
   try {
+    throwIfAborted(options.signal);
     for (const viewport of defaultViewports) {
+      throwIfAborted(options.signal);
       const page = await browser.newPage({ viewport });
       const consoleErrors = [];
       const pageErrors = [];
@@ -280,6 +370,7 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
         timeout: options.requestTimeoutMs,
         waitUntil: 'load',
       });
+      throwIfAborted(options.signal);
       const navigationStatus = navigation?.status() ?? 0;
       if (navigationStatus < 200 || navigationStatus >= 300) {
         throw new Error(
@@ -287,6 +378,7 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
         );
       }
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+      throwIfAborted(options.signal);
       const terminalState =
         options.accessibility === true
           ? {
@@ -364,6 +456,7 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
           title: document.title,
         };
       });
+      throwIfAborted(options.signal);
       const terminalObservation =
         terminalState === null
           ? null
@@ -386,6 +479,7 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
       });
     }
   } finally {
+    options.signal?.removeEventListener('abort', closeOnAbort);
     await browser.close();
   }
 
@@ -424,27 +518,39 @@ export function summarizeAxeResult(result, options) {
   };
 }
 
-function browserGateResult(browserResults) {
+export function browserGateResult(browserResults, options = {}) {
   const failures = [];
+  if (!Array.isArray(browserResults) || browserResults.length === 0) {
+    failures.push('browser smoke produced no viewport results');
+    return { failures, pass: false };
+  }
   for (const result of browserResults) {
-    const prefix = result.viewport.name;
+    const prefix = result.viewport?.name ?? 'unknown viewport';
     if (!result.firstViewportTextVisible) failures.push(`${prefix}: first viewport has no text`);
-    if (result.consoleErrors.length > 0) {
+    if ((result.consoleErrors?.length ?? 0) > 0) {
       failures.push(`${prefix}: ${result.consoleErrors.length} console error(s)`);
     }
-    if (result.pageErrors.length > 0) {
+    if ((result.pageErrors?.length ?? 0) > 0) {
       failures.push(`${prefix}: ${result.pageErrors.length} page error(s)`);
     }
-    if (result.terminalState?.matched !== true) {
-      failures.push(`${prefix}: terminal state was not observed`);
+    const fcpEntry = result.paintEntries?.find((entry) => entry.name === 'first-contentful-paint');
+    if (!Number.isFinite(fcpEntry?.startTime) || fcpEntry.startTime < 0) {
+      failures.push(`${prefix}: first-contentful-paint was not observed`);
     }
-    if (result.terminalState?.matchCount !== 1) {
-      failures.push(
-        `${prefix}: terminal state selector matched ${result.terminalState?.matchCount ?? 0} elements`,
-      );
-    }
-    if (result.accessibility?.pass !== true) {
-      failures.push(`${prefix}: ${result.accessibility?.violations.length ?? 0} axe violation(s)`);
+    if (options.accessibilityRequested === true) {
+      if (result.terminalState?.matched !== true) {
+        failures.push(`${prefix}: terminal state was not observed`);
+      }
+      if (result.terminalState?.matchCount !== 1) {
+        failures.push(
+          `${prefix}: terminal state selector matched ${result.terminalState?.matchCount ?? 0} elements`,
+        );
+      }
+      if (result.accessibility?.pass !== true) {
+        failures.push(
+          `${prefix}: ${result.accessibility?.violations.length ?? 0} axe violation(s)`,
+        );
+      }
     }
     if (
       !/^sha256:[0-9a-f]{64}$/u.test(result.screenshot?.sha256 ?? '') ||
@@ -461,10 +567,17 @@ export function fcpGateResult(result, options = {}) {
   if (result.browserGate?.pass === false) {
     failures.push(...result.browserGate.failures.map((failure) => `browser: ${failure}`));
   }
-  if (options.lighthouseRequested === true && result.lighthouse?.ok !== true) {
-    failures.push(
-      `lighthouse: ${result.lighthouse?.error?.trim() || 'requested run did not succeed'}`,
-    );
+  if (options.lighthouseRequested === true) {
+    if (result.lighthouse?.ok !== true) {
+      failures.push(
+        `lighthouse: ${result.lighthouse?.error?.trim() || 'requested run did not succeed'}`,
+      );
+    } else if (
+      !Number.isFinite(result.lighthouse.audits?.fcpMs) ||
+      result.lighthouse.audits.fcpMs < 0
+    ) {
+      failures.push('lighthouse: first-contentful-paint is missing or invalid');
+    }
   }
   return { failures, pass: failures.length === 0 };
 }
@@ -637,6 +750,30 @@ function boundedPositiveInteger(value, fallback, maximum, label) {
   return resolved;
 }
 
+function validatedHarnessLimits(options = {}) {
+  return {
+    ...validatedProbeOptions(options),
+    harnessTimeoutMs: boundedPositiveInteger(
+      options.harnessTimeoutMs,
+      defaultHarnessTimeoutMs,
+      hardMaxHarnessTimeoutMs,
+      'harnessTimeoutMs',
+    ),
+    lighthouseTimeoutMs: boundedPositiveInteger(
+      options.lighthouseTimeoutMs,
+      defaultLighthouseTimeoutMs,
+      hardMaxLighthouseTimeoutMs,
+      'lighthouseTimeoutMs',
+    ),
+    maxCriticalAssetCount: boundedPositiveInteger(
+      options.maxCriticalAssetCount,
+      defaultMaxCriticalAssetCount,
+      hardMaxCriticalAssetCount,
+      'maxCriticalAssetCount',
+    ),
+  };
+}
+
 function validatedProbeOptions(options = {}) {
   const acceptEncoding = options.acceptEncoding ?? defaultAcceptEncoding;
   if (typeof acceptEncoding !== 'string' || acceptEncoding.trim().length === 0) {
@@ -663,6 +800,25 @@ function validatedProbeOptions(options = {}) {
       'requestTimeoutMs',
     ),
   };
+}
+
+function abortReason(signal) {
+  return signal?.reason instanceof Error
+    ? signal.reason
+    : new Error('FCP harness operation was aborted');
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function remainingDeadlineMs(signal, deadlineAt, harnessTimeoutMs) {
+  throwIfAborted(signal);
+  const remaining = Math.ceil(deadlineAt - performance.now());
+  if (remaining <= 0) {
+    throw new Error(`FCP harness exceeded ${harnessTimeoutMs} ms global deadline`);
+  }
+  return remaining;
 }
 
 function assertSuccessfulProbe(probe, label) {
@@ -734,6 +890,48 @@ function parseCliArgs(args) {
     if (arg.startsWith('--accept-encoding=')) {
       options.acceptEncoding = arg.slice('--accept-encoding='.length);
       if (!options.acceptEncoding) throw new Error('Missing value for --accept-encoding.');
+      continue;
+    }
+    if (arg === '--harness-timeout-ms') {
+      options.harnessTimeoutMs = parseCliPositiveInteger(args[index + 1], '--harness-timeout-ms');
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--harness-timeout-ms=')) {
+      options.harnessTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--harness-timeout-ms='.length),
+        '--harness-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--lighthouse-timeout-ms') {
+      options.lighthouseTimeoutMs = parseCliPositiveInteger(
+        args[index + 1],
+        '--lighthouse-timeout-ms',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--lighthouse-timeout-ms=')) {
+      options.lighthouseTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--lighthouse-timeout-ms='.length),
+        '--lighthouse-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--max-critical-asset-count') {
+      options.maxCriticalAssetCount = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-critical-asset-count',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-critical-asset-count=')) {
+      options.maxCriticalAssetCount = parseCliPositiveInteger(
+        arg.slice('--max-critical-asset-count='.length),
+        '--max-critical-asset-count',
+      );
       continue;
     }
     if (arg === '--request-timeout-ms') {
@@ -824,7 +1022,7 @@ function parseCliArgs(args) {
   }
   if (!options.url) {
     throw new Error(
-      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--request-timeout-ms <ms>] [--max-encoded-body-bytes <bytes>] [--max-decoded-body-bytes <bytes>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
+      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--harness-timeout-ms <ms>] [--lighthouse-timeout-ms <ms>] [--request-timeout-ms <ms>] [--max-critical-asset-count <count>] [--max-encoded-body-bytes <bytes>] [--max-decoded-body-bytes <bytes>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
     );
   }
   if (options.accessibility && (!options.terminalState?.name || !options.terminalState?.selector)) {
@@ -857,7 +1055,10 @@ function printTextSummary(result) {
     `document-content-encoding=${result.document.contentEncoding ?? '-'}`,
     `document-vary=${result.document.vary ?? '-'}`,
     `document-ttfb-ms=${result.document.timings.ttfbMs ?? '-'}`,
+    `harness-timeout-ms=${result.probeLimits.harnessTimeoutMs}`,
+    `lighthouse-timeout-ms=${result.probeLimits.lighthouseTimeoutMs}`,
     `request-timeout-ms=${result.probeLimits.requestTimeoutMs}`,
+    `max-critical-asset-count=${result.probeLimits.maxCriticalAssetCount}`,
     `max-encoded-body-bytes=${result.probeLimits.maxEncodedBodyBytes}`,
     `max-decoded-body-bytes=${result.probeLimits.maxDecodedBodyBytes}`,
     `inline-style-bytes=${result.inventory.inlineStyleBytes}`,
