@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { sha256 } from './artifacts-v6.ts';
+import { contentSubjectDigest, sha256 } from './artifacts-v6.ts';
 import {
   assertD1V6EvaluationShape,
   evaluateD1V6,
@@ -99,6 +99,125 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
     }
     expect(collisions).toEqual(evidence.semanticEquivalence.collisionSubjects);
   });
+
+  it('rejects subject/count, contract-cardinality, packed-base, forbidden-diagnostic, and performance bypasses', async () => {
+    const mutations: Array<
+      readonly [string, (value: Mutable<D1RawEvidenceV6>) => void]
+    > = [
+      [
+        'generated contract truncation',
+        (value) => {
+          value.generation.armB.contracts.splice(1);
+        },
+      ],
+      [
+        'generated contract cloning',
+        (value) => {
+          const primary = clone(value.generation.armB.contracts[0]!);
+          value.generation.armB.contracts = [
+            primary,
+            clone(primary),
+            clone(primary),
+          ];
+        },
+      ],
+      [
+        'forbidden generated diagnostic',
+        (value) => {
+          value.generation.armB.compilerRecognitionDiagnostics.push({
+            code: `D1B${201}`,
+            fileName: '<fixture>/forbidden.ts',
+            length: 1,
+            message: 'forbidden synthetic diagnostic',
+            start: 0,
+          });
+        },
+      ],
+      [
+        'declaration subject without count claim',
+        (value) => {
+          const input = value.workloadSubjects.declarationInputs.baseline[0]!;
+          input.source += '\n';
+          input.subject.bytes = Buffer.byteLength(input.source);
+          input.subject.sha256 = sha256(input.source);
+        },
+      ],
+      [
+        'empty packed server with correlated digest claims',
+        (value) => {
+          const server = value.provenance.packages.find(
+            (entry) => entry.name === '@kovojs/server',
+          )!;
+          server.packedContents.files = [];
+          server.packedContents.digest = contentSubjectDigest([]);
+          server.sourceSha256 = server.sourceContents.digest;
+          for (const copy of value.fixture.serverCopies) {
+            copy.basePackedContentsSha256 = server.packedContents.digest;
+          }
+          for (const contract of value.generation.armB.contracts) {
+            contract.manifest.serverPackedContentsSha256 =
+              server.packedContents.digest;
+          }
+        },
+      ],
+      [
+        'negative timing and declaration domains',
+        (value) => {
+          for (const measurement of Object.values(value.measurements)) {
+            for (const sample of [
+              ...measurement.coldTscSamples,
+              ...measurement.warmTscSamples,
+              ...measurement.coldCompletionSamples,
+              ...measurement.warmCompletionSamples,
+            ]) {
+              sample.milliseconds = -1;
+            }
+            measurement.coldTscP50Ms = -1;
+            measurement.warmTscP50Ms = -1;
+            measurement.coldCompletionP50Ms = -1;
+            measurement.warmCompletionP95Ms = -1;
+            measurement.declarationBytes = -1;
+          }
+        },
+      ],
+      [
+        'runner metadata/name contradiction',
+        (value) => {
+          value.runner.architecture = 'x64';
+          value.runner.cpuModel = 'forged';
+          value.runner.nodeVersion = 'v1.0.0';
+          value.runner.operatingSystem = 'linux forged';
+          value.runner.typescriptVersion = '1.0.0';
+        },
+      ],
+      [
+        'ignored typecheck diagnostic',
+        (value) => {
+          value.measurements['arm-a'].typecheckDiagnosticCodes = [9999];
+        },
+      ],
+    ];
+    for (const [name, mutate] of mutations) {
+      const value = clone(evidence);
+      mutate(value);
+      const evaluated = await evaluateD1V6(criteria, value);
+      expect(
+        evaluated.arms['arm-a'].eligible && evaluated.arms['arm-b'].eligible,
+        name,
+      ).toBe(false);
+    }
+  });
+
+  it.each(ownerCorrelatedMutations())(
+    'rejects owner AST correlated forgery %s',
+    async (name, mutate) => {
+      expect(criteria.ownerContract.correlatedForgeryMutations).toContain(name);
+      const value = clone(evidence);
+      const authority = cloneAuthority(sealed);
+      mutate(value, authority);
+      await expectMutationDetected(value, authority);
+    },
+  );
 
   it.each(oneSidedMutations())('rejects one-sided mutation %s', async (name, mutate) => {
     expect(criteria.mutationContract.oneSided).toContain(name);
@@ -394,9 +513,16 @@ function correlatedMutations(): Array<
     [
       'count-and-workload-claims',
       (evidence) => {
-        evidence.fixture.counts.matrixCases =
-          (evidence.fixture.counts.matrixCases ?? 0) + 1;
-        addSurplus(evidence.matrix);
+        for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
+          const inputs = evidence.workloadSubjects.declarationInputs[variant];
+          const duplicate = clone(inputs[0]!);
+          duplicate.subject.path =
+            `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
+          inputs.push(duplicate);
+        }
+        evidence.fixture.counts.declarationFilesPerVariant = 13;
+        evidence.fixture.counts.generatedTypeDeclarationFiles = 39;
+        evidence.fixture.counts.generatedTypeDeclarations = 156;
       },
     ],
     [
@@ -413,6 +539,203 @@ function correlatedMutations(): Array<
   ];
 }
 
+function ownerCorrelatedMutations(): Array<
+  readonly [
+    string,
+    (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void,
+  ]
+> {
+  return [
+    [
+      'config-generated-owner',
+      (evidence, authority) =>
+        mutateOwnerAuthority(evidence, authority, {
+          appId: '00000000-0000-4000-8000-000000000066',
+          configAppId: true,
+          generatedAppId: true,
+        }),
+    ],
+    [
+      'provider-generated-owner',
+      (evidence, authority) =>
+        mutateOwnerAuthority(evidence, authority, {
+          generatedProviderKey: true,
+          providerKey: 'forged-provider-v6',
+          providerSourceKey: true,
+        }),
+    ],
+    [
+      'config-provider-generated-owner',
+      (evidence, authority) =>
+        mutateOwnerAuthority(evidence, authority, {
+          configProviderKey: true,
+          generatedProviderKey: true,
+          providerKey: 'correlated-provider-v6',
+          providerSourceKey: true,
+        }),
+    ],
+    [
+      'owner-manifest-runtime',
+      (evidence, authority) =>
+        mutateOwnerAuthority(evidence, authority, {
+          forcedOwner: `d1v6:${'f'.repeat(64)}`,
+        }),
+    ],
+    [
+      'appId-providerKey-owner',
+      (evidence, authority) =>
+        mutateOwnerAuthority(evidence, authority, {
+          appId: '00000000-0000-4000-8000-000000000099',
+          configAppId: true,
+          configProviderKey: true,
+          generatedAppId: true,
+          generatedProviderKey: true,
+          providerKey: 'forged-everywhere-v6',
+          providerSourceKey: true,
+        }),
+    ],
+  ];
+}
+
+function mutateOwnerAuthority(
+  evidence: Mutable<D1RawEvidenceV6>,
+  authority: MutableAuthority,
+  options: {
+    readonly appId?: string;
+    readonly configAppId?: boolean;
+    readonly configProviderKey?: boolean;
+    readonly forcedOwner?: string;
+    readonly generatedAppId?: boolean;
+    readonly generatedProviderKey?: boolean;
+    readonly providerKey?: string;
+    readonly providerSourceKey?: boolean;
+  },
+): void {
+  const previousAppId = '00000000-0000-4000-8000-000000000006';
+  const previousProviderKey = 'contacts-provider-v6';
+  const appId = options.appId ?? previousAppId;
+  const providerKey = options.providerKey ?? previousProviderKey;
+  const owner =
+    options.forcedOwner ??
+    `d1v6:${sha256(
+      JSON.stringify({
+        appId,
+        providerExportBinding: 'contactsProvider',
+        providerImportSpecifier: './provider.js',
+        providerKey,
+      }),
+    )}`;
+  if (options.configAppId) {
+    replaceAuthority(authority, 'config.ts', previousAppId, appId);
+  }
+  if (options.configProviderKey) {
+    replaceAuthority(
+      authority,
+      'config.ts',
+      previousProviderKey,
+      providerKey,
+    );
+  }
+  if (options.providerSourceKey) {
+    replaceAuthority(
+      authority,
+      'provider.ts',
+      previousProviderKey,
+      providerKey,
+    );
+  }
+  if (options.generatedAppId) {
+    replaceAuthority(authority, 'generated-app.ts', previousAppId, appId);
+  }
+  if (options.generatedProviderKey) {
+    replaceAuthority(
+      authority,
+      'generated-app.ts',
+      previousProviderKey,
+      providerKey,
+    );
+  }
+  replaceAuthority(
+    authority,
+    'generated-app.ts',
+    evidence.fixture.ownerKey,
+    owner,
+  );
+
+  evidence.fixture.ownerKey = owner;
+  for (const runtime of Object.values(evidence.runtime)) runtime.ownerKey = owner;
+  for (const family of declarationFamilies) {
+    for (const arm of ['arm-a', 'arm-b'] as const) {
+      evidence.compiler.families[family][arm].compiledOwnerKey = owner;
+    }
+  }
+  for (const contract of evidence.generation.armB.contracts) {
+    contract.manifest.ownerKey = owner;
+    if (options.generatedAppId) contract.manifest.appId = appId;
+    if (options.generatedProviderKey) contract.manifest.providerKey = providerKey;
+  }
+  synchronizePrimaryAuthorityClaims(evidence, authority);
+}
+
+function replaceAuthority(
+  authority: MutableAuthority,
+  name: keyof MutableAuthority,
+  before: string,
+  after: string,
+): void {
+  authority[name] = Buffer.from(
+    authority[name].toString('utf8').replaceAll(before, after),
+  );
+}
+
+function synchronizePrimaryAuthorityClaims(
+  evidence: Mutable<D1RawEvidenceV6>,
+  authority: MutableAuthority,
+): void {
+  const primary = evidence.generation.armB.contracts[0]!;
+  const updates = [
+    ['config.ts', 'configSource', 'configSubject', 'configSha256'],
+    ['provider.ts', 'providerSource', 'providerSubject', 'providerSourceSha256'],
+    [
+      'generated-app.ts',
+      'generatedModuleSource',
+      'generatedModuleSubject',
+      'generatedModuleSha256',
+    ],
+  ] as const;
+  for (const [artifact, sourceKey, subjectKey, manifestKey] of updates) {
+    const source = authority[artifact].toString('utf8');
+    const subject = primary[subjectKey];
+    const digest = sha256(source);
+    primary[sourceKey] = source;
+    subject.bytes = Buffer.byteLength(source);
+    subject.sha256 = digest;
+    primary.manifest[manifestKey] = digest;
+    for (const snapshot of [
+      evidence.workloadSubjects.appSourcesBefore,
+      evidence.workloadSubjects.appSourcesAfter,
+    ]) {
+      const input = snapshot.inputs.find(
+        (candidate) => candidate.subject.path === subject.path,
+      );
+      if (input) {
+        input.source = source;
+        input.subject.bytes = subject.bytes;
+        input.subject.sha256 = digest;
+      }
+      snapshot.content.files = snapshot.inputs.map((entry) =>
+        clone(entry.subject),
+      );
+      snapshot.content.digest = contentSubjectDigest(snapshot.content.files);
+    }
+  }
+  evidence.sealedArtifacts.configSha256 = sha256(authority['config.ts']);
+  evidence.sealedArtifacts.providerSha256 = sha256(authority['provider.ts']);
+  evidence.sealedArtifacts.generatedAppSha256 = sha256(
+    authority['generated-app.ts'],
+  );
+}
+
 function surplusRawMutations(): Array<
   readonly [string, (evidence: Mutable<D1RawEvidenceV6>) => void]
 > {
@@ -427,6 +750,24 @@ function surplusRawMutations(): Array<
     ['fixture', (value) => addSurplus(value.fixture)],
     ['counts', (value) => addSurplus(value.fixture.counts)],
     ['server-copy', (value) => addSurplus(value.fixture.serverCopies[0]!)],
+    ['workload-subjects', (value) => addSurplus(value.workloadSubjects)],
+    [
+      'source-snapshot',
+      (value) => addSurplus(value.workloadSubjects.appSourcesBefore),
+    ],
+    [
+      'source-input',
+      (value) => addSurplus(value.workloadSubjects.appSourcesBefore.inputs[0]!),
+    ],
+    [
+      'declaration-inputs',
+      (value) => addSurplus(value.workloadSubjects.declarationInputs),
+    ],
+    [
+      'declaration-input',
+      (value) =>
+        addSurplus(value.workloadSubjects.declarationInputs.baseline[0]!),
+    ],
     ['matrix-case', (value) => addSurplus(value.matrix['ordinary-local-import'])],
     [
       'matrix-evidence',

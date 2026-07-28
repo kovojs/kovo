@@ -135,6 +135,7 @@ function deterministicEvidenceSurface(evidence: D1RawEvidenceV6): unknown {
     schedules: evidence.schedules,
     schema: evidence.schema,
     semanticEquivalence: evidence.semanticEquivalence,
+    workloadSubjects: evidence.workloadSubjects,
   };
 }
 

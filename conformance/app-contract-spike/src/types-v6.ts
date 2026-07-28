@@ -5,9 +5,15 @@ import type {
   MatrixCaseName,
   PrototypeDiagnostic,
 } from './fixture-v6.ts';
-import type { CanonicalSemanticSubject, FamilyEvidence, MatrixEvidence } from './project-v6.ts';
+import type {
+  CanonicalSemanticSubject,
+  FamilyEvidence,
+  FixtureSourceSnapshot,
+  MatrixEvidence,
+} from './project-v6.ts';
 import type { RuntimeArmEvidence } from './runtime-v6.ts';
 import type {
+  DeclarationInputEvidence,
   SuccessfulTypeMeasurement,
   TypeDiagnosticEvidence,
   TypeMeasurementEvidence,
@@ -40,6 +46,7 @@ export interface D1CriteriaV6 {
     readonly surplusKeyMutationsRequiredAtEveryDeclaredSchemaNode: boolean;
   };
   readonly ownerContract: Readonly<Record<string, unknown>> & {
+    readonly correlatedForgeryMutations: readonly string[];
     readonly expectedAppId: string;
     readonly expectedProviderKey: string;
   };
@@ -113,9 +120,12 @@ export interface GeneratedManifestEvidence {
 }
 
 export interface GeneratedContractEvidence {
+  readonly configSource: string;
   readonly configSubject: FileSubject;
+  readonly generatedModuleSource: string;
   readonly generatedModuleSubject: FileSubject;
   readonly manifest: GeneratedManifestEvidence;
+  readonly providerSource: string;
   readonly providerSubject: FileSubject;
 }
 
@@ -143,6 +153,13 @@ export interface D1RawEvidenceV6 {
       readonly physicalRoot: string;
       readonly postWriteContents: ContentSubject;
     }[];
+  };
+  readonly workloadSubjects: {
+    readonly appSourcesAfter: FixtureSourceSnapshot;
+    readonly appSourcesBefore: FixtureSourceSnapshot;
+    readonly declarationInputs: Readonly<
+      Record<AppContractArm | 'baseline', readonly DeclarationInputEvidence[]>
+    >;
   };
   readonly sealedArtifacts: {
     readonly compilerPackedSha256: string;

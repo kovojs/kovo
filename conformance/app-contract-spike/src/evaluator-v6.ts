@@ -89,6 +89,7 @@ const exactRawKeys = [
   'sealedArtifacts',
   'schema',
   'semanticEquivalence',
+  'workloadSubjects',
 ] as const;
 
 export async function evaluateD1V6(
@@ -327,6 +328,22 @@ async function artifactGate(
       failures.push(`sealed post-write server copy differs at ${file.path}`);
     }
   }
+  const serverArtifact = evidence.provenance.packages.find(
+    (entry) => entry.name === '@kovojs/server',
+  );
+  const overlayPaths = new Set(overlayFiles.map((file) => file.path));
+  const packedBaseFiles =
+    serverArtifact?.packedContents.files.filter(
+      (file) => !overlayPaths.has(file.path),
+    ) ?? [];
+  const postWriteBaseFiles = postWriteFiles.filter(
+    (file) => !overlayPaths.has(file.path),
+  );
+  if (!equalJson(packedBaseFiles, postWriteBaseFiles)) {
+    failures.push(
+      'sealed post-write server bytes do not authenticate the claimed packed base',
+    );
+  }
   const sealedClaims = {
     'config.ts': evidence.sealedArtifacts.configSha256,
     'generated-app.ts': evidence.sealedArtifacts.generatedAppSha256,
@@ -466,12 +483,10 @@ function ownershipGate(
   ) {
     failures.push('authored source contains a forbidden owner literal');
   }
-  const expectedCounts = {
-    ...criteria.workload,
-    providerDefinitionCount: criteria.semanticThresholds.providerDefinitionCountExact,
-  };
-  if (!equalJson(evidence.fixture.counts, expectedCounts)) {
-    failures.push('fixture counts differ from subjects/preregistered workload');
+  validateWorkloadSubjects(criteria, evidence, failures);
+  validateGeneratedContractSet(criteria, evidence, failures);
+  if (evidence.generation.armB.compilerRecognitionDiagnostics.length !== 0) {
+    failures.push('generated Arm B recognition emitted a forbidden compiler diagnostic');
   }
   for (const arm of arms) {
     const runtime = evidence.runtime[arm];
@@ -535,6 +550,16 @@ function ownershipGate(
   const compilerArtifact = evidence.provenance.packages.find(
     (entry) => entry.name === '@kovojs/compiler',
   );
+  if (
+    sealedIdentity &&
+    (sealedIdentity.compilerSourceSha256 !== compilerArtifact?.sourceSha256 ||
+      sealedIdentity.serverPackedContentsSha256 !==
+        serverArtifact?.packedContents.digest)
+  ) {
+    failures.push(
+      'sealed generated AST compiler/server digests differ from authenticated package subjects',
+    );
+  }
   for (const contract of evidence.generation.armB.contracts) {
     const { manifest } = contract;
     const required = [
@@ -591,7 +616,11 @@ function ownershipGate(
     !primaryContract ||
     primaryContract.configSubject.sha256 !== sha256(sealed['config.ts']) ||
     primaryContract.providerSubject.sha256 !== sha256(sealed['provider.ts']) ||
-    primaryContract.generatedModuleSubject.sha256 !== sha256(sealed['generated-app.ts'])
+    primaryContract.generatedModuleSubject.sha256 !== sha256(sealed['generated-app.ts']) ||
+    primaryContract.configSource !== sealed['config.ts'].toString('utf8') ||
+    primaryContract.providerSource !== sealed['provider.ts'].toString('utf8') ||
+    primaryContract.generatedModuleSource !==
+      sealed['generated-app.ts'].toString('utf8')
   ) {
     failures.push('primary generated contract is not bound to sealed source bytes');
   }
@@ -647,6 +676,308 @@ function ownershipGate(
     }
   }
   return gate(failures);
+}
+
+function validateWorkloadSubjects(
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
+  failures: string[],
+): void {
+  validateSourceSnapshot(evidence.workloadSubjects.appSourcesBefore, failures, 'app sources before');
+  validateSourceSnapshot(evidence.workloadSubjects.appSourcesAfter, failures, 'app sources after');
+
+  const before = new Map(
+    evidence.workloadSubjects.appSourcesBefore.inputs.map((entry) => [
+      entry.subject.path,
+      entry,
+    ]),
+  );
+  const after = new Map(
+    evidence.workloadSubjects.appSourcesAfter.inputs.map((entry) => [
+      entry.subject.path,
+      entry,
+    ]),
+  );
+  const sourcePaths = new Set([...before.keys(), ...after.keys()]);
+  const appSourceRewriteCount = [...sourcePaths].filter((path) => {
+    const left = before.get(path);
+    const right = after.get(path);
+    return (
+      !left ||
+      !right ||
+      left.source !== right.source ||
+      !equalJson(left.subject, right.subject)
+    );
+  }).length;
+
+  const matrixEntries = matrixCaseNames.flatMap((name) =>
+    arms.map((arm) => evidence.matrix[name][arm]),
+  );
+  const matrixSubjectIdentities = new Set(
+    matrixEntries.map((entry) => JSON.stringify(entry.sourceSubject)),
+  );
+  const matrixPaths = new Set(matrixEntries.map((entry) => entry.sourceSubject.path));
+  if (
+    matrixSubjectIdentities.size !==
+      criteria.semanticThresholds.matrixDistinctSourceSubjectsExact ||
+    matrixPaths.size !== criteria.semanticThresholds.matrixDistinctSourceSubjectsExact
+  ) {
+    failures.push('matrix source subjects are not exact and physically distinct');
+  }
+
+  const declarationVariants = ['baseline', 'arm-a', 'arm-b'] as const;
+  const declarationCounts: number[] = [];
+  let generatedTypeDeclarationFiles = 0;
+  let generatedTypeDeclarations = 0;
+  for (const variant of declarationVariants) {
+    const inputs = evidence.workloadSubjects.declarationInputs[variant];
+    generatedTypeDeclarationFiles += inputs.length;
+    for (const [index, input] of inputs.entries()) {
+      validateSourceInput(input, failures, `${variant} declaration input ${index}`);
+      if (
+        input.subject.path !==
+        `app/d1-measure/${variant}/declarations-${index}.ts`
+      ) {
+        failures.push(`${variant} declaration input ${index} path/order differs`);
+      }
+      const declarationCount = countGeneratedTypeDeclarations(
+        input.source,
+        failures,
+        `${variant} declaration input ${index}`,
+      );
+      declarationCounts.push(declarationCount);
+      generatedTypeDeclarations += declarationCount;
+    }
+    if (new Set(inputs.map((input) => input.subject.path)).size !== inputs.length) {
+      failures.push(`${variant} declaration input paths are not distinct`);
+    }
+  }
+  const declarationsPerFile =
+    declarationCounts.length > 0 && new Set(declarationCounts).size === 1
+      ? declarationCounts[0]!
+      : -1;
+  if (declarationsPerFile < 0) {
+    failures.push('generated declaration files do not have one exact declaration count');
+  }
+
+  const familyEntries = declarationFamilies.flatMap((family) =>
+    (['baseline', 'arm-a', 'arm-b'] as const).map(
+      (variant) => evidence.compiler.families[family][variant],
+    ),
+  );
+  const generatedProviderFiles = new Set(
+    evidence.generation.armB.contracts.map((contract) => contract.providerSubject.path),
+  ).size;
+  const generatedBoundModules = new Set(
+    evidence.generation.armB.contracts.map(
+      (contract) => contract.generatedModuleSubject.path,
+    ),
+  ).size;
+  const recomputedCounts = {
+    matrixCases: Object.keys(evidence.matrix).length,
+    matrixArms: new Set(
+      Object.values(evidence.matrix).flatMap((entry) => Object.keys(entry)),
+    ).size,
+    generatedMatrixFiles: matrixEntries.length,
+    declarationFamilies: Object.keys(evidence.compiler.families).length,
+    familyVariants: new Set(
+      Object.values(evidence.compiler.families).flatMap((entry) =>
+        Object.keys(entry),
+      ),
+    ).size,
+    generatedFamilyFiles: familyEntries.length,
+    generatedRuntimeFiles: Object.keys(evidence.runtime).length,
+    generatedProviderFiles,
+    generatedBoundModules,
+    unsupportedReceiverFiles: Object.keys(evidence.receiverFlow.unsupported).length,
+    negativeControlFiles: Object.keys(evidence.receiverFlow.controls).length,
+    typeMeasurementVariants: Object.keys(
+      evidence.workloadSubjects.declarationInputs,
+    ).length,
+    declarationFilesPerVariant:
+      new Set(
+        declarationVariants.map(
+          (variant) =>
+            evidence.workloadSubjects.declarationInputs[variant].length,
+        ),
+      ).size === 1
+        ? evidence.workloadSubjects.declarationInputs.baseline.length
+        : -1,
+    declarationsPerFile,
+    generatedTypeDeclarationFiles,
+    generatedTypeDeclarations,
+    appSourceRewriteCount,
+    serverOverlayFileCount:
+      evidence.fixture.serverCopies[0]?.overlayFiles.length ?? 0,
+    sealedArtifactCount: Object.keys(evidence.sealedArtifacts).length,
+    buildCommandCount: evidence.provenance.buildCommands.length,
+    providerDefinitionCount: generatedProviderFiles,
+  };
+  const preregisteredCounts = {
+    ...criteria.workload,
+    providerDefinitionCount:
+      criteria.semanticThresholds.providerDefinitionCountExact,
+  };
+  if (
+    !equalJson(recomputedCounts, preregisteredCounts) ||
+    !equalJson(evidence.fixture.counts, recomputedCounts)
+  ) {
+    failures.push('fixture counts do not independently recompute from raw subjects');
+  }
+}
+
+function validateSourceSnapshot(
+  snapshot: D1RawEvidenceV6['workloadSubjects']['appSourcesBefore'],
+  failures: string[],
+  label: string,
+): void {
+  validateContentSubject(snapshot.content, failures, `${label} content`);
+  for (const [index, input] of snapshot.inputs.entries()) {
+    validateSourceInput(input, failures, `${label} input ${index}`);
+  }
+  const subjects = snapshot.inputs.map((entry) => entry.subject);
+  if (
+    snapshot.schema !== 'kovo.app-contract-d1-source-snapshot/v1' ||
+    new Set(subjects.map((subject) => subject.path)).size !== subjects.length ||
+    !equalJson(subjects, snapshot.content.files)
+  ) {
+    failures.push(`${label} source bytes are not exactly bound to its content subject`);
+  }
+}
+
+function validateSourceInput(
+  input: {
+    readonly source: string;
+    readonly subject: FileSubject;
+  },
+  failures: string[],
+  label: string,
+): void {
+  validateFileBinding(input.subject.sha256, input.subject, failures, label);
+  if (
+    Buffer.byteLength(input.source) !== input.subject.bytes ||
+    sha256(input.source) !== input.subject.sha256
+  ) {
+    failures.push(`${label} bytes differ from its file subject`);
+  }
+}
+
+function countGeneratedTypeDeclarations(
+  source: string,
+  failures: string[],
+  label: string,
+): number {
+  const sourceFile = ts.createSourceFile(
+    `${label}.ts`,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let count = 0;
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      !statement.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+      )
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer
+        ? evaluatorUnwrap(declaration.initializer)
+        : undefined;
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        !/^query\d+$/u.test(declaration.name.text) ||
+        !initializer ||
+        !ts.isCallExpression(initializer)
+      ) {
+        failures.push(`${label} contains a noncanonical generated declaration`);
+        continue;
+      }
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function validateGeneratedContractSet(
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
+  failures: string[],
+): void {
+  const contracts = evidence.generation.armB.contracts;
+  const generatedPaths = new Set(
+    contracts.map((contract) => contract.generatedModuleSubject.path),
+  );
+  const providerPaths = new Set(
+    contracts.map((contract) => contract.providerSubject.path),
+  );
+  if (
+    contracts.length !== criteria.workload.generatedBoundModules ||
+    generatedPaths.size !== criteria.workload.generatedBoundModules ||
+    providerPaths.size !== criteria.workload.generatedProviderFiles
+  ) {
+    failures.push('generated contracts do not have the exact module/provider cardinality');
+  }
+  for (const [index, contract] of contracts.entries()) {
+    validateSourceInput(
+      { source: contract.configSource, subject: contract.configSubject },
+      failures,
+      `generated contract ${index} config`,
+    );
+    validateSourceInput(
+      {
+        source: contract.providerSource,
+        subject: contract.providerSubject,
+      },
+      failures,
+      `generated contract ${index} provider`,
+    );
+    validateSourceInput(
+      {
+        source: contract.generatedModuleSource,
+        subject: contract.generatedModuleSubject,
+      },
+      failures,
+      `generated contract ${index} module`,
+    );
+    if (
+      contract.manifest.configSha256 !== contract.configSubject.sha256 ||
+      contract.manifest.providerSourceSha256 !== contract.providerSubject.sha256 ||
+      contract.manifest.generatedModuleSha256 !==
+        contract.generatedModuleSubject.sha256
+    ) {
+      failures.push(`generated contract ${index} manifest is not bound to captured bytes`);
+    }
+    const identity = deriveOwnerIdentityFromSources(
+      contract.configSource,
+      contract.providerSource,
+      contract.generatedModuleSource,
+      failures,
+    );
+    if (
+      !identity ||
+      identity.appId !== contract.manifest.appId ||
+      identity.providerKey !== contract.manifest.providerKey ||
+      identity.providerExportBinding !==
+        contract.manifest.providerExportBinding ||
+      identity.providerImportSpecifier !==
+        contract.manifest.providerImportSpecifier ||
+      identity.ownerKey !== contract.manifest.ownerKey ||
+      identity.generatedOwnerKey !== contract.manifest.ownerKey ||
+      identity.compilerSourceSha256 !==
+        contract.manifest.compilerSourceSha256 ||
+      identity.serverPackedContentsSha256 !==
+        contract.manifest.serverPackedContentsSha256
+    ) {
+      failures.push(
+        `generated contract ${index} identity does not derive from its config/provider/generated AST`,
+      );
+    }
+  }
 }
 
 function publicForgeryGate(evidence: D1RawEvidenceV6): EvaluationGate {
@@ -797,6 +1128,16 @@ function performanceGates(
   if (evidence.runner.runnerName !== criteria.performanceThresholds.runnerName) {
     scheduleFailures.push('runner name differs from preregistration');
   }
+  if (
+    evidence.runner.schema !== 'kovo.app-contract-d1-runner/v1' ||
+    evidence.runner.architecture !== 'arm64' ||
+    evidence.runner.cpuModel !== 'Apple M4' ||
+    !evidence.runner.nodeVersion.startsWith('v24.') ||
+    !evidence.runner.operatingSystem.startsWith('darwin ') ||
+    !evidence.runner.typescriptVersion.startsWith('6.')
+  ) {
+    scheduleFailures.push('runner metadata is inconsistent with the named runner');
+  }
   const baseline = evidence.measurements.baseline;
   validateMeasurementSummary(
     baseline,
@@ -925,10 +1266,48 @@ function validateMeasurementSummary(
   ) {
     failures.push(`${name} timing samples and summaries are inconsistent`);
   }
+  const allSamples = [
+    ...measurement.coldTscSamples,
+    ...measurement.warmTscSamples,
+    ...measurement.coldCompletionSamples,
+    ...measurement.warmCompletionSamples,
+  ];
+  if (
+    allSamples.some(
+      (sample) =>
+        !Number.isFinite(sample.milliseconds) ||
+        sample.milliseconds <= 0 ||
+        !Number.isSafeInteger(sample.blockIndex) ||
+        sample.blockIndex < 0 ||
+        !Number.isSafeInteger(sample.iteration) ||
+        sample.iteration < 0 ||
+        !Number.isSafeInteger(sample.orderIndex) ||
+        sample.orderIndex < 0,
+    ) ||
+    !Number.isSafeInteger(measurement.declarationBytes) ||
+    measurement.declarationBytes <= 0 ||
+    !Number.isSafeInteger(measurement.completionCandidateCount) ||
+    measurement.completionCandidateCount <= 0 ||
+    [
+      measurement.coldTscP50Ms,
+      measurement.warmTscP50Ms,
+      measurement.coldCompletionP50Ms,
+      measurement.warmCompletionP95Ms,
+    ].some((value) => !Number.isFinite(value) || value <= 0) ||
+    !equalJson(measurement.typecheckDiagnosticCodes, [])
+  ) {
+    failures.push(`${name} measurement values are outside the valid domain`);
+  }
   if (
     measurement.completionCandidateCount !== measurement.completionCandidateNames.length ||
     measurement.completionCandidateDigest !==
-      sha256(measurement.completionCandidateNames.join('\n'))
+      sha256(measurement.completionCandidateNames.join('\n')) ||
+    new Set(measurement.completionCandidateNames).size !==
+      measurement.completionCandidateNames.length ||
+    !equalJson(
+      measurement.completionCandidateNames,
+      [...measurement.completionCandidateNames].sort(),
+    )
   ) {
     failures.push(`${name} completion candidate subject is inconsistent`);
   }
@@ -1134,16 +1513,40 @@ function deriveSealedOwnerIdentity(
 ):
   | {
       readonly appId: string;
+      readonly compilerSourceSha256: string;
       readonly generatedOwnerKey: string;
       readonly ownerKey: string;
       readonly providerExportBinding: string;
       readonly providerImportSpecifier: string;
       readonly providerKey: string;
+      readonly serverPackedContentsSha256: string;
     }
   | undefined {
-  const configSource = sealed['config.ts'].toString('utf8');
-  const providerSource = sealed['provider.ts'].toString('utf8');
-  const generatedSource = sealed['generated-app.ts'].toString('utf8');
+  return deriveOwnerIdentityFromSources(
+    sealed['config.ts'].toString('utf8'),
+    sealed['provider.ts'].toString('utf8'),
+    sealed['generated-app.ts'].toString('utf8'),
+    failures,
+  );
+}
+
+function deriveOwnerIdentityFromSources(
+  configSource: string,
+  providerSource: string,
+  generatedSource: string,
+  failures: string[],
+):
+  | {
+      readonly appId: string;
+      readonly compilerSourceSha256: string;
+      readonly generatedOwnerKey: string;
+      readonly ownerKey: string;
+      readonly providerExportBinding: string;
+      readonly providerImportSpecifier: string;
+      readonly providerKey: string;
+      readonly serverPackedContentsSha256: string;
+    }
+  | undefined {
   const configFile = ts.createSourceFile(
     'sealed/config.ts',
     configSource,
@@ -1242,6 +1645,12 @@ function deriveSealedOwnerIdentity(
   const generatedOwnerKey = generatedObject
     ? evaluatorStringProperty(generatedObject, 'ownerKey')
     : undefined;
+  const compilerSourceSha256 = generatedObject
+    ? evaluatorStringProperty(generatedObject, 'compilerSourceSha256')
+    : undefined;
+  const serverPackedContentsSha256 = generatedObject
+    ? evaluatorStringProperty(generatedObject, 'serverPackedContentsSha256')
+    : undefined;
   if (
     !generatedObject ||
     evaluatorStringProperty(generatedObject, 'appId') !== appId ||
@@ -1250,7 +1659,9 @@ function deriveSealedOwnerIdentity(
     evaluatorStringProperty(generatedObject, 'providerImportSpecifier') !==
       providerImportSpecifier ||
     evaluatorStringProperty(generatedObject, 'providerKey') !== providerKey ||
-    !generatedOwnerKey
+    !generatedOwnerKey ||
+    !compilerSourceSha256 ||
+    !serverPackedContentsSha256
   ) {
     failures.push('sealed generated AST does not bind the provider/config identity');
     return undefined;
@@ -1265,11 +1676,13 @@ function deriveSealedOwnerIdentity(
   )}`;
   return {
     appId,
+    compilerSourceSha256,
     generatedOwnerKey,
     ownerKey,
     providerExportBinding,
     providerImportSpecifier,
     providerKey,
+    serverPackedContentsSha256,
   };
 }
 
@@ -1402,6 +1815,33 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
     assertContentSubjectShape(copy.postWriteContents, 'post-write copy');
   }
 
+  assertExactKeys(
+    evidence.workloadSubjects,
+    ['appSourcesAfter', 'appSourcesBefore', 'declarationInputs'],
+    'workloadSubjects',
+  );
+  assertSourceSnapshotShape(
+    evidence.workloadSubjects.appSourcesBefore,
+    'workloadSubjects.appSourcesBefore',
+  );
+  assertSourceSnapshotShape(
+    evidence.workloadSubjects.appSourcesAfter,
+    'workloadSubjects.appSourcesAfter',
+  );
+  assertExactKeys(
+    evidence.workloadSubjects.declarationInputs,
+    ['arm-a', 'arm-b', 'baseline'],
+    'workloadSubjects.declarationInputs',
+  );
+  for (const [variant, inputs] of Object.entries(
+    evidence.workloadSubjects.declarationInputs,
+  )) {
+    for (const input of inputs) {
+      assertExactKeys(input, ['source', 'subject'], `${variant} declaration input`);
+      assertFileSubjectShape(input.subject, `${variant} declaration input subject`);
+    }
+  }
+
   assertExactKeys(evidence.matrix, matrixCaseNames, 'matrix');
   for (const name of matrixCaseNames) {
     assertExactKeys(evidence.matrix[name], arms, `matrix.${name}`);
@@ -1531,7 +1971,15 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
   for (const contract of evidence.generation.armB.contracts) {
     assertExactKeys(
       contract,
-      ['configSubject', 'generatedModuleSubject', 'manifest', 'providerSubject'],
+      [
+        'configSource',
+        'configSubject',
+        'generatedModuleSource',
+        'generatedModuleSubject',
+        'manifest',
+        'providerSource',
+        'providerSubject',
+      ],
       'generated contract',
     );
     assertFileSubjectShape(contract.configSubject, 'generated config');
@@ -1685,6 +2133,18 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
 function assertContentSubjectShape(subject: ContentSubject, label: string): void {
   assertExactKeys(subject, ['digest', 'files', 'schema'], label);
   for (const file of subject.files) assertFileSubjectShape(file, `${label}.file`);
+}
+
+function assertSourceSnapshotShape(
+  snapshot: D1RawEvidenceV6['workloadSubjects']['appSourcesBefore'],
+  label: string,
+): void {
+  assertExactKeys(snapshot, ['content', 'inputs', 'schema'], label);
+  assertContentSubjectShape(snapshot.content, `${label}.content`);
+  for (const input of snapshot.inputs) {
+    assertExactKeys(input, ['source', 'subject'], `${label}.input`);
+    assertFileSubjectShape(input.subject, `${label}.input.subject`);
+  }
 }
 
 function assertFileSubjectShape(subject: FileSubject, label: string): void {

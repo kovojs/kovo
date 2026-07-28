@@ -4,8 +4,10 @@ import { basename, dirname, join, relative } from 'node:path';
 import ts from 'typescript';
 
 import {
+  contentSubjectDigest,
   fileSubject,
   sha256,
+  type ContentSubject,
   type FileSubject,
   type LoadedPackedCompiler,
 } from './artifacts-v6.ts';
@@ -77,6 +79,17 @@ export interface CanonicalSemanticSubject {
   readonly canonical: unknown;
   readonly digest: string;
   readonly schema: 'kovo.app-contract-d1-canonical-semantics/v1';
+}
+
+export interface AuthenticatedSourceInput {
+  readonly source: string;
+  readonly subject: FileSubject;
+}
+
+export interface FixtureSourceSnapshot {
+  readonly content: ContentSubject;
+  readonly inputs: readonly AuthenticatedSourceInput[];
+  readonly schema: 'kovo.app-contract-d1-source-snapshot/v1';
 }
 
 export interface FamilyEvidence {
@@ -456,6 +469,29 @@ export async function fixtureFileSubject(
   fileName: string,
 ): Promise<FileSubject> {
   return fileSubject(fixture.root, relative(fixture.root, fileName));
+}
+
+export async function fixtureSourceContentSubject(
+  fixture: PrototypeFixture,
+): Promise<FixtureSourceSnapshot> {
+  const inputs = await Promise.all(
+    (await sourceFiles(fixture.root)).map(async (fileName) => ({
+      source: await readFile(fileName, 'utf8'),
+      subject: await fixtureFileSubject(fixture, fileName),
+    })),
+  );
+  inputs.sort((left, right) => left.subject.path.localeCompare(right.subject.path));
+  const files = inputs.map((entry) => entry.subject);
+  files.sort((left, right) => left.path.localeCompare(right.path));
+  return {
+    content: {
+      digest: contentSubjectDigest(files),
+      files,
+      schema: 'kovo.app-contract-d1-content-subject/v1',
+    },
+    inputs,
+    schema: 'kovo.app-contract-d1-source-snapshot/v1',
+  };
 }
 
 function requiredFunction(

@@ -9,6 +9,10 @@ import {
   type PackedCompilerEntrypoint,
 } from './artifacts-v6.ts';
 import {
+  evaluateD1V6,
+  type D1V6SealedAuthority,
+} from './evaluator-v6.ts';
+import {
   createPrototypeFixture,
   declarationFamilies,
   generatedContractMutationDiagnostics,
@@ -22,6 +26,7 @@ import {
   createPrototypeProject,
   familyEvidence,
   fixtureFileSubject,
+  fixtureSourceContentSubject,
   matrixEvidenceForEntry,
   publicForgeryEvidence,
   semanticCollisionEvidence,
@@ -46,6 +51,7 @@ export async function runD1V6Experiment(
     const artifacts = await buildAndPackFresh(root);
     const packed = await loadAuthenticatedPackedCompiler(artifacts);
     const fixture = await createPrototypeFixture(root, artifacts);
+    const appSourcesBefore = await fixtureSourceContentSubject(fixture);
     const project = await createPrototypeProject(fixture, packed);
 
     const matrix = {} as {
@@ -145,11 +151,14 @@ export async function runD1V6Experiment(
     const contracts = await Promise.all(
       fixture.generated.map(async (contract) => {
         return {
+          configSource: await readFile(contract.configFile, 'utf8'),
           configSubject: await fixtureFileSubject(fixture, contract.configFile),
+          generatedModuleSource: await readFile(contract.generatedFile, 'utf8'),
           generatedModuleSubject: await fixtureFileSubject(fixture, contract.generatedFile),
           manifest: JSON.parse(
             await readFile(contract.manifestFile, 'utf8'),
           ) as GeneratedManifestEvidence,
+          providerSource: await readFile(contract.providerDefinitionFile, 'utf8'),
           providerSubject: await fixtureFileSubject(fixture, contract.providerDefinitionFile),
         };
       }),
@@ -158,6 +167,7 @@ export async function runD1V6Experiment(
       'arm-a': await runtimeEvidence(fixture, 'arm-a'),
       'arm-b': await runtimeEvidence(fixture, 'arm-b'),
     } as const;
+    const appSourcesAfter = await fixtureSourceContentSubject(fixture);
     const typeEvidence = await measureTypeContracts(fixture, criteria);
     const packedEntrypoints = stablePackedEntrypoints(
       artifacts.packages.compiler.extractedPackageRoot,
@@ -174,6 +184,26 @@ export async function runD1V6Experiment(
       };
     });
     const serverDigest = artifacts.packages.server.packedContents.digest;
+    const sealedArtifacts = {
+      compilerPackedSha256: artifacts.packages.compiler.tarballSha256,
+      configSha256: contracts[0]!.configSubject.sha256,
+      generatedAppSha256: contracts[0]!.generatedModuleSubject.sha256,
+      providerSha256: contracts[0]!.providerSubject.sha256,
+      serverOverlayPackedSha256: fixture.serverOverlayTarballSha256,
+    };
+    const fixtureCounts = observedFixtureCounts({
+      appSourcesAfter,
+      appSourcesBefore,
+      buildCommands: artifacts.buildCommands,
+      contracts,
+      declarationInputs: typeEvidence.declarationInputs,
+      families,
+      matrix,
+      receiverFlow,
+      runtime,
+      sealedArtifacts,
+      serverOverlayFiles: fixture.serverOverlayFiles,
+    });
     const evidenceBindings = {
       mutationDiagnostics: bindingMutationDiagnostics({
         compiledOwner: families.query['arm-a'].compiledOwnerKey,
@@ -187,16 +217,12 @@ export async function runD1V6Experiment(
       }),
     };
 
-    const evidence: D1RawEvidenceV6 = {
+    const provisionalEvidence: D1RawEvidenceV6 = {
       compiler: { combinedGraphs, families },
       diagnostics: typeEvidence.diagnostics,
       evidenceBindings,
       fixture: {
-        counts: {
-          ...criteria.workload,
-          providerDefinitionCount:
-            criteria.semanticThresholds.providerDefinitionCountExact,
-        },
+        counts: fixtureCounts,
         ownerKey: fixture.ownerKey,
         serverCopies: [
           {
@@ -257,15 +283,35 @@ export async function runD1V6Experiment(
       runner: typeEvidence.runner,
       runtime,
       schedules: typeEvidence.schedules,
-      sealedArtifacts: {
-        compilerPackedSha256: artifacts.packages.compiler.tarballSha256,
-        configSha256: contracts[0]!.configSubject.sha256,
-        generatedAppSha256: contracts[0]!.generatedModuleSubject.sha256,
-        providerSha256: contracts[0]!.providerSubject.sha256,
-        serverOverlayPackedSha256: fixture.serverOverlayTarballSha256,
-      },
+      sealedArtifacts,
       schema: 'kovo.app-contract-d1-raw-evidence/v6',
       semanticEquivalence,
+      workloadSubjects: {
+        appSourcesAfter,
+        appSourcesBefore,
+        declarationInputs: typeEvidence.declarationInputs,
+      },
+    };
+    const mutationCoverage = await executeMutationCoverage(
+      criteria,
+      provisionalEvidence,
+      {
+        'compiler-packed.tgz': await readFile(
+          artifacts.packages.compiler.tarball,
+        ),
+        'config.ts': await readFile(fixture.generatedApp.configFile),
+        'generated-app.ts': await readFile(fixture.generatedApp.generatedFile),
+        'provider.ts': await readFile(
+          fixture.generatedApp.providerDefinitionFile,
+        ),
+        'server-overlay-packed.tgz': await readFile(
+          fixture.serverOverlayTarball,
+        ),
+      },
+    );
+    const evidence: D1RawEvidenceV6 = {
+      ...provisionalEvidence,
+      mutationCoverage,
     };
     if (options.sealDirectory) {
       await sealArtifacts(options.sealDirectory, {
@@ -302,6 +348,386 @@ async function sealArtifacts(
     cp(files.generatedAppFile, join(directory, 'generated-app.ts')),
   ]);
 }
+
+function observedFixtureCounts(values: {
+  readonly appSourcesAfter: D1RawEvidenceV6['workloadSubjects']['appSourcesAfter'];
+  readonly appSourcesBefore: D1RawEvidenceV6['workloadSubjects']['appSourcesBefore'];
+  readonly buildCommands: readonly string[];
+  readonly contracts: D1RawEvidenceV6['generation']['armB']['contracts'];
+  readonly declarationInputs: D1RawEvidenceV6['workloadSubjects']['declarationInputs'];
+  readonly families: D1RawEvidenceV6['compiler']['families'];
+  readonly matrix: D1RawEvidenceV6['matrix'];
+  readonly receiverFlow: D1RawEvidenceV6['receiverFlow'];
+  readonly runtime: D1RawEvidenceV6['runtime'];
+  readonly sealedArtifacts: D1RawEvidenceV6['sealedArtifacts'];
+  readonly serverOverlayFiles: readonly unknown[];
+}): Readonly<Record<string, number>> {
+  const matrixEntries = matrixCaseNames.flatMap((name) =>
+    (['arm-a', 'arm-b'] as const).map((arm) => values.matrix[name][arm]),
+  );
+  const familyEntries = declarationFamilies.flatMap((family) =>
+    (['baseline', 'arm-a', 'arm-b'] as const).map(
+      (variant) => values.families[family][variant],
+    ),
+  );
+  const declarationVariants = ['baseline', 'arm-a', 'arm-b'] as const;
+  const declarationFiles = declarationVariants.flatMap(
+    (variant) => values.declarationInputs[variant],
+  );
+  const declarationsPerFile = declarationFiles.map(
+    (input) => input.source.match(/\bexport const query\d+\s*=/gu)?.length ?? 0,
+  );
+  const before = new Map(
+    values.appSourcesBefore.inputs.map((input) => [
+      input.subject.path,
+      input.source,
+    ]),
+  );
+  const after = new Map(
+    values.appSourcesAfter.inputs.map((input) => [
+      input.subject.path,
+      input.source,
+    ]),
+  );
+  const appSourceRewriteCount = [
+    ...new Set([...before.keys(), ...after.keys()]),
+  ].filter((path) => before.get(path) !== after.get(path)).length;
+  const generatedProviderFiles = new Set(
+    values.contracts.map((contract) => contract.providerSubject.path),
+  ).size;
+  return {
+    matrixCases: Object.keys(values.matrix).length,
+    matrixArms: new Set(
+      Object.values(values.matrix).flatMap((entry) => Object.keys(entry)),
+    ).size,
+    generatedMatrixFiles: matrixEntries.length,
+    declarationFamilies: Object.keys(values.families).length,
+    familyVariants: new Set(
+      Object.values(values.families).flatMap((entry) => Object.keys(entry)),
+    ).size,
+    generatedFamilyFiles: familyEntries.length,
+    generatedRuntimeFiles: Object.keys(values.runtime).length,
+    generatedProviderFiles,
+    generatedBoundModules: new Set(
+      values.contracts.map(
+        (contract) => contract.generatedModuleSubject.path,
+      ),
+    ).size,
+    unsupportedReceiverFiles: Object.keys(values.receiverFlow.unsupported)
+      .length,
+    negativeControlFiles: Object.keys(values.receiverFlow.controls).length,
+    typeMeasurementVariants: Object.keys(values.declarationInputs).length,
+    declarationFilesPerVariant:
+      new Set(
+        declarationVariants.map(
+          (variant) => values.declarationInputs[variant].length,
+        ),
+      ).size === 1
+        ? values.declarationInputs.baseline.length
+        : -1,
+    declarationsPerFile:
+      declarationsPerFile.length > 0 &&
+      new Set(declarationsPerFile).size === 1
+        ? declarationsPerFile[0]!
+        : -1,
+    generatedTypeDeclarationFiles: declarationFiles.length,
+    generatedTypeDeclarations: declarationsPerFile.reduce(
+      (sum, count) => sum + count,
+      0,
+    ),
+    appSourceRewriteCount,
+    serverOverlayFileCount: values.serverOverlayFiles.length,
+    sealedArtifactCount: Object.keys(values.sealedArtifacts).length,
+    buildCommandCount: values.buildCommands.length,
+    providerDefinitionCount: generatedProviderFiles,
+  };
+}
+
+async function executeMutationCoverage(
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
+  authority: Readonly<Record<SealedArtifactName, Buffer>>,
+): Promise<D1RawEvidenceV6['mutationCoverage']> {
+  type Mutation = (
+    value: Mutable<D1RawEvidenceV6>,
+    sealed: MutableSealedAuthority,
+  ) => void;
+  const oneSided: Readonly<Record<string, Mutation>> = {
+    'config-bytes': (_value, sealed) => appendSealed(sealed, 'config.ts'),
+    'provider-bytes': (_value, sealed) => appendSealed(sealed, 'provider.ts'),
+    'generated-module-bytes': (_value, sealed) =>
+      appendSealed(sealed, 'generated-app.ts'),
+    'compiler-entrypoint-bytes': (_value, sealed) =>
+      flipSealedByte(sealed, 'compiler-packed.tgz'),
+    'server-artifact-bytes': (value) => {
+      value.provenance.packages.find(
+        (entry) => entry.name === '@kovojs/server',
+      )!.packedContents.files[0]!.sha256 = '0'.repeat(64);
+    },
+    'server-overlay-bytes': (_value, sealed) =>
+      flipSealedByte(sealed, 'server-overlay-packed.tgz'),
+    'matrix-source-bytes': (value) => {
+      value.matrix['ordinary-local-import']['arm-a'].sourceSha256 =
+        '0'.repeat(64);
+    },
+    'runtime-owner': (value) => {
+      value.runtime['arm-a'].ownerKey += ':forged';
+    },
+    'compiled-owner': (value) => {
+      value.compiler.families.query['arm-a'].compiledOwnerKey =
+        'd1v6:forged';
+    },
+    'generated-owner': (value) => {
+      value.generation.armB.contracts[0]!.manifest.ownerKey =
+        'd1v6:forged';
+    },
+    'build-command': (value) => {
+      value.provenance.buildCommands[0] += ' --forged';
+    },
+    'source-commit': (value) => {
+      value.provenance.frameworkSourceCommit = '0'.repeat(40);
+    },
+    count: (value) => {
+      value.fixture.counts.matrixCases =
+        (value.fixture.counts.matrixCases ?? 0) + 1;
+    },
+    'typescript-diagnostic': (value) => {
+      value.diagnostics['arm-a'].code = 9999;
+    },
+    'completion-sample-identity': (value) => {
+      value.measurements['arm-a'].warmCompletionSamples[0]!.sampleId +=
+        ':forged';
+    },
+  };
+  const correlated: Readonly<Record<string, Mutation>> = {
+    'config-bytes-and-claimed-digest': (value, sealed) => {
+      appendSealed(sealed, 'config.ts');
+      const digest = sha256(sealed['config.ts']);
+      value.sealedArtifacts.configSha256 = digest;
+      value.generation.armB.contracts[0]!.configSubject.sha256 = digest;
+      value.generation.armB.contracts[0]!.manifest.configSha256 = digest;
+    },
+    'provider-bytes-and-claimed-digest': (value, sealed) => {
+      appendSealed(sealed, 'provider.ts');
+      const digest = sha256(sealed['provider.ts']);
+      value.sealedArtifacts.providerSha256 = digest;
+      value.generation.armB.contracts[0]!.providerSubject.sha256 = digest;
+      value.generation.armB.contracts[0]!.manifest.providerSourceSha256 =
+        digest;
+    },
+    'generated-bytes-manifest-and-claimed-digest': (value, sealed) => {
+      appendSealed(sealed, 'generated-app.ts');
+      const digest = sha256(sealed['generated-app.ts']);
+      value.sealedArtifacts.generatedAppSha256 = digest;
+      value.generation.armB.contracts[0]!.generatedModuleSubject.sha256 =
+        digest;
+      value.generation.armB.contracts[0]!.manifest.generatedModuleSha256 =
+        digest;
+    },
+    'compiler-bytes-and-entrypoint-claims': (value, sealed) => {
+      flipSealedByte(sealed, 'compiler-packed.tgz');
+      const digest = sha256(sealed['compiler-packed.tgz']);
+      value.sealedArtifacts.compilerPackedSha256 = digest;
+      value.provenance.packages.find(
+        (entry) => entry.name === '@kovojs/compiler',
+      )!.tarballSha256 = digest;
+      value.provenance.packedCompiler.entrypoints[0]!.resolvedSha256 =
+        digest;
+      value.provenance.packedCompiler.entrypoints[0]!.packedFile.sha256 =
+        digest;
+    },
+    'server-bytes-copy-and-packed-claims': (value, sealed) => {
+      flipSealedByte(sealed, 'server-overlay-packed.tgz');
+      value.sealedArtifacts.serverOverlayPackedSha256 = sha256(
+        sealed['server-overlay-packed.tgz'],
+      );
+      for (const copy of value.fixture.serverCopies) {
+        copy.postWriteContents.digest = 'f'.repeat(64);
+      }
+    },
+    'canonical-ir-and-digest': (value) =>
+      mutateCanonicalSubject(value, 'canonicalIr'),
+    'canonical-graph-and-digest': (value) =>
+      mutateCanonicalSubject(value, 'canonicalGraph'),
+    'owner-config-provider-generated-runtime-claims': (value) => {
+      const owner = 'd1v6:correlated-forgery';
+      value.fixture.ownerKey = owner;
+      for (const arm of ['arm-a', 'arm-b'] as const) {
+        value.runtime[arm].ownerKey = owner;
+      }
+      for (const family of declarationFamilies) {
+        for (const arm of ['arm-a', 'arm-b'] as const) {
+          value.compiler.families[family][arm].compiledOwnerKey = owner;
+        }
+      }
+      for (const contract of value.generation.armB.contracts) {
+        contract.manifest.ownerKey = owner;
+      }
+    },
+    'count-and-workload-claims': (value) => {
+      for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
+        const inputs = value.workloadSubjects.declarationInputs[variant];
+        const duplicate = structuredClone(inputs[0]!);
+        duplicate.subject.path =
+          `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
+        inputs.push(duplicate);
+      }
+      value.fixture.counts.declarationFilesPerVariant = 13;
+      value.fixture.counts.generatedTypeDeclarationFiles = 39;
+      value.fixture.counts.generatedTypeDeclarations = 156;
+    },
+    'timing-samples-and-summary': (value) => {
+      const measurement = value.measurements['arm-a'];
+      for (const sample of measurement.coldTscSamples) {
+        sample.milliseconds += 1_000;
+      }
+      measurement.coldTscP50Ms = roundMeasurement(
+        percentileMeasurement(
+          measurement.coldTscSamples.map((sample) => sample.milliseconds),
+          0.5,
+        ),
+      );
+    },
+  };
+  const execute = async (mutation: Mutation): Promise<boolean> => {
+    const mutated = structuredClone(evidence) as Mutable<D1RawEvidenceV6>;
+    const mutableAuthority = cloneSealedAuthority(authority);
+    mutation(mutated, mutableAuthority);
+    try {
+      const evaluation = await evaluateD1V6(
+        criteria,
+        mutated,
+        mutableAuthority,
+      );
+      return !(
+        evaluation.arms['arm-a'].eligible &&
+        evaluation.arms['arm-b'].eligible
+      );
+    } catch {
+      return true;
+    }
+  };
+  const oneSidedResults = Object.fromEntries(
+    await Promise.all(
+      criteria.mutationContract.oneSided.map(async (name) => [
+        name,
+        { detected: oneSided[name] ? await execute(oneSided[name]) : false },
+      ]),
+    ),
+  );
+  const correlatedResults = Object.fromEntries(
+    await Promise.all(
+      criteria.mutationContract.correlated.map(async (name) => [
+        name,
+        {
+          detected: correlated[name]
+            ? await execute(correlated[name])
+            : false,
+        },
+      ]),
+    ),
+  );
+  const selection = async (
+    mutate: (value: Mutable<D1RawEvidenceV6>) => void,
+  ): Promise<string> => {
+    const value = structuredClone(evidence) as Mutable<D1RawEvidenceV6>;
+    mutate(value);
+    return (
+      await evaluateD1V6(criteria, value, cloneSealedAuthority(authority))
+    ).decision;
+  };
+  return {
+    correlated: correlatedResults,
+    oneSided: oneSidedResults,
+    selectionBranches: {
+      'arm-a-selected-when-both-pass': {
+        decision: await selection(() => {}),
+      },
+      'arm-a-selected-when-arm-b-fails': {
+        decision: await selection((value) =>
+          mutateCanonicalSubject(value, 'canonicalIr', 'arm-b'),
+        ),
+      },
+      'arm-b-selected-when-arm-a-fails': {
+        decision: await selection((value) =>
+          mutateCanonicalSubject(value, 'canonicalIr', 'arm-a'),
+        ),
+      },
+      'fallback-when-both-fail': {
+        decision: await selection((value) => {
+          mutateCanonicalSubject(value, 'canonicalIr', 'arm-a');
+          mutateCanonicalSubject(value, 'canonicalIr', 'arm-b');
+        }),
+      },
+    },
+  };
+}
+
+function mutateCanonicalSubject(
+  evidence: Mutable<D1RawEvidenceV6>,
+  field: 'canonicalGraph' | 'canonicalIr',
+  arm: 'arm-a' | 'arm-b' = 'arm-a',
+): void {
+  const subject = evidence.compiler.families.query[arm][field];
+  subject.canonical = { original: subject.canonical, unexpected: true };
+  subject.digest = sha256(JSON.stringify(subject.canonical));
+}
+
+function appendSealed(
+  authority: MutableSealedAuthority,
+  name: SealedArtifactName,
+): void {
+  authority[name] = Buffer.concat([
+    authority[name],
+    Buffer.from('\n// forged\n'),
+  ]);
+}
+
+function flipSealedByte(
+  authority: MutableSealedAuthority,
+  name: SealedArtifactName,
+): void {
+  const bytes = Buffer.from(authority[name]);
+  bytes[Math.min(32, bytes.length - 1)]! ^= 1;
+  authority[name] = bytes;
+}
+
+function cloneSealedAuthority(
+  authority: Readonly<Record<SealedArtifactName, Buffer>>,
+): MutableSealedAuthority {
+  return Object.fromEntries(
+    Object.entries(authority).map(([name, bytes]) => [
+      name,
+      Buffer.from(bytes),
+    ]),
+  ) as MutableSealedAuthority;
+}
+
+function percentileMeasurement(
+  values: readonly number[],
+  fraction: number,
+): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
+}
+
+function roundMeasurement(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+type SealedArtifactName =
+  | 'compiler-packed.tgz'
+  | 'config.ts'
+  | 'generated-app.ts'
+  | 'provider.ts'
+  | 'server-overlay-packed.tgz';
+type MutableSealedAuthority = Record<SealedArtifactName, Buffer> &
+  D1V6SealedAuthority;
+type Mutable<Value> = Value extends readonly (infer Entry)[]
+  ? Mutable<Entry>[]
+  : Value extends object
+    ? { -readonly [Key in keyof Value]: Mutable<Value[Key]> }
+    : Value;
 
 function semanticMutationDiagnostics(
   ir: D1RawEvidenceV6['compiler']['families']['query']['baseline']['canonicalIr'],

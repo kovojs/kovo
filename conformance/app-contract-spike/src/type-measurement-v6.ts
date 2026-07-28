@@ -3,11 +3,12 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { cpus, arch, platform, release } from 'node:os';
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 import ts from 'typescript';
 
+import { fileSubject, type FileSubject } from './artifacts-v6.ts';
 import type { PrototypeFixture } from './fixture-v6.ts';
 
 export type MeasuredVariant = 'arm-a' | 'arm-b' | 'baseline';
@@ -80,7 +81,15 @@ export interface TypeDiagnosticEvidence {
   readonly start: number;
 }
 
+export interface DeclarationInputEvidence {
+  readonly source: string;
+  readonly subject: FileSubject;
+}
+
 export interface TypeMeasurementEvidence {
+  readonly declarationInputs: Readonly<
+    Record<MeasuredVariant, readonly DeclarationInputEvidence[]>
+  >;
   readonly diagnostics: Readonly<Record<MeasuredVariant, TypeDiagnosticEvidence>>;
   readonly measurements: Readonly<Record<MeasuredVariant, SuccessfulTypeMeasurement>>;
   readonly runner: {
@@ -124,12 +133,23 @@ export async function measureTypeContracts(
     variants[variant] = directory;
     await writeMeasurementFixture(directory, variant, criteria);
   }
+  const declarationInputs = {} as Record<
+    MeasuredVariant,
+    readonly DeclarationInputEvidence[]
+  >;
+  for (const variant of measuredVariants) {
+    declarationInputs[variant] = await declarationInputEvidence(
+      fixture,
+      variants[variant],
+    );
+  }
   const measured = await measureSuccessfulVariants(variants, criteria);
   const diagnostics = {} as Record<MeasuredVariant, TypeDiagnosticEvidence>;
   for (const variant of measuredVariants) {
     diagnostics[variant] = await diagnosticEvidence(variants[variant], criteria);
   }
   return {
+    declarationInputs,
     diagnostics,
     measurements: measured.measurements,
     runner: {
@@ -143,6 +163,27 @@ export async function measureTypeContracts(
     },
     schedules: measured.schedules,
   };
+}
+
+async function declarationInputEvidence(
+  fixture: PrototypeFixture,
+  directory: string,
+): Promise<readonly DeclarationInputEvidence[]> {
+  const fileNames = (await readdir(directory))
+    .filter((entry) => /^declarations-\d+\.ts$/u.test(entry))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  return Promise.all(
+    fileNames.map(async (entry) => {
+      const fileName = join(directory, entry);
+      return {
+        source: await readFile(fileName, 'utf8'),
+        subject: await fileSubject(
+          fixture.root,
+          relative(fixture.root, fileName),
+        ),
+      };
+    }),
+  );
 }
 
 async function writeMeasurementFixture(

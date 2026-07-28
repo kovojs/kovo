@@ -907,7 +907,7 @@ async function writeMatrixFixtures(options: {
     'monorepo-shared-app-package',
     'arm-b',
     options.shared,
-    `import { query } from '#kovo';\nexport const item = query(${definition});\n`,
+    `import { query } from '@fixture/app/generated';\nexport const item = query(${definition});\n`,
   );
 
   const duplicateSource = (
