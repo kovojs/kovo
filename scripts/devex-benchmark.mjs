@@ -2,12 +2,17 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
+  rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -15,18 +20,43 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
+import {
+  readPackageTarballSnapshot,
+  validatedPackageTarballEntries,
+} from './lib/deterministic-tarball.mjs';
+import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
+import {
+  validatePackedReleaseManifest,
+  verifyPackedAttestationBytes,
+} from './publish-packed-packages.mjs';
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
+import { releasePackages } from './release-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v2';
-export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v2';
-export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v2';
-export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v2';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v3';
+export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v3';
+export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v3';
+export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v3';
+export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v1';
+export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
+const PACKED_PROFILE_ID = 'kovo-packed-check/v1';
+const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
+const PACKED_PROFILE_COMMANDS = Object.freeze(
+  Object.fromEntries(
+    PHASES.map((phase) => [
+      phase,
+      Object.freeze({
+        command: Object.freeze(['node', 'profile.mjs', phase]),
+        cwd: '.',
+      }),
+    ]),
+  ),
+);
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -73,12 +103,18 @@ export function benchmarkScenarioDigest(scenario) {
   return sha256(Buffer.from(canonicalJson(scenario)));
 }
 
+export const DEVEX_PACKED_PROFILE_COMMAND_DIGEST = sha256(
+  Buffer.from(canonicalJson(PACKED_PROFILE_COMMANDS)),
+);
+
 function safeRepositoryRelativePath(value) {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
     !path.isAbsolute(value) &&
-    value.split(/[\\/]/u).every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+    !value.includes('\\') &&
+    path.posix.normalize(value) === value &&
+    value.split('/').every((segment) => segment !== '' && segment !== '.' && segment !== '..')
   );
 }
 
@@ -252,9 +288,22 @@ function validateBenchmarkProvenance(provenance, label) {
   if (!validGitObjectId(provenance?.sourceCommit)) {
     findings.push(`${label}.sourceCommit must be an exact Git object ID`);
   }
+  if (provenance?.sourceTree !== 'clean') {
+    findings.push(`${label}.sourceTree must be clean`);
+  }
+  if (
+    !safeRepositoryRelativePath(provenance?.workloadManifest?.path) ||
+    !provenance.workloadManifest.path.endsWith('.json')
+  ) {
+    findings.push(`${label}.workloadManifest.path must be a repository-relative JSON path`);
+  }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(provenance?.workloadManifest?.sha256 ?? '')) {
+    findings.push(`${label}.workloadManifest.sha256 must be an exact SHA-256 digest`);
+  }
   findings.push(
     ...validatePackedArtifacts(provenance?.packedArtifacts, `${label}.packedArtifacts`),
   );
+  findings.push(...validateWorkloadFiles(provenance?.supportFiles, `${label}.supportFiles`));
   return findings;
 }
 
@@ -268,20 +317,17 @@ export function validateBenchmarkScenario(scenario) {
   }
   findings.push(...validatePinnedEnvironment(scenario?.environment, 'scenario.environment'));
   findings.push(...validateBenchmarkProvenance(scenario?.provenance, 'scenario.provenance'));
-  for (const phase of PHASES) {
-    try {
-      validateCommand(scenario?.phases?.[phase]?.command, `scenario.phases.${phase}.command`);
-    } catch (error) {
-      findings.push(error.message);
-    }
+  if (scenario?.profile?.id !== PACKED_PROFILE_ID) {
+    findings.push(`scenario.profile.id must be ${PACKED_PROFILE_ID}`);
   }
-  const files = scenario?.browserBootstrap?.files;
-  if (
-    !Array.isArray(files) ||
-    files.length === 0 ||
-    files.some((file) => typeof file !== 'string')
-  ) {
-    findings.push('scenario.browserBootstrap.files must be a non-empty string array');
+  if (scenario?.profile?.commandDigest !== DEVEX_PACKED_PROFILE_COMMAND_DIGEST) {
+    findings.push('scenario.profile.commandDigest must match the code-owned packed profiles');
+  }
+  const allowedFields = new Set(['schema', 'name', 'profile', 'environment', 'provenance']);
+  for (const field of Object.keys(scenario ?? {})) {
+    if (!allowedFields.has(field)) {
+      findings.push(`scenario.${field} is not part of the packed benchmark contract`);
+    }
   }
   return findings;
 }
@@ -305,9 +351,18 @@ function currentBenchmarkEnvironment(options = {}) {
       'benchmarking requires KOVO_DEVEX_OS_IMAGE and KOVO_DEVEX_RUNNER_NAME to identify the pinned runner',
     );
   }
+  const dirtyPaths = checkedCommandOutput(
+    'git',
+    ['status', '--porcelain=v1', '--untracked-files=all'],
+    repositoryRoot,
+  );
+  if (dirtyPaths !== '') {
+    throw new Error('benchmarking requires a clean source revision');
+  }
   return {
     runnerName,
     sourceCommit,
+    sourceTree: 'clean',
     packageManager: `${packageManagerName}@${packageManagerVersion}`,
     osImage,
     platform: process.platform,
@@ -351,6 +406,9 @@ function observedEnvironmentFindings(scenario, observed) {
   if (!validGitObjectId(observed?.sourceCommit)) {
     findings.push('observedEnvironment.sourceCommit must be an exact Git object ID');
   }
+  if (observed?.sourceTree !== 'clean') {
+    findings.push('observedEnvironment.sourceTree must be clean');
+  }
   for (const field of [
     'runnerName',
     'platform',
@@ -369,6 +427,11 @@ function observedEnvironmentFindings(scenario, observed) {
   if (observed?.sourceCommit !== scenario.provenance.sourceCommit) {
     findings.push(
       `observedEnvironment.sourceCommit=${JSON.stringify(observed?.sourceCommit)} does not match scenario.provenance.sourceCommit`,
+    );
+  }
+  if (observed?.sourceTree !== scenario.provenance.sourceTree) {
+    findings.push(
+      `observedEnvironment.sourceTree=${JSON.stringify(observed?.sourceTree)} does not match scenario.provenance.sourceTree`,
     );
   }
   return findings;
@@ -415,19 +478,38 @@ export function measureCommand(command, options = {}) {
   };
 }
 
+function resolveInsideRoot(root, relative, label) {
+  if (!safeRepositoryRelativePath(relative)) {
+    throw new Error(`${label} must be a canonical relative path`);
+  }
+  const absolute = path.resolve(root, ...relative.split('/'));
+  if (absolute === root || !absolute.startsWith(`${root}${path.sep}`)) {
+    throw new Error(`${label} escapes its root: ${relative}`);
+  }
+  return absolute;
+}
+
+function regularFileInsideRoot(root, relative, label) {
+  const absolute = resolveInsideRoot(root, relative, label);
+  if (!existsSync(absolute)) throw new Error(`${label} is missing: ${relative}`);
+  const fileStat = lstatSync(absolute);
+  if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular non-symlink file: ${relative}`);
+  }
+  const realRoot = realpathSync(root);
+  const realFile = realpathSync(absolute);
+  if (!realFile.startsWith(`${realRoot}${path.sep}`)) {
+    throw new Error(`${label} resolves outside its root: ${relative}`);
+  }
+  return absolute;
+}
+
 export function browserBootstrapBytes(files, options = {}) {
   const root = path.resolve(options.root ?? defaultRepoRoot);
   let total = 0;
   const measured = [];
   for (const relative of [...files].sort(compareStrings)) {
-    const absolute = path.resolve(root, relative);
-    const rootPrefix = `${root}${path.sep}`;
-    if (absolute !== root && !absolute.startsWith(rootPrefix)) {
-      throw new Error(`browser bootstrap path escapes scenario root: ${relative}`);
-    }
-    if (!existsSync(absolute) || !statSync(absolute).isFile()) {
-      throw new Error(`browser bootstrap file is missing: ${relative}`);
-    }
+    const absolute = regularFileInsideRoot(root, relative, 'browser bootstrap file');
     const bytes = statSync(absolute).size;
     total += bytes;
     measured.push({ path: relative.split(path.sep).join('/'), bytes });
@@ -446,36 +528,290 @@ function sampleSummary(samples) {
   };
 }
 
-function verifiedPackedArtifacts(artifacts, root) {
-  const realRoot = realpathSync(root);
-  return artifacts.map((artifact) => {
-    const absolute = path.resolve(root, artifact.path);
-    if (absolute === root || !absolute.startsWith(`${root}${path.sep}`)) {
-      throw new Error(`packed artifact path escapes scenario root: ${artifact.path}`);
+function validateWorkloadFiles(files, label) {
+  const findings = [];
+  if (!Array.isArray(files) || files.length === 0) {
+    return [`${label} must contain an exact tarball file census`];
+  }
+  const paths = new Set();
+  for (const [index, file] of files.entries()) {
+    const prefix = `${label}[${index}]`;
+    if (!safeRepositoryRelativePath(file?.path)) {
+      findings.push(`${prefix}.path must be canonical and relative`);
+    } else if (paths.has(file.path)) {
+      findings.push(`${prefix}.path is duplicated`);
+    } else {
+      paths.add(file.path);
     }
-    if (
-      !existsSync(absolute) ||
-      !lstatSync(absolute).isFile() ||
-      lstatSync(absolute).isSymbolicLink()
-    ) {
-      throw new Error(`packed artifact must be a regular non-symlink file: ${artifact.path}`);
+    if (!/^sha256:[0-9a-f]{64}$/u.test(file?.sha256 ?? '')) {
+      findings.push(`${prefix}.sha256 must be an exact SHA-256 digest`);
     }
-    const realArtifact = realpathSync(absolute);
-    if (!realArtifact.startsWith(`${realRoot}${path.sep}`)) {
-      throw new Error(`packed artifact resolves outside scenario root: ${artifact.path}`);
+    if (typeof file?.executable !== 'boolean') {
+      findings.push(`${prefix}.executable must be boolean`);
     }
-    const observedDigest = sha256(readFileSync(absolute));
-    if (observedDigest !== artifact.sha256) {
-      throw new Error(
-        `packed artifact digest mismatch for ${artifact.path}: expected ${artifact.sha256}, observed ${observedDigest}`,
-      );
+  }
+  if (!paths.has('package.json')) findings.push(`${label} must include package.json`);
+  return findings;
+}
+
+function validatePackedWorkloadManifest(manifest) {
+  const findings = [];
+  if (manifest?.schema !== DEVEX_PACKED_WORKLOAD_SCHEMA) {
+    findings.push(`workload manifest schema must be ${DEVEX_PACKED_WORKLOAD_SCHEMA}`);
+  }
+  if (
+    manifest?.profile?.id !== PACKED_PROFILE_ID ||
+    manifest?.profile?.commandDigest !== DEVEX_PACKED_PROFILE_COMMAND_DIGEST
+  ) {
+    findings.push('workload manifest profile must match the code-owned packed profile contract');
+  }
+  if (manifest?.entrypoint !== 'profile.mjs') {
+    findings.push('workload manifest entrypoint must be profile.mjs');
+  }
+  if (!Array.isArray(manifest?.artifacts) || manifest.artifacts.length === 0) {
+    findings.push('workload manifest artifacts must be a non-empty array');
+  } else {
+    const names = new Set();
+    let consumerCount = 0;
+    for (const [index, artifact] of manifest.artifacts.entries()) {
+      const prefix = `workload manifest artifacts[${index}]`;
+      if (typeof artifact?.name !== 'string' || artifact.name.trim().length === 0) {
+        findings.push(`${prefix}.name must be non-empty`);
+      } else if (names.has(artifact.name)) {
+        findings.push(`${prefix}.name is duplicated`);
+      } else {
+        names.add(artifact.name);
+      }
+      if (!['consumer', 'package'].includes(artifact?.role)) {
+        findings.push(`${prefix}.role must be consumer or package`);
+      }
+      if (artifact?.role === 'consumer') consumerCount += 1;
+      if (!safeRepositoryRelativePath(artifact?.path) || !artifact.path.endsWith('.tgz')) {
+        findings.push(`${prefix}.path must be a repository-relative .tgz path`);
+      }
+      if (!/^sha256:[0-9a-f]{64}$/u.test(artifact?.sha256 ?? '')) {
+        findings.push(`${prefix}.sha256 must be an exact SHA-256 digest`);
+      }
+      findings.push(...validateWorkloadFiles(artifact?.files, `${prefix}.files`));
     }
-    return {
-      name: artifact.name,
-      path: artifact.path.split(path.sep).join('/'),
-      sha256: observedDigest,
-    };
-  });
+    if (consumerCount !== 1) {
+      findings.push('workload manifest must contain exactly one consumer artifact');
+    }
+  }
+  if (
+    !Array.isArray(manifest?.browserBootstrap) ||
+    manifest.browserBootstrap.length === 0 ||
+    manifest.browserBootstrap.some((file) => !safeRepositoryRelativePath(file)) ||
+    new Set(manifest.browserBootstrap).size !== manifest.browserBootstrap.length
+  ) {
+    findings.push(
+      'workload manifest browserBootstrap must contain unique canonical relative paths',
+    );
+  }
+  return findings;
+}
+
+function readPackedWorkloadManifest(scenario, root) {
+  const reference = scenario.provenance.workloadManifest;
+  const absolute = regularFileInsideRoot(root, reference.path, 'packed workload manifest');
+  const bytes = readFileSync(absolute);
+  const observedDigest = sha256(bytes);
+  if (observedDigest !== reference.sha256) {
+    throw new Error(
+      `packed workload manifest digest mismatch: expected ${reference.sha256}, observed ${observedDigest}`,
+    );
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error('packed workload manifest is not valid JSON');
+  }
+  const findings = validatePackedWorkloadManifest(manifest);
+  if (findings.length > 0) {
+    throw new Error(`Invalid packed workload manifest:\n- ${findings.join('\n- ')}`);
+  }
+  const declaredArtifacts = manifest.artifacts.map(
+    ({ name, path: artifactPath, sha256: digest }) => ({
+      name,
+      path: artifactPath,
+      sha256: digest,
+    }),
+  );
+  if (!sameJson(declaredArtifacts, scenario.provenance.packedArtifacts)) {
+    throw new Error('packed workload manifest artifacts do not match scenario provenance');
+  }
+  if (!sameJson(manifest.profile, scenario.profile)) {
+    throw new Error('packed workload manifest profile does not match scenario profile');
+  }
+  const consumer = manifest.artifacts.find((artifact) => artifact.role === 'consumer');
+  if (!sameJson(consumer.files, scenario.provenance.supportFiles)) {
+    throw new Error('packed workload support files do not match scenario provenance');
+  }
+  return { bytes, manifest };
+}
+
+function packageDestination(nodeModules, packageName) {
+  const match = /^(?:@([a-z0-9][a-z0-9._-]*)\/)?([a-z0-9][a-z0-9._-]*)$/u.exec(packageName);
+  if (!match) throw new TypeError(`invalid packed package name: ${String(packageName)}`);
+  return match[1]
+    ? path.join(nodeModules, `@${match[1]}`, match[2])
+    : path.join(nodeModules, match[2]);
+}
+
+function linkExternalDependencies(stageRoot, repositoryRoot, packedNames) {
+  const source = path.join(repositoryRoot, 'node_modules');
+  if (!existsSync(source) || !lstatSync(source).isDirectory()) {
+    throw new Error('the frozen repository node_modules is required by the packed Kovo profile');
+  }
+  const destination = path.join(stageRoot, 'node_modules');
+  mkdirSync(destination, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) continue;
+    const sourceEntry = path.join(source, entry.name);
+    const destinationEntry = path.join(destination, entry.name);
+    if (!entry.name.startsWith('@')) {
+      if (!packedNames.has(entry.name) && !existsSync(destinationEntry)) {
+        symlinkSync(realpathSync(sourceEntry), destinationEntry, 'dir');
+      }
+      continue;
+    }
+    const packedScope = [...packedNames].some((name) => name.startsWith(`${entry.name}/`));
+    if (!packedScope) {
+      if (!existsSync(destinationEntry)) {
+        symlinkSync(realpathSync(sourceEntry), destinationEntry, 'dir');
+      }
+      continue;
+    }
+    mkdirSync(destinationEntry, { recursive: true });
+    for (const scopedEntry of readdirSync(sourceEntry, { withFileTypes: true })) {
+      const packageName = `${entry.name}/${scopedEntry.name}`;
+      const scopedDestination = path.join(destinationEntry, scopedEntry.name);
+      if (!packedNames.has(packageName) && !existsSync(scopedDestination)) {
+        symlinkSync(
+          realpathSync(path.join(sourceEntry, scopedEntry.name)),
+          scopedDestination,
+          'dir',
+        );
+      }
+    }
+  }
+}
+
+function declaredDependencyNames(manifest) {
+  const names = new Set();
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of Object.keys(manifest[field] ?? {})) names.add(name);
+  }
+  return [...names];
+}
+
+function linkDeclaredExternalDependencies(stageRoot, repositoryRoot, packedNames, packedManifests) {
+  const nodeModules = path.join(stageRoot, 'node_modules');
+  const sourcePackages = new Map(releasePackages().map((pkg) => [pkg.name, pkg.dirPath]));
+  for (const { manifest, name } of packedManifests) {
+    for (const dependencyName of declaredDependencyNames(manifest)) {
+      if (packedNames.has(dependencyName)) continue;
+      const destination = packageDestination(nodeModules, dependencyName);
+      if (existsSync(destination)) continue;
+      const packageSource = sourcePackages.get(name);
+      const candidates = [
+        packageSource
+          ? path.join(packageSource, 'node_modules', ...dependencyName.split('/'))
+          : null,
+        path.join(repositoryRoot, 'node_modules', ...dependencyName.split('/')),
+      ].filter(Boolean);
+      const source = candidates.find((candidate) => existsSync(candidate));
+      if (!source) {
+        throw new Error(`${name}: frozen repository install cannot resolve ${dependencyName}`);
+      }
+      mkdirSync(path.dirname(destination), { recursive: true });
+      symlinkSync(realpathSync(source), destination, 'dir');
+    }
+  }
+}
+
+function observedTarballFiles(entries) {
+  return entries.map((entry) => ({
+    path: entry.name.slice('package/'.length),
+    sha256: sha256(entry.data),
+    executable: entry.executable,
+  }));
+}
+
+function stagePackedWorkload(scenario, root, repositoryRoot) {
+  const { manifest } = readPackedWorkloadManifest(scenario, root);
+  const stageRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-benchmark-'));
+  try {
+    const packedManifests = [];
+    for (const artifact of manifest.artifacts) {
+      const absolute = regularFileInsideRoot(root, artifact.path, 'packed artifact');
+      const compressed = readPackageTarballSnapshot(absolute);
+      const observedDigest = sha256(compressed);
+      if (observedDigest !== artifact.sha256) {
+        throw new Error(
+          `packed artifact digest mismatch for ${artifact.path}: expected ${artifact.sha256}, observed ${observedDigest}`,
+        );
+      }
+      const entries = validatedPackageTarballEntries(compressed);
+      if (!sameJson(observedTarballFiles(entries), artifact.files)) {
+        throw new Error(`${artifact.name}: tarball file census does not match workload manifest`);
+      }
+      const packageManifestEntry = entries.find((entry) => entry.name === 'package/package.json');
+      const packageManifest = JSON.parse(packageManifestEntry.data.toString('utf8'));
+      if (packageManifest.name !== artifact.name) {
+        throw new Error(`${artifact.name}: tarball package name does not match workload manifest`);
+      }
+      packedManifests.push({ manifest: packageManifest, name: artifact.name });
+      const destination =
+        artifact.role === 'consumer'
+          ? stageRoot
+          : packageDestination(path.join(stageRoot, 'node_modules'), artifact.name);
+      mkdirSync(destination, { recursive: true });
+      for (const entry of entries) {
+        const relative = entry.name.slice('package/'.length);
+        const output = resolveInsideRoot(destination, relative, `${artifact.name} tar entry`);
+        mkdirSync(path.dirname(output), { recursive: true });
+        writeFileSync(output, entry.data, {
+          flag: 'wx',
+          mode: entry.executable ? 0o755 : 0o644,
+        });
+      }
+    }
+    const packedPackages = new Set(
+      manifest.artifacts
+        .filter((artifact) => artifact.role === 'package')
+        .map((artifact) => artifact.name),
+    );
+    if (packedPackages.size > 0) {
+      linkExternalDependencies(stageRoot, repositoryRoot, packedPackages);
+      linkDeclaredExternalDependencies(stageRoot, repositoryRoot, packedPackages, packedManifests);
+    }
+    regularFileInsideRoot(stageRoot, manifest.entrypoint, 'packed profile entrypoint');
+    for (const bootstrap of manifest.browserBootstrap) {
+      regularFileInsideRoot(stageRoot, bootstrap, 'browser bootstrap file');
+    }
+    return { manifest, stageRoot };
+  } catch (error) {
+    rmSync(stageRoot, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function commandCwdInsideStage(stageRoot, relative) {
+  if (relative === '.') return stageRoot;
+  const cwd = resolveInsideRoot(stageRoot, relative, 'benchmark command cwd');
+  if (!existsSync(cwd) || !lstatSync(cwd).isDirectory() || lstatSync(cwd).isSymbolicLink()) {
+    throw new Error(
+      `benchmark command cwd must be a regular directory inside the stage: ${relative}`,
+    );
+  }
+  const realStage = realpathSync(stageRoot);
+  const realCwd = realpathSync(cwd);
+  if (realCwd !== realStage && !realCwd.startsWith(`${realStage}${path.sep}`)) {
+    throw new Error(`benchmark command cwd resolves outside the stage: ${relative}`);
+  }
+  return cwd;
 }
 
 /**
@@ -498,105 +834,111 @@ export function runBenchmarkScenario(scenario, options = {}) {
       `Benchmark environment does not match the pinned scenario:\n- ${environmentFindings.join('\n- ')}`,
     );
   }
-  const packedArtifacts = verifiedPackedArtifacts(scenario.provenance.packedArtifacts, root);
-  const measure = options.measure ?? ((command, context) => measureCommand(command, context));
-  const metrics = {};
-  const commands = {};
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const staged = stagePackedWorkload(scenario, root, repositoryRoot);
+  try {
+    const measure = options.measure ?? ((command, context) => measureCommand(command, context));
+    const metrics = {};
+    const commands = expectedScenarioCommands();
 
-  for (const phase of PHASES) {
-    const phaseConfig = scenario.phases[phase];
-    const durationSamples = [];
-    const rssSamples = [];
-    commands[phase] = {
-      command: [...phaseConfig.command],
-      cwd: phaseConfig.cwd ?? '.',
-    };
-    for (let index = 0; index < samples; index += 1) {
-      const result = measure(phaseConfig.command, {
-        cwd: path.resolve(root, phaseConfig.cwd ?? '.'),
-        phase,
-        sampleIndex: index,
-      });
-      if (result.exitCode !== 0 || result.signal || result.error) {
-        throw new Error(
-          `${phase} sample ${index + 1} failed: exit=${String(result.exitCode)} signal=${String(
-            result.signal,
-          )} ${result.error ?? result.stderr ?? ''}`.trim(),
-        );
-      }
-      if (!finiteNonNegative(result.durationMs)) {
-        throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
-      }
-      durationSamples.push(result.durationMs);
-      if (result.peakRssBytes !== null && result.peakRssBytes !== undefined) {
-        if (!finiteNonNegative(result.peakRssBytes)) {
-          throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+    for (const phase of PHASES) {
+      const phaseConfig = commands[phase];
+      const cwd = commandCwdInsideStage(staged.stageRoot, phaseConfig.cwd);
+      const durationSamples = [];
+      const rssSamples = [];
+      for (let index = 0; index < samples; index += 1) {
+        const result = measure(phaseConfig.command, {
+          cwd,
+          phase,
+          sampleIndex: index,
+          stageRoot: staged.stageRoot,
+        });
+        if (result.exitCode !== 0 || result.signal || result.error) {
+          throw new Error(
+            `${phase} sample ${index + 1} failed: exit=${String(result.exitCode)} signal=${String(
+              result.signal,
+            )} ${result.error ?? result.stderr ?? ''}`.trim(),
+          );
         }
-        rssSamples.push(result.peakRssBytes);
+        if (!finiteNonNegative(result.durationMs)) {
+          throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
+        }
+        durationSamples.push(result.durationMs);
+        if (result.peakRssBytes !== null && result.peakRssBytes !== undefined) {
+          if (!finiteNonNegative(result.peakRssBytes)) {
+            throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
+          }
+          rssSamples.push(result.peakRssBytes);
+        }
       }
+      metrics[`check.${phase}.durationMs`] = {
+        unit: 'ms',
+        samples: durationSamples,
+        summary: sampleSummary(durationSamples),
+      };
+      metrics[`check.${phase}.peakRssBytes`] = {
+        unit: 'bytes',
+        samples: rssSamples,
+        summary: rssSamples.length === 0 ? null : sampleSummary(rssSamples),
+      };
     }
-    metrics[`check.${phase}.durationMs`] = {
-      unit: 'ms',
-      samples: durationSamples,
-      summary: sampleSummary(durationSamples),
-    };
-    metrics[`check.${phase}.peakRssBytes`] = {
+
+    const browser = browserBootstrapBytes(staged.manifest.browserBootstrap, {
+      root: staged.stageRoot,
+    });
+    metrics['browser.bootstrapBytes'] = {
       unit: 'bytes',
-      samples: rssSamples,
-      summary: rssSamples.length === 0 ? null : sampleSummary(rssSamples),
+      samples: [browser.bytes],
+      summary: sampleSummary([browser.bytes]),
+      files: browser.files,
     };
+    const consumer = staged.manifest.artifacts.find((artifact) => artifact.role === 'consumer');
+
+    return {
+      schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
+      scenario: {
+        name: scenario.name,
+        digest: benchmarkScenarioDigest(scenario),
+        definition: structuredClone(scenario),
+      },
+      provenance: {
+        sourceCommit: observedEnvironment.sourceCommit,
+        sourceTree: observedEnvironment.sourceTree,
+        packageManager: observedEnvironment.packageManager,
+        osImage: observedEnvironment.osImage,
+        workloadManifest: structuredClone(scenario.provenance.workloadManifest),
+        commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+        packedArtifacts: structuredClone(scenario.provenance.packedArtifacts),
+        supportFiles: structuredClone(consumer.files),
+      },
+      runner: environmentRunnerFingerprint(observedEnvironment),
+      sampleCount: samples,
+      commands,
+      metrics,
+    };
+  } finally {
+    rmSync(staged.stageRoot, { recursive: true, force: true });
   }
-
-  const browser = browserBootstrapBytes(scenario.browserBootstrap.files, { root });
-  metrics['browser.bootstrapBytes'] = {
-    unit: 'bytes',
-    samples: [browser.bytes],
-    summary: sampleSummary([browser.bytes]),
-    files: browser.files,
-  };
-
-  return {
-    schema: DEVEX_BENCHMARK_REPORT_SCHEMA,
-    scenario: {
-      name: scenario.name,
-      digest: benchmarkScenarioDigest(scenario),
-      definition: structuredClone(scenario),
-    },
-    provenance: {
-      sourceCommit: observedEnvironment.sourceCommit,
-      packageManager: observedEnvironment.packageManager,
-      osImage: observedEnvironment.osImage,
-      packedArtifacts,
-    },
-    runner: environmentRunnerFingerprint(observedEnvironment),
-    sampleCount: samples,
-    commands,
-    metrics,
-  };
 }
 
-function expectedScenarioCommands(scenario) {
-  return Object.fromEntries(
-    PHASES.map((phase) => [
-      phase,
-      {
-        command: [...scenario.phases[phase].command],
-        cwd: scenario.phases[phase].cwd ?? '.',
-      },
-    ]),
-  );
+function expectedScenarioCommands() {
+  return structuredClone(PACKED_PROFILE_COMMANDS);
 }
 
 function expectedReportProvenance(scenario) {
   return {
     sourceCommit: scenario.provenance.sourceCommit,
+    sourceTree: scenario.provenance.sourceTree,
     packageManager: scenario.environment.packageManager,
     osImage: scenario.environment.osImage,
+    workloadManifest: structuredClone(scenario.provenance.workloadManifest),
+    commandDigest: scenario.profile.commandDigest,
     packedArtifacts: scenario.provenance.packedArtifacts.map((artifact) => ({
       name: artifact.name,
       path: artifact.path.split(path.sep).join('/'),
       sha256: artifact.sha256,
     })),
+    supportFiles: structuredClone(scenario.provenance.supportFiles),
   };
 }
 
@@ -623,7 +965,7 @@ function validateBenchmarkReportIdentity(report, label = 'report') {
   if (!sameJson(report.runner, environmentRunnerFingerprint(definition.environment))) {
     findings.push(`${label}.runner does not match its scenario environment`);
   }
-  if (!sameJson(report.commands, expectedScenarioCommands(definition))) {
+  if (!sameJson(report.commands, expectedScenarioCommands())) {
     findings.push(`${label}.commands do not match its full scenario definition`);
   }
   return findings;
@@ -650,6 +992,9 @@ function validateWorkloadIdentity(identity, label) {
   if (!validGitObjectId(identity?.provenance?.sourceCommit)) {
     findings.push(`${label}.provenance.sourceCommit must be an exact Git object ID`);
   }
+  if (identity?.provenance?.sourceTree !== 'clean') {
+    findings.push(`${label}.provenance.sourceTree must be clean`);
+  }
   if (
     !/^[a-z0-9][a-z0-9._-]*@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(
       identity?.provenance?.packageManager ?? '',
@@ -660,10 +1005,25 @@ function validateWorkloadIdentity(identity, label) {
   if (!/^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/u.test(identity?.provenance?.osImage ?? '')) {
     findings.push(`${label}.provenance.osImage must be an immutable image digest`);
   }
+  if (
+    !safeRepositoryRelativePath(identity?.provenance?.workloadManifest?.path) ||
+    !/^sha256:[0-9a-f]{64}$/u.test(identity?.provenance?.workloadManifest?.sha256 ?? '')
+  ) {
+    findings.push(`${label}.provenance.workloadManifest must bind a relative path and SHA-256`);
+  }
+  if (identity?.provenance?.commandDigest !== DEVEX_PACKED_PROFILE_COMMAND_DIGEST) {
+    findings.push(`${label}.provenance.commandDigest must bind the code-owned packed profiles`);
+  }
   findings.push(
     ...validatePackedArtifacts(
       identity?.provenance?.packedArtifacts,
       `${label}.provenance.packedArtifacts`,
+    ),
+  );
+  findings.push(
+    ...validateWorkloadFiles(
+      identity?.provenance?.supportFiles,
+      `${label}.provenance.supportFiles`,
     ),
   );
   return findings;
@@ -1167,6 +1527,163 @@ export function evaluateBudgets(budgets, report, options = {}) {
   };
 }
 
+function workloadArtifact(name, role, artifactPath, compressed) {
+  const entries = validatedPackageTarballEntries(compressed);
+  const packageManifestEntry = entries.find((entry) => entry.name === 'package/package.json');
+  if (!packageManifestEntry) throw new Error(`${name}: packed workload has no package manifest`);
+  const packageManifest = JSON.parse(packageManifestEntry.data.toString('utf8'));
+  if (packageManifest.name !== name) {
+    throw new Error(`${name}: packed workload package name mismatch`);
+  }
+  return {
+    name,
+    role,
+    path: artifactPath,
+    sha256: sha256(compressed),
+    files: observedTarballFiles(entries),
+  };
+}
+
+/**
+ * Materialize the code-owned real Kovo scenario from the authenticated release tarballs.
+ * The generated files live below `.release/` and remain unratified until separately measured.
+ */
+export function prepareKovoPackedScenario(options = {}) {
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const recipePath = path.join(repositoryRoot, KOVO_PACKED_RECIPE_PATH);
+  const recipe = readJson(recipePath);
+  if (
+    recipe.schema !== DEVEX_SCENARIO_RECIPE_SCHEMA ||
+    recipe.name !== 'kovo-packed-check' ||
+    recipe.profile !== PACKED_PROFILE_ID ||
+    recipe.packedReleaseManifest !== '.release/packed-packages.json' ||
+    recipe.consumerSource !== 'scripts/devex-workloads/kovo-packed-check/package' ||
+    recipe.output !== '.release/devex-kovo-packed-scenario.json'
+  ) {
+    throw new Error(`${KOVO_PACKED_RECIPE_PATH} does not match the code-owned Kovo scenario`);
+  }
+
+  const releaseManifestPath = regularFileInsideRoot(
+    repositoryRoot,
+    recipe.packedReleaseManifest,
+    'packed release manifest',
+  );
+  const releaseManifest = JSON.parse(readFileSync(releaseManifestPath, 'utf8'));
+  const releaseEntries = validatePackedReleaseManifest(releaseManifest, releasePackages());
+  const scenarioPath = path.join(repositoryRoot, recipe.output);
+  const outputRoot = path.dirname(scenarioPath);
+  const outputTarballs = path.join(outputRoot, 'tarballs');
+  mkdirSync(outputTarballs, { recursive: true });
+
+  const temporaryPackRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-consumer-pack-'));
+  let consumerTarball;
+  try {
+    consumerTarball = packWithoutLifecycleScripts(
+      {
+        name: '@kovojs/devex-packed-check-consumer',
+        version: '1.0.0',
+        dirPath: path.join(repositoryRoot, recipe.consumerSource),
+      },
+      temporaryPackRoot,
+    );
+    const consumerDestination = path.join(
+      outputTarballs,
+      'kovojs-devex-packed-check-consumer-1.0.0.tgz',
+    );
+    copyFileSync(consumerTarball, consumerDestination);
+    const consumerBytes = readPackageTarballSnapshot(consumerDestination);
+    const artifacts = [
+      workloadArtifact(
+        '@kovojs/devex-packed-check-consumer',
+        'consumer',
+        path.relative(outputRoot, consumerDestination).split(path.sep).join('/'),
+        consumerBytes,
+      ),
+    ];
+
+    for (const releaseEntry of releaseEntries) {
+      const tarball = regularFileInsideRoot(
+        repositoryRoot,
+        releaseEntry.tarball.split(path.sep).join('/'),
+        `${releaseEntry.name} release tarball`,
+      );
+      const tarballBytes = readPackageTarballSnapshot(tarball);
+      verifyPackedAttestationBytes(releaseEntry, tarballBytes);
+      artifacts.push(
+        workloadArtifact(
+          releaseEntry.name,
+          'package',
+          path.relative(outputRoot, tarball).split(path.sep).join('/'),
+          tarballBytes,
+        ),
+      );
+    }
+
+    const workloadManifest = {
+      schema: DEVEX_PACKED_WORKLOAD_SCHEMA,
+      profile: {
+        id: PACKED_PROFILE_ID,
+        commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+      },
+      entrypoint: 'profile.mjs',
+      artifacts,
+      browserBootstrap: ['browser-bootstrap.mjs'],
+    };
+    const manifestFindings = validatePackedWorkloadManifest(workloadManifest);
+    if (manifestFindings.length > 0) {
+      throw new Error(
+        `Generated Kovo workload manifest is invalid:\n- ${manifestFindings.join('\n- ')}`,
+      );
+    }
+    const workloadManifestPath = path.join(outputRoot, 'devex-kovo-packed-workload.json');
+    writeJson(workloadManifestPath, workloadManifest);
+    const workloadManifestBytes = readFileSync(workloadManifestPath);
+    const environment = currentBenchmarkEnvironment({
+      repositoryRoot,
+      observedEnvironment: options.observedEnvironment,
+    });
+    const consumer = artifacts[0];
+    const scenario = {
+      schema: DEVEX_BENCHMARK_SCENARIO_SCHEMA,
+      name: recipe.name,
+      profile: structuredClone(workloadManifest.profile),
+      environment: {
+        runnerName: environment.runnerName,
+        platform: environment.platform,
+        arch: environment.arch,
+        node: environment.node,
+        cpuModel: environment.cpuModel,
+        packageManager: environment.packageManager,
+        osImage: environment.osImage,
+      },
+      provenance: {
+        sourceCommit: environment.sourceCommit,
+        sourceTree: environment.sourceTree,
+        workloadManifest: {
+          path: path.basename(workloadManifestPath),
+          sha256: sha256(workloadManifestBytes),
+        },
+        packedArtifacts: artifacts.map(({ name, path: artifactPath, sha256: digest }) => ({
+          name,
+          path: artifactPath,
+          sha256: digest,
+        })),
+        supportFiles: structuredClone(consumer.files),
+      },
+    };
+    const scenarioFindings = validateBenchmarkScenario(scenario);
+    if (scenarioFindings.length > 0) {
+      throw new Error(
+        `Generated Kovo benchmark scenario is invalid:\n- ${scenarioFindings.join('\n- ')}`,
+      );
+    }
+    writeJson(scenarioPath, scenario);
+    return { scenario, scenarioPath, workloadManifest, workloadManifestPath };
+  } finally {
+    rmSync(temporaryPackRoot, { recursive: true, force: true });
+  }
+}
+
 function parseArgs(argv) {
   const args = {
     budgets: path.join(defaultRepoRoot, 'devex-budgets.json'),
@@ -1184,6 +1701,7 @@ function parseArgs(argv) {
     else if (arg === '--proposal') args.proposal = argv[++index];
     else if (arg === '--write') args.write = true;
     else if (arg === '--check-budgets') args.checkBudgets = true;
+    else if (arg === '--prepare-kovo-scenario') args.prepareKovoScenario = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -1196,6 +1714,7 @@ function usage() {
     '  node scripts/devex-benchmark.mjs --scenario <file> [--samples N] [--output <file>] [--evaluate]',
     '  node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <file> [--write]',
     '  node scripts/devex-benchmark.mjs --check-budgets',
+    '  node scripts/devex-benchmark.mjs --prepare-kovo-scenario',
     '',
     'Budgets remain non-binding until a separate baseline report and proposal ratify them.',
     '',
@@ -1206,6 +1725,13 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) {
     process.stdout.write(usage());
+    return 0;
+  }
+  if (args.prepareKovoScenario) {
+    const prepared = prepareKovoPackedScenario();
+    process.stdout.write(
+      `Prepared ${path.relative(defaultRepoRoot, prepared.scenarioPath)} from authenticated packed Kovo packages.\n`,
+    );
     return 0;
   }
   const budgets = readJson(path.resolve(args.budgets));

@@ -29,6 +29,7 @@ export const CONSUMER_AREAS = Object.freeze([
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const DOC_EXTENSIONS = new Set(['.md', '.mdx']);
+const ENTRYPOINT_EVIDENCE = '<entrypoint-only>';
 const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
   '.cache',
   '.git',
@@ -193,8 +194,19 @@ function publicManifestUnits(repoRoot) {
   return { findings, units };
 }
 
+function diagnosticFinding(diagnostic, repoRoot, label) {
+  const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+  if (!diagnostic.file || diagnostic.start === undefined) {
+    return `${label}: TS${diagnostic.code} ${message}`;
+  }
+  const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+  const relative = path.relative(repoRoot, diagnostic.file.fileName).split(path.sep).join('/');
+  return `${label}: ${relative}:${position.line + 1}:${position.character + 1} TS${diagnostic.code} ${message}`;
+}
+
 function tsProgram(repoRoot, files) {
   const configPath = path.join(repoRoot, 'tsconfig.json');
+  const diagnostics = [];
   let options = {
     allowJs: true,
     jsx: ts.JsxEmit.ReactJSX,
@@ -207,15 +219,31 @@ function tsProgram(repoRoot, files) {
   if (existsSync(configPath)) {
     const config = ts.readConfigFile(configPath, (filePath) => ts.sys.readFile(filePath));
     if (config.error) {
-      throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'));
+      diagnostics.push(diagnosticFinding(config.error, repoRoot, 'TypeScript config diagnostic'));
+    } else {
+      const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot);
+      diagnostics.push(
+        ...parsed.errors.map((diagnostic) =>
+          diagnosticFinding(diagnostic, repoRoot, 'TypeScript config diagnostic'),
+        ),
+      );
+      options = {
+        ...options,
+        ...parsed.options,
+        noEmit: true,
+      };
     }
-    options = {
-      ...options,
-      ...ts.parseJsonConfigFileContent(config.config, ts.sys, repoRoot).options,
-      noEmit: true,
-    };
   }
-  return ts.createProgram(files, options);
+  const program = ts.createProgram(files, options);
+  for (const diagnostic of [
+    ...program.getConfigFileParsingDiagnostics(),
+    ...program.getOptionsDiagnostics(),
+    ...program.getGlobalDiagnostics(),
+    ...program.getSyntacticDiagnostics(),
+  ]) {
+    diagnostics.push(diagnosticFinding(diagnostic, repoRoot, 'TypeScript program diagnostic'));
+  }
+  return { diagnostics: [...new Set(diagnostics)].sort(compareStrings), program };
 }
 
 function resolvedSymbol(symbol, checker) {
@@ -427,12 +455,11 @@ function walkConsumerFiles(repoRoot) {
 
 function markdownCode(text) {
   const blocks = [];
-  const fence = /```(?:[cm]?[jt]sx?|typescript|javascript)?[^\n]*\n([\s\S]*?)```/giu;
+  const fence = /```(?:[cm]?[jt]sx?|typescript|javascript)(?:[ \t][^\n]*)?\n([\s\S]*?)```/giu;
   for (const match of text.matchAll(fence)) blocks.push(match[1]);
   const importLines =
-    text.match(
-      /^\s*(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?)\s+from\s+['"][^'"]+['"];?\s*$/gmu,
-    ) ?? [];
+    text.match(/^\s*(?:import|export)\s+(?:type\s+)?[^\n]*?\s+from\s+['"][^'"]+['"];?\s*$/gmu) ??
+    [];
   return [...blocks, ...importLines].join('\n');
 }
 
@@ -440,7 +467,7 @@ function publicSpecifier(specifier, publicSpecifiers) {
   return publicSpecifiers.has(specifier) ? specifier : null;
 }
 
-function consumerImports(file, publicSpecifiers) {
+function consumerImports(file, publicSpecifiers, repoRoot) {
   const raw = readFileSync(file.absolute, 'utf8');
   const text = DOC_EXTENSIONS.has(file.extension) ? markdownCode(raw) : raw;
   const sourceFile = ts.createSourceFile(
@@ -448,9 +475,16 @@ function consumerImports(file, publicSpecifiers) {
     text,
     ts.ScriptTarget.Latest,
     true,
-    file.extension.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    DOC_EXTENSIONS.has(file.extension) || file.extension.endsWith('x')
+      ? ts.ScriptKind.TSX
+      : ts.ScriptKind.TS,
   );
   const imports = [];
+  const findings = DOC_EXTENSIONS.has(file.extension)
+    ? []
+    : (sourceFile.parseDiagnostics ?? []).map((diagnostic) =>
+        diagnosticFinding(diagnostic, repoRoot, 'TypeScript consumer parse diagnostic'),
+      );
   const namespaceBindings = new Map();
 
   function add(specifier, symbol) {
@@ -458,12 +492,22 @@ function consumerImports(file, publicSpecifiers) {
     if (matched !== null) imports.push({ specifier: matched, symbol });
   }
 
+  function requiredSpecifier(node) {
+    return ts.isCallExpression(node) &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'require'
+      ? node.arguments[0].text
+      : null;
+  }
+
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
       const specifier = statement.moduleSpecifier.text;
       const clause = statement.importClause;
       if (!clause) {
-        add(specifier, '*');
+        add(specifier, ENTRYPOINT_EVIDENCE);
         continue;
       }
       if (clause.name) add(specifier, 'default');
@@ -473,6 +517,7 @@ function consumerImports(file, publicSpecifiers) {
         }
       } else if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
         namespaceBindings.set(clause.namedBindings.name.text, specifier);
+        add(specifier, ENTRYPOINT_EVIDENCE);
       }
     }
 
@@ -483,13 +528,13 @@ function consumerImports(file, publicSpecifiers) {
     ) {
       const specifier = statement.moduleSpecifier.text;
       if (!statement.exportClause) {
-        add(specifier, '*');
+        add(specifier, ENTRYPOINT_EVIDENCE);
       } else if (ts.isNamedExports(statement.exportClause)) {
         for (const element of statement.exportClause.elements) {
           add(specifier, element.propertyName?.text ?? element.name.text);
         }
       } else {
-        add(specifier, '*');
+        add(specifier, ENTRYPOINT_EVIDENCE);
       }
     }
   }
@@ -502,6 +547,12 @@ function consumerImports(file, publicSpecifiers) {
     ) {
       add(namespaceBindings.get(node.expression.text), node.name.text);
     } else if (
+      ts.isQualifiedName(node) &&
+      ts.isIdentifier(node.left) &&
+      namespaceBindings.has(node.left.text)
+    ) {
+      add(namespaceBindings.get(node.left.text), node.right.text);
+    } else if (
       ts.isElementAccessExpression(node) &&
       ts.isIdentifier(node.expression) &&
       namespaceBindings.has(node.expression.text) &&
@@ -509,6 +560,15 @@ function consumerImports(file, publicSpecifiers) {
       ts.isStringLiteral(node.argumentExpression)
     ) {
       add(namespaceBindings.get(node.expression.text), node.argumentExpression.text);
+    } else if (ts.isPropertyAccessExpression(node) && requiredSpecifier(node.expression) !== null) {
+      add(requiredSpecifier(node.expression), node.name.text);
+    } else if (
+      ts.isElementAccessExpression(node) &&
+      requiredSpecifier(node.expression) !== null &&
+      node.argumentExpression &&
+      ts.isStringLiteral(node.argumentExpression)
+    ) {
+      add(requiredSpecifier(node.expression), node.argumentExpression.text);
     } else if (
       ts.isCallExpression(node) &&
       node.arguments.length === 1 &&
@@ -516,22 +576,53 @@ function consumerImports(file, publicSpecifiers) {
       ((ts.isIdentifier(node.expression) && node.expression.text === 'require') ||
         node.expression.kind === ts.SyntaxKind.ImportKeyword)
     ) {
-      add(node.arguments[0].text, '*');
+      add(node.arguments[0].text, ENTRYPOINT_EVIDENCE);
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer &&
+      ts.isIdentifier(node.initializer) &&
+      namespaceBindings.has(node.initializer.text)
+    ) {
+      for (const element of node.name.elements) {
+        if (element.dotDotDotToken) continue;
+        const importedName = element.propertyName ?? element.name;
+        if (ts.isIdentifier(importedName) || ts.isStringLiteral(importedName)) {
+          add(namespaceBindings.get(node.initializer.text), importedName.text);
+        }
+      }
+    } else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer &&
+      requiredSpecifier(node.initializer) !== null
+    ) {
+      const specifier = requiredSpecifier(node.initializer);
+      for (const element of node.name.elements) {
+        if (element.dotDotDotToken) continue;
+        const importedName = element.propertyName ?? element.name;
+        if (ts.isIdentifier(importedName) || ts.isStringLiteral(importedName)) {
+          add(specifier, importedName.text);
+        }
+      }
     }
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  return imports;
+  return { findings, imports };
 }
 
 function collectConsumerEvidence(repoRoot, manifestUnits) {
   const publicSpecifiers = new Set(manifestUnits.map((unit) => unit.specifier));
   const evidence = new Map();
+  const findings = [];
   const filesByArea = Object.fromEntries(CONSUMER_AREAS.map((area) => [area, new Set()]));
   const { files, excludedDirectories } = walkConsumerFiles(repoRoot);
 
   for (const file of files) {
-    const imports = consumerImports(file, publicSpecifiers);
+    const parsed = consumerImports(file, publicSpecifiers, repoRoot);
+    findings.push(...parsed.findings);
+    const imports = parsed.imports;
     if (imports.length > 0) filesByArea[file.area].add(file.relativeFile);
     for (const imported of imports) {
       const key = `${imported.specifier}\0${imported.symbol}`;
@@ -547,23 +638,14 @@ function collectConsumerEvidence(repoRoot, manifestUnits) {
 
   return {
     evidence,
+    findings: [...new Set(findings)].sort(compareStrings),
     excludedDirectories,
     consumerFiles: Object.fromEntries(CONSUMER_AREAS.map((area) => [area, filesByArea[area].size])),
   };
 }
 
 function evidenceFor(evidence, specifier, symbol) {
-  const exact = evidence.get(`${specifier}\0${symbol}`) ?? emptyConsumerEvidence();
-  const namespace = evidence.get(`${specifier}\0*`);
-  if (!namespace) return exact;
-  const merged = structuredClone(exact);
-  for (const area of CONSUMER_AREAS) {
-    merged[area].imports += namespace[area].imports;
-    merged[area].files = [...new Set([...merged[area].files, ...namespace[area].files])].sort(
-      compareStrings,
-    );
-  }
-  return merged;
+  return evidence.get(`${specifier}\0${symbol}`) ?? emptyConsumerEvidence();
 }
 
 function entryEvidence(evidence, specifier) {
@@ -590,10 +672,13 @@ export function buildPublicApiInventory(options = {}) {
   const entrypoints = units.filter((unit) => unit.kind === 'typescript-entrypoint');
   const generatedFamilyMembers = units.filter((unit) => unit.kind === 'generated-family-member');
   const consumer = collectConsumerEvidence(repoRoot, units);
-  const program = tsProgram(
+  findings.push(...consumer.findings);
+  const typescript = tsProgram(
     repoRoot,
     entrypoints.map((entry) => path.resolve(repoRoot, entry.source)),
   );
+  findings.push(...typescript.diagnostics);
+  const program = typescript.program;
   const checker = program.getTypeChecker();
   const declarations = [];
 
@@ -660,7 +745,7 @@ export function buildPublicApiInventory(options = {}) {
       consumerFiles: consumer.consumerFiles,
       excludedDirectories: consumer.excludedDirectories.length,
     },
-    findings,
+    findings: [...new Set(findings)].sort(compareStrings),
     manifestPublicSubpaths: units,
     analyzedTypeScriptEntrypoints: analyzedEntrypoints,
     exportedDeclarations: declarations,

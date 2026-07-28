@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
 export const KNOWN_FAILURE_REGISTER_SCHEMA = 'kovo-known-failures/v1';
+export const KNOWN_FAILURE_PROBE_RESULT_SCHEMA = 'kovo-known-failure-probe-result/v1';
 export const DESIRED_BEHAVIOR_EXIT_CODE = 0;
 export const REPRODUCED_DEFECT_EXIT_CODE = 1;
 export const INFRASTRUCTURE_ERROR_EXIT_CODE = 2;
@@ -79,6 +80,7 @@ const REGISTER_PATH = 'scripts/known-failure-register.json';
 const PROBE_DIRECTORY = 'scripts/known-failure-probes';
 const OWNERSHIP_LEDGER = 'plans/devex-gates.md';
 const STATES = new Set(['executable', 'pending-repro', 'retired']);
+const PROBE_OUTCOMES = new Set(['defect-reproduced', 'desired-behavior']);
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -95,10 +97,65 @@ function substantive(value, minimum = 12) {
 function relativeProbeFiles(repoRoot) {
   const directory = path.join(repoRoot, PROBE_DIRECTORY);
   if (!existsSync(directory)) return [];
-  return readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.mjs'))
-    .map((entry) => `${PROBE_DIRECTORY}/${entry.name}`)
-    .sort(compareStrings);
+  const files = [];
+  function walk(current) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolute);
+      } else if (entry.isFile() && entry.name.endsWith('.mjs')) {
+        files.push(path.relative(repoRoot, absolute).split(path.sep).join('/'));
+      }
+    }
+  }
+  walk(directory);
+  return files.sort(compareStrings);
+}
+
+function canonicalProbePath(value) {
+  if (
+    typeof value !== 'string' ||
+    path.isAbsolute(value) ||
+    value.includes('\\') ||
+    path.posix.normalize(value) !== value ||
+    !value.startsWith(`${PROBE_DIRECTORY}/`) ||
+    value === `${PROBE_DIRECTORY}/` ||
+    !value.endsWith('.mjs')
+  ) {
+    return false;
+  }
+  const relative = path.posix.relative(PROBE_DIRECTORY, value);
+  return relative !== '' && relative !== '..' && !relative.startsWith('../');
+}
+
+function regularProbePathFinding(repoRoot, probePath) {
+  const probeDirectory = path.resolve(repoRoot, PROBE_DIRECTORY);
+  const absolute = path.resolve(repoRoot, probePath);
+  if (
+    !existsSync(probeDirectory) ||
+    !lstatSync(probeDirectory).isDirectory() ||
+    lstatSync(probeDirectory).isSymbolicLink() ||
+    !existsSync(absolute) ||
+    !lstatSync(absolute).isFile() ||
+    lstatSync(absolute).isSymbolicLink()
+  ) {
+    return `${probePath}: mapped probe must be a regular non-symlink file`;
+  }
+  const realDirectory = realpathSync(probeDirectory);
+  const realProbe = realpathSync(absolute);
+  if (!realProbe.startsWith(`${realDirectory}${path.sep}`)) {
+    return `${probePath}: mapped probe resolves outside ${PROBE_DIRECTORY}`;
+  }
+  return null;
+}
+
+function commandPairCount(command, flag, value) {
+  let count = 0;
+  for (let index = 0; index < command.length - 1; index += 1) {
+    if (command[index] === flag && command[index + 1] === value) count += 1;
+  }
+  return count;
 }
 
 function resolveOwnershipLedger(repoRoot, register, options) {
@@ -224,17 +281,14 @@ export function validateKnownFailureRegister(register, options = {}) {
       findings.push(`${entry.id}: probe mapping is required`);
       continue;
     }
-    if (
-      typeof probe.path !== 'string' ||
-      !probe.path.startsWith(`${PROBE_DIRECTORY}/`) ||
-      path.isAbsolute(probe.path)
-    ) {
-      findings.push(`${entry.id}: probe.path must be a repository-relative probe path`);
+    if (!canonicalProbePath(probe.path)) {
+      findings.push(
+        `${entry.id}: probe.path must be canonical and strictly under ${PROBE_DIRECTORY}`,
+      );
     } else {
       registeredPaths.add(probe.path);
-      if (!existsSync(path.join(repoRoot, probe.path))) {
-        findings.push(`${entry.id}: mapped probe is missing: ${probe.path}`);
-      }
+      const pathFinding = regularProbePathFinding(repoRoot, probe.path);
+      if (pathFinding) findings.push(`${entry.id}: ${pathFinding}`);
     }
     if (
       !Array.isArray(probe.command) ||
@@ -242,13 +296,29 @@ export function validateKnownFailureRegister(register, options = {}) {
       probe.command.some((part) => typeof part !== 'string' || part.length === 0)
     ) {
       findings.push(`${entry.id}: probe.command must be a non-empty argv array`);
-    } else if (probe.command[1] !== probe.path) {
-      findings.push(`${entry.id}: probe.command must execute its mapped probe.path`);
+    } else {
+      if (probe.command[0] !== 'node' || probe.command[1] !== probe.path) {
+        findings.push(`${entry.id}: probe.command must execute only its mapped probe.path`);
+      }
+      if (commandPairCount(probe.command, '--id', entry.id) !== 1) {
+        findings.push(`${entry.id}: probe.command must bind exactly one --id ${entry.id}`);
+      }
+      if (commandPairCount(probe.command, '--packed-manifest', '{packedManifest}') !== 1) {
+        findings.push(
+          `${entry.id}: probe.command must bind exactly one declared packed manifest input`,
+        );
+      }
     }
     if (!Number.isInteger(probe.timeoutMs) || probe.timeoutMs < 1000 || probe.timeoutMs > 600000) {
       findings.push(`${entry.id}: probe.timeoutMs must be between 1s and 10m`);
     }
     if (probe.packedInput !== true) findings.push(`${entry.id}: probe must use packed input`);
+    if (probe.resultSchema !== KNOWN_FAILURE_PROBE_RESULT_SCHEMA) {
+      findings.push(`${entry.id}: probe.resultSchema must be ${KNOWN_FAILURE_PROBE_RESULT_SCHEMA}`);
+    }
+    if (entry.state !== 'pending-repro' && probe.path.endsWith('/pending.mjs')) {
+      findings.push(`${entry.id}: executable and retired rows cannot use the pending probe`);
+    }
 
     if (entry.state === 'pending-repro' && !substantive(entry.gap, 24)) {
       findings.push(`${entry.id}: pending repro requires an honest substantive gap`);
@@ -282,17 +352,90 @@ function substituteCommand(command, options) {
       if (!options.packedManifest) {
         throw new Error('executable packed probes require --packed-manifest <path>');
       }
-      return path.resolve(options.packedManifest);
+      const packedManifest = path.resolve(options.packedManifest);
+      if (
+        !existsSync(packedManifest) ||
+        !lstatSync(packedManifest).isFile() ||
+        lstatSync(packedManifest).isSymbolicLink()
+      ) {
+        throw new Error('packed manifest input must be a regular non-symlink file');
+      }
+      return packedManifest;
     }
     return part;
   });
 }
 
+function classifiedProbeResult(entry, result) {
+  if (result.signal || result.error || result.status === null) {
+    return {
+      id: entry.id,
+      status: 'infrastructure-error',
+      detail: result.error?.message ?? result.signal ?? 'probe did not return an exit status',
+    };
+  }
+  if (result.stderr?.trim()) {
+    return {
+      id: entry.id,
+      status: 'infrastructure-error',
+      detail: `probe wrote unexpected stderr: ${result.stderr.trim()}`,
+    };
+  }
+  let payload;
+  try {
+    payload = JSON.parse(result.stdout?.trim() ?? '');
+  } catch {
+    return {
+      id: entry.id,
+      status: 'infrastructure-error',
+      detail: 'probe stdout was not one bounded JSON result',
+    };
+  }
+  const keys =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? Object.keys(payload).sort(compareStrings)
+      : [];
+  if (
+    JSON.stringify(keys) !== JSON.stringify(['id', 'outcome', 'schema']) ||
+    payload.schema !== entry.probe.resultSchema ||
+    payload.id !== entry.id ||
+    !PROBE_OUTCOMES.has(payload.outcome)
+  ) {
+    return {
+      id: entry.id,
+      status: 'infrastructure-error',
+      detail: 'probe result schema, row identity, or outcome was invalid',
+    };
+  }
+  const expectedExit =
+    payload.outcome === 'desired-behavior'
+      ? DESIRED_BEHAVIOR_EXIT_CODE
+      : REPRODUCED_DEFECT_EXIT_CODE;
+  if (result.status !== expectedExit) {
+    return {
+      id: entry.id,
+      status: 'infrastructure-error',
+      detail: `probe outcome ${payload.outcome} contradicted exit ${String(result.status)}`,
+    };
+  }
+  if (entry.state === 'retired') {
+    return {
+      id: entry.id,
+      status: payload.outcome === 'desired-behavior' ? 'retired-pass' : 'retired-regression',
+    };
+  }
+  return {
+    id: entry.id,
+    status: payload.outcome === 'desired-behavior' ? 'xpass' : 'xfail',
+  };
+}
+
 /**
  * Expected-failure protocol:
- * - 1: the desired-behavior assertion failed, so the known defect is still reproduced (XFAIL).
- * - 0: desired behavior now passes (XPASS); CI turns red until the entry is retired with proof.
- * - anything else / timeout: infrastructure error, never accepted as reproduction evidence.
+ * - exit 1 plus the exact row-bound `defect-reproduced` result: XFAIL.
+ * - exit 0 plus the exact row-bound `desired-behavior` result: XPASS until retirement.
+ * - retired rows still execute and must return `desired-behavior`.
+ * - malformed output, stderr, contradictory exits, crashes, and timeouts are infrastructure errors.
  */
 export function runKnownFailureProbes(register, options = {}) {
   const repoRoot = path.resolve(options.repoRoot ?? defaultRepoRoot);
@@ -316,10 +459,6 @@ export function runKnownFailureProbes(register, options = {}) {
       results.push({ id: entry.id, status: 'pending-repro', gap: entry.gap });
       continue;
     }
-    if (entry.state === 'retired') {
-      results.push({ id: entry.id, status: 'retired' });
-      continue;
-    }
     let command;
     try {
       command = substituteCommand(entry.probe.command, options);
@@ -335,34 +474,15 @@ export function runKnownFailureProbes(register, options = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: entry.probe.timeoutMs,
     });
-    if (result.status === REPRODUCED_DEFECT_EXIT_CODE && !result.signal && !result.error) {
-      results.push({
-        id: entry.id,
-        status: 'xfail',
-        detail: (result.stderr || result.stdout || '').trim(),
-      });
-    } else if (result.status === DESIRED_BEHAVIOR_EXIT_CODE && !result.signal && !result.error) {
-      results.push({
-        id: entry.id,
-        status: 'xpass',
-        detail: (result.stdout || '').trim(),
-      });
-    } else {
-      results.push({
-        id: entry.id,
-        status: 'infrastructure-error',
-        detail:
-          result.error?.message ??
-          result.signal ??
-          (result.stderr || result.stdout || `exit ${String(result.status)}`).trim(),
-      });
-    }
+    results.push(classifiedProbeResult(entry, result));
   }
   const executableClosureComplete = results.every(
-    (result) => result.status === 'retired' || ['xfail', 'xpass'].includes(result.status),
+    (result) =>
+      !['pending-repro', 'infrastructure-error'].includes(result.status) &&
+      ['xfail', 'xpass', 'retired-pass', 'retired-regression'].includes(result.status),
   );
   const executableOutcomesAccepted = results.every((result) =>
-    ['pending-repro', 'retired', 'xfail'].includes(result.status),
+    ['pending-repro', 'xfail', 'retired-pass'].includes(result.status),
   );
   return {
     schemaValid: true,

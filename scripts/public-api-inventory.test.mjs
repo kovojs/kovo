@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -74,6 +75,65 @@ describe('public API inventory', () => {
       conformance: 1,
       tests: 1,
     });
+  });
+
+  it('keeps side-effect, wildcard, namespace-container, and dynamic imports at entrypoint level', () => {
+    const evidenceRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-public-inventory-evidence-'));
+    try {
+      cpSync(fixtureRoot, evidenceRoot, { recursive: true });
+      const evidenceFiles = {
+        'examples/evidence/side-effect.ts': "import '@fixture/api/feature';\n",
+        'examples/evidence/wildcard.ts': "export * from '@fixture/api/feature';\n",
+        'examples/evidence/dynamic.ts': "void import('@fixture/api/feature');\n",
+        'examples/evidence/namespace-container.ts':
+          "import * as api from '@fixture/api/feature';\nvoid api;\n",
+        'examples/evidence/namespace-exact.ts':
+          "import * as api from '@fixture/api/feature';\nconst value: api.Feature = api.feature();\nvoid value;\n",
+        'examples/evidence/commonjs-exact.cjs':
+          "const { Feature, feature: makeFeature } = require('@fixture/api/feature');\nconst direct = require('@fixture/api/feature').feature;\nvoid Feature; void makeFeature; void direct;\n",
+      };
+      for (const [relative, source] of Object.entries(evidenceFiles)) {
+        const absolute = path.join(evidenceRoot, relative);
+        mkdirSync(path.dirname(absolute), { recursive: true });
+        writeFileSync(absolute, source);
+      }
+
+      const inventory = buildPublicApiInventory({ repoRoot: evidenceRoot });
+      expect(inventory.findings).toEqual([]);
+      const declarations = inventory.exportedDeclarations.filter(
+        (item) => item.specifier === '@fixture/api/feature',
+      );
+      const entrypoint = inventory.analyzedTypeScriptEntrypoints.find(
+        (item) => item.specifier === '@fixture/api/feature',
+      );
+      const entrypointOnly = [
+        'examples/evidence/side-effect.ts',
+        'examples/evidence/wildcard.ts',
+        'examples/evidence/dynamic.ts',
+        'examples/evidence/namespace-container.ts',
+      ];
+      expect(entrypoint?.consumers.authoredExamples.files).toEqual(
+        expect.arrayContaining([...entrypointOnly, 'examples/evidence/namespace-exact.ts']),
+      );
+      for (const declaration of declarations) {
+        for (const relative of entrypointOnly) {
+          expect(declaration.consumers.authoredExamples.files).not.toContain(relative);
+        }
+      }
+      for (const symbol of ['Feature', 'feature']) {
+        expect(
+          declarations.find((declaration) => declaration.symbol === symbol)?.consumers
+            .authoredExamples.files,
+        ).toEqual(
+          expect.arrayContaining([
+            'examples/evidence/commonjs-exact.cjs',
+            'examples/evidence/namespace-exact.ts',
+          ]),
+        );
+      }
+    } finally {
+      rmSync(evidenceRoot, { recursive: true, force: true });
+    }
   });
 
   it('uses objective/declared exclusions while preserving coincidentally named authored consumers', () => {
@@ -186,6 +246,48 @@ describe('public API inventory', () => {
       generatedFamilyMember: true,
       target: './src/alpha.ts',
     });
+  });
+
+  it('surfaces malformed consumer and public-entrypoint TypeScript and makes --check red', () => {
+    const diagnosticsRoot = mkdtempSync(
+      path.join(os.tmpdir(), 'kovo-public-inventory-diagnostics-'),
+    );
+    try {
+      cpSync(fixtureRoot, diagnosticsRoot, { recursive: true });
+      writeFileSync(
+        path.join(diagnosticsRoot, 'examples/authored/src/broken.ts'),
+        "import { feature from '@fixture/api/feature';\n",
+      );
+      writeFileSync(
+        path.join(diagnosticsRoot, 'packages/api/src/feature.ts'),
+        'export const broken = ;\n',
+      );
+
+      const inventory = buildPublicApiInventory({ repoRoot: diagnosticsRoot });
+      expect(inventory.findings).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'TypeScript consumer parse diagnostic: examples/authored/src/broken.ts',
+          ),
+          expect.stringContaining('TypeScript program diagnostic: packages/api/src/feature.ts'),
+        ]),
+      );
+      const command = spawnSync(
+        'node',
+        [
+          fileURLToPath(new URL('./public-api-inventory.mjs', import.meta.url)),
+          '--repo-root',
+          diagnosticsRoot,
+          '--check',
+        ],
+        { cwd: fixtureRoot, encoding: 'utf8' },
+      );
+      expect(command.status).toBe(1);
+      expect(command.stderr).toContain('TypeScript consumer parse diagnostic');
+      expect(command.stderr).toContain('TypeScript program diagnostic');
+    } finally {
+      rmSync(diagnosticsRoot, { recursive: true, force: true });
+    }
   });
 
   it('renders the four inventory units and separated consumer areas', () => {

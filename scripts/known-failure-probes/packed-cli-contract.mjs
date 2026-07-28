@@ -19,6 +19,7 @@ import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
 } from '../lib/deterministic-tarball.mjs';
+import { packedCliContractOutcome } from '../lib/known-failure-probe-classifier.mjs';
 import {
   validatePackedReleaseManifest,
   verifyPackedAttestationBytes,
@@ -37,14 +38,18 @@ process.once('uncaughtException', (error) => {
 });
 
 const mode = process.argv[2];
+const idArgument = process.argv.indexOf('--id');
 const manifestArgument = process.argv.indexOf('--packed-manifest');
+const id = process.argv[idArgument + 1];
 if (
   !['help', 'empty-check'].includes(mode) ||
+  idArgument === -1 ||
+  !/^KF-DEVEX-\d{3}$/u.test(id ?? '') ||
   manifestArgument === -1 ||
   !process.argv[manifestArgument + 1]
 ) {
   process.stderr.write(
-    'Usage: node packed-cli-contract.mjs <help|empty-check> --packed-manifest <path>\n',
+    'Usage: node packed-cli-contract.mjs <help|empty-check> --id <KF-DEVEX-NNN> --packed-manifest <path>\n',
   );
   process.exit(2);
 }
@@ -110,54 +115,11 @@ try {
   if (result.error || result.signal || result.status === null) {
     infrastructureFailure(`kovo ${mode}`, result);
   }
-  if (
-    /(?:ERR_MODULE_NOT_FOUND|Cannot find package|node:internal\/|SyntaxError:|ReferenceError:)/u.test(
-      `${result.stdout}\n${result.stderr}`,
-    )
-  ) {
-    infrastructureFailure(`kovo ${mode} runtime`, result);
+  const outcome = packedCliContractOutcome(mode, result);
+  if (outcome === null) {
+    infrastructureFailure(`packed kovo ${mode} returned an unclassified contract shape`, result);
   }
-
-  if (mode === 'help') {
-    const combined = `${result.stdout}\n${result.stderr}`;
-    const renderedHelp = /(?:usage|commands):/iu.test(combined);
-    const desired = result.status === 0 && renderedHelp && result.stderr.trim().length === 0;
-    if (desired) {
-      process.stdout.write('packed kovo --help satisfies the desired exit/stdout contract\n');
-      process.exitCode = 0;
-    } else if (
-      result.status === 1 &&
-      (renderedHelp || /unknown command ["']--help["']/iu.test(combined))
-    ) {
-      process.stderr.write(
-        `reproduced: packed kovo --help exit=${String(result.status)} stdout=${JSON.stringify(
-          result.stdout.slice(0, 240),
-        )} stderr=${JSON.stringify(result.stderr.slice(0, 240))}\n`,
-      );
-      process.exitCode = 1;
-    } else {
-      infrastructureFailure('packed kovo --help returned an unclassified contract shape', result);
-    }
-  } else {
-    const combined = `${result.stdout}\n${result.stderr}`;
-    const desired = result.status !== 0 && !/^\s*OK\s*$/mu.test(combined);
-    if (desired) {
-      process.stdout.write('packed kovo check fails closed without graph input\n');
-      process.exitCode = 0;
-    } else if (result.status === 0 && /^\s*OK\s*$/mu.test(combined)) {
-      process.stderr.write(
-        `reproduced: packed empty kovo check exit=${String(result.status)} output=${JSON.stringify(
-          combined.slice(0, 240),
-        )}\n`,
-      );
-      process.exitCode = 1;
-    } else {
-      infrastructureFailure(
-        'packed empty kovo check returned an unclassified contract shape',
-        result,
-      );
-    }
-  }
+  emitResult(id, outcome);
 } finally {
   rmSync(consumerRoot, { recursive: true, force: true });
   consumerRoot = null;
@@ -271,6 +233,17 @@ function command(executable, args, cwd) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 120000,
   });
+}
+
+function emitResult(id, outcome) {
+  process.stdout.write(
+    `${JSON.stringify({
+      schema: 'kovo-known-failure-probe-result/v1',
+      id,
+      outcome,
+    })}\n`,
+  );
+  process.exitCode = outcome === 'desired-behavior' ? 0 : 1;
 }
 
 function infrastructureFailure(label, result) {

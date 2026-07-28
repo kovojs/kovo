@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,11 +10,13 @@ import {
   BASELINE_KNOWN_FAILURE_IDS,
   DESIRED_BEHAVIOR_EXIT_CODE,
   INFRASTRUCTURE_ERROR_EXIT_CODE,
+  KNOWN_FAILURE_PROBE_RESULT_SCHEMA,
   REPRODUCED_DEFECT_EXIT_CODE,
   knownFailureSummary,
   runKnownFailureProbes,
   validateKnownFailureRegister,
 } from './known-failure-register.mjs';
+import { packedCliContractOutcome } from './lib/known-failure-probe-classifier.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
@@ -51,6 +54,8 @@ describe('known-failure register', () => {
           entry.observedLayer.length > 0 &&
           entry.retirementCondition.length > 0 &&
           entry.probe.packedInput === true &&
+          entry.probe.resultSchema === KNOWN_FAILURE_PROBE_RESULT_SCHEMA &&
+          entry.probe.command.includes('{packedManifest}') &&
           entry.probe.timeoutMs >= 1000 &&
           entry.probe.timeoutMs <= 600000,
       ),
@@ -148,7 +153,7 @@ describe('known-failure register', () => {
     missingProbe.entries[0].probe.path = 'scripts/known-failure-probes/absent.mjs';
     missingProbe.entries[0].probe.command[1] = 'scripts/known-failure-probes/absent.mjs';
     expect(validateRegister(missingProbe)).toContain(
-      'KF-DEVEX-001: mapped probe is missing: scripts/known-failure-probes/absent.mjs',
+      'KF-DEVEX-001: scripts/known-failure-probes/absent.mjs: mapped probe must be a regular non-symlink file',
     );
 
     const noMappings = structuredClone(register);
@@ -168,18 +173,80 @@ describe('known-failure register', () => {
     );
   });
 
-  it('keeps reproduced defects green and makes an unexpected pass red until retirement', () => {
+  it('rejects traversal, self-probes, symlinks, and undeclared packed inputs', () => {
+    const traversal = structuredClone(register);
+    traversal.entries[0].probe.path = 'scripts/known-failure-probes/../known-failure-register.mjs';
+    traversal.entries[0].probe.command[1] = traversal.entries[0].probe.path;
+    expect(validateRegister(traversal)).toContain(
+      'KF-DEVEX-001: probe.path must be canonical and strictly under scripts/known-failure-probes',
+    );
+
+    const selfProbe = structuredClone(register);
+    selfProbe.entries[0].probe.path =
+      'scripts/known-failure-probes/../../scripts/known-failure-register.mjs';
+    selfProbe.entries[0].probe.command[1] = selfProbe.entries[0].probe.path;
+    expect(validateRegister(selfProbe)).toContain(
+      'KF-DEVEX-001: probe.path must be canonical and strictly under scripts/known-failure-probes',
+    );
+
+    const missingInput = structuredClone(register);
+    missingInput.entries[0].probe.command = missingInput.entries[0].probe.command.filter(
+      (part) => !['--packed-manifest', '{packedManifest}'].includes(part),
+    );
+    expect(validateRegister(missingInput)).toContain(
+      'KF-DEVEX-001: probe.command must bind exactly one declared packed manifest input',
+    );
+
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-probe-path-'));
+    try {
+      const probeDirectory = path.join(temporaryRoot, 'scripts/known-failure-probes');
+      mkdirSync(probeDirectory, { recursive: true });
+      for (const name of ['pending.mjs', 'packed-cli-contract.mjs']) {
+        copyFileSync(
+          path.join(repoRoot, 'scripts/known-failure-probes', name),
+          path.join(probeDirectory, name),
+        );
+      }
+      symlinkSync(
+        path.join(repoRoot, 'scripts/known-failure-probes/pending.mjs'),
+        path.join(probeDirectory, 'linked.mjs'),
+      );
+      const nestedProbeDirectory = path.join(probeDirectory, 'nested');
+      mkdirSync(nestedProbeDirectory);
+      copyFileSync(
+        path.join(repoRoot, 'scripts/known-failure-probes/pending.mjs'),
+        path.join(nestedProbeDirectory, 'stale.mjs'),
+      );
+      const linked = structuredClone(register);
+      linked.entries[0].probe.path = 'scripts/known-failure-probes/linked.mjs';
+      linked.entries[0].probe.command[1] = linked.entries[0].probe.path;
+      const findings = validateKnownFailureRegister(linked, {
+        repoRoot: temporaryRoot,
+        ledgerResolver,
+      });
+      expect(findings).toContain(
+        'KF-DEVEX-001: scripts/known-failure-probes/linked.mjs: mapped probe must be a regular non-symlink file',
+      );
+      expect(findings).toContain(
+        'stale unregistered probe: scripts/known-failure-probes/nested/stale.mjs',
+      );
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts only a bounded row-authenticated result as expected failure or unexpected pass', () => {
     const xfail = runKnownFailureProbes(register, {
       repoRoot,
-      packedManifest: 'fixture-packed-manifest.json',
+      packedManifest: ownershipLedgerPath,
       ledgerResolver,
-      spawnSync: () => processResult(1),
+      spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
     });
     const xpass = runKnownFailureProbes(register, {
       repoRoot,
-      packedManifest: 'fixture-packed-manifest.json',
+      packedManifest: ownershipLedgerPath,
       ledgerResolver,
-      spawnSync: () => processResult(0),
+      spawnSync: (_executable, args) => processResult(commandId(args), 'desired-behavior'),
     });
 
     expect(xfail.executableClosureComplete).toBe(false);
@@ -195,18 +262,117 @@ describe('known-failure register', () => {
     ]);
   });
 
-  it('does not mistake an infrastructure error for defect reproduction', () => {
-    const result = runKnownFailureProbes(register, {
+  it('does not mistake arbitrary exit 1, crashes, usage errors, or forged row results for XFAIL', () => {
+    const hostileResults = [
+      processResult(null, null, { status: 1 }),
+      processResult(null, null, {
+        status: null,
+        error: new Error('crash'),
+      }),
+      processResult(null, null, {
+        status: 1,
+        stderr: 'Usage: fake probe',
+      }),
+      processResult('KF-DEVEX-999', 'defect-reproduced'),
+      processResult('KF-DEVEX-003', 'desired-behavior', { status: 1 }),
+    ];
+    for (const hostile of hostileResults) {
+      const result = runKnownFailureProbes(register, {
+        repoRoot,
+        packedManifest: ownershipLedgerPath,
+        ledgerResolver,
+        spawnSync: () => hostile,
+      });
+      expect(result.pass).toBe(false);
+      expect(result.results.some((item) => item.status === 'xfail')).toBe(false);
+      expect(result.results.filter((item) => item.status === 'infrastructure-error')).toHaveLength(
+        2,
+      );
+    }
+
+    const ledgerFailure = runKnownFailureProbes(register, {
       repoRoot,
-      packedManifest: 'fixture-packed-manifest.json',
-      ledgerResolver,
-      spawnSync: () => processResult(2),
+      packedManifest: ownershipLedgerPath,
+      ledgerResolver: () => null,
+      spawnSync: () => {
+        throw new Error('must not execute');
+      },
     });
-    expect(result.pass).toBe(false);
-    expect(result.results.filter((item) => item.status === 'infrastructure-error')).toEqual([
-      expect.objectContaining({ id: 'KF-DEVEX-003' }),
-      expect.objectContaining({ id: 'KF-DEVEX-004' }),
-    ]);
+    expect(ledgerFailure).toMatchObject({ pass: false, results: [], schemaValid: false });
+  });
+
+  it('executes retired rows as ordinary passing regressions and turns recurrence red', () => {
+    const retired = structuredClone(register);
+    retired.entries[2].state = 'retired';
+    retired.entries[2].retirement = {
+      evidence: 'The packed help contract now passes on the release artifact.',
+      verification: 'pnpm test:packed-help',
+    };
+    const executed = [];
+    const passing = runKnownFailureProbes(retired, {
+      repoRoot,
+      packedManifest: ownershipLedgerPath,
+      ledgerResolver,
+      spawnSync: (_executable, args) => {
+        const id = commandId(args);
+        executed.push(id);
+        return processResult(id, id === 'KF-DEVEX-003' ? 'desired-behavior' : 'defect-reproduced');
+      },
+    });
+    expect(executed).toContain('KF-DEVEX-003');
+    expect(passing.results).toContainEqual({
+      id: 'KF-DEVEX-003',
+      status: 'retired-pass',
+    });
+
+    const regression = runKnownFailureProbes(retired, {
+      repoRoot,
+      packedManifest: ownershipLedgerPath,
+      ledgerResolver,
+      spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
+    });
+    expect(regression.pass).toBe(false);
+    expect(regression.results).toContainEqual({
+      id: 'KF-DEVEX-003',
+      status: 'retired-regression',
+    });
+  });
+
+  it('classifies empty-check only for the exact missing-graph contract, never generic failures', () => {
+    expect(
+      packedCliContractOutcome('empty-check', {
+        status: 1,
+        signal: null,
+        error: null,
+        stdout: '',
+        stderr: 'kovo: graph input is required when no explicit artifact exists',
+      }),
+    ).toBe('desired-behavior');
+    for (const stderr of [
+      'Usage: kovo check <graph>',
+      'unknown command check',
+      'ERR_MODULE_NOT_FOUND',
+      'permission denied',
+    ]) {
+      expect(
+        packedCliContractOutcome('empty-check', {
+          status: 1,
+          signal: null,
+          error: null,
+          stdout: '',
+          stderr,
+        }),
+      ).toBeNull();
+    }
+    expect(
+      packedCliContractOutcome('empty-check', {
+        status: 0,
+        signal: null,
+        error: null,
+        stdout: 'kovo-check/v1\nOK\n',
+        stderr: '',
+      }),
+    ).toBe('defect-reproduced');
   });
 });
 
@@ -214,12 +380,30 @@ function validateRegister(value) {
   return validateKnownFailureRegister(value, { repoRoot, ledgerResolver });
 }
 
-function processResult(status) {
+function commandId(args) {
+  return args[args.indexOf('--id') + 1];
+}
+
+function processResult(id, outcome, overrides = {}) {
+  const status =
+    outcome === 'desired-behavior'
+      ? DESIRED_BEHAVIOR_EXIT_CODE
+      : outcome === 'defect-reproduced'
+        ? REPRODUCED_DEFECT_EXIT_CODE
+        : INFRASTRUCTURE_ERROR_EXIT_CODE;
   return {
     status,
     signal: null,
     error: null,
-    stdout: '',
-    stderr: status === 1 ? 'reproduced' : status === 2 ? 'infrastructure' : '',
+    stdout:
+      id && outcome
+        ? `${JSON.stringify({
+            schema: KNOWN_FAILURE_PROBE_RESULT_SCHEMA,
+            id,
+            outcome,
+          })}\n`
+        : '',
+    stderr: '',
+    ...overrides,
   };
 }

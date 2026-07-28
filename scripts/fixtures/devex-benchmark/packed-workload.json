@@ -1,0 +1,44 @@
+{
+  "schema": "kovo-devex-packed-workload/v1",
+  "profile": {
+    "id": "kovo-packed-check/v1",
+    "commandDigest": "sha256:c5e75a95455141399414f4784c0ecc2cf6b64dc2d1674b7725b44b34cb1acbd0"
+  },
+  "entrypoint": "profile.mjs",
+  "artifacts": [
+    {
+      "name": "@fixture/kovo-packed-benchmark",
+      "role": "consumer",
+      "path": "packed-fixture.tgz",
+      "sha256": "sha256:e102fd10e63a4393cd62f0a4375272604c09bcb016b2f43c5c8bf31742513aa7",
+      "files": [
+        {
+          "path": "bootstrap-a.mjs",
+          "sha256": "sha256:4c9a2a851c102d1e1fe2ebb20defb6a0332b9b5c431a0fd644fe21712c412c6a",
+          "executable": false
+        },
+        {
+          "path": "bootstrap-b.css",
+          "sha256": "sha256:25e8ca1220810764d6705aee5efae670904cb0a8b56059f49b6e7d0659662a8f",
+          "executable": false
+        },
+        {
+          "path": "package.json",
+          "sha256": "sha256:dde8ed77ccb6c7be7ba2e1f039510e371ba1ecc4c05be0ee16389819bbb1c0ce",
+          "executable": false
+        },
+        {
+          "path": "profile.mjs",
+          "sha256": "sha256:3fb432a8f1240a1045457d8f9cd2f5766751f98dd1c49155b7261740e5a2fe7e",
+          "executable": false
+        },
+        {
+          "path": "workload.json",
+          "sha256": "sha256:dc17335af2b2163ddc6d068d58b54c83c73e7ae1d4c9367b2c0d2f07aecb0832",
+          "executable": false
+        }
+      ]
+    }
+  ],
+  "browserBootstrap": ["bootstrap-a.mjs", "bootstrap-b.css"]
+}

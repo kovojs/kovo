@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
+  DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
   benchmarkScenarioDigest,
+  browserBootstrapBytes,
   createRunnerFingerprint,
   evaluateBudgets,
   median,
@@ -21,9 +25,17 @@ const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = fileURLToPath(new URL('./fixtures/devex-benchmark/', import.meta.url));
 const scenario = JSON.parse(readFileSync(path.join(fixtureRoot, 'scenario.json'), 'utf8'));
 const budgets = JSON.parse(readFileSync(path.join(repoRoot, 'devex-budgets.json'), 'utf8'));
+const kovoScenarioRecipe = JSON.parse(
+  readFileSync(path.join(repoRoot, 'scripts/devex-scenarios/kovo-packed-check.json'), 'utf8'),
+);
+const kovoPackedProfileSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/profile.mjs'),
+  'utf8',
+);
 const observedEnvironment = {
   ...scenario.environment,
   sourceCommit: scenario.provenance.sourceCommit,
+  sourceTree: 'clean',
 };
 
 describe('DevEx benchmark foundation', () => {
@@ -44,7 +56,15 @@ describe('DevEx benchmark foundation', () => {
       root: fixtureRoot,
       samples: 5,
       observedEnvironment,
-      measure(_command, context) {
+      measure(command, context) {
+        expect(command).toEqual(['node', 'profile.mjs', context.phase]);
+        expect(path.basename(context.cwd)).toMatch(/^kovo-devex-benchmark-/u);
+        expect(readFileSync(path.join(context.cwd, 'profile.mjs'), 'utf8')).toContain(
+          'kovo-check-input',
+        );
+        expect(
+          JSON.parse(readFileSync(path.join(context.cwd, 'package.json'), 'utf8')),
+        ).toMatchObject({ name: '@fixture/kovo-packed-benchmark' });
         const base = phaseValues[context.phase];
         return {
           ...base,
@@ -65,9 +85,13 @@ describe('DevEx benchmark foundation', () => {
     });
     expect(report.provenance).toEqual({
       sourceCommit: scenario.provenance.sourceCommit,
+      sourceTree: 'clean',
       packageManager: scenario.environment.packageManager,
       osImage: scenario.environment.osImage,
+      workloadManifest: scenario.provenance.workloadManifest,
+      commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
       packedArtifacts: scenario.provenance.packedArtifacts,
+      supportFiles: scenario.provenance.supportFiles,
     });
     expect(report.runner).toMatchObject({
       platform: 'linux',
@@ -99,6 +123,14 @@ describe('DevEx benchmark foundation', () => {
         { path: 'bootstrap-b.css', bytes: 22 },
       ],
     });
+    expect(report.commands).toEqual({
+      cold: { command: ['node', 'profile.mjs', 'cold'], cwd: '.' },
+      warm: { command: ['node', 'profile.mjs', 'warm'], cwd: '.' },
+      oneFileIncremental: {
+        command: ['node', 'profile.mjs', 'oneFileIncremental'],
+        cwd: '.',
+      },
+    });
   });
 
   it('refuses forged source and packed-artifact provenance before measuring', () => {
@@ -124,7 +156,79 @@ describe('DevEx benchmark foundation', () => {
           throw new Error('measurement must not start');
         },
       }),
-    ).toThrow('packed artifact digest mismatch');
+    ).toThrow('workload manifest artifacts do not match scenario provenance');
+
+    const dirtySource = structuredClone(observedEnvironment);
+    dirtySource.sourceTree = 'dirty';
+    expect(() =>
+      runBenchmarkScenario(scenario, {
+        root: fixtureRoot,
+        observedEnvironment: dirtySource,
+        measure: () => {
+          throw new Error('measurement must not start');
+        },
+      }),
+    ).toThrow('observedEnvironment.sourceTree must be clean');
+  });
+
+  it('authenticates, parses, and unpacks a canonical tarball instead of accepting decoy bytes', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-benchmark-decoy-'));
+    const copiedFixture = path.join(temporaryRoot, 'fixture');
+    try {
+      cpSync(fixtureRoot, copiedFixture, { recursive: true });
+      const tarballPath = path.join(copiedFixture, 'packed-fixture.tgz');
+      const decoy = Buffer.from('not a tarball');
+      writeFileSync(tarballPath, decoy);
+      const decoyDigest = digest(decoy);
+      const manifestPath = path.join(copiedFixture, 'packed-workload.json');
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      manifest.artifacts[0].sha256 = decoyDigest;
+      const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+      writeFileSync(manifestPath, manifestBytes);
+      const decoyScenario = structuredClone(scenario);
+      decoyScenario.provenance.packedArtifacts[0].sha256 = decoyDigest;
+      decoyScenario.provenance.workloadManifest.sha256 = digest(manifestBytes);
+
+      expect(() =>
+        runBenchmarkScenario(decoyScenario, {
+          root: copiedFixture,
+          observedEnvironment,
+          measure: () => {
+            throw new Error('measurement must not start');
+          },
+        }),
+      ).toThrow('invalid canonical package tarball');
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('executes every code-owned profile from the unpacked consumer', () => {
+    const report = runBenchmarkScenario(scenario, {
+      root: fixtureRoot,
+      samples: 1,
+      observedEnvironment,
+    });
+    for (const phase of ['cold', 'warm', 'oneFileIncremental']) {
+      expect(report.metrics[`check.${phase}.durationMs`].samples).toHaveLength(1);
+      expect(report.metrics[`check.${phase}.durationMs`].samples[0]).toBeGreaterThan(0);
+    }
+  });
+
+  it('ships a real Kovo packed-check recipe whose profile invokes only the staged CLI', () => {
+    expect(kovoScenarioRecipe).toEqual({
+      schema: 'kovo-devex-scenario-recipe/v1',
+      name: 'kovo-packed-check',
+      profile: 'kovo-packed-check/v1',
+      packedReleaseManifest: '.release/packed-packages.json',
+      consumerSource: 'scripts/devex-workloads/kovo-packed-check/package',
+      output: '.release/devex-kovo-packed-scenario.json',
+    });
+    expect(kovoPackedProfileSource).toContain(
+      "path.resolve('node_modules/@kovojs/cli/dist/bin.mjs')",
+    );
+    expect(kovoPackedProfileSource).not.toContain('packages/cli');
+    expect(kovoPackedProfileSource).not.toContain('workspace:');
   });
 
   it('keeps every provisional budget non-binding before baseline ratification', () => {
@@ -133,6 +237,48 @@ describe('DevEx benchmark foundation', () => {
       true,
     );
     expect(budgets.runner.status).toBe('unratified');
+  });
+
+  it('represents deterministic documentation snapshot sizes without inventing thresholds', () => {
+    for (const metricId of ['docs.snapshot.compressedBytes', 'docs.snapshot.installedBytes']) {
+      expect(budgets.metrics[metricId]).toEqual({
+        unit: 'bytes',
+        direction: 'max',
+        sampling: 'deterministic',
+        provisionalTarget: null,
+        ratification: null,
+      });
+    }
+  });
+
+  it('rejects bootstrap traversal, direct symlinks, and symlink-parent escapes', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-bootstrap-boundary-'));
+    const scenarioRoot = path.join(temporaryRoot, 'scenario');
+    const outsideRoot = path.join(temporaryRoot, 'outside');
+    try {
+      cpSync(fixtureRoot, scenarioRoot, { recursive: true });
+      cpSync(path.join(fixtureRoot, 'package'), outsideRoot, { recursive: true });
+      symlinkSync(
+        path.join(outsideRoot, 'bootstrap-a.mjs'),
+        path.join(scenarioRoot, 'linked-bootstrap.mjs'),
+      );
+      symlinkSync(outsideRoot, path.join(scenarioRoot, 'linked-parent'), 'dir');
+
+      expect(() =>
+        browserBootstrapBytes(['../outside/bootstrap-a.mjs'], { root: scenarioRoot }),
+      ).toThrow('must be a canonical relative path');
+      expect(() =>
+        browserBootstrapBytes(['linked-parent\\bootstrap-a.mjs'], { root: scenarioRoot }),
+      ).toThrow('must be a canonical relative path');
+      expect(() => browserBootstrapBytes(['linked-bootstrap.mjs'], { root: scenarioRoot })).toThrow(
+        'regular non-symlink',
+      );
+      expect(() =>
+        browserBootstrapBytes(['linked-parent/bootstrap-a.mjs'], { root: scenarioRoot }),
+      ).toThrow('resolves outside its root');
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
   });
 
   it('requires at least five statistical samples and validates the runner block', () => {
@@ -228,7 +374,7 @@ describe('DevEx benchmark foundation', () => {
         budgets,
         report,
         {
-          schema: 'kovo-devex-budget-proposal/v2',
+          schema: 'kovo-devex-budget-proposal/v3',
           runnerFingerprint: report.runner,
           metrics: {
             'check.cold.durationMs': {
@@ -248,7 +394,7 @@ describe('DevEx benchmark foundation', () => {
       'check.cold.durationMs': [100, 101, 102, 103, 104],
     });
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v2',
+      schema: 'kovo-devex-budget-proposal/v3',
       runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
@@ -307,16 +453,16 @@ describe('DevEx benchmark foundation', () => {
       },
     });
     const cheapScenario = structuredClone(scenario);
-    cheapScenario.phases.cold.command = ['node', '-e', 'void 0'];
+    cheapScenario.phases = {
+      cold: { command: ['node', '-e', 'void 0'], cwd: '../../outside' },
+    };
     const cheapReport = benchmarkReport(
       { 'check.cold.durationMs': [1, 1, 1, 1, 1] },
       { definition: cheapScenario },
     );
-    const cheapEvaluation = evaluateBudgets(ratified, cheapReport, validationOptions);
-    expect(cheapEvaluation.pass).toBe(false);
-    expect(
-      cheapEvaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
-    ).toMatchObject({ status: 'scenario-mismatch' });
+    expect(() => evaluateBudgets(ratified, cheapReport, validationOptions)).toThrow(
+      'report.scenario.phases is not part of the packed benchmark contract',
+    );
 
     const forged = benchmarkReport({
       'check.cold.durationMs': [90, 91, 92, 93, 94],
@@ -416,9 +562,13 @@ function benchmarkReport(metricSamples, options = {}) {
     },
     provenance: {
       sourceCommit: definition.provenance.sourceCommit,
+      sourceTree: definition.provenance.sourceTree,
       packageManager: definition.environment.packageManager,
       osImage: definition.environment.osImage,
+      workloadManifest: structuredClone(definition.provenance.workloadManifest),
+      commandDigest: definition.profile.commandDigest,
       packedArtifacts: structuredClone(definition.provenance.packedArtifacts),
+      supportFiles: structuredClone(definition.provenance.supportFiles),
     },
     runner: createRunnerFingerprint({
       name: runnerEnvironment.runnerName,
@@ -430,15 +580,14 @@ function benchmarkReport(metricSamples, options = {}) {
       osImage: runnerEnvironment.osImage,
     }),
     sampleCount: Math.max(...Object.values(metricSamples).map((samples) => samples.length)),
-    commands: Object.fromEntries(
-      ['cold', 'warm', 'oneFileIncremental'].map((phase) => [
-        phase,
-        {
-          command: [...definition.phases[phase].command],
-          cwd: definition.phases[phase].cwd ?? '.',
-        },
-      ]),
-    ),
+    commands: {
+      cold: { command: ['node', 'profile.mjs', 'cold'], cwd: '.' },
+      warm: { command: ['node', 'profile.mjs', 'warm'], cwd: '.' },
+      oneFileIncremental: {
+        command: ['node', 'profile.mjs', 'oneFileIncremental'],
+        cwd: '.',
+      },
+    },
     metrics: Object.fromEntries(
       Object.entries(metricSamples).map(([metric, samples]) => [
         metric,
@@ -466,7 +615,7 @@ function ratifyFixtureBudgets(report, metrics) {
       budgets,
       report,
       {
-        schema: 'kovo-devex-budget-proposal/v2',
+        schema: 'kovo-devex-budget-proposal/v3',
         runnerFingerprint: report.runner,
         metrics,
       },
@@ -474,4 +623,8 @@ function ratifyFixtureBudgets(report, metrics) {
     ),
     validationOptions: source.validationOptions,
   };
+}
+
+function digest(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }

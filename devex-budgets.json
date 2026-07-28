@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budgets/v2",
+  "schema": "kovo-devex-budgets/v3",
   "runner": {
     "status": "unratified",
     "fingerprint": null
@@ -58,6 +58,20 @@
       "ratification": null
     },
     "browser.bootstrapBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "docs.snapshot.compressedBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "docs.snapshot.installedBytes": {
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
