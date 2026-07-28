@@ -148,21 +148,55 @@ export async function measureTypeContracts(
   for (const variant of measuredVariants) {
     diagnostics[variant] = await diagnosticEvidence(variants[variant], criteria);
   }
+  const architecture = arch();
+  const cpuModel = cpus()[0]?.model ?? 'unknown';
+  const nodeVersion = process.version;
+  const operatingSystem = `${platform()} ${release()}`;
+  const typescriptVersion = ts.version;
   return {
     declarationInputs,
     diagnostics,
     measurements: measured.measurements,
     runner: {
-      architecture: arch(),
-      cpuModel: cpus()[0]?.model ?? 'unknown',
-      nodeVersion: process.version,
-      operatingSystem: `${platform()} ${release()}`,
-      runnerName: 'apple-m4-darwin-arm64-node24-ts6-d1-v6',
+      architecture,
+      cpuModel,
+      nodeVersion,
+      operatingSystem,
+      runnerName: measuredRunnerName({
+        architecture,
+        cpuModel,
+        nodeVersion,
+        operatingSystem,
+        typescriptVersion,
+      }),
       schema: 'kovo.app-contract-d1-runner/v1',
-      typescriptVersion: ts.version,
+      typescriptVersion,
     },
     schedules: measured.schedules,
   };
+}
+
+function measuredRunnerName(metadata: {
+  readonly architecture: string;
+  readonly cpuModel: string;
+  readonly nodeVersion: string;
+  readonly operatingSystem: string;
+  readonly typescriptVersion: string;
+}): string {
+  const slug = (value: string): string =>
+    value
+      .toLowerCase()
+      .replace(/^v/u, '')
+      .replace(/[^a-z0-9]+/gu, '-')
+      .replace(/^-|-$/gu, '');
+  return [
+    slug(metadata.cpuModel),
+    slug(metadata.operatingSystem.split(/\s/u, 1)[0] ?? ''),
+    slug(metadata.architecture),
+    `node${metadata.nodeVersion.replace(/^v/u, '').split('.')[0] ?? ''}`,
+    `ts${metadata.typescriptVersion.split('.')[0] ?? ''}`,
+    'd1-v6',
+  ].join('-');
 }
 
 async function declarationInputEvidence(
