@@ -230,7 +230,10 @@ function tsProgram(repoRoot, files) {
       options = {
         ...options,
         ...parsed.options,
+        composite: false,
+        incremental: false,
         noEmit: true,
+        tsBuildInfoFile: undefined,
       };
     }
   }
@@ -240,6 +243,7 @@ function tsProgram(repoRoot, files) {
     ...program.getOptionsDiagnostics(),
     ...program.getGlobalDiagnostics(),
     ...program.getSyntacticDiagnostics(),
+    ...program.getSemanticDiagnostics(),
   ]) {
     diagnostics.push(diagnosticFinding(diagnostic, repoRoot, 'TypeScript program diagnostic'));
   }
@@ -486,6 +490,7 @@ function consumerImports(file, publicSpecifiers, repoRoot) {
         diagnosticFinding(diagnostic, repoRoot, 'TypeScript consumer parse diagnostic'),
       );
   const namespaceBindings = new Map();
+  const bindingCounts = new Map();
 
   function add(specifier, symbol) {
     const matched = publicSpecifier(specifier, publicSpecifiers);
@@ -499,6 +504,49 @@ function consumerImports(file, publicSpecifiers, repoRoot) {
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'require'
       ? node.arguments[0].text
+      : null;
+  }
+
+  function isConstDeclaration(node) {
+    return (
+      ts.isVariableDeclaration(node) &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) !== 0
+    );
+  }
+
+  function countBindingName(name) {
+    if (ts.isIdentifier(name)) {
+      bindingCounts.set(name.text, (bindingCounts.get(name.text) ?? 0) + 1);
+      return;
+    }
+    if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+      for (const element of name.elements) {
+        if (ts.isBindingElement(element)) countBindingName(element.name);
+      }
+    }
+  }
+
+  function countBindings(node) {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      countBindingName(node.name);
+    } else if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isClassDeclaration(node) ||
+        ts.isImportClause(node) ||
+        ts.isNamespaceImport(node) ||
+        ts.isImportSpecifier(node)) &&
+      node.name
+    ) {
+      countBindingName(node.name);
+    }
+    ts.forEachChild(node, countBindings);
+  }
+  countBindings(sourceFile);
+
+  function namespaceSpecifier(identifier) {
+    return bindingCounts.get(identifier.text) === 1
+      ? (namespaceBindings.get(identifier.text) ?? null)
       : null;
   }
 
@@ -516,7 +564,9 @@ function consumerImports(file, publicSpecifiers, repoRoot) {
           add(specifier, element.propertyName?.text ?? element.name.text);
         }
       } else if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
-        namespaceBindings.set(clause.namedBindings.name.text, specifier);
+        if (bindingCounts.get(clause.namedBindings.name.text) === 1) {
+          namespaceBindings.set(clause.namedBindings.name.text, specifier);
+        }
         add(specifier, ENTRYPOINT_EVIDENCE);
       }
     }
@@ -541,25 +591,46 @@ function consumerImports(file, publicSpecifiers, repoRoot) {
 
   function visit(node) {
     if (
+      isConstDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      requiredSpecifier(node.initializer) !== null
+    ) {
+      const specifier = requiredSpecifier(node.initializer);
+      if (bindingCounts.get(node.name.text) === 1) {
+        namespaceBindings.set(node.name.text, specifier);
+      }
+      add(specifier, ENTRYPOINT_EVIDENCE);
+    } else if (
+      isConstDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isIdentifier(node.initializer) &&
+      namespaceSpecifier(node.initializer) !== null
+    ) {
+      if (bindingCounts.get(node.name.text) === 1) {
+        namespaceBindings.set(node.name.text, namespaceSpecifier(node.initializer));
+      }
+    } else if (
       ts.isPropertyAccessExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      namespaceBindings.has(node.expression.text)
+      namespaceSpecifier(node.expression) !== null
     ) {
-      add(namespaceBindings.get(node.expression.text), node.name.text);
+      add(namespaceSpecifier(node.expression), node.name.text);
     } else if (
       ts.isQualifiedName(node) &&
       ts.isIdentifier(node.left) &&
-      namespaceBindings.has(node.left.text)
+      namespaceSpecifier(node.left) !== null
     ) {
-      add(namespaceBindings.get(node.left.text), node.right.text);
+      add(namespaceSpecifier(node.left), node.right.text);
     } else if (
       ts.isElementAccessExpression(node) &&
       ts.isIdentifier(node.expression) &&
-      namespaceBindings.has(node.expression.text) &&
+      namespaceSpecifier(node.expression) !== null &&
       node.argumentExpression &&
       ts.isStringLiteral(node.argumentExpression)
     ) {
-      add(namespaceBindings.get(node.expression.text), node.argumentExpression.text);
+      add(namespaceSpecifier(node.expression), node.argumentExpression.text);
     } else if (ts.isPropertyAccessExpression(node) && requiredSpecifier(node.expression) !== null) {
       add(requiredSpecifier(node.expression), node.name.text);
     } else if (
@@ -579,20 +650,22 @@ function consumerImports(file, publicSpecifiers, repoRoot) {
       add(node.arguments[0].text, ENTRYPOINT_EVIDENCE);
     } else if (
       ts.isVariableDeclaration(node) &&
+      isConstDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
       node.initializer &&
       ts.isIdentifier(node.initializer) &&
-      namespaceBindings.has(node.initializer.text)
+      namespaceSpecifier(node.initializer) !== null
     ) {
       for (const element of node.name.elements) {
         if (element.dotDotDotToken) continue;
         const importedName = element.propertyName ?? element.name;
         if (ts.isIdentifier(importedName) || ts.isStringLiteral(importedName)) {
-          add(namespaceBindings.get(node.initializer.text), importedName.text);
+          add(namespaceSpecifier(node.initializer), importedName.text);
         }
       }
     } else if (
       ts.isVariableDeclaration(node) &&
+      isConstDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
       node.initializer &&
       requiredSpecifier(node.initializer) !== null

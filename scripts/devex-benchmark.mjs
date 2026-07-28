@@ -24,6 +24,11 @@ import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
+import {
+  ensureNonSymlinkDescendantDirectory,
+  nonSymlinkDescendant,
+  nonSymlinkRootDirectory,
+} from './lib/non-symlink-path.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
 import {
@@ -42,6 +47,7 @@ export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
 const PACKED_PROFILE_ID = 'kovo-packed-check/v1';
+const KOVO_FRESH_PACK_PRODUCER_ID = 'kovo-clean-source-pack/v1';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
@@ -490,18 +496,7 @@ function resolveInsideRoot(root, relative, label) {
 }
 
 function regularFileInsideRoot(root, relative, label) {
-  const absolute = resolveInsideRoot(root, relative, label);
-  if (!existsSync(absolute)) throw new Error(`${label} is missing: ${relative}`);
-  const fileStat = lstatSync(absolute);
-  if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
-    throw new Error(`${label} must be a regular non-symlink file: ${relative}`);
-  }
-  const realRoot = realpathSync(root);
-  const realFile = realpathSync(absolute);
-  if (!realFile.startsWith(`${realRoot}${path.sep}`)) {
-    throw new Error(`${label} resolves outside its root: ${relative}`);
-  }
-  return absolute;
+  return nonSymlinkDescendant(root, relative, { kind: 'file', label });
 }
 
 export function browserBootstrapBytes(files, options = {}) {
@@ -708,7 +703,12 @@ function declaredDependencyNames(manifest) {
 
 function linkDeclaredExternalDependencies(stageRoot, repositoryRoot, packedNames, packedManifests) {
   const nodeModules = path.join(stageRoot, 'node_modules');
-  const sourcePackages = new Map(releasePackages().map((pkg) => [pkg.name, pkg.dirPath]));
+  const sourcePackages = new Map(
+    releasePackages().map((pkg) => [
+      pkg.name,
+      path.join(repositoryRoot, path.relative(defaultRepoRoot, pkg.dirPath)),
+    ]),
+  );
   for (const { manifest, name } of packedManifests) {
     for (const dependencyName of declaredDependencyNames(manifest)) {
       if (packedNames.has(dependencyName)) continue;
@@ -799,19 +799,11 @@ function stagePackedWorkload(scenario, root, repositoryRoot) {
 }
 
 function commandCwdInsideStage(stageRoot, relative) {
-  if (relative === '.') return stageRoot;
-  const cwd = resolveInsideRoot(stageRoot, relative, 'benchmark command cwd');
-  if (!existsSync(cwd) || !lstatSync(cwd).isDirectory() || lstatSync(cwd).isSymbolicLink()) {
-    throw new Error(
-      `benchmark command cwd must be a regular directory inside the stage: ${relative}`,
-    );
-  }
-  const realStage = realpathSync(stageRoot);
-  const realCwd = realpathSync(cwd);
-  if (realCwd !== realStage && !realCwd.startsWith(`${realStage}${path.sep}`)) {
-    throw new Error(`benchmark command cwd resolves outside the stage: ${relative}`);
-  }
-  return cwd;
+  if (relative === '.') return nonSymlinkRootDirectory(stageRoot, 'benchmark command cwd');
+  return nonSymlinkDescendant(stageRoot, relative, {
+    kind: 'directory',
+    label: 'benchmark command cwd',
+  });
 }
 
 /**
@@ -822,6 +814,11 @@ export function runBenchmarkScenario(scenario, options = {}) {
   const findings = validateBenchmarkScenario(scenario);
   if (findings.length > 0)
     throw new Error(`Invalid benchmark scenario:\n- ${findings.join('\n- ')}`);
+  if (scenario.name !== 'kovo-packed-check' && options.allowFixtureScenario !== true) {
+    throw new Error(
+      'production benchmark measurement accepts only the code-owned fresh Kovo scenario',
+    );
+  }
   const samples = options.samples ?? 5;
   if (!Number.isInteger(samples) || samples <= 0) {
     throw new Error('samples must be a positive integer');
@@ -835,8 +832,26 @@ export function runBenchmarkScenario(scenario, options = {}) {
     );
   }
   const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
-  const staged = stagePackedWorkload(scenario, root, repositoryRoot);
+  let acquired = null;
+  let staged = null;
   try {
+    let executionScenario = scenario;
+    let executionRoot = root;
+    let executionRepositoryRoot = repositoryRoot;
+    if (scenario.name === 'kovo-packed-check') {
+      const acquire = options.acquireFreshKovoScenario ?? acquireFreshKovoScenario;
+      acquired = acquire(observedEnvironment, { repositoryRoot });
+      validateFreshKovoScenario(acquired, observedEnvironment);
+      if (!sameJson(scenario, acquired.scenario)) {
+        throw new Error(
+          'Kovo benchmark scenario does not match artifacts freshly produced from the exact clean source revision',
+        );
+      }
+      executionScenario = acquired.scenario;
+      executionRoot = acquired.root;
+      executionRepositoryRoot = acquired.repositoryRoot;
+    }
+    staged = stagePackedWorkload(executionScenario, executionRoot, executionRepositoryRoot);
     const measure = options.measure ?? ((command, context) => measureCommand(command, context));
     const metrics = {};
     const commands = expectedScenarioCommands();
@@ -917,7 +932,8 @@ export function runBenchmarkScenario(scenario, options = {}) {
       metrics,
     };
   } finally {
-    rmSync(staged.stageRoot, { recursive: true, force: true });
+    if (staged !== null) rmSync(staged.stageRoot, { recursive: true, force: true });
+    if (acquired !== null) acquired.dispose();
   }
 }
 
@@ -1544,41 +1560,186 @@ function workloadArtifact(name, role, artifactPath, compressed) {
   };
 }
 
-/**
- * Materialize the code-owned real Kovo scenario from the authenticated release tarballs.
- * The generated files live below `.release/` and remain unratified until separately measured.
- */
-export function prepareKovoPackedScenario(options = {}) {
-  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
-  const recipePath = path.join(repositoryRoot, KOVO_PACKED_RECIPE_PATH);
-  const recipe = readJson(recipePath);
+function readKovoScenarioRecipe(repositoryRoot) {
+  const recipe = readJson(path.join(repositoryRoot, KOVO_PACKED_RECIPE_PATH));
   if (
     recipe.schema !== DEVEX_SCENARIO_RECIPE_SCHEMA ||
     recipe.name !== 'kovo-packed-check' ||
     recipe.profile !== PACKED_PROFILE_ID ||
-    recipe.packedReleaseManifest !== '.release/packed-packages.json' ||
+    recipe.producer !== KOVO_FRESH_PACK_PRODUCER_ID ||
     recipe.consumerSource !== 'scripts/devex-workloads/kovo-packed-check/package' ||
-    recipe.output !== '.release/devex-kovo-packed-scenario.json'
+    recipe.output !== '.release/devex/kovo-packed-scenario.json' ||
+    Object.hasOwn(recipe, 'packedReleaseManifest')
   ) {
     throw new Error(`${KOVO_PACKED_RECIPE_PATH} does not match the code-owned Kovo scenario`);
   }
+  return recipe;
+}
 
+function producerCommand(spawn, executable, args, cwd, label, env = process.env) {
+  const result = spawn(executable, args, {
+    cwd,
+    encoding: 'utf8',
+    env,
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0 || result.signal || result.error) {
+    throw new Error(
+      `${label} failed: ${
+        result.error?.message ??
+        result.signal ??
+        result.stderr?.trim() ??
+        `exit ${String(result.status)}`
+      }`,
+    );
+  }
+  return result.stdout.trim();
+}
+
+/**
+ * Build the public tarballs in a detached worktree at the exact clean source revision. The fixed
+ * producer performs a frozen offline install and the code-owned publish build; no mutable ignored
+ * `.release` input from the caller's worktree participates in the result.
+ */
+export function produceFreshKovoPackedRelease(options = {}) {
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const repositoryHead = checkedCommandOutput('git', ['rev-parse', 'HEAD'], repositoryRoot);
+  const sourceCommit = options.sourceCommit ?? repositoryHead;
+  if (!validGitObjectId(sourceCommit))
+    throw new Error('fresh pack producer requires an exact HEAD');
+  if (sourceCommit !== repositoryHead) {
+    throw new Error('fresh pack producer source revision must equal the repository HEAD');
+  }
+  const sourceChanges = checkedCommandOutput(
+    'git',
+    ['status', '--porcelain=v1', '--untracked-files=all'],
+    repositoryRoot,
+  );
+  if (sourceChanges !== '') {
+    throw new Error('fresh pack producer requires a clean source revision');
+  }
+  const spawn = options.spawnSync ?? spawnSync;
+  const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-clean-source-pack-'));
+  const sourceRoot = path.join(temporaryRoot, 'source');
+  let attached = false;
+  let disposed = false;
+
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    let removalError = null;
+    if (attached) {
+      const result = spawn('git', ['worktree', 'remove', '--force', sourceRoot], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status !== 0 || result.signal || result.error) {
+        removalError = new Error(
+          `fresh pack worktree cleanup failed: ${
+            result.error?.message ??
+            result.signal ??
+            result.stderr?.trim() ??
+            `exit ${String(result.status)}`
+          }`,
+        );
+      }
+    }
+    rmSync(temporaryRoot, { recursive: true, force: true });
+    if (removalError) throw removalError;
+  }
+
+  try {
+    producerCommand(
+      spawn,
+      'git',
+      ['worktree', 'add', '--detach', sourceRoot, sourceCommit],
+      repositoryRoot,
+      'fresh pack worktree checkout',
+    );
+    attached = true;
+    const checkedOutCommit = producerCommand(
+      spawn,
+      'git',
+      ['rev-parse', 'HEAD'],
+      sourceRoot,
+      'fresh pack source identity',
+    );
+    if (checkedOutCommit !== sourceCommit) {
+      throw new Error('fresh pack worktree did not check out the requested source revision');
+    }
+    producerCommand(
+      spawn,
+      'pnpm',
+      ['install', '--offline', '--frozen-lockfile', '--ignore-scripts'],
+      sourceRoot,
+      'fresh pack frozen offline install',
+    );
+    producerCommand(
+      spawn,
+      'pnpm',
+      ['run', 'check:publish'],
+      sourceRoot,
+      'fresh pack code-owned publish build',
+    );
+    const trackedChanges = producerCommand(
+      spawn,
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all'],
+      sourceRoot,
+      'fresh pack source cleanliness',
+    );
+    if (trackedChanges !== '') {
+      throw new Error('fresh pack producer changed the exact source worktree');
+    }
+    regularFileInsideRoot(
+      sourceRoot,
+      '.release/packed-packages.json',
+      'fresh packed release manifest',
+    );
+    return {
+      dispose,
+      producer: KOVO_FRESH_PACK_PRODUCER_ID,
+      repositoryRoot: sourceRoot,
+      sourceCommit,
+    };
+  } catch (error) {
+    try {
+      dispose();
+    } catch (cleanupError) {
+      throw new Error(`${error.message}; ${cleanupError.message}`, { cause: error });
+    }
+    throw error;
+  }
+}
+
+function materializeFreshKovoScenario(repositoryRoot, environment) {
+  const recipe = readKovoScenarioRecipe(repositoryRoot);
   const releaseManifestPath = regularFileInsideRoot(
     repositoryRoot,
-    recipe.packedReleaseManifest,
-    'packed release manifest',
+    '.release/packed-packages.json',
+    'fresh packed release manifest',
   );
   const releaseManifest = JSON.parse(readFileSync(releaseManifestPath, 'utf8'));
   const releaseEntries = validatePackedReleaseManifest(releaseManifest, releasePackages());
-  const scenarioPath = path.join(repositoryRoot, recipe.output);
-  const outputRoot = path.dirname(scenarioPath);
-  const outputTarballs = path.join(outputRoot, 'tarballs');
-  mkdirSync(outputTarballs, { recursive: true });
+  const outputRelativeRoot = path.posix.dirname(recipe.output);
+  const outputRoot = ensureNonSymlinkDescendantDirectory(
+    repositoryRoot,
+    outputRelativeRoot,
+    'fresh Kovo scenario directory',
+  );
+  const outputTarballs = ensureNonSymlinkDescendantDirectory(
+    repositoryRoot,
+    `${outputRelativeRoot}/tarballs`,
+    'fresh Kovo artifact directory',
+  );
+  const scenarioPath = nonSymlinkOutputPath(repositoryRoot, recipe.output, 'fresh Kovo scenario');
 
   const temporaryPackRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-consumer-pack-'));
-  let consumerTarball;
   try {
-    consumerTarball = packWithoutLifecycleScripts(
+    const consumerTarball = packWithoutLifecycleScripts(
       {
         name: '@kovojs/devex-packed-check-consumer',
         version: '1.0.0',
@@ -1605,15 +1766,17 @@ export function prepareKovoPackedScenario(options = {}) {
       const tarball = regularFileInsideRoot(
         repositoryRoot,
         releaseEntry.tarball.split(path.sep).join('/'),
-        `${releaseEntry.name} release tarball`,
+        `${releaseEntry.name} fresh release tarball`,
       );
       const tarballBytes = readPackageTarballSnapshot(tarball);
       verifyPackedAttestationBytes(releaseEntry, tarballBytes);
+      const destination = path.join(outputTarballs, path.basename(tarball));
+      copyFileSync(tarball, destination);
       artifacts.push(
         workloadArtifact(
           releaseEntry.name,
           'package',
-          path.relative(outputRoot, tarball).split(path.sep).join('/'),
+          path.relative(outputRoot, destination).split(path.sep).join('/'),
           tarballBytes,
         ),
       );
@@ -1635,13 +1798,13 @@ export function prepareKovoPackedScenario(options = {}) {
         `Generated Kovo workload manifest is invalid:\n- ${manifestFindings.join('\n- ')}`,
       );
     }
-    const workloadManifestPath = path.join(outputRoot, 'devex-kovo-packed-workload.json');
+    const workloadManifestPath = nonSymlinkOutputPath(
+      outputRoot,
+      'packed-workload.json',
+      'fresh Kovo workload manifest',
+    );
     writeJson(workloadManifestPath, workloadManifest);
     const workloadManifestBytes = readFileSync(workloadManifestPath);
-    const environment = currentBenchmarkEnvironment({
-      repositoryRoot,
-      observedEnvironment: options.observedEnvironment,
-    });
     const consumer = artifacts[0];
     const scenario = {
       schema: DEVEX_BENCHMARK_SCENARIO_SCHEMA,
@@ -1678,9 +1841,120 @@ export function prepareKovoPackedScenario(options = {}) {
       );
     }
     writeJson(scenarioPath, scenario);
-    return { scenario, scenarioPath, workloadManifest, workloadManifestPath };
+    return { outputRoot, scenario, scenarioPath, workloadManifest, workloadManifestPath };
   } finally {
     rmSync(temporaryPackRoot, { recursive: true, force: true });
+  }
+}
+
+function acquireFreshKovoScenario(environment, options = {}) {
+  const produced = produceFreshKovoPackedRelease({
+    repositoryRoot: options.repositoryRoot,
+    sourceCommit: environment.sourceCommit,
+  });
+  try {
+    const materialized = materializeFreshKovoScenario(produced.repositoryRoot, environment);
+    return {
+      ...materialized,
+      dispose: produced.dispose,
+      producer: produced.producer,
+      repositoryRoot: produced.repositoryRoot,
+      root: materialized.outputRoot,
+      sourceCommit: produced.sourceCommit,
+    };
+  } catch (error) {
+    produced.dispose();
+    throw error;
+  }
+}
+
+function validateFreshKovoScenario(acquired, environment) {
+  if (
+    acquired?.producer !== KOVO_FRESH_PACK_PRODUCER_ID ||
+    acquired?.sourceCommit !== environment.sourceCommit ||
+    acquired?.scenario?.name !== 'kovo-packed-check' ||
+    typeof acquired?.dispose !== 'function'
+  ) {
+    throw new Error('fresh Kovo scenario producer returned an invalid source-bound result');
+  }
+  const findings = validateBenchmarkScenario(acquired.scenario);
+  if (findings.length > 0) {
+    throw new Error(`Fresh Kovo scenario is invalid:\n- ${findings.join('\n- ')}`);
+  }
+  nonSymlinkRootDirectory(acquired.root, 'fresh Kovo scenario');
+  nonSymlinkRootDirectory(acquired.repositoryRoot, 'fresh Kovo source');
+}
+
+function copyFreshScenarioToRepository(acquired, repositoryRoot) {
+  const recipe = readKovoScenarioRecipe(repositoryRoot);
+  const outputRelativeRoot = path.posix.dirname(recipe.output);
+  const outputRoot = ensureNonSymlinkDescendantDirectory(
+    repositoryRoot,
+    outputRelativeRoot,
+    'persisted Kovo scenario directory',
+  );
+  ensureNonSymlinkDescendantDirectory(
+    repositoryRoot,
+    `${outputRelativeRoot}/tarballs`,
+    'persisted Kovo artifact directory',
+  );
+  const outputPath = nonSymlinkOutputPath(repositoryRoot, recipe.output, 'persisted Kovo scenario');
+  for (const artifact of acquired.workloadManifest.artifacts) {
+    const source = regularFileInsideRoot(
+      acquired.root,
+      artifact.path,
+      `${artifact.name} freshly produced artifact`,
+    );
+    const destination = nonSymlinkOutputPath(
+      outputRoot,
+      artifact.path,
+      `${artifact.name} persisted output`,
+    );
+    copyFileSync(source, destination);
+  }
+  const workloadManifestPath = path.join(outputRoot, 'packed-workload.json');
+  nonSymlinkOutputPath(outputRoot, 'packed-workload.json', 'persisted Kovo workload manifest');
+  copyFileSync(acquired.workloadManifestPath, workloadManifestPath);
+  writeJson(outputPath, acquired.scenario);
+  return {
+    scenario: acquired.scenario,
+    scenarioPath: outputPath,
+    workloadManifest: acquired.workloadManifest,
+    workloadManifestPath,
+  };
+}
+
+function nonSymlinkOutputPath(root, relative, label) {
+  const parent = path.posix.dirname(relative);
+  if (parent !== '.') ensureNonSymlinkDescendantDirectory(root, parent, `${label} parent`);
+  const absolute = resolveInsideRoot(root, relative, label);
+  if (existsSync(absolute)) {
+    const stat = lstatSync(absolute);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error(`${label} must be a regular non-symlink output file`);
+    }
+  }
+  return absolute;
+}
+
+/**
+ * Produce and persist a convenience copy of the real scenario. Measurement never trusts this
+ * ignored copy: every run independently reproduces the exact clean-source artifacts and compares
+ * the supplied definition before executing from the fresh worktree.
+ */
+export function prepareKovoPackedScenario(options = {}) {
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const environment = currentBenchmarkEnvironment({
+    repositoryRoot,
+    observedEnvironment: options.observedEnvironment,
+  });
+  const acquire = options.acquireFreshKovoScenario ?? acquireFreshKovoScenario;
+  const acquired = acquire(environment, { repositoryRoot });
+  try {
+    validateFreshKovoScenario(acquired, environment);
+    return copyFreshScenarioToRepository(acquired, repositoryRoot);
+  } finally {
+    acquired.dispose();
   }
 }
 
@@ -1762,16 +2036,15 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     const baselinePath = path.resolve(args.baseline);
     const relativeBaselinePath = path.relative(budgetsRoot, baselinePath);
     const baselineBytes = readFileSync(baselinePath);
-    const updated = ratifyBudgets(
-      budgets,
-      JSON.parse(baselineBytes.toString('utf8')),
-      readJson(path.resolve(args.proposal)),
-      {
-        baselineReportPath: relativeBaselinePath,
-        baselineReportBytes: baselineBytes,
-        repoRoot: budgetsRoot,
-      },
-    );
+    const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
+    if (baselineReport?.scenario?.name !== 'kovo-packed-check') {
+      throw new Error('production ratification accepts only the code-owned fresh Kovo scenario');
+    }
+    const updated = ratifyBudgets(budgets, baselineReport, readJson(path.resolve(args.proposal)), {
+      baselineReportPath: relativeBaselinePath,
+      baselineReportBytes: baselineBytes,
+      repoRoot: budgetsRoot,
+    });
     if (args.write) writeJson(args.budgets, updated);
     else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
     return 0;

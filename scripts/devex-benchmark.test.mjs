@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +28,8 @@ import {
   runBenchmarkScenario,
   validateBudgets,
 } from './devex-benchmark.mjs';
+import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
+import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const fixtureRoot = fileURLToPath(new URL('./fixtures/devex-benchmark/', import.meta.url));
@@ -30,6 +40,10 @@ const kovoScenarioRecipe = JSON.parse(
 );
 const kovoPackedProfileSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/profile.mjs'),
+  'utf8',
+);
+const devexBenchmarkSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-benchmark.mjs'),
   'utf8',
 );
 const observedEnvironment = {
@@ -56,6 +70,7 @@ describe('DevEx benchmark foundation', () => {
       root: fixtureRoot,
       samples: 5,
       observedEnvironment,
+      allowFixtureScenario: true,
       measure(command, context) {
         expect(command).toEqual(['node', 'profile.mjs', context.phase]);
         expect(path.basename(context.cwd)).toMatch(/^kovo-devex-benchmark-/u);
@@ -140,6 +155,7 @@ describe('DevEx benchmark foundation', () => {
       runBenchmarkScenario(wrongCommit, {
         root: fixtureRoot,
         observedEnvironment,
+        allowFixtureScenario: true,
         measure: () => {
           throw new Error('measurement must not start');
         },
@@ -152,6 +168,7 @@ describe('DevEx benchmark foundation', () => {
       runBenchmarkScenario(wrongArtifact, {
         root: fixtureRoot,
         observedEnvironment,
+        allowFixtureScenario: true,
         measure: () => {
           throw new Error('measurement must not start');
         },
@@ -164,6 +181,7 @@ describe('DevEx benchmark foundation', () => {
       runBenchmarkScenario(scenario, {
         root: fixtureRoot,
         observedEnvironment: dirtySource,
+        allowFixtureScenario: true,
         measure: () => {
           throw new Error('measurement must not start');
         },
@@ -193,6 +211,7 @@ describe('DevEx benchmark foundation', () => {
         runBenchmarkScenario(decoyScenario, {
           root: copiedFixture,
           observedEnvironment,
+          allowFixtureScenario: true,
           measure: () => {
             throw new Error('measurement must not start');
           },
@@ -203,11 +222,149 @@ describe('DevEx benchmark foundation', () => {
     }
   });
 
+  it('rejects a canonical forged CLI plus coherent ignored self-attestation on clean HEAD', () => {
+    const temporaryRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-benchmark-forged-release-'));
+    const packageRoot = path.join(temporaryRoot, 'fake-cli');
+    const ignoredReleaseRoot = path.join(temporaryRoot, '.release');
+    const ignoredTarballRoot = path.join(ignoredReleaseRoot, 'tarballs');
+    const scenarioRoot = path.join(ignoredReleaseRoot, 'devex');
+    const scenarioTarballRoot = path.join(scenarioRoot, 'tarballs');
+    let measured = false;
+    let disposed = false;
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      mkdirSync(ignoredTarballRoot, { recursive: true });
+      mkdirSync(scenarioTarballRoot, { recursive: true });
+      const fakePackageManifest = {
+        name: '@kovojs/cli',
+        version: '0.2.0',
+        type: 'module',
+        files: ['boot.mjs', 'profile.mjs'],
+      };
+      writeFileSync(
+        path.join(packageRoot, 'package.json'),
+        `${JSON.stringify(fakePackageManifest, null, 2)}\n`,
+      );
+      writeFileSync(path.join(packageRoot, 'boot.mjs'), "document.body.dataset.forged = 'true';\n");
+      writeFileSync(
+        path.join(packageRoot, 'profile.mjs'),
+        "process.stdout.write('forged metrics input must never execute\\n');\n",
+      );
+      const ignoredTarball = packWithoutLifecycleScripts(
+        {
+          name: '@kovojs/cli',
+          version: '0.2.0',
+          dirPath: packageRoot,
+        },
+        ignoredTarballRoot,
+      );
+      const tarballBytes = readFileSync(ignoredTarball);
+      const entries = validatedPackageTarballEntries(tarballBytes);
+      const packedManifest = JSON.parse(
+        entries.find((entry) => entry.name === 'package/package.json').data.toString('utf8'),
+      );
+      const scenarioTarball = path.join(scenarioTarballRoot, path.basename(ignoredTarball));
+      cpSync(ignoredTarball, scenarioTarball);
+      const files = entries.map((entry) => ({
+        path: entry.name.slice('package/'.length),
+        sha256: digest(entry.data),
+        executable: entry.executable,
+      }));
+      const artifact = {
+        name: '@kovojs/cli',
+        role: 'consumer',
+        path: `tarballs/${path.basename(scenarioTarball)}`,
+        sha256: digest(tarballBytes),
+        files,
+      };
+      const fakeWorkload = {
+        schema: 'kovo-devex-packed-workload/v1',
+        profile: {
+          id: 'kovo-packed-check/v1',
+          commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+        },
+        entrypoint: 'profile.mjs',
+        artifacts: [artifact],
+        browserBootstrap: ['boot.mjs'],
+      };
+      const fakeWorkloadBytes = Buffer.from(`${JSON.stringify(fakeWorkload, null, 2)}\n`);
+      writeFileSync(path.join(scenarioRoot, 'packed-workload.json'), fakeWorkloadBytes);
+      const ignoredManifest = {
+        schema: 'kovo.packed-public-packages/v2',
+        packages: [
+          {
+            name: '@kovojs/cli',
+            version: '0.2.0',
+            tarball: `.release/tarballs/${path.basename(ignoredTarball)}`,
+            sha512: `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`,
+            files: entries.map((entry) => entry.name),
+            manifest: packedManifest,
+          },
+        ],
+      };
+      writeFileSync(
+        path.join(ignoredReleaseRoot, 'packed-packages.json'),
+        `${JSON.stringify(ignoredManifest, null, 2)}\n`,
+      );
+      const forgedScenario = structuredClone(scenario);
+      forgedScenario.name = 'kovo-packed-check';
+      forgedScenario.provenance.workloadManifest = {
+        path: 'packed-workload.json',
+        sha256: digest(fakeWorkloadBytes),
+      };
+      forgedScenario.provenance.packedArtifacts = [
+        {
+          name: artifact.name,
+          path: artifact.path,
+          sha256: artifact.sha256,
+        },
+      ];
+      forgedScenario.provenance.supportFiles = files;
+      const freshScenario = structuredClone(forgedScenario);
+      freshScenario.provenance.packedArtifacts[0].sha256 = `sha256:${'f'.repeat(64)}`;
+
+      expect(
+        ignoredManifest.packages[0],
+        'the attack fixture must be coherent enough to self-attest its canonical fake tarball',
+      ).toMatchObject({
+        name: '@kovojs/cli',
+        sha512: `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`,
+        files: entries.map((entry) => entry.name),
+        manifest: packedManifest,
+      });
+      expect(() =>
+        runBenchmarkScenario(forgedScenario, {
+          root: scenarioRoot,
+          observedEnvironment,
+          acquireFreshKovoScenario: () => ({
+            producer: 'kovo-clean-source-pack/v1',
+            sourceCommit: observedEnvironment.sourceCommit,
+            scenario: freshScenario,
+            root: scenarioRoot,
+            repositoryRoot: repoRoot,
+            dispose() {
+              disposed = true;
+            },
+          }),
+          measure: () => {
+            measured = true;
+            throw new Error('forged workload must not drive measurement');
+          },
+        }),
+      ).toThrow('does not match artifacts freshly produced from the exact clean source revision');
+      expect(measured).toBe(false);
+      expect(disposed).toBe(true);
+    } finally {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
   it('executes every code-owned profile from the unpacked consumer', () => {
     const report = runBenchmarkScenario(scenario, {
       root: fixtureRoot,
       samples: 1,
       observedEnvironment,
+      allowFixtureScenario: true,
     });
     for (const phase of ['cold', 'warm', 'oneFileIncremental']) {
       expect(report.metrics[`check.${phase}.durationMs`].samples).toHaveLength(1);
@@ -215,20 +372,37 @@ describe('DevEx benchmark foundation', () => {
     }
   });
 
+  it('keeps fixture scenarios behind an explicit test-only seam', () => {
+    expect(() =>
+      runBenchmarkScenario(scenario, {
+        root: fixtureRoot,
+        observedEnvironment,
+        measure: () => {
+          throw new Error('non-Kovo fixture must not drive production measurement');
+        },
+      }),
+    ).toThrow('production benchmark measurement accepts only the code-owned fresh Kovo scenario');
+  });
+
   it('ships a real Kovo packed-check recipe whose profile invokes only the staged CLI', () => {
     expect(kovoScenarioRecipe).toEqual({
       schema: 'kovo-devex-scenario-recipe/v1',
       name: 'kovo-packed-check',
       profile: 'kovo-packed-check/v1',
-      packedReleaseManifest: '.release/packed-packages.json',
+      producer: 'kovo-clean-source-pack/v1',
       consumerSource: 'scripts/devex-workloads/kovo-packed-check/package',
-      output: '.release/devex-kovo-packed-scenario.json',
+      output: '.release/devex/kovo-packed-scenario.json',
     });
     expect(kovoPackedProfileSource).toContain(
       "path.resolve('node_modules/@kovojs/cli/dist/bin.mjs')",
     );
     expect(kovoPackedProfileSource).not.toContain('packages/cli');
     expect(kovoPackedProfileSource).not.toContain('workspace:');
+    expect(devexBenchmarkSource).toContain("['worktree', 'add', '--detach'");
+    expect(devexBenchmarkSource).toContain(
+      "['install', '--offline', '--frozen-lockfile', '--ignore-scripts']",
+    );
+    expect(devexBenchmarkSource).toContain("['run', 'check:publish']");
   });
 
   it('keeps every provisional budget non-binding before baseline ratification', () => {
@@ -263,6 +437,7 @@ describe('DevEx benchmark foundation', () => {
         path.join(scenarioRoot, 'linked-bootstrap.mjs'),
       );
       symlinkSync(outsideRoot, path.join(scenarioRoot, 'linked-parent'), 'dir');
+      symlinkSync(path.join(scenarioRoot, 'package'), path.join(scenarioRoot, 'alias'), 'dir');
 
       expect(() =>
         browserBootstrapBytes(['../outside/bootstrap-a.mjs'], { root: scenarioRoot }),
@@ -271,11 +446,14 @@ describe('DevEx benchmark foundation', () => {
         browserBootstrapBytes(['linked-parent\\bootstrap-a.mjs'], { root: scenarioRoot }),
       ).toThrow('must be a canonical relative path');
       expect(() => browserBootstrapBytes(['linked-bootstrap.mjs'], { root: scenarioRoot })).toThrow(
-        'regular non-symlink',
+        'contains a symbolic-link path segment',
       );
       expect(() =>
         browserBootstrapBytes(['linked-parent/bootstrap-a.mjs'], { root: scenarioRoot }),
-      ).toThrow('resolves outside its root');
+      ).toThrow('contains a symbolic-link path segment');
+      expect(() =>
+        browserBootstrapBytes(['alias/bootstrap-a.mjs'], { root: scenarioRoot }),
+      ).toThrow('contains a symbolic-link path segment');
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });
     }

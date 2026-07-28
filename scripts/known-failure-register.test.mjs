@@ -153,7 +153,7 @@ describe('known-failure register', () => {
     missingProbe.entries[0].probe.path = 'scripts/known-failure-probes/absent.mjs';
     missingProbe.entries[0].probe.command[1] = 'scripts/known-failure-probes/absent.mjs';
     expect(validateRegister(missingProbe)).toContain(
-      'KF-DEVEX-001: scripts/known-failure-probes/absent.mjs: mapped probe must be a regular non-symlink file',
+      'KF-DEVEX-001: scripts/known-failure-probes/absent.mjs: mapped probe is missing: scripts/known-failure-probes/absent.mjs',
     );
 
     const noMappings = structuredClone(register);
@@ -211,6 +211,7 @@ describe('known-failure register', () => {
         path.join(repoRoot, 'scripts/known-failure-probes/pending.mjs'),
         path.join(probeDirectory, 'linked.mjs'),
       );
+      symlinkSync(probeDirectory, path.join(probeDirectory, 'alias'), 'dir');
       const nestedProbeDirectory = path.join(probeDirectory, 'nested');
       mkdirSync(nestedProbeDirectory);
       copyFileSync(
@@ -225,10 +226,22 @@ describe('known-failure register', () => {
         ledgerResolver,
       });
       expect(findings).toContain(
-        'KF-DEVEX-001: scripts/known-failure-probes/linked.mjs: mapped probe must be a regular non-symlink file',
+        'KF-DEVEX-001: scripts/known-failure-probes/linked.mjs: mapped probe contains a symbolic-link path segment: scripts/known-failure-probes/linked.mjs',
       );
       expect(findings).toContain(
         'stale unregistered probe: scripts/known-failure-probes/nested/stale.mjs',
+      );
+
+      const aliased = structuredClone(register);
+      aliased.entries[0].probe.path = 'scripts/known-failure-probes/alias/pending.mjs';
+      aliased.entries[0].probe.command[1] = aliased.entries[0].probe.path;
+      expect(
+        validateKnownFailureRegister(aliased, {
+          repoRoot: temporaryRoot,
+          ledgerResolver,
+        }),
+      ).toContain(
+        'KF-DEVEX-001: scripts/known-failure-probes/alias/pending.mjs: mapped probe contains a symbolic-link path segment: scripts/known-failure-probes/alias/pending.mjs',
       );
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });

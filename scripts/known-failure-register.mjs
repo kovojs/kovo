@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { nonSymlinkDescendant } from './lib/non-symlink-path.mjs';
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 
 export const KNOWN_FAILURE_REGISTER_SCHEMA = 'kovo-known-failures/v1';
@@ -130,22 +131,13 @@ function canonicalProbePath(value) {
 }
 
 function regularProbePathFinding(repoRoot, probePath) {
-  const probeDirectory = path.resolve(repoRoot, PROBE_DIRECTORY);
-  const absolute = path.resolve(repoRoot, probePath);
-  if (
-    !existsSync(probeDirectory) ||
-    !lstatSync(probeDirectory).isDirectory() ||
-    lstatSync(probeDirectory).isSymbolicLink() ||
-    !existsSync(absolute) ||
-    !lstatSync(absolute).isFile() ||
-    lstatSync(absolute).isSymbolicLink()
-  ) {
-    return `${probePath}: mapped probe must be a regular non-symlink file`;
-  }
-  const realDirectory = realpathSync(probeDirectory);
-  const realProbe = realpathSync(absolute);
-  if (!realProbe.startsWith(`${realDirectory}${path.sep}`)) {
-    return `${probePath}: mapped probe resolves outside ${PROBE_DIRECTORY}`;
+  try {
+    nonSymlinkDescendant(repoRoot, probePath, {
+      kind: 'file',
+      label: 'mapped probe',
+    });
+  } catch (error) {
+    return `${probePath}: ${error.message}`;
   }
   return null;
 }

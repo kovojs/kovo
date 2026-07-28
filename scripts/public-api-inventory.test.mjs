@@ -91,6 +91,12 @@ describe('public API inventory', () => {
           "import * as api from '@fixture/api/feature';\nconst value: api.Feature = api.feature();\nvoid value;\n",
         'examples/evidence/commonjs-exact.cjs':
           "const { Feature, feature: makeFeature } = require('@fixture/api/feature');\nconst direct = require('@fixture/api/feature').feature;\nvoid Feature; void makeFeature; void direct;\n",
+        'examples/evidence/commonjs-namespace.cjs':
+          "const api = require('@fixture/api/feature');\nconst alias = api;\nconst { Feature } = alias;\nconst direct = alias.feature;\nvoid Feature; void direct;\n",
+        'examples/evidence/commonjs-dynamic.cjs':
+          "const name = 'feature';\nconst dynamicSpecifier = '@fixture/api/feature';\nconst dynamic = require(dynamicSpecifier);\nconst api = require('@fixture/api/feature');\nvoid dynamic.feature; void api[name];\n",
+        'examples/evidence/commonjs-shadowed.cjs':
+          "const api = require('@fixture/api/feature');\nfunction inspect(api) { return api.feature; }\nvoid api; void inspect;\n",
       };
       for (const [relative, source] of Object.entries(evidenceFiles)) {
         const absolute = path.join(evidenceRoot, relative);
@@ -127,9 +133,18 @@ describe('public API inventory', () => {
         ).toEqual(
           expect.arrayContaining([
             'examples/evidence/commonjs-exact.cjs',
+            'examples/evidence/commonjs-namespace.cjs',
             'examples/evidence/namespace-exact.ts',
           ]),
         );
+      }
+      for (const declaration of declarations) {
+        for (const relative of [
+          'examples/evidence/commonjs-dynamic.cjs',
+          'examples/evidence/commonjs-shadowed.cjs',
+        ]) {
+          expect(declaration.consumers.authoredExamples.files).not.toContain(relative);
+        }
       }
     } finally {
       rmSync(evidenceRoot, { recursive: true, force: true });
@@ -260,7 +275,7 @@ describe('public API inventory', () => {
       );
       writeFileSync(
         path.join(diagnosticsRoot, 'packages/api/src/feature.ts'),
-        'export const broken = ;\n',
+        'export const broken: MissingPublicType = 1;\n',
       );
 
       const inventory = buildPublicApiInventory({ repoRoot: diagnosticsRoot });
@@ -269,7 +284,9 @@ describe('public API inventory', () => {
           expect.stringContaining(
             'TypeScript consumer parse diagnostic: examples/authored/src/broken.ts',
           ),
-          expect.stringContaining('TypeScript program diagnostic: packages/api/src/feature.ts'),
+          expect.stringContaining(
+            "TypeScript program diagnostic: packages/api/src/feature.ts:1:22 TS2304 Cannot find name 'MissingPublicType'.",
+          ),
         ]),
       );
       const command = spawnSync(
@@ -284,7 +301,9 @@ describe('public API inventory', () => {
       );
       expect(command.status).toBe(1);
       expect(command.stderr).toContain('TypeScript consumer parse diagnostic');
-      expect(command.stderr).toContain('TypeScript program diagnostic');
+      expect(command.stderr).toContain(
+        "TypeScript program diagnostic: packages/api/src/feature.ts:1:22 TS2304 Cannot find name 'MissingPublicType'.",
+      );
     } finally {
       rmSync(diagnosticsRoot, { recursive: true, force: true });
     }
