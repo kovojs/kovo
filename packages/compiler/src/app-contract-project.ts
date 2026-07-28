@@ -31,6 +31,14 @@ export interface CompilerOwnedAppContractDiagnostic {
     | 'D1A007'
     | 'D1A008'
     | 'D1A009'
+    | 'D1B001'
+    | 'D1B002'
+    | 'D1B003'
+    | 'D1B004'
+    | 'D1B005'
+    | 'D1B006'
+    | 'D1B007'
+    | 'D1B008'
     | 'D1B009'
     | 'D1X001';
   readonly fileName: string;
@@ -393,6 +401,8 @@ function proveFactoryCall(
     const generated = proveGeneratedAppFactory(sourceFile, expression, context);
     if (generated) return generated;
   }
+  const unsafeGenerated = proveUnsafeGeneratedFactoryCall(sourceFile, call, context);
+  if (unsafeGenerated) return unsafeGenerated;
 
   const callback = call.arguments.find(
     (argument): argument is ts.ArrowFunction | ts.FunctionExpression =>
@@ -975,6 +985,300 @@ function proveGeneratedAppFactory(
     ownerKey: receiver.ownerKey,
     serverPackageRoot: receiver.serverPackageRoot,
   };
+}
+
+function proveUnsafeGeneratedFactoryCall(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  context: ProvenanceContext,
+): Extract<FactoryProof, { kind: 'diagnostic' }> | undefined {
+  const expression = unwrapExpression(call.expression);
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression &&
+    isDeclarationFamily(staticMemberName(expression.argumentExpression)) &&
+    ts.isIdentifier(unwrapExpression(expression.expression)) &&
+    namespaceResolvesToGeneratedApp(
+      unwrapExpression(expression.expression) as ts.Identifier,
+      context,
+    )
+  ) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B008',
+      'generated app factories require a static named import',
+    );
+  }
+  if (
+    (ts.isCallExpression(expression) ||
+      ts.isPropertyAccessExpression(expression) ||
+      ts.isElementAccessExpression(expression)) &&
+    expressionDerivesFromGeneratedFactory(expression, context, new Set(), 0)
+  ) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B007',
+      'generated app factory binding is indirectly derived',
+    );
+  }
+  if (!ts.isIdentifier(expression)) return undefined;
+  const declaration = localSymbolDeclaration(context.checker, expression);
+  if (declaration && ts.isBindingElement(declaration)) {
+    const member = bindingMemberName(declaration);
+    const variable = enclosingVariableDeclaration(declaration);
+    if (
+      member &&
+      isDeclarationFamily(member) &&
+      variable?.initializer &&
+      ts.isIdentifier(unwrapExpression(variable.initializer)) &&
+      namespaceResolvesToGeneratedApp(
+        unwrapExpression(variable.initializer) as ts.Identifier,
+        context,
+      )
+    ) {
+      return generatedDiagnostic(
+        sourceFile,
+        expression,
+        'D1B003',
+        'generated app factories may not be destructured from a namespace',
+      );
+    }
+  }
+  const functionLike = declaration ? functionLikeDeclaration(declaration) : undefined;
+  if (functionLike && functionContainsGeneratedFactoryCall(functionLike, context)) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B001',
+      'generated app factory wrappers are not an exact generated binding',
+    );
+  }
+  if (
+    !declaration ||
+    !ts.isVariableDeclaration(declaration) ||
+    !declaration.initializer ||
+    !expressionDerivesFromGeneratedFactory(declaration.initializer, context, new Set(), 0)
+  ) {
+    return undefined;
+  }
+  if (!variableDeclarationIsConst(declaration)) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B004',
+      'generated app factory aliases must be const',
+    );
+  }
+  if (variableIsReassigned(declaration, context.checker, context.program)) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B005',
+      'generated app factory aliases may not be reassigned',
+    );
+  }
+  const initializer = unwrapExpression(declaration.initializer);
+  if (ts.isConditionalExpression(initializer) || isJoiningBinaryExpression(initializer)) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B006',
+      'generated app factory aliases may not join control-flow branches',
+    );
+  }
+  if (
+    ts.isElementAccessExpression(initializer) &&
+    !ts.isArrayLiteralExpression(unwrapExpression(initializer.expression))
+  ) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B002',
+      'generated app factories may not be dynamically selected',
+    );
+  }
+  return generatedDiagnostic(
+    sourceFile,
+    expression,
+    'D1B007',
+    'generated app factory binding is indirectly derived',
+  );
+}
+
+function generatedDiagnostic(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  code:
+    | 'D1B001'
+    | 'D1B002'
+    | 'D1B003'
+    | 'D1B004'
+    | 'D1B005'
+    | 'D1B006'
+    | 'D1B007'
+    | 'D1B008',
+  detail: string,
+): Extract<FactoryProof, { kind: 'diagnostic' }> {
+  return {
+    diagnostic: diagnosticAt(
+      sourceFile,
+      node,
+      code,
+      `${code} ${detail}; import and call the exact #kovo named export.`,
+    ),
+    kind: 'diagnostic',
+  };
+}
+
+function expressionDerivesFromGeneratedFactory(
+  rawExpression: ts.Expression,
+  context: ProvenanceContext,
+  seen: Set<ts.Declaration>,
+  depth: number,
+): boolean {
+  if (depth > 48) return true;
+  const expression = unwrapExpression(rawExpression);
+  if (ts.isIdentifier(expression)) {
+    const direct = proveGeneratedAppFactory(expression.getSourceFile(), expression, context);
+    if (direct?.kind === 'factory') return true;
+    const declaration = localSymbolDeclaration(context.checker, expression);
+    if (!declaration || seen.has(declaration)) return false;
+    const nextSeen = new Set(seen);
+    nextSeen.add(declaration);
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      return expressionDerivesFromGeneratedFactory(
+        declaration.initializer,
+        context,
+        nextSeen,
+        depth + 1,
+      );
+    }
+    const functionLike = functionLikeDeclaration(declaration);
+    return functionLike
+      ? functionReturnsGeneratedFactory(functionLike, context, nextSeen, depth + 1)
+      : false;
+  }
+  if (ts.isCallExpression(expression)) {
+    if (
+      ts.isIdentifier(expression.expression) &&
+      expressionDerivesFromGeneratedFactory(expression.expression, context, seen, depth + 1)
+    ) {
+      return true;
+    }
+    const declaration = ts.isIdentifier(expression.expression)
+      ? localSymbolDeclaration(context.checker, expression.expression)
+      : undefined;
+    const functionLike = declaration ? functionLikeDeclaration(declaration) : undefined;
+    if (
+      functionLike &&
+      functionReturnsGeneratedFactory(functionLike, context, seen, depth + 1)
+    ) {
+      return true;
+    }
+  }
+  let derives = false;
+  const visit = (node: ts.Node): void => {
+    if (derives || ts.isFunctionLike(node)) return;
+    if (
+      ts.isExpression(node) &&
+      node !== expression &&
+      expressionDerivesFromGeneratedFactory(node, context, seen, depth + 1)
+    ) {
+      derives = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(expression, visit);
+  return derives;
+}
+
+function functionReturnsGeneratedFactory(
+  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  context: ProvenanceContext,
+  seen: Set<ts.Declaration>,
+  depth: number,
+): boolean {
+  if (!declaration.body) return false;
+  if (!ts.isBlock(declaration.body)) {
+    return expressionDerivesFromGeneratedFactory(declaration.body, context, seen, depth + 1);
+  }
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (
+      ts.isReturnStatement(node) &&
+      node.expression &&
+      expressionDerivesFromGeneratedFactory(node.expression, context, seen, depth + 1)
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(declaration.body);
+  return found;
+}
+
+function functionContainsGeneratedFactoryCall(
+  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  context: ProvenanceContext,
+): boolean {
+  if (!declaration.body) return false;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      proveGeneratedAppFactory(node.getSourceFile(), node.expression, context)?.kind === 'factory'
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(declaration.body);
+  return found;
+}
+
+function namespaceResolvesToGeneratedApp(
+  expression: ts.Identifier,
+  context: ProvenanceContext,
+): boolean {
+  const declaration = localSymbolDeclaration(context.checker, expression);
+  if (!declaration || !ts.isNamespaceImport(declaration)) return false;
+  const importDeclaration = declaration.parent.parent;
+  if (
+    !ts.isImportDeclaration(importDeclaration) ||
+    !ts.isStringLiteralLike(importDeclaration.moduleSpecifier) ||
+    importDeclaration.moduleSpecifier.text !== '#kovo'
+  ) {
+    return false;
+  }
+  const resolved = resolveModule(
+    importDeclaration.moduleSpecifier.text,
+    importDeclaration.getSourceFile().fileName,
+    context.options,
+  );
+  if (!resolved) return false;
+  const target =
+    context.program.getSourceFile(resolved.resolvedFileName) ??
+    context.program
+      .getSourceFiles()
+      .find(
+        (candidate) =>
+          normalizeFileName(candidate.fileName) === normalizeFileName(resolved.resolvedFileName),
+      );
+  return (
+    target !== undefined &&
+    normalizeFileName(target.fileName).includes('/.kovo/') &&
+    generatedModuleMatchesManifest(target)
+  );
 }
 
 function sourceReachesGeneratedModuleThroughKovoAlias(

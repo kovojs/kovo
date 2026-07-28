@@ -182,6 +182,50 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.resolver.exactNodeCount).toBe(1);
     expect(result.serverPackageRoots).toEqual([fixture.serverA]);
 
+    const definition = '{ load() { return 1; } }';
+    const generatedImport = "import { query } from '#kovo';\n";
+    const generatedNamespaceImport = "import * as generated from '#kovo';\n";
+    const rejected = {
+      array: `${generatedImport}const active = [query][0]!;\nexport const item = active(${definition});\n`,
+      computed: `${generatedNamespaceImport}export const item = generated['query'](${definition});\n`,
+      destructured: `${generatedNamespaceImport}const { query } = generated;\nexport const item = query(${definition});\n`,
+      dynamic: `${generatedImport}declare const choose: boolean;\nconst factory = ({ left: query, right: query })[choose ? 'left' : 'right'];\nexport const item = factory(${definition});\n`,
+      joined: `${generatedImport}declare const choose: boolean;\nconst active = choose ? query : query;\nexport const item = active(${definition});\n`,
+      mutable: `${generatedImport}let active = query;\nexport const item = active(${definition});\n`,
+      object: `${generatedImport}const active = ({ value: query }).value;\nexport const item = active(${definition});\n`,
+      reassigned: `${generatedImport}const active = query;\n// @ts-expect-error probe\nactive = query;\nexport const item = active(${definition});\n`,
+      'wrapper-returned': `${generatedImport}const select = () => query;\nexport const item = select()(${definition});\n`,
+      wrapper: `${generatedImport}const wrapped = (value: Parameters<typeof query>[0]) => query(value);\nexport const item = wrapped(${definition});\n`,
+    } as const;
+    const expected = {
+      array: 'D1B007',
+      computed: 'D1B008',
+      destructured: 'D1B003',
+      dynamic: 'D1B002',
+      joined: 'D1B006',
+      mutable: 'D1B004',
+      object: 'D1B007',
+      reassigned: 'D1B005',
+      'wrapper-returned': 'D1B007',
+      wrapper: 'D1B001',
+    } as const;
+    const rejectedFiles = await Promise.all(
+      Object.entries(rejected).map(async ([name, source]) => {
+        const fileName = join(fixture.root, `app/src/generated-rejected-${name}.ts`);
+        await writeSource(fileName, source);
+        return [name as keyof typeof expected, fileName] as const;
+      }),
+    );
+    const rejectionProject = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, generated, ...rejectedFiles.map(([, fileName]) => fileName)],
+    });
+    for (const [name, fileName] of rejectedFiles) {
+      expect(
+        rejectionProject.compileEntry(fileName).diagnostics.map((diagnostic) => diagnostic.code),
+        name,
+      ).toEqual([expected[name]]);
+    }
+
     await writeSource(generated, `${generatedSource}// forged after manifest\n`);
     const forgedProject = createCompilerOwnedAppContractProject({
       rootNames: [fixture.provider, generated, entry],
