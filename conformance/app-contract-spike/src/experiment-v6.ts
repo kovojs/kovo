@@ -45,7 +45,12 @@ export async function runD1V6Experiment(
   if (dirname(root) !== temporaryRoot) {
     throw new Error('D1 v6 deterministic fixture escaped the operating-system temp root.');
   }
-  await rm(root, { force: true, recursive: true });
+  await rm(root, {
+    force: true,
+    maxRetries: 5,
+    recursive: true,
+    retryDelay: 50,
+  });
   await mkdir(root, { recursive: true });
   try {
     const artifacts = await buildAndPackFresh(root);
@@ -324,7 +329,12 @@ export async function runD1V6Experiment(
     }
     return evidence;
   } finally {
-    await rm(root, { force: true, recursive: true });
+    await rm(root, {
+      force: true,
+      maxRetries: 5,
+      recursive: true,
+      retryDelay: 50,
+    });
   }
 }
 
