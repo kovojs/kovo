@@ -121,17 +121,8 @@ import {
 } from '@kovojs/server/internal/runtime-registry-wire';
 import { build as viteBuild, createServer as createViteServer, type Plugin } from 'vite-plus';
 
-import {
-  BUILD_ARGV_SPEC,
-  BUILD_USAGE,
-  commandArgvError,
-  EXPORT_ARGV_SPEC,
-  EXPORT_USAGE,
-  parsedBooleanOption,
-  parsedStringOption,
-  parseCommandArgv,
-  requireSinglePositional,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoCheck } from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
@@ -562,95 +553,55 @@ interface SelectedKovoBuildPreset {
 }
 
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
-  const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
-  if (!parsed.ok) return buildArgvError(parsed);
-
-  const appModule = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'build',
-    usage: buildUsage(),
-  });
-  if (!appModule.ok) return appModule;
-
-  const presetValue = parsedStringOption(parsed.value, '--preset');
-  const preset = presetValue === undefined ? undefined : parseKovoBuildPresetName(presetValue);
-  if (presetValue !== undefined && preset === undefined) {
-    return { message: `kovo: unsupported build preset ${stableValue(presetValue)}.\n`, ok: false };
-  }
+  const parsed = parseKovoCommandInvocation('build', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const appModule = parsed.value.arguments.appModule;
+  const preset = parsed.value.options.preset;
 
   return {
     ok: true,
     options: {
-      appModulePath: appModule.value,
-      cache: !parsedBooleanOption(parsed.value, '--no-cache'),
-      check: parsedBooleanOption(parsed.value, '--check'),
-      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
+      appModulePath: appModule,
+      cache: parsed.value.options.cache,
+      check: parsed.value.options.check,
+      outDir: parsed.value.options.out,
       ...(preset === undefined ? {} : { preset }),
     },
   };
-}
-
-function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('build', error, buildUsage());
 }
 
 function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
   return value === 'node' || value === 'vercel' || value === 'cloudflare' ? value : undefined;
 }
 
-function buildUsage(): string {
-  return buildJoinStrings([BUILD_USAGE, ''], '\n', 'Build usage lines');
-}
-
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
-  const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
-  if (!parsed.ok) return exportArgvError(parsed);
-
-  const appModule = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'export',
-    usage: exportUsage(),
-  });
-  if (!appModule.ok) return appModule;
-
-  const assetBase = parsedStringOption(parsed.value, '--asset-base');
-  const distDir = parsedStringOption(parsed.value, '--dist');
-  const manifestFile = parsedStringOption(parsed.value, '--manifest');
-  const origin = parsedStringOption(parsed.value, '--origin');
-  const root = parsedStringOption(parsed.value, '--root');
-  const vite = parsedBooleanOption(parsed.value, '--vite');
-  const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
-    ? ('skip' as const)
-    : undefined;
+  const parsed = parseKovoCommandInvocation('export', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const appModule = parsed.value.arguments.appModule;
+  const {
+    assetBase,
+    dist: distDir,
+    manifest: manifestFile,
+    origin,
+    root,
+    vite,
+  } = parsed.value.options;
+  const onNonExportable = parsed.value.options.skipNonExportable ? ('skip' as const) : undefined;
 
   return {
     ok: true,
     options: {
-      appModulePath: appModule.value,
+      appModulePath: appModule,
       ...(assetBase === undefined ? {} : { assetBase }),
       ...(distDir === undefined ? {} : { distDir }),
       ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
-      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
+      outDir: parsed.value.options.out,
       ...(root === undefined ? {} : { root }),
       ...(vite ? { vite } : {}),
     },
   };
-}
-
-function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('export', error, exportUsage());
-}
-
-function exportUsage(): string {
-  return buildJoinStrings([EXPORT_USAGE, ''], '\n', 'Export usage lines');
 }
 
 export async function runBuildCommand(
@@ -6379,7 +6330,7 @@ function kovoExportResult(
   result: StaticExportResult,
   options: KovoExportOptions,
 ): KovoExportCommandResult {
-  const lines = ['kovo-export/v1'];
+  const lines = [requireKovoCommandResultProtocol('export')];
   const diagnostics = registeredStaticExportResultDiagnostics(result.diagnostics);
 
   for (const artifact of result.artifacts) {
@@ -6590,7 +6541,11 @@ function exportErrorResult(
     );
     return {
       error: buildJoinStrings(
-        appendDense(['kovo-export/v1'], diagnosticLines, 'Static-export error lines'),
+        appendDense(
+          [requireKovoCommandResultProtocol('export')],
+          diagnosticLines,
+          'Static-export error lines',
+        ),
         '\n',
         'Static-export error lines',
       ),

@@ -54,7 +54,6 @@ const TEMPLATE_FILES = [
   'src/components/contacts.tsx',
   'src/components/auth-forms.tsx',
   'src/app.tsx',
-  'src/test-setup.ts',
   'src/app.test.ts',
   'src/endpoint-posture.test.ts',
   'src/theme.ts',
@@ -395,13 +394,17 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');
     expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
-    expect(files.get('src/app.test.ts')).not.toContain("from './db.js'");
-    expect(files.get('src/app.test.ts')).not.toContain('createAppDb');
-    expect(files.get('src/app.test.ts')).toContain('contactsQuery.load(undefined)');
-    expect(files.get('vite.config.ts')).toContain("setupFiles: ['./src/test-setup.ts']");
-    expect(files.get('src/test-setup.ts')).toContain('...(await importOriginal())');
-    expect(files.get('src/test-setup.ts')).toContain(
-      'assertRequestSafeRuntimeRealmLocked: vi.fn()',
+    expect(files.get('src/app.test.ts')).toContain("spawn('kovo', ['dev', './src/app.tsx']");
+    expect(files.get('src/app.test.ts')).toContain('await fetch(');
+    expect(files.get('src/app.test.ts')).toContain('toBeInstanceOf(Response)');
+    expect(files.get('src/app.test.ts')).toContain("response.headers.get('content-type')");
+    expect(files.get('src/app.test.ts')).not.toContain("from './app.js'");
+    expect(files.get('src/app.test.ts')).not.toContain('isKovoApp');
+    expect(files.get('src/app.test.ts')).not.toContain('/internal/');
+    expect(files.get('vite.config.ts')).not.toContain('setupFiles');
+    expect(files.has('src/test-setup.ts')).toBe(false);
+    expect([...files.values()].join('\n')).not.toContain(
+      '@kovojs/core/internal/classifier-verdict',
     );
     expect(files.get('src/schema.ts')).toContain(
       'import { bigint, boolean, integer, pgTable, text, timestamp }',
@@ -993,7 +996,7 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
-  it.each(['src/endpoint-posture.test.ts', 'src/test-setup.ts'])(
+  it.each(['src/app.test.ts', 'src/endpoint-posture.test.ts'])(
     'fails check:sound-subset when security surface %s is not fully enrolled',
     (removedFile) => {
       const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-enrollment-'));

@@ -138,7 +138,7 @@ describe('kovo update-docs', () => {
 
     const result = await runUpdateDocsCommand({ cwd: root, version: '1.0.0' });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.output).toContain('Expected exactly one');
     expect(existsSync(path.join(root, '.kovo/docs'))).toBe(false);
   });
@@ -150,7 +150,7 @@ describe('kovo update-docs', () => {
 
     const result = await runUpdateDocsCommand({ cwd: root, version: '1.0.0' });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.output).toContain('exceeds its byte limit');
     expect(existsSync(path.join(root, '.kovo/docs'))).toBe(false);
   });
@@ -167,7 +167,7 @@ describe('kovo update-docs', () => {
 
     const result = await runUpdateDocsCommand({ cwd: root, version: '1.0.0' });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(readFileSync(outsideAgents, 'utf8')).toBe('outside agents\n');
     expect(existsSync(path.join(outside, 'current.json'))).toBe(false);
     expect(lstatSync(path.join(root, 'AGENTS.md')).isSymbolicLink()).toBe(true);
@@ -181,7 +181,7 @@ describe('kovo update-docs', () => {
 
     const result = await runUpdateDocsCommand({ cwd: root, version: '1.0.0' });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.output).toContain('placeholder content cannot enter');
     expect(existsSync(path.join(root, '.kovo/docs/current.json'))).toBe(false);
   });

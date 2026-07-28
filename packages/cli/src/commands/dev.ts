@@ -14,15 +14,7 @@ import type {
 
 type DevPluginEnvironment = Parameters<NonNullable<Plugin['applyToEnvironment']>>[0];
 
-import {
-  DEV_ARGV_SPEC,
-  DEV_USAGE,
-  commandArgvError,
-  parseCommandArgv,
-  parsedBooleanOption,
-  parsedStringOption,
-  requireSinglePositional,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import {
@@ -100,42 +92,22 @@ export function parseDevArgs(
   args: readonly string[],
   invocationCwd = kovoCommandBootSecurityDisposition.invocationCwd,
 ): DevArgParseResult {
-  const parsed = parseCommandArgv(args, DEV_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('dev', parsed, DEV_USAGE);
-  const app = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'dev',
-    usage: DEV_USAGE,
-  });
-  if (!app.ok) return app;
-
-  const root = resolve(invocationCwd, parsedStringOption(parsed.value, '--root') ?? '.');
-  const portValue = parsedStringOption(parsed.value, '--port');
-  let port: number | undefined;
-  if (portValue !== undefined) {
-    port = Number.parseInt(portValue, 10);
-    if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
-      return {
-        message: `kovo: dev --port must be an integer from 0 through 65535.\n${DEV_USAGE}`,
-        ok: false,
-      };
-    }
-  }
+  const parsed = parseKovoCommandInvocation('dev', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const app = parsed.value.arguments.appModule;
+  const root = resolve(invocationCwd, parsed.value.options.root);
+  const { config, host, port } = parsed.value.options;
 
   return {
     ok: true,
     options: {
-      appModulePath: resolve(root, app.value),
-      ...(parsedStringOption(parsed.value, '--config') === undefined
-        ? {}
-        : { configFile: resolve(root, parsedStringOption(parsed.value, '--config')!) }),
-      ...(parsedStringOption(parsed.value, '--host') === undefined
-        ? {}
-        : { host: parsedStringOption(parsed.value, '--host')! }),
-      mode: parsedStringOption(parsed.value, '--mode') ?? 'development',
+      appModulePath: resolve(root, app),
+      ...(config === undefined ? {} : { configFile: resolve(root, config) }),
+      ...(host === undefined ? {} : { host }),
+      mode: parsed.value.options.mode,
       ...(port === undefined ? {} : { port }),
       root,
-      strictPort: parsedBooleanOption(parsed.value, '--strict-port'),
+      strictPort: parsed.value.options.strictPort,
     },
   };
 }
@@ -238,7 +210,7 @@ export async function runDevCommand(
   } catch (error) {
     return {
       error: `kovo dev failed: ${error instanceof Error ? error.message : String(error)}`,
-      exitCode: 1,
+      exitCode: 2,
     };
   }
 }

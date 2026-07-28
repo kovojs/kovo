@@ -13,6 +13,7 @@ import {
 } from '@kovojs/core/internal/security-operation-ir';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 
+import { requireKovoCommandResultProtocol } from './command-schema.js';
 import type { KovoCheckFamily, KovoExplainOptions } from './graph-args.js';
 import {
   accessDecisions,
@@ -145,9 +146,9 @@ import {
   snapshotGraphVerifierInvocation,
 } from './graph-security-boundary.js';
 
-export const outputVersion = 'kovo-check/v1';
-export const explainOutputVersion = 'kovo-explain/v1';
-export const auditOutputVersion = 'kovo-audit/v1';
+export const outputVersion = requireKovoCommandResultProtocol('check');
+export const explainOutputVersion = requireKovoCommandResultProtocol('explain');
+export const auditOutputVersion = requireKovoCommandResultProtocol('audit');
 
 function operationKinds(operations: readonly { kind: string }[]): string[] {
   return [...new Set(operations.map((operation) => operation.kind))].sort();

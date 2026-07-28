@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { EXPLAIN_USAGE_LINE } from './commands-manifest.js';
+import { EXPLAIN_USAGE_LINE, formatRootHelp } from './commands-manifest.js';
 import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
@@ -2567,7 +2567,7 @@ describe('kovo check', () => {
     }) as typeof process.stderr.write);
 
     try {
-      expect(main(['check', 'optimstic', 'graph.json'])).toBe(1);
+      expect(main(['check', 'optimstic', 'graph.json'])).toBe(2);
     } finally {
       stderrWrite.mockRestore();
     }
@@ -2585,7 +2585,7 @@ describe('kovo check', () => {
     }) as typeof process.stderr.write);
 
     try {
-      expect(main(['check', 'coverage', 'graph.json', 'extra.json'])).toBe(1);
+      expect(main(['check', 'coverage', 'graph.json', 'extra.json'])).toBe(2);
     } finally {
       stderrWrite.mockRestore();
     }
@@ -2603,7 +2603,7 @@ describe('kovo check', () => {
     }) as typeof process.stderr.write);
 
     try {
-      expect(main(['explain', '--json', 'component', 'CartBadge'])).toBe(1);
+      expect(main(['explain', '--json', 'component', 'CartBadge'])).toBe(2);
     } finally {
       stderrWrite.mockRestore();
     }
@@ -2621,7 +2621,7 @@ describe('kovo check', () => {
     }) as typeof process.stderr.write);
 
     try {
-      expect(main(['compile'])).toBe(1);
+      expect(main(['compile'])).toBe(2);
     } finally {
       stderrWrite.mockRestore();
     }
@@ -2701,9 +2701,7 @@ describe('kovo check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe(
-        'kovo: add, audit, build, dev, check, db, compile, fix, explain, incident, export, mcp, update-docs\n',
-      );
+      expect(output).toBe(formatRootHelp());
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }

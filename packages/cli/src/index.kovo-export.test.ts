@@ -847,7 +847,7 @@ describe('kovo export', () => {
           '--stylesheet-env',
           'KOVO_TEST_STYLESHEET_HREF',
         ]),
-      ).resolves.toBe(1);
+      ).resolves.toBe(2);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(

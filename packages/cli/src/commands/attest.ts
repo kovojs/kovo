@@ -12,13 +12,7 @@ import {
   type EscapeObligationReviewSubject,
 } from '@kovojs/server/internal/execution';
 
-import {
-  EXPLAIN_ARGV_SPEC,
-  EXPLAIN_USAGE_LINE,
-  commandArgvError,
-  parsedStringOption,
-  parseCommandArgv,
-} from '../commands-manifest.js';
+import { parseKovoCommandFormInvocation } from '../commands-manifest.js';
 import { readBoundedRegularFile } from './bounded-regular-file.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
 import type { CliCommandResult } from '../shared.js';
@@ -44,26 +38,15 @@ interface AttestOptions {
 export function parseAttestArgs(
   args: readonly string[],
 ): { ok: true; options: AttestOptions } | { message: string; ok: false } {
-  const parsed = parseCommandArgv(args, EXPLAIN_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('explain', parsed, `kovo: usage: ${EXPLAIN_USAGE_LINE}`);
-  if (parsed.value.positionals.length !== 0) {
-    return { message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`, ok: false };
-  }
-  const url = parsedStringOption(parsed.value, '--attest');
-  const artifactPath = parsedStringOption(parsed.value, '--artifact');
-  const trustAnchor = parsedStringOption(parsed.value, '--trust-anchor');
-  const escapeCensusReviewsPath = parsedStringOption(parsed.value, '--escape-census-reviews');
-  const escapeReviewsPath = parsedStringOption(parsed.value, '--escape-reviews');
-  const expectedOptionCount =
-    3 + (escapeReviewsPath === undefined ? 0 : 1) + (escapeCensusReviewsPath === undefined ? 0 : 1);
-  if (
-    url === undefined ||
-    artifactPath === undefined ||
-    trustAnchor === undefined ||
-    parsed.value.options.size !== expectedOptionCount
-  ) {
-    return { message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`, ok: false };
-  }
+  const parsed = parseKovoCommandFormInvocation('explain', 'attest', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const {
+    artifact: artifactPath,
+    escapeCensusReviews: escapeCensusReviewsPath,
+    escapeReviews: escapeReviewsPath,
+    trustAnchor,
+    attest: url,
+  } = parsed.value.options;
   if (!/^sha256:[a-f0-9]{64}$/u.test(trustAnchor)) {
     return { message: 'kovo: --trust-anchor must be a sha256 fingerprint.', ok: false };
   }

@@ -197,6 +197,15 @@ export function runStarterTypecheck(root: string): void {
   );
 }
 
+export function runStarterAppHttpTest(root: string): void {
+  execFileSync(resolveStarterBin(root, 'vitest'), ['--run', 'src/app.test.ts'], {
+    cwd: root,
+    env: withStarterBinOnPath(root),
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: 'pipe',
+  });
+}
+
 export function runStarterVpCheck(root: string): void {
   execFileSync(resolveStarterBin(root, 'vp'), ['check'], {
     cwd: root,

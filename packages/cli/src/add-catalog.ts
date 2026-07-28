@@ -4,6 +4,8 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { KOVO_ADD_COMPONENT_NAMES, type AddComponentName } from './add-component-names.js';
+
 export interface VendoredUiFile {
   fileName: string;
   requiredPackageDependencies: readonly string[];
@@ -35,16 +37,18 @@ const uiPackageRoot = findUiPackageRoot(catalogModuleDir);
 const uiPackageManifestPath = join(uiPackageRoot, 'package.json');
 const uiPackageManifest = readUiPackageManifest();
 
+const vendoredUiComponentEntries = uiPackageComponentEntries(uiPackageManifest);
+assertFiniteComponentCatalog(vendoredUiComponentEntries);
 export const vendoredUiComponents = Object.freeze(
   Object.fromEntries(
-    uiPackageComponentEntries(uiPackageManifest).map(([name, sourcePath]) => [
+    vendoredUiComponentEntries.map(([name, sourcePath]) => [
       name,
       readVendoredComponent(name, sourcePath),
     ]),
   ),
-) as Readonly<Record<string, VendoredUiComponent>>;
+) as Readonly<Record<AddComponentName, VendoredUiComponent>>;
 
-export type AddComponentName = keyof typeof vendoredUiComponents;
+export type { AddComponentName } from './add-component-names.js';
 
 export function availableAddComponents(): string {
   return Object.keys(vendoredUiComponents).sort().join(', ');
@@ -52,6 +56,18 @@ export function availableAddComponents(): string {
 
 export function isAddComponentName(value: string): value is AddComponentName {
   return Object.hasOwn(vendoredUiComponents, value);
+}
+
+function assertFiniteComponentCatalog(entries: readonly [string, string][]): void {
+  const actual = entries.map(([name]) => name);
+  if (
+    actual.length !== KOVO_ADD_COMPONENT_NAMES.length ||
+    actual.some((name, index) => name !== KOVO_ADD_COMPONENT_NAMES[index])
+  ) {
+    throw new Error(
+      '@kovojs/ui exports and the semantic kovo add component enum must be updated together',
+    );
+  }
 }
 
 function readUiPackageManifest(): UiPackageManifest {

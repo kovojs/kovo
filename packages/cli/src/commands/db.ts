@@ -24,13 +24,7 @@ import { collectRuntimeRegistryFacts } from '@kovojs/server/internal/data-plane-
 import { installGeneratedTableSecurityManifestForCommand } from '@kovojs/server/internal/execution';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
-import {
-  commandArgvError,
-  DB_ARGV_SPEC,
-  DB_USAGE,
-  parsedStringOption,
-  parseCommandArgv,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
 import {
@@ -88,46 +82,29 @@ interface LoadedDbConfig {
 type DbArgParseResult = { ok: true; options: KovoDbOptions } | { message: string; ok: false };
 
 export function parseDbArgs(args: readonly string[]): DbArgParseResult {
-  const parsed = parseCommandArgv(args, DB_ARGV_SPEC);
-  if (!parsed.ok) return dbArgvError(parsed);
-
-  const [actionValue, extra] = parsed.value.positionals;
-  if (extra !== undefined) {
-    return { message: `kovo: db accepts one action.\n${dbUsage()}`, ok: false };
-  }
-  const action = parseDbAction(actionValue);
-  if (action === undefined) {
-    return {
-      message: `kovo: db requires provision, migrate, generate, or check.\n${dbUsage()}`,
-      ok: false,
-    };
-  }
-
-  const driverValue = parsedStringOption(parsed.value, '--driver');
-  const driver = driverValue === undefined ? undefined : parsePostgresRuntimeDriver(driverValue);
-  if (driverValue !== undefined && driver === undefined) {
-    return {
-      message: `kovo: unsupported db driver ${stableValue(driverValue)}.\n${dbUsage()}`,
-      ok: false,
-    };
-  }
-
-  const adminDatabaseUrl = parsedStringOption(parsed.value, '--admin-database-url');
-  const dataDir = parsedStringOption(parsed.value, '--data-dir');
-  const databaseUrl = parsedStringOption(parsed.value, '--database-url');
-  const migrationsDir = parsedStringOption(parsed.value, '--migrations');
-  const readerRole = parsedStringOption(parsed.value, '--reader-role');
-  const systemDatabaseUrl = parsedStringOption(parsed.value, '--system-database-url');
-  const writerRole = parsedStringOption(parsed.value, '--writer-role');
+  const parsed = parseKovoCommandInvocation('db', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const action = parsed.value.arguments.action;
+  const {
+    adminDatabaseUrl,
+    dataDir,
+    databaseUrl,
+    driver,
+    migrations: migrationsDir,
+    readerRole,
+    schema: schemaPath,
+    systemDatabaseUrl,
+    writerRole,
+  } = parsed.value.options;
   const options: KovoDbOptions = {
     action,
-    schemaPath: parsedStringOption(parsed.value, '--schema') ?? 'src/schema.ts',
+    migrationsDir,
+    schemaPath,
   };
   if (adminDatabaseUrl !== undefined) options.adminDatabaseUrl = adminDatabaseUrl;
   if (dataDir !== undefined) options.dataDir = dataDir;
   if (databaseUrl !== undefined) options.databaseUrl = databaseUrl;
   if (driver !== undefined) options.driver = driver;
-  if (migrationsDir !== undefined) options.migrationsDir = migrationsDir;
   if (readerRole !== undefined) options.readerRole = readerRole;
   if (systemDatabaseUrl !== undefined) options.systemDatabaseUrl = systemDatabaseUrl;
   if (writerRole !== undefined) options.writerRole = writerRole;
@@ -163,7 +140,7 @@ export async function runDbCommand(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
-      exitCode: 1,
+      exitCode: 2,
     };
   } finally {
     releaseTableSecurityManifest?.();
@@ -211,24 +188,6 @@ function resolveDbCommandDriver(
     );
   }
   return parsed;
-}
-
-function dbArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
-  message: string;
-  ok: false;
-} {
-  return commandArgvError('db', error, dbUsage());
-}
-
-function dbUsage(): string {
-  return [DB_USAGE, ''].join('\n');
-}
-
-function parseDbAction(value: string | undefined): KovoDbAction | undefined {
-  if (value === 'check' || value === 'generate' || value === 'migrate' || value === 'provision') {
-    return value;
-  }
-  return undefined;
 }
 
 function parsePostgresRuntimeDriver(value: string): KovoPostgresRuntimeDriver | undefined {

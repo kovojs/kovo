@@ -6,13 +6,8 @@ import {
   type SecurityEventRecordVerifier,
 } from '@kovojs/server/internal/execution';
 
-import {
-  INCIDENT_ARGV_SPEC,
-  INCIDENT_USAGE,
-  commandArgvError,
-  parsedStringOption,
-  parseCommandArgv,
-} from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import { readBoundedRegularFile } from './bounded-regular-file.js';
@@ -118,20 +113,15 @@ interface IncidentEventExport {
 export function parseIncidentArgs(
   args: readonly string[],
 ): { ok: true; options: IncidentOptions } | { message: string; ok: false } {
-  const parsed = parseCommandArgv(args, INCIDENT_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('incident', parsed, INCIDENT_USAGE);
-  const [action, advisoryPath, extra] = parsed.value.positionals;
-  const eventsPath = parsedStringOption(parsed.value, '--events');
-  if (
-    action !== 'scope' ||
-    advisoryPath === undefined ||
-    extra !== undefined ||
-    eventsPath === undefined ||
-    parsed.value.options.size !== 1
-  ) {
-    return { message: INCIDENT_USAGE, ok: false };
-  }
-  return { ok: true, options: { advisoryPath, eventsPath } };
+  const parsed = parseKovoCommandInvocation('incident', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  return {
+    ok: true,
+    options: {
+      advisoryPath: parsed.value.arguments.advisory,
+      eventsPath: parsed.value.options.events,
+    },
+  };
 }
 
 /**
@@ -208,7 +198,7 @@ export function runIncidentScopeCommand(
     return { exitCode: status === 'unanswerable' ? 1 : 0, output: `${output}\n` };
   } catch (error) {
     return {
-      error: `kovo-incident-scope/v1\nERROR ${error instanceof Error ? error.message : String(error)}`,
+      error: `${requireKovoCommandResultProtocol('incident')}\nERROR ${error instanceof Error ? error.message : String(error)}`,
       exitCode: 1,
     };
   }

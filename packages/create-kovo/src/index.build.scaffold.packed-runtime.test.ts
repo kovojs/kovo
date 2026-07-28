@@ -11,6 +11,7 @@ import {
   createStarterApp,
   fetchTextWhenReady,
   reservePort,
+  runStarterAppHttpTest,
   runStarterVpCheck,
   stopProcess,
   withStarterBinOnPath,
@@ -30,6 +31,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
 
     try {
       expectPackedKovoPackageShape(app.root);
+      runStarterAppHttpTest(app.root);
       runStarterVpCheck(app.root);
       buildReusableProductionArtifact(app.root);
       expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(

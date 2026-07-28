@@ -1,1197 +1,1510 @@
+import {
+  KOVO_CLI_SCHEMA,
+  KOVO_COMMAND_SCHEMA,
+  type KovoCommandEntry,
+  type KovoCommandName,
+  type KovoCommandOptionSchema,
+  type KovoCommandSchemaEntry,
+  type KovoCommandUsageForm,
+  type KovoCommandUsageToken,
+  type KovoCommandValueSchema,
+  type KovoMetaCommandName,
+  type KovoMetaCommandSchemaEntry,
+} from './command-schema.js';
+import { readCliPackageVersion } from './package-version.js';
+
+export type {
+  KovoAsyncCommandName,
+  KovoCommandEntry,
+  KovoCommandName,
+  KovoSyncCommandName,
+} from './command-schema.js';
+
 /**
  * @internal
  *
- * Shared command manifest for the `kovo` bin. This is build/docs tooling, not a
- * public API: it is the single source of truth for the CLI's command surface
- * (the same commands `main`/`mainAsync` dispatch in `./index.ts`) and the usage
- * strings those dispatchers emit.
- *
- * The docs generator (`site/scripts/cli-ref.mjs`) imports this manifest to render
- * the command-first `/api/cli/` page, and `./index.ts` imports the exported usage
- * constants so the bin and the docs cannot drift. A vitest drift guard
- * (`./commands-manifest.test.ts`) asserts the manifest covers every dispatched
- * command and that each usage constant matches the literal the CLI emits.
- *
- * Marked `@internal` so it stays out of the public `@kovojs/cli` API surface (the
- * api-surface gate, `scripts/api-surface-gate.mjs`) — it is reachable only through
- * the `@kovojs/cli/internal` subpath and the docs tooling, never the `.` export.
+ * Adapters over the semantic command AST in `command-schema.ts`. Argv, help,
+ * completion, and command-reference output all resolve through this module so a
+ * new flag or command cannot exist on only one surface.
  */
 
-/** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */
-export const CHECK_USAGE =
-  'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
+/** @internal Version of the installed CLI package. */
+export const KOVO_CLI_VERSION = readCliVersion();
 
-/** @internal Usage line emitted for the asynchronous advisory verifier. */
-export const ADVISORY_USAGE =
-  'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]';
+/** @internal Generated CLI version line. */
+export function formatCliVersion(): string {
+  return `${KOVO_CLI_SCHEMA.name} ${KOVO_CLI_VERSION}\n`;
+}
 
-/** @internal Usage line emitted for `kovo audit` (see `parseAuditArgs`). */
-export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]';
+/** @internal Usage line emitted for `kovo check`. */
+export const CHECK_USAGE = renderInlineUsage(requireCommand('check'));
 
-/** @internal Usage forms emitted for `kovo explain` (see `explainUsage`). */
-export const EXPLAIN_USAGE = [
-  'usage: kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json]',
-  '       kovo explain document [graph.json]',
-  '       kovo explain --sources-sinks',
-  '       kovo explain --tasks [graph.json]',
-  '       kovo explain --agent [graph.json]',
-  '       kovo explain --grants [graph.json]',
-  '       kovo explain --endpoints [graph.json]',
-  '       kovo explain --revealed [graph.json]',
-  '       kovo explain --trust [graph.json]',
-  '       kovo explain --capabilities [graph.json]',
-  '       kovo explain --cookies [graph.json]',
-  '       kovo explain --auth-lifecycle',
-  '       kovo explain --model-boundaries',
-  '       kovo explain --authorization [graph.json]',
-  '       kovo explain --access [--fail-on-findings] [graph.json]',
-  '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
-  '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
-  '       kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint> [--escape-reviews <reviews.json>] [--escape-census-reviews <reviews.json>]',
-] as const;
+/** @internal Usage line emitted for asynchronous advisory verification. */
+export const ADVISORY_USAGE = renderFormUsageLine(
+  requireCommand('check'),
+  requireUsageForm('check', 'advisories'),
+  'usage: ',
+);
 
-/**
- * @internal Single-line `kovo explain` usage as emitted by the bin's error path.
- * The bin prints all explain forms on one line joined by ` | `; keep that exact
- * literal here so the drift guard can compare against `explainUsage()`.
- */
-export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --agent [graph.json] | kovo explain --grants [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --auth-lifecycle | kovo explain --model-boundaries | kovo explain --authorization [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json] | kovo explain --attest <url> --artifact <graph.json> --trust-anchor <sha256:fingerprint> [--escape-reviews <reviews.json>] [--escape-census-reviews <reviews.json>]';
+/** @internal Usage line emitted for `kovo audit`. */
+export const AUDIT_USAGE = renderInlineUsage(requireCommand('audit'));
 
-/** @internal Usage line emitted for `kovo add` (see `addUsage`). */
-export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
+/** @internal Usage forms emitted for `kovo explain`. */
+export const EXPLAIN_USAGE = renderMultilineUsage(requireCommand('explain'));
 
-/** @internal Usage line emitted for `kovo build` (see `buildUsage`). */
-export const BUILD_USAGE =
-  'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]';
+/** @internal Single-line explain usage emitted on error paths. */
+export const EXPLAIN_USAGE_LINE = renderJoinedUsage(requireCommand('explain'));
 
-/** @internal Usage line emitted for `kovo dev` (see `parseDevArgs`). */
-export const DEV_USAGE =
-  'usage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>]';
+/** @internal Usage line emitted for `kovo add`. */
+export const ADD_USAGE = renderInlineUsage(requireCommand('add'));
 
-/** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
-export const DB_USAGE =
-  'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--system-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
+/** @internal Usage line emitted for `kovo build`. */
+export const BUILD_USAGE = renderInlineUsage(requireCommand('build'));
 
-/** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
-export const COMPILE_USAGE = [
-  'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
-  '       kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check]',
-  '       kovo compile graph <input.json> --out <graph.json> [--check]',
-  '       kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check]',
-  '       kovo compile drizzle-static <input.json> --out <facts.json> [--check]',
-  '       kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check]',
-  '       kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]',
-] as const;
+/** @internal Usage line emitted for `kovo dev`. */
+export const DEV_USAGE = renderInlineUsage(requireCommand('dev'));
 
-/** @internal Single-line `kovo compile` usage as emitted by the bin's error path. */
-export const COMPILE_USAGE_LINE =
-  'kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>] | kovo compile route <source.tsx> --out <artifact.tsx> [--file-name <name>] [--artifact-file-name <name>] [--rewrite <Local=specifier>] [--facts-out <json>] [--check] | kovo compile graph <input.json> --out <graph.json> [--check] | kovo compile mutation-inputs <source.ts> --out <facts.json> [--file-name <name>] [--check] | kovo compile drizzle-static <input.json> --out <facts.json> [--check] | kovo compile drizzle-optimistic <input.json> --out <artifact.ts> [--facts-out <json>] [--check] | kovo compile package-css <package> --out <file.css> [--entry <source.ts>] [--check]';
+/** @internal Usage line emitted for `kovo db`. */
+export const DB_USAGE = renderInlineUsage(requireCommand('db'));
 
-/** @internal Usage forms emitted for `kovo fix`. */
-export const FIX_USAGE =
-  'usage: kovo fix <source.tsx|source.jsx> [--check] | kovo fix --cost-report';
+/** @internal Usage line emitted for authenticated local docs retrieval. */
+export const DOCS_USAGE = renderInlineUsage(requireCommand('docs'));
 
-/** @internal Usage line emitted for `kovo export` (see `exportUsage`). */
-export const EXPORT_USAGE =
-  'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]';
+/** @internal Usage forms emitted for `kovo compile`. */
+export const COMPILE_USAGE = renderMultilineUsage(requireCommand('compile'));
 
-/** @internal Usage line emitted for `kovo mcp` (see `mcpUsage`). */
-export const MCP_USAGE = 'usage: kovo mcp';
+/** @internal Single-line compile usage emitted on error paths. */
+export const COMPILE_USAGE_LINE = renderJoinedUsage(requireCommand('compile'));
+
+/** @internal Usage line emitted for `kovo fix`. */
+export const FIX_USAGE = renderInlineUsage(requireCommand('fix'));
+
+/** @internal Usage line emitted for `kovo export`. */
+export const EXPORT_USAGE = renderInlineUsage(requireCommand('export'));
+
+/** @internal Usage line emitted for `kovo mcp`. */
+export const MCP_USAGE = renderInlineUsage(requireCommand('mcp'));
 
 /** @internal Usage line emitted for `kovo update-docs`. */
-export const UPDATE_DOCS_USAGE = 'usage: kovo update-docs';
+export const UPDATE_DOCS_USAGE = renderInlineUsage(requireCommand('update-docs'));
 
 /** @internal Usage line emitted for `kovo incident`. */
-export const INCIDENT_USAGE =
-  'usage: kovo incident scope <advisory.json> --events <security-events.json>';
+export const INCIDENT_USAGE = renderInlineUsage(requireCommand('incident'));
 
-/** @internal A single command-line flag and its human description. */
+/** @internal One flag rendered into the generated command reference. */
 export interface CommandFlag {
-  /** The flag token as typed on the command line, e.g. `--out <dir>`. */
-  flag: string;
-  /** Short prose describing what the flag does. */
-  description: string;
+  readonly description: string;
+  readonly flag: string;
 }
 
-/** @internal Value shape accepted by the shared argv parser. */
-export type CommandArgvOptionKind = 'boolean' | 'value';
-
-/** @internal One flag spec consumed by the shared argv parser. */
-export interface CommandArgvOptionSpec {
-  /** Canonical flag token, e.g. `--out`. */
-  flag: `--${string}`;
-  /** Whether the flag is valueless or consumes a value. */
-  kind: CommandArgvOptionKind;
-  /** Allow the option to appear multiple times and collect every value. */
-  repeat?: boolean;
-  /** Exact diagnostic emitted when a value flag is present with no value. */
-  requiresValueMessage?: string;
+type SemanticScalarValue<Schema> = Schema extends {
+  readonly values: readonly (infer Value extends string)[];
 }
+  ? Value
+  : Schema extends { readonly kind: 'integer' }
+    ? number
+    : string;
 
-/** @internal One command or compile-subcommand argv parse spec. */
-export interface CommandArgvSpec {
-  /** Specs for all supported flags. */
-  options: readonly CommandArgvOptionSpec[];
+type SemanticArgumentValue<Token> = Token extends {
+  readonly repeatable: true;
+  readonly value: infer Schema;
 }
+  ? readonly SemanticScalarValue<Schema>[]
+  : Token extends { readonly value: infer Schema }
+    ? SemanticScalarValue<Schema>
+    : never;
 
-/** @internal Parsed argv result before command-specific semantic validation. */
-export interface ParsedCommandArgv {
-  options: ReadonlyMap<string, true | string | readonly string[]>;
-  positionals: readonly string[];
+type FormArgumentToken<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
 }
+  ? Extract<Token, { readonly kind: 'argument' }>
+  : never;
 
-/** @internal Shared argv parser result. */
-export type ParseCommandArgvResult =
-  | { ok: true; value: ParsedCommandArgv }
-  | { error: 'help'; ok: false }
-  | { error: 'missing-value'; message: string; ok: false }
-  | { error: 'unknown-option'; ok: false; option: string };
+type RequiredFormArguments<Form> = {
+  readonly [Token in FormArgumentToken<Form> as Token extends { readonly required: true }
+    ? Token['name']
+    : never]: SemanticArgumentValue<Token>;
+};
 
-/** @internal Check command flags consumed by `parseCheckArgs`. */
-export const CHECK_ARGV_SPEC = {
-  options: [],
-} as const satisfies CommandArgvSpec;
+type OptionalFormArguments<Form> = {
+  readonly [Token in FormArgumentToken<Form> as Token extends { readonly required: false }
+    ? Token['name']
+    : never]?: SemanticArgumentValue<Token>;
+};
 
-/** @internal Advisory-check flags consumed by `parseAdvisoryArgs`. */
-export const ADVISORY_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--attestation',
-      kind: 'value',
-      requiresValueMessage: 'kovo: check advisories --attestation requires a URL or file.\n',
-    },
-    {
-      flag: '--feed',
-      kind: 'value',
-      requiresValueMessage: 'kovo: check advisories --feed requires a URL or file.\n',
-    },
-    {
-      flag: '--severity-floor',
-      kind: 'value',
-      requiresValueMessage: 'kovo: check advisories --severity-floor requires a severity.\n',
-    },
-    {
-      flag: '--state',
-      kind: 'value',
-      requiresValueMessage: 'kovo: check advisories --state requires a file.\n',
-    },
-  ],
-} as const satisfies CommandArgvSpec;
+type FormOptionToken<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
+}
+  ? Token extends { readonly kind: 'option' }
+    ? Token
+    : Token extends { readonly kind: 'group'; readonly tokens: readonly (infer GroupToken)[] }
+      ? GroupToken
+      : never
+  : never;
 
-/** @internal Audit command flags consumed by `parseAuditArgs`. */
-export const AUDIT_ARGV_SPEC = {
-  options: [{ flag: '--fail-on-findings', kind: 'boolean' }],
-} as const satisfies CommandArgvSpec;
+type FormOptionId<Form> =
+  FormOptionToken<Form> extends infer Token
+    ? Token extends { readonly option: infer Id extends string }
+      ? Id
+      : never
+    : never;
 
-/** @internal Explain command flags consumed by `parseExplainArgs`. */
-export const EXPLAIN_ARGV_SPEC = {
-  options: [
-    { flag: '--access', kind: 'boolean' },
-    { flag: '--agent', kind: 'boolean' },
-    {
-      flag: '--artifact',
-      kind: 'value',
-      requiresValueMessage: 'kovo: explain --artifact requires a graph path.\n',
-    },
-    {
-      flag: '--attest',
-      kind: 'value',
-      requiresValueMessage: 'kovo: explain --attest requires a deployment URL.\n',
-    },
-    { flag: '--auth-lifecycle', kind: 'boolean' },
-    { flag: '--authorization', kind: 'boolean' },
-    { flag: '--capabilities', kind: 'boolean' },
-    { flag: '--cookies', kind: 'boolean' },
-    { flag: '--endpoints', kind: 'boolean' },
-    { flag: '--grants', kind: 'boolean' },
-    {
-      flag: '--escape-census-reviews',
-      kind: 'value',
-      requiresValueMessage: 'kovo: explain --escape-census-reviews requires a review file.\n',
-    },
-    {
-      flag: '--escape-reviews',
-      kind: 'value',
-      requiresValueMessage: 'kovo: explain --escape-reviews requires a review file.\n',
-    },
-    { flag: '--fail-on-findings', kind: 'boolean' },
-    { flag: '--layouts', kind: 'boolean' },
-    { flag: '--model-boundaries', kind: 'boolean' },
-    { flag: '--optimistic', kind: 'boolean' },
-    { flag: '--revealed', kind: 'boolean' },
-    { flag: '--sources-sinks', kind: 'boolean' },
-    { flag: '--tasks', kind: 'boolean' },
-    { flag: '--trust', kind: 'boolean' },
-    {
-      flag: '--trust-anchor',
-      kind: 'value',
-      requiresValueMessage: 'kovo: explain --trust-anchor requires a sha256 fingerprint.\n',
-    },
-    { flag: '--unguarded', kind: 'boolean' },
-    { flag: '--unscoped', kind: 'boolean' },
-  ],
-} as const satisfies CommandArgvSpec;
+type EntryOption<Entry, Id extends string> = Entry extends {
+  readonly options: readonly (infer Option)[];
+}
+  ? Extract<Option, { readonly id: Id }>
+  : never;
 
-/** @internal Incident command flags consumed by the retrospective scope verifier. */
-export const INCIDENT_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--events',
-      kind: 'value',
-      requiresValueMessage: 'kovo: incident --events requires a security-event export path.\n',
-    },
-  ],
-} as const satisfies CommandArgvSpec;
+type SemanticOptionValue<Option> = Option extends {
+  readonly value: infer Schema;
+}
+  ? Option extends { readonly repeatable: true }
+    ? readonly SemanticScalarValue<Schema>[]
+    : SemanticScalarValue<Schema>
+  : boolean;
 
-/** @internal Add command flags consumed by `parseAddArgs`. */
-export const ADD_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--out',
-      kind: 'value',
-      requiresValueMessage: 'kovo: add --out requires a directory.\n',
-    },
-  ],
-} as const satisfies CommandArgvSpec;
+type RequiredOptionIdFromToken<Token> = Token extends {
+  readonly kind: 'option';
+  readonly option: infer Id extends string;
+  readonly required: true;
+}
+  ? Id
+  : Token extends {
+        readonly kind: 'group';
+        readonly required: true;
+        readonly tokens: readonly (infer GroupToken)[];
+      }
+    ? GroupToken extends {
+        readonly option: infer Id extends string;
+        readonly required: true;
+      }
+      ? Id
+      : never
+    : never;
 
-/** @internal Build command flags consumed by `parseBuildArgs`. */
-export const BUILD_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--out',
-      kind: 'value',
-      requiresValueMessage: 'kovo: build --out requires a directory.\n',
-    },
-    {
-      flag: '--preset',
-      kind: 'value',
-      requiresValueMessage: 'kovo: build --preset requires a preset name.\n',
-    },
-    { flag: '--check', kind: 'boolean' },
-    { flag: '--no-cache', kind: 'boolean' },
-  ],
-} as const satisfies CommandArgvSpec;
+type RequiredFormOptionId<Form> = Form extends {
+  readonly tokens: readonly (infer Token)[];
+}
+  ? RequiredOptionIdFromToken<Token>
+  : never;
 
-/** @internal Safe source rewrite and cost-report flags consumed by `parseFixArgs`. */
-export const FIX_ARGV_SPEC = {
-  options: [
-    { flag: '--check', kind: 'boolean' },
-    { flag: '--cost-report', kind: 'boolean' },
-  ],
-} as const satisfies CommandArgvSpec;
+type SemanticFormOptions<Entry, Form> = {
+  readonly [Id in FormOptionId<Form>]?: SemanticOptionValue<EntryOption<Entry, Id>>;
+} & {
+  readonly [Id in RequiredFormOptionId<Form>]-?: SemanticOptionValue<EntryOption<Entry, Id>>;
+};
 
-/** @internal Dev command flags consumed by the bootstrap-first Vite runner. */
-export const DEV_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--root',
-      kind: 'value',
-      requiresValueMessage: 'kovo: dev --root requires a directory.\n',
-    },
-    {
-      flag: '--config',
-      kind: 'value',
-      requiresValueMessage: 'kovo: dev --config requires a file.\n',
-    },
-    {
-      flag: '--host',
-      kind: 'value',
-      requiresValueMessage: 'kovo: dev --host requires a host.\n',
-    },
-    {
-      flag: '--port',
-      kind: 'value',
-      requiresValueMessage: 'kovo: dev --port requires a port.\n',
-    },
-    { flag: '--strict-port', kind: 'boolean' },
-    {
-      flag: '--mode',
-      kind: 'value',
-      requiresValueMessage: 'kovo: dev --mode requires a mode.\n',
-    },
-  ],
-} as const satisfies CommandArgvSpec;
+type ParsedFormOptions<Entry, Form> = {
+  readonly [Id in FormOptionId<Form>]: EntryOption<Entry, Id> extends {
+    readonly value: infer Schema;
+  }
+    ? EntryOption<Entry, Id> extends { readonly repeatable: true }
+      ? readonly SemanticScalarValue<Schema>[]
+      : Id extends RequiredFormOptionId<Form>
+        ? SemanticScalarValue<Schema>
+        : EntryOption<Entry, Id> extends { readonly value: { readonly default: unknown } }
+          ? SemanticScalarValue<Schema>
+          : SemanticScalarValue<Schema> | undefined
+    : boolean;
+};
 
-/** @internal DB command flags consumed by `parseDbArgs`. */
-export const DB_ARGV_SPEC = {
-  options: [
-    {
-      flag: '--schema',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --schema requires a module path.\n',
-    },
-    {
-      flag: '--driver',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --driver requires pglite, pg, or node-postgres.\n',
-    },
-    {
-      flag: '--database-url',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --database-url requires a URL.\n',
-    },
-    {
-      flag: '--admin-database-url',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --admin-database-url requires a URL.\n',
-    },
-    {
-      flag: '--system-database-url',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --system-database-url requires a URL.\n',
-    },
-    {
-      flag: '--data-dir',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --data-dir requires a directory.\n',
-    },
-    {
-      flag: '--migrations',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --migrations requires a directory.\n',
-    },
-    {
-      flag: '--reader-role',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --reader-role requires a role name.\n',
-    },
-    {
-      flag: '--writer-role',
-      kind: 'value',
-      requiresValueMessage: 'kovo: db --writer-role requires a role name.\n',
-    },
-  ],
-} as const satisfies CommandArgvSpec;
+type CommandForm<Entry> = Entry extends { readonly usage: readonly (infer Form)[] } ? Form : never;
 
-/** @internal Export command flags consumed by `parseExportArgs`. */
-export const EXPORT_ARGV_SPEC = {
-  options: [
-    { flag: '--vite', kind: 'boolean' },
-    {
-      flag: '--root',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --root requires a directory.\n',
-    },
-    {
-      flag: '--out',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --out requires a directory.\n',
-    },
-    {
-      flag: '--origin',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --origin requires a URL.\n',
-    },
-    {
-      flag: '--manifest',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --manifest requires a file.\n',
-    },
-    {
-      flag: '--dist',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --dist requires a directory.\n',
-    },
-    {
-      flag: '--asset-base',
-      kind: 'value',
-      requiresValueMessage: 'kovo: export --asset-base requires a URL path.\n',
-    },
-    { flag: '--skip-non-exportable', kind: 'boolean' },
-  ],
-} as const satisfies CommandArgvSpec;
+type ParsedInvocationFor<Entry, Form> = Entry extends {
+  readonly name: infer Name extends KovoCommandName;
+}
+  ? Form extends { readonly id: infer Id extends string }
+    ? {
+        readonly arguments: RequiredFormArguments<Form> & OptionalFormArguments<Form>;
+        readonly command: Name;
+        readonly form: Id;
+        readonly options: ParsedFormOptions<Entry, Form>;
+      }
+    : never
+  : never;
 
-/** @internal Compile subcommand flags consumed by `parseCompileArgs`. */
-export const COMPILE_ARGV_SPECS = {
-  component: {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile component --out requires a path.\n',
-      },
-      {
-        flag: '--file-name',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile component --file-name requires a name.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-      { flag: '--fixpoint', kind: 'boolean' },
-      { flag: '--render-equivalence', kind: 'boolean' },
-      {
-        flag: '--registry-facts',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile component --registry-facts requires a JSON path.\n',
-      },
-      {
-        flag: '--query-shape-facts',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile component --query-shape-facts requires a JSON path.\n',
-      },
-      {
-        flag: '--facts-out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile component --facts-out requires a JSON path.\n',
-      },
-      { flag: '--emit-client-files', kind: 'boolean' },
-      {
-        flag: '--allow-diagnostic',
-        kind: 'value',
-        repeat: true,
-        requiresValueMessage: 'kovo: compile component --allow-diagnostic requires a code.\n',
-      },
-    ],
-  },
-  route: {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile route --out requires a path.\n',
-      },
-      {
-        flag: '--file-name',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile route --file-name requires a name.\n',
-      },
-      {
-        flag: '--artifact-file-name',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile route --artifact-file-name requires a name.\n',
-      },
-      {
-        flag: '--rewrite',
-        kind: 'value',
-        repeat: true,
-        requiresValueMessage: 'kovo: compile route --rewrite requires Local=specifier.\n',
-      },
-      {
-        flag: '--facts-out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile route --facts-out requires a JSON path.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-  graph: {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile graph --out requires a path.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-  'mutation-inputs': {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile mutation-inputs --out requires a path.\n',
-      },
-      {
-        flag: '--file-name',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile mutation-inputs --file-name requires a name.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-  'drizzle-optimistic': {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile drizzle-optimistic --out requires a path.\n',
-      },
-      {
-        flag: '--facts-out',
-        kind: 'value',
-        requiresValueMessage:
-          'kovo: compile drizzle-optimistic --facts-out requires a JSON path.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-  'drizzle-static': {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile drizzle-static --out requires a path.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-  'package-css': {
-    options: [
-      {
-        flag: '--out',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile package-css --out requires a path.\n',
-      },
-      {
-        flag: '--entry',
-        kind: 'value',
-        requiresValueMessage: 'kovo: compile package-css --entry requires a source path.\n',
-      },
-      { flag: '--check', kind: 'boolean' },
-    ],
-  },
-} as const satisfies Record<string, CommandArgvSpec>;
+/** @internal Form-discriminated semantic result produced by the command AST parser. */
+export type KovoParsedCommandInvocation<
+  Name extends KovoCommandName = KovoCommandName,
+  Entry extends KovoCommandEntry = Extract<KovoCommandEntry, { readonly name: Name }>,
+> = CommandForm<Entry> extends infer Form ? ParsedInvocationFor<Entry, Form> : never;
 
-/** @internal One `kovo <command>` entry rendered into the CLI docs page. */
+/** @internal Exact success/error result of schema-owned command parsing. */
+export type KovoCommandInvocationParseResult<Name extends KovoCommandName = KovoCommandName> =
+  | { readonly ok: true; readonly value: KovoParsedCommandInvocation<Name> }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false };
+
+type KovoCommandFormId<Name extends KovoCommandName> = KovoParsedCommandInvocation<Name>['form'];
+
+type SemanticRequestOptions<Entry, Form> = [RequiredFormOptionId<Form>] extends [never]
+  ? { readonly options?: SemanticFormOptions<Entry, Form> }
+  : { readonly options: SemanticFormOptions<Entry, Form> };
+
+type SemanticRequestFor<Entry, Form> = Entry extends {
+  readonly name: infer Name extends KovoCommandName;
+}
+  ? Form extends { readonly id: infer Id extends string }
+    ? {
+        readonly arguments: RequiredFormArguments<Form> & OptionalFormArguments<Form>;
+        readonly command: Name;
+        readonly form: Id;
+      } & SemanticRequestOptions<Entry, Form>
+    : never
+  : never;
+
+/**
+ * @internal Precise programmatic command union. Forms, enum literals, argument
+ * names, repeats, and semantic boolean polarity all derive from the same AST.
+ */
+export type KovoSemanticCommandRequest = KovoCommandEntry extends infer Entry
+  ? Entry extends KovoCommandEntry
+    ? CommandForm<Entry> extends infer Form
+      ? SemanticRequestFor<Entry, Form>
+      : never
+    : never
+  : never;
+
+/** @internal One command-reference projection. */
 export interface CommandManifestEntry {
-  /** The dispatched sub-command name, e.g. `check`. */
-  name: string;
-  /** One-line summary of what the command does. */
-  summary: string;
-  /** Usage line(s) for the command, mirroring the bin's `usage:` literals. */
-  usage: string | readonly string[];
-  /** Recognized flags, if any. */
-  flags?: readonly CommandFlag[];
-  /** Copy-paste example invocations. */
-  examples?: readonly string[];
-  /** Whether the command is dispatched through `mainAsync` (async) vs `main`. */
-  async?: boolean;
-  /** Display rank for `kovo` with no args. */
-  noArgsOrder: number;
-  /** Display rank for unknown-command diagnostics. */
-  unknownOrder: number;
+  readonly aliases: readonly string[];
+  readonly async?: boolean;
+  readonly category: KovoCommandSchemaEntry['category'];
+  readonly examples: readonly string[];
+  readonly exits: KovoCommandSchemaEntry['exits'];
+  readonly flags: readonly CommandFlag[];
+  readonly name: KovoCommandName;
+  readonly noArgsOrder: number;
+  readonly resultProtocol: string | null;
+  readonly summary: string;
+  readonly unknownOrder: number;
+  readonly usage: string | readonly string[];
 }
 
 /**
- * @internal The full `kovo` command surface, in display order. Covers every
- * command `main`/`mainAsync` dispatches: check, explain, add, build, dev, db,
- * audit, compile, export, mcp, update-docs.
+ * @internal Complete generated command-reference data. This is an adapter, not
+ * an independently editable manifest.
  */
-export const COMMANDS_MANIFEST = [
-  {
-    name: 'check',
-    noArgsOrder: 4,
-    summary:
-      'Run the consistency and exhaustiveness verifier over an extracted app graph and report findings.',
-    unknownOrder: 6,
-    usage: CHECK_USAGE,
-    flags: [
-      {
-        flag: 'optimistic',
-        description:
-          'Restrict to the optimistic-exhaustiveness slice (KV310) instead of the full check.',
-      },
-      {
-        flag: 'coverage',
-        description: 'Restrict to the update-coverage slice (KV311) instead of the full check.',
-      },
-      {
-        flag: 'endpoint-posture',
-        description: 'Restrict to endpoint response posture fixture verification.',
-      },
-      {
-        flag: 'sources-sinks',
-        description: 'Emit the Phase 1 source/sink inventory and write .kovo/sources-sinks.json.',
-      },
-      {
-        flag: 'env',
-        description:
-          'Probe the deployment assume-guarantee contract and print exact retained obligations and suspended guarantees.',
-      },
-      {
-        flag: 'advisories',
-        description:
-          'Authenticate the signed Kovo advisory feed and match it against exact package and graph-schema provenance.',
-      },
-      {
-        flag: '--severity-floor <severity>',
-        description:
-          'Fail on matching advisories at or above low, moderate, high (default), or critical.',
-      },
-      {
-        flag: '--feed <url|file>',
-        description: 'Override the default HTTPS advisory feed, primarily for an offline drill.',
-      },
-      {
-        flag: '--attestation <url|file>',
-        description: 'Override the digest-addressed GitHub attestation response.',
-      },
-      {
-        flag: '--state <file>',
-        description: 'Override the local epoch/equivocation state file.',
-      },
-    ],
-    examples: [
-      'kovo check',
-      'kovo check coverage graph.json',
-      'kovo check endpoint-posture .kovo/endpoint-posture.json',
-      'kovo check sources-sinks',
-      'kovo check env deployment.json',
-      'kovo check advisories .kovo/graph.json',
-    ],
-  },
-  {
-    name: 'explain',
-    noArgsOrder: 7,
-    summary: 'Print the stable graph view for a single subject, or run the security review modes.',
-    unknownOrder: 5,
-    usage: EXPLAIN_USAGE,
-    flags: [
-      { flag: '--optimistic', description: 'Include optimistic-update detail for the subject.' },
-      {
-        flag: '--sources-sinks',
-        description: 'Print the Phase 1 source/sink inventory and write its JSON artifact.',
-      },
-      {
-        flag: '--endpoints',
-        description:
-          'List the machine-ingress audit for endpoints, webhooks, file/stream routes, and dynamic surfaces.',
-      },
-      {
-        flag: '--tasks',
-        description: 'List durable task registry facts and static composition edges.',
-      },
-      {
-        flag: '--agent',
-        description: 'Print exact model/tool effects and retained tools at every integrity level.',
-      },
-      {
-        flag: '--grants',
-        description:
-          'Print compiler-derived grant resources, attenuation decisions, and named budgeted escapes.',
-      },
-      {
-        flag: '--revealed',
-        description:
-          'List confidentiality reveals, distinguishing proof-grade projections from audit-grade arbitrary functions.',
-      },
-      {
-        flag: '--trust',
-        description: 'List explicit trust escape hatches and their provenance.',
-      },
-      {
-        flag: '--capabilities',
-        description:
-          'List held dangerous capabilities and the static external-Postgres posture-lease contract.',
-      },
-      {
-        flag: '--cookies',
-        description: 'List cookie posture and downgrade findings.',
-      },
-      {
-        flag: '--access',
-        description: 'Review explicit access decisions and missing-access facts.',
-      },
-      {
-        flag: '--authorization',
-        description:
-          'Pair exact app guard facts with generated Postgres policies without claiming equivalence or live activation.',
-      },
-      {
-        flag: '--auth-lifecycle',
-        description:
-          'Print inherited Better Auth session defaults, Kovo-owned identity transitions, and unsupported lifecycle classes.',
-      },
-      {
-        flag: '--model-boundaries',
-        description:
-          'Print bounded-model assumptions, finite bounds, modeled actions, and the explicit complement.',
-      },
-      { flag: '--unguarded', description: 'Audit handlers reachable without a guard.' },
-      { flag: '--unscoped', description: 'Audit storage access that is not tenant-scoped.' },
-      {
-        flag: '--fail-on-findings',
-        description: 'Exit non-zero when the audit reports any findings.',
-      },
-    ],
-    examples: [
-      'kovo explain component Cart graph.json',
-      'kovo explain document',
-      'kovo explain --sources-sinks',
-      'kovo explain --tasks',
-      'kovo explain --agent',
-      'kovo explain --grants',
-      'kovo explain --endpoints',
-      'kovo explain --revealed',
-      'kovo explain --trust',
-      'kovo explain --capabilities',
-      'kovo explain --cookies',
-      'kovo explain --authorization',
-      'kovo explain --auth-lifecycle',
-      'kovo explain --model-boundaries',
-      'kovo explain --access --fail-on-findings',
-      'kovo explain --unguarded --fail-on-findings',
-    ],
-  },
-  {
-    name: 'incident',
-    noArgsOrder: 7.5,
-    summary:
-      'Replay a finite advisory decision-site predicate against a tamper-evident security-event export.',
-    unknownOrder: 7,
-    usage: INCIDENT_USAGE,
-    flags: [
-      {
-        flag: 'scope <advisory.json>',
-        description:
-          'Return the affected principal and tenant set, or an explicit unanswerable verdict.',
-      },
-      {
-        flag: '--events <security-events.json>',
-        description: 'Read the bounded append-only event export to scope.',
-      },
-    ],
-    examples: ['kovo incident scope advisory.json --events security-events.json'],
-  },
-  {
-    name: 'add',
-    noArgsOrder: 1,
-    summary: 'Copy a vendored @kovojs/ui component into your project (shadcn-style copy-in).',
-    unknownOrder: 1,
-    usage: ADD_USAGE,
-    async: true,
-    flags: [
-      {
-        flag: '--out <dir>',
-        description:
-          'Destination directory for the copied component (default: project components dir).',
-      },
-    ],
-    examples: ['kovo add button', 'kovo add button card --out src/components/ui'],
-  },
-  {
-    name: 'build',
-    noArgsOrder: 3,
-    summary:
-      'Run TypeScript and kovo-check preflights, then build a Kovo app module into preset production output.',
-    unknownOrder: 2,
-    usage: BUILD_USAGE,
-    async: true,
-    flags: [
-      {
-        flag: '--out <dir>',
-        description: 'Output directory for the neutral and preset artifacts.',
-      },
-      {
-        flag: '--preset <name>',
-        description:
-          'Preset override. Current emitter: node; vercel/cloudflare fail loudly until their emitters land.',
-      },
-      {
-        flag: '--check',
-        description:
-          'Validate only: run the TypeScript and kovo-check preflights and the compiler transform (all build diagnostics), then stop before emitting deployable output.',
-      },
-    ],
-    examples: ['kovo build ./src/app-shell.ts --out dist', 'kovo build ./src/app.tsx --check'],
-  },
-  {
-    name: 'dev',
-    noArgsOrder: 3.5,
-    summary:
-      'Start Vite only after the app-resolved compiler, data-plane, and server trust roots are established.',
-    unknownOrder: 2.5,
-    usage: DEV_USAGE,
-    async: true,
-    flags: [
-      { flag: '--root <dir>', description: 'Project root (default: current directory).' },
-      {
-        flag: '--config <file>',
-        description: 'Explicit restricted client-plugin config loaded after security bootstrap.',
-      },
-      { flag: '--host <host>', description: 'Vite listen host override.' },
-      { flag: '--port <port>', description: 'Vite listen port override.' },
-      { flag: '--strict-port', description: 'Fail instead of selecting another occupied port.' },
-      { flag: '--mode <mode>', description: 'Vite mode (default: development).' },
-    ],
-    examples: ['kovo dev ./src/app.tsx', 'kovo dev ./src/app.tsx --port 4173 --strict-port'],
-  },
-  {
-    name: 'db',
-    noArgsOrder: 5,
-    summary:
-      'Provision, migrate, or check a Postgres app database from the Drizzle schema and framework-owned RLS posture.',
-    unknownOrder: 3,
-    usage: DB_USAGE,
-    async: true,
-    flags: [
-      {
-        flag: 'provision',
-        description:
-          'Apply pending migrations, roles, RLS policies, and grants, then re-check live Postgres posture. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
-      },
-      {
-        flag: 'migrate',
-        description:
-          'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and live posture.',
-      },
-      {
-        flag: 'generate',
-        description:
-          'Generate reviewable additive up/down SQL files by diffing the current database against the schema module.',
-      },
-      {
-        flag: 'check',
-        description:
-          'Bind the ordinary runtime witness to a privileged authority on the same live database, then verify forced RLS, policies, grants, and least-privilege access.',
-      },
-      { flag: '--schema <module>', description: 'Schema module path (default: src/schema.ts).' },
-      {
-        flag: '--driver <pglite|pg|node-postgres>',
-        description:
-          'Database driver. Defaults to external Postgres when a URL is present, otherwise PGlite.',
-      },
-      {
-        flag: '--migrations <dir>',
-        description: 'Directory of reviewed .sql migrations (default: migrations).',
-      },
-      {
-        flag: '--database-url <url>',
-        description:
-          'Least-privilege runtime witness URL. Defaults to KOVO_RUNTIME_DATABASE_URL, then KOVO_DATABASE_URL.',
-      },
-      {
-        flag: '--admin-database-url <url>',
-        description:
-          'Privileged setup/check fallback authority URL. Defaults to KOVO_ADMIN_DATABASE_URL.',
-      },
-      {
-        flag: '--system-database-url <url>',
-        description:
-          'Least-privilege system/check authority URL. Preferred over admin; defaults to KOVO_DB_SYSTEM_URL.',
-      },
-      {
-        flag: '--data-dir <dir>',
-        description: 'PGlite data directory for embedded development databases.',
-      },
-      { flag: '--reader-role <role>', description: 'Reader role name (default: kovo_reader).' },
-      { flag: '--writer-role <role>', description: 'Writer role name (default: kovo_writer).' },
-    ],
-    examples: [
-      'kovo db provision --schema src/schema.ts',
-      'kovo db generate --migrations migrations',
-      'kovo db migrate --migrations migrations',
-      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db provision',
-      'KOVO_DB_SYSTEM_URL=postgres://kovo_system@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check',
-      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db:5432/app?sslmode=verify-full KOVO_RUNTIME_DATABASE_URL=postgres://app@db:5432/app?sslmode=verify-full kovo db check',
-      'kovo db check --driver pglite --data-dir .kovo/pglite',
-    ],
-  },
-  {
-    name: 'compile',
-    noArgsOrder: 6,
-    summary:
-      'Emit compiler-backed app artifacts without importing @kovojs/compiler from app scripts.',
-    unknownOrder: 4,
-    usage: COMPILE_USAGE,
-    async: true,
-    flags: [
-      { flag: '--out <path>', description: 'Artifact path to write or verify.' },
-      {
-        flag: '--check',
-        description: 'Verify the existing artifact is current instead of writing it.',
-      },
-      {
-        flag: '--file-name <name>',
-        description: 'Logical source file name embedded in diagnostics and emitted IR.',
-      },
-      {
-        flag: '--artifact-file-name <name>',
-        description: 'Logical generated route artifact name embedded in route IR.',
-      },
-      {
-        flag: '--rewrite <Local=specifier>',
-        description: 'Route component import rewrite for generated component artifacts.',
-      },
-      {
-        flag: '--registry-facts <json>',
-        description: 'JSON registry facts passed to component lowering.',
-      },
-      {
-        flag: '--facts-out <json>',
-        description: 'Write compiler-derived component or route facts as JSON.',
-      },
-      {
-        flag: '--emit-client-files',
-        description: 'Write or check emitted component client artifacts alongside the lowered IR.',
-      },
-      {
-        flag: '--allow-diagnostic <code>',
-        description: 'Treat the named component diagnostic as a warning for this command.',
-      },
-      {
-        flag: '--entry <source.ts>',
-        description: 'Source entry used for package component-prefix discovery.',
-      },
-      { flag: '--fixpoint', description: 'Assert lowered component IR is already a fixpoint.' },
-      {
-        flag: '--render-equivalence',
-        description: 'Assert authored and lowered component render output stays equivalent.',
-      },
-    ],
-    examples: [
-      'kovo compile component src/components/cart.tsx --out dist/kovo/cart.tsx --check',
-      'kovo compile route src/app-shell.tsx --out dist/kovo/app-shell.kovo-route.tsx --rewrite Cart=./cart.js',
-      'kovo compile mutation-inputs src/app.ts --out dist/kovo/mutation-inputs.json',
-      'kovo compile drizzle-static dist/kovo/drizzle-static-input.json --out dist/kovo/drizzle-static-facts.json',
-      'kovo compile drizzle-optimistic dist/kovo/cart-add.optimistic.json --out dist/kovo/optimistic/cart-add.ts',
-      'kovo compile package-css @kovojs/ui --entry src/app.ts --out dist/assets/kovo-ui.css',
-    ],
-  },
-  {
-    name: 'fix',
-    noArgsOrder: 6.5,
-    summary: 'Apply only compiler-proven safe TSX/JSX rewrites and re-analyze the result.',
-    unknownOrder: 4.5,
-    usage: FIX_USAGE,
-    async: true,
-    flags: [
-      {
-        flag: '--check',
-        description: 'Report available safe rewrites without changing the source file.',
-      },
-      {
-        flag: '--cost-report',
-        description:
-          'Measure safe-vs-escape structural edit cost over the versioned agent-authored corpus.',
-      },
-    ],
-    examples: ['kovo fix src/components/cart.tsx', 'kovo fix --cost-report'],
-  },
-  {
-    name: 'audit',
-    noArgsOrder: 2,
-    summary: 'Run the security/access audits over an extracted app graph.',
-    unknownOrder: 7,
-    usage: AUDIT_USAGE,
-    flags: [
-      {
-        flag: '--fail-on-findings',
-        description: 'Exit non-zero when the audit reports any findings.',
-      },
-    ],
-    examples: ['kovo audit', 'kovo audit --fail-on-findings graph.json'],
-  },
-  {
-    name: 'export',
-    noArgsOrder: 8,
-    summary: 'Statically export a Kovo app module to disk for hosting.',
-    unknownOrder: 8,
-    usage: EXPORT_USAGE,
-    async: true,
-    flags: [
-      { flag: '--vite', description: 'Load the app module through Vite SSR for TS/TSX app files.' },
-      {
-        flag: '--root <dir>',
-        description: 'Project root for --vite module loading; defaults to the current directory.',
-      },
-      { flag: '--out <dir>', description: 'Output directory for the exported site.' },
-      { flag: '--origin <url>', description: 'Absolute origin used for canonical URLs.' },
-      {
-        flag: '--manifest <file>',
-        description: 'Copy static assets referenced by a Vite manifest into the export output.',
-      },
-      {
-        flag: '--dist <dir>',
-        description: 'Vite output directory used as the source root for manifest assets.',
-      },
-      {
-        flag: '--asset-base <path>',
-        description: 'URL path prefix for manifest asset hrefs; defaults to /.',
-      },
-      {
-        flag: '--skip-non-exportable',
-        description: 'Skip routes that cannot be statically exported instead of failing.',
-      },
-    ],
-    examples: [
-      'kovo export ./src/app.ts --out dist',
-      'kovo export ./src/app.ts --origin https://example.com',
-      'kovo export /src/app-shell.ts --vite --root . --out dist',
-      'kovo export ./src/app.ts --manifest dist/.vite/manifest.json --dist dist',
-    ],
-  },
-  {
-    name: 'mcp',
-    noArgsOrder: 9,
-    summary:
-      'Run the Model Context Protocol server: read newline-delimited JSON-RPC from stdin, write responses to stdout.',
-    unknownOrder: 9,
-    usage: MCP_USAGE,
-    async: true,
-    examples: ['kovo mcp'],
-  },
-  {
-    name: 'update-docs',
-    noArgsOrder: 10,
-    summary: 'Refresh AGENTS.md and mirror the latest agent-readable Kovo docs into ./.kovo/docs.',
-    unknownOrder: 10,
-    usage: UPDATE_DOCS_USAGE,
-    async: true,
-    examples: ['kovo update-docs'],
-  },
-] as const satisfies readonly CommandManifestEntry[];
+export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = Object.freeze(
+  KOVO_COMMAND_SCHEMA.map((entry) =>
+    Object.freeze({
+      aliases: entry.aliases,
+      ...('async' in entry && entry.async ? { async: true } : {}),
+      category: entry.category,
+      examples: entry.examples,
+      exits: entry.exits,
+      flags: referenceFlags(entry),
+      name: entry.name,
+      noArgsOrder: entry.order,
+      resultProtocol: entry.resultProtocol,
+      summary: entry.summary,
+      unknownOrder: entry.order,
+      usage:
+        entry.referenceUsage === 'multiline'
+          ? renderMultilineUsage(entry)
+          : renderInlineUsage(entry),
+    }),
+  ),
+);
 
-/** @internal Command names accepted by the `kovo` dispatcher. */
-export type KovoCommandName = (typeof COMMANDS_MANIFEST)[number]['name'];
+const COMMAND_REGISTRY = new Map<KovoCommandName, KovoCommandEntry>(
+  KOVO_COMMAND_SCHEMA.map((entry) => [entry.name, entry]),
+);
+const COMMAND_ALIAS_REGISTRY = new Map<string, KovoCommandEntry>(
+  KOVO_COMMAND_SCHEMA.flatMap((entry) => entry.aliases.map((alias) => [alias, entry] as const)),
+);
+const META_COMMAND_REGISTRY = new Map<KovoMetaCommandName, KovoMetaCommandSchemaEntry>(
+  KOVO_CLI_SCHEMA.metaCommands.map((entry) => [entry.name, entry]),
+);
+const META_COMMAND_ALIAS_REGISTRY = new Map<string, KovoMetaCommandSchemaEntry>(
+  KOVO_CLI_SCHEMA.metaCommands.flatMap((entry) =>
+    entry.aliases.map((alias) => [alias, entry] as const),
+  ),
+);
+const GLOBAL_OPTION_REGISTRY = new Map<string, KovoCommandOptionSchema>(
+  KOVO_CLI_SCHEMA.globalOptions.flatMap((option) =>
+    option.flags.map((flag) => [flag, option] as const),
+  ),
+);
 
-/** @internal One concrete command registry entry. */
-export type KovoCommandEntry = (typeof COMMANDS_MANIFEST)[number];
-
-/** @internal One concrete async command registry entry. */
-export type KovoAsyncCommandEntry = Extract<KovoCommandEntry, { async: true }>;
-
-/** @internal One concrete sync command registry entry. */
-export type KovoSyncCommandEntry = Exclude<KovoCommandEntry, KovoAsyncCommandEntry>;
-
-/** @internal Commands that must route through `mainAsync()`. */
-export type KovoAsyncCommandName = KovoAsyncCommandEntry['name'];
-
-/** @internal Commands that can route through `main()`. */
-export type KovoSyncCommandName = KovoSyncCommandEntry['name'];
-
-/** @internal Registry keyed by sub-command name for dispatch and diagnostics. */
-export const COMMAND_REGISTRY: ReadonlyMap<KovoCommandName, (typeof COMMANDS_MANIFEST)[number]> =
-  new Map(COMMANDS_MANIFEST.map((entry) => [entry.name, entry]));
-
-/** @internal Resolve an argv command token to its registry entry. */
-export function resolveCommand(name: string | undefined) {
+/** @internal Resolve a canonical command name or declared alias. */
+export function resolveCommand(name: string | undefined): KovoCommandEntry | undefined {
   if (name === undefined) return undefined;
-  return COMMAND_REGISTRY.get(name as KovoCommandName);
+  return COMMAND_REGISTRY.get(name as KovoCommandName) ?? COMMAND_ALIAS_REGISTRY.get(name);
 }
 
-/** @internal True when a registry entry must route through `mainAsync()`. */
-export function isAsyncCommand(entry: KovoCommandEntry): entry is KovoAsyncCommandEntry {
+function resolveMetaCommand(name: string | undefined): KovoMetaCommandSchemaEntry | undefined {
+  if (name === undefined) return undefined;
+  return (
+    META_COMMAND_REGISTRY.get(name as KovoMetaCommandName) ?? META_COMMAND_ALIAS_REGISTRY.get(name)
+  );
+}
+
+function globalOptionForFlag(flag: string): KovoCommandOptionSchema | undefined {
+  return GLOBAL_OPTION_REGISTRY.get(flag);
+}
+
+function requestedGlobalOptions(args: readonly string[]): KovoCommandOptionSchema[] {
+  return args
+    .map(globalOptionForFlag)
+    .filter((option): option is KovoCommandOptionSchema => option !== undefined);
+}
+
+function singleGlobalOption(
+  command: string,
+  options: readonly KovoCommandOptionSchema[],
+):
+  | { readonly message: string; readonly ok: false }
+  | { readonly ok: true; readonly value: KovoCommandOptionSchema } {
+  const selected = options[0];
+  if (
+    selected === undefined ||
+    options.length > 1 ||
+    options.some((option) => option.id !== selected.id)
+  ) {
+    return {
+      message: `${KOVO_CLI_SCHEMA.name}: ${command} accepts one global help or version option.\n`,
+      ok: false,
+    };
+  }
+  return { ok: true, value: selected };
+}
+
+/** @internal True when a command routes through `mainAsync`. */
+export function isAsyncCommand(
+  entry: KovoCommandEntry,
+): entry is Extract<KovoCommandEntry, { async: true }> {
   return 'async' in entry && entry.async === true;
 }
 
-function commandNamesByOrder(orderKey: 'noArgsOrder' | 'unknownOrder'): KovoCommandName[] {
-  return [...COMMANDS_MANIFEST]
-    .sort((left, right) => left[orderKey] - right[orderKey] || left.name.localeCompare(right.name))
-    .map((entry) => entry.name);
+/** @internal Command list retained for compact docs snippets. */
+export function formatNoArgsCommandList(): string {
+  return orderedCommands()
+    .map((entry) => entry.name)
+    .join(', ');
+}
+
+/** @internal Compact command-list message retained as generated reference data. */
+export function formatNoArgsMessage(): string {
+  return `kovo: ${formatNoArgsCommandList()}\n`;
+}
+
+/** @internal Complete expected-command phrase for diagnostics. */
+export function formatExpectedCommandList(): string {
+  return sentenceList(orderedCommands().map((entry) => entry.name));
+}
+
+/** @internal Unknown-command diagnostic text. */
+export function formatUnknownCommandMessage(command: string): string {
+  return `kovo: unknown command ${JSON.stringify(command)}. expected ${formatExpectedCommandList()}.\n`;
+}
+
+/** @internal Generated root help. */
+export function formatRootHelp(): string {
+  const cliName = KOVO_CLI_SCHEMA.name;
+  const lines = [
+    `Kovo ${KOVO_CLI_VERSION}`,
+    '',
+    'Usage:',
+    `  ${cliName} <command> [options]`,
+    ...KOVO_CLI_SCHEMA.metaCommands.flatMap((entry) =>
+      entry.usage.map((form) => `  ${renderFormUsageLine(entry, form)}`),
+    ),
+    '',
+  ];
+  for (const category of [
+    ['daily-build', 'Daily and build'],
+    ['inspect-security', 'Inspect and security'],
+    ['agent-operator', 'Agent and operator'],
+  ] as const) {
+    lines.push(`${category[1]}:`);
+    for (const entry of orderedCommands().filter(
+      (candidate) => candidate.category === category[0],
+    )) {
+      lines.push(`  ${entry.name.padEnd(13)} ${entry.summary}`);
+    }
+    lines.push('');
+  }
+  lines.push(
+    'Global options:',
+    ...KOVO_CLI_SCHEMA.globalOptions.map(
+      (option) => `  ${option.flags.join(', ').padEnd(15)} ${option.description}`,
+    ),
+    '',
+    `Run \`${cliName} help <command>\` for command details.`,
+    '',
+  );
+  return lines.join('\n');
+}
+
+/** @internal Generated multiline help for one capability command. */
+export function formatCommandHelp(name: KovoCommandName): string {
+  const entry = requireCommand(name);
+  const lines = [
+    entry.summary,
+    '',
+    'Usage:',
+    ...entry.usage.map((form) => `  ${renderFormUsageLine(entry, form)}`),
+  ];
+  const flags = referenceFlags(entry);
+  if (flags.length > 0) {
+    lines.push('', 'Arguments and options:');
+    const width = Math.max(...flags.map((item) => item.flag.length));
+    for (const item of flags) {
+      lines.push(`  ${item.flag.padEnd(width)}  ${item.description}`);
+    }
+  }
+  lines.push(
+    '',
+    `Result protocol: ${entry.resultProtocol ?? 'none (human process surface)'}`,
+    'Exit codes: 0 success/help/version; 1 proof or build findings; 2 usage/config error' +
+      ('unknown' in entry.exits && entry.exits.unknown === 2 ? ' or authenticated UNKNOWN' : ''),
+  );
+  if (entry.examples.length > 0) {
+    lines.push('', 'Examples:', ...entry.examples.map((example) => `  ${example}`));
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+/** @internal Generated help for one schema-owned meta command. */
+export function formatMetaCommandHelp(name: KovoMetaCommandName): string {
+  const entry = requireMetaCommand(name);
+  return [
+    entry.summary,
+    '',
+    'Usage:',
+    ...entry.usage.map((form) => `  ${renderFormUsageLine(entry, form)}`),
+    '',
+    'Examples:',
+    ...entry.examples.map((example) => `  ${example}`),
+    '',
+  ].join('\n');
+}
+
+/** @internal Supported generated shell targets. */
+export type KovoCompletionShell = 'bash' | 'fish' | 'zsh';
+
+/** @internal A schema-parsed invocation handled before capability dispatch. */
+export type KovoMetaInvocation =
+  | { readonly kind: 'command-help'; readonly command: KovoCommandName }
+  | { readonly kind: 'completion'; readonly shell: KovoCompletionShell }
+  | { readonly kind: 'meta-help'; readonly command: KovoMetaCommandName }
+  | { readonly kind: 'root-help' }
+  | { readonly kind: 'version' };
+
+/** @internal Result of parsing the schema-owned global/meta grammar. */
+export type KovoMetaInvocationParseResult =
+  | { readonly handled: false; readonly ok: true }
+  | { readonly handled: true; readonly ok: true; readonly value: KovoMetaInvocation }
+  | { readonly message: string; readonly ok: false };
+
+/** @internal True for a supported completion-shell discriminator. */
+export function isKovoCompletionShell(value: string | undefined): value is KovoCompletionShell {
+  const completion = requireMetaCommand('completion');
+  const shell = completion.usage[0]?.tokens.find(
+    (token) => token.kind === 'argument' && token.name === 'shell',
+  );
+  return (
+    value !== undefined &&
+    shell?.kind === 'argument' &&
+    shell.value.values?.some((candidate) => candidate === value) === true
+  );
+}
+
+/** @internal Parse root aliases, meta commands, and capability help/version from the CLI AST. */
+export function parseKovoMetaInvocation(args: readonly string[]): KovoMetaInvocationParseResult {
+  const [first, ...rest] = args;
+  if (first === undefined) return { handled: true, ok: true, value: { kind: 'root-help' } };
+
+  const globalOption = globalOptionForFlag(first);
+  if (globalOption !== undefined) {
+    if (rest.length > 0) {
+      return {
+        message: `${KOVO_CLI_SCHEMA.name}: ${globalOption.flags[0]} does not accept arguments.\n`,
+        ok: false,
+      };
+    }
+    return {
+      handled: true,
+      ok: true,
+      value: { kind: globalOption.id === 'help' ? 'root-help' : 'version' },
+    };
+  }
+
+  const meta = resolveMetaCommand(first);
+  if (meta !== undefined) {
+    const metaGlobals = requestedGlobalOptions(rest);
+    if (metaGlobals.length > 0) {
+      const selected = singleGlobalOption(meta.name, metaGlobals);
+      if (!selected.ok) return selected;
+      return {
+        handled: true,
+        ok: true,
+        value:
+          selected.value.id === 'help'
+            ? { command: meta.name, kind: 'meta-help' }
+            : { kind: 'version' },
+      };
+    }
+    const parsed = parseEntryInvocation(meta, rest);
+    if (!parsed.ok) return { message: parsed.message, ok: false };
+    if (meta.name === 'version') {
+      return { handled: true, ok: true, value: { kind: 'version' } };
+    }
+    if (meta.name === 'completion') {
+      const shell =
+        typeof parsed.value.arguments.shell === 'string' ? parsed.value.arguments.shell : undefined;
+      if (!isKovoCompletionShell(shell)) {
+        throw new TypeError('Kovo completion schema admitted an unsupported shell.');
+      }
+      return { handled: true, ok: true, value: { kind: 'completion', shell } };
+    }
+    const target =
+      typeof parsed.value.arguments.command === 'string'
+        ? parsed.value.arguments.command
+        : undefined;
+    if (target === undefined) {
+      return { handled: true, ok: true, value: { kind: 'root-help' } };
+    }
+    const capability = resolveCommand(target);
+    if (capability !== undefined) {
+      return {
+        handled: true,
+        ok: true,
+        value: { command: capability.name, kind: 'command-help' },
+      };
+    }
+    const targetMeta = resolveMetaCommand(target);
+    if (targetMeta !== undefined) {
+      return {
+        handled: true,
+        ok: true,
+        value: { command: targetMeta.name, kind: 'meta-help' },
+      };
+    }
+    throw new TypeError('Kovo help schema admitted an unknown command.');
+  }
+
+  const capability = resolveCommand(first);
+  if (capability === undefined) return { handled: false, ok: true };
+  const capabilityGlobals = requestedGlobalOptions(rest);
+  if (capabilityGlobals.length === 0) return { handled: false, ok: true };
+  const selected = singleGlobalOption(capability.name, capabilityGlobals);
+  if (!selected.ok) return selected;
+  return {
+    handled: true,
+    ok: true,
+    value:
+      selected.value.id === 'help'
+        ? { command: capability.name, kind: 'command-help' }
+        : { kind: 'version' },
+  };
+}
+
+/** @internal Generate a shell completion program entirely from the command AST. */
+export function renderShellCompletion(shell: KovoCompletionShell): string {
+  if (shell === 'bash') return renderBashCompletion();
+  if (shell === 'fish') return renderFishCompletion();
+  return renderZshCompletion();
+}
+
+type ParsedSemanticValue = boolean | number | string | readonly (number | string)[];
+
+interface TokenizedCommandArgv {
+  readonly options: ReadonlyMap<string, ParsedSemanticValue>;
+  readonly positionals: readonly string[];
+}
+
+interface ParsedEntryForm {
+  readonly arguments: Readonly<Record<string, number | string | readonly (number | string)[]>>;
+  readonly form: KovoCommandUsageForm;
+  readonly options: Readonly<Record<string, ParsedSemanticValue | undefined>>;
+  readonly score: number;
+}
+
+interface FormParseFailure {
+  readonly message: string;
+  readonly priority: number;
+  readonly score: number;
+}
+
+type EntryInvocationParseResult =
+  | { readonly ok: true; readonly value: ParsedEntryForm }
+  | {
+      readonly error: 'help' | 'usage';
+      readonly message: string;
+      readonly ok: false;
+      readonly priority?: number;
+      readonly score?: number;
+    };
+
+/** @internal Parse and select one concrete command form from the semantic AST. */
+export function parseKovoCommandInvocation<Name extends KovoCommandName>(
+  name: Name,
+  args: readonly string[],
+): KovoCommandInvocationParseResult<Name> {
+  const entry = requireCommand(name);
+  const parsed = parseEntryInvocation(entry, args);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    value: {
+      arguments: parsed.value.arguments,
+      command: name,
+      form: parsed.value.form.id,
+      options: parsed.value.options,
+    } as KovoParsedCommandInvocation<Name>,
+  };
+}
+
+/**
+ * @internal Parse one known command form with form-scoped option diagnostics
+ * and usage, while retaining the same semantic AST as whole-command dispatch.
+ */
+export function parseKovoCommandFormInvocation<
+  Name extends KovoCommandName,
+  Form extends KovoCommandFormId<Name>,
+>(
+  name: Name,
+  formId: Form,
+  args: readonly string[],
+):
+  | {
+      readonly ok: true;
+      readonly value: Extract<KovoParsedCommandInvocation<Name>, { readonly form: Form }>;
+    }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false } {
+  const entry = requireCommand(name);
+  const form = entry.usage.find((candidate) => candidate.id === formId);
+  if (form === undefined) {
+    throw new TypeError(`Missing Kovo command usage form ${name}/${formId}.`);
+  }
+  const usage = `usage: ${renderFormUsageLine(entry, form)}`;
+  const admittedOptionIds = new Set(formOptionIds(form));
+  const tokenized = tokenizeCommandArgv(entry, args, usage, {
+    displayName: `${entry.name} ${form.id}`,
+    options: entry.options.filter((option) => admittedOptionIds.has(option.id)),
+  });
+  if (!tokenized.ok) return tokenized;
+  const parsed = parseEntryForm(entry, form, tokenized.value, usage);
+  if (!parsed.ok) return parsed;
+  return {
+    ok: true,
+    value: {
+      arguments: parsed.value.arguments,
+      command: name,
+      form: form.id,
+      options: parsed.value.options,
+    } as Extract<KovoParsedCommandInvocation<Name>, { readonly form: Form }>,
+  };
+}
+
+/** @internal True when a parsed command form requires the async dispatcher. */
+export function isAsyncKovoCommandInvocation(invocation: KovoParsedCommandInvocation): boolean {
+  const entry = requireCommand(invocation.command);
+  if ('async' in entry && entry.async === true) return true;
+  return entry.usage.some(
+    (form) => form.id === invocation.form && 'async' in form && form.async === true,
+  );
+}
+
+/** @internal Serialize one precise semantic form request through the same AST parser. */
+export function commandRequestToArgv(request: KovoSemanticCommandRequest): string[] {
+  const entry = requireCommand(request.command);
+  const form = entry.usage.find((candidate) => candidate.id === request.form);
+  if (form === undefined) {
+    throw new TypeError(
+      `Unknown kovo ${entry.name} semantic form ${JSON.stringify(request.form)}.`,
+    );
+  }
+  const semanticArguments = request.arguments as Readonly<Record<string, unknown>>;
+  const semanticOptions = (request.options ?? {}) as Readonly<Record<string, unknown>>;
+  const argv: string[] = [];
+  const admittedArguments = new Set<string>();
+  for (const token of positionalFormTokens(form)) {
+    if (token.kind === 'literal') {
+      argv.push(token.value);
+      continue;
+    }
+    admittedArguments.add(token.name);
+    const argumentValue = semanticArguments[token.name];
+    if (token.repeatable) {
+      if (!Array.isArray(argumentValue)) {
+        throw new TypeError(`Kovo ${entry.name} form ${form.id} requires ${token.name} values.`);
+      }
+      for (const item of argumentValue) argv.push(serializeSemanticValue(item, token.value));
+      continue;
+    }
+    if (argumentValue === undefined) {
+      if (token.required) {
+        throw new TypeError(`Kovo ${entry.name} form ${form.id} requires argument ${token.name}.`);
+      }
+      continue;
+    }
+    argv.push(serializeSemanticValue(argumentValue, token.value));
+  }
+  rejectSurplusSemanticKeys(semanticArguments, admittedArguments, `${entry.name} arguments`);
+
+  const admittedOptions = new Set(formOptionIds(form));
+  rejectSurplusSemanticKeys(semanticOptions, admittedOptions, `${entry.name} options`);
+  for (const rawOption of entry.options) {
+    const option: KovoCommandOptionSchema = rawOption;
+    if (!admittedOptions.has(option.id)) continue;
+    const optionValue = semanticOptions[option.id];
+    if (optionValue === undefined) continue;
+    if (option.value === undefined) {
+      if (typeof optionValue !== 'boolean') {
+        throw new TypeError(`Kovo option ${option.flags[0]} is boolean.`);
+      }
+      if (optionValue === (option.booleanValue ?? true)) argv.push(option.flags[0]);
+      continue;
+    }
+    const values = Array.isArray(optionValue) ? optionValue : [optionValue];
+    if (!option.repeatable && values.length > 1) {
+      throw new TypeError(`Kovo option ${option.flags[0]} is not repeatable.`);
+    }
+    for (const item of values) {
+      argv.push(option.flags[0], serializeSemanticValue(item, option.value));
+    }
+  }
+
+  const verified = parseKovoCommandInvocation(entry.name, argv);
+  if (!verified.ok || verified.value.form !== form.id) {
+    throw new TypeError(
+      verified.ok
+        ? `Kovo semantic request selected ${verified.value.form}, expected ${form.id}.`
+        : verified.message.trim(),
+    );
+  }
+  return [entry.name, ...argv];
+}
+
+function parseEntryInvocation(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+): EntryInvocationParseResult {
+  const literalForm = literalPrefixedForm(entry, args);
+  const forms = literalForm === undefined ? entry.usage : [literalForm];
+  const usage =
+    literalForm === undefined
+      ? entryUsageForError(entry)
+      : `usage: ${renderFormUsageLine(entry, literalForm)}`;
+  const admittedOptionIds =
+    literalForm === undefined ? undefined : new Set(formOptionIds(literalForm));
+  const tokenized = tokenizeCommandArgv(entry, args, usage, {
+    ...(literalForm === undefined ? {} : { displayName: `${entry.name} ${literalForm.id}` }),
+    ...(admittedOptionIds === undefined
+      ? {}
+      : { options: entry.options.filter((option) => admittedOptionIds.has(option.id)) }),
+  });
+  if (!tokenized.ok) return tokenized;
+  const successes: ParsedEntryForm[] = [];
+  const failures: FormParseFailure[] = [];
+  for (const form of forms) {
+    const parsed = parseEntryForm(entry, form, tokenized.value, usage);
+    if (parsed.ok) successes.push(parsed.value);
+    else
+      failures.push({
+        message: parsed.message,
+        priority: parsed.priority ?? 0,
+        score: parsed.score ?? 0,
+      });
+  }
+  if (successes.length > 0) {
+    successes.sort((left, right) => right.score - left.score);
+    return { ok: true, value: successes[0]! };
+  }
+  failures.sort((left, right) => right.priority - left.priority || right.score - left.score);
+  const failure = failures[0];
+  return {
+    error: 'usage',
+    message: failure?.message ?? usage,
+    ok: false,
+    ...(failure === undefined ? {} : { priority: failure.priority, score: failure.score }),
+  };
+}
+
+function literalPrefixedForm(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+): KovoCommandUsageForm | undefined {
+  const first = args[0];
+  if (first === undefined || first.startsWith('-')) return undefined;
+  const candidates = entry.usage.filter((form) => {
+    const positional = positionalFormTokens(form);
+    return positional[0]?.kind === 'literal' && positional[0].value === first;
+  });
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function tokenizeCommandArgv(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  args: readonly string[],
+  usage: string,
+  context: {
+    readonly displayName?: string;
+    readonly options?: readonly KovoCommandOptionSchema[];
+  } = {},
+):
+  | { readonly ok: true; readonly value: TokenizedCommandArgv }
+  | { readonly error: 'help' | 'usage'; readonly message: string; readonly ok: false } {
+  const optionsByFlag = new Map<string, KovoCommandOptionSchema>();
+  for (const option of context.options ?? entry.options) {
+    for (const flag of option.flags) optionsByFlag.set(flag, option);
+  }
+  const displayName = context.displayName ?? entry.name;
+  const options = new Map<string, ParsedSemanticValue>();
+  const positionals: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === undefined) continue;
+    if (argument === '--help' || argument === '-h') {
+      return { error: 'help', message: usage, ok: false };
+    }
+    const equalsIndex = argument.indexOf('=');
+    const flag = equalsIndex > 0 ? argument.slice(0, equalsIndex) : argument;
+    const schema = flag.startsWith('-') ? optionsByFlag.get(flag) : undefined;
+    if (schema === undefined) {
+      if (argument.startsWith('-')) {
+        return {
+          error: 'usage',
+          message: `kovo: unknown ${displayName} option ${stableValue(argument)}.\n${usage}`,
+          ok: false,
+        };
+      }
+      positionals.push(argument);
+      continue;
+    }
+    if (schema.value === undefined) {
+      if (equalsIndex > 0) {
+        return {
+          error: 'usage',
+          message: `kovo: unknown ${displayName} option ${stableValue(argument)}.\n${usage}`,
+          ok: false,
+        };
+      }
+      if (options.has(schema.id)) {
+        return {
+          error: 'usage',
+          message: `kovo: ${displayName} option ${schema.flags[0]} may appear only once.\n${usage}`,
+          ok: false,
+        };
+      }
+      options.set(schema.id, schema.booleanValue ?? true);
+      continue;
+    }
+    const following = args[index + 1];
+    const rawValue = equalsIndex > 0 ? argument.slice(equalsIndex + 1) : following;
+    const followingFlag =
+      equalsIndex <= 0 && following !== undefined
+        ? optionsByFlag.get(
+            following.includes('=') ? following.slice(0, following.indexOf('=')) : following,
+          )
+        : undefined;
+    if (rawValue === undefined || rawValue.length === 0 || followingFlag !== undefined) {
+      return {
+        error: 'usage',
+        message: appendUsage(
+          schema.missingValueMessage ?? `kovo: ${schema.flags[0]} requires a value.\n`,
+          usage,
+        ),
+        ok: false,
+      };
+    }
+    if (equalsIndex <= 0) index += 1;
+    const parsed = parseSemanticValue(rawValue, schema.value);
+    if (!parsed.ok) {
+      return {
+        error: 'usage',
+        message: appendUsage(
+          schema.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
+            `kovo: ${schema.flags[0]} requires ${valueSchemaExpectation(schema.value)}; received ${stableValue(rawValue)}.\n`,
+          usage,
+        ),
+        ok: false,
+      };
+    }
+    if (!schema.repeatable && options.has(schema.id)) {
+      return {
+        error: 'usage',
+        message: `kovo: ${displayName} option ${schema.flags[0]} may appear only once.\n${usage}`,
+        ok: false,
+      };
+    }
+    if (schema.repeatable) {
+      const previous = options.get(schema.id);
+      const values = Array.isArray(previous) ? [...previous] : [];
+      values.push(parsed.value);
+      options.set(schema.id, values);
+    } else {
+      options.set(schema.id, parsed.value);
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      options,
+      positionals: Object.freeze(positionals),
+    },
+  };
+}
+
+function parseEntryForm(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  form: KovoCommandUsageForm,
+  tokenized: TokenizedCommandArgv,
+  usage: string,
+): EntryInvocationParseResult {
+  const admittedOptionIds = new Set(formOptionIds(form));
+  for (const optionId of tokenized.options.keys()) {
+    if (!admittedOptionIds.has(optionId)) {
+      return { error: 'usage', message: usage, ok: false, priority: 5, score: 0 };
+    }
+  }
+  const semanticArguments: Record<string, number | string | readonly (number | string)[]> = {};
+  const positionalTokens = positionalFormTokens(form);
+  let position = 0;
+  let score = 0;
+  for (const [tokenIndex, token] of positionalTokens.entries()) {
+    if (token.kind === 'literal') {
+      if (tokenized.positionals[position] !== token.value) {
+        return { error: 'usage', message: usage, ok: false, priority: 10, score };
+      }
+      position += 1;
+      score += 100;
+      continue;
+    }
+    if (token.repeatable) {
+      const values: (number | string)[] = [];
+      for (; position < tokenized.positionals.length; position += 1) {
+        const rawValue = tokenized.positionals[position]!;
+        const parsed = parseSemanticValue(rawValue, token.value);
+        if (!parsed.ok) {
+          return formValueFailure(entry, token, rawValue, usage, score);
+        }
+        values.push(parsed.value);
+        score += token.value.kind === 'enum' ? 20 : 1;
+      }
+      if (token.required && values.length === 0) {
+        return formMissingArgument(entry, token, usage, score);
+      }
+      semanticArguments[token.name] = Object.freeze(values);
+      continue;
+    }
+    const rawValue = tokenized.positionals[position];
+    if (rawValue === undefined) {
+      if (token.required) return formMissingArgument(entry, token, usage, score);
+      continue;
+    }
+    const parsed = parseSemanticValue(rawValue, token.value);
+    if (!parsed.ok) {
+      const laterCapacity = positionalCapacity(positionalTokens.slice(tokenIndex + 1));
+      const remaining = tokenized.positionals.length - position;
+      if (!token.required && remaining <= laterCapacity) continue;
+      return formValueFailure(entry, token, rawValue, usage, score);
+    }
+    semanticArguments[token.name] = parsed.value;
+    position += 1;
+    score += token.value.kind === 'enum' ? 20 : 1;
+  }
+  if (position < tokenized.positionals.length) {
+    const argumentToken = positionalTokens.find(
+      (token): token is Extract<KovoCommandUsageToken, { kind: 'argument' }> =>
+        token.kind === 'argument',
+    );
+    return {
+      error: 'usage',
+      message:
+        argumentToken?.unexpectedValueMessage === undefined
+          ? prefixUsage(usage, argumentToken?.usageErrorPrefix)
+          : appendUsage(argumentToken.unexpectedValueMessage, usage),
+      ok: false,
+      priority: 12,
+      score,
+    };
+  }
+
+  const semanticOptions: Record<string, ParsedSemanticValue | undefined> = {};
+  for (const optionId of admittedOptionIds) {
+    const schema = entry.options.find((option) => option.id === optionId) as
+      | KovoCommandOptionSchema
+      | undefined;
+    if (schema === undefined) {
+      throw new TypeError(`Kovo ${entry.name}/${form.id} references unknown option ${optionId}.`);
+    }
+    const explicit = tokenized.options.get(optionId);
+    if (explicit !== undefined) {
+      semanticOptions[optionId] = Array.isArray(explicit) ? Object.freeze([...explicit]) : explicit;
+    } else if (schema.value?.default !== undefined) {
+      semanticOptions[optionId] = schema.value.default;
+    } else if (schema.repeatable) {
+      semanticOptions[optionId] = Object.freeze([]);
+    } else if (schema.value === undefined) {
+      semanticOptions[optionId] = schema.defaultBoolean ?? !(schema.booleanValue ?? true);
+    } else {
+      semanticOptions[optionId] = undefined;
+    }
+  }
+  for (const token of form.tokens) {
+    if (token.kind === 'option' && token.required) {
+      const schema = entry.options.find((option) => option.id === token.option) as
+        | KovoCommandOptionSchema
+        | undefined;
+      if (!tokenized.options.has(token.option)) {
+        return requiredOptionFailure(entry, schema, usage, score);
+      }
+      score += 50;
+    }
+    if (token.kind === 'group') {
+      const groupWasSelected = token.tokens.some((member) => tokenized.options.has(member.option));
+      if (!token.required && !groupWasSelected) continue;
+      for (const member of token.tokens) {
+        if (!member.required || tokenized.options.has(member.option)) continue;
+        const schema = entry.options.find((option) => option.id === member.option) as
+          | KovoCommandOptionSchema
+          | undefined;
+        return requiredOptionFailure(entry, schema, usage, score);
+      }
+    }
+  }
+  for (const constraint of form.optionRequiresArgument ?? []) {
+    if (
+      semanticOptions[constraint.option] === true &&
+      !constraint.values.includes(String(semanticArguments[constraint.argument]))
+    ) {
+      return { error: 'usage', message: usage, ok: false, priority: 30, score };
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      arguments: Object.freeze(semanticArguments),
+      form,
+      options: Object.freeze(semanticOptions),
+      score,
+    },
+  };
+}
+
+function formMissingArgument(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  token: Extract<KovoCommandUsageToken, { kind: 'argument' }>,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message: appendUsage(
+      token.missingValueMessage ??
+        `kovo: ${entry.name} requires ${articleFor(token.value.label)} ${token.value.label}.\n`,
+      usage,
+    ),
+    ok: false,
+    priority: 25,
+    score,
+  };
+}
+
+function formValueFailure(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  token: Extract<KovoCommandUsageToken, { kind: 'argument' }>,
+  rawValue: string,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message:
+      token.invalidValueMessage !== undefined && token.invalidValueUsage === 'omit'
+        ? token.invalidValueMessage.replaceAll('{value}', stableValue(rawValue))
+        : appendUsage(
+            token.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
+              `kovo: ${entry.name} requires ${valueSchemaExpectation(token.value)}; received ${stableValue(rawValue)}.\n`,
+            usage,
+          ),
+    ok: false,
+    priority: token.invalidValueMessage === undefined ? 20 : 35,
+    score,
+  };
+}
+
+function requiredOptionFailure(
+  entry: KovoCommandEntry | KovoMetaCommandSchemaEntry,
+  schema: KovoCommandOptionSchema | undefined,
+  usage: string,
+  score: number,
+): EntryInvocationParseResult {
+  return {
+    error: 'usage',
+    message: appendUsage(
+      schema?.missingValueMessage ??
+        `kovo: ${entry.name} requires ${schema?.flags[0] ?? 'an option'}.\n`,
+      usage,
+    ),
+    ok: false,
+    priority: 25,
+    score,
+  };
+}
+
+function positionalFormTokens(
+  form: KovoCommandUsageForm,
+): readonly (
+  | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+  | Extract<KovoCommandUsageToken, { kind: 'literal' }>
+)[] {
+  return form.tokens.filter(
+    (
+      token,
+    ): token is
+      | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+      | Extract<KovoCommandUsageToken, { kind: 'literal' }> =>
+      token.kind === 'argument' || token.kind === 'literal',
+  );
+}
+
+function positionalCapacity(
+  tokens: readonly (
+    | Extract<KovoCommandUsageToken, { kind: 'argument' }>
+    | Extract<KovoCommandUsageToken, { kind: 'literal' }>
+  )[],
+): number {
+  return tokens.some((token) => token.kind === 'argument' && token.repeatable)
+    ? Number.POSITIVE_INFINITY
+    : tokens.length;
+}
+
+function formOptionIds(form: KovoCommandUsageForm): string[] {
+  return form.tokens.flatMap((token) => {
+    if (token.kind === 'option') return [token.option];
+    if (token.kind === 'group') return token.tokens.map((member) => member.option);
+    return [];
+  });
+}
+
+function entryUsageForError(entry: KovoCommandEntry | KovoMetaCommandSchemaEntry): string {
+  const usage = `usage: ${renderJoinedUsage(entry)}`;
+  return 'usageErrorPrefix' in entry ? prefixUsage(usage, entry.usageErrorPrefix) : usage;
+}
+
+function serializeSemanticValue(value: unknown, schema: KovoCommandValueSchema): string {
+  const rawValue = typeof value === 'number' ? String(value) : value;
+  if (typeof rawValue !== 'string' || !parseSemanticValue(rawValue, schema).ok) {
+    throw new TypeError(`Kovo semantic value requires ${valueSchemaExpectation(schema)}.`);
+  }
+  return rawValue;
+}
+
+function rejectSurplusSemanticKeys(
+  value: Readonly<Record<string, unknown>>,
+  admitted: ReadonlySet<string>,
+  label: string,
+): void {
+  for (const key of Object.keys(value)) {
+    if (!admitted.has(key)) {
+      throw new TypeError(`Unknown Kovo ${label} field ${JSON.stringify(key)}.`);
+    }
+  }
+}
+
+function requireCommand<Name extends KovoCommandName>(
+  name: Name,
+): Extract<KovoCommandEntry, { name: Name }> {
+  const entry = KOVO_COMMAND_SCHEMA.find((candidate) => candidate.name === name);
+  if (!entry) throw new TypeError(`Missing Kovo command schema for ${name}.`);
+  return entry as Extract<KovoCommandEntry, { name: Name }>;
+}
+
+function requireMetaCommand<Name extends KovoMetaCommandName>(
+  name: Name,
+): Extract<(typeof KOVO_CLI_SCHEMA.metaCommands)[number], { name: Name }> {
+  const entry = KOVO_CLI_SCHEMA.metaCommands.find((candidate) => candidate.name === name);
+  if (entry === undefined) throw new TypeError(`Missing Kovo meta-command schema for ${name}.`);
+  return entry as Extract<(typeof KOVO_CLI_SCHEMA.metaCommands)[number], { name: Name }>;
+}
+
+function requireUsageForm(command: KovoCommandName, id: string): KovoCommandUsageForm {
+  const form = requireCommand(command).usage.find((candidate) => candidate.id === id);
+  if (!form) throw new TypeError(`Missing Kovo command usage form ${command}/${id}.`);
+  return form;
+}
+
+function parseSemanticValue(
+  rawValue: string,
+  schema: KovoCommandValueSchema,
+): { readonly ok: false } | { readonly ok: true; readonly value: number | string } {
+  if (schema.kind === 'integer') {
+    if (!/^-?\d+$/u.test(rawValue)) return { ok: false };
+    const parsed = Number(rawValue);
+    if (
+      !Number.isSafeInteger(parsed) ||
+      (schema.minimum !== undefined && parsed < schema.minimum) ||
+      (schema.maximum !== undefined && parsed > schema.maximum)
+    ) {
+      return { ok: false };
+    }
+    return { ok: true, value: parsed };
+  }
+  if (schema.kind === 'enum' && schema.values !== undefined && !schema.values.includes(rawValue)) {
+    return { ok: false };
+  }
+  if (schema.kind === 'url') {
+    try {
+      new URL(rawValue);
+    } catch {
+      return { ok: false };
+    }
+  }
+  return { ok: true, value: rawValue };
+}
+
+function valueSchemaExpectation(schema: KovoCommandValueSchema): string {
+  if (schema.values !== undefined) return sentenceList(schema.values);
+  return schema.kind === 'integer' ? 'an integer' : schema.label;
+}
+
+function renderInlineUsage(entry: KovoCommandSchemaEntry): string {
+  return `usage: ${renderJoinedUsage(entry)}`;
+}
+
+function renderJoinedUsage(entry: KovoRenderableCommandSchema): string {
+  return entry.usage.map((form) => renderFormUsageLine(entry, form)).join(' | ');
+}
+
+function renderMultilineUsage(entry: KovoCommandSchemaEntry): readonly string[] {
+  return Object.freeze(
+    entry.usage.map((form, index) =>
+      renderFormUsageLine(entry, form, index === 0 ? 'usage: ' : '       '),
+    ),
+  );
+}
+
+function renderFormUsageLine(
+  entry: KovoRenderableCommandSchema,
+  form: KovoCommandUsageForm,
+  prefix = '',
+): string {
+  const tokens = form.tokens.map((token) => renderUsageToken(entry, token));
+  return `${prefix}${KOVO_CLI_SCHEMA.name} ${entry.name}${
+    tokens.length === 0 ? '' : ` ${tokens.join(' ')}`
+  }`;
+}
+
+function renderUsageToken(
+  entry: KovoRenderableCommandSchema,
+  token: KovoCommandUsageToken,
+): string {
+  if (token.kind === 'group') {
+    const syntax = token.tokens.map((item) => renderUsageToken(entry, item)).join(' ');
+    return token.required ? syntax : `[${syntax}]`;
+  }
+  if (token.kind === 'literal') return token.value;
+  if (token.kind === 'argument') {
+    const core =
+      token.value.kind === 'enum' && token.value.values && token.value.usage !== 'label'
+        ? token.value.values.join('|')
+        : !token.required && token.value.kind === 'path'
+          ? token.value.label
+          : `<${token.value.label}${token.repeatable ? '...' : ''}>`;
+    return token.required ? core : `[${core}]`;
+  }
+  const schema = entry.options.find((item) => item.id === token.option);
+  if (!schema) {
+    throw new TypeError(
+      `Usage form for kovo ${entry.name} references unknown option ${token.option}.`,
+    );
+  }
+  const syntax =
+    schema.value === undefined
+      ? schema.flags[0]
+      : `${schema.flags[0]} <${token.valueLabel ?? schema.value.label}>`;
+  return token.required ? syntax : `[${syntax}]`;
+}
+
+function referenceFlags(entry: KovoRenderableCommandSchema): readonly CommandFlag[] {
+  const rows: CommandFlag[] = [];
+  const seen = new Set<string>();
+  for (const form of entry.usage) {
+    for (const token of form.tokens) {
+      if (token.kind === 'group') continue;
+      if (
+        (token.kind === 'literal' || token.kind === 'argument') &&
+        token.description !== undefined
+      ) {
+        const syntax =
+          token.kind === 'literal'
+            ? token.value
+            : token.value.kind === 'enum' && token.value.values && token.value.usage !== 'label'
+              ? token.value.values.join('|')
+              : `<${token.value.label}${token.repeatable ? '...' : ''}>`;
+        if (!seen.has(syntax)) {
+          seen.add(syntax);
+          rows.push({ description: token.description, flag: syntax });
+        }
+      }
+    }
+  }
+  for (const schema of entry.options) {
+    const syntax = [
+      schema.flags.join(', '),
+      schema.value === undefined ? '' : ` <${schema.value.label}>`,
+      schema.repeatable ? '…' : '',
+    ].join('');
+    const details = [
+      schema.description,
+      schema.value?.default === undefined ? '' : ` Default: ${schema.value.default}.`,
+      schema.repeatable ? ' Repeatable.' : '',
+    ].join('');
+    rows.push({ description: details, flag: syntax });
+  }
+  return Object.freeze(rows.map((row) => Object.freeze(row)));
+}
+
+function completionWords(entry: KovoRenderableCommandSchema): string[] {
+  const words = new Set<string>();
+  for (const schema of entry.options) {
+    for (const optionFlag of schema.flags) words.add(optionFlag);
+    for (const enumValue of schema.value?.values ?? []) words.add(enumValue);
+  }
+  for (const form of entry.usage) {
+    for (const token of form.tokens) {
+      if (token.kind === 'group') continue;
+      if (token.kind === 'literal') words.add(token.value);
+      if (token.kind === 'argument' && token.value.values) {
+        for (const item of token.value.values) words.add(item);
+      }
+    }
+  }
+  return [...words].sort();
+}
+
+type KovoRenderableCommandSchema = Pick<KovoCommandSchemaEntry, 'name' | 'options' | 'usage'>;
+
+function renderBashCompletion(): string {
+  const entries = orderedCliEntries();
+  const commands = entries.flatMap((entry) => [entry.name, ...entry.aliases]);
+  const globals = globalCompletionWords();
+  return [
+    '# generated by kovo completion bash; do not edit',
+    '_kovo_complete() {',
+    '  local cur command',
+    '  COMPREPLY=()',
+    '  cur="${COMP_WORDS[COMP_CWORD]}"',
+    '  if (( COMP_CWORD == 1 )); then',
+    `    COMPREPLY=( $(compgen -W "${[...commands, ...globals].join(' ')}" -- "$cur") )`,
+    '    return',
+    '  fi',
+    '  command="${COMP_WORDS[1]}"',
+    '  case "$command" in',
+    ...entries.map(
+      (entry) =>
+        `    ${[entry.name, ...entry.aliases].join('|')}) COMPREPLY=( $(compgen -W "${[
+          ...completionWords(entry),
+          ...globals,
+        ].join(' ')}" -- "$cur") ) ;;`,
+    ),
+    '  esac',
+    '}',
+    'complete -F _kovo_complete kovo',
+    '',
+  ].join('\n');
+}
+
+function renderFishCompletion(): string {
+  const lines = ['# generated by kovo completion fish; do not edit', 'complete -c kovo -f'];
+  for (const entry of orderedCliEntries()) {
+    lines.push(
+      `complete -c kovo -n '__fish_use_subcommand' -a '${entry.name}' -d '${fishEscape(entry.summary)}'`,
+    );
+    for (const alias of entry.aliases) {
+      lines.push(
+        `complete -c kovo -n '__fish_use_subcommand' -a '${alias}' -d '${fishEscape(entry.summary)}'`,
+      );
+    }
+    for (const word of completionWords(entry)) {
+      if (word.startsWith('--')) {
+        lines.push(
+          `complete -c kovo -n '__fish_seen_subcommand_from ${entry.name}' -l '${word.slice(2)}'`,
+        );
+      } else {
+        lines.push(
+          `complete -c kovo -n '__fish_seen_subcommand_from ${entry.name}' -a '${fishEscape(word)}'`,
+        );
+      }
+    }
+    for (const option of KOVO_CLI_SCHEMA.globalOptions) {
+      const longFlag = option.flags.find((flag) => flag.startsWith('--'));
+      if (longFlag !== undefined) {
+        lines.push(
+          `complete -c kovo -n '__fish_seen_subcommand_from ${entry.name}' -l '${longFlag.slice(2)}'`,
+        );
+      }
+    }
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+function renderZshCompletion(): string {
+  const entries = orderedCliEntries();
+  const globalArguments = KOVO_CLI_SCHEMA.globalOptions
+    .flatMap((option) => option.flags.map((flag) => `'${flag}[${zshEscape(option.description)}]'`))
+    .join(' ');
+  return [
+    '#compdef kovo',
+    '# generated by kovo completion zsh; do not edit',
+    '_kovo() {',
+    '  local -a commands',
+    '  commands=(',
+    ...entries.flatMap((entry) =>
+      [entry.name, ...entry.aliases].map((name) => `    '${name}:${zshEscape(entry.summary)}'`),
+    ),
+    '  )',
+    `  _arguments ${globalArguments} '1:command:->command' '*::argument:->args'`,
+    '  case $state in',
+    '    command) _describe command commands ;;',
+    '    args)',
+    '      case $words[2] in',
+    ...entries.map(
+      (entry) =>
+        `        ${[entry.name, ...entry.aliases].join('|')}) _values 'kovo ${entry.name}' ${[
+          ...completionWords(entry),
+          ...globalCompletionWords(),
+        ]
+          .map((word) => `'${zshEscape(word)}'`)
+          .join(' ')} ;;`,
+    ),
+    '      esac',
+    '    ;;',
+    '  esac',
+    '}',
+    '_kovo "$@"',
+    '',
+  ].join('\n');
+}
+
+function orderedCliEntries(): readonly (KovoCommandEntry | KovoMetaCommandSchemaEntry)[] {
+  return [...orderedCommands(), ...KOVO_CLI_SCHEMA.metaCommands];
+}
+
+function globalCompletionWords(): string[] {
+  return KOVO_CLI_SCHEMA.globalOptions.flatMap((option) => [...option.flags]);
+}
+
+function orderedCommands(): KovoCommandEntry[] {
+  return [...KOVO_COMMAND_SCHEMA].sort(
+    (left, right) => left.order - right.order || left.name.localeCompare(right.name),
+  );
+}
+
+function readCliVersion(): string {
+  return readCliPackageVersion();
 }
 
 function sentenceList(values: readonly string[]): string {
   if (values.length === 0) return '';
   if (values.length === 1) return values[0] ?? '';
   return `${values.slice(0, -1).join(', ')}, or ${values[values.length - 1]}`;
-}
-
-/** @internal The command list emitted by `kovo` with no args. */
-export function formatNoArgsCommandList(): string {
-  return commandNamesByOrder('noArgsOrder').join(', ');
-}
-
-/** @internal The complete no-args message emitted by the bin. */
-export function formatNoArgsMessage(): string {
-  return `kovo: ${formatNoArgsCommandList()}\n`;
-}
-
-/** @internal The expected-command phrase emitted by unknown-command diagnostics. */
-export function formatExpectedCommandList(): string {
-  return sentenceList(commandNamesByOrder('unknownOrder'));
-}
-
-/** @internal Unknown-command diagnostic emitted by the bin. */
-export function formatUnknownCommandMessage(command: string): string {
-  return `kovo: unknown command ${JSON.stringify(command)}. expected ${formatExpectedCommandList()}.\n`;
-}
-
-/** @internal Parse command argv from a manifest-owned flag spec. */
-export function parseCommandArgv(
-  args: readonly string[],
-  spec: CommandArgvSpec,
-): ParseCommandArgvResult {
-  const optionSpecs = new Map(spec.options.map((option) => [option.flag, option]));
-  const options = new Map<string, true | string | string[]>();
-  const positionals: string[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--help' || arg === '-h') return { error: 'help', ok: false };
-
-    const equalsIndex = arg.indexOf('=');
-    const flag = equalsIndex > 0 ? arg.slice(0, equalsIndex) : arg;
-    const optionSpec = flag.startsWith('--') ? optionSpecs.get(flag as `--${string}`) : undefined;
-    if (optionSpec) {
-      if (optionSpec.kind === 'boolean') {
-        if (equalsIndex > 0) return { error: 'unknown-option', ok: false, option: arg };
-        options.set(flag, true);
-        continue;
-      }
-
-      const value = equalsIndex > 0 ? arg.slice(equalsIndex + 1) : args[index + 1];
-      if (!value) {
-        return {
-          error: 'missing-value',
-          message:
-            optionSpec.requiresValueMessage ?? `kovo: ${optionSpec.flag} requires a value.\n`,
-          ok: false,
-        };
-      }
-      if (equalsIndex <= 0) index += 1;
-      if (optionSpec.repeat) {
-        const previous = options.get(flag);
-        const values =
-          previous === undefined
-            ? []
-            : Array.isArray(previous)
-              ? [...previous]
-              : [String(previous)];
-        values.push(value);
-        options.set(flag, values);
-      } else {
-        options.set(flag, value);
-      }
-      continue;
-    }
-
-    if (arg.startsWith('-')) return { error: 'unknown-option', ok: false, option: arg };
-    positionals.push(arg);
-  }
-
-  return { ok: true, value: { options, positionals } };
-}
-
-/** @internal Render the common command-argv parser error shape. */
-export function commandArgvError(
-  name: string,
-  error: Exclude<ParseCommandArgvResult, { ok: true }>,
-  usage: string,
-): { message: string; ok: false } {
-  if (error.error === 'help') return { message: usage, ok: false };
-  if (error.error === 'missing-value') return { message: error.message, ok: false };
-  return {
-    message: `kovo: unknown ${name} option ${stableValue(error.option)}.\n${usage}`,
-    ok: false,
-  };
-}
-
-/** @internal Require a command to have exactly one positional argument. */
-export function requireSinglePositional(
-  parsed: ParsedCommandArgv,
-  options: {
-    label: string;
-    name: string;
-    usage: string;
-  },
-): { ok: true; value: string } | { message: string; ok: false } {
-  const [value, extra] = parsed.positionals;
-  if (extra) {
-    return {
-      message: `kovo: ${options.name} accepts one ${options.label}.\n${options.usage}`,
-      ok: false,
-    };
-  }
-  if (!value) {
-    return {
-      message: `kovo: ${options.name} requires ${articleFor(options.label)} ${options.label}.\n${options.usage}`,
-      ok: false,
-    };
-  }
-  return { ok: true, value };
 }
 
 function articleFor(label: string): 'a' | 'an' {
@@ -1202,20 +1515,20 @@ function stableValue(value: string | undefined): string {
   return value === undefined ? '-' : JSON.stringify(value);
 }
 
-/** @internal True when a parsed boolean flag appeared. */
-export function parsedBooleanOption(parsed: ParsedCommandArgv, flag: string): boolean {
-  return parsed.options.get(flag) === true;
+function appendUsage(message: string, usage: string): string {
+  const normalizedUsage = usage.trim();
+  if (normalizedUsage.length === 0 || message.includes(normalizedUsage)) return message;
+  return `${message.trimEnd()}\n${usage}`;
 }
 
-/** @internal Return a parsed value option, if present. */
-export function parsedStringOption(parsed: ParsedCommandArgv, flag: string): string | undefined {
-  const value = parsed.options.get(flag);
-  return typeof value === 'string' ? value : undefined;
+function prefixUsage(usage: string, prefix: 'kovo' | undefined): string {
+  return prefix === 'kovo' && !usage.startsWith('kovo: ') ? `kovo: ${usage}` : usage;
 }
 
-/** @internal Return a repeatable value option. */
-export function parsedStringListOption(parsed: ParsedCommandArgv, flag: string): string[] {
-  const value = parsed.options.get(flag);
-  if (Array.isArray(value)) return [...value];
-  return typeof value === 'string' ? [value] : [];
+function fishEscape(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+}
+
+function zshEscape(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll("'", "'\\''");
 }

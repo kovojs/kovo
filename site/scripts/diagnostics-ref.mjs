@@ -38,7 +38,8 @@ const LEGACY_DIAGNOSTICS_HEADING = '### 11.3 Diagnostic codes (registry)';
 const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
   {
     code: 'KV999',
-    pathPattern: /packages\/(?:core\/src\/graph|cli\/src\/index\.kovo-check)\.test\.ts$/u,
+    pathPattern:
+      /packages\/(?:core\/src\/graph|cli\/src\/(?:diagnostic|index\.kovo-check))\.test\.ts$/u,
     reason:
       'unknown-diagnostic-code rejection fixtures use a fake code that the framework must not register',
   },

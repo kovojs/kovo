@@ -807,7 +807,7 @@ describe('kovo add', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      await expect(mainAsync(['add', 'calendar'])).resolves.toBe(1);
+      await expect(mainAsync(['add', 'calendar'])).resolves.toBe(2);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(

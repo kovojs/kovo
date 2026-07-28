@@ -10,8 +10,9 @@ import {
 
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { installAgentDocsSnapshot } from '../docs-store.js';
+import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { readCliPackageVersion } from '../package-version.js';
-import type { KovoCheckResult } from '../shared.js';
+import type { CliProcessResult } from '../shared.js';
 
 export interface UpdateDocsOptions {
   cwd?: string;
@@ -25,7 +26,7 @@ const nativeReflectApply = Reflect.apply;
 /** @internal Execute the CLI-only `kovo update-docs` command. */
 export async function runUpdateDocsCommand(
   options: UpdateDocsOptions = {},
-): Promise<KovoCheckResult> {
+): Promise<CliProcessResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
   try {
     const output = createFrameworkOutputFileSystemBoundary(cwd);
@@ -68,7 +69,7 @@ export async function runUpdateDocsCommand(
     return {
       exitCode: 0,
       output: [
-        'kovo-update-docs/v1',
+        requireKovoCommandResultProtocol('update-docs'),
         `OK source=installed-package version=${snapshot.version} files=${installed.files}`,
         `OK snapshot=${installed.snapshotDigest} current=${installed.pointerPath}`,
         '',
@@ -76,8 +77,8 @@ export async function runUpdateDocsCommand(
     };
   } catch (error) {
     return {
-      exitCode: 1,
-      output: `kovo-update-docs/v1\nERROR ${
+      exitCode: 2,
+      output: `${requireKovoCommandResultProtocol('update-docs')}\nERROR ${
         error instanceof Error ? error.message : String(error)
       }\n`,
     };

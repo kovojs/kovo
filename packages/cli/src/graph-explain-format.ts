@@ -14,6 +14,7 @@ import {
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
+import { requireKovoCommandResultProtocol } from './command-schema.js';
 import type { KovoTargetExplainOptions } from './graph-args.js';
 import type { KovoCheckResult } from './shared.js';
 
@@ -22,7 +23,7 @@ const NativeSet = globalThis.Set;
 const nativeReflectApply = NativeReflect.apply;
 const nativeSetHas = NativeSet.prototype.has;
 
-const explainOutputVersion = 'kovo-explain/v1';
+const explainOutputVersion = requireKovoCommandResultProtocol('explain');
 
 export type DocumentSourceSinkRow = ReturnType<typeof frameworkSourceSinkInventory>[number];
 

@@ -507,7 +507,7 @@ export default { server: { host: '127.0.0.1', port: 0, strictPort: true } };\n`,
       const output = collectChildOutput(child);
       const status = await waitForChildExit(child, 30_000);
 
-      expect(status).toBe(1);
+      expect(status).toBe(2);
       expect(output.stderr).toContain('kovo dev rejects authored Vite config key resolve');
       expect(output.combined()).not.toContain('ALIASED FRAMEWORK');
     }

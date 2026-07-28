@@ -232,7 +232,6 @@ const templateFiles: readonly TemplateFile[] = [
   'src/components/contacts.tsx',
   'src/components/auth-forms.tsx',
   'src/app.tsx',
-  'src/test-setup.ts',
   'src/app.test.ts',
   'src/endpoint-posture.test.ts',
   'src/theme.ts',

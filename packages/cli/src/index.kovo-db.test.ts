@@ -159,7 +159,7 @@ describe('kovo db', () => {
         mainAsync(['db', 'check', '--schema', schemaPath], security),
       );
 
-      expect(check.result).toBe(1);
+      expect(check.result).toBe(2);
       expect(check.stdout).toBe('');
       expect(check.stderr).not.toContain('DRIVER pglite');
       expect(check.stderr).toContain('requires a runtime witness URL');
@@ -187,7 +187,7 @@ describe('kovo db', () => {
       mainAsync(['db', 'check', '--schema', schemaPath], security),
     );
 
-    expect(check.result).toBe(1);
+    expect(check.result).toBe(2);
     expect(check.stdout).toBe('');
     expect(check.stderr).not.toContain('DRIVER pglite');
     expect(check.stderr).toContain('requires a runtime witness URL');
@@ -207,6 +207,7 @@ describe('kovo db', () => {
       options: {
         action: 'check',
         databaseUrl: 'postgres://app@127.0.0.1:5432/app',
+        migrationsDir: 'migrations',
         schemaPath: 'src/schema.ts',
         systemDatabaseUrl: 'postgres://kovo_system@127.0.0.1:5432/app',
       },
@@ -230,7 +231,7 @@ describe('kovo db', () => {
           mainAsync(['db', action, '--schema', schemaPath], security),
         );
 
-        expect(run.result, driver).toBe(1);
+        expect(run.result, driver).toBe(2);
         expect(run.stdout, driver).toBe('');
         expect(run.stderr, driver).toContain('unsupported KOVO_DB_DRIVER');
         expect(run.stderr, driver).not.toContain('DRIVER pglite');
@@ -329,7 +330,7 @@ describe('kovo db', () => {
       ]),
     );
 
-    expect(changed.result).toBe(1);
+    expect(changed.result).toBe(2);
     expect(changed.stdout).toBe('');
     expect(changed.stderr).toContain('KV433_MIGRATION_CHECKSUM');
   });
@@ -459,7 +460,7 @@ describe('kovo db', () => {
       ]),
     );
 
-    expect(generated.result).toBe(1);
+    expect(generated.result).toBe(2);
     expect(generated.stdout).toBe('');
     expect(generated.stderr).toMatch(/symbolic-link|symbolic link|cannot use/u);
     expect(readdirSync(outside)).toEqual([]);
@@ -493,7 +494,7 @@ describe('kovo db', () => {
       ]),
     );
 
-    expect(migrated.result).toBe(1);
+    expect(migrated.result).toBe(2);
     expect(migrated.stdout).toBe('');
     expect(migrated.stderr).not.toContain('MIGRATION status=applied');
 
@@ -641,7 +642,7 @@ describe('kovo db', () => {
   it('prints usage for missing db actions', async () => {
     const output = await captureWrites(() => mainAsync(['db']));
 
-    expect(output.result).toBe(1);
+    expect(output.result).toBe(2);
     expect(output.stdout).toBe('');
     expect(output.stderr).toContain('kovo: db requires provision, migrate, generate, or check.');
     expect(output.stderr).toContain('usage: kovo db provision|migrate|generate|check');

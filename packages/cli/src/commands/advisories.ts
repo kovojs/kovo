@@ -8,13 +8,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 import type { KovoArtifactProvenance } from '@kovojs/core/internal/graph';
 
-import {
-  ADVISORY_ARGV_SPEC,
-  ADVISORY_USAGE,
-  commandArgvError,
-  parsedStringOption,
-  parseCommandArgv,
-} from '../commands-manifest.js';
+import { parseKovoCommandFormInvocation } from '../commands-manifest.js';
 import { discoverGraphInputPaths } from '../graph-input.js';
 import type { CliCommandResult, CliProcessResult } from '../shared.js';
 import { readBoundedRegularFile } from './bounded-regular-file.js';
@@ -97,41 +91,18 @@ interface ParsedSemver {
 
 /** @internal Parse `kovo check advisories` through the manifest-owned grammar. */
 export function parseAdvisoryArgs(args: readonly string[]): AdvisoryArgParseResult {
-  const duplicate = duplicateScalarOption(args, [
-    '--attestation',
-    '--feed',
-    '--severity-floor',
-    '--state',
-  ]);
-  if (duplicate !== undefined) {
-    return {
-      message: `kovo: check advisories option ${duplicate} may appear only once.\n${ADVISORY_USAGE}`,
-      ok: false,
-    };
-  }
-  const parsed = parseCommandArgv(args, ADVISORY_ARGV_SPEC);
-  if (!parsed.ok) return commandArgvError('check advisories', parsed, ADVISORY_USAGE);
-  if (parsed.value.positionals[0] !== 'advisories' || parsed.value.positionals.length > 2) {
-    return { message: `kovo: ${ADVISORY_USAGE}`, ok: false };
-  }
-  const severity = parsedStringOption(parsed.value, '--severity-floor') ?? 'high';
-  if (!isSeverity(severity)) {
-    return {
-      message: `kovo: --severity-floor must be low, moderate, high, or critical.\n${ADVISORY_USAGE}`,
-      ok: false,
-    };
-  }
-  const attestation = parsedStringOption(parsed.value, '--attestation');
-  const feed = parsedStringOption(parsed.value, '--feed');
-  const graphPath = parsed.value.positionals[1];
+  const parsed = parseKovoCommandFormInvocation('check', 'advisories', args);
+  if (!parsed.ok) return { message: parsed.message, ok: false };
+  const { attestation, feed, severityFloor, state } = parsed.value.options;
+  const graphPath = parsed.value.arguments.graph;
   return {
     ok: true,
     options: {
       ...(attestation === undefined ? {} : { attestation }),
       ...(feed === undefined ? {} : { feed }),
       ...(graphPath === undefined ? {} : { graphPath }),
-      severityFloor: severity,
-      statePath: parsedStringOption(parsed.value, '--state') ?? '.kovo/advisory-state.json',
+      severityFloor,
+      statePath: state,
     },
   };
 }
@@ -819,22 +790,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isSeverity(value: unknown): value is AdvisorySeverity {
   return value === 'low' || value === 'moderate' || value === 'high' || value === 'critical';
-}
-
-function duplicateScalarOption(
-  args: readonly string[],
-  flags: readonly string[],
-): string | undefined {
-  const admitted = new Set(flags);
-  const seen = new Set<string>();
-  for (const argument of args) {
-    const equals = argument.indexOf('=');
-    const flag = equals < 0 ? argument : argument.slice(0, equals);
-    if (!admitted.has(flag)) continue;
-    if (seen.has(flag)) return flag;
-    seen.add(flag);
-  }
-  return undefined;
 }
 
 function severityRank(value: AdvisorySeverity): number {

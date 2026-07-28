@@ -20,7 +20,8 @@ import type {
   FiniteMcpToolResult,
 } from '@kovojs/core/internal/mcp-stdio';
 
-import { MCP_USAGE } from '../commands-manifest.js';
+import { parseKovoCommandInvocation } from '../commands-manifest.js';
+import { kovoCommandExitCode } from '../command-schema.js';
 import {
   checkFamilyArg,
   explainOutputVersion,
@@ -198,26 +199,16 @@ function compileComponentOptions(
 export async function runMcpCommand(
   args: readonly string[],
   invocationCwd: string,
-): Promise<0 | 1> {
-  if (args.length > 0) {
-    const [first] = args;
-    const message =
-      first === '--help' || first === '-h'
-        ? mcpUsage()
-        : `kovo: unknown mcp option ${stableValue(first)}.\n${mcpUsage()}`;
-    return writeUsageError(message);
-  }
+): Promise<0 | 2> {
+  const parsed = parseKovoCommandInvocation('mcp', args);
+  if (!parsed.ok) return writeUsageError(parsed.message, 'mcp');
 
   await runMcpStdioServer(process.stdin, process.stdout, invocationCwd);
-  return 0;
-}
-
-function mcpUsage(): string {
-  return [
-    MCP_USAGE,
-    'Reads newline-delimited JSON-RPC requests from stdin and writes newline-delimited responses.',
-    '',
-  ].join('\n');
+  const exitCode = kovoCommandExitCode('mcp', 'success');
+  if (exitCode !== 0) {
+    throw new TypeError(`Kovo mcp success exit ${exitCode} contradicts the CLI contract.`);
+  }
+  return exitCode;
 }
 
 /** @internal Runs the finite SPEC §11.5 `kovo mcp` stdio server; not a public API. */
