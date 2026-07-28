@@ -77,7 +77,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G5"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
         "command": [
@@ -93,7 +93,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "The packed kovo --help command exits 0, writes usage to stdout, and does not classify help as an error."
+      "desiredBehavior": "The packed kovo --help command exits 0, writes usage to stdout, and does not classify help as an error.",
+      "retirement": {
+        "evidence": "The authenticated packed @kovojs/cli help probe now exits zero with usage on stdout and no stderr.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-004",
@@ -232,12 +236,13 @@
         "fixTrack": "Track 5",
         "scorecardGates": ["G24"]
       },
-      "state": "pending-repro",
+      "state": "retired",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "starter-test-surface",
           "--id",
           "KF-DEVEX-008",
           "--packed-manifest",
@@ -248,7 +253,10 @@
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
       "desiredBehavior": "Packed starter tests use only the app-public inferred harness and no internal classifier import.",
-      "gap": "Needs a packed starter file census plus its public test run; scanning the source template alone would not prove the published journey."
+      "retirement": {
+        "evidence": "The authenticated create-kovo tarball contains the bootstrap-first public HTTP test journey and no internal classifier mock or test-setup shim.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-009",
@@ -263,12 +271,13 @@
         "fixTrack": "Track 3",
         "scorecardGates": ["G13"]
       },
-      "state": "pending-repro",
+      "state": "retired",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "offline-docs",
           "--id",
           "KF-DEVEX-009",
           "--packed-manifest",
@@ -279,7 +288,10 @@
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
       "desiredBehavior": "Packed kovo update-docs fails when it cannot produce version-matched substantive local documentation.",
-      "gap": "Needs an offline packed consumer with the current placeholder path triggered deterministically and its output classified."
+      "retirement": {
+        "evidence": "The authenticated packed CLI installs at least 70 substantive version-matched local docs from its embedded snapshot with no placeholder corpus.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-010",

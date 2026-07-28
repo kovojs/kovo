@@ -41,9 +41,9 @@ describe('known-failure register', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 2,
-      'pending-repro': 8,
-      retired: 0,
+      executable: 1,
+      'pending-repro': 6,
+      retired: 3,
     });
     expect(
       register.entries.every(
@@ -265,7 +265,14 @@ describe('known-failure register', () => {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       ledgerResolver,
-      spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
+      spawnSync: (_executable, args) => {
+        const id = commandId(args);
+        const entry = register.entries.find((candidate) => candidate.id === id);
+        return processResult(
+          id,
+          entry?.state === 'retired' ? 'desired-behavior' : 'defect-reproduced',
+        );
+      },
     });
     const xpass = runKnownFailureProbes(register, {
       repoRoot,
@@ -278,13 +285,11 @@ describe('known-failure register', () => {
     expect(xfail.availablePass).toBe(true);
     expect(xfail.pass).toBe(false);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
-      expect.objectContaining({ id: 'KF-DEVEX-003' }),
       expect.objectContaining({ id: 'KF-DEVEX-004' }),
     ]);
     expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
-      expect.objectContaining({ id: 'KF-DEVEX-003' }),
       expect.objectContaining({ id: 'KF-DEVEX-004' }),
     ]);
   });
@@ -314,7 +319,7 @@ describe('known-failure register', () => {
       expect(result.pass).toBe(false);
       expect(result.results.some((item) => item.status === 'xfail')).toBe(false);
       expect(result.results.filter((item) => item.status === 'infrastructure-error')).toHaveLength(
-        2,
+        4,
       );
     }
 
@@ -335,32 +340,31 @@ describe('known-failure register', () => {
   });
 
   it('executes retired rows as ordinary passing regressions and turns recurrence red', () => {
-    const retired = structuredClone(register);
-    retired.entries[2].state = 'retired';
-    retired.entries[2].retirement = {
-      evidence: 'The packed help contract now passes on the release artifact.',
-      verification: 'pnpm test:packed-help',
-    };
     const executed = [];
-    const passing = runKnownFailureProbes(retired, {
+    const passing = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       ledgerResolver,
       spawnSync: (_executable, args) => {
         const id = commandId(args);
         executed.push(id);
-        return processResult(id, id === 'KF-DEVEX-003' ? 'desired-behavior' : 'defect-reproduced');
+        const entry = register.entries.find((candidate) => candidate.id === id);
+        return processResult(
+          id,
+          entry?.state === 'retired' ? 'desired-behavior' : 'defect-reproduced',
+        );
       },
     });
     expect(executed).toContain('KF-DEVEX-003');
-    expect(passing.results).toContainEqual({
-      id: 'KF-DEVEX-003',
-      status: 'retired-pass',
-    });
+    expect(passing.results.filter((result) => result.status === 'retired-pass')).toEqual([
+      { id: 'KF-DEVEX-003', status: 'retired-pass' },
+      { id: 'KF-DEVEX-008', status: 'retired-pass' },
+      { id: 'KF-DEVEX-009', status: 'retired-pass' },
+    ]);
     expect(passing.availablePass).toBe(true);
     expect(passing.pass).toBe(false);
 
-    const regression = runKnownFailureProbes(retired, {
+    const regression = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: ownershipLedgerPath,
       ledgerResolver,
@@ -368,10 +372,11 @@ describe('known-failure register', () => {
     });
     expect(regression.availablePass).toBe(false);
     expect(regression.pass).toBe(false);
-    expect(regression.results).toContainEqual({
-      id: 'KF-DEVEX-003',
-      status: 'retired-regression',
-    });
+    expect(regression.results.filter((result) => result.status === 'retired-regression')).toEqual([
+      { id: 'KF-DEVEX-003', status: 'retired-regression' },
+      { id: 'KF-DEVEX-008', status: 'retired-regression' },
+      { id: 'KF-DEVEX-009', status: 'retired-regression' },
+    ]);
   });
 
   it('classifies empty-check only for the exact missing-graph contract, never generic failures', () => {

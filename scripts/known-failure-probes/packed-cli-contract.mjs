@@ -42,14 +42,14 @@ const idArgument = process.argv.indexOf('--id');
 const manifestArgument = process.argv.indexOf('--packed-manifest');
 const id = process.argv[idArgument + 1];
 if (
-  !['help', 'empty-check'].includes(mode) ||
+  !['help', 'empty-check', 'starter-test-surface', 'offline-docs'].includes(mode) ||
   idArgument === -1 ||
   !/^KF-DEVEX-\d{3}$/u.test(id ?? '') ||
   manifestArgument === -1 ||
   !process.argv[manifestArgument + 1]
 ) {
   process.stderr.write(
-    'Usage: node packed-cli-contract.mjs <help|empty-check> --id <KF-DEVEX-NNN> --packed-manifest <path>\n',
+    'Usage: node packed-cli-contract.mjs <help|empty-check|starter-test-surface|offline-docs> --id <KF-DEVEX-NNN> --packed-manifest <path>\n',
   );
   process.exit(2);
 }
@@ -108,16 +108,33 @@ try {
     });
   }
 
-  const result =
-    mode === 'help'
-      ? command(process.execPath, [cli, '--help'], appRoot)
-      : command(process.execPath, [cli, 'check'], appRoot);
-  if (result.error || result.signal || result.status === null) {
-    infrastructureFailure(`kovo ${mode}`, result);
+  let result = null;
+  let outcome = null;
+  if (mode === 'help' || mode === 'empty-check') {
+    result =
+      mode === 'help'
+        ? command(process.execPath, [cli, '--help'], appRoot)
+        : command(process.execPath, [cli, 'check'], appRoot);
+    if (result.error || result.signal || result.status === null) {
+      infrastructureFailure(`kovo ${mode}`, result);
+    }
+    outcome = packedCliContractOutcome(mode, result);
+  } else if (mode === 'starter-test-surface') {
+    outcome = starterTestSurfaceOutcome(nodeModules);
+  } else {
+    result = command(process.execPath, [cli, 'update-docs'], appRoot);
+    if (result.error || result.signal || result.status === null) {
+      infrastructureFailure('kovo offline-docs', result);
+    }
+    outcome = offlineDocsOutcome(result, appRoot);
   }
-  const outcome = packedCliContractOutcome(mode, result);
   if (outcome === null) {
-    infrastructureFailure(`packed kovo ${mode} returned an unclassified contract shape`, result);
+    infrastructureFailure(`packed kovo ${mode} returned an unclassified contract shape`, {
+      ...(result ?? {}),
+      status: result?.status ?? null,
+      stderr: result?.stderr ?? '',
+      stdout: result?.stdout ?? '',
+    });
   }
   emitResult(id, outcome);
 } finally {
@@ -233,6 +250,92 @@ function command(executable, args, cwd) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 120000,
   });
+}
+
+function starterTestSurfaceOutcome(nodeModules) {
+  const templateRoot = path.join(nodeModules, 'create-kovo', 'templates');
+  const testPath = path.join(templateRoot, 'src', 'app.test.ts');
+  const setupPath = path.join(templateRoot, 'src', 'test-setup.ts');
+  if (!existsSync(testPath)) return null;
+  const source = readFileSync(testPath, 'utf8');
+  const internalMock =
+    existsSync(setupPath) ||
+    source.includes('@kovojs/compiler/internal') ||
+    source.includes('vi.mock(') ||
+    source.includes('isKovoApp');
+  if (internalMock) return 'defect-reproduced';
+  if (
+    source.includes("spawn('kovo', ['dev', './src/app.tsx']") &&
+    source.includes("fetch(`${appOrigin}/api/health`)") &&
+    source.includes("fetch(`${appOrigin}/login`)")
+  ) {
+    return 'desired-behavior';
+  }
+  return null;
+}
+
+function offlineDocsOutcome(result, appRoot) {
+  if (result.status !== 0 || result.stderr.trim().length > 0) return null;
+  if (
+    !/^kovo-update-docs\/v1\r?\nOK source=installed-package version=\S+ files=\d+\r?\nOK snapshot=sha256:[0-9a-f]{64} current=\.kovo\/docs\/current\.json\r?\n?$/u.test(
+      result.stdout,
+    )
+  ) {
+    return null;
+  }
+  const docsRoot = path.join(appRoot, '.kovo', 'docs');
+  const currentPath = path.join(docsRoot, 'current.json');
+  if (!existsSync(currentPath)) return null;
+  const current = JSON.parse(readFileSync(currentPath, 'utf8'));
+  if (
+    current.schema !== 'kovo.installed-agent-docs-current/v1' ||
+    !/^sha256:[0-9a-f]{64}$/u.test(current.snapshotDigest ?? '')
+  ) {
+    return null;
+  }
+  const snapshotRoot = path.join(
+    docsRoot,
+    'snapshots',
+    current.snapshotDigest.slice('sha256:'.length),
+  );
+  const files = recursiveRegularFiles(snapshotRoot);
+  const source = files.map((file) => readFileSync(file, 'utf8')).join('\n');
+  if (
+    source.includes('Bundled starter placeholder') ||
+    source.includes('Upgrade and run kovo update-docs')
+  ) {
+    return 'defect-reproduced';
+  }
+  const relativeFiles = files.map((file) =>
+    path.relative(snapshotRoot, file).split(path.sep).join('/'),
+  );
+  const installedBytes = files.reduce((total, file) => total + statSync(file).size, 0);
+  if (
+    relativeFiles.length >= 70 &&
+    installedBytes >= 100_000 &&
+    ['llms.txt', 'tutorial/01-first-page.md', 'api/server.md'].every((file) =>
+      relativeFiles.includes(file),
+    )
+  ) {
+    return 'desired-behavior';
+  }
+  return files.length > 0 ? 'defect-reproduced' : null;
+}
+
+function recursiveRegularFiles(root) {
+  if (!existsSync(root) || !statSync(root).isDirectory()) return [];
+  const files = [];
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      if (entry.isSymbolicLink()) return [];
+      if (entry.isDirectory()) pending.push(absolute);
+      else if (entry.isFile()) files.push(absolute);
+    }
+  }
+  return files.sort();
 }
 
 function emitResult(id, outcome) {
