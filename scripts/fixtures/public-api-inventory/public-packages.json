@@ -1,0 +1,26 @@
+{
+  "packages": [
+    {
+      "name": "@fixture/api",
+      "dir": "api",
+      "visibility": "public",
+      "kind": "library",
+      "apiBoundary": {
+        "public": [".", "./feature"],
+        "generated": [],
+        "internal": []
+      }
+    },
+    {
+      "name": "@fixture/glyphs",
+      "dir": "glyphs",
+      "visibility": "public",
+      "kind": "library",
+      "apiBoundary": {
+        "public": [".", "./alpha", "./beta"],
+        "generated": [],
+        "internal": []
+      }
+    }
+  ]
+}

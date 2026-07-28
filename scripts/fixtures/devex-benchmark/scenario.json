@@ -1,0 +1,19 @@
+{
+  "schema": "kovo-devex-benchmark-scenario/v1",
+  "name": "deterministic-harness-fixture",
+  "runnerName": "fixture-runner",
+  "phases": {
+    "cold": {
+      "command": ["node", "workload.mjs", "cold"]
+    },
+    "warm": {
+      "command": ["node", "workload.mjs", "warm"]
+    },
+    "oneFileIncremental": {
+      "command": ["node", "workload.mjs", "one-file"]
+    }
+  },
+  "browserBootstrap": {
+    "files": ["bootstrap-a.mjs", "bootstrap-b.css"]
+  }
+}

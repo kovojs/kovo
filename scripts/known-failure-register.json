@@ -1,0 +1,151 @@
+{
+  "schema": "kovo-known-failures/v1",
+  "protocol": {
+    "desiredBehaviorExitCode": 0,
+    "reproducedDefectExitCode": 1,
+    "infrastructureErrorExitCode": 2,
+    "unexpectedPassPolicy": "An executable probe that exits 0 makes the register runner fail until the entry is retired with proof."
+  },
+  "entries": [
+    {
+      "id": "KF-DEVEX-001",
+      "title": "Fresh SQLite scaffold requires an undeclared auth-origin fix",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-001"],
+        "timeoutMs": 180000,
+        "packedInput": true
+      },
+      "desiredBehavior": "A packed SQLite scaffold reaches login using only creator-emitted configuration and instructions.",
+      "gap": "Needs the shared packed scaffold journey and a bounded login request probe; no source-link substitute is accepted."
+    },
+    {
+      "id": "KF-DEVEX-002",
+      "title": "Dev server stays silent for at least 75 seconds after listen",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-002"],
+        "timeoutMs": 120000,
+        "packedInput": true
+      },
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
+      "gap": "Needs the packed journey runner's observable listen marker so the probe can distinguish silent output from a server that never listened."
+    },
+    {
+      "id": "KF-DEVEX-003",
+      "title": "CLI help exits 1",
+      "state": "executable",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "help",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true
+      },
+      "desiredBehavior": "The packed kovo --help command exits 0, writes usage to stdout, and does not classify help as an error."
+    },
+    {
+      "id": "KF-DEVEX-004",
+      "title": "Bare check with no graph reports OK",
+      "state": "executable",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "empty-check",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true
+      },
+      "desiredBehavior": "The packed kovo check command fails closed when an empty consumer has no source graph or explicit artifact."
+    },
+    {
+      "id": "KF-DEVEX-005",
+      "title": "Failed build can leave a plausible graph under dist/.kovo",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-005"],
+        "timeoutMs": 240000,
+        "packedInput": true
+      },
+      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched.",
+      "gap": "Needs a packed app fixture with one successful build followed by a deterministic compiler failure and artifact digest comparison."
+    },
+    {
+      "id": "KF-DEVEX-006",
+      "title": "Fresh-app check is coupled to KV417 trusted-boundary setup",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-006"],
+        "timeoutMs": 240000,
+        "packedInput": true
+      },
+      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup.",
+      "gap": "Needs the packed starter and its generated checking scripts preserved as the test input before those scripts are removed."
+    },
+    {
+      "id": "KF-DEVEX-007",
+      "title": "Full 44-component catalog check reaches 4.4-4.8 GiB and OOMs",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-007"],
+        "timeoutMs": 600000,
+        "packedInput": true
+      },
+      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target.",
+      "gap": "Needs the full-catalog packed fixture and RSS-enforced runner; devex-budgets.json records the non-binding provisional target."
+    },
+    {
+      "id": "KF-DEVEX-008",
+      "title": "Starter tests import an internal classifier mock",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-008"],
+        "timeoutMs": 180000,
+        "packedInput": true
+      },
+      "desiredBehavior": "Packed starter tests use only the app-public inferred harness and no internal classifier import.",
+      "gap": "Needs a packed starter file census plus its public test run; scanning the source template alone would not prove the published journey."
+    },
+    {
+      "id": "KF-DEVEX-009",
+      "title": "update-docs reports success after writing placeholder-only content",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-009"],
+        "timeoutMs": 180000,
+        "packedInput": true
+      },
+      "desiredBehavior": "Packed kovo update-docs fails when it cannot produce version-matched substantive local documentation.",
+      "gap": "Needs an offline packed consumer with the current placeholder path triggered deterministically and its output classified."
+    },
+    {
+      "id": "KF-DEVEX-010",
+      "title": "Opaque trusted-boundary path returns an internal 500",
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": ["node", "scripts/known-failure-probes/pending.mjs", "KF-DEVEX-010"],
+        "timeoutMs": 240000,
+        "packedInput": true
+      },
+      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500.",
+      "gap": "Needs a minimized packed request fixture that preserves the opaque boundary and distinguishes the intended diagnostic from an infrastructure failure."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/api",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./feature": {
+      "source": "./src/feature.ts",
+      "default": "./dist/feature.mjs"
+    }
+  }
+}
