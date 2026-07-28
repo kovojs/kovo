@@ -242,6 +242,13 @@ async function runBrowserSmoke(url, outputDir, options = {}) {
           state: 'visible',
           timeout: options.terminalState.timeoutMs ?? 10000,
         });
+        const matchCount = await page.locator(terminalState.selector).count();
+        if (matchCount !== 1) {
+          throw new Error(
+            `terminal state selector must match exactly one element; observed ${matchCount}: ${terminalState.selector}`,
+          );
+        }
+        terminalState.matchCount = matchCount;
       }
       const screenshotPath = join(outputDir, `${viewport.name}.png`);
       await page.screenshot({ fullPage: false, path: screenshotPath });
@@ -373,6 +380,11 @@ function browserGateResult(browserResults) {
     }
     if (result.terminalState?.matched !== true) {
       failures.push(`${prefix}: terminal state was not observed`);
+    }
+    if (result.terminalState?.matchCount !== 1) {
+      failures.push(
+        `${prefix}: terminal state selector matched ${result.terminalState?.matchCount ?? 0} elements`,
+      );
     }
     if (result.accessibility?.pass !== true) {
       failures.push(`${prefix}: ${result.accessibility?.violations.length ?? 0} axe violation(s)`);

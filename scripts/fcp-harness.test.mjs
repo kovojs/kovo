@@ -84,6 +84,7 @@ describe('fcp harness HTML asset inventory', () => {
       {
         sourceDigest: `sha256:${'a'.repeat(64)}`,
         terminalState: {
+          matchCount: 1,
           name: 'authenticated-dashboard',
           selector: 'main[data-journey-state="ready"]',
         },
@@ -98,6 +99,7 @@ describe('fcp harness HTML asset inventory', () => {
       },
       pass: false,
       terminalState: {
+        matchCount: 1,
         name: 'authenticated-dashboard',
         selector: 'main[data-journey-state="ready"]',
       },
