@@ -13,6 +13,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
+import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import {
   contextualizeCompilerDiagnostic,
   diagnosticFor,
@@ -698,11 +699,19 @@ function isFrameworkExpression(
   expression: ts.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    bindings.sourceFile,
-    expression,
-    identity,
+  return (
+    compilerOwnedAppContractFactoryEquals(
+      ts as FrameworkIdentityTypeScript,
+      bindings.sourceFile,
+      expression,
+      identity,
+    ) ||
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      bindings.sourceFile,
+      expression,
+      identity,
+    )
   );
 }
 

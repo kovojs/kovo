@@ -7,6 +7,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 
+import { compilerOwnedAppContractFactoryEquals } from './app-contract-resolver.js';
 import { deriveComponentNames } from './component-names.js';
 import {
   agentModelOperationsForBinding,
@@ -386,12 +387,20 @@ function resolvesTo(
   expression: ts.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    sourceFile,
-    expression,
-    identity,
-    { legacyGlobals: LEGACY_IDENTITIES },
+  return (
+    compilerOwnedAppContractFactoryEquals(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      identity,
+    ) ||
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      identity,
+      { legacyGlobals: LEGACY_IDENTITIES },
+    )
   );
 }
 
