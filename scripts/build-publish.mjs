@@ -151,6 +151,9 @@ export function derivePublishPlan(pkgJson) {
     targetFiles.add(`dist/${stem}.mjs`);
     targetFiles.add(`dist/${stem}.d.mts`);
   }
+  if (pkgJson.name === '@kovojs/cli') {
+    targetFiles.add('dist/kovo-docs.snapshot.json.gz');
+  }
 
   const byString = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   return {
@@ -169,7 +172,7 @@ function readPackageJson(pkg) {
 }
 
 /** The `vp pack <entries> --dts` build command for a package. */
-function buildCommand(plan, pkgJson) {
+export function buildCommand(plan, pkgJson) {
   if (pkgJson.name === '@kovojs/icons') return 'node ./scripts/build-dist.mjs';
   if (pkgJson.name === '@kovojs/compiler') {
     // The public Vite entry statically binds the compiler authority. Loading the root workspace
@@ -179,7 +182,11 @@ function buildCommand(plan, pkgJson) {
     const ordinaryEntries = plan.entries.filter((entry) => entry !== viteEntry);
     return `vp pack ${ordinaryEntries.join(' ')} --no-config --dts && vp pack ${viteEntry} --no-config --no-clean --dts`;
   }
-  return `vp pack ${plan.entries.join(' ')} --dts`;
+  const packCommand = `vp pack ${plan.entries.join(' ')} --dts`;
+  if (pkgJson.name === '@kovojs/cli') {
+    return `${packCommand} && node ../../scripts/agent-docs-snapshot.mjs`;
+  }
+  return packCommand;
 }
 
 function write() {

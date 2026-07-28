@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { derivePublishPlan } from './build-publish.mjs';
+import { buildCommand, derivePublishPlan } from './build-publish.mjs';
 import {
   importPathForPackageSubpath,
   normalizePackageExports,
@@ -163,5 +163,19 @@ describe('package export resolver', () => {
       },
       targetFiles: ['dist/index.d.mts', 'dist/index.mjs', 'dist/vite.d.mts', 'dist/vite.mjs'],
     });
+  });
+
+  it('makes the CLI docs snapshot part of the generated publish proof', () => {
+    const manifest = {
+      name: '@kovojs/cli',
+      bin: { kovo: './src/bin.ts' },
+      exports: { '.': './src/api.ts', './internal': './src/index.ts' },
+    };
+    const plan = derivePublishPlan(manifest);
+
+    expect(plan.targetFiles).toContain('dist/kovo-docs.snapshot.json.gz');
+    expect(buildCommand(plan, manifest)).toBe(
+      'vp pack src/api.ts src/bin.ts src/index.ts --dts && node ../../scripts/agent-docs-snapshot.mjs',
+    );
   });
 });
