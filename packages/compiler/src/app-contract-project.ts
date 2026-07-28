@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -30,6 +31,7 @@ export interface CompilerOwnedAppContractDiagnostic {
     | 'D1A007'
     | 'D1A008'
     | 'D1A009'
+    | 'D1B009'
     | 'D1X001';
   readonly fileName: string;
   readonly length: number;
@@ -168,9 +170,6 @@ export function createCompilerOwnedAppContractProject(
           diagnostics.push(proof.diagnostic);
         } else if (proof.kind === 'factory') {
           const expression = node.expression;
-          if (!ts.isPropertyAccessExpression(expression)) {
-            throw new TypeError('Compiler-owned factory proof lost its property-access node.');
-          }
           facts.push({
             end: expression.getEnd(),
             exportName: proof.exportName,
@@ -388,6 +387,11 @@ function proveFactoryCall(
         kind: 'diagnostic',
       };
     }
+  }
+
+  if (ts.isIdentifier(expression)) {
+    const generated = proveGeneratedAppFactory(sourceFile, expression, context);
+    if (generated) return generated;
   }
 
   const callback = call.arguments.find(
@@ -680,13 +684,64 @@ function proveDirectDefineKovo(
   if (!serverPackageRoot) return undefined;
   const appId = stringProperty(argument, 'appId');
   const providerKey = stringProperty(argument, 'providerKey');
-  if (!appId || !providerKey) return undefined;
+  const providerIdentity = importedProviderIdentity(argument, providerKey, context);
+  if (!appId || !providerKey || !providerIdentity) return undefined;
   // Bind the proof to the declaration that owns the initializer, not merely an equivalent call.
   if (initializer.getSourceFile() !== declaration.getSourceFile()) return undefined;
   return {
     kind: 'app',
-    ownerKey: `${appId}:${providerKey}`,
+    ownerKey: `d1v6:${createHash('sha256')
+      .update(
+        JSON.stringify({
+          appId,
+          providerExportBinding: providerIdentity.exportBinding,
+          providerImportSpecifier: providerIdentity.importSpecifier,
+          providerKey,
+        }),
+      )
+      .digest('hex')}`,
     serverPackageRoot,
+  };
+}
+
+function importedProviderIdentity(
+  options: ts.ObjectLiteralExpression,
+  providerKey: string | undefined,
+  context: ProvenanceContext,
+): { readonly exportBinding: string; readonly importSpecifier: string } | undefined {
+  if (!providerKey) return undefined;
+  const providerProperty = options.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === 'provider') ||
+        (ts.isStringLiteralLike(property.name) && property.name.text === 'provider')),
+  );
+  if (!providerProperty || !ts.isIdentifier(providerProperty.initializer)) return undefined;
+  const localDeclaration = localSymbolDeclaration(context.checker, providerProperty.initializer);
+  if (!localDeclaration || !ts.isImportSpecifier(localDeclaration)) return undefined;
+  const importDeclaration = localDeclaration.parent.parent.parent;
+  if (
+    !ts.isImportDeclaration(importDeclaration) ||
+    !ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
+  ) {
+    return undefined;
+  }
+  const resolvedDeclaration = symbolDeclaration(context.checker, providerProperty.initializer);
+  if (
+    !resolvedDeclaration ||
+    !ts.isVariableDeclaration(resolvedDeclaration) ||
+    !resolvedDeclaration.initializer ||
+    !ts.isObjectLiteralExpression(unwrapExpression(resolvedDeclaration.initializer))
+  ) {
+    return undefined;
+  }
+  const providerDefinition = unwrapExpression(
+    resolvedDeclaration.initializer,
+  ) as ts.ObjectLiteralExpression;
+  if (stringProperty(providerDefinition, 'key') !== providerKey) return undefined;
+  return {
+    exportBinding: localDeclaration.propertyName?.text ?? localDeclaration.name.text,
+    importSpecifier: importDeclaration.moduleSpecifier.text,
   };
 }
 
@@ -833,6 +888,160 @@ function functionContainsAppDeclarationFactory(
   };
   visit(declaration.body);
   return found;
+}
+
+function proveGeneratedAppFactory(
+  callSourceFile: ts.SourceFile,
+  expression: ts.Identifier,
+  context: ProvenanceContext,
+): Exclude<FactoryProof, { kind: 'none' }> | undefined {
+  const declaration = symbolDeclaration(context.checker, expression);
+  if (
+    !declaration ||
+    !ts.isVariableDeclaration(declaration) ||
+    !ts.isIdentifier(declaration.name) ||
+    !isDeclarationFamily(declaration.name.text) ||
+    !declaration.initializer
+  ) {
+    return undefined;
+  }
+  const generatedSourceFile = declaration.getSourceFile();
+  const normalizedGeneratedFile = normalizeFileName(generatedSourceFile.fileName);
+  if (
+    !normalizedGeneratedFile.includes('/.kovo/') ||
+    !normalizedGeneratedFile.endsWith('/app.ts')
+  ) {
+    return undefined;
+  }
+  if (
+    !generatedSourceFile.text.startsWith(
+      '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
+    ) ||
+    !sourceReachesGeneratedModuleThroughKovoAlias(
+      callSourceFile,
+      generatedSourceFile,
+      context,
+      new Set(),
+      false,
+    ) ||
+    !generatedModuleMatchesManifest(generatedSourceFile)
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        callSourceFile,
+        expression,
+        'D1B009',
+        'D1B009 generated app factory identity is not bound to an authenticated #kovo module.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+  const initializer = unwrapExpression(declaration.initializer);
+  if (
+    !ts.isPropertyAccessExpression(initializer) ||
+    initializer.name.text !== declaration.name.text
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        callSourceFile,
+        expression,
+        'D1B009',
+        'D1B009 generated app factory does not lower to its exact app receiver.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+  const receiver = proveReceiver(
+    generatedSourceFile,
+    initializer.expression,
+    context,
+    new Set(),
+    0,
+  );
+  if (receiver.kind !== 'app') {
+    return {
+      diagnostic: diagnosticAt(
+        callSourceFile,
+        expression,
+        'D1B009',
+        'D1B009 generated app factory owner could not be derived from its provider.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+  return {
+    exportName: declaration.name.text,
+    kind: 'factory',
+    ownerKey: receiver.ownerKey,
+    serverPackageRoot: receiver.serverPackageRoot,
+  };
+}
+
+function sourceReachesGeneratedModuleThroughKovoAlias(
+  sourceFile: ts.SourceFile,
+  generatedSourceFile: ts.SourceFile,
+  context: ProvenanceContext,
+  seen: Set<string>,
+  aliasObserved: boolean,
+): boolean {
+  const seenKey = `${normalizeFileName(sourceFile.fileName)}:${String(aliasObserved)}`;
+  if (seen.has(seenKey)) return false;
+  seen.add(seenKey);
+  for (const statement of sourceFile.statements) {
+    const moduleSpecifier =
+      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteralLike(statement.moduleSpecifier)
+        ? statement.moduleSpecifier
+        : undefined;
+    if (!moduleSpecifier) continue;
+    const resolved = resolveModule(moduleSpecifier.text, sourceFile.fileName, context.options);
+    if (!resolved) continue;
+    const nextAliasObserved = aliasObserved || moduleSpecifier.text === '#kovo';
+    const normalizedResolved = normalizeFileName(resolved.resolvedFileName);
+    if (
+      nextAliasObserved &&
+      normalizedResolved === normalizeFileName(generatedSourceFile.fileName)
+    ) {
+      return true;
+    }
+    const dependency =
+      context.program.getSourceFile(resolved.resolvedFileName) ??
+      context.program
+        .getSourceFiles()
+        .find((candidate) => normalizeFileName(candidate.fileName) === normalizedResolved);
+    if (
+      dependency &&
+      sourceReachesGeneratedModuleThroughKovoAlias(
+        dependency,
+        generatedSourceFile,
+        context,
+        seen,
+        nextAliasObserved,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function generatedModuleMatchesManifest(sourceFile: ts.SourceFile): boolean {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(dirname(sourceFile.fileName), 'app.manifest.json'), 'utf8'),
+    ) as {
+      generatedModuleSha256?: unknown;
+      schema?: unknown;
+    };
+    return (
+      manifest.schema === 'kovo.generated-app-contract/v6' &&
+      manifest.generatedModuleSha256 ===
+        createHash('sha256').update(sourceFile.text).digest('hex')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function functionContainsDeclarationFactoryAccess(

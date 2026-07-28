@@ -131,12 +131,14 @@ export function validateCompilerOwnedAppContractResolutions(
       });
       continue;
     }
+    const exactFactoryNode =
+      (ts.isPropertyAccessExpression(fact.node) && fact.node.name.text === fact.exportName) ||
+      (ts.isIdentifier(fact.node) && fact.node.text.length > 0);
     if (
-      !ts.isPropertyAccessExpression(fact.node) ||
+      !exactFactoryNode ||
       fact.node.getSourceFile() !== fact.sourceFile ||
       fact.node.getStart(fact.sourceFile) !== fact.start ||
       fact.node.getEnd() !== fact.end ||
-      fact.node.name.text !== fact.exportName ||
       !isDeclarationFamily(fact.exportName)
     ) {
       diagnostics.push({
@@ -190,17 +192,30 @@ export function compilerOwnedAppContractFactoryIdentity(
   expression: ts.Expression,
 ): FrameworkExportIdentity | undefined {
   const session = activeResolutionSessions[activeResolutionSessions.length - 1];
-  if (!session || !typescript.isPropertyAccessExpression(expression)) return undefined;
+  if (
+    !session ||
+    (!typescript.isPropertyAccessExpression(expression) && !typescript.isIdentifier(expression))
+  ) {
+    return undefined;
+  }
   const fileName = normalizeComponentFileName(sourceFile.fileName);
   const start = expression.getStart(sourceFile);
   const end = expression.getEnd();
+  const expressionName = typescript.isPropertyAccessExpression(expression)
+    ? expression.name.text
+    : expression.text;
   for (const fact of session.facts) {
+    const factNodeName = typescript.isPropertyAccessExpression(fact.node)
+      ? fact.node.name.text
+      : typescript.isIdentifier(fact.node)
+        ? fact.node.text
+        : undefined;
     if (
       normalizeComponentFileName(fact.sourceFile.fileName) !== fileName ||
       fact.sourceSnapshot !== sourceFile.text ||
       fact.start !== start ||
       fact.end !== end ||
-      expression.name.text !== fact.exportName ||
+      expressionName !== factNodeName ||
       sourceFile.text.slice(start, end) !== fact.sourceSnapshot.slice(fact.start, fact.end)
     ) {
       continue;

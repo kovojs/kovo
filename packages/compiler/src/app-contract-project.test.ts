@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -151,6 +152,45 @@ describe('D1 compiler-owned exact project resolver', () => {
     }
   });
 
+  it('recognizes only an authenticated generated #kovo free function', async () => {
+    const fixture = await createFixture();
+    const generated = join(fixture.root, 'app/.kovo/app.ts');
+    const generatedSource = [
+      '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
+      "import { app } from '../src/provider.js';",
+      'export const query = app.query;',
+      '',
+    ].join('\n');
+    await writeSource(generated, generatedSource);
+    await writeJson(join(fixture.root, 'app/.kovo/app.manifest.json'), {
+      generatedModuleSha256: createHash('sha256').update(generatedSource).digest('hex'),
+      schema: 'kovo.generated-app-contract/v6',
+    });
+    const entry = join(fixture.root, 'app/src/generated-entry.ts');
+    await writeSource(
+      entry,
+      "import { query } from '#kovo';\nexport const item = query({ load() { return 1; } });\n",
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, generated, entry],
+    });
+
+    const result = project.compileEntry(entry);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ownerKey).toBe(ownerKey);
+    expect(result.parsedFactories).toContain('query');
+    expect(result.resolver.exactNodeCount).toBe(1);
+    expect(result.serverPackageRoots).toEqual([fixture.serverA]);
+
+    await writeSource(generated, `${generatedSource}// forged after manifest\n`);
+    const forgedProject = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, generated, entry],
+    });
+    expect(forgedProject.compileEntry(entry).diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      ['D1B009'],
+    );
+  });
+
   it.each(['direct', 'named', 'star', 'same-owner'] as const)(
     'rejects duplicate physical server copies through the %s path',
     async (kind) => {
@@ -192,7 +232,7 @@ describe('D1 compiler-owned exact project resolver', () => {
   });
 });
 
-const ownerKey = '00000000-0000-4000-8000-000000000001:contacts';
+const ownerKey = ownerKeyFor('contacts');
 
 interface Fixture {
   readonly alias: string;
@@ -217,6 +257,7 @@ async function createFixture(): Promise<Fixture> {
   const sharedPackage = join(root, 'packages/shared');
   await writeJson(join(app, 'package.json'), {
     exports: { './provider': './src/provider.ts' },
+    imports: { '#kovo': './.kovo/app.ts' },
     name: '@fixture/app',
     type: 'module',
   });
@@ -229,6 +270,10 @@ async function createFixture(): Promise<Fixture> {
   await linkDependency(sharedPackage, '@fixture/app', app);
 
   const provider = join(app, 'src/provider.ts');
+  await writeSource(
+    join(app, 'src/provider-impl.ts'),
+    "export const contactsProvider = { key: 'contacts' } as const;\n",
+  );
   await writeSource(provider, providerSource('contacts'));
   const namedBridge = join(app, 'src/named-bridge.ts');
   await writeSource(namedBridge, "export { app } from './provider.js';\n");
@@ -324,6 +369,10 @@ async function createAppPackage(
     type: 'module',
   });
   await linkDependency(root, '@kovojs/server', server);
+  await writeSource(
+    join(root, 'src/provider-impl.ts'),
+    `export const contactsProvider = { key: '${providerKey}' } as const;\n`,
+  );
   await writeSource(join(root, 'src/provider.ts'), providerSource(providerKey));
   await writeSource(join(root, 'src/named.ts'), "export { app } from './provider.js';\n");
   await writeSource(join(root, 'src/star.ts'), "export * from './provider.js';\n");
@@ -347,6 +396,7 @@ async function createServerPackage(root: string): Promise<string> {
       'export declare function task(definition: unknown): unknown;',
       'export declare function defineKovo<const AppId extends string>(options: {',
       '  readonly appId: AppId;',
+      '  readonly provider: unknown;',
       '  readonly providerKey: string;',
       '}): {',
       '  readonly endpoint: typeof endpoint;',
@@ -365,12 +415,27 @@ async function createServerPackage(root: string): Promise<string> {
 function providerSource(providerKey: string): string {
   return [
     "import { defineKovo } from '@kovojs/server';",
+    "import { contactsProvider } from './provider-impl.js';",
     'export const app = defineKovo({',
     "  appId: '00000000-0000-4000-8000-000000000001',",
+    '  provider: contactsProvider,',
     `  providerKey: '${providerKey}',`,
     '});',
     '',
   ].join('\n');
+}
+
+function ownerKeyFor(providerKey: string): string {
+  return `d1v6:${createHash('sha256')
+    .update(
+      JSON.stringify({
+        appId: '00000000-0000-4000-8000-000000000001',
+        providerExportBinding: 'contactsProvider',
+        providerImportSpecifier: './provider-impl.js',
+        providerKey,
+      }),
+    )
+    .digest('hex')}`;
 }
 
 function acceptedSource(specifier: string, name: string): string {
