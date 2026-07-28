@@ -476,7 +476,7 @@ function routeObject(route: unknown): { readonly routePageFacts: readonly unknow
 }
 
 function countHandlerRoots(value: unknown): number {
-  return JSON.stringify(value).split('"kind":"server.handler.root"').length - 1;
+  return (JSON.stringify(value) ?? '').split('"kind":"server.handler.root"').length - 1;
 }
 
 function factoryStart(source: string): number {
