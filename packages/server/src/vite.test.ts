@@ -645,13 +645,16 @@ export default createApp({
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-css-'));
     const appSource = `
 import { createApp, route } from '@kovojs/server';
+import * as style from '@kovojs/style';
 import { HomeCard } from './components/home-card.js';
 import { LoginCard } from './components/login-card.js';
 
+const shellStyles = style.create({ root: { backgroundColor: 'linen' } });
+
 export default createApp({
   routes: [
-    route('/', { page: () => <HomeCard /> }),
-    route('/login', { page: () => <LoginCard /> }),
+    route('/', { page: () => <div style={shellStyles.root}><HomeCard /></div> }),
+    route('/login', { page: () => <div style={shellStyles.root}><LoginCard /></div> }),
   ],
 });
 `;
@@ -741,6 +744,7 @@ export const LoginCard = component({
         expect(homeBody).toContain(`data-kovo-critical-href="${homeRouteHref}"`);
         expect(homeBody).toContain(homeRouteHref);
         expect(homeBody).toContain('color:teal');
+        expect(homeBody).toContain('background-color:linen');
         expect(homeBody).not.toContain('color:purple');
         expect(homeBody).not.toContain('/assets/routes/login');
 

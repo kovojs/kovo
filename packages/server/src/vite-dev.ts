@@ -14,6 +14,11 @@ import {
   decodeFrameworkTargetHeader,
   FRAMEWORK_WIRE_INPUT_GRAMMAR,
 } from '@kovojs/core/internal/wire-input-grammar';
+import {
+  createFrameworkFileSystemBoundary,
+  pathRelativeToRoot,
+  type FrameworkFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/hmr-target-snapshot';
 import { isKovoApp } from './app-guards.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
@@ -39,11 +44,17 @@ import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
 } from './document-diagnostics.js';
-import { snapshotStylesheetAsset, type StylesheetAsset } from './hints.js';
+import {
+  snapshotStylesheetAsset,
+  stylesheetSourceFile,
+  stylesheetSourcePath,
+  type StylesheetAsset,
+} from './hints.js';
 import {
   nodeRequestToWebRequest,
   rejectNodeRequestPreloadIngress,
   toNodeHandler,
+  toNodeHandlerWithFrameworkSetCookies,
   writeWebResponseToNode,
   type NodeRequestHandler,
 } from './node.js';
@@ -78,6 +89,7 @@ import {
   securityBufferConcat,
   securityBufferFrom,
   securityBufferToString,
+  securityDecodeUtf8Fatal,
   securityHeadersDelete,
   securityHeadersForEach,
   securityHeadersGet,
@@ -257,6 +269,10 @@ export interface KovoAppShellViteDevPluginOptions {
    */
   nodeHandlerExportName?: string;
   order?: 'pre' | 'post';
+  /**
+   * @internal Supported-runner bridge for cookies owned by the outer dev transport.
+   */
+  responseSetCookieValues?: (response: ServerResponse) => readonly string[];
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
   /**
    * Build-owned stylesheet assets supplied by the compiler Vite plugin during dev.
@@ -266,6 +282,11 @@ export interface KovoAppShellViteDevPluginOptions {
   stylesheetAssets?:
     | KovoAppShellViteDevStylesheetAssets
     | (() => KovoAppShellViteDevStylesheetAssets | undefined);
+  /**
+   * @internal Exact authored source root used to materialize local `stylesheet('./file.css')`
+   * declarations through Kovo's confined filesystem boundary during development.
+   */
+  stylesheetSourceRoot?: string;
 }
 
 /** @internal Structural CSS chunk assets accepted by app-shell Vite dev. */
@@ -477,6 +498,9 @@ export async function dispatchKovoAppShellViteDevRequest(
   const appExportName = options.appExportName ?? 'default';
   if (options.devDiagnostics) registerRequestDiagnosticStore(options.devDiagnostics);
   if (rejectNodeRequestPreloadIngress(request, response)) return;
+  const additionalSetCookies = readKovoAppShellViteDevResponseSetCookies(options, response);
+  const additionalSetCookieOptions =
+    additionalSetCookies === undefined ? {} : { additionalSetCookies };
 
   // SPEC §9.5: the full direct-Node source/method/authority/target/framing verdict above must close
   // before this graph-local bootstrap or any authored app module can evaluate.
@@ -485,17 +509,31 @@ export async function dispatchKovoAppShellViteDevRequest(
   // bundles, but an authored dependency cannot run first and influence their dev-time capture.
   await server.ssrLoadModule(kovoServerRootModuleId);
   const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));
+  const baseApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
   const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
-  const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);
+  const declaredStylesheetAssets = await materializeKovoAppShellViteDevStylesheets(
+    baseApp,
+    options.stylesheetSourceRoot,
+  );
+  const stylesheetResponse =
+    renderKovoAppShellViteDevStylesheetAsset(request, declaredStylesheetAssets) ??
+    renderKovoAppShellViteDevStylesheetAsset(request, stylesheetAssets);
   if (stylesheetResponse) {
-    await writeWebResponseToNode(stylesheetResponse, response, request.method ?? 'GET');
+    await writeWebResponseToNode(
+      stylesheetResponse,
+      response,
+      request.method ?? 'GET',
+      additionalSetCookieOptions,
+    );
     return;
   }
 
-  const baseApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
   publishKovoAppShellViteDevClientModuleSnapshot(baseApp, options);
   const app = appWithDevDiagnostics(
-    appWithDevStylesheetAssets(baseApp, stylesheetAssets),
+    appWithDevStylesheetAssets(
+      appWithDevStylesheetAssets(baseApp, declaredStylesheetAssets),
+      stylesheetAssets,
+    ),
     options.devDiagnostics,
   );
   const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
@@ -510,7 +548,12 @@ export async function dispatchKovoAppShellViteDevRequest(
 
   const hmrResponse = renderKovoAppShellViteDevHmrResponse(app, request, options.devDiagnostics);
   if (hmrResponse) {
-    await writeWebResponseToNode(await hmrResponse, response, request.method ?? 'GET');
+    await writeWebResponseToNode(
+      await hmrResponse,
+      response,
+      request.method ?? 'GET',
+      additionalSetCookieOptions,
+    );
     return;
   }
 
@@ -524,6 +567,7 @@ export async function dispatchKovoAppShellViteDevRequest(
       injectKovoHmrScriptIntoRouteResponse(diagnosticResponse),
       request,
       response,
+      additionalSetCookies,
     );
     return;
   }
@@ -535,6 +579,7 @@ export async function dispatchKovoAppShellViteDevRequest(
     options,
     options.nodeHandlerExportName,
     moduleId,
+    additionalSetCookies,
   )(request, devResponse, next);
 }
 
@@ -790,11 +835,13 @@ async function writeKovoAppShellViteDevRouteResponse(
   routeResponse: RoutePageResponse,
   request: IncomingMessage,
   response: ServerResponse,
+  additionalSetCookies: readonly string[] | undefined,
 ): Promise<void> {
   await writeWebResponseToNode(
     routeResponseToWebResponse(routeResponse, { method: request.method ?? 'GET' }),
     response,
     request.method ?? 'GET',
+    additionalSetCookies === undefined ? {} : { additionalSetCookies },
   );
 }
 
@@ -1768,6 +1815,7 @@ function readKovoAppShellViteDevNodeHandler(
   options: KovoAppShellViteDevPluginOptions,
   exportName: string | undefined,
   moduleId: string,
+  additionalSetCookies: readonly string[] | undefined,
 ): KovoAppShellViteMiddleware {
   if (exportName !== undefined) {
     const handler = viteDevModuleExportValue(
@@ -1795,8 +1843,28 @@ function readKovoAppShellViteDevNodeHandler(
     compression: false,
     ...(options.earlyHints === undefined ? {} : { earlyHints: options.earlyHints }),
   };
-  const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
+  const handler = createRequestHandler(app);
+  const nodeHandler =
+    additionalSetCookies === undefined
+      ? toNodeHandler(handler, nodeOptions)
+      : toNodeHandlerWithFrameworkSetCookies(handler, nodeOptions, additionalSetCookies);
   return (request, response) => nodeHandler(request, response);
+}
+
+function readKovoAppShellViteDevResponseSetCookies(
+  options: KovoAppShellViteDevPluginOptions,
+  response: ServerResponse,
+): readonly string[] | undefined {
+  const getter = viteDevOwnDataValue(
+    options,
+    'responseSetCookieValues',
+    'Vite dev response Set-Cookie bridge',
+  );
+  if (getter === undefined) return undefined;
+  if (typeof getter !== 'function') {
+    throw new TypeError('Vite dev response Set-Cookie bridge must be a function.');
+  }
+  return witnessReflectApply<readonly string[]>(getter, undefined, [response]);
 }
 
 function appWithDevDiagnostics(
@@ -1861,6 +1929,138 @@ function requestHrefFromContext(request: unknown): string | undefined {
   if (!requestIsRequest(request)) return undefined;
   const url = viteDevUrlSnapshot(requestUrl(request));
   return `${url.pathname}${url.search}`;
+}
+
+async function materializeKovoAppShellViteDevStylesheets(
+  app: KovoApp,
+  sourceRoot: string | undefined,
+): Promise<KovoAppShellViteDevStylesheetAssets | undefined> {
+  if (sourceRoot === undefined) return undefined;
+
+  let fileSystem: FrameworkFileSystemBoundary;
+  try {
+    fileSystem = await createFrameworkFileSystemBoundary(sourceRoot);
+  } catch (error) {
+    throw new Error(
+      `KV229 Kovo dev cannot establish stylesheet source root '${sourceRoot}'. SPEC §6.6 confines reviewed filesystem doors to the authored source root.`,
+      { cause: error },
+    );
+  }
+
+  const appAssets = await materializeKovoAppShellViteDevStylesheetArray(
+    app.stylesheets,
+    sourceRoot,
+    fileSystem,
+  );
+  const routeAssets = createSecurityNullRecord<readonly StylesheetAsset[]>();
+  for (let index = 0; index < app.routes.length; index += 1) {
+    const route = app.routes[index]!;
+    const assets = await materializeKovoAppShellViteDevStylesheetArray(
+      route.stylesheets ?? [],
+      sourceRoot,
+      fileSystem,
+    );
+    if (assets.length === 0) continue;
+    witnessDefineProperty(routeAssets, route.path, {
+      configurable: false,
+      enumerable: true,
+      value: witnessFreeze(assets),
+      writable: false,
+    });
+  }
+
+  const fragmentAssets = createSecurityNullRecord<readonly StylesheetAsset[]>();
+  for (let index = 0; index < app.liveTargetRenderers.length; index += 1) {
+    const renderer = app.liveTargetRenderers[index]!;
+    const assets = await materializeKovoAppShellViteDevStylesheetArray(
+      renderer.stylesheets ?? [],
+      sourceRoot,
+      fileSystem,
+    );
+    if (assets.length === 0) continue;
+    witnessDefineProperty(fragmentAssets, renderer.component, {
+      configurable: false,
+      enumerable: true,
+      value: witnessFreeze(assets),
+      writable: false,
+    });
+  }
+
+  if (
+    appAssets.length === 0 &&
+    witnessOwnKeys(routeAssets).length === 0 &&
+    witnessOwnKeys(fragmentAssets).length === 0
+  ) {
+    return undefined;
+  }
+  return witnessFreeze({
+    ...(appAssets.length === 0 ? {} : { app: witnessFreeze(appAssets) }),
+    ...(witnessOwnKeys(fragmentAssets).length === 0
+      ? {}
+      : { fragments: witnessFreeze(fragmentAssets) }),
+    ...(witnessOwnKeys(routeAssets).length === 0 ? {} : { routes: witnessFreeze(routeAssets) }),
+  });
+}
+
+async function materializeKovoAppShellViteDevStylesheetArray(
+  stylesheets: readonly (string | StylesheetAsset)[],
+  sourceRoot: string,
+  fileSystem: FrameworkFileSystemBoundary,
+): Promise<StylesheetAsset[]> {
+  const values = viteDevDenseArrayValues<string | StylesheetAsset>(
+    stylesheets,
+    'Vite dev declared stylesheets',
+  );
+  const result: StylesheetAsset[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const asset = values[index]!;
+    if (typeof asset === 'string') continue;
+    const sourcePath = stylesheetSourcePath(asset);
+    const sourceFile = stylesheetSourceFile(asset);
+    if (sourcePath === undefined && sourceFile === undefined) continue;
+    const relativePath =
+      sourceFile === undefined
+        ? sourcePath
+        : (pathRelativeToRoot(sourceRoot, sourceFile) ??
+          pathRelativeToRoot(fileSystem.root, sourceFile));
+    if (relativePath === undefined) {
+      throw new Error(
+        `KV229 Kovo dev refuses stylesheet '${asset.href}' outside stylesheet source root '${sourceRoot}'. SPEC §6.6 confines reviewed filesystem doors to the authored source root.`,
+      );
+    }
+
+    let source: Awaited<ReturnType<FrameworkFileSystemBoundary['readFile']>>;
+    try {
+      source = await fileSystem.readFile(relativePath, { requireSingleLink: true });
+    } catch (error) {
+      throw new Error(
+        `KV229 Kovo dev cannot read stylesheet '${asset.href}' through stylesheet source root '${sourceRoot}'.`,
+        { cause: error },
+      );
+    }
+    if (source === undefined || !securityIsUint8Array(source.body)) {
+      throw new Error(
+        `KV229 Kovo dev cannot materialize stylesheet '${asset.href}' from a stable root-confined regular file.`,
+      );
+    }
+
+    let criticalCss: string;
+    try {
+      criticalCss = securityDecodeUtf8Fatal(source.body);
+    } catch (error) {
+      throw new Error(`KV229 Kovo dev stylesheet '${asset.href}' is not valid UTF-8.`, {
+        cause: error,
+      });
+    }
+    const snapshot = snapshotStylesheetAsset(asset);
+    securityArrayPush(result, {
+      href: snapshot.href,
+      criticalCss,
+      ...(snapshot.deferFull === undefined ? {} : { deferFull: snapshot.deferFull }),
+      ...(snapshot.preload === undefined ? {} : { preload: snapshot.preload }),
+    });
+  }
+  return result;
 }
 
 function readKovoAppShellViteDevStylesheetAssets(

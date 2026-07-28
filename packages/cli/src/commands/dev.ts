@@ -40,6 +40,7 @@ import {
   configureKovoDevHostDoor,
   installKovoDevHostDoor,
   installKovoDevSourceFallbackDoor,
+  kovoDevResponseSetCookieValues,
   type KovoDevNodeIngressProfile,
 } from './dev-host-door.js';
 
@@ -164,6 +165,7 @@ export async function startKovoDevServer(
     const createdPlugin = profile.trustedKovoVitePlugin({
       app: viteAppModuleId(options.appModulePath, root),
       paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+      responseSetCookieValues: kovoDevResponseSetCookieValues,
     });
     if (!isRecord(createdPlugin)) {
       throw new TypeError('@kovojs/server/vite kovo() must return a plugin object.');
@@ -245,6 +247,7 @@ interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
   trustedKovoVitePlugin(options: {
     app: string;
     paranoidStaticAdvisory: boolean;
+    responseSetCookieValues: typeof kovoDevResponseSetCookieValues;
   }): Exclude<PluginOption, false | null | undefined>;
 }
 

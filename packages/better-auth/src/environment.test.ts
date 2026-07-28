@@ -387,9 +387,9 @@ process.stdout.write(JSON.stringify({
     }
   });
 
-  it('keeps the HTTP localhost default development-only and requires a canonical production HTTPS origin', () => {
+  it('keeps the exact kovo dev loopback origin development-only and requires canonical production HTTPS', () => {
     expect(resolveEnvironmentInChild([])).toEqual({
-      baseURL: 'http://localhost:5173',
+      baseURL: 'http://127.0.0.1:5173',
       developmentSeed: false,
       production: false,
     });

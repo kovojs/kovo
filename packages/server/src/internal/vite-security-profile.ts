@@ -1,3 +1,5 @@
+import type { ServerResponse } from 'node:http';
+
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
 import { kovo } from '../vite.js';
 import { createKovoAppShellViteDevIntegration } from '../vite-dev.js';
@@ -5,11 +7,13 @@ export { nodeRequestPreloadIngressRejection, rejectNodeRequestPreloadIngress } f
 import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileParanoidSentinel,
+  trustedViteSecurityProfileResponseCookiesSentinel,
   trustedViteSecurityProfileSentinel,
 } from './vite-security-sentinel.js';
 
 interface TrustedKovoVitePluginOptions extends KovoVitePluginOptions {
   paranoidStaticAdvisory: boolean;
+  responseSetCookieValues?(response: ServerResponse): readonly string[];
 }
 
 /**
@@ -24,5 +28,11 @@ export function trustedKovoVitePlugin(options: TrustedKovoVitePluginOptions): Ko
     [trustedViteSecurityProfileSentinel]: trustedViteSecurityProfileSentinel,
     [trustedViteSecurityProfileIntegrationSentinel]: createKovoAppShellViteDevIntegration,
     [trustedViteSecurityProfileParanoidSentinel]: options.paranoidStaticAdvisory,
+    ...(options.responseSetCookieValues === undefined
+      ? {}
+      : {
+          // oxlint-disable-next-line typescript/unbound-method -- This callback is transported as a value and invoked without a receiver.
+          [trustedViteSecurityProfileResponseCookiesSentinel]: options.responseSetCookieValues,
+        }),
   } as KovoVitePluginOptions);
 }

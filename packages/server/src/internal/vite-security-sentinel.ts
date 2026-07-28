@@ -12,3 +12,8 @@ export const trustedViteSecurityProfileIntegrationSentinel: unique symbol = Symb
 export const trustedViteSecurityProfileParanoidSentinel: unique symbol = Symbol(
   'Kovo trusted Vite security profile paranoid disposition',
 );
+
+/** @internal Module-private slot carrying the supported runner's response-cookie bridge. */
+export const trustedViteSecurityProfileResponseCookiesSentinel: unique symbol = Symbol(
+  'Kovo trusted Vite security profile response cookies',
+);

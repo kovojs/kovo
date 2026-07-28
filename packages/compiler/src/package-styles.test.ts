@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { collectCssAssetManifest } from './internal.js';
 import {
   extractAppComponentCss,
   extractAppRouteCssTargets,
@@ -142,6 +143,27 @@ describe('normalizeNumericLengths (K2: served-CSS length normalizer)', () => {
 });
 
 describe('extractAppComponentCss', () => {
+  it('keeps app-shell styles in the create-kovo route-split base chunk', () => {
+    const root = repoRoot();
+    const fileName = join(root, 'packages', 'create-kovo', 'templates', 'src', 'app.tsx');
+    const options = {
+      fileName,
+      packagePrefixDiscoveryRoot: root,
+      source: '',
+    };
+    const appCss = extractAppComponentCss(options);
+    const routeCss = extractAppRouteCssTargets(options);
+    const manifest = collectCssAssetManifest(
+      { cssAssets: appCss.cssAssets },
+      { split: { routes: routeCss.routeTargets } },
+    );
+    const baseCss = manifest.chunks?.base.map((asset) => asset.criticalCss ?? '').join('\n');
+
+    expect(appCss.css).toContain('.kv-style-');
+    expect(routeCss.routeTargets.map((target) => target.route)).toContain('/login');
+    expect(baseCss).toContain('.kv-style-');
+  });
+
   it('extracts app-authored style.create CSS without generated artifacts', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-'));
 

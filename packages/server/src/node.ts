@@ -60,6 +60,8 @@ export interface NodeHandlerOptions {
 
 export interface WriteWebResponseToNodeOptions {
   acceptEncoding?: string;
+  /** @internal Trusted outer-layer cookies to append at the final transport boundary. */
+  additionalSetCookies?: readonly string[];
   /** Compress eligible text responses by default; set `false` to opt out. */
   compression?: boolean;
   earlyHints?: boolean;
@@ -759,7 +761,31 @@ export function toNodeHandler(
   handler: RequestHandler,
   options: NodeHandlerOptions = {},
 ): NodeRequestHandler {
-  const pinnedOptions = snapshotNodeHandlerOptions(options);
+  return createNodeHandler(handler, snapshotNodeHandlerOptions(options));
+}
+
+/**
+ * @internal Compose framework-owned transport cookies without widening the public Node adapter
+ * options. The Vite dev door is the only caller; authored handlers still return ordinary Web
+ * Responses and cannot forge the boot-captured outer-layer cookie.
+ */
+export function toNodeHandlerWithFrameworkSetCookies(
+  handler: RequestHandler,
+  options: NodeHandlerOptions,
+  additionalSetCookies: readonly string[],
+): NodeRequestHandler {
+  return createNodeHandler(
+    handler,
+    snapshotNodeHandlerOptions(options),
+    snapshotAdditionalNodeSetCookies(additionalSetCookies),
+  );
+}
+
+function createNodeHandler(
+  handler: RequestHandler,
+  pinnedOptions: PinnedNodeHandlerOptions,
+  additionalSetCookies?: readonly string[],
+): NodeRequestHandler {
   return async (nodeRequest, nodeResponse) => {
     const responseTransport = pinNodeResponseTransport(nodeResponse);
     try {
@@ -779,6 +805,7 @@ export function toNodeHandler(
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
       const acceptEncoding = firstHeaderValue(pinnedNodeRequest.headers['accept-encoding']);
       const writeOptions: WriteWebResponseToNodeOptions = {
+        ...(additionalSetCookies === undefined ? {} : { additionalSetCookies }),
         ...(acceptEncoding === undefined ? {} : { acceptEncoding }),
         ...(pinnedOptions.compression === undefined
           ? {}
@@ -1086,6 +1113,7 @@ export async function writeWebResponseToNode(
   // SPEC §6.6 rule 5: the final transport pins the complete Response once. Authored code may
   // share this realm, so no status/header/body getter is re-read after this boundary decision.
   const pinnedResponse = snapshotWebResponse(response);
+  appendAdditionalNodeSetCookies(pinnedResponse.headers, options.additionalSetCookies);
   assertSafeTransportResponseHeaders(
     nodeTransportHeaderEntries(pinnedResponse.headers),
     classifyNodeTransportResponseHeaders,
@@ -1140,6 +1168,38 @@ export async function writeWebResponseToNode(
   } else {
     await nativePipeline(source, nodeResponse);
   }
+}
+
+function appendAdditionalNodeSetCookies(
+  headers: Headers,
+  additionalSetCookies: readonly string[] | undefined,
+): void {
+  if (additionalSetCookies === undefined) return;
+  if (!witnessIsArray(additionalSetCookies)) {
+    throw new TypeError('Kovo additional Set-Cookie values must be a dense string array.');
+  }
+  for (let index = 0; index < additionalSetCookies.length; index += 1) {
+    const value = witnessGetOwnPropertyDescriptor(additionalSetCookies, index)?.value;
+    if (typeof value !== 'string') {
+      throw new TypeError('Kovo additional Set-Cookie values must be a dense string array.');
+    }
+    appendHeader(headers, 'set-cookie', value);
+  }
+}
+
+function snapshotAdditionalNodeSetCookies(value: unknown): readonly string[] {
+  if (!witnessIsArray(value)) {
+    throw new TypeError('Kovo additional Set-Cookie values must be a dense string array.');
+  }
+  const snapshot: string[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const cookie = witnessGetOwnPropertyDescriptor(value, index)?.value;
+    if (typeof cookie !== 'string') {
+      throw new TypeError('Kovo additional Set-Cookie values must be a dense string array.');
+    }
+    snapshot[index] = cookie;
+  }
+  return witnessFreeze(snapshot);
 }
 
 /**

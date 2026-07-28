@@ -445,6 +445,11 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/app.tsx')).toContain('<HomePage userName={request.session.user.name} />');
     expect(files.get('src/app.tsx')).not.toContain('<HomePage request={request} />');
+    expect(files.get('src/app.tsx')).toContain(`<main>
+        <ContactsRegion />
+      </main>`);
+    expect(files.get('src/app.tsx')).not.toContain('<span style={styles.who}>');
+    expect(files.get('src/app.tsx')).toContain("if (request.session) return redirect('/', {});");
   });
 
   it('keeps deployment environment access out of generated production source', () => {

@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
@@ -6,6 +7,13 @@ import type { InlineConfig, ViteDevServer } from 'vite-plus';
 
 const DEV_AUTH_COOKIE = 'Kovo-Dev-Auth';
 const DEFAULT_DEV_HOST = '127.0.0.1';
+const NativeWeakMap = globalThis.WeakMap;
+const nativeObjectFreeze = globalThis.Object.freeze;
+const nativeReflectApply = globalThis.Reflect.apply;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
+const devResponseSetCookies = new NativeWeakMap<ServerResponse, readonly string[]>();
+const emptyDevResponseSetCookies = nativeObjectFreeze([] as string[]);
 const SOURCE_PATH_PREFIXES = Object.freeze([
   '/@fs/',
   '/@id/',
@@ -64,6 +72,14 @@ export interface KovoDevNodeIngressProfile {
     request: IncomingMessage,
   ): { readonly message: string; readonly status: 400 | 413 | 414 } | undefined;
   rejectNodeRequestPreloadIngress(request: IncomingMessage, response: ServerResponse): boolean;
+}
+
+/** @internal Final-response cookie bridge shared with the trusted Kovo dev plugin. */
+export function kovoDevResponseSetCookieValues(response: ServerResponse): readonly string[] {
+  return (
+    nativeReflectApply(nativeWeakMapGet, devResponseSetCookies, [response]) ??
+    emptyDevResponseSetCookies
+  );
 }
 
 /**
@@ -352,6 +368,10 @@ function requestHasDevAuth(request: IncomingMessage, token: SecretValue<string>)
 
 function issueDevAuthCookie(response: ServerResponse, token: string): void {
   const cookie = `${DEV_AUTH_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict`;
+  nativeReflectApply(nativeWeakMapSet, devResponseSetCookies, [
+    response,
+    nativeObjectFreeze([cookie]),
+  ]);
   const existing = response.getHeader('Set-Cookie');
   if (existing === undefined) {
     response.setHeader('Set-Cookie', cookie);

@@ -355,6 +355,10 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       expect(login).toContain('Sign in');
       // The themed stylesheet pipeline ran: critical theme vars are inlined.
       expect(login).toContain('--kovo-theme');
+      // World-class DevEx G10: dev must deliver app-shell and public UI component CSS,
+      // not merely emit matching class attributes that render with browser defaults.
+      expect(login).toMatch(/\.kv-style-[^{]+\{/);
+      expect(login).toMatch(/\.kv-button-[^{]+\{/);
 
       const home = await fetch(`${origin}/`, { redirect: 'manual' });
       expect([302, 303, 307]).toContain(home.status);
@@ -407,6 +411,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       expect(authedHtml).toContain('Contacts');
       expect(authedHtml).toContain('Ada Lovelace');
       expect(authedHtml).toContain('Add contact');
+      expect(authedHtml).toMatch(/\.kv-card-[^{]+\{/);
     } finally {
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });

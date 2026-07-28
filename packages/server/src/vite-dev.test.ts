@@ -1,6 +1,8 @@
 import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
@@ -22,6 +24,7 @@ import {
 } from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import { guard, resolveLifecycleRequest } from './guards.js';
+import { stylesheet } from './hints.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import {
   registerGeneratedLiveTargetRenderer,
@@ -1049,6 +1052,81 @@ describe('server app shell Vite dev seam', () => {
       expect(documentBody).toContain('.base{display:block}');
       expect(documentBody).toContain('.home{color:teal}');
       expect(documentBody).not.toContain('.login{color:purple}');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('materializes authored local stylesheets through the confined dev source root', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          page() {
+            return renderedHtml('<main class="local-dev-sheet">styled source app shell</main>');
+          },
+        }),
+      ],
+      stylesheets: [stylesheet('./vite-dev.local-stylesheet.fixture.css')],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      earlyHints: false,
+      moduleId: '/src/app-shell.ts',
+      responseSetCookieValues: () => ['Kovo-Dev-Auth=dev-token; Path=/; HttpOnly; SameSite=Strict'],
+      stylesheetSourceRoot: dirname(fileURLToPath(import.meta.url)),
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      ssrLoadModule: viteDevSsrLoadModule(async () => ({ default: app })),
+    });
+
+    expect(middleware).toBeDefined();
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        const message = error instanceof Error ? error.message : 'vite fallback';
+        response.writeHead(error ? 500 : 404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(message);
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const documentResponse = await fetch(`${origin}/`);
+      const documentBody = await documentResponse.text();
+      const stylesheetResponse = await fetch(
+        `${origin}/assets/vite-dev.local-stylesheet.fixture.css`,
+      );
+      const stylesheetBody = await stylesheetResponse.text();
+
+      expect(documentResponse.status, documentBody).toBe(200);
+      expect(documentResponse.headers.getSetCookie()).toContain(
+        'Kovo-Dev-Auth=dev-token; Path=/; HttpOnly; SameSite=Strict',
+      );
+      expect(documentBody).toContain(
+        'data-kovo-critical-href="/assets/vite-dev.local-stylesheet.fixture.css"',
+      );
+      expect(documentBody).toContain('.local-dev-sheet');
+      expect(stylesheetResponse.status, stylesheetBody).toBe(200);
+      expect(stylesheetResponse.headers.getSetCookie()).toContain(
+        'Kovo-Dev-Auth=dev-token; Path=/; HttpOnly; SameSite=Strict',
+      );
+      expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+      expect(stylesheetBody).toContain('font-family: ui-sans-serif');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

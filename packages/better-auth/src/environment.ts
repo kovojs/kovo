@@ -15,7 +15,10 @@ import { assertBetterAuthRuntimeRealmLocked } from './internal/runtime-lock.js';
 
 const NativeTypeError = globalThis.TypeError;
 const BETTER_AUTH_SECRET_MINIMUM_LENGTH = 32;
-const DEFAULT_BETTER_AUTH_URL = 'http://localhost:5173';
+// `kovo dev` intentionally owns one exact loopback host door at 127.0.0.1. Keep the
+// development-only auth origin identical so a freshly scaffolded app authenticates without an
+// environment override (SPEC §6.6/§9.5.1).
+const DEFAULT_BETTER_AUTH_URL = 'http://127.0.0.1:5173';
 const REPLACEMENT_SECRET = 'replace-with-a-deployed-secret';
 const REPLACEMENT_DEMO_PASSWORD = 'replace-with-a-local-demo-password';
 const BETTER_AUTH_CSRF_BINDING_MAXIMUM_LENGTH = 1_024;

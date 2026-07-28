@@ -1799,6 +1799,31 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
     expect(cookies[1]).toBe('csrf=xyz; SameSite=Strict; Path=/');
   });
 
+  it('composes trusted outer and app Set-Cookie values for the dev transport', async () => {
+    const response = new Response(null, {
+      headers: { 'Set-Cookie': 'kovo_csrf=csrf-value; SameSite=Lax; Path=/' },
+      status: 200,
+    });
+    let capturedSetCookie: string | string[] | undefined;
+    const fakeNodeResponse = {
+      end: vi.fn(),
+      writeHead: vi.fn(
+        (_status: number, _statusText: string, headers: Record<string, string | string[]>) => {
+          capturedSetCookie = headers['set-cookie'];
+        },
+      ),
+    } as unknown as ServerResponse;
+
+    await writeWebResponseToNode(response, fakeNodeResponse, 'GET', {
+      additionalSetCookies: ['Kovo-Dev-Auth=dev-token; HttpOnly; SameSite=Strict; Path=/'],
+    });
+
+    expect(capturedSetCookie).toEqual([
+      'kovo_csrf=csrf-value; SameSite=Lax; Path=/',
+      'Kovo-Dev-Auth=dev-token; HttpOnly; SameSite=Strict; Path=/',
+    ]);
+  });
+
   it.each([
     ['Set-Cookie', 'session=abc; HttpOnly; Path=/'],
     ['Clear-Site-Data', '"cookies", "storage"'],

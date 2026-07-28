@@ -152,12 +152,14 @@ function HomePage({ userName }: { userName: string }): string {
             <p style={styles.tagline}>A clean starting point for your next Kovo app.</p>
           </div>
         </div>
-        <span style={styles.who}>
+        <div style={styles.who}>
           <span style={styles.userName}>{userName}</span>
           <SignOutForm />
-        </span>
+        </div>
       </header>
-      <ContactsRegion />
+      <main>
+        <ContactsRegion />
+      </main>
     </div>
   );
 }
@@ -199,7 +201,10 @@ const app = createApp({
       meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
       layout: AppLayout,
       stylesheets,
-      page() {
+      page(_context, request: AppRequest) {
+        // A session transition deliberately performs a full document reload (SPEC §9.3).
+        // Complete sign-in by moving an already-authenticated reload to the guarded home route.
+        if (request.session) return redirect('/', {});
         return (
           <main style={styles.loginMain}>
             <LoginForm />

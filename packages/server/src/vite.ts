@@ -8,10 +8,17 @@ assertDataPlaneStaticAnalysisIntrinsics();
 
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { extname as pathExtname } from 'node:path';
 
-import { extractAppRouteCssTargets } from '@kovojs/compiler/package-styles';
 import {
+  extractAppComponentCss,
+  extractAppRouteCssTargets,
+  extractPackageComponentCss,
+} from '@kovojs/compiler/package-styles';
+import {
+  collectCssAssetManifest,
   projectMutationRegistryFactsFromFiles,
+  type ComponentCssAsset,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact as CompilerViteQueryShapeFact,
 } from '@kovojs/compiler/internal';
@@ -47,6 +54,7 @@ import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runt
 import {
   trustedViteSecurityProfileIntegrationSentinel,
   trustedViteSecurityProfileParanoidSentinel,
+  trustedViteSecurityProfileResponseCookiesSentinel,
   trustedViteSecurityProfileSentinel,
 } from './internal/vite-security-sentinel.ts';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
@@ -75,6 +83,7 @@ import {
 const viteClearTimeout = globalThis.clearTimeout;
 const viteSetTimeout = globalThis.setTimeout;
 const viteExistsSync = existsSync;
+const vitePathExtname = pathExtname;
 const viteReadFileSync = readFileSync;
 const viteParanoidValue = process.env.KOVO_PARANOID;
 const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
@@ -173,12 +182,14 @@ interface KovoAppShellDevPlugin {
 
 interface CssAssetManifestOptions {
   split?: {
+    baseSourceFileNames?: readonly string[];
     routes: readonly CssRouteSplitTarget[];
   };
 }
 
 interface CssAssetManifest {
   chunks?: CssSplitChunks;
+  stylesheets: readonly ComponentCssAsset[];
 }
 
 interface CssRouteSplitTarget {
@@ -209,6 +220,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const trustedOptions = options as KovoVitePluginOptions & {
     [trustedViteSecurityProfileIntegrationSentinel]?: unknown;
     [trustedViteSecurityProfileParanoidSentinel]?: unknown;
+    [trustedViteSecurityProfileResponseCookiesSentinel]?: unknown;
     [trustedViteSecurityProfileSentinel]?: unknown;
   };
   const trustedProfile = buildOwnDataProperty(
@@ -226,6 +238,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     trustedViteSecurityProfileParanoidSentinel,
     'trusted Vite paranoid disposition',
   );
+  const trustedResponseCookies = buildOwnDataProperty(
+    trustedOptions,
+    trustedViteSecurityProfileResponseCookiesSentinel,
+    'trusted Vite response cookies',
+  );
   const hasTrustedSecurityProfile =
     trustedProfile.present && trustedProfile.value === trustedViteSecurityProfileSentinel;
   const trustedCreateDevIntegration =
@@ -237,6 +254,12 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   const paranoidStaticAdvisory = hasTrustedSecurityProfile
     ? trustedParanoid.present && trustedParanoid.value === true
     : viteBootParanoidStaticAdvisory;
+  const responseSetCookieValues =
+    hasTrustedSecurityProfile &&
+    trustedResponseCookies.present &&
+    typeof trustedResponseCookies.value === 'function'
+      ? (trustedResponseCookies.value as (response: ServerResponse) => readonly string[])
+      : undefined;
   const appProperty = buildOwnDataProperty(options, 'app', 'kovo({ app })');
   const app = authoredAppEntry(appProperty.present ? appProperty.value : undefined);
   const runtimeRegistryPublicId = `virtual:kovo-runtime-registry:${app}`;
@@ -435,11 +458,11 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
         clientModules: () => compiler.getClientModules?.() ?? [],
         earlyHints: false,
         moduleId: app,
+        ...(responseSetCookieValues === undefined ? {} : { responseSetCookieValues }),
+        stylesheetSourceRoot: buildSecurityPathDirname(appEntryFileName(app, root)),
         stylesheetAssets: () =>
           stylesheetAssetsFromCssSplitChunks(
-            compiler.getCssAssetManifest?.(
-              appRouteTargets.length === 0 ? undefined : { split: { routes: appRouteTargets } },
-            ).chunks,
+            collectDevStylesheetManifest(compiler, app, root, appRouteTargets).chunks,
           ),
       }) as KovoAppShellViteDevIntegration;
 
@@ -670,6 +693,116 @@ function rootRelativeRouteTargets(
     commitBuildArrayValue(normalized, { ...target, sourceFileNames }, 'CSS route split target');
   }
   return normalized;
+}
+
+function collectDevStylesheetManifest(
+  compiler: KovoCompilerVitePlugin,
+  app: string,
+  root: string,
+  routeTargets: readonly CssRouteSplitTarget[],
+): CssAssetManifest {
+  const appEntry = appEntryFileName(app, root);
+  const appDir = buildSecurityPathDirname(appEntry);
+  const extractionOptions = {
+    fileName: appEntry,
+    packagePrefixDiscoveryRoot: root,
+    source: viteExistsSync(appEntry) ? viteReadFileSync(appEntry, 'utf8') : '',
+  };
+  const appResult = extractAppComponentCss(extractionOptions);
+  assertCompleteDevStylesheetExtraction('app', appResult.diagnostics);
+  const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
+  assertCompleteDevStylesheetExtraction('@kovojs/ui', packageResult.diagnostics);
+
+  const cssAssets: ComponentCssAsset[] = [];
+  const compilerAssets = snapshotBuildArray(
+    compiler.getCssAssetManifest?.().stylesheets ?? [],
+    'Compiler dev stylesheet assets',
+  );
+  for (let index = 0; index < compilerAssets.length; index += 1) {
+    commitBuildArrayValue(cssAssets, compilerAssets[index]!, 'Compiler dev stylesheet asset');
+  }
+
+  const sourcePrefix = slashPath(buildSecurityPathRelative(root, appDir));
+  const appAssets = snapshotBuildArray(appResult.cssAssets, 'App dev stylesheet assets');
+  for (let index = 0; index < appAssets.length; index += 1) {
+    const asset = appAssets[index]!;
+    const sourceFileName = sourcePrefix
+      ? `${sourcePrefix}/${asset.sourceFileName}`
+      : asset.sourceFileName;
+    commitBuildArrayValue(
+      cssAssets,
+      {
+        componentName: asset.componentName,
+        ...(asset.criticalCss === undefined ? {} : { criticalCss: asset.criticalCss }),
+        fragmentTargets: snapshotBuildArray(
+          asset.fragmentTargets,
+          'App dev stylesheet fragment targets',
+        ),
+        href: `/assets/${sourceFileName}`,
+        ...(asset.preload === undefined ? {} : { preload: asset.preload }),
+        sourceFileName,
+        ...(asset.styleRuleUsages === undefined
+          ? {}
+          : {
+              styleRuleUsages: snapshotBuildArray(
+                asset.styleRuleUsages,
+                'App dev stylesheet rule usages',
+              ),
+            }),
+      },
+      'App dev stylesheet asset',
+    );
+  }
+
+  const baseSourceFileNames: string[] = [];
+  const appEntryRelative = slashPath(buildSecurityPathRelative(appDir, appEntry));
+  const appEntryExtension = vitePathExtname(appEntryRelative);
+  const appEntryCss = `${
+    sourcePrefix ? `${sourcePrefix}/` : ''
+  }${securityStringSlice(appEntryRelative, 0, -appEntryExtension.length)}.css`;
+  commitBuildArrayValue(baseSourceFileNames, appEntryCss, 'App entry dev stylesheet base asset');
+
+  if (packageResult.css !== null) {
+    const packageSourceFileName = '__kovo/ui.css';
+    commitBuildArrayValue(
+      cssAssets,
+      {
+        componentName: 'kovo-ui',
+        criticalCss: packageResult.css,
+        fragmentTargets: [],
+        href: `/assets/${packageSourceFileName}`,
+        sourceFileName: packageSourceFileName,
+      },
+      'Kovo UI dev stylesheet asset',
+    );
+    commitBuildArrayValue(
+      baseSourceFileNames,
+      packageSourceFileName,
+      'Kovo UI dev stylesheet base asset',
+    );
+  }
+
+  return collectCssAssetManifest(
+    { cssAssets },
+    {
+      split: {
+        baseSourceFileNames,
+        routes: routeTargets,
+      },
+    },
+  );
+}
+
+function assertCompleteDevStylesheetExtraction(
+  owner: string,
+  diagnostics: readonly { fileName: string; message: string }[],
+): void {
+  const snapshot = snapshotBuildArray(diagnostics, `${owner} dev stylesheet diagnostics`);
+  if (snapshot.length === 0) return;
+  const first = snapshot[0]!;
+  throw new Error(
+    `Kovo dev cannot serve a partially styled ${owner} surface: ${first.fileName}: ${first.message}`,
+  );
 }
 
 function isAuthoredAppSourceFile(fileName: string, app: string, root: string): boolean {
