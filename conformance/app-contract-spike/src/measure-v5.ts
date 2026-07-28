@@ -135,14 +135,62 @@ function deterministicEvidenceSurface(evidence: D1RawEvidenceV5): unknown {
 
 function assertEqual(actual: unknown, expected: unknown, message: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    const difference = firstDifference(actual, expected);
     throw new Error(
-      `D1 v5 ${message}.\nFresh: ${JSON.stringify(actual, null, 2)}\nCommitted: ${JSON.stringify(
-        expected,
-        null,
-        2,
-      )}`,
+      `D1 v5 ${message} at ${difference.path}.\nFresh: ${formatDifference(
+        difference.actual,
+      )}\nCommitted: ${formatDifference(difference.expected)}`,
     );
   }
+}
+
+function firstDifference(
+  actual: unknown,
+  expected: unknown,
+  path = '$',
+): { readonly actual: unknown; readonly expected: unknown; readonly path: string } {
+  if (Object.is(actual, expected)) return { actual, expected, path };
+  if (
+    typeof actual !== 'object' ||
+    actual === null ||
+    typeof expected !== 'object' ||
+    expected === null
+  ) {
+    return { actual, expected, path };
+  }
+  if (Array.isArray(actual) || Array.isArray(expected)) {
+    if (!Array.isArray(actual) || !Array.isArray(expected) || actual.length !== expected.length) {
+      return { actual, expected, path };
+    }
+    for (let index = 0; index < actual.length; index += 1) {
+      if (JSON.stringify(actual[index]) !== JSON.stringify(expected[index])) {
+        return firstDifference(actual[index], expected[index], `${path}[${index}]`);
+      }
+    }
+    return { actual, expected, path };
+  }
+  const actualRecord = actual as Record<string, unknown>;
+  const expectedRecord = expected as Record<string, unknown>;
+  const actualKeys = Object.keys(actualRecord);
+  const expectedKeys = Object.keys(expectedRecord);
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    return { actual: actualKeys, expected: expectedKeys, path: `${path}.[[keys]]` };
+  }
+  for (const key of actualKeys) {
+    if (JSON.stringify(actualRecord[key]) !== JSON.stringify(expectedRecord[key])) {
+      return firstDifference(actualRecord[key], expectedRecord[key], `${path}.${key}`);
+    }
+  }
+  return { actual, expected, path };
+}
+
+function formatDifference(value: unknown): string {
+  const serialized = JSON.stringify(value);
+  return serialized === undefined
+    ? String(value)
+    : serialized.length <= 500
+      ? serialized
+      : `${serialized.slice(0, 500)}…`;
 }
 
 async function readJson<Value>(url: URL): Promise<Value> {
