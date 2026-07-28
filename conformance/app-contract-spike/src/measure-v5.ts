@@ -40,9 +40,9 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
     'committed evaluation is stale relative to v5 criteria/evidence',
   );
   assertEqual(
-    evaluationVerdictSurface(freshEvaluation),
-    evaluationVerdictSurface(committedEvaluation),
-    'fresh eligibility/gates/decision differ from committed v5 result',
+    evaluationVerificationSurface(freshEvaluation),
+    evaluationVerificationSurface(committedEvaluation),
+    'fresh decision-relevant eligibility/gates differ from committed v5 result',
   );
   assertEqual(
     deterministicEvidenceSurface(freshEvidence),
@@ -56,9 +56,9 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
         bothArmsRerun: true,
         committedEvidenceReevaluatesExactly: true,
         decision: freshEvaluation.decision,
-        everyGateCompared: true,
+        everyDecisionRelevantGateCompared: true,
         schema: 'kovo.app-contract-d1-measure-verify/v5',
-        timingSamplesComparedByThresholds: true,
+        timingSamplesReevaluatedByThresholds: true,
       },
       null,
       2,
@@ -66,22 +66,34 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
   );
 }
 
-function evaluationVerdictSurface(evaluation: D1EvaluationV5): unknown {
+export function evaluationVerificationSurface(evaluation: D1EvaluationV5): unknown {
   return {
     arms: Object.fromEntries(
       (['arm-a', 'arm-b'] as const).map((arm) => [
         arm,
         {
           eligible: evaluation.arms[arm].eligible,
-          gatePasses: Object.fromEntries(
-            Object.entries(evaluation.arms[arm].gates).map(([name, gate]) => [name, gate.pass]),
-          ),
+          gatePasses: decisionRelevantGatePasses(evaluation.arms[arm].gates),
         },
       ]),
     ),
     decision: evaluation.decision,
     priorEvidenceDisposition: evaluation.priorEvidenceDisposition,
   };
+}
+
+function decisionRelevantGatePasses(
+  gates: D1EvaluationV5['arms']['arm-a']['gates'],
+): Readonly<Record<string, boolean>> {
+  const deterministicGates = Object.fromEntries(
+    Object.entries(gates)
+      .filter(([name]) => name !== 'performance')
+      .map(([name, gate]) => [name, gate.pass]),
+  );
+  const canPerformanceAffectEligibility = Object.values(deterministicGates).every(Boolean);
+  return canPerformanceAffectEligibility
+    ? { ...deterministicGates, performance: gates.performance.pass }
+    : deterministicGates;
 }
 
 function deterministicEvidenceSurface(evidence: D1RawEvidenceV5): unknown {

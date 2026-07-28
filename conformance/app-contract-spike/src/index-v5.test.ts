@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { sha256 } from './artifacts-v5.ts';
 import { evaluateD1V5 } from './evaluator-v5.ts';
 import { declarationFamilies, matrixCaseNames } from './fixture-v5.ts';
+import { evaluationVerificationSurface } from './measure-v5.ts';
 import type { D1CriteriaV5, D1EvaluationV5, D1RawEvidenceV5 } from './types-v5.ts';
 
 describe('D1 v5 authenticated app-contract evaluator', () => {
@@ -37,6 +38,23 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
     expect(evaluated.arms['arm-a'].eligible).toBe(true);
     expect(evaluated.arms['arm-b'].eligible).toBe(false);
     expect(evaluated.arms['arm-b'].gates.compilerAndGraph.pass).toBe(false);
+  });
+
+  it('compares timing outcomes exactly only when they can affect eligibility', () => {
+    const irrelevantTimingFlip = clone(committed);
+    irrelevantTimingFlip.arms['arm-b'].gates.performance.pass =
+      !irrelevantTimingFlip.arms['arm-b'].gates.performance.pass;
+    irrelevantTimingFlip.arms['arm-b'].gates.performance.details = [];
+    expect(evaluationVerificationSurface(irrelevantTimingFlip)).toEqual(
+      evaluationVerificationSurface(committed),
+    );
+
+    const relevantTimingFlip = clone(committed);
+    relevantTimingFlip.arms['arm-a'].gates.performance.pass = false;
+    relevantTimingFlip.arms['arm-a'].gates.performance.details = ['timing threshold failed'];
+    expect(evaluationVerificationSurface(relevantTimingFlip)).not.toEqual(
+      evaluationVerificationSurface(committed),
+    );
   });
 
   it('binds all 38 matrix runs, six families, two packed compiler entrypoints, and two probes', () => {
