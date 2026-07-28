@@ -169,7 +169,7 @@ export async function createPrototypeFixture(
     artifacts,
     configFile,
     packageRoot: duplicate,
-    providerFile: secondaryProviderFile,
+    providerFile,
     serverPackageRoot: serverB,
   });
 
@@ -486,7 +486,7 @@ async function writeMatrixFixtures(options: {
     entries[name][arm] = fileName;
   };
   const definition = '{ load() { return { status: "ok" } as const; } }';
-  const providerImport = "import { app } from '../../kovo.js';";
+  const providerImport = "import { app } from '../kovo.js';";
   const armB = `import { query } from '#kovo';\nexport const item = query(${definition});\n`;
 
   await write(
@@ -500,21 +500,21 @@ async function writeMatrixFixtures(options: {
     'named-re-export',
     'arm-a',
     options.app,
-    `import { app } from '../../named.js';\nexport const item = app.query(${definition});\n`,
+    `import { app } from '../named.js';\nexport const item = app.query(${definition});\n`,
   );
   await write('named-re-export', 'arm-b', options.app, armB);
   await write(
     'star-re-export',
     'arm-a',
     options.app,
-    `import { app } from '../../star.js';\nexport const item = app.query(${definition});\n`,
+    `import { app } from '../star.js';\nexport const item = app.query(${definition});\n`,
   );
   await write('star-re-export', 'arm-b', options.app, armB);
   await write(
     'aliased-import',
     'arm-a',
     options.app,
-    `import { app as contacts } from '../../kovo.js';\nexport const item = contacts.query(${definition});\n`,
+    `import { app as contacts } from '../kovo.js';\nexport const item = contacts.query(${definition});\n`,
   );
   await write('aliased-import', 'arm-b', options.app, armB);
 

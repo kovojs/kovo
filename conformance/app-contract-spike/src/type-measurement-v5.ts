@@ -210,10 +210,15 @@ function diagnosticSource(variant: MeasuredVariant, misspelledProperty: string):
   const { factory, imports } = variantSyntax(variant);
   return [
     imports,
-    `${factory}({`,
+    'type ExpectedDefinition = {',
+    '  readonly access: ReturnType<typeof publicAccess>;',
+    '  load(): { readonly ok: boolean };',
+    '};',
+    'const definition: ExpectedDefinition = {',
     "  access: publicAccess('D1 v5 diagnostic'),",
     `  ${misspelledProperty}() { return { ok: true }; },`,
-    '});',
+    '};',
+    `${factory}(definition);`,
     '',
   ].join('\n');
 }

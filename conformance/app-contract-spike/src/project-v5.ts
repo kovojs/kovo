@@ -445,11 +445,23 @@ function spanKey(key: string | undefined): boolean {
 }
 
 function normalizeCalleeSyntax(value: string): string {
-  let normalized = value;
+  let normalized = value
+    .replaceAll(/(?:^|\n)import \{ app \} from ['"][^'"]+['"];\n?/gu, '\n')
+    .replaceAll(/import \{ ([^}]+) \} from '@kovojs\/server';/gu, (_match, rawNames: string) => {
+      const names = rawNames
+        .split(',')
+        .map((name) => name.trim())
+        .filter(
+          (name) => name.length > 0 && !(declarationFamilies as readonly string[]).includes(name),
+        );
+      return names.length > 0 ? `import { ${names.join(', ')} } from '@kovojs/server';` : '';
+    })
+    .replaceAll(/"end":\d+/gu, '"end":0')
+    .replaceAll(/"start":\d+/gu, '"start":0');
   for (const family of declarationFamilies) {
     normalized = normalized.replaceAll(`app.${family}`, family);
   }
-  return normalized;
+  return normalized.replaceAll(/\n{3,}/gu, '\n\n');
 }
 
 function familyReached(family: DeclarationFamily, component: unknown, route: unknown): boolean {
