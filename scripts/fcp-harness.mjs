@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { createRequire } from 'node:module';
 import { basename, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
@@ -11,6 +13,8 @@ const defaultViewports = [
   { height: 844, name: 'mobile', width: 390 },
   { height: 900, name: 'desktop', width: 1440 },
 ];
+const axeRequire = createRequire(new URL('../tests/integration/package.json', import.meta.url));
+const wcagTags = Object.freeze(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
 
 export async function runFcpHarness(options) {
   const url = new URL(options.url);
@@ -30,7 +34,13 @@ export async function runFcpHarness(options) {
     );
   }
 
-  const browser = options.browser === false ? undefined : await runBrowserSmoke(url, outputDir);
+  const browser =
+    options.browser === false
+      ? undefined
+      : await runBrowserSmoke(url, outputDir, {
+          accessibility: options.accessibility === true,
+          terminalState: options.terminalState,
+        });
   const lighthouse = options.lighthouse ? runLighthouse(url, outputDir) : undefined;
   const result = {
     assetProbes: assetProbes.map(probeSummary),
@@ -41,6 +51,9 @@ export async function runFcpHarness(options) {
     outputDir,
     url: url.href,
   };
+  if (browser && options.accessibility === true) {
+    result.browserGate = browserGateResult(browser);
+  }
 
   writeFileSync(join(outputDir, 'summary.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
@@ -195,10 +208,23 @@ function runLighthouse(url, outputDir) {
   };
 }
 
-async function runBrowserSmoke(url, outputDir) {
+async function runBrowserSmoke(url, outputDir, options = {}) {
+  if (
+    options.accessibility === true &&
+    (typeof options.terminalState?.name !== 'string' ||
+      options.terminalState.name.trim().length === 0 ||
+      typeof options.terminalState?.selector !== 'string' ||
+      options.terminalState.selector.trim().length === 0)
+  ) {
+    throw new Error('accessibility capture requires an explicit terminal state name and selector');
+  }
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   const results = [];
+  const axePath = options.accessibility === true ? axeRequire.resolve('axe-core/axe.min.js') : null;
+  const axeSource = axePath === null ? null : readFileSync(axePath, 'utf8');
+  const axeSourceDigest =
+    axeSource === null ? null : `sha256:${createHash('sha256').update(axeSource).digest('hex')}`;
 
   try {
     for (const viewport of defaultViewports) {
@@ -212,8 +238,47 @@ async function runBrowserSmoke(url, outputDir) {
 
       await page.goto(url.href, { waitUntil: 'load' });
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+      const terminalState =
+        options.accessibility === true
+          ? {
+              name: options.terminalState.name,
+              selector: options.terminalState.selector,
+            }
+          : null;
+      if (terminalState !== null) {
+        await page.waitForSelector(terminalState.selector, {
+          state: 'visible',
+          timeout: options.terminalState.timeoutMs ?? 10000,
+        });
+      }
       const screenshotPath = join(outputDir, `${viewport.name}.png`);
       await page.screenshot({ fullPage: false, path: screenshotPath });
+      const screenshotBytes = readFileSync(screenshotPath);
+      const screenshot = {
+        bytes: screenshotBytes.byteLength,
+        fullPage: false,
+        path: screenshotPath,
+        sha256: `sha256:${createHash('sha256').update(screenshotBytes).digest('hex')}`,
+        viewport,
+      };
+      let accessibility = null;
+      if (axeSource !== null) {
+        // Runtime evaluation preserves the application's real CSP/Trusted Types policy. DOM-based
+        // script injection is intentionally rejected by Kovo's generated Trusted Types bootstrap.
+        await page.evaluate(axeSource);
+        const axeResult = await page.evaluate(
+          async (tags) =>
+            await globalThis.axe.run(document, {
+              runOnly: { type: 'tag', values: tags },
+              resultTypes: ['incomplete', 'passes', 'violations'],
+            }),
+          wcagTags,
+        );
+        accessibility = summarizeAxeResult(axeResult, {
+          sourceDigest: axeSourceDigest,
+          terminalState,
+        });
+      }
       const facts = await page.evaluate(() => {
         const paintEntries = performance.getEntriesByType('paint').map((entry) => ({
           name: entry.name,
@@ -243,13 +308,24 @@ async function runBrowserSmoke(url, outputDir) {
           title: document.title,
         };
       });
+      const terminalObservation =
+        terminalState === null
+          ? null
+          : {
+              ...terminalState,
+              matched: true,
+              url: page.url(),
+            };
 
       await page.close();
       results.push({
         ...facts,
         consoleErrors,
+        accessibility,
         pageErrors,
+        screenshot,
         screenshotPath,
+        terminalState: terminalObservation,
         viewport,
       });
     }
@@ -258,6 +334,65 @@ async function runBrowserSmoke(url, outputDir) {
   }
 
   return results;
+}
+
+export function summarizeAxeResult(result, options) {
+  const compactNodes = (nodes) =>
+    nodes.map((node) => ({
+      failureSummary: node.failureSummary ?? null,
+      target: node.target,
+    }));
+  const compactRule = (rule) => ({
+    help: rule.help,
+    helpUrl: rule.helpUrl,
+    id: rule.id,
+    impact: rule.impact ?? null,
+    nodes: compactNodes(rule.nodes ?? []),
+  });
+  const violations = (result.violations ?? []).map(compactRule);
+  return {
+    engine: {
+      name: result.testEngine?.name ?? 'axe-core',
+      sourceSha256: options.sourceDigest,
+      version: result.testEngine?.version ?? null,
+    },
+    incomplete: (result.incomplete ?? []).map(compactRule),
+    pass: violations.length === 0,
+    passes: (result.passes ?? []).map((rule) => ({
+      id: rule.id,
+      nodes: rule.nodes?.length ?? 0,
+    })),
+    terminalState: options.terminalState,
+    violations,
+    wcagTags,
+  };
+}
+
+function browserGateResult(browserResults) {
+  const failures = [];
+  for (const result of browserResults) {
+    const prefix = result.viewport.name;
+    if (!result.firstViewportTextVisible) failures.push(`${prefix}: first viewport has no text`);
+    if (result.consoleErrors.length > 0) {
+      failures.push(`${prefix}: ${result.consoleErrors.length} console error(s)`);
+    }
+    if (result.pageErrors.length > 0) {
+      failures.push(`${prefix}: ${result.pageErrors.length} page error(s)`);
+    }
+    if (result.terminalState?.matched !== true) {
+      failures.push(`${prefix}: terminal state was not observed`);
+    }
+    if (result.accessibility?.pass !== true) {
+      failures.push(`${prefix}: ${result.accessibility?.violations.length ?? 0} axe violation(s)`);
+    }
+    if (
+      !/^sha256:[0-9a-f]{64}$/u.test(result.screenshot?.sha256 ?? '') ||
+      !(result.screenshot?.bytes > 0)
+    ) {
+      failures.push(`${prefix}: screenshot artifact metadata is missing`);
+    }
+  }
+  return { failures, pass: failures.length === 0 };
 }
 
 function probeSummary(probe) {
@@ -394,7 +529,7 @@ function escapeRegExp(value) {
 }
 
 function parseCliArgs(args) {
-  const options = { browser: true, lighthouse: false };
+  const options = { accessibility: false, browser: true, lighthouse: false };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--') continue;
@@ -404,6 +539,10 @@ function parseCliArgs(args) {
     }
     if (arg === '--lighthouse') {
       options.lighthouse = true;
+      continue;
+    }
+    if (arg === '--a11y') {
+      options.accessibility = true;
       continue;
     }
     if (arg === '--no-browser') {
@@ -434,6 +573,32 @@ function parseCliArgs(args) {
       if (!options.acceptEncoding) throw new Error('Missing value for --accept-encoding.');
       continue;
     }
+    if (arg === '--terminal-name') {
+      const name = args[index + 1];
+      if (!name) throw new Error('Missing value for --terminal-name.');
+      options.terminalState = { ...options.terminalState, name };
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--terminal-name=')) {
+      const name = arg.slice('--terminal-name='.length);
+      if (!name) throw new Error('Missing value for --terminal-name.');
+      options.terminalState = { ...options.terminalState, name };
+      continue;
+    }
+    if (arg === '--terminal-selector') {
+      const selector = args[index + 1];
+      if (!selector) throw new Error('Missing value for --terminal-selector.');
+      options.terminalState = { ...options.terminalState, selector };
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--terminal-selector=')) {
+      const selector = arg.slice('--terminal-selector='.length);
+      if (!selector) throw new Error('Missing value for --terminal-selector.');
+      options.terminalState = { ...options.terminalState, selector };
+      continue;
+    }
     if (arg === '--url') {
       const url = args[index + 1];
       if (!url) throw new Error('Missing value for --url.');
@@ -454,8 +619,11 @@ function parseCliArgs(args) {
   }
   if (!options.url) {
     throw new Error(
-      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>]`,
+      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
     );
+  }
+  if (options.accessibility && (!options.terminalState?.name || !options.terminalState?.selector)) {
+    throw new Error('--a11y requires --terminal-name and --terminal-selector.');
   }
   return options;
 }
@@ -500,7 +668,24 @@ function printTextSummary(result) {
       `browser-${smoke.viewport.name}-resources=${smoke.resources.length}`,
       `browser-${smoke.viewport.name}-console-errors=${smoke.consoleErrors.length}`,
       `browser-${smoke.viewport.name}-page-errors=${smoke.pageErrors.length}`,
-      `browser-${smoke.viewport.name}-screenshot=${smoke.screenshotPath}`,
+      `browser-${smoke.viewport.name}-screenshot=${smoke.screenshot.path}`,
+      `browser-${smoke.viewport.name}-screenshot-bytes=${smoke.screenshot.bytes}`,
+      `browser-${smoke.viewport.name}-screenshot-sha256=${smoke.screenshot.sha256}`,
+    );
+    if (smoke.accessibility) {
+      lines.push(
+        `browser-${smoke.viewport.name}-terminal-state=${smoke.terminalState.name}`,
+        `browser-${smoke.viewport.name}-terminal-selector=${smoke.terminalState.selector}`,
+        `browser-${smoke.viewport.name}-axe-version=${smoke.accessibility.engine.version}`,
+        `browser-${smoke.viewport.name}-axe-pass=${smoke.accessibility.pass}`,
+        `browser-${smoke.viewport.name}-axe-violations=${smoke.accessibility.violations.length}`,
+      );
+    }
+  }
+  if (result.browserGate) {
+    lines.push(
+      `browser-gate-pass=${result.browserGate.pass}`,
+      `browser-gate-failures=${result.browserGate.failures.join(';') || '-'}`,
     );
   }
 
@@ -529,6 +714,7 @@ if (import.meta.url === new URL(process.argv[1], 'file:').href) {
     const result = await runFcpHarness(options);
     if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else printTextSummary(result);
+    if (result.browserGate?.pass === false) process.exitCode = 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

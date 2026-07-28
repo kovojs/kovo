@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { htmlAssetInventory } from './fcp-harness.mjs';
+import { htmlAssetInventory, summarizeAxeResult } from './fcp-harness.mjs';
 
 describe('fcp harness HTML asset inventory', () => {
   it('classifies deferred stylesheets, noscript fallbacks, modulepreloads, and inline bytes', () => {
@@ -58,5 +58,57 @@ describe('fcp harness HTML asset inventory', () => {
       'https://example.test/assets/app.css',
       'https://example.test/c/app.js',
     ]);
+  });
+
+  it('binds axe results to an explicit terminal state and exact engine bytes', () => {
+    const result = summarizeAxeResult(
+      {
+        testEngine: { name: 'axe-core', version: '4.12.1' },
+        incomplete: [],
+        passes: [{ id: 'document-title', nodes: [{ target: ['html'] }] }],
+        violations: [
+          {
+            id: 'button-name',
+            impact: 'critical',
+            help: 'Buttons must have discernible text',
+            helpUrl: 'https://dequeuniversity.com/rules/axe/button-name',
+            nodes: [
+              {
+                target: ['#save'],
+                failureSummary: 'Fix the button label.',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        sourceDigest: `sha256:${'a'.repeat(64)}`,
+        terminalState: {
+          name: 'authenticated-dashboard',
+          selector: 'main[data-journey-state="ready"]',
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      engine: {
+        name: 'axe-core',
+        version: '4.12.1',
+        sourceSha256: `sha256:${'a'.repeat(64)}`,
+      },
+      pass: false,
+      terminalState: {
+        name: 'authenticated-dashboard',
+        selector: 'main[data-journey-state="ready"]',
+      },
+      violations: [
+        {
+          id: 'button-name',
+          impact: 'critical',
+          nodes: [{ target: ['#save'], failureSummary: 'Fix the button label.' }],
+        },
+      ],
+    });
+    expect(result.passes).toEqual([{ id: 'document-title', nodes: 1 }]);
   });
 });
