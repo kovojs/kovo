@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 import type { AppContractArm, PrototypeFixture } from './fixture-v6.ts';
@@ -16,6 +16,12 @@ export async function runtimeEvidence(
   fixture: PrototypeFixture,
   arm: AppContractArm,
 ): Promise<RuntimeArmEvidence> {
+  const providerRuntimeFile = join(fixture.app, 'src/provider.js');
+  const providerRuntimeSource = (await readFile(join(fixture.app, 'src/provider.ts'), 'utf8')).replace(
+    /\s+as const/gu,
+    '',
+  );
+  await writeFile(providerRuntimeFile, providerRuntimeSource);
   const script = join(fixture.app, `runtime-evidence-${arm}.mjs`);
   const runtimeSpecifier = moduleRelative(fixture.app, fixture.runtimeEntries[arm]);
   const providerSpecifier = moduleRelative(fixture.app, fixture.providerFile);
