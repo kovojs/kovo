@@ -1,26 +1,15 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
-  createKovoDiagnostic,
-  formatKovoDiagnostics,
-  KOVO_DIAGNOSTIC_VERSION,
   runKovoCommand,
   type KovoCommandExitCode,
-  type KovoDiagnosticEnvelope,
   type KovoSemanticCommandRequest,
 } from './api.js';
 import * as PublicCli from './api.js';
 
 describe('@kovojs/cli public API', () => {
   it('publishes the semantic command facade without exposing the argv dispatcher', () => {
-    expect(Object.keys(PublicCli).sort()).toEqual([
-      'KOVO_DIAGNOSTIC_VERSION',
-      'createKovoDiagnostic',
-      'formatKovoDiagnostics',
-      'kovoCheck',
-      'kovoExplain',
-      'runKovoCommand',
-    ]);
+    expect(Object.keys(PublicCli).sort()).toEqual(['kovoCheck', 'kovoExplain', 'runKovoCommand']);
     expect('main' in PublicCli).toBe(false);
     expect('mainAsync' in PublicCli).toBe(false);
 
@@ -137,23 +126,5 @@ describe('@kovojs/cli public API', () => {
         form: 'mcp',
       } as never),
     ).rejects.toThrow('long-lived');
-  });
-
-  it('publishes one authenticated diagnostic record for every renderer', () => {
-    const diagnostic = createKovoDiagnostic({
-      category: 'config',
-      code: 'KOVO_CONFIG',
-      help: 'Set the required value and retry.',
-      message: 'Configuration is incomplete.',
-      severity: 'error',
-    });
-    const envelope = JSON.parse(
-      formatKovoDiagnostics([diagnostic], 'json'),
-    ) as KovoDiagnosticEnvelope;
-
-    expect(envelope).toEqual({
-      diagnostics: [diagnostic],
-      version: KOVO_DIAGNOSTIC_VERSION,
-    });
   });
 });

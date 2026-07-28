@@ -381,9 +381,8 @@ const exitCode = await runKovoCommand({
 For a valid one-shot semantic request, the call writes the command's normal stdout or stderr and
 resolves to `0`, `1`, or `2`. Invalid JavaScript objects are rejected before dispatch. Long-lived
 `dev` and `mcp` processes stay on the executable surface until Kovo has an explicit abort/disposal
-contract. Use `createKovoDiagnostic` plus `formatKovoDiagnostics` when your integration needs a
-registry-authenticated `kovo-diagnostic/v1` record rendered as human text, JSON, or a GitHub
-annotation. The public module does not expose the argv dispatcher.
+contract. The public module does not expose the argv dispatcher, diagnostic construction internals,
+or transport internals.
 
 ## How they compose
 

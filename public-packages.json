@@ -2136,7 +2136,7 @@
       "apiRef": {
         "order": 9,
         "slug": "cli",
-        "description": "Semantic command execution, versioned diagnostics, and in-process graph verifiers behind the kovo CLI."
+        "description": "Semantic command execution and in-process graph verifiers behind the kovo CLI."
       }
     },
     {

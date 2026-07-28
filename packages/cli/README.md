@@ -1,9 +1,8 @@
 # @kovojs/cli
 
 The `kovo` command and its curated programmatic API. Use it to run one-shot
-semantic commands without spelling argv, render versioned diagnostics, explain an app
-graph, run framework audits, update agent docs, add copy-in UI, and export static
-output.
+semantic commands without spelling argv, explain an app graph, run framework
+audits, update agent docs, add copy-in UI, and export static output.
 
 ```sh
 pnpm add -D @kovojs/cli
