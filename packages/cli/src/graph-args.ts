@@ -226,7 +226,7 @@ export function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
   }
 
   return {
-    failOnFindings: parsedBooleanOption(parsed.value, '--fail-on-findings'),
+    failOnFindings: parsedBooleanOption(parsed.value, 'failOnFindings'),
     inputPath: parsed.value.positionals[0],
     ok: true,
   };
@@ -245,29 +245,29 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   };
   const positional = parsed.value.positionals;
   const modeFlags = [
-    '--access',
-    '--agent',
-    '--auth-lifecycle',
-    '--authorization',
-    '--capabilities',
-    '--cookies',
-    '--endpoints',
-    '--grants',
-    '--model-boundaries',
-    '--revealed',
-    '--sources-sinks',
-    '--tasks',
-    '--trust',
-    '--unguarded',
-    '--unscoped',
+    'access',
+    'agent',
+    'authLifecycle',
+    'authorization',
+    'capabilities',
+    'cookies',
+    'endpoints',
+    'grants',
+    'modelBoundaries',
+    'revealed',
+    'sourcesSinks',
+    'tasks',
+    'trust',
+    'unguarded',
+    'unscoped',
   ].filter((flag) => flags.has(flag));
   if (modeFlags.length > 1) return explainUsage();
 
-  if (flags.has('--auth-lifecycle')) {
+  if (flags.has('authLifecycle')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 0
     ) {
       return explainUsage();
@@ -275,11 +275,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
   }
 
-  if (flags.has('--agent')) {
+  if (flags.has('agent')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -287,11 +287,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { agent: true } };
   }
 
-  if (flags.has('--authorization')) {
+  if (flags.has('authorization')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -299,11 +299,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { authorization: true } };
   }
 
-  if (flags.has('--grants')) {
+  if (flags.has('grants')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -311,11 +311,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { grants: true } };
   }
 
-  if (flags.has('--model-boundaries')) {
+  if (flags.has('modelBoundaries')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 0
     ) {
       return explainUsage();
@@ -323,22 +323,22 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
   }
 
-  if (flags.has('--access')) {
-    if (flags.has('--layouts') || flags.has('--optimistic') || positional.length > 1) {
+  if (flags.has('access')) {
+    if (flags.has('layouts') || flags.has('optimistic') || positional.length > 1) {
       return explainUsage();
     }
     return {
       inputPath: positional[0],
       ok: true,
-      options: { access: true, failOnFindings: flags.has('--fail-on-findings') },
+      options: { access: true, failOnFindings: flags.has('failOnFindings') },
     };
   }
 
-  if (flags.has('--sources-sinks')) {
+  if (flags.has('sourcesSinks')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 0
     ) {
       return explainUsage();
@@ -346,11 +346,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: undefined, ok: true, options: { sourcesSinks: true } };
   }
 
-  if (flags.has('--tasks')) {
+  if (flags.has('tasks')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -358,11 +358,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { tasks: true } };
   }
 
-  if (flags.has('--endpoints')) {
+  if (flags.has('endpoints')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -370,11 +370,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { endpoints: true } };
   }
 
-  if (flags.has('--revealed')) {
+  if (flags.has('revealed')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -382,11 +382,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { revealed: true } };
   }
 
-  if (flags.has('--trust')) {
+  if (flags.has('trust')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -394,11 +394,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { trust: true } };
   }
 
-  if (flags.has('--capabilities')) {
+  if (flags.has('capabilities')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -406,11 +406,11 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { capabilities: true } };
   }
 
-  if (flags.has('--cookies')) {
+  if (flags.has('cookies')) {
     if (
-      flags.has('--fail-on-findings') ||
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('failOnFindings') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       positional.length > 1
     ) {
       return explainUsage();
@@ -418,23 +418,23 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: positional[0], ok: true, options: { cookies: true } };
   }
 
-  if (flags.has('--unguarded') || flags.has('--unscoped')) {
-    if (flags.has('--layouts') || flags.has('--optimistic') || positional.length > 1) {
+  if (flags.has('unguarded') || flags.has('unscoped')) {
+    if (flags.has('layouts') || flags.has('optimistic') || positional.length > 1) {
       return explainUsage();
     }
-    const options = flags.has('--unguarded')
-      ? ({ failOnFindings: flags.has('--fail-on-findings'), unguarded: true } as const)
-      : ({ failOnFindings: flags.has('--fail-on-findings'), unscoped: true } as const);
+    const options = flags.has('unguarded')
+      ? ({ failOnFindings: flags.has('failOnFindings'), unguarded: true } as const)
+      : ({ failOnFindings: flags.has('failOnFindings'), unscoped: true } as const);
     return { inputPath: positional[0], ok: true, options };
   }
 
-  if (flags.has('--fail-on-findings')) return explainUsage();
+  if (flags.has('failOnFindings')) return explainUsage();
 
   const [kind, target, inputPath, extra] = positional;
   if (kind === 'document') {
     if (
-      flags.has('--layouts') ||
-      flags.has('--optimistic') ||
+      flags.has('layouts') ||
+      flags.has('optimistic') ||
       (target === undefined ? false : inputPath !== undefined)
     ) {
       return explainUsage();
@@ -442,16 +442,16 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     return { inputPath: target, ok: true, options: { document: true } };
   }
   if (!isExplainKind(kind) || !target || extra) return explainUsage();
-  if (flags.has('--layouts') && kind !== 'page') return explainUsage();
-  if (flags.has('--optimistic') && kind !== 'mutation') return explainUsage();
+  if (flags.has('layouts') && kind !== 'page') return explainUsage();
+  if (flags.has('optimistic') && kind !== 'mutation') return explainUsage();
 
   return {
     inputPath,
     ok: true,
     options: {
       kind,
-      layouts: flags.has('--layouts'),
-      optimistic: flags.has('--optimistic'),
+      layouts: flags.has('layouts'),
+      optimistic: flags.has('optimistic'),
       target,
     },
   };

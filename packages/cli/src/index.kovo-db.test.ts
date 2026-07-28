@@ -207,6 +207,7 @@ describe('kovo db', () => {
       options: {
         action: 'check',
         databaseUrl: 'postgres://app@127.0.0.1:5432/app',
+        migrationsDir: 'migrations',
         schemaPath: 'src/schema.ts',
         systemDatabaseUrl: 'postgres://kovo_system@127.0.0.1:5432/app',
       },

@@ -37,8 +37,8 @@ export type FixArgParseResult =
 export function parseFixArgs(args: readonly string[]): FixArgParseResult {
   const parsed = parseCommandArgv(args, FIX_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('fix', parsed, FIX_USAGE);
-  const costReport = parsedBooleanOption(parsed.value, '--cost-report');
-  const check = parsedBooleanOption(parsed.value, '--check');
+  const costReport = parsedBooleanOption(parsed.value, 'costReport');
+  const check = parsedBooleanOption(parsed.value, 'check');
   if (costReport) {
     if (check || parsed.value.positionals.length > 0) {
       return {

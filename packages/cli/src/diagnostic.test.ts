@@ -7,7 +7,9 @@ import {
   formatKovoDiagnostics,
   KOVO_DIAGNOSTIC_VERSION,
   usageDiagnostic,
+  type KovoDiagnosticEnvelope,
 } from './diagnostic.js';
+import { formatCommandResultDiagnostics, normalizeCommandResultDiagnostics } from './shared.js';
 
 describe('kovo-diagnostic/v1', () => {
   const diagnostic = createKovoDiagnostic({
@@ -104,4 +106,36 @@ describe('kovo-diagnostic/v1', () => {
       version: KOVO_DIAGNOSTIC_VERSION,
     });
   });
+
+  it.each([
+    ['proof', 'kovo-check/v1\nERROR KV436 missing access decision\n', 'KOVO_PROOF_FINDING'],
+    ['proof', 'kovo-explain/v1\nERROR stale graph\n', 'KOVO_PROOF_FINDING'],
+    ['build', 'kovo-build/v1\nERROR artifact rejected\n', 'KOVO_BUILD_FINDING'],
+  ] as const)(
+    'renders %s command findings as equivalent human, JSON, and GitHub records',
+    (category, output, code) => {
+      const result = { exitCode: 1 as const, output };
+      const normalized = normalizeCommandResultDiagnostics(result, category);
+      expect(formatCommandResultDiagnostics(result, 'human', category)).toBe(output);
+      const json = JSON.parse(
+        formatCommandResultDiagnostics(result, 'json', category),
+      ) as KovoDiagnosticEnvelope;
+      expect(json).toEqual({
+        diagnostics: [
+          expect.objectContaining({
+            category,
+            code,
+            message: output,
+            severity: 'error',
+          }),
+        ],
+        version: KOVO_DIAGNOSTIC_VERSION,
+      });
+      expect(formatCommandResultDiagnostics(result, 'github', category)).toContain(
+        output.trimEnd().replaceAll('\n', '%0A'),
+      );
+      expect(normalized.exitCode).toBe(1);
+      expect(normalized.diagnostics).toEqual(json.diagnostics);
+    },
+  );
 });

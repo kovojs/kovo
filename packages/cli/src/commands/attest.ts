@@ -49,11 +49,11 @@ export function parseAttestArgs(
   if (parsed.value.positionals.length !== 0) {
     return { message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`, ok: false };
   }
-  const url = parsedStringOption(parsed.value, '--attest');
-  const artifactPath = parsedStringOption(parsed.value, '--artifact');
-  const trustAnchor = parsedStringOption(parsed.value, '--trust-anchor');
-  const escapeCensusReviewsPath = parsedStringOption(parsed.value, '--escape-census-reviews');
-  const escapeReviewsPath = parsedStringOption(parsed.value, '--escape-reviews');
+  const url = parsedStringOption(parsed.value, 'attest');
+  const artifactPath = parsedStringOption(parsed.value, 'artifact');
+  const trustAnchor = parsedStringOption(parsed.value, 'trustAnchor');
+  const escapeCensusReviewsPath = parsedStringOption(parsed.value, 'escapeCensusReviews');
+  const escapeReviewsPath = parsedStringOption(parsed.value, 'escapeReviews');
   const expectedOptionCount =
     3 + (escapeReviewsPath === undefined ? 0 : 1) + (escapeCensusReviewsPath === undefined ? 0 : 1);
   if (

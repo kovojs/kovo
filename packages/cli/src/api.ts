@@ -8,6 +8,12 @@
  * widening the app-facing root API.
  */
 export { kovoCheck, kovoExplain } from './index.js';
+export {
+  createKovoDiagnostic,
+  createKovoDiagnosticEnvelope,
+  formatKovoDiagnostics,
+  KOVO_DIAGNOSTIC_VERSION,
+} from './diagnostic.js';
 
 export type {
   ExplainKind,
@@ -30,3 +36,11 @@ export type {
   KovoUnguardedExplainOptions,
   KovoUnscopedExplainOptions,
 } from './index.js';
+export type {
+  KovoDiagnosticCategory,
+  KovoDiagnosticConstruction,
+  KovoDiagnosticEnvelope,
+  KovoDiagnosticFormat,
+  KovoDiagnosticRecord,
+  KovoDiagnosticSourceAnchor,
+} from './diagnostic.js';

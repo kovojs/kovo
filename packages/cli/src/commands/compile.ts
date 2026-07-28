@@ -44,6 +44,7 @@ import {
   parsedStringListOption,
   parsedStringOption,
   parseCommandArgv,
+  requiredParsedStringOption,
   requireSinglePositional,
 } from '../commands-manifest.js';
 import { compileFrameworkComponentModule } from './mcp.js';
@@ -211,7 +212,7 @@ export function parseAddArgs(args: readonly string[]): AddArgParseResult {
     ok: true,
     options: {
       components,
-      outDir: parsedStringOption(parsed.value, '--out') ?? 'src/components/ui',
+      outDir: requiredParsedStringOption(parsed.value, 'out'),
     },
   };
 }
@@ -220,12 +221,7 @@ function addArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: 
   message: string;
   ok: false;
 } {
-  if (error.error === 'help') return { message: addUsage(), ok: false };
-  if (error.error === 'missing-value') return { message: error.message, ok: false };
-  return {
-    message: `kovo: unknown add option ${stableValue(error.option)}.\n${addUsage()}`,
-    ok: false,
-  };
+  return commandArgvError('add', error, addUsage());
 }
 
 export function addUsage(): string {
@@ -623,16 +619,16 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   });
   if (!sourcePath.ok) return sourcePath;
 
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return { message: `kovo: compile component requires --out.\n${compileUsage()}`, ok: false };
 
-  const factsOutPath = parsedStringOption(parsed.value, '--facts-out');
-  const fileName = parsedStringOption(parsed.value, '--file-name');
-  const queryShapeFactsPath = parsedStringOption(parsed.value, '--query-shape-facts');
-  const registryFactsPath = parsedStringOption(parsed.value, '--registry-facts');
+  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
+  const fileName = parsedStringOption(parsed.value, 'fileName');
+  const queryShapeFactsPath = parsedStringOption(parsed.value, 'queryShapeFacts');
+  const registryFactsPath = parsedStringOption(parsed.value, 'registryFacts');
   const allowedDiagnosticCodes: DiagnosticCode[] = [];
-  for (const code of parsedStringListOption(parsed.value, '--allow-diagnostic')) {
+  for (const code of parsedStringListOption(parsed.value, 'allowDiagnostic')) {
     if (!isDiagnosticCode(code)) {
       return {
         message: `kovo: compile component --allow-diagnostic received unknown code ${stableValue(code)}.\n`,
@@ -646,15 +642,15 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     ok: true,
     options: {
       allowedDiagnosticCodes,
-      check: parsedBooleanOption(parsed.value, '--check'),
-      emitClientFiles: parsedBooleanOption(parsed.value, '--emit-client-files'),
+      check: parsedBooleanOption(parsed.value, 'check'),
+      emitClientFiles: parsedBooleanOption(parsed.value, 'emitClientFiles'),
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
-      fixpoint: parsedBooleanOption(parsed.value, '--fixpoint'),
+      fixpoint: parsedBooleanOption(parsed.value, 'fixpoint'),
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
       ...(queryShapeFactsPath === undefined ? {} : { queryShapeFactsPath }),
       ...(registryFactsPath === undefined ? {} : { registryFactsPath }),
-      renderEquivalence: parsedBooleanOption(parsed.value, '--render-equivalence'),
+      renderEquivalence: parsedBooleanOption(parsed.value, 'renderEquivalence'),
       sourcePath: sourcePath.value,
       target: 'component',
     },
@@ -672,26 +668,26 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
   });
   if (!sourcePath.ok) return sourcePath;
 
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return { message: `kovo: compile route requires --out.\n${compileUsage()}`, ok: false };
 
   const componentImportRewrites: RouteComponentImportRewrite[] = [];
-  for (const value of parsedStringListOption(parsed.value, '--rewrite')) {
+  for (const value of parsedStringListOption(parsed.value, 'rewrite')) {
     const rewrite = parseRouteRewrite(value);
     if (!rewrite.ok) return rewrite;
     componentImportRewrites.push(rewrite.value);
   }
 
-  const artifactFileName = parsedStringOption(parsed.value, '--artifact-file-name');
-  const factsOutPath = parsedStringOption(parsed.value, '--facts-out');
-  const fileName = parsedStringOption(parsed.value, '--file-name');
+  const artifactFileName = parsedStringOption(parsed.value, 'artifactFileName');
+  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
+  const fileName = parsedStringOption(parsed.value, 'fileName');
 
   return {
     ok: true,
     options: {
       ...(artifactFileName === undefined ? {} : { artifactFileName }),
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       componentImportRewrites,
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
       ...(fileName === undefined ? {} : { fileName }),
@@ -712,14 +708,14 @@ function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
     usage: compileUsage(),
   });
   if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
 
   return {
     ok: true,
     options: {
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       inputPath: inputPath.value,
       outPath,
       target: 'graph',
@@ -737,18 +733,18 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
     usage: compileUsage(),
   });
   if (!sourcePath.ok) return sourcePath;
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return {
       message: `kovo: compile mutation-inputs requires --out.\n${compileUsage()}`,
       ok: false,
     };
-  const fileName = parsedStringOption(parsed.value, '--file-name');
+  const fileName = parsedStringOption(parsed.value, 'fileName');
 
   return {
     ok: true,
     options: {
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
       sourcePath: sourcePath.value,
@@ -767,18 +763,18 @@ function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgP
     usage: compileUsage(),
   });
   if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return {
       message: `kovo: compile drizzle-optimistic requires --out.\n${compileUsage()}`,
       ok: false,
     };
-  const factsOutPath = parsedStringOption(parsed.value, '--facts-out');
+  const factsOutPath = parsedStringOption(parsed.value, 'factsOut');
 
   return {
     ok: true,
     options: {
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
       inputPath: inputPath.value,
       outPath,
@@ -797,7 +793,7 @@ function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParse
     usage: compileUsage(),
   });
   if (!inputPath.ok) return inputPath;
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return {
       message: `kovo: compile drizzle-static requires --out.\n${compileUsage()}`,
@@ -807,7 +803,7 @@ function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParse
   return {
     ok: true,
     options: {
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       inputPath: inputPath.value,
       outPath,
       target: 'drizzle-static',
@@ -825,15 +821,15 @@ function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseRes
     usage: compileUsage(),
   });
   if (!packageName.ok) return packageName;
-  const outPath = parsedStringOption(parsed.value, '--out');
+  const outPath = parsedStringOption(parsed.value, 'out');
   if (!outPath)
     return { message: `kovo: compile package-css requires --out.\n${compileUsage()}`, ok: false };
-  const entryPath = parsedStringOption(parsed.value, '--entry');
+  const entryPath = parsedStringOption(parsed.value, 'entry');
 
   return {
     ok: true,
     options: {
-      check: parsedBooleanOption(parsed.value, '--check'),
+      check: parsedBooleanOption(parsed.value, 'check'),
       ...(entryPath === undefined ? {} : { entryPath }),
       outPath,
       packageName: packageName.value,

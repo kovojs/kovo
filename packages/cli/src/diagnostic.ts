@@ -2,23 +2,23 @@ import type { DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 
 /**
- * @internal Stable diagnostic record shared by CLI, editor, GitHub, MCP, and
- * devtool adapters. It carries decisions; renderers are presentation-only.
+ * Stable version of the diagnostic record shared by CLI, editor, GitHub, MCP,
+ * and devtool adapters.
  */
 export const KOVO_DIAGNOSTIC_VERSION = 'kovo-diagnostic/v1' as const;
 
-/** @internal Exact authored-source anchor using zero-based UTF-16 offsets. */
+/** Exact authored-source anchor using zero-based UTF-16 offsets. */
 export interface KovoDiagnosticSourceAnchor {
   readonly end: number;
   readonly file: string;
   readonly start: number;
 }
 
-/** @internal Stable diagnostic categories used to choose process behavior. */
+/** Stable diagnostic categories used to choose process behavior. */
 export type KovoDiagnosticCategory = 'build' | 'config' | 'proof' | 'runtime' | 'usage';
 
 /**
- * @internal One transport-neutral diagnostic. A KV code retains registry-owned
+ * One transport-neutral diagnostic. A KV code retains registry-owned
  * severity/help; CLI-owned codes use the `KOVO_*` namespace.
  */
 export interface KovoDiagnosticRecord {
@@ -31,16 +31,16 @@ export interface KovoDiagnosticRecord {
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
 }
 
-/** @internal Serialized diagnostic envelope for JSON/watch consumers. */
+/** Serialized diagnostic envelope for JSON/watch consumers. */
 export interface KovoDiagnosticEnvelope {
   readonly diagnostics: readonly KovoDiagnosticRecord[];
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
 }
 
-/** @internal Presentation adapters supported by the shared record. */
+/** Presentation adapters supported by the shared record. */
 export type KovoDiagnosticFormat = 'github' | 'human' | 'json';
 
-/** @internal Inputs accepted by the diagnostic-record constructor. */
+/** Inputs accepted by {@link createKovoDiagnostic}. */
 export type KovoDiagnosticConstruction = Omit<
   KovoDiagnosticRecord,
   'help' | 'severity' | 'version'
@@ -50,9 +50,9 @@ export type KovoDiagnosticConstruction = Omit<
 };
 
 /**
- * @internal Construct and freeze one honest diagnostic record. Callers cannot
- * smuggle malformed source ranges into GitHub/editor adapters. Registered KV
- * codes always take severity/help from the owning diagnostic registry.
+ * Construct and freeze one honest diagnostic record. Callers cannot smuggle
+ * malformed source ranges into GitHub/editor adapters. Registered KV codes
+ * always take severity/help from the owning diagnostic registry.
  */
 export function createKovoDiagnostic(input: KovoDiagnosticConstruction): KovoDiagnosticRecord {
   if (!input.code || !/^(?:KV\d{3}|KOVO_[A-Z0-9_]+)$/u.test(input.code)) {
@@ -88,7 +88,7 @@ export function createKovoDiagnostic(input: KovoDiagnosticConstruction): KovoDia
   });
 }
 
-/** @internal Create a frozen JSON envelope without re-deriving any field. */
+/** Create a frozen JSON envelope without re-deriving any field. */
 export function createKovoDiagnosticEnvelope(
   diagnostics: readonly KovoDiagnosticRecord[],
 ): KovoDiagnosticEnvelope {
@@ -98,7 +98,7 @@ export function createKovoDiagnosticEnvelope(
   });
 }
 
-/** @internal Render records for one presentation surface without changing their decisions. */
+/** Render records for one presentation surface without changing their decisions. */
 export function formatKovoDiagnostics(
   diagnostics: readonly KovoDiagnosticRecord[],
   format: KovoDiagnosticFormat,
@@ -124,6 +124,31 @@ export function usageDiagnostic(message: string): KovoDiagnosticRecord {
     category: 'usage',
     code: 'KOVO_USAGE',
     help: 'Run `kovo --help` or `kovo help <command>` for generated usage.',
+    message,
+    severity: 'error',
+  });
+}
+
+/** @internal Create a transport-neutral record for a non-usage command finding. */
+export function commandFindingDiagnostic(
+  category: Exclude<KovoDiagnosticCategory, 'usage'>,
+  message: string,
+): KovoDiagnosticRecord {
+  const code =
+    category === 'build'
+      ? 'KOVO_BUILD_FINDING'
+      : category === 'config'
+        ? 'KOVO_CONFIG_FINDING'
+        : category === 'runtime'
+          ? 'KOVO_RUNTIME_FINDING'
+          : 'KOVO_PROOF_FINDING';
+  return createKovoDiagnostic({
+    category,
+    code,
+    help:
+      category === 'proof'
+        ? 'Inspect the cited source proof and rerun the command.'
+        : 'Resolve the reported command finding and rerun the command.',
     message,
     severity: 'error',
   });

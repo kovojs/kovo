@@ -122,7 +122,7 @@ export function parseIncidentArgs(
   const parsed = parseCommandArgv(args, INCIDENT_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('incident', parsed, INCIDENT_USAGE);
   const [action, advisoryPath, extra] = parsed.value.positionals;
-  const eventsPath = parsedStringOption(parsed.value, '--events');
+  const eventsPath = parsedStringOption(parsed.value, 'events');
   if (
     action !== 'scope' ||
     advisoryPath === undefined ||

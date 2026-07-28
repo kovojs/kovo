@@ -28,8 +28,10 @@ import {
   commandArgvError,
   DB_ARGV_SPEC,
   DB_USAGE,
+  parsedStringArgument,
   parsedStringOption,
   parseCommandArgv,
+  requiredParsedStringOption,
 } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
@@ -91,43 +93,28 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
   const parsed = parseCommandArgv(args, DB_ARGV_SPEC);
   if (!parsed.ok) return dbArgvError(parsed);
 
-  const [actionValue, extra] = parsed.value.positionals;
-  if (extra !== undefined) {
-    return { message: `kovo: db accepts one action.\n${dbUsage()}`, ok: false };
-  }
-  const action = parseDbAction(actionValue);
-  if (action === undefined) {
-    return {
-      message: `kovo: db requires provision, migrate, generate, or check.\n${dbUsage()}`,
-      ok: false,
-    };
-  }
+  const actionValue = parsedStringArgument(parsed.value, 'action');
+  if (actionValue === undefined) throw new TypeError('Kovo db schema omitted action.');
+  const action = actionValue as KovoDbAction;
 
-  const driverValue = parsedStringOption(parsed.value, '--driver');
-  const driver = driverValue === undefined ? undefined : parsePostgresRuntimeDriver(driverValue);
-  if (driverValue !== undefined && driver === undefined) {
-    return {
-      message: `kovo: unsupported db driver ${stableValue(driverValue)}.\n${dbUsage()}`,
-      ok: false,
-    };
-  }
+  const driverValue = parsedStringOption(parsed.value, 'driver');
+  const driver = driverValue as KovoPostgresRuntimeDriver | undefined;
 
-  const adminDatabaseUrl = parsedStringOption(parsed.value, '--admin-database-url');
-  const dataDir = parsedStringOption(parsed.value, '--data-dir');
-  const databaseUrl = parsedStringOption(parsed.value, '--database-url');
-  const migrationsDir = parsedStringOption(parsed.value, '--migrations');
-  const readerRole = parsedStringOption(parsed.value, '--reader-role');
-  const systemDatabaseUrl = parsedStringOption(parsed.value, '--system-database-url');
-  const writerRole = parsedStringOption(parsed.value, '--writer-role');
+  const adminDatabaseUrl = parsedStringOption(parsed.value, 'adminDatabaseUrl');
+  const dataDir = parsedStringOption(parsed.value, 'dataDir');
+  const databaseUrl = parsedStringOption(parsed.value, 'databaseUrl');
+  const readerRole = parsedStringOption(parsed.value, 'readerRole');
+  const systemDatabaseUrl = parsedStringOption(parsed.value, 'systemDatabaseUrl');
+  const writerRole = parsedStringOption(parsed.value, 'writerRole');
   const options: KovoDbOptions = {
     action,
-    schemaPath: parsedStringOption(parsed.value, '--schema') ?? 'src/schema.ts',
+    migrationsDir: requiredParsedStringOption(parsed.value, 'migrations'),
+    schemaPath: requiredParsedStringOption(parsed.value, 'schema'),
   };
   if (adminDatabaseUrl !== undefined) options.adminDatabaseUrl = adminDatabaseUrl;
   if (dataDir !== undefined) options.dataDir = dataDir;
   if (databaseUrl !== undefined) options.databaseUrl = databaseUrl;
   if (driver !== undefined) options.driver = driver;
-  if (migrationsDir !== undefined) options.migrationsDir = migrationsDir;
   if (readerRole !== undefined) options.readerRole = readerRole;
   if (systemDatabaseUrl !== undefined) options.systemDatabaseUrl = systemDatabaseUrl;
   if (writerRole !== undefined) options.writerRole = writerRole;
@@ -222,13 +209,6 @@ function dbArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: t
 
 function dbUsage(): string {
   return [DB_USAGE, ''].join('\n');
-}
-
-function parseDbAction(value: string | undefined): KovoDbAction | undefined {
-  if (value === 'check' || value === 'generate' || value === 'migrate' || value === 'provision') {
-    return value;
-  }
-  return undefined;
 }
 
 function parsePostgresRuntimeDriver(value: string): KovoPostgresRuntimeDriver | undefined {

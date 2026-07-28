@@ -31,9 +31,11 @@ export interface KovoCommandExitBehavior {
 
 /** @internal A value accepted by a positional argument or option. */
 export interface KovoCommandValueSchema {
-  readonly default?: string;
+  readonly default?: number | string;
   readonly kind: KovoCommandValueKind;
   readonly label: string;
+  readonly maximum?: number;
+  readonly minimum?: number;
   readonly values?: readonly string[];
 }
 
@@ -45,10 +47,12 @@ export interface KovoCommandOptionSchema {
    * the concept (`cache: false`) instead of copying argv polarity.
    */
   readonly booleanValue?: boolean;
+  readonly defaultBoolean?: boolean;
   readonly category?: 'advanced' | 'input' | 'output' | 'posture' | 'selection';
   readonly description: string;
   readonly flags: readonly [`--${string}`, ...string[]];
   readonly id: string;
+  readonly invalidValueMessage?: string;
   readonly missingValueMessage?: string;
   readonly repeatable?: boolean;
   readonly value?: KovoCommandValueSchema;
@@ -68,10 +72,13 @@ export type KovoCommandUsageToken =
     }
   | {
       readonly description?: string;
+      readonly invalidValueMessage?: string;
       readonly kind: 'argument';
+      readonly missingValueMessage?: string;
       readonly name: string;
       readonly repeatable?: boolean;
       readonly required: boolean;
+      readonly unexpectedValueMessage?: string;
       readonly value: KovoCommandValueSchema;
     }
   | {
@@ -109,6 +116,16 @@ export interface KovoCommandSchemaEntry {
   readonly usage: readonly KovoCommandUsageForm[];
 }
 
+/** @internal One framework-owned meta command handled before capability dispatch. */
+export interface KovoMetaCommandSchemaEntry {
+  readonly aliases: readonly string[];
+  readonly examples: readonly string[];
+  readonly name: 'completion' | 'help' | 'version';
+  readonly options: readonly KovoCommandOptionSchema[];
+  readonly summary: string;
+  readonly usage: readonly KovoCommandUsageForm[];
+}
+
 const exits = Object.freeze({
   finding: 1,
   success: 0,
@@ -124,7 +141,9 @@ function value(
   kind: KovoCommandValueKind,
   label: string,
   options: {
-    readonly default?: string;
+    readonly default?: number | string;
+    readonly maximum?: number;
+    readonly minimum?: number;
     readonly values?: readonly string[];
   } = {},
 ): KovoCommandValueSchema {
@@ -136,8 +155,11 @@ function argument(
   schema: KovoCommandValueSchema,
   options: {
     readonly description?: string;
+    readonly invalidValueMessage?: string;
+    readonly missingValueMessage?: string;
     readonly repeatable?: boolean;
     readonly required?: boolean;
+    readonly unexpectedValueMessage?: string;
   } = {},
 ): KovoCommandUsageToken {
   return {
@@ -146,7 +168,16 @@ function argument(
     required: options.required ?? true,
     value: schema,
     ...(options.description === undefined ? {} : { description: options.description }),
+    ...(options.invalidValueMessage === undefined
+      ? {}
+      : { invalidValueMessage: options.invalidValueMessage }),
+    ...(options.missingValueMessage === undefined
+      ? {}
+      : { missingValueMessage: options.missingValueMessage }),
     ...(options.repeatable === undefined ? {} : { repeatable: options.repeatable }),
+    ...(options.unexpectedValueMessage === undefined
+      ? {}
+      : { unexpectedValueMessage: options.unexpectedValueMessage }),
   };
 }
 
@@ -210,6 +241,7 @@ const checkOptions = [
   }),
   flag('severityFloor', ['--severity-floor'], 'Set the blocking advisory severity floor.', {
     category: 'selection',
+    invalidValueMessage: 'kovo: --severity-floor must be low, moderate, high, or critical.\n',
     missingValueMessage: 'kovo: check advisories --severity-floor requires a severity.\n',
     value: value('enum', 'low|moderate|high|critical', {
       default: 'high',
@@ -434,6 +466,7 @@ export const KOVO_COMMAND_SCHEMA = [
       }),
       flag('preset', ['--preset'], 'Select the deployment preset.', {
         category: 'posture',
+        invalidValueMessage: 'kovo: unsupported build preset {value}.\n',
         missingValueMessage: 'kovo: build --preset requires a preset name.\n',
         value: value('enum', 'name', { values: ['node', 'vercel', 'cloudflare'] }),
       }),
@@ -443,6 +476,7 @@ export const KOVO_COMMAND_SCHEMA = [
       flag('cache', ['--no-cache'], 'Disable build analysis caches.', {
         booleanValue: false,
         category: 'advanced',
+        defaultBoolean: true,
       }),
     ],
     order: 30,
@@ -453,7 +487,10 @@ export const KOVO_COMMAND_SCHEMA = [
       {
         id: 'build',
         tokens: [
-          argument('appModule', value('path', 'app-module')),
+          argument('appModule', value('path', 'app-module'), {
+            missingValueMessage: 'kovo: build requires an app module path.\n',
+            unexpectedValueMessage: 'kovo: build accepts one app module path.\n',
+          }),
           option('out'),
           option('preset'),
           option('check'),
@@ -634,6 +671,7 @@ export const KOVO_COMMAND_SCHEMA = [
       }),
       flag('driver', ['--driver'], 'Select the database driver.', {
         category: 'posture',
+        invalidValueMessage: 'kovo: unsupported db driver {value}.\n',
         missingValueMessage: 'kovo: db --driver requires pglite, pg, or node-postgres.\n',
         value: value('enum', 'pglite|pg|node-postgres', {
           values: ['pglite', 'pg', 'node-postgres'],
@@ -662,12 +700,12 @@ export const KOVO_COMMAND_SCHEMA = [
       flag('readerRole', ['--reader-role'], 'Reader database role.', {
         category: 'posture',
         missingValueMessage: 'kovo: db --reader-role requires a role name.\n',
-        value: value('string', 'role', { default: 'kovo_reader' }),
+        value: value('string', 'role'),
       }),
       flag('writerRole', ['--writer-role'], 'Writer database role.', {
         category: 'posture',
         missingValueMessage: 'kovo: db --writer-role requires a role name.\n',
-        value: value('string', 'role', { default: 'kovo_writer' }),
+        value: value('string', 'role'),
       }),
     ],
     order: 60,
@@ -683,7 +721,12 @@ export const KOVO_COMMAND_SCHEMA = [
             value('enum', 'provision|migrate|generate|check', {
               values: ['provision', 'migrate', 'generate', 'check'],
             }),
-            { description: 'Select the database lifecycle action.' },
+            {
+              description: 'Select the database lifecycle action.',
+              invalidValueMessage: 'kovo: db requires provision, migrate, generate, or check.\n',
+              missingValueMessage: 'kovo: db requires provision, migrate, generate, or check.\n',
+              unexpectedValueMessage: 'kovo: db accepts one action.\n',
+            },
           ),
           option('schema'),
           option('migrations'),
@@ -723,8 +766,9 @@ export const KOVO_COMMAND_SCHEMA = [
       }),
       flag('port', ['--port'], 'Vite listen port.', {
         category: 'posture',
+        invalidValueMessage: 'kovo: dev --port must be an integer from 0 through 65535.\n',
         missingValueMessage: 'kovo: dev --port requires a port.\n',
-        value: value('integer', 'port'),
+        value: value('integer', 'port', { maximum: 65_535, minimum: 0 }),
       }),
       flag('strictPort', ['--strict-port'], 'Fail instead of selecting another occupied port.', {
         category: 'posture',
@@ -743,7 +787,10 @@ export const KOVO_COMMAND_SCHEMA = [
       {
         id: 'dev',
         tokens: [
-          argument('appModule', value('path', 'app-module')),
+          argument('appModule', value('path', 'app-module'), {
+            missingValueMessage: 'kovo: dev requires an app module path.\n',
+            unexpectedValueMessage: 'kovo: dev accepts one app module path.\n',
+          }),
           option('root'),
           option('config'),
           option('host'),
@@ -868,7 +915,7 @@ export const KOVO_COMMAND_SCHEMA = [
       flag('assetBase', ['--asset-base'], 'URL path prefix for exported assets.', {
         category: 'output',
         missingValueMessage: 'kovo: export --asset-base requires a URL path.\n',
-        value: value('string', 'path', { default: '/' }),
+        value: value('string', 'path'),
       }),
       flag('skipNonExportable', ['--skip-non-exportable'], 'Skip non-exportable routes.', {
         category: 'posture',
@@ -982,8 +1029,84 @@ export const KOVO_COMMAND_SCHEMA = [
   },
 ] as const satisfies readonly KovoCommandSchemaEntry[];
 
+const capabilityAndMetaCommandNames = [
+  ...KOVO_COMMAND_SCHEMA.map((entry) => entry.name),
+  'completion',
+  'help',
+  'version',
+] as const;
+
+/**
+ * @internal Complete CLI AST, including global aliases and meta-command
+ * validation. Help, version, completion, capability parsing, and references
+ * project from this object.
+ */
+export const KOVO_CLI_SCHEMA = Object.freeze({
+  commands: KOVO_COMMAND_SCHEMA,
+  globalOptions: [
+    flag('help', ['--help', '-h'], 'Show generated help.'),
+    flag('version', ['--version', '-V'], 'Show the installed CLI version.'),
+  ],
+  metaCommands: [
+    {
+      aliases: [],
+      examples: ['kovo help', 'kovo help build'],
+      name: 'help',
+      options: [],
+      summary: 'Show generated root or command help.',
+      usage: [
+        {
+          id: 'help',
+          tokens: [
+            argument(
+              'command',
+              value('enum', 'command', { values: capabilityAndMetaCommandNames }),
+              { required: false },
+            ),
+          ],
+        },
+      ],
+    },
+    {
+      aliases: [],
+      examples: ['kovo version'],
+      name: 'version',
+      options: [],
+      summary: 'Show the installed CLI version.',
+      usage: [{ id: 'version', tokens: [] }],
+    },
+    {
+      aliases: [],
+      examples: ['kovo completion bash'],
+      name: 'completion',
+      options: [],
+      summary: 'Generate a shell completion program.',
+      usage: [
+        {
+          id: 'completion',
+          tokens: [
+            argument('shell', value('enum', 'bash|fish|zsh', { values: ['bash', 'fish', 'zsh'] }), {
+              invalidValueMessage: 'kovo: completion requires bash, zsh, or fish.\n',
+              missingValueMessage: 'kovo: completion requires bash, zsh, or fish.\n',
+            }),
+          ],
+        },
+      ],
+    },
+  ],
+  name: 'kovo',
+} as const satisfies {
+  readonly commands: readonly KovoCommandSchemaEntry[];
+  readonly globalOptions: readonly KovoCommandOptionSchema[];
+  readonly metaCommands: readonly KovoMetaCommandSchemaEntry[];
+  readonly name: 'kovo';
+});
+
 /** @internal One literal capability command name. */
 export type KovoCommandName = (typeof KOVO_COMMAND_SCHEMA)[number]['name'];
+
+/** @internal One literal framework-owned meta-command name. */
+export type KovoMetaCommandName = (typeof KOVO_CLI_SCHEMA.metaCommands)[number]['name'];
 
 /** @internal One concrete semantic command node. */
 export type KovoCommandEntry = (typeof KOVO_COMMAND_SCHEMA)[number];

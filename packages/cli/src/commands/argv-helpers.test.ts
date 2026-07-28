@@ -28,7 +28,7 @@ describe('command argv helper integration', () => {
 
   it('uses shared missing-value, unknown-option, and single-positional errors', () => {
     expect(parseBuildArgs(['src/app.tsx', '--out'])).toEqual({
-      message: 'kovo: build --out requires a directory.\n',
+      message: expect.stringContaining('kovo: build --out requires a directory.'),
       ok: false,
     });
     expect(parseExportArgs(['src/app.tsx', '--vite=false'])).toEqual({

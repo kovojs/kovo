@@ -128,9 +128,10 @@ import {
   EXPORT_ARGV_SPEC,
   EXPORT_USAGE,
   parsedBooleanOption,
+  parsedStringArgument,
   parsedStringOption,
   parseCommandArgv,
-  requireSinglePositional,
+  requiredParsedStringOption,
 } from '../commands-manifest.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
 import { kovoCheck } from '../graph-output.js';
@@ -566,26 +567,18 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
   if (!parsed.ok) return buildArgvError(parsed);
 
-  const appModule = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'build',
-    usage: buildUsage(),
-  });
-  if (!appModule.ok) return appModule;
-
-  const presetValue = parsedStringOption(parsed.value, '--preset');
-  const preset = presetValue === undefined ? undefined : parseKovoBuildPresetName(presetValue);
-  if (presetValue !== undefined && preset === undefined) {
-    return { message: `kovo: unsupported build preset ${stableValue(presetValue)}.\n`, ok: false };
-  }
+  const appModule = parsedStringArgument(parsed.value, 'appModule');
+  if (appModule === undefined) throw new TypeError('Kovo build schema omitted appModule.');
+  const presetValue = parsedStringOption(parsed.value, 'preset');
+  const preset = presetValue as KovoBuildPresetName | undefined;
 
   return {
     ok: true,
     options: {
-      appModulePath: appModule.value,
-      cache: !parsedBooleanOption(parsed.value, '--no-cache'),
-      check: parsedBooleanOption(parsed.value, '--check'),
-      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
+      appModulePath: appModule,
+      cache: parsedBooleanOption(parsed.value, 'cache'),
+      check: parsedBooleanOption(parsed.value, 'check'),
+      outDir: requiredParsedStringOption(parsed.value, 'out'),
       ...(preset === undefined ? {} : { preset }),
     },
   };
@@ -598,45 +591,41 @@ function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok
   return commandArgvError('build', error, buildUsage());
 }
 
-function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
-  return value === 'node' || value === 'vercel' || value === 'cloudflare' ? value : undefined;
-}
-
 function buildUsage(): string {
   return buildJoinStrings([BUILD_USAGE, ''], '\n', 'Build usage lines');
+}
+
+function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
+  return value === 'node' || value === 'vercel' || value === 'cloudflare' ? value : undefined;
 }
 
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
   if (!parsed.ok) return exportArgvError(parsed);
 
-  const appModule = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'export',
-    usage: exportUsage(),
-  });
-  if (!appModule.ok) return appModule;
+  const appModule = parsedStringArgument(parsed.value, 'appModule');
+  if (appModule === undefined) throw new TypeError('Kovo export schema omitted appModule.');
 
-  const assetBase = parsedStringOption(parsed.value, '--asset-base');
-  const distDir = parsedStringOption(parsed.value, '--dist');
-  const manifestFile = parsedStringOption(parsed.value, '--manifest');
-  const origin = parsedStringOption(parsed.value, '--origin');
-  const root = parsedStringOption(parsed.value, '--root');
-  const vite = parsedBooleanOption(parsed.value, '--vite');
-  const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
+  const assetBase = parsedStringOption(parsed.value, 'assetBase');
+  const distDir = parsedStringOption(parsed.value, 'dist');
+  const manifestFile = parsedStringOption(parsed.value, 'manifest');
+  const origin = parsedStringOption(parsed.value, 'origin');
+  const root = parsedStringOption(parsed.value, 'root');
+  const vite = parsedBooleanOption(parsed.value, 'vite');
+  const onNonExportable = parsedBooleanOption(parsed.value, 'skipNonExportable')
     ? ('skip' as const)
     : undefined;
 
   return {
     ok: true,
     options: {
-      appModulePath: appModule.value,
+      appModulePath: appModule,
       ...(assetBase === undefined ? {} : { assetBase }),
       ...(distDir === undefined ? {} : { distDir }),
       ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
-      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
+      outDir: requiredParsedStringOption(parsed.value, 'out'),
       ...(root === undefined ? {} : { root }),
       ...(vite ? { vite } : {}),
     },

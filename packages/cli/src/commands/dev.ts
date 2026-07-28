@@ -20,8 +20,10 @@ import {
   commandArgvError,
   parseCommandArgv,
   parsedBooleanOption,
+  parsedIntegerOption,
+  parsedStringArgument,
   parsedStringOption,
-  requireSinglePositional,
+  requiredParsedStringOption,
 } from '../commands-manifest.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
@@ -102,40 +104,23 @@ export function parseDevArgs(
 ): DevArgParseResult {
   const parsed = parseCommandArgv(args, DEV_ARGV_SPEC);
   if (!parsed.ok) return commandArgvError('dev', parsed, DEV_USAGE);
-  const app = requireSinglePositional(parsed.value, {
-    label: 'app module path',
-    name: 'dev',
-    usage: DEV_USAGE,
-  });
-  if (!app.ok) return app;
-
-  const root = resolve(invocationCwd, parsedStringOption(parsed.value, '--root') ?? '.');
-  const portValue = parsedStringOption(parsed.value, '--port');
-  let port: number | undefined;
-  if (portValue !== undefined) {
-    port = Number.parseInt(portValue, 10);
-    if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
-      return {
-        message: `kovo: dev --port must be an integer from 0 through 65535.\n${DEV_USAGE}`,
-        ok: false,
-      };
-    }
-  }
+  const app = parsedStringArgument(parsed.value, 'appModule');
+  if (app === undefined) throw new TypeError('Kovo dev schema omitted appModule.');
+  const root = resolve(invocationCwd, requiredParsedStringOption(parsed.value, 'root'));
+  const port = parsedIntegerOption(parsed.value, 'port');
+  const config = parsedStringOption(parsed.value, 'config');
+  const host = parsedStringOption(parsed.value, 'host');
 
   return {
     ok: true,
     options: {
-      appModulePath: resolve(root, app.value),
-      ...(parsedStringOption(parsed.value, '--config') === undefined
-        ? {}
-        : { configFile: resolve(root, parsedStringOption(parsed.value, '--config')!) }),
-      ...(parsedStringOption(parsed.value, '--host') === undefined
-        ? {}
-        : { host: parsedStringOption(parsed.value, '--host')! }),
-      mode: parsedStringOption(parsed.value, '--mode') ?? 'development',
+      appModulePath: resolve(root, app),
+      ...(config === undefined ? {} : { configFile: resolve(root, config) }),
+      ...(host === undefined ? {} : { host }),
+      mode: requiredParsedStringOption(parsed.value, 'mode'),
       ...(port === undefined ? {} : { port }),
       root,
-      strictPort: parsedBooleanOption(parsed.value, '--strict-port'),
+      strictPort: parsedBooleanOption(parsed.value, 'strictPort'),
     },
   };
 }

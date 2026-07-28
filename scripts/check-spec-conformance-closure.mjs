@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '22c93bdb6fffd692da8ecafd0e400c0d27d5e0a620c6270b0be6d5d749171ca5';
+  'd6a07efe28fc78e33c3af82ac595dcf46ad200ad238f7ebd6e4b0bf07d0da069';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
 const expectedDiagnosticActualLayerReviewDigest =
-  '9b13cb492ebfda1473e75bb601be55f94831498ea2b3bc8df69c53a85342fcc0';
+  '270913fb0c9171a2753cac5f0c8f778f5c490eba4f9ffe2d2ebf8deda1a1b95e';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -102,7 +102,7 @@ const expectedCoreBuildDistCommand =
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/browser/src/inline-loader.ts#20f1d4a5dfc82c788169bbbf007314ede0a76e284689ff210367268bf10bcd01#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/db.ts#56af7873918dd0309505fa16539961821f5cd6d2c522d05c70671802e31b731a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
+  'packages/cli/src/commands/db.ts#8cb5a33986098b921ad4f966323cb98db810dddcd36578071fc772ab7d92b28e#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
@@ -126,15 +126,15 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'e7ffee6190f6ba8d1b268c7d427f111b926710714bd684de7bcb30572d7ded5c'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '5d08cc92f5f6126563422a907201be02da054db102ae01459cfd837a7ef3e486',
+    '0f0e2f128f0e3a6e3e5a0e26d120e9244222d36844309b6bba8c7948e2a29a16',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '63d6216a65fcc491eeb22482ef3cbb00a8cab5f9450a3f4d40a9e5c7e4b38165',
+    'c66fe4ae7cf3b1088d1773dc977e12c221d6289012eea212acb0a68d3567d6af',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '40058910c2c25b41db42b29017d309c902a3e0b7a7c26ef2a36d3a931da8c9fe',
+    'fa8ed63059c63d8e7cca89e3325f7b887ccd34dfcf80464bdc1c27aaa70b6eea',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
@@ -196,6 +196,14 @@ const reviewedExcludedSourceReachability = new Set([
 // non-diagnostic protocols and registry-derived projections are capability-closed by exact site +
 // outer-owner digests; any new shape or owner edit must be reviewed explicitly.
 const reviewedDynamicDiagnosticShapeSummaries = new Map([
+  [
+    'packages/cli/src/diagnostic.ts#literal#34451147e5e32b9200d3542bc28e57a9df9d336aa4b9c9428601e5ba339b5170#da1c062242e8492954ca9ba18856be3ed89831f697a06081eff40fe28aff4083',
+    'Transport-neutral kovo-diagnostic/v1 constructor; registered KV severity/help are registry-owned and CLI codes are namespace-checked.',
+  ],
+  [
+    'packages/cli/src/diagnostic.ts#literal#6469ce0e5e5ba5a70063e8b2c9e081dc2b2be75400017a5ad7875cf03afde043#80d3b843265fbbf3e9ff3188dfaba07ec29bb21a96ea4e3194ce5c5637dee8df',
+    'Framework command-finding projection into the reviewed kovo-diagnostic/v1 constructor.',
+  ],
   [
     'packages/cli/src/commands/build-export.ts#literal#5a87391d0ef0e56239bd18530c212e8579a9935ef567ce1b48212149b66d386b#58a0b16ea437f43a43903be9c7b70f0cd5f652b934c66534eed982e5efca03b2',
     'Registry-derived compiler diagnostic projection for the build-export result protocol.',

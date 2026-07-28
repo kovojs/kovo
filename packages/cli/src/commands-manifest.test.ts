@@ -230,10 +230,10 @@ describe('commands manifest', () => {
     expect(build).toEqual(expect.objectContaining({ ok: true }));
     if (build.ok) {
       expect(build.value.positionals).toEqual(['src/app.tsx']);
-      expect(parsedStringOption(build.value, '--out')).toBe('dist-prod');
-      expect(parsedStringOption(build.value, '--preset')).toBe('node');
-      expect(parsedBooleanOption(build.value, '--check')).toBe(true);
-      expect(parsedBooleanOption(build.value, '--no-cache')).toBe(true);
+      expect(parsedStringOption(build.value, 'out')).toBe('dist-prod');
+      expect(parsedStringOption(build.value, 'preset')).toBe('node');
+      expect(parsedBooleanOption(build.value, 'check')).toBe(true);
+      expect(parsedBooleanOption(build.value, 'cache')).toBe(false);
     }
 
     const route = parseCommandArgv(
@@ -250,11 +250,11 @@ describe('commands manifest', () => {
     expect(route).toEqual(expect.objectContaining({ ok: true }));
     if (route.ok) {
       expect(route.value.positionals).toEqual(['src/route.tsx']);
-      expect(parsedStringListOption(route.value, '--rewrite')).toEqual([
+      expect(parsedStringListOption(route.value, 'rewrite')).toEqual([
         'Cart=./cart.js',
         'Shell=./shell.js',
       ]);
-      expect(parsedStringOption(route.value, '--out')).toBe('dist/route.tsx');
+      expect(parsedStringOption(route.value, 'out')).toBe('dist/route.tsx');
     }
 
     const advisories = parseCommandArgv(
@@ -273,8 +273,8 @@ describe('commands manifest', () => {
     expect(advisories).toEqual(expect.objectContaining({ ok: true }));
     if (advisories.ok) {
       expect(advisories.value.positionals).toEqual(['advisories', '.kovo/graph.json']);
-      expect(parsedStringOption(advisories.value, '--feed')).toBe('https://example.test/feed.json');
-      expect(parsedStringOption(advisories.value, '--severity-floor')).toBe('critical');
+      expect(parsedStringOption(advisories.value, 'feed')).toBe('https://example.test/feed.json');
+      expect(parsedStringOption(advisories.value, 'severityFloor')).toBe('critical');
     }
 
     expect(parseCommandArgv(['--out='], BUILD_ARGV_SPEC)).toEqual({
@@ -304,10 +304,10 @@ describe('commands manifest', () => {
     expect(db).toEqual(expect.objectContaining({ ok: true }));
     if (db.ok) {
       expect(db.value.positionals).toEqual(['migrate']);
-      expect(parsedStringOption(db.value, '--schema')).toBe('src/schema.ts');
-      expect(parsedStringOption(db.value, '--driver')).toBe('pglite');
-      expect(parsedStringOption(db.value, '--data-dir')).toBe('.kovo/pglite');
-      expect(parsedStringOption(db.value, '--migrations')).toBe('migrations');
+      expect(parsedStringOption(db.value, 'schema')).toBe('src/schema.ts');
+      expect(parsedStringOption(db.value, 'driver')).toBe('pglite');
+      expect(parsedStringOption(db.value, 'dataDir')).toBe('.kovo/pglite');
+      expect(parsedStringOption(db.value, 'migrations')).toBe('migrations');
     }
   });
 
@@ -321,7 +321,7 @@ describe('commands manifest', () => {
     );
     if (!missing.ok) {
       expect(commandArgvError('build', missing, 'usage: kovo build <app-module>')).toEqual({
-        message: 'kovo: build --out requires a directory.\n',
+        message: 'kovo: build --out requires a directory.\nusage: kovo build <app-module>',
         ok: false,
       });
     }
@@ -335,19 +335,29 @@ describe('commands manifest', () => {
     }
 
     const parsed = parseCommandArgv(['one.tsx', 'two.tsx'], BUILD_ARGV_SPEC);
-    expect(parsed).toEqual(expect.objectContaining({ ok: true }));
-    if (parsed.ok) {
-      expect(
-        requireSinglePositional(parsed.value, {
+    expect(parsed).toEqual({
+      error: 'invalid-value',
+      message: 'kovo: build accepts one app module path.\n',
+      ok: false,
+    });
+
+    expect(
+      requireSinglePositional(
+        {
+          arguments: new Map(),
+          options: new Map(),
+          positionals: ['one.tsx', 'two.tsx'],
+        },
+        {
           label: 'app module path',
           name: 'build',
           usage: 'usage: kovo build <app-module>',
-        }),
-      ).toEqual({
-        message: 'kovo: build accepts one app module path.\nusage: kovo build <app-module>',
-        ok: false,
-      });
-    }
+        },
+      ),
+    ).toEqual({
+      message: 'kovo: build accepts one app module path.\nusage: kovo build <app-module>',
+      ok: false,
+    });
   });
 });
 
