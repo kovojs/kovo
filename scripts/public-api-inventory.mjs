@@ -38,9 +38,8 @@ const CONSUMER_SCAN_ROOTS = Object.freeze([
   'tests',
   'conformance',
 ]);
-const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
+const ROOT_OWNED_OUTPUT_DIRECTORIES = new Set([
   '.cache',
-  '.git',
   '.kovo',
   '.next',
   '.nx',
@@ -54,7 +53,6 @@ const ALWAYS_EXCLUDED_DIRECTORIES = new Set([
   'dist',
   'gen',
   'generated',
-  'node_modules',
   'out',
 ]);
 const EXCLUSION_MARKER = '.kovo-public-api-inventory.json';
@@ -427,11 +425,26 @@ function rejectLocalConsumerExclusion(directory, repoRoot) {
   }
 }
 
-function excludedDirectoryReason(repoRoot, directory, name, reviewedExclusions) {
+function rootOwnedOutputDirectory(relative) {
+  const segments = relative.split('/');
+  const outputName = segments.at(-1);
+  if (!ROOT_OWNED_OUTPUT_DIRECTORIES.has(outputName)) return false;
+  if (segments[0] === 'examples' || segments[0] === 'packages') {
+    return segments.length === 3;
+  }
+  return (
+    ['site', 'docs', 'tests', 'conformance'].includes(segments[0]) &&
+    segments.length === 2
+  );
+}
+
+function excludedDirectoryReason(repoRoot, directory, reviewedExclusions) {
   rejectLocalConsumerExclusion(directory, repoRoot);
-  if (name === 'node_modules') return 'nested-dependency';
-  if (ALWAYS_EXCLUDED_DIRECTORIES.has(name)) return 'generated-dist-cache';
   const relative = path.relative(repoRoot, directory).split(path.sep).join('/');
+  const name = path.posix.basename(relative);
+  if (name === 'node_modules') return 'nested-dependency';
+  if (name === '.git') return 'repository-metadata';
+  if (rootOwnedOutputDirectory(relative)) return 'generated-dist-cache';
   return reviewedExclusions.get(relative)?.reason ?? null;
 }
 
@@ -488,7 +501,7 @@ function walkConsumerFiles(repoRoot) {
       }
       if (entry.isDirectory()) {
         const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
-        const reason = excludedDirectoryReason(repoRoot, absolute, entry.name, reviewedExclusions);
+        const reason = excludedDirectoryReason(repoRoot, absolute, reviewedExclusions);
         if (reason !== null) {
           excludedDirectories.push({
             path: relative,

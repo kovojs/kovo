@@ -171,6 +171,16 @@ describe('public API inventory', () => {
         mkdirSync(path.dirname(absolute), { recursive: true });
         writeFileSync(absolute, "import { feature } from '@fixture/api/feature';\nvoid feature;\n");
       }
+      const coincidentalNestedOutputNames = [
+        'examples/authored/src/dist/must-scan.ts',
+        'examples/authored/src/generated/must-scan.ts',
+        'examples/authored/src/.cache/must-scan.ts',
+      ];
+      for (const relative of coincidentalNestedOutputNames) {
+        const absolute = path.join(hostileRoot, relative);
+        mkdirSync(path.dirname(absolute), { recursive: true });
+        writeFileSync(absolute, "import { feature } from '@fixture/api/feature';\nvoid feature;\n");
+      }
       const coincidentalAuthoredFiles = [
         'examples/packed-release-notes/authored.ts',
         'examples/throwaway-ideas/authored.ts',
@@ -246,11 +256,17 @@ describe('public API inventory', () => {
       const feature = inventory.exportedDeclarations.find(
         (item) => item.specifier === '@fixture/api/feature' && item.symbol === 'feature',
       );
-      expect(feature?.consumerImports).toBe(11);
+      expect(feature?.consumerImports).toBe(14);
       expect(feature?.consumers.authoredExamples.files).toEqual(
-        expect.arrayContaining(coincidentalAuthoredFiles),
+        expect.arrayContaining([
+          ...coincidentalAuthoredFiles,
+          ...coincidentalNestedOutputNames,
+        ]),
       );
-      for (const relative of coincidentalAuthoredFiles) {
+      for (const relative of [
+        ...coincidentalAuthoredFiles,
+        ...coincidentalNestedOutputNames,
+      ]) {
         expect(excluded.some(([directory]) => relative.startsWith(`${directory}/`))).toBe(false);
       }
       expect(JSON.stringify(feature?.consumers)).not.toContain('hostile');
