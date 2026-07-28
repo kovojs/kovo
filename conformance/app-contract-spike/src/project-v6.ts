@@ -516,20 +516,37 @@ function stableDiagnostic(
   };
 }
 
+const structuredSpanObjectKeys = new Set([
+  'argumentSpan',
+  'callableSpan',
+  'callSpan',
+  'diagnosticSpan',
+  'factoryCallSpan',
+  'rootSpan',
+  'sourceSpan',
+  'span',
+]);
+const spanCoordinateKeys = new Set(['end', 'length', 'start']);
+
 function canonicalize(value: unknown, key?: string): unknown {
-  if (spanKey(key)) return undefined;
   if (typeof value === 'string') {
     return key === 'source' || key === 'loweredSource'
       ? canonicalizeFactorySource(value)
       : value;
   }
   if (Array.isArray(value)) {
-    return value.map((entry) => canonicalize(entry)).filter((entry) => entry !== undefined);
+    const entryKey = key === 'argumentSpans' ? 'argumentSpan' : undefined;
+    return value
+      .map((entry) => canonicalize(entry, entryKey))
+      .filter((entry) => entry !== undefined);
   }
   if (typeof value === 'object' && value !== null) {
+    const record = value as Readonly<Record<string, unknown>>;
+    const ignoredKeys = structuredSourceLocationKeys(record, key);
     const entries = Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
       .flatMap(([entryKey, entryValue]) => {
+        if (ignoredKeys.has(entryKey)) return [];
         const canonical = canonicalize(entryValue, entryKey);
         return canonical === undefined ? [] : [[entryKey, canonical] as const];
       });
@@ -538,15 +555,43 @@ function canonicalize(value: unknown, key?: string): unknown {
   return value;
 }
 
-function spanKey(key: string | undefined): boolean {
+function structuredSourceLocationKeys(
+  record: Readonly<Record<string, unknown>>,
+  key: string | undefined,
+): ReadonlySet<string> {
+  if (key && structuredSpanObjectKeys.has(key) && exactNumericSpan(record)) {
+    return spanCoordinateKeys;
+  }
+  if (
+    typeof record.templateStart === 'number' &&
+    typeof record.templateEnd === 'number' &&
+    typeof record.path === 'string' &&
+    typeof record.readPath === 'string' &&
+    typeof record.value === 'string'
+  ) {
+    return new Set(['templateEnd', 'templateStart']);
+  }
+  if (
+    typeof record.sourceStart === 'number' &&
+    typeof record.source === 'string' &&
+    (record.kind === 'block' || record.kind === 'expression') &&
+    Array.isArray(record.erasures) &&
+    Array.isArray(record.propertyAccesses) &&
+    Array.isArray(record.references)
+  ) {
+    return new Set(['sourceStart']);
+  }
+  return new Set();
+}
+
+function exactNumericSpan(record: Readonly<Record<string, unknown>>): boolean {
+  const keys = Object.keys(record);
   return (
-    key === 'end' ||
-    key === 'length' ||
-    key === 'sourceSpan' ||
-    key === 'sourceStart' ||
-    key === 'start' ||
-    key === 'templateEnd' ||
-    key === 'templateStart'
+    keys.length >= 2 &&
+    keys.every((key) => spanCoordinateKeys.has(key)) &&
+    typeof record.start === 'number' &&
+    (typeof record.end === 'number' || typeof record.length === 'number') &&
+    keys.every((key) => typeof record[key] === 'number')
   );
 }
 
@@ -558,19 +603,62 @@ function canonicalizeFactorySource(value: string): string {
     true,
     ts.ScriptKind.TSX,
   );
-  const factoryBindings = new Map<string, DeclarationFamily>();
-  const appBindings = new Set<string>();
+  const renderEnvelope = compilerOwnedRenderSourceEnvelope(sourceFile, value);
+  if (renderEnvelope) {
+    // This is the one structured exception to treating template text as opaque: `renderSource`
+    // is the compiler-owned serialization envelope for an emitted module. The exact marker and
+    // single-export shape authenticate that payload before the ordinary scope-aware AST pass.
+    const canonicalPayload = canonicalizeFactorySource(renderEnvelope.payload.text);
+    if (canonicalPayload === renderEnvelope.payload.text) return value;
+    const transformedEnvelope = ts.transform(sourceFile, [
+      (context) => {
+        const visitor: ts.Visitor = (node) =>
+          node === renderEnvelope.payload
+            ? context.factory.createNoSubstitutionTemplateLiteral(canonicalPayload)
+            : ts.visitEachChild(node, visitor, context);
+        return (node) => ts.visitNode(node, visitor) as ts.SourceFile;
+      },
+    ]);
+    try {
+      return ts
+        .createPrinter({ newLine: ts.NewLineKind.LineFeed, removeComments: false })
+        .printFile(transformedEnvelope.transformed[0] as ts.SourceFile);
+    } finally {
+      transformedEnvelope.dispose();
+    }
+  }
+  const checker = canonicalSourceTypeChecker(sourceFile);
+  const factoryBindings = new Map<
+    ts.Symbol,
+    { readonly family: DeclarationFamily; readonly specifier: ts.ImportSpecifier }
+  >();
+  const appBindings = new Map<ts.Symbol, ts.ImportSpecifier>();
   const generatedSpanProperties = new Set<ts.PropertyAssignment>();
   for (const statement of sourceFile.statements) {
     if (isGeneratedSecurityManifest(statement)) {
       const collectGeneratedSpans = (node: ts.Node): void => {
-        if (
-          ts.isPropertyAssignment(node) &&
-          propertyNameText(node.name) !== undefined &&
-          spanKey(propertyNameText(node.name))
-        ) {
-          generatedSpanProperties.add(node);
-          return;
+        if (ts.isPropertyAssignment(node)) {
+          const containerName = propertyNameText(node.name);
+          if (
+            containerName &&
+            structuredSpanObjectKeys.has(containerName) &&
+            ts.isObjectLiteralExpression(node.initializer) &&
+            exactNumericAstSpan(node.initializer)
+          ) {
+            for (const property of node.initializer.properties) {
+              if (ts.isPropertyAssignment(property)) generatedSpanProperties.add(property);
+            }
+          } else if (
+            containerName === 'argumentSpans' &&
+            ts.isArrayLiteralExpression(node.initializer)
+          ) {
+            for (const element of node.initializer.elements) {
+              if (!ts.isObjectLiteralExpression(element) || !exactNumericAstSpan(element)) continue;
+              for (const property of element.properties) {
+                if (ts.isPropertyAssignment(property)) generatedSpanProperties.add(property);
+              }
+            }
+          }
         }
         ts.forEachChild(node, collectGeneratedSpans);
       };
@@ -587,61 +675,74 @@ function canonicalizeFactorySource(value: string): string {
     const moduleName = statement.moduleSpecifier.text;
     for (const specifier of statement.importClause.namedBindings.elements) {
       const imported = specifier.propertyName?.text ?? specifier.name.text;
+      const symbol = checker.getSymbolAtLocation(specifier.name);
+      if (!symbol) continue;
       if (
         (moduleName === '@kovojs/server' || moduleName === '#kovo') &&
         declarationFamilies.includes(imported as DeclarationFamily)
       ) {
-        factoryBindings.set(specifier.name.text, imported as DeclarationFamily);
+        factoryBindings.set(symbol, {
+          family: imported as DeclarationFamily,
+          specifier,
+        });
       }
       if (
         imported === 'app' &&
         (moduleName.endsWith('/kovo.js') || moduleName.endsWith('/kovo.ts'))
       ) {
-        appBindings.add(specifier.name.text);
+        appBindings.set(symbol, specifier);
       }
     }
   }
-  const exactCallees = new Map<ts.Expression, DeclarationFamily>();
+  const exactCallees = new Map<
+    ts.Expression,
+    { readonly family: DeclarationFamily; readonly specifier: ts.ImportSpecifier }
+  >();
+  const provenCalleeImports = new Set<ts.ImportSpecifier>();
   const visitCalls = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const expression = unwrapCanonicalExpression(node.expression);
       if (ts.isIdentifier(expression)) {
-        const family = factoryBindings.get(expression.text);
-        if (family) exactCallees.set(expression, family);
+        const symbol = checker.getSymbolAtLocation(expression);
+        const binding = symbol ? factoryBindings.get(symbol) : undefined;
+        if (binding) {
+          exactCallees.set(expression, binding);
+          provenCalleeImports.add(binding.specifier);
+        }
       } else if (
         ts.isPropertyAccessExpression(expression) &&
         ts.isIdentifier(expression.expression) &&
-        appBindings.has(expression.expression.text) &&
         declarationFamilies.includes(expression.name.text as DeclarationFamily)
       ) {
-        exactCallees.set(expression, expression.name.text as DeclarationFamily);
+        const symbol = checker.getSymbolAtLocation(expression.expression);
+        const specifier = symbol ? appBindings.get(symbol) : undefined;
+        if (specifier) {
+          exactCallees.set(expression, {
+            family: expression.name.text as DeclarationFamily,
+            specifier,
+          });
+          provenCalleeImports.add(specifier);
+        }
       }
     }
     ts.forEachChild(node, visitCalls);
   };
   visitCalls(sourceFile);
 
-  let nestedTemplateChanged = false;
   const transformed = ts.transform(sourceFile, [
     (context) => {
       const visitor: ts.Visitor = (node) => {
         if (ts.isPropertyAssignment(node) && generatedSpanProperties.has(node)) {
           return undefined;
         }
-        if (ts.isNoSubstitutionTemplateLiteral(node)) {
-          const canonical = canonicalizeFactorySource(node.text);
-          if (canonical !== node.text) {
-            nestedTemplateChanged = true;
-            return context.factory.createNoSubstitutionTemplateLiteral(canonical);
-          }
-          return node;
-        }
-        if (ts.isImportDeclaration(node) && exactCallees.size > 0) {
-          return canonicalImportDeclaration(node, context.factory);
+        if (ts.isImportDeclaration(node) && provenCalleeImports.size > 0) {
+          // Import normalization is intentionally limited to the exact import symbols that own
+          // proven callees below. Same-spelled unused or shadowed bindings remain authored data.
+          return canonicalImportDeclaration(node, provenCalleeImports, context.factory);
         }
         if (ts.isExpression(node)) {
-          const family = exactCallees.get(node);
-          if (family) return context.factory.createIdentifier(family);
+          const binding = exactCallees.get(node);
+          if (binding) return context.factory.createIdentifier(binding.family);
         }
         return ts.visitEachChild(node, visitor, context);
       };
@@ -649,11 +750,7 @@ function canonicalizeFactorySource(value: string): string {
     },
   ]);
   try {
-    if (
-      exactCallees.size === 0 &&
-      generatedSpanProperties.size === 0 &&
-      !nestedTemplateChanged
-    ) {
+    if (exactCallees.size === 0 && generatedSpanProperties.size === 0) {
       return value;
     }
     return ts
@@ -662,6 +759,95 @@ function canonicalizeFactorySource(value: string): string {
   } finally {
     transformed.dispose();
   }
+}
+
+function compilerOwnedRenderSourceEnvelope(
+  sourceFile: ts.SourceFile,
+  source: string,
+): { readonly payload: ts.NoSubstitutionTemplateLiteral } | undefined {
+  const parseDiagnostics = (
+    sourceFile as ts.SourceFile & { readonly parseDiagnostics?: readonly ts.Diagnostic[] }
+  ).parseDiagnostics;
+  if (
+    !source.startsWith('// @kovojs-ir\n') ||
+    (parseDiagnostics?.length ?? 0) > 0 ||
+    sourceFile.statements.length !== 1
+  ) {
+    return undefined;
+  }
+  const statement = sourceFile.statements[0];
+  if (
+    !statement ||
+    !ts.isFunctionDeclaration(statement) ||
+    statement.name?.text !== 'renderSource' ||
+    statement.asteriskToken ||
+    statement.typeParameters ||
+    statement.parameters.length !== 0 ||
+    statement.type ||
+    !statement.body ||
+    statement.body.statements.length !== 1 ||
+    statement.modifiers?.length !== 1 ||
+    statement.modifiers[0]?.kind !== ts.SyntaxKind.ExportKeyword
+  ) {
+    return undefined;
+  }
+  const returned = statement.body.statements[0];
+  return returned &&
+    ts.isReturnStatement(returned) &&
+    returned.expression &&
+    ts.isNoSubstitutionTemplateLiteral(returned.expression)
+    ? { payload: returned.expression }
+    : undefined;
+}
+
+function canonicalSourceTypeChecker(sourceFile: ts.SourceFile): ts.TypeChecker {
+  const options: ts.CompilerOptions = {
+    jsx: ts.JsxEmit.Preserve,
+    module: ts.ModuleKind.ESNext,
+    noLib: true,
+    noResolve: true,
+    target: ts.ScriptTarget.ES2024,
+  };
+  const host: ts.CompilerHost = {
+    fileExists: (fileName) => fileName === sourceFile.fileName,
+    getCanonicalFileName: (fileName) => fileName,
+    getCurrentDirectory: () => '/',
+    getDefaultLibFileName: () => '/lib.d.ts',
+    getNewLine: () => '\n',
+    getSourceFile: (fileName) => (fileName === sourceFile.fileName ? sourceFile : undefined),
+    readFile: (fileName) => (fileName === sourceFile.fileName ? sourceFile.text : undefined),
+    useCaseSensitiveFileNames: () => true,
+    writeFile: () => {},
+  };
+  return ts
+    .createProgram({ host, options, rootNames: [sourceFile.fileName] })
+    .getTypeChecker();
+}
+
+function exactNumericAstSpan(object: ts.ObjectLiteralExpression): boolean {
+  const properties = object.properties.filter(ts.isPropertyAssignment);
+  if (properties.length !== object.properties.length || properties.length < 2) return false;
+  const names = properties.map((property) => propertyNameText(property.name));
+  return (
+    names.every((name) => name !== undefined && spanCoordinateKeys.has(name)) &&
+    names.includes('start') &&
+    (names.includes('end') || names.includes('length')) &&
+    properties.every((property) => numericLiteralValue(property.initializer) !== undefined)
+  );
+}
+
+function numericLiteralValue(expression: ts.Expression): number | undefined {
+  const value = unwrapCanonicalExpression(expression);
+  if (ts.isNumericLiteral(value)) return Number(value.text);
+  if (
+    ts.isPrefixUnaryExpression(value) &&
+    (value.operator === ts.SyntaxKind.MinusToken || value.operator === ts.SyntaxKind.PlusToken) &&
+    ts.isNumericLiteral(value.operand)
+  ) {
+    const number = Number(value.operand.text);
+    return value.operator === ts.SyntaxKind.MinusToken ? -number : number;
+  }
+  return undefined;
 }
 
 function isGeneratedSecurityManifest(
@@ -705,6 +891,7 @@ function propertyNameText(name: ts.PropertyName): string | undefined {
 
 function canonicalImportDeclaration(
   declaration: ts.ImportDeclaration,
+  provenCalleeImports: ReadonlySet<ts.ImportSpecifier>,
   factory: ts.NodeFactory,
 ): ts.ImportDeclaration | undefined {
   if (
@@ -714,20 +901,9 @@ function canonicalImportDeclaration(
   ) {
     return declaration;
   }
-  const moduleName = declaration.moduleSpecifier.text;
-  const elements = declaration.importClause.namedBindings.elements.filter((specifier) => {
-    const imported = specifier.propertyName?.text ?? specifier.name.text;
-    if (
-      (moduleName === '@kovojs/server' || moduleName === '#kovo') &&
-      declarationFamilies.includes(imported as DeclarationFamily)
-    ) {
-      return false;
-    }
-    return !(
-      imported === 'app' &&
-      (moduleName.endsWith('/kovo.js') || moduleName.endsWith('/kovo.ts'))
-    );
-  });
+  const elements = declaration.importClause.namedBindings.elements.filter(
+    (specifier) => !provenCalleeImports.has(specifier),
+  );
   if (elements.length === 0 && !declaration.importClause.name) return undefined;
   return factory.updateImportDeclaration(
     declaration,

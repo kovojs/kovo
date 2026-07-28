@@ -9,7 +9,7 @@ import {
   type D1V6SealedAuthority,
 } from './evaluator-v6.ts';
 import { declarationFamilies, matrixCaseNames } from './fixture-v6.ts';
-import { semanticCollisionEvidence } from './project-v6.ts';
+import { canonicalSemanticSubject, semanticCollisionEvidence } from './project-v6.ts';
 import type { D1CriteriaV6, D1EvaluationV6, D1RawEvidenceV6 } from './types-v6.ts';
 
 const artifactNames = [
@@ -220,7 +220,89 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
       await expectMutationDetected(value, authority);
     },
   );
+  it('normalizes only proven structured spans and preserves arbitrary coordinate-shaped data', () => {
+    const canonical = canonicalSemanticSubject({
+      authored: {
+        end: 19,
+        length: 16,
+        nested: { length: 7, start: 3 },
+        start: 3,
+      },
+      binding: {
+        callableSpan: { end: 19, start: 3 },
+        factoryCallSpan: { length: 8, start: 4 },
+        root: 'query:contacts',
+      },
+    }).canonical;
 
+    expect(canonical).toEqual({
+      authored: {
+        end: 19,
+        length: 16,
+        nested: { length: 7, start: 3 },
+        start: 3,
+      },
+      binding: {
+        callableSpan: {},
+        factoryCallSpan: {},
+        root: 'query:contacts',
+      },
+    });
+  });
+
+  it('binds callee and import normalization to the exact lexical import symbol', () => {
+    const source = [
+      "import { mutation as unusedMutation, query as generatedQuery } from '#kovo';",
+      'export const declaration = generatedQuery({ load() { return 1; } });',
+      'export function unrelated(generatedQuery: (value: string) => string) {',
+      "  return generatedQuery('authored-shadow');",
+      '}',
+      'void unusedMutation;',
+      '',
+    ].join('\n');
+    const canonical = canonicalSemanticSubject({ source }).canonical as {
+      readonly source: string;
+    };
+
+    expect(canonical.source).toContain("import { mutation as unusedMutation } from '#kovo';");
+    expect(canonical.source).toContain('export const declaration = query(');
+    expect(canonical.source).toContain("return generatedQuery('authored-shadow');");
+  });
+
+  it('never reparses or rewrites source-like authored template literal text', () => {
+    const source = [
+      "import { query as generatedQuery } from '#kovo';",
+      'export const declaration = generatedQuery({ load() { return 1; } });',
+      "export const authored = `import { query as generatedQuery } from '#kovo';",
+      'generatedQuery({ load() { return \"authored-template\"; } });`;',
+      '',
+    ].join('\n');
+    const canonical = canonicalSemanticSubject({ source }).canonical as {
+      readonly source: string;
+    };
+
+    expect(canonical.source).toContain('export const declaration = query(');
+    expect(canonical.source).toContain(
+      'generatedQuery({ load() { return "authored-template"; } });`;',
+    );
+    expect(canonical.source).not.toContain(
+      'query({ load() { return "authored-template"; } });`;',
+    );
+
+    const nearMissEnvelope = [
+      '// @kovojs-ir',
+      'export function renderSource() {',
+      "  return `import { query as generatedQuery } from '#kovo';",
+      'generatedQuery({ load() { return "near-miss"; } });`;',
+      '}',
+      'export const authored = true;',
+      '',
+    ].join('\n');
+    expect(
+      (canonicalSemanticSubject({ source: nearMissEnvelope }).canonical as { source: string })
+        .source,
+    ).toBe(nearMissEnvelope);
+  });
   it.each(oneSidedMutations())('rejects one-sided mutation %s', async (name, mutate) => {
     expect(criteria.mutationContract.oneSided).toContain(name);
     const mutated = clone(evidence);
