@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, realpath, rename, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 
-import type { FreshArtifactSet } from './artifacts-v5.ts';
+import type { FreshArtifactSet } from './artifacts-v6.ts';
 
 export const declarationFamilies = [
   'endpoint',
@@ -38,9 +38,11 @@ export const matrixCaseNames = [
 ] as const;
 export type MatrixCaseName = (typeof matrixCaseNames)[number];
 
-const appId = '00000000-0000-4000-8000-000000000001';
-const providerKey = 'contacts-provider';
-const ownerKey = `${appId}:${providerKey}`;
+const appId = '00000000-0000-4000-8000-000000000006';
+const providerKey = 'contacts-provider-v6';
+const providerExportBinding = 'contactsProvider';
+const providerImportSpecifier = './provider.js';
+const ownerKey = ownerKeyFor(appId, providerKey);
 
 export interface PrototypeDiagnostic {
   readonly code: string;
@@ -96,8 +98,8 @@ export async function createPrototypeFixture(
   await cp(artifacts.packages.server.extractedPackageRoot, serverB, { recursive: true });
   await cp(artifacts.packages.core.extractedPackageRoot, core, { recursive: true });
   await cp(artifacts.packages.browser.extractedPackageRoot, browser, { recursive: true });
-  await installSyntheticRuntimeOverlay(serverA, 'server-copy-a');
-  await installSyntheticRuntimeOverlay(serverB, 'server-copy-b');
+  await installSyntheticRuntimeOverlay(serverA);
+  await installSyntheticRuntimeOverlay(serverB);
   await linkKovoDependency(serverA, 'core', core);
   await linkKovoDependency(serverA, 'browser', browser);
   await linkKovoDependency(serverB, 'core', core);
@@ -111,6 +113,7 @@ export async function createPrototypeFixture(
     exports: {
       './named': './src/named.ts',
       './provider': './src/kovo.ts',
+      './generated': './src/generated.ts',
       './star': './src/star.ts',
     },
     imports: { '#kovo': './.kovo/app.ts' },
@@ -122,6 +125,7 @@ export async function createPrototypeFixture(
     exports: {
       './named': './src/named.ts',
       './provider': './src/kovo.ts',
+      './generated': './src/generated.ts',
       './star': './src/star.ts',
     },
     imports: { '#kovo': './.kovo/app.ts' },
@@ -133,23 +137,37 @@ export async function createPrototypeFixture(
   await linkPackage(consumer, '@fixture/app', app);
   await linkPackage(consumer, '@fixture/secondary', duplicate);
 
-  const configFile = join(app, 'kovo.config.json');
-  await writeJson(configFile, {
-    appId,
-    providerKey,
-    providers: ['db', 'env'],
-  });
+  const configFile = join(app, 'src/kovo.config.ts');
+  await writeSource(configFile, configSource());
+  await writeSource(
+    join(app, 'src/provider.ts'),
+    `export const ${providerExportBinding} = { key: '${providerKey}' } as const;\n`,
+  );
   const providerFile = join(app, 'src/kovo.ts');
   await writeSource(providerFile, primaryProviderSource());
   await writeSource(join(app, 'src/named.ts'), "export { app } from './kovo.js';\n");
   await writeSource(join(app, 'src/star.ts'), "export * from './kovo.js';\n");
+  await writeSource(join(app, 'src/generated.ts'), "export * from '#kovo';\n");
+  await writeSource(join(app, 'src/generated-named.ts'), "export { query } from '#kovo';\n");
+  await writeSource(join(app, 'src/generated-star.ts'), "export * from '#kovo';\n");
   const secondaryProviderFile = join(duplicate, 'src/kovo.ts');
+  const duplicateConfigFile = join(duplicate, 'src/kovo.config.ts');
+  await writeSource(duplicateConfigFile, configSource());
+  await writeSource(
+    join(duplicate, 'src/provider.ts'),
+    [
+      "export const billingProvider = { key: 'billing-provider-v6' } as const;",
+      `export const ${providerExportBinding} = { key: '${providerKey}' } as const;`,
+      '',
+    ].join('\n'),
+  );
   await writeSource(secondaryProviderFile, secondaryProviderSource());
   await writeSource(
     join(duplicate, 'src/named.ts'),
     "export { app, sameOwnerApp } from './kovo.js';\n",
   );
   await writeSource(join(duplicate, 'src/star.ts'), "export * from './kovo.js';\n");
+  await writeSource(join(duplicate, 'src/generated.ts'), "export * from '#kovo';\n");
 
   const generatedApp = await generateBoundContract({
     artifacts,
@@ -166,8 +184,9 @@ export async function createPrototypeFixture(
     serverPackageRoot: serverA,
   });
   const generatedDuplicate = await generateBoundContract({
+    appExportName: 'sameOwnerApp',
     artifacts,
-    configFile,
+    configFile: duplicateConfigFile,
     packageRoot: duplicate,
     providerFile,
     serverPackageRoot: serverB,
@@ -289,7 +308,6 @@ export function stableFixturePath(fixture: PrototypeFixture, fileName: string): 
 
 async function installSyntheticRuntimeOverlay(
   packageRoot: string,
-  instanceId: string,
 ): Promise<void> {
   const manifestFile = join(packageRoot, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8')) as {
@@ -303,13 +321,14 @@ async function installSyntheticRuntimeOverlay(
     },
   };
   await writeJson(manifestFile, manifest);
-  await writeSource(join(packageRoot, 'd1/index.mjs'), syntheticRuntimeSource(instanceId));
+  await writeSource(join(packageRoot, 'd1/index.mjs'), syntheticRuntimeSource());
   await writeSource(join(packageRoot, 'd1/index.d.mts'), syntheticDeclarationSource());
 }
 
-function syntheticRuntimeSource(instanceId: string): string {
+function syntheticRuntimeSource(): string {
   return [
-    `export const d1PackageInstance = ${JSON.stringify(instanceId)};`,
+    "import { createHash } from 'node:crypto';",
+    'export const d1PackageInstance = "d1-v6-authenticated-overlay";',
     'const ownership = new WeakMap();',
     'const makeFactory = (kind, owner) => (...args) => {',
     '  const handle = Object.freeze({ args, kind });',
@@ -324,10 +343,16 @@ function syntheticRuntimeSource(instanceId: string): string {
     'export const query = makeFactory("query", unbound);',
     'export const route = makeFactory("route", unbound);',
     'export const task = makeFactory("task", unbound);',
+    'const ownerKeyFor = (metadata) => `d1v6:${createHash("sha256").update(JSON.stringify({',
+    '  appId: metadata.appId,',
+    '  providerExportBinding: metadata.providerExportBinding,',
+    '  providerImportSpecifier: metadata.providerImportSpecifier,',
+    '  providerKey: metadata.providerKey,',
+    '})).digest("hex")}`;',
     'export function createD1BoundFactories(metadata) {',
     '  const owner = Object.freeze({',
     '    appId: metadata.appId,',
-    '    ownerKey: `${metadata.appId}:${metadata.providerKey}`,',
+    '    ownerKey: ownerKeyFor(metadata),',
     '    providerKey: metadata.providerKey,',
     '  });',
     '  return Object.freeze({',
@@ -352,11 +377,11 @@ function syntheticRuntimeSource(instanceId: string): string {
     '      const handles = Object.values(registries).flat();',
     '      for (const handle of handles) {',
     '        const observed = inspectD1Ownership(handle);',
-    '        if (!observed || observed.ownerKey !== `${options.appId}:${options.providerKey}`) {',
+    '        if (!observed || observed.ownerKey !== ownerKeyFor(options)) {',
     '          throw new TypeError("D1OWN001 mixed app or Kovo package handle refused before assembly.");',
     '        }',
     '      }',
-    '      return Object.freeze({ handleCount: handles.length, ownerKey: `${options.appId}:${options.providerKey}` });',
+    '      return Object.freeze({ handleCount: handles.length, ownerKey: ownerKeyFor(options) });',
     '    },',
     '  });',
     '}',
@@ -385,10 +410,10 @@ function syntheticDeclarationSource(): string {
     '}',
     'export declare const d1PackageInstance: string;',
     'export declare function createD1BoundFactories<const AppId extends string>(',
-    '  metadata: { readonly appId: AppId; readonly providerKey: string },',
+    '  metadata: { readonly appId: AppId; readonly providerExportBinding: string; readonly providerImportSpecifier: string; readonly providerKey: string },',
     '): D1BoundFactories<AppId>;',
     'export declare function defineKovo<const AppId extends string>(',
-    '  options: { readonly appId: AppId; readonly db?: () => unknown; readonly env?: () => unknown; readonly providerKey: string },',
+    '  options: { readonly appId: AppId; readonly db?: () => unknown; readonly env?: () => unknown; readonly provider: unknown; readonly providerExportBinding: string; readonly providerImportSpecifier: string; readonly providerKey: string },',
     '): D1App<AppId>;',
     'export declare function inspectD1Ownership(value: unknown):',
     '  | { readonly appId: string; readonly kind: string; readonly ownerKey: string; readonly packageInstance: string; readonly providerKey: string }',
@@ -398,6 +423,7 @@ function syntheticDeclarationSource(): string {
 }
 
 async function generateBoundContract(options: {
+  readonly appExportName?: 'app' | 'sameOwnerApp';
   readonly artifacts: FreshArtifactSet;
   readonly configFile: string;
   readonly packageRoot: string;
@@ -409,27 +435,34 @@ async function generateBoundContract(options: {
   const context = providerContext(providerSource, options.providerFile);
   const generatedFile = join(options.packageRoot, '.kovo/app.ts');
   const manifestFile = join(options.packageRoot, '.kovo/app.manifest.json');
+  const providerImport = relative(dirname(generatedFile), options.providerFile)
+    .replaceAll('\\', '/')
+    .replace(/\.ts$/u, '.js');
+  const normalizedProviderImport = providerImport.startsWith('.')
+    ? providerImport
+    : `./${providerImport}`;
+  const importedApp = options.appExportName ?? 'app';
   const moduleSource = [
-    '/* kovo-app-contract-prototype/v5: compiler generated; do not edit */',
-    "import { createD1BoundFactories } from '@kovojs/server';",
-    "import type { D1BoundFactories } from '@kovojs/server';",
+    '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
+    `import { ${importedApp} as app } from ${JSON.stringify(normalizedProviderImport)};`,
+    "export { publicAccess } from '@kovojs/server';",
     'export const __kovoGeneratedContract = Object.freeze({',
     `  appId: ${JSON.stringify(context.appId)},`,
     `  compilerSourceSha256: ${JSON.stringify(options.artifacts.packages.compiler.sourceSha256)},`,
+    `  ownerKey: ${JSON.stringify(ownerKeyFor(context.appId, context.providerKey))},`,
+    `  providerExportBinding: ${JSON.stringify(providerExportBinding)},`,
+    `  providerImportSpecifier: ${JSON.stringify(providerImportSpecifier)},`,
     `  providerKey: ${JSON.stringify(context.providerKey)},`,
     `  serverPackedContentsSha256: ${JSON.stringify(
       options.artifacts.packages.server.packedContents.digest,
     )},`,
     '});',
-    'const bound = createD1BoundFactories(__kovoGeneratedContract);',
-    'type Bound = D1BoundFactories<typeof __kovoGeneratedContract.appId>;',
-    "export const endpoint: Bound['endpoint'] = bound.endpoint;",
-    "export const layout: Bound['layout'] = bound.layout;",
-    "export const mutation: Bound['mutation'] = bound.mutation;",
-    "export const publicAccess: Bound['publicAccess'] = bound.publicAccess;",
-    "export const query: Bound['query'] = bound.query;",
-    "export const route: Bound['route'] = bound.route;",
-    "export const task: Bound['task'] = bound.task;",
+    'export const endpoint = app.endpoint;',
+    'export const layout = app.layout;',
+    'export const mutation = app.mutation;',
+    'export const query = app.query;',
+    'export const route = app.route;',
+    'export const task = app.task;',
     '',
   ].join('\n');
   const manifest = {
@@ -438,10 +471,12 @@ async function generateBoundContract(options: {
     completed: 'complete',
     configSha256: sha256(configSource),
     generatedModuleSha256: sha256(moduleSource),
-    ownerKey: `${context.appId}:${context.providerKey}`,
+    ownerKey: ownerKeyFor(context.appId, context.providerKey),
+    providerExportBinding,
+    providerImportSpecifier,
     providerKey: context.providerKey,
     providerSourceSha256: sha256(providerSource),
-    schema: 'kovo.generated-app-contract/v5',
+    schema: 'kovo.generated-app-contract/v6',
     serverPackedContentsSha256: options.artifacts.packages.server.packedContents.digest,
   };
   await atomicWrite(generatedFile, moduleSource);
@@ -487,7 +522,6 @@ async function writeMatrixFixtures(options: {
   };
   const definition = '{ load() { return { status: "ok" } as const; } }';
   const providerImport = "import { app } from '../kovo.js';";
-  const armB = `import { query } from '#kovo';\nexport const item = query(${definition});\n`;
 
   await write(
     'ordinary-local-import',
@@ -495,28 +529,48 @@ async function writeMatrixFixtures(options: {
     options.app,
     `${providerImport}\nexport const item = app.query(${definition});\n`,
   );
-  await write('ordinary-local-import', 'arm-b', options.app, armB);
+  await write(
+    'ordinary-local-import',
+    'arm-b',
+    options.app,
+    `import { query } from '#kovo';\nexport const item = query(${definition});\n`,
+  );
   await write(
     'named-re-export',
     'arm-a',
     options.app,
     `import { app } from '../named.js';\nexport const item = app.query(${definition});\n`,
   );
-  await write('named-re-export', 'arm-b', options.app, armB);
+  await write(
+    'named-re-export',
+    'arm-b',
+    options.app,
+    `import { query } from '../generated-named.js';\nexport const item = query(${definition});\n`,
+  );
   await write(
     'star-re-export',
     'arm-a',
     options.app,
     `import { app } from '../star.js';\nexport const item = app.query(${definition});\n`,
   );
-  await write('star-re-export', 'arm-b', options.app, armB);
+  await write(
+    'star-re-export',
+    'arm-b',
+    options.app,
+    `import { query } from '../generated-star.js';\nexport const item = query(${definition});\n`,
+  );
   await write(
     'aliased-import',
     'arm-a',
     options.app,
     `import { app as contacts } from '../kovo.js';\nexport const item = contacts.query(${definition});\n`,
   );
-  await write('aliased-import', 'arm-b', options.app, armB);
+  await write(
+    'aliased-import',
+    'arm-b',
+    options.app,
+    `import { query as contactsQuery } from '#kovo';\nexport const item = contactsQuery(${definition});\n`,
+  );
 
   const rejected: Readonly<
     Record<Exclude<MatrixCaseName, string & `duplicate-${string}`>, string>
@@ -550,7 +604,43 @@ async function writeMatrixFixtures(options: {
     'joined-receiver',
   ] as const) {
     await write(name, 'arm-a', options.app, rejected[name]);
-    await write(name, 'arm-b', options.app, armB);
+  }
+  const generatedImport = "import { query } from '#kovo';";
+  const generatedNamespaceImport = "import * as generated from '#kovo';";
+  const rejectedArmB: Readonly<Record<(typeof matrixCaseNames)[number], string>> = {
+    'aliased-import': '',
+    'array-derived-receiver': `${generatedImport}\nconst active = [query][0]!;\nexport const item = active(${definition});\n`,
+    'computed-factory-access': `${generatedNamespaceImport}\nexport const item = generated['query'](${definition});\n`,
+    'destructured-factory': `${generatedNamespaceImport}\nconst { query } = generated;\nexport const item = query(${definition});\n`,
+    'duplicate-direct-copies': '',
+    'duplicate-named-reexport-copies': '',
+    'duplicate-same-owner-key-copies': '',
+    'duplicate-star-reexport-copies': '',
+    'dynamic-factory-selection': `${generatedImport}\ndeclare const choose: boolean;\nconst factory = ({ left: query, right: query })[choose ? 'left' : 'right'];\nexport const item = factory(${definition});\n`,
+    'joined-receiver': `${generatedImport}\ndeclare const choose: boolean;\nconst active = choose ? query : query;\nexport const item = active(${definition});\n`,
+    'monorepo-shared-app-package': '',
+    'mutable-receiver': `${generatedImport}\nlet active = query;\nexport const item = active(${definition});\n`,
+    'named-re-export': '',
+    'object-derived-receiver': `${generatedImport}\nconst active = ({ value: query }).value;\nexport const item = active(${definition});\n`,
+    'ordinary-local-import': '',
+    'reassigned-receiver': `${generatedImport}\nconst active = query;\n// @ts-expect-error D1 probe\nactive = query;\nexport const item = active(${definition});\n`,
+    'star-re-export': '',
+    'wrapper-function': `${generatedImport}\nconst wrapped = (value: Parameters<typeof query>[0]) => query(value);\nexport const item = wrapped(${definition});\n`,
+    'wrapper-returned-receiver': `${generatedImport}\nconst select = () => query;\nexport const item = select()(${definition});\n`,
+  };
+  for (const name of [
+    'destructured-factory',
+    'wrapper-function',
+    'dynamic-factory-selection',
+    'object-derived-receiver',
+    'array-derived-receiver',
+    'wrapper-returned-receiver',
+    'computed-factory-access',
+    'mutable-receiver',
+    'reassigned-receiver',
+    'joined-receiver',
+  ] as const) {
+    await write(name, 'arm-b', options.app, rejectedArmB[name]);
   }
   await write(
     'monorepo-shared-app-package',
@@ -558,7 +648,12 @@ async function writeMatrixFixtures(options: {
     options.shared,
     `import { app } from '@fixture/app/provider';\nexport const item = app.query(${definition});\n`,
   );
-  await write('monorepo-shared-app-package', 'arm-b', options.shared, armB);
+  await write(
+    'monorepo-shared-app-package',
+    'arm-b',
+    options.shared,
+    `import { query } from '#kovo';\nexport const item = query(${definition});\n`,
+  );
 
   const duplicateSource = (
     left: '/named' | '/provider' | '/star',
@@ -579,9 +674,16 @@ async function writeMatrixFixtures(options: {
     ['duplicate-same-owner-key-copies', '/provider', '/provider', true],
   ] as const;
   for (const [name, left, right, sameOwner] of duplicateCases) {
-    const source = duplicateSource(left, right, sameOwner);
-    await write(name, 'arm-a', options.consumer, source);
-    await write(name, 'arm-b', options.consumer, source);
+    await write(name, 'arm-a', options.consumer, duplicateSource(left, right, sameOwner));
+    const generatedSource = [
+      "import { query as primaryQuery } from '@fixture/app/generated';",
+      "import { query as secondaryQuery } from '@fixture/secondary/generated';",
+      `export const first = primaryQuery(${definition});`,
+      `export const second = secondaryQuery(${definition});`,
+      `export const duplicatePath = ${JSON.stringify(`${left}:${right}:${String(sameOwner)}`)};`,
+      '',
+    ].join('\n');
+    await write(name, 'arm-b', options.consumer, generatedSource);
   }
   return entries;
 }
@@ -636,12 +738,12 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
   }
   const definition =
     family === 'endpoint'
-      ? `'/probe', { access: publicAccess('D1 v5'), handler() { return new Response('ok'); } }`
+      ? `'/probe', { access: publicAccess('D1 v6'), handler() { return new Response('ok'); } }`
       : family === 'mutation'
-        ? `{ access: publicAccess('D1 v5'), handler() { return { ok: true } as const; } }`
+        ? `{ access: publicAccess('D1 v6'), handler() { return { ok: true } as const; } }`
         : family === 'task'
           ? `{ run() { return { ok: true } as const; } }`
-          : `{ access: publicAccess('D1 v5'), load() { return { status: 'ok' } as const; } }`;
+          : `{ access: publicAccess('D1 v6'), load() { return { status: 'ok' } as const; } }`;
   return `${imports}\nexport const declaration = ${factory}(${definition});\n`;
 }
 
@@ -676,6 +778,7 @@ async function writeRuntimeFixtures(app: string): Promise<Record<AppContractArm,
 function primaryProviderSource(): string {
   return [
     "import { defineKovo } from '@kovojs/server';",
+    `import { ${providerExportBinding} } from '${providerImportSpecifier}';`,
     'const probe = globalThis as typeof globalThis & { __d1ProviderEvaluations?: number };',
     'const lazyDb = () => { probe.__d1ProviderEvaluations = (probe.__d1ProviderEvaluations ?? 0) + 1; return { source: "db" } as const; };',
     'const lazyEnv = () => { probe.__d1ProviderEvaluations = (probe.__d1ProviderEvaluations ?? 0) + 1; return { stage: "test" } as const; };',
@@ -683,6 +786,9 @@ function primaryProviderSource(): string {
     `  appId: '${appId}',`,
     '  db: lazyDb,',
     '  env: lazyEnv,',
+    `  provider: ${providerExportBinding},`,
+    `  providerExportBinding: '${providerExportBinding}',`,
+    `  providerImportSpecifier: '${providerImportSpecifier}',`,
     `  providerKey: '${providerKey}',`,
     '});',
     '',
@@ -692,16 +798,48 @@ function primaryProviderSource(): string {
 function secondaryProviderSource(): string {
   return [
     "import { defineKovo } from '@kovojs/server';",
+    "import { billingProvider, contactsProvider } from './provider.js';",
     'export const app = defineKovo({',
     `  appId: '${appId}',`,
-    "  providerKey: 'billing-provider',",
+    '  provider: billingProvider,',
+    "  providerExportBinding: 'billingProvider',",
+    `  providerImportSpecifier: '${providerImportSpecifier}',`,
+    "  providerKey: 'billing-provider-v6',",
     '});',
     'export const sameOwnerApp = defineKovo({',
     `  appId: '${appId}',`,
+    `  provider: ${providerExportBinding},`,
+    `  providerExportBinding: '${providerExportBinding}',`,
+    `  providerImportSpecifier: '${providerImportSpecifier}',`,
     `  providerKey: '${providerKey}',`,
     '});',
     '',
   ].join('\n');
+}
+
+function configSource(): string {
+  return [
+    `import { ${providerExportBinding} } from '${providerImportSpecifier}';`,
+    'export default Object.freeze({',
+    `  appId: '${appId}',`,
+    `  provider: ${providerExportBinding},`,
+    `  providerExportBinding: '${providerExportBinding}',`,
+    `  providerImportSpecifier: '${providerImportSpecifier}',`,
+    `  providerKey: '${providerKey}',`,
+    '});',
+    '',
+  ].join('\n');
+}
+
+function ownerKeyFor(observedAppId: string, observedProviderKey: string): string {
+  return `d1v6:${sha256(
+    JSON.stringify({
+      appId: observedAppId,
+      providerExportBinding,
+      providerImportSpecifier,
+      providerKey: observedProviderKey,
+    }),
+  )}`;
 }
 
 async function linkFixtureDependencies(

@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "measure": "KOVO_D1_MEASURE_MODE=write vitest --run src/measure-v5.test.ts",
-    "measure:verify": "KOVO_D1_MEASURE_MODE=verify vitest --run src/measure-v5.test.ts",
-    "test": "vitest --run src/index-v5.test.ts"
+    "measure": "KOVO_D1_V6_MEASURE_MODE=write vitest --run src/measure-v6.test.ts",
+    "measure:verify": "KOVO_D1_V6_MEASURE_MODE=verify vitest --run src/measure-v6.test.ts",
+    "test": "vitest --run src/index-v6.test.ts"
   },
   "devDependencies": {
     "@types/node": "25.9.2",

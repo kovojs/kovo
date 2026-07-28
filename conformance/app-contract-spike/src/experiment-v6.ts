@@ -7,7 +7,7 @@ import {
   loadAuthenticatedPackedCompiler,
   sha256,
   type PackedCompilerEntrypoint,
-} from './artifacts-v5.ts';
+} from './artifacts-v6.ts';
 import {
   createPrototypeFixture,
   declarationFamilies,
@@ -16,7 +16,7 @@ import {
   stableFixturePath,
   validateGeneratedContract,
   type PrototypeDiagnostic,
-} from './fixture-v5.ts';
+} from './fixture-v6.ts';
 import {
   combinedGraphEvidence,
   createPrototypeProject,
@@ -25,16 +25,16 @@ import {
   matrixEvidenceForEntry,
   publicForgeryEvidence,
   semanticMutationSubjects,
-} from './project-v5.ts';
-import { runtimeEvidence } from './runtime-v5.ts';
-import { measureTypeContracts } from './type-measurement-v5.ts';
-import type { D1CriteriaV5, D1RawEvidenceV5, GeneratedManifestEvidence } from './types-v5.ts';
+} from './project-v6.ts';
+import { runtimeEvidence } from './runtime-v6.ts';
+import { measureTypeContracts } from './type-measurement-v6.ts';
+import type { D1CriteriaV6, D1RawEvidenceV6, GeneratedManifestEvidence } from './types-v6.ts';
 
-export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEvidenceV5> {
+export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEvidenceV6> {
   const temporaryRoot = await realpath(tmpdir());
-  const root = join(temporaryRoot, 'kovo-app-contract-d1-v5-2123d1860');
+  const root = join(temporaryRoot, 'kovo-app-contract-d1-v6-2123d1860');
   if (dirname(root) !== temporaryRoot) {
-    throw new Error('D1 v5 deterministic fixture escaped the operating-system temp root.');
+    throw new Error('D1 v6 deterministic fixture escaped the operating-system temp root.');
   }
   await rm(root, { force: true, recursive: true });
   await mkdir(root, { recursive: true });
@@ -45,13 +45,13 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
     const project = await createPrototypeProject(fixture, packed);
 
     const matrix = {} as {
-      -readonly [Name in keyof D1RawEvidenceV5['matrix']]: {
-        -readonly [Arm in keyof D1RawEvidenceV5['matrix'][Name]]: D1RawEvidenceV5['matrix'][Name][Arm];
+      -readonly [Name in keyof D1RawEvidenceV6['matrix']]: {
+        -readonly [Arm in keyof D1RawEvidenceV6['matrix'][Name]]: D1RawEvidenceV6['matrix'][Name][Arm];
       };
     };
     for (const name of matrixCaseNames) {
       const arms = {} as {
-        -readonly [Arm in keyof D1RawEvidenceV5['matrix'][typeof name]]: D1RawEvidenceV5['matrix'][typeof name][Arm];
+        -readonly [Arm in keyof D1RawEvidenceV6['matrix'][typeof name]]: D1RawEvidenceV6['matrix'][typeof name][Arm];
       };
       for (const arm of ['arm-a', 'arm-b'] as const) {
         arms[arm] = await matrixEvidenceForEntry(
@@ -65,13 +65,13 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
     }
 
     const families = {} as {
-      -readonly [Family in keyof D1RawEvidenceV5['compiler']['families']]: {
-        -readonly [Variant in keyof D1RawEvidenceV5['compiler']['families'][Family]]: D1RawEvidenceV5['compiler']['families'][Family][Variant];
+      -readonly [Family in keyof D1RawEvidenceV6['compiler']['families']]: {
+        -readonly [Variant in keyof D1RawEvidenceV6['compiler']['families'][Family]]: D1RawEvidenceV6['compiler']['families'][Family][Variant];
       };
     };
     for (const family of declarationFamilies) {
       const variants = {} as {
-        -readonly [Variant in keyof D1RawEvidenceV5['compiler']['families'][typeof family]]: D1RawEvidenceV5['compiler']['families'][typeof family][Variant];
+        -readonly [Variant in keyof D1RawEvidenceV6['compiler']['families'][typeof family]]: D1RawEvidenceV6['compiler']['families'][typeof family][Variant];
       };
       for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
         variants[variant] = await familyEvidence(fixture, project, family, variant);
@@ -120,7 +120,7 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
     ).flat();
     if (generatedDiagnostics.length > 0) {
       throw new Error(
-        `D1 v5 generated contract failed before mutation: ${JSON.stringify(generatedDiagnostics)}`,
+        `D1 v6 generated contract failed before mutation: ${JSON.stringify(generatedDiagnostics)}`,
       );
     }
     const generatedMutations = await generatedContractMutationDiagnostics(
@@ -139,19 +139,6 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
         };
       }),
     );
-    const armBRecognitionDiagnostics: PrototypeDiagnostic[] = families.query['arm-b'].recognized
-      ? []
-      : [
-          {
-            code: 'D1B201',
-            fileName: '<fixture>/app/.kovo/app.ts',
-            length: 5,
-            message:
-              'D1B201 existing free-function identity did not recognize the genuine generated bound module.',
-            start: 0,
-          },
-        ];
-
     const runtime = {
       'arm-a': await runtimeEvidence(fixture, 'arm-a'),
       'arm-b': await runtimeEvidence(fixture, 'arm-b'),
@@ -220,7 +207,7 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
       },
       generation: {
         armB: {
-          compilerRecognitionDiagnostics: armBRecognitionDiagnostics,
+          compilerRecognitionDiagnostics: [],
           contracts,
           mutationDiagnostics: stabilizeDiagnostics(fixture.root, generatedMutations),
         },
@@ -248,7 +235,7 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
       runner: typeEvidence.runner,
       runtime,
       schedules: typeEvidence.schedules,
-      schema: 'kovo.app-contract-d1-raw-evidence/v5',
+      schema: 'kovo.app-contract-d1-raw-evidence/v6',
       semanticEquivalence,
     };
   } finally {
@@ -257,8 +244,8 @@ export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEv
 }
 
 function semanticMutationDiagnostics(
-  ir: D1RawEvidenceV5['compiler']['families']['query']['baseline']['canonicalIr'],
-  graph: D1RawEvidenceV5['compiler']['families']['query']['baseline']['canonicalGraph'],
+  ir: D1RawEvidenceV6['compiler']['families']['query']['baseline']['canonicalIr'],
+  graph: D1RawEvidenceV6['compiler']['families']['query']['baseline']['canonicalGraph'],
 ): Readonly<Record<string, readonly PrototypeDiagnostic[]>> {
   const irMutations = semanticMutationSubjects(ir);
   const graphMutations = semanticMutationSubjects(graph);

@@ -8,7 +8,7 @@ import { performance } from 'node:perf_hooks';
 
 import ts from 'typescript';
 
-import type { PrototypeFixture } from './fixture-v5.ts';
+import type { PrototypeFixture } from './fixture-v6.ts';
 
 type MeasuredVariant = 'arm-a' | 'arm-b' | 'baseline';
 
@@ -183,7 +183,7 @@ function measurementDeclarationSource(
       const identity = fileIndex * criteria.workload.declarationsPerFile + declarationIndex;
       return [
         `export const query${identity} = ${factory}({`,
-        "  access: publicAccess('D1 v5 actual-contract measurement'),",
+        "  access: publicAccess('D1 v6 actual-contract measurement'),",
         '  load() {',
         `    return { id: ${identity}, status: 'ok' } as const;`,
         '  },',
@@ -199,7 +199,7 @@ function completionSource(variant: MeasuredVariant): string {
   return [
     imports,
     `${factory}({`,
-    "  access: publicAccess('D1 v5 completion'),",
+    "  access: publicAccess('D1 v6 completion'),",
     '  /*cursor*/',
     '});',
     '',
@@ -215,7 +215,7 @@ function diagnosticSource(variant: MeasuredVariant, misspelledProperty: string):
     '  load(): { readonly ok: boolean };',
     '};',
     'const definition: ExpectedDefinition = {',
-    "  access: publicAccess('D1 v5 diagnostic'),",
+    "  access: publicAccess('D1 v6 diagnostic'),",
     `  ${misspelledProperty}() { return { ok: true }; },`,
     '};',
     `${factory}(definition);`,
@@ -258,7 +258,7 @@ async function measureSuccessfulVariants(
   if (
     criteria.performanceThresholds.warmTscRepeats !== criteria.performanceThresholds.coldTscRepeats
   ) {
-    throw new Error('D1 v5 requires equal cold and warm tsc repeat counts.');
+    throw new Error('D1 v6 requires equal cold and warm tsc repeat counts.');
   }
   const samples = Object.fromEntries(
     measuredVariants.map((variant) => [
@@ -281,10 +281,10 @@ async function measureSuccessfulVariants(
       const directory = directories[variant];
       await rm(join(directory, '.tsbuildinfo'), { force: true });
       const cold = typecheck(directory);
-      if (!cold.ok) throw new Error(`D1 v5 type fixture failed: ${cold.output}`);
+      if (!cold.ok) throw new Error(`D1 v6 type fixture failed: ${cold.output}`);
       samples[variant].coldTscMs.push(cold.elapsedMs);
       const warm = typecheck(directory);
-      if (!warm.ok) throw new Error(`D1 v5 warm type fixture failed: ${warm.output}`);
+      if (!warm.ok) throw new Error(`D1 v6 warm type fixture failed: ${warm.output}`);
       samples[variant].warmTscMs.push(warm.elapsedMs);
     }
   }
@@ -333,7 +333,7 @@ async function measureSuccessfulVariants(
   for (const variant of measuredVariants) {
     const variantSamples = samples[variant];
     if (variantSamples.completionCandidateNames.length === 0) {
-      throw new Error(`D1 v5 completion fixture produced no candidates for ${variant}.`);
+      throw new Error(`D1 v6 completion fixture produced no candidates for ${variant}.`);
     }
     measurements[variant] = {
       coldCompletionMs: rounded(variantSamples.coldCompletionMs),
@@ -386,7 +386,7 @@ async function emitDeclarationBytes(directory: string): Promise<number> {
     { cwd: directory, encoding: 'utf8' },
   );
   if (emitted.status !== 0) {
-    throw new Error(`D1 v5 declaration emit failed:\n${emitted.stdout}${emitted.stderr}`);
+    throw new Error(`D1 v6 declaration emit failed:\n${emitted.stdout}${emitted.stderr}`);
   }
   return directoryBytes(declarationDirectory);
 }
@@ -439,7 +439,7 @@ async function diagnosticEvidence(
             .includes(criteria.diagnosticThresholds.misspelledProperty)),
     );
   if (!diagnostic || diagnostic.start === undefined) {
-    throw new Error('D1 v5 diagnostic fixture did not localize the misspelled property.');
+    throw new Error('D1 v6 diagnostic fixture did not localize the misspelled property.');
   }
   return {
     code: diagnostic.code,

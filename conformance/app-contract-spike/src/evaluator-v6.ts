@@ -8,20 +8,20 @@ import {
   sha256,
   type ContentSubject,
   type FileSubject,
-} from './artifacts-v5.ts';
+} from './artifacts-v6.ts';
 import {
   declarationFamilies,
   matrixCaseNames,
   type AppContractArm,
   type PrototypeDiagnostic,
-} from './fixture-v5.ts';
+} from './fixture-v6.ts';
 import type {
   ArmEvaluation,
-  D1CriteriaV5,
-  D1EvaluationV5,
-  D1RawEvidenceV5,
+  D1CriteriaV6,
+  D1EvaluationV6,
+  D1RawEvidenceV6,
   EvaluationGate,
-} from './types-v5.ts';
+} from './types-v6.ts';
 
 const arms = ['arm-a', 'arm-b'] as const;
 const exactRawKeys = [
@@ -43,16 +43,16 @@ const exactRawKeys = [
   'semanticEquivalence',
 ] as const;
 
-export async function evaluateD1V5(
-  criteria: D1CriteriaV5,
-  evidence: D1RawEvidenceV5,
-): Promise<D1EvaluationV5> {
+export async function evaluateD1V6(
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
+): Promise<D1EvaluationV6> {
   assertExactKeys(evidence, exactRawKeys, 'raw evidence');
   if (
-    criteria.schema !== 'kovo.app-contract-d1-criteria/v5' ||
-    evidence.schema !== 'kovo.app-contract-d1-raw-evidence/v5'
+    criteria.schema !== 'kovo.app-contract-d1-criteria/v6' ||
+    evidence.schema !== 'kovo.app-contract-d1-raw-evidence/v6'
   ) {
-    throw new Error('D1 v5 malformed evidence: schema mismatch.');
+    throw new Error('D1 v6 malformed evidence: schema mismatch.');
   }
   assertExactKeySet(Object.keys(criteria.matrix), matrixCaseNames, 'criteria matrix cases');
   assertExactKeySet(Object.keys(evidence.matrix), matrixCaseNames, 'evidence matrix cases');
@@ -100,17 +100,17 @@ export async function evaluateD1V5(
       v3: 'invalidated',
       v4: 'invalidated',
     },
-    schema: 'kovo.app-contract-d1-evaluation/v5',
+    schema: 'kovo.app-contract-d1-evaluation/v6',
   };
 }
 
 async function artifactGate(
-  criteria: D1CriteriaV5,
-  evidence: D1RawEvidenceV5,
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
 ): Promise<EvaluationGate> {
   const failures: string[] = [];
   const packageNames = evidence.provenance.packages.map((entry) => entry.name).sort();
-  const expectedNames = [...criteria.artifactThresholds.exactPackageNames].sort();
+  const expectedNames = [...criteria.artifactContract.exactPackageNames].sort();
   if (!equalJson(packageNames, expectedNames)) failures.push('packed package set is not exact');
   if (!evidence.provenance.frameworkSourceTreeClean) {
     failures.push('framework source tree was not clean');
@@ -170,8 +170,8 @@ async function artifactGate(
 }
 
 function matrixGate(
-  criteria: D1CriteriaV5,
-  evidence: D1RawEvidenceV5,
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
   arm: AppContractArm,
 ): EvaluationGate {
   const failures: string[] = [];
@@ -214,28 +214,14 @@ function matrixGate(
 }
 
 function compilerGate(
-  criteria: D1CriteriaV5,
-  evidence: D1RawEvidenceV5,
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
   arm: AppContractArm,
 ): EvaluationGate {
   const failures: string[] = [];
-  if (arm === 'arm-b') {
-    if (
-      !equalJson(
-        evidence.generation.armB.compilerRecognitionDiagnostics.map((entry) => entry.code),
-        ['D1B201'],
-      )
-    ) {
-      failures.push('genuine generated bound module was not tested through existing identity');
-    } else {
-      failures.push('existing free-function identity did not recognize generated binding');
-    }
-    return gate(failures);
-  }
-
   for (const family of declarationFamilies) {
     const baseline = evidence.compiler.families[family].baseline;
-    const candidate = evidence.compiler.families[family]['arm-a'];
+    const candidate = evidence.compiler.families[family][arm];
     validateSemanticSubject(baseline.canonicalIr, failures, `${family} baseline IR`);
     validateSemanticSubject(candidate.canonicalIr, failures, `${family} Arm A IR`);
     validateSemanticSubject(baseline.canonicalGraph, failures, `${family} baseline graph`);
@@ -247,29 +233,29 @@ function compilerGate(
       !equalJson(baseline.canonicalGraph.canonical, candidate.canonicalGraph.canonical) ||
       baseline.canonicalGraph.digest !== candidate.canonicalGraph.digest
     ) {
-      failures.push(`${family} full canonical IR/graph differs from baseline`);
+      failures.push(`${family} ${arm} full canonical IR/graph differs from baseline`);
     }
   }
   const baselineGraph = evidence.compiler.combinedGraphs.baseline;
-  const armGraph = evidence.compiler.combinedGraphs['arm-a'];
+  const armGraph = evidence.compiler.combinedGraphs[arm];
   validateSemanticSubject(baselineGraph, failures, 'combined baseline graph');
   validateSemanticSubject(armGraph, failures, 'combined Arm A graph');
   if (
     baselineGraph.digest !== armGraph.digest ||
     !equalJson(baselineGraph.canonical, armGraph.canonical)
   ) {
-    failures.push('combined Arm A graph differs from independently assembled baseline graph');
+    failures.push(`combined ${arm} graph differs from independently assembled baseline graph`);
   }
   validateDiagnosticMap(
     evidence.semanticEquivalence.mutationDiagnostics,
-    criteria.semanticEquivalenceContract.mutations,
+    criteria.semanticEquivalenceContract.semanticMutations,
     failures,
     'semantic mutation',
   );
   return gate(failures);
 }
 
-function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): EvaluationGate {
+function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): EvaluationGate {
   const failures: string[] = [];
   for (const arm of arms) {
     const runtime = evidence.runtime[arm];
@@ -278,16 +264,18 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
       runtime.assembledHandleCount !== 6 ||
       !equalJson(runtime.ownedFamilies, declarationFamilies) ||
       runtime.providerEvaluationCount !== 0 ||
-      !runtime.crossAppError.includes(criteria.diagnosticThresholds.crossAppDiagnosticCode)
+      !runtime.crossAppError.includes('D1OWN001')
     ) {
       failures.push(`${arm} runtime ownership/assembly contract failed`);
     }
   }
   for (const family of declarationFamilies) {
-    const entry = evidence.compiler.families[family]['arm-a'];
-    validateFileBinding(entry.sourceSha256, entry.sourceSubject, failures, `${family} source`);
-    if (entry.compiledOwnerKey !== evidence.runtime['arm-a'].ownerKey) {
-      failures.push(`${family} compiled owner differs from runtime owner`);
+    for (const arm of arms) {
+      const entry = evidence.compiler.families[family][arm];
+      validateFileBinding(entry.sourceSha256, entry.sourceSubject, failures, `${family}/${arm} source`);
+      if (entry.compiledOwnerKey !== evidence.runtime[arm].ownerKey) {
+        failures.push(`${family}/${arm} compiled owner differs from runtime owner`);
+      }
     }
   }
   for (const name of matrixCaseNames) {
@@ -314,11 +302,17 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
   );
   for (const contract of evidence.generation.armB.contracts) {
     const { manifest } = contract;
-    const required = criteria.artifactThresholds.generatedManifestDigestFieldsRequired;
+    const required = [
+      'compilerSourceSha256',
+      'configSha256',
+      'generatedModuleSha256',
+      'providerSourceSha256',
+      'serverPackedContentsSha256',
+    ] as const;
     if (
       manifest.ownerKey !== evidence.runtime['arm-b'].ownerKey ||
       manifest.completed !== 'complete' ||
-      manifest.schema !== 'kovo.generated-app-contract/v5' ||
+      manifest.schema !== 'kovo.generated-app-contract/v6' ||
       required.some(
         (field) =>
           typeof manifest[field as keyof typeof manifest] !== 'string' ||
@@ -353,7 +347,14 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
   }
   validateDiagnosticMap(
     evidence.resolverIntegrity,
-    criteria.resolverIntegrityMutations,
+    {
+      'blank-owner-key': 'D1A105',
+      'blank-server-package-root': 'D1A106',
+      'duplicate-span': 'D1A101',
+      'overlapping-span': 'D1A102',
+      'stale-source-reparse': 'D1A104',
+      'wrong-node-span': 'D1A103',
+    },
     failures,
     'resolver mutation',
   );
@@ -372,12 +373,17 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
   );
   validateDiagnosticMap(
     evidence.evidenceBindings.mutationDiagnostics,
-    criteria.evidenceBindingContract.mutations,
+    {
+      'matrix-source': 'D1E202',
+      'packed-compiler-entrypoint': 'D1E204',
+      'runtime-owner': 'D1E201',
+      'server-copy-digest': 'D1E203',
+    },
     failures,
     'evidence-binding mutation',
   );
   if (
-    criteria.immutableReceiverContract.unprovedAppDerivedCallMustDiagnose &&
+    criteria.receiverFlowContract.unprovedAppDerivedCallMustDiagnose &&
     !equalJson(
       evidence.receiverFlow.nestedAppDerived.diagnostics.map((entry) => entry.code),
       ['D1A007'],
@@ -387,7 +393,7 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
   }
   const unrelated = evidence.receiverFlow.unrelatedSameNamedMember;
   if (
-    criteria.immutableReceiverContract.unrelatedSameNamedMemberMustRemainUnrecognized &&
+    criteria.receiverFlowContract.unrelatedSameNamedMemberMustRemainUnrecognized &&
     (unrelated.diagnostics.length !== 0 ||
       unrelated.recognizedFactoryCount !== 0 ||
       unrelated.ownerKey !== null)
@@ -397,7 +403,7 @@ function ownershipGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Evalu
   return gate(failures);
 }
 
-function publicForgeryGate(evidence: D1RawEvidenceV5): EvaluationGate {
+function publicForgeryGate(evidence: D1RawEvidenceV6): EvaluationGate {
   const failures: string[] = [];
   if (
     evidence.publicForgery.fakeAccessAsPublicAccess.componentPublicAccess ||
@@ -417,7 +423,7 @@ function publicForgeryGate(evidence: D1RawEvidenceV5): EvaluationGate {
   return gate(failures);
 }
 
-function diagnosticGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): EvaluationGate {
+function diagnosticGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): EvaluationGate {
   const failures: string[] = [];
   for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
     const diagnostic = evidence.diagnostics[variant];
@@ -425,7 +431,8 @@ function diagnosticGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Eval
       diagnostic.code !== criteria.diagnosticThresholds.typescriptCode ||
       diagnostic.length !== criteria.diagnosticThresholds.spanLength ||
       diagnostic.start !== diagnostic.expectedStart ||
-      diagnostic.message.length > criteria.diagnosticThresholds.messageCharactersMaximum ||
+      diagnostic.message.length >
+        criteria.diagnosticThresholds.matrixDiagnosticMessageCharactersMaximum ||
       !diagnostic.message.includes(criteria.diagnosticThresholds.suggestedProperty)
     ) {
       failures.push(`${variant} TypeScript diagnostic contract failed`);
@@ -435,8 +442,8 @@ function diagnosticGate(criteria: D1CriteriaV5, evidence: D1RawEvidenceV5): Eval
 }
 
 function performanceGates(
-  criteria: D1CriteriaV5,
-  evidence: D1RawEvidenceV5,
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
 ): Readonly<Record<AppContractArm, EvaluationGate>> {
   const scheduleFailures: string[] = [];
   if (criteria.performanceThresholds.completeSixOrderBlocksRequired) {
@@ -481,19 +488,19 @@ function performanceGates(
     validateMeasurementSummary(candidate, criteria.performanceThresholds, failures, arm);
     if (
       deltaPercent(candidate.coldTscP50Ms, baseline.coldTscP50Ms) >
-      criteria.performanceThresholds.coldTscP50DeltaPercentMaximum
+      criteria.performanceThresholds.coldTscPairedP50DeltaPercentMaximum
     ) {
       failures.push('cold tsc delta exceeds threshold');
     }
     if (
       deltaPercent(candidate.warmTscP50Ms, baseline.warmTscP50Ms) >
-      criteria.performanceThresholds.warmTscP50DeltaPercentMaximum
+      criteria.performanceThresholds.warmTscPairedP50DeltaPercentMaximum
     ) {
       failures.push('warm tsc delta exceeds threshold');
     }
     if (
       deltaPercent(candidate.coldCompletionP50Ms, baseline.coldCompletionP50Ms) >
-      criteria.performanceThresholds.coldCompletionP50DeltaPercentMaximum
+      criteria.performanceThresholds.coldCompletionPairedP50DeltaPercentMaximum
     ) {
       failures.push('cold completion delta exceeds threshold');
     }
@@ -501,7 +508,7 @@ function performanceGates(
       candidate.warmCompletionP95Ms >
         criteria.performanceThresholds.warmCompletionP95MillisecondsMaximum ||
       deltaPercent(candidate.warmCompletionP95Ms, baseline.warmCompletionP95Ms) >
-        criteria.performanceThresholds.warmCompletionP95DeltaPercentMaximum
+        criteria.performanceThresholds.warmCompletionPairedP95DeltaPercentMaximum
     ) {
       failures.push('warm completion p95 exceeds threshold');
     }
@@ -529,8 +536,8 @@ function performanceGates(
 }
 
 function validateMeasurementSummary(
-  measurement: D1RawEvidenceV5['measurements']['baseline'],
-  thresholds: D1CriteriaV5['performanceThresholds'],
+  measurement: D1RawEvidenceV6['measurements']['baseline'],
+  thresholds: D1CriteriaV6['performanceThresholds'],
   failures: string[],
   name: string,
 ): void {
@@ -618,7 +625,7 @@ function validateFileBinding(
 }
 
 function validateSemanticSubject(
-  subject: D1RawEvidenceV5['compiler']['combinedGraphs']['baseline'],
+  subject: D1RawEvidenceV6['compiler']['combinedGraphs']['baseline'],
   failures: string[],
   label: string,
 ): void {
@@ -661,7 +668,7 @@ function assertExactKeySet(
   label: string,
 ): void {
   if (!equalJson([...actual].sort(), [...expected].sort())) {
-    throw new Error(`D1 v5 malformed evidence: ${label} keys differ (${actual.join(', ')}).`);
+    throw new Error(`D1 v6 malformed evidence: ${label} keys differ (${actual.join(', ')}).`);
   }
 }
 

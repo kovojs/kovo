@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-import type { AppContractArm, PrototypeFixture } from './fixture-v5.ts';
+import type { AppContractArm, PrototypeFixture } from './fixture-v6.ts';
 
 export interface RuntimeArmEvidence {
   readonly assembledHandleCount: number;
@@ -69,7 +69,7 @@ export async function runtimeEvidence(
     env: { ...process.env, NODE_NO_WARNINGS: '1' },
   });
   if (result.status !== 0) {
-    throw new Error(`D1 v5 ${arm} runtime failed:\n${result.stdout}${result.stderr}`);
+    throw new Error(`D1 v6 ${arm} runtime failed:\n${result.stdout}${result.stderr}`);
   }
   const parsed = JSON.parse(result.stdout) as RuntimeArmEvidence;
   if (
@@ -78,7 +78,7 @@ export async function runtimeEvidence(
     typeof parsed.ownerKey !== 'string' ||
     typeof parsed.providerEvaluationCount !== 'number'
   ) {
-    throw new Error(`D1 v5 ${arm} runtime evidence was malformed.`);
+    throw new Error(`D1 v6 ${arm} runtime evidence was malformed.`);
   }
   return parsed;
 }

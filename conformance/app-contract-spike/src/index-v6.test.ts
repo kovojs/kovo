@@ -2,30 +2,30 @@ import { readFile } from 'node:fs/promises';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { sha256 } from './artifacts-v5.ts';
-import { evaluateD1V5 } from './evaluator-v5.ts';
-import { declarationFamilies, matrixCaseNames } from './fixture-v5.ts';
-import { evaluationVerificationSurface } from './measure-v5.ts';
-import type { D1CriteriaV5, D1EvaluationV5, D1RawEvidenceV5 } from './types-v5.ts';
+import { sha256 } from './artifacts-v6.ts';
+import { evaluateD1V6 } from './evaluator-v6.ts';
+import { declarationFamilies, matrixCaseNames } from './fixture-v6.ts';
+import { evaluationVerificationSurface } from './measure-v6.ts';
+import type { D1CriteriaV6, D1EvaluationV6, D1RawEvidenceV6 } from './types-v6.ts';
 
-describe('D1 v5 authenticated app-contract evaluator', () => {
-  let criteria: D1CriteriaV5;
-  let evidence: D1RawEvidenceV5;
-  let committed: D1EvaluationV5;
+describe('D1 v6 authenticated app-contract evaluator', () => {
+  let criteria: D1CriteriaV6;
+  let evidence: D1RawEvidenceV6;
+  let committed: D1EvaluationV6;
 
   beforeAll(async () => {
     [criteria, evidence, committed] = await Promise.all([
-      readJson<D1CriteriaV5>(new URL('../criteria-v5.json', import.meta.url)),
-      readJson<D1RawEvidenceV5>(new URL('../raw-evidence-v5.json', import.meta.url)),
-      readJson<D1EvaluationV5>(new URL('../results-v5.json', import.meta.url)),
+      readJson<D1CriteriaV6>(new URL('../criteria-v6.json', import.meta.url)),
+      readJson<D1RawEvidenceV6>(new URL('../raw-evidence-v6.json', import.meta.url)),
+      readJson<D1EvaluationV6>(new URL('../results-v6.json', import.meta.url)),
     ]);
   });
 
   it('recomputes the exact committed decision and invalidates v1-v4', async () => {
-    const evaluated = await evaluateD1V5(criteria, evidence);
+    const evaluated = await evaluateD1V6(criteria, evidence);
     expect(evaluated).toEqual(committed);
     expect(evaluated).toMatchObject({
-      criteria: 'kovo.app-contract-d1-criteria/v5',
+      criteria: 'kovo.app-contract-d1-criteria/v6',
       decision: 'arm-a',
       priorEvidenceDisposition: {
         v1: 'invalidated',
@@ -33,7 +33,7 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
         v3: 'invalidated',
         v4: 'invalidated',
       },
-      schema: 'kovo.app-contract-d1-evaluation/v5',
+      schema: 'kovo.app-contract-d1-evaluation/v6',
     });
     expect(evaluated.arms['arm-a'].eligible).toBe(true);
     expect(evaluated.arms['arm-b'].eligible).toBe(false);
@@ -139,7 +139,7 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
             : { changed: subject.canonical };
       subject.digest = sha256(JSON.stringify(subject.canonical));
 
-      const evaluated = await evaluateD1V5(criteria, mutated);
+      const evaluated = await evaluateD1V6(criteria, mutated);
       expect(evaluated.arms['arm-a'].gates.compilerAndGraph.pass).toBe(false);
       expect(evaluated.arms['arm-a'].eligible).toBe(false);
     },
@@ -148,28 +148,28 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
   it.each([
     [
       'runtime owner',
-      (mutated: Mutable<D1RawEvidenceV5>) => {
+      (mutated: Mutable<D1RawEvidenceV6>) => {
         mutated.runtime['arm-a'].ownerKey = `${mutated.runtime['arm-a'].ownerKey}:forged`;
       },
       'ownershipAndBindings',
     ],
     [
       'matrix source',
-      (mutated: Mutable<D1RawEvidenceV5>) => {
+      (mutated: Mutable<D1RawEvidenceV6>) => {
         mutated.matrix['ordinary-local-import']['arm-a'].sourceSha256 = '0'.repeat(64);
       },
       'ownershipAndBindings',
     ],
     [
       'server copy digest',
-      (mutated: Mutable<D1RawEvidenceV5>) => {
+      (mutated: Mutable<D1RawEvidenceV6>) => {
         mutated.fixture.serverCopies[0]!.basePackedContentsSha256 = '0'.repeat(64);
       },
       'ownershipAndBindings',
     ],
     [
       'packed compiler entrypoint',
-      (mutated: Mutable<D1RawEvidenceV5>) => {
+      (mutated: Mutable<D1RawEvidenceV6>) => {
         mutated.provenance.packedCompiler.entrypoints[0]!.resolvedSha256 = '0'.repeat(64);
       },
       'artifacts',
@@ -177,7 +177,7 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
   ] as const)('rejects a forged %s binding', async (_label, mutate, gateName) => {
     const mutated = clone(evidence);
     mutate(mutated);
-    const evaluated = await evaluateD1V5(criteria, mutated);
+    const evaluated = await evaluateD1V6(criteria, mutated);
     expect(evaluated.arms['arm-a'].gates[gateName].pass).toBe(false);
     expect(evaluated.arms['arm-a'].eligible).toBe(false);
   });
@@ -186,7 +186,7 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
     const configMutation = clone(evidence);
     configMutation.generation.armB.contracts[0]!.manifest.configSha256 = '0'.repeat(64);
     expect(
-      (await evaluateD1V5(criteria, configMutation)).arms['arm-a'].gates.ownershipAndBindings.pass,
+      (await evaluateD1V6(criteria, configMutation)).arms['arm-a'].gates.ownershipAndBindings.pass,
     ).toBe(false);
 
     const serverMutation = clone(evidence);
@@ -194,7 +194,7 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
       64,
     );
     expect(
-      (await evaluateD1V5(criteria, serverMutation)).arms['arm-a'].gates.ownershipAndBindings.pass,
+      (await evaluateD1V6(criteria, serverMutation)).arms['arm-a'].gates.ownershipAndBindings.pass,
     ).toBe(false);
   });
 
@@ -202,13 +202,13 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
     const nested = clone(evidence);
     nested.receiverFlow.nestedAppDerived.diagnostics = [];
     expect(
-      (await evaluateD1V5(criteria, nested)).arms['arm-a'].gates.ownershipAndBindings.pass,
+      (await evaluateD1V6(criteria, nested)).arms['arm-a'].gates.ownershipAndBindings.pass,
     ).toBe(false);
 
     const unrelated = clone(evidence);
     unrelated.receiverFlow.unrelatedSameNamedMember.recognizedFactoryCount = 1;
     expect(
-      (await evaluateD1V5(criteria, unrelated)).arms['arm-a'].gates.ownershipAndBindings.pass,
+      (await evaluateD1V6(criteria, unrelated)).arms['arm-a'].gates.ownershipAndBindings.pass,
     ).toBe(false);
 
     for (const name of [
@@ -218,32 +218,32 @@ describe('D1 v5 authenticated app-contract evaluator', () => {
     ] as const) {
       const duplicate = clone(evidence);
       duplicate.matrix[name]['arm-a'].serverPackageRoots.splice(1, 1);
-      expect((await evaluateD1V5(criteria, duplicate)).arms['arm-a'].gates.matrix.pass).toBe(false);
+      expect((await evaluateD1V6(criteria, duplicate)).arms['arm-a'].gates.matrix.pass).toBe(false);
     }
   });
 
   it('rejects an incomplete six-order block and forged timing summary', async () => {
     const orderMutation = clone(evidence);
     orderMutation.schedules.warmCompletion[5] = orderMutation.schedules.warmCompletion[0]!;
-    expect((await evaluateD1V5(criteria, orderMutation)).arms['arm-a'].gates.performance.pass).toBe(
+    expect((await evaluateD1V6(criteria, orderMutation)).arms['arm-a'].gates.performance.pass).toBe(
       false,
     );
 
     const timingMutation = clone(evidence);
     timingMutation.measurements['arm-a'].coldTscP50Ms += 1;
     expect(
-      (await evaluateD1V5(criteria, timingMutation)).arms['arm-a'].gates.performance.pass,
+      (await evaluateD1V6(criteria, timingMutation)).arms['arm-a'].gates.performance.pass,
     ).toBe(false);
   });
 
   it('rejects surplus raw and criteria keys', async () => {
     const raw = clone(evidence);
     (raw as unknown as Record<string, unknown>).forged = true;
-    await expect(evaluateD1V5(criteria, raw)).rejects.toThrow('raw evidence keys');
+    await expect(evaluateD1V6(criteria, raw)).rejects.toThrow('raw evidence keys');
 
     const criteriaMutation = clone(criteria);
     (criteriaMutation.matrix as unknown as Record<string, unknown>).forged = {};
-    await expect(evaluateD1V5(criteriaMutation, evidence)).rejects.toThrow('criteria matrix cases');
+    await expect(evaluateD1V6(criteriaMutation, evidence)).rejects.toThrow('criteria matrix cases');
   });
 });
 

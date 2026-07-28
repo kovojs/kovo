@@ -57,7 +57,7 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
   const frameworkSourceTreeClean =
     git('status', '--porcelain=v1', '--untracked-files=all').trim() === '';
   if (!frameworkSourceTreeClean) {
-    throw new Error('D1 v5 fresh artifact build requires a clean framework source tree.');
+    throw new Error('D1 v6 fresh artifact build requires a clean framework source tree.');
   }
   const frameworkSourceFiles = frameworkFiles();
   const frameworkSourceContents = await contentSubject(repoRoot, frameworkSourceFiles);
@@ -145,7 +145,7 @@ async function canonicalizePublishedDependencyOrder(packageRoot: string): Promis
   }
   const serialized = `${JSON.stringify(manifest, null, 2)}\n`;
   if (serialized.includes('"workspace:')) {
-    throw new Error('D1 v5 staged published manifest retained a workspace protocol.');
+    throw new Error('D1 v6 staged published manifest retained a workspace protocol.');
   }
   await writeFile(manifestPath, serialized);
 }

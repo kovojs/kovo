@@ -1,17 +1,17 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { evaluateD1V5 } from './evaluator-v5.ts';
-import { runD1V5Experiment } from './experiment-v5.ts';
-import type { D1CriteriaV5, D1EvaluationV5, D1RawEvidenceV5 } from './types-v5.ts';
+import { evaluateD1V6 } from './evaluator-v6.ts';
+import { runD1V6Experiment } from './experiment-v6.ts';
+import type { D1CriteriaV6, D1EvaluationV6, D1RawEvidenceV6 } from './types-v6.ts';
 
-const criteriaUrl = new URL('../criteria-v5.json', import.meta.url);
-const evidenceUrl = new URL('../raw-evidence-v5.json', import.meta.url);
-const resultsUrl = new URL('../results-v5.json', import.meta.url);
+const criteriaUrl = new URL('../criteria-v6.json', import.meta.url);
+const evidenceUrl = new URL('../raw-evidence-v6.json', import.meta.url);
+const resultsUrl = new URL('../results-v6.json', import.meta.url);
 
-export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void> {
-  const criteria = await readJson<D1CriteriaV5>(criteriaUrl);
-  const freshEvidence = await runD1V5Experiment(criteria);
-  const freshEvaluation = await evaluateD1V5(criteria, freshEvidence);
+export async function runD1V6Measurement(mode: 'verify' | 'write'): Promise<void> {
+  const criteria = await readJson<D1CriteriaV6>(criteriaUrl);
+  const freshEvidence = await runD1V6Experiment(criteria);
+  const freshEvaluation = await evaluateD1V6(criteria, freshEvidence);
 
   if (mode === 'write') {
     await writeJson(evidenceUrl, freshEvidence);
@@ -22,7 +22,7 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
           decision: freshEvaluation.decision,
           evidence: evidenceUrl.pathname,
           results: resultsUrl.pathname,
-          schema: 'kovo.app-contract-d1-measure-write/v5',
+          schema: 'kovo.app-contract-d1-measure-write/v6',
         },
         null,
         2,
@@ -31,23 +31,23 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
     return;
   }
 
-  const committedEvidence = await readJson<D1RawEvidenceV5>(evidenceUrl);
-  const committedEvaluation = await readJson<D1EvaluationV5>(resultsUrl);
-  const reevaluatedCommitted = await evaluateD1V5(criteria, committedEvidence);
+  const committedEvidence = await readJson<D1RawEvidenceV6>(evidenceUrl);
+  const committedEvaluation = await readJson<D1EvaluationV6>(resultsUrl);
+  const reevaluatedCommitted = await evaluateD1V6(criteria, committedEvidence);
   assertEqual(
     reevaluatedCommitted,
     committedEvaluation,
-    'committed evaluation is stale relative to v5 criteria/evidence',
+    'committed evaluation is stale relative to v6 criteria/evidence',
   );
   assertEqual(
     evaluationVerificationSurface(freshEvaluation),
     evaluationVerificationSurface(committedEvaluation),
-    'fresh decision-relevant eligibility/gates differ from committed v5 result',
+    'fresh decision-relevant eligibility/gates differ from committed v6 result',
   );
   assertEqual(
     deterministicEvidenceSurface(freshEvidence),
     deterministicEvidenceSurface(committedEvidence),
-    'fresh deterministic evidence differs from committed v5 evidence',
+    'fresh deterministic evidence differs from committed v6 evidence',
   );
   process.stdout.write(
     `${JSON.stringify(
@@ -57,7 +57,7 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
         committedEvidenceReevaluatesExactly: true,
         decision: freshEvaluation.decision,
         everyDecisionRelevantGateCompared: true,
-        schema: 'kovo.app-contract-d1-measure-verify/v5',
+        schema: 'kovo.app-contract-d1-measure-verify/v6',
         timingSamplesReevaluatedByThresholds: true,
       },
       null,
@@ -66,7 +66,7 @@ export async function runD1V5Measurement(mode: 'verify' | 'write'): Promise<void
   );
 }
 
-export function evaluationVerificationSurface(evaluation: D1EvaluationV5): unknown {
+export function evaluationVerificationSurface(evaluation: D1EvaluationV6): unknown {
   return {
     arms: Object.fromEntries(
       (['arm-a', 'arm-b'] as const).map((arm) => [
@@ -83,7 +83,7 @@ export function evaluationVerificationSurface(evaluation: D1EvaluationV5): unkno
 }
 
 function decisionRelevantGatePasses(
-  gates: D1EvaluationV5['arms']['arm-a']['gates'],
+  gates: D1EvaluationV6['arms']['arm-a']['gates'],
 ): Readonly<Record<string, boolean>> {
   const deterministicGates = Object.fromEntries(
     Object.entries(gates)
@@ -96,7 +96,7 @@ function decisionRelevantGatePasses(
     : deterministicGates;
 }
 
-function deterministicEvidenceSurface(evidence: D1RawEvidenceV5): unknown {
+function deterministicEvidenceSurface(evidence: D1RawEvidenceV6): unknown {
   return {
     compiler: evidence.compiler,
     completionContracts: Object.fromEntries(
@@ -137,7 +137,7 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     const difference = firstDifference(actual, expected);
     throw new Error(
-      `D1 v5 ${message} at ${difference.path}.\nFresh: ${formatDifference(
+      `D1 v6 ${message} at ${difference.path}.\nFresh: ${formatDifference(
         difference.actual,
       )}\nCommitted: ${formatDifference(difference.expected)}`,
     );

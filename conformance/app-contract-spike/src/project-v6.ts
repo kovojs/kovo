@@ -6,7 +6,7 @@ import {
   sha256,
   type FileSubject,
   type LoadedPackedCompiler,
-} from './artifacts-v5.ts';
+} from './artifacts-v6.ts';
 import {
   declarationFamilies,
   stableFixturePath,
@@ -14,7 +14,7 @@ import {
   type DeclarationFamily,
   type PrototypeDiagnostic,
   type PrototypeFixture,
-} from './fixture-v5.ts';
+} from './fixture-v6.ts';
 
 interface CompilerOwnedEntry {
   readonly component?: unknown;
@@ -132,18 +132,6 @@ export async function matrixEvidenceForEntry(
     resolved.resolver.exactNodeCount +
     countHandlerRoots(resolved.component) +
     routeFactCount(resolved.route);
-  if (arm === 'arm-b' && diagnostics.length === 0 && recognizedFactoryCount === 0) {
-    diagnostics.push(
-      stableDiagnostic(fixture, {
-        code: 'D1B201',
-        fileName,
-        length: Math.min(5, Math.max(1, source.length - factoryStart(source))),
-        message:
-          'D1B201 the existing free-function import identity engine did not recognize this generated app-bound declaration.',
-        start: factoryStart(source),
-      }),
-    );
-  }
   return {
     diagnostics,
     ownerKey: diagnostics.length === 0 ? resolved.ownerKey : null,
@@ -164,10 +152,10 @@ export async function familyEvidence(
 ): Promise<FamilyEvidence> {
   const fileName = fixture.familyEntries[family][arm];
   const source = await readFile(fileName, 'utf8');
-  if (arm === 'arm-a') {
+  if (arm !== 'baseline') {
     const resolved = project.compilerProject.compileEntry(fileName);
     if (resolved.diagnostics.length > 0) {
-      throw new Error(`D1 v5 Arm A ${family} failed: ${JSON.stringify(resolved.diagnostics)}`);
+      throw new Error(`D1 v6 ${arm} ${family} failed: ${JSON.stringify(resolved.diagnostics)}`);
     }
     const semanticIr = { component: resolved.component ?? null, route: resolved.route ?? null };
     const semanticGraph =
@@ -230,11 +218,11 @@ export async function combinedGraphEvidence(
   for (const family of declarationFamilies) {
     const fileName = fixture.familyEntries[family][arm];
     const source = await readFile(fileName, 'utf8');
-    if (arm === 'arm-a') {
+    if (arm !== 'baseline') {
       const resolved = project.compilerProject.compileEntry(fileName);
       if (resolved.diagnostics.length > 0) {
         throw new Error(
-          `D1 v5 combined Arm A graph rejected ${family}: ${JSON.stringify(resolved.diagnostics)}`,
+          `D1 v6 combined ${arm} graph rejected ${family}: ${JSON.stringify(resolved.diagnostics)}`,
         );
       }
       if (resolved.component) components.push(resolved.component);
@@ -494,11 +482,6 @@ function routeObject(route: unknown): { readonly routePageFacts: readonly unknow
 
 function countHandlerRoots(value: unknown): number {
   return (JSON.stringify(value) ?? '').split('"kind":"server.handler.root"').length - 1;
-}
-
-function factoryStart(source: string): number {
-  const query = source.lastIndexOf('query(');
-  return Math.max(0, query);
 }
 
 function changeFirstScalar(value: unknown): unknown {

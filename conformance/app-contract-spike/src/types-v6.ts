@@ -1,39 +1,51 @@
-import type { ContentSubject, FileSubject, PackedCompilerEntrypoint } from './artifacts-v5.ts';
+import type { ContentSubject, FileSubject, PackedCompilerEntrypoint } from './artifacts-v6.ts';
 import type {
   AppContractArm,
   DeclarationFamily,
   MatrixCaseName,
   PrototypeDiagnostic,
-} from './fixture-v5.ts';
-import type { CanonicalSemanticSubject, FamilyEvidence, MatrixEvidence } from './project-v5.ts';
-import type { RuntimeArmEvidence } from './runtime-v5.ts';
+} from './fixture-v6.ts';
+import type { CanonicalSemanticSubject, FamilyEvidence, MatrixEvidence } from './project-v6.ts';
+import type { RuntimeArmEvidence } from './runtime-v6.ts';
 import type {
   SuccessfulTypeMeasurement,
   TypeDiagnosticEvidence,
   TypeMeasurementEvidence,
-} from './type-measurement-v5.ts';
+} from './type-measurement-v6.ts';
 
-export interface D1CriteriaV5 {
-  readonly artifactThresholds: {
+export interface D1CriteriaV6 {
+  readonly artifactContract: {
     readonly exactPackageNames: readonly string[];
-    readonly generatedManifestDigestFieldsRequired: readonly string[];
+    readonly packedCompilerEntrypoints: readonly string[];
+    readonly sealedArtifactNames: readonly string[];
+    readonly [key: string]: unknown;
   };
+  readonly buildCommands: readonly string[];
   readonly declarationFamilies: readonly DeclarationFamily[];
   readonly diagnosticThresholds: {
-    readonly crossAppDiagnosticCode: string;
-    readonly duplicatePackageDiagnosticCode: string;
+    readonly allRejectedCasesRequireOneBoundedDiagnostic: boolean;
     readonly matrixDiagnosticMessageCharactersMaximum: number;
     readonly matrixDiagnosticSpanCharactersMaximum: number;
-    readonly messageCharactersMaximum: number;
     readonly misspelledProperty: string;
     readonly spanLength: number;
     readonly suggestedProperty: string;
     readonly typescriptCode: number;
   };
-  readonly evidenceBindingContract: {
-    readonly mutations: Readonly<Record<string, string>>;
+  readonly evaluatorContract: Readonly<Record<string, unknown>>;
+  readonly mutationContract: {
+    readonly correlated: readonly string[];
+    readonly oneSided: readonly string[];
+    readonly selectionBranchesRequired: readonly string[];
+    readonly surplusKeyMutationsRequiredAtEveryDeclaredSchemaNode: boolean;
   };
-  readonly immutableReceiverContract: {
+  readonly ownerContract: Readonly<Record<string, unknown>> & {
+    readonly expectedAppId: string;
+    readonly expectedProviderKey: string;
+  };
+  readonly receiverFlowContract: {
+    readonly diagnosticCountPerUnsupportedFixtureExact: number;
+    readonly negativeControls: readonly string[];
+    readonly unsupported: Readonly<Record<string, string>>;
     readonly unrelatedSameNamedMemberMustRemainUnrecognized: boolean;
     readonly unprovedAppDerivedCallMustDiagnose: boolean;
   };
@@ -41,25 +53,29 @@ export interface D1CriteriaV5 {
     Record<MatrixCaseName, Readonly<Record<AppContractArm, 'accept' | `reject:${string}`>>>
   >;
   readonly performanceThresholds: {
-    readonly coldCompletionP50DeltaPercentMaximum: number;
+    readonly coldCompletionPairedP50DeltaPercentMaximum: number;
     readonly coldCompletionRepeats: number;
-    readonly coldTscP50DeltaPercentMaximum: number;
+    readonly coldTscPairedP50DeltaPercentMaximum: number;
     readonly coldTscRepeats: number;
     readonly completionCandidateCountMustEqualBaseline: boolean;
     readonly completionCandidateDigestMustEqualBaseline: boolean;
     readonly completeSixOrderBlocksRequired: boolean;
     readonly declarationBytesDeltaPercentMaximum: number;
+    readonly pairedBlockNormalizationRequired: boolean;
+    readonly perSampleCompletionIdentityRequired: boolean;
+    readonly runnerName: string;
     readonly runnerMetadataRequired: readonly string[];
-    readonly warmCompletionP95DeltaPercentMaximum: number;
+    readonly warmCompletionPairedP95DeltaPercentMaximum: number;
     readonly warmCompletionP95MillisecondsMaximum: number;
     readonly warmCompletionRepeats: number;
-    readonly warmTscP50DeltaPercentMaximum: number;
+    readonly warmTscPairedP50DeltaPercentMaximum: number;
     readonly warmTscRepeats: number;
   };
-  readonly resolverIntegrityMutations: Readonly<Record<string, string>>;
-  readonly schema: 'kovo.app-contract-d1-criteria/v5';
+  readonly schema: 'kovo.app-contract-d1-criteria/v6';
   readonly semanticEquivalenceContract: {
-    readonly mutations: Readonly<Record<string, string>>;
+    readonly collisionFixtures: readonly string[];
+    readonly semanticMutations: Readonly<Record<string, string>>;
+    readonly [key: string]: unknown;
   };
   readonly semanticThresholds: Readonly<Record<string, number>>;
   readonly workload: {
@@ -96,8 +112,8 @@ export interface GeneratedContractEvidence {
   readonly providerSubject: FileSubject;
 }
 
-export interface D1RawEvidenceV5 {
-  readonly schema: 'kovo.app-contract-d1-raw-evidence/v5';
+export interface D1RawEvidenceV6 {
+  readonly schema: 'kovo.app-contract-d1-raw-evidence/v6';
   readonly provenance: {
     readonly buildCommands: readonly string[];
     readonly frameworkHeadCommit: string;
@@ -184,9 +200,9 @@ export interface ArmEvaluation {
   };
 }
 
-export interface D1EvaluationV5 {
+export interface D1EvaluationV6 {
   readonly arms: Readonly<Record<AppContractArm, ArmEvaluation>>;
-  readonly criteria: 'kovo.app-contract-d1-criteria/v5';
+  readonly criteria: 'kovo.app-contract-d1-criteria/v6';
   readonly decision: 'arm-a' | 'arm-b' | 'fallback';
   readonly priorEvidenceDisposition: {
     readonly v1: 'invalidated';
@@ -194,7 +210,7 @@ export interface D1EvaluationV5 {
     readonly v3: 'invalidated';
     readonly v4: 'invalidated';
   };
-  readonly schema: 'kovo.app-contract-d1-evaluation/v5';
+  readonly schema: 'kovo.app-contract-d1-evaluation/v6';
 }
 
 export type { FileSubject };
