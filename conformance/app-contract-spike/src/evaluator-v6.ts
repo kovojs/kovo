@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
+
+import ts from 'typescript';
 
 import {
   contentSubjectDigest,
@@ -13,6 +16,7 @@ import {
   declarationFamilies,
   matrixCaseNames,
   type AppContractArm,
+  type MatrixCaseName,
   type PrototypeDiagnostic,
 } from './fixture-v6.ts';
 import type {
@@ -24,6 +28,26 @@ import type {
 } from './types-v6.ts';
 
 const arms = ['arm-a', 'arm-b'] as const;
+const criteriaSha256 = 'd05ffa8fe6182e6ffbf69619af15bf64aa5f0788a58f554c80e09f885bf87a98';
+const sealedArtifactNames = [
+  'compiler-packed.tgz',
+  'server-overlay-packed.tgz',
+  'config.ts',
+  'provider.ts',
+  'generated-app.ts',
+] as const;
+const sealedArtifactSha256 = {
+  'compiler-packed.tgz': '7ec401830ce434073a0892b93c02b25ebfef7190ab0b51b822836f4ec672e236',
+  'config.ts': 'ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761',
+  'generated-app.ts': '841c936107e2f1f3d3d1146f0e1df484d43f20e07cd261fc973e5f938a2136e3',
+  'provider.ts': '7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d',
+  'server-overlay-packed.tgz':
+    '07539e5059bf11ab8409faec35c51e575d18d66059accffbad84baa88511d3ba',
+} as const satisfies Readonly<Record<(typeof sealedArtifactNames)[number], string>>;
+type SealedArtifactName = (typeof sealedArtifactNames)[number];
+export type D1V6SealedAuthority = Partial<
+  Readonly<Record<SealedArtifactName, string | Buffer>>
+>;
 const exactRawKeys = [
   'compiler',
   'diagnostics',
@@ -32,6 +56,7 @@ const exactRawKeys = [
   'generation',
   'matrix',
   'measurements',
+  'mutationCoverage',
   'provenance',
   'publicForgery',
   'receiverFlow',
@@ -47,8 +72,10 @@ const exactRawKeys = [
 export async function evaluateD1V6(
   criteria: D1CriteriaV6,
   evidence: D1RawEvidenceV6,
+  sealedOverrides: D1V6SealedAuthority = {},
 ): Promise<D1EvaluationV6> {
-  assertExactKeys(evidence, exactRawKeys, 'raw evidence');
+  await assertCriteriaAuthority(criteria);
+  assertRawEvidenceShape(criteria, evidence);
   if (
     criteria.schema !== 'kovo.app-contract-d1-criteria/v6' ||
     evidence.schema !== 'kovo.app-contract-d1-raw-evidence/v6'
@@ -63,10 +90,11 @@ export async function evaluateD1V6(
     'compiler family subjects',
   );
 
-  const artifacts = await artifactGate(criteria, evidence);
+  const sealed = await readSealedAuthority(sealedOverrides);
+  const artifacts = await artifactGate(criteria, evidence, sealed);
   const publicForgery = publicForgeryGate(evidence);
   const diagnostics = diagnosticGate(criteria, evidence);
-  const ownershipAndBindings = ownershipGate(criteria, evidence);
+  const ownershipAndBindings = ownershipGate(criteria, evidence, sealed);
   const performance = performanceGates(criteria, evidence);
   const evaluations = {} as Record<AppContractArm, ArmEvaluation>;
   for (const arm of arms) {
@@ -91,7 +119,7 @@ export async function evaluateD1V6(
     : evaluations['arm-b'].eligible
       ? 'arm-b'
       : 'fallback';
-  return {
+  const evaluation: D1EvaluationV6 = {
     arms: evaluations,
     criteria: criteria.schema,
     decision,
@@ -104,13 +132,78 @@ export async function evaluateD1V6(
     },
     schema: 'kovo.app-contract-d1-evaluation/v6',
   };
+  assertD1V6EvaluationShape(evaluation);
+  return evaluation;
 }
 
 async function artifactGate(
   criteria: D1CriteriaV6,
   evidence: D1RawEvidenceV6,
+  sealed: Readonly<Record<SealedArtifactName, Buffer>>,
 ): Promise<EvaluationGate> {
   const failures: string[] = [];
+  for (const name of sealedArtifactNames) {
+    if (sha256(sealed[name]) !== sealedArtifactSha256[name]) {
+      failures.push(`${name} differs from the independently sealed v6 authority`);
+    }
+  }
+  assertExactKeySet(
+    Object.keys(evidence.mutationCoverage.oneSided),
+    criteria.mutationContract.oneSided,
+    'one-sided mutation coverage',
+  );
+  assertExactKeySet(
+    Object.keys(evidence.mutationCoverage.correlated),
+    criteria.mutationContract.correlated,
+    'correlated mutation coverage',
+  );
+  assertExactKeySet(
+    Object.keys(evidence.mutationCoverage.selectionBranches),
+    criteria.mutationContract.selectionBranchesRequired,
+    'selection branch coverage',
+  );
+  if (
+    [
+      ...Object.values(evidence.mutationCoverage.oneSided),
+      ...Object.values(evidence.mutationCoverage.correlated),
+    ].some((entry) => !entry.detected) ||
+    !equalJson(
+      Object.fromEntries(
+        Object.entries(evidence.mutationCoverage.selectionBranches).map(([name, entry]) => [
+          name,
+          entry.decision,
+        ]),
+      ),
+      {
+        'arm-a-selected-when-both-pass': 'arm-a',
+        'arm-a-selected-when-arm-b-fails': 'arm-a',
+        'arm-b-selected-when-arm-a-fails': 'arm-b',
+        'fallback-when-both-fail': 'fallback',
+      },
+    )
+  ) {
+    failures.push('mutation/selection coverage is incomplete');
+  }
+  if (!equalJson(criteria.buildCommands, evidence.provenance.buildCommands)) {
+    failures.push('build commands differ from the immutable preregistration');
+  }
+  const currentSourceCommit = runGit(
+    'log',
+    '-1',
+    '--format=%H',
+    '--',
+    'packages/browser/package.json',
+    'packages/browser/src',
+    'packages/compiler/package.json',
+    'packages/compiler/src',
+    'packages/core/package.json',
+    'packages/core/src',
+    'packages/server/package.json',
+    'packages/server/src',
+  ).trim();
+  if (evidence.provenance.frameworkSourceCommit !== currentSourceCommit) {
+    failures.push('framework source commit was not recomputed from git');
+  }
   const packageNames = evidence.provenance.packages.map((entry) => entry.name).sort();
   const expectedNames = [...criteria.artifactContract.exactPackageNames].sort();
   if (!equalJson(packageNames, expectedNames)) failures.push('packed package set is not exact');
@@ -141,6 +234,13 @@ async function artifactGate(
   const compilerArtifact = evidence.provenance.packages.find(
     (entry) => entry.name === '@kovojs/compiler',
   );
+  const compilerTar = tarEntries(sealed['compiler-packed.tgz'], failures, 'compiler tarball');
+  if (
+    sha256(sealed['compiler-packed.tgz']) !== evidence.sealedArtifacts.compilerPackedSha256 ||
+    evidence.sealedArtifacts.compilerPackedSha256 !== compilerArtifact?.tarballSha256
+  ) {
+    failures.push('sealed compiler tarball digest is unbound');
+  }
   const entrypoints = evidence.provenance.packedCompiler.entrypoints;
   if (
     evidence.provenance.packedCompiler.schema !== 'kovo.app-contract-d1-packed-compiler/v1' ||
@@ -158,14 +258,64 @@ async function artifactGate(
     const packed = compilerArtifact?.packedContents.files.find(
       (file) => file.path === entrypoint.packedFile.path,
     );
+    const tarEntry = compilerTar.get(`package/${entrypoint.packedFile.path}`);
     if (
       !entrypoint.realpath.startsWith('<artifact>/compiler/dist/') ||
       entrypoint.realpath.includes('/packages/compiler/src/') ||
       !packed ||
       packed.sha256 !== entrypoint.packedFile.sha256 ||
-      entrypoint.resolvedSha256 !== entrypoint.packedFile.sha256
+      entrypoint.resolvedSha256 !== entrypoint.packedFile.sha256 ||
+      !tarEntry ||
+      sha256(tarEntry) !== entrypoint.packedFile.sha256
     ) {
       failures.push(`${entrypoint.requested} is not bound to authenticated packed bytes`);
+    }
+  }
+  const serverTar = tarEntries(
+    sealed['server-overlay-packed.tgz'],
+    failures,
+    'server overlay tarball',
+  );
+  if (
+    sha256(sealed['server-overlay-packed.tgz']) !==
+    evidence.sealedArtifacts.serverOverlayPackedSha256
+  ) {
+    failures.push('sealed server overlay tarball digest is unbound');
+  }
+  const overlayFiles = evidence.fixture.serverCopies[0]?.overlayFiles ?? [];
+  if (
+    overlayFiles.length !== criteria.workload.serverOverlayFileCount ||
+    overlayFiles.length !== criteria.artifactContract.overlayFilesExact
+  ) {
+    failures.push('server overlay file count differs');
+  }
+  for (const file of overlayFiles) {
+    const actual = serverTar.get(`package/${file.path}`);
+    if (!actual || actual.byteLength !== file.bytes || sha256(actual) !== file.sha256) {
+      failures.push(`sealed server overlay differs at ${file.path}`);
+    }
+  }
+  const postWriteFiles = evidence.fixture.serverCopies[0]?.postWriteContents.files ?? [];
+  if (serverTar.size !== postWriteFiles.length) {
+    failures.push('sealed server overlay file set differs from the post-write copy');
+  }
+  for (const file of postWriteFiles) {
+    const actual = serverTar.get(`package/${file.path}`);
+    if (!actual || actual.byteLength !== file.bytes || sha256(actual) !== file.sha256) {
+      failures.push(`sealed post-write server copy differs at ${file.path}`);
+    }
+  }
+  const sealedClaims = {
+    'config.ts': evidence.sealedArtifacts.configSha256,
+    'generated-app.ts': evidence.sealedArtifacts.generatedAppSha256,
+    'provider.ts': evidence.sealedArtifacts.providerSha256,
+  } as const;
+  for (const [name, claimed] of Object.entries(sealedClaims) as [
+    keyof typeof sealedClaims,
+    string,
+  ][]) {
+    if (sha256(sealed[name]) !== claimed) {
+      failures.push(`sealed ${name} digest is unbound`);
     }
   }
   return gate(failures);
@@ -254,15 +404,58 @@ function compilerGate(
     failures,
     'semantic mutation',
   );
+  assertExactKeySet(
+    Object.keys(evidence.semanticEquivalence.collisionSubjects),
+    criteria.semanticEquivalenceContract.collisionFixtures,
+    'semantic collision fixtures',
+  );
+  for (const [name, collision] of Object.entries(
+    evidence.semanticEquivalence.collisionSubjects,
+  )) {
+    if (
+      !collision.byteExact ||
+      collision.originalSha256 !== collision.canonicalSha256
+    ) {
+      failures.push(`${name} was changed outside an exact factory-callee AST node`);
+    }
+  }
   return gate(failures);
 }
 
-function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): EvaluationGate {
+function ownershipGate(
+  criteria: D1CriteriaV6,
+  evidence: D1RawEvidenceV6,
+  sealed: Readonly<Record<SealedArtifactName, Buffer>>,
+): EvaluationGate {
   const failures: string[] = [];
+  const sealedIdentity = deriveSealedOwnerIdentity(sealed, failures);
+  if (
+    sealedIdentity &&
+    (sealedIdentity.appId !== criteria.ownerContract.expectedAppId ||
+      sealedIdentity.providerKey !== criteria.ownerContract.expectedProviderKey ||
+      sealedIdentity.ownerKey !== evidence.fixture.ownerKey ||
+      sealedIdentity.generatedOwnerKey !== sealedIdentity.ownerKey)
+  ) {
+    failures.push('sealed config/provider/generated owner identity differs');
+  }
+  if (
+    sealed['config.ts'].includes('d1v6:') ||
+    sealed['provider.ts'].includes('d1v6:')
+  ) {
+    failures.push('authored source contains a forbidden owner literal');
+  }
+  const expectedCounts = {
+    ...criteria.workload,
+    providerDefinitionCount: criteria.semanticThresholds.providerDefinitionCountExact,
+  };
+  if (!equalJson(evidence.fixture.counts, expectedCounts)) {
+    failures.push('fixture counts differ from subjects/preregistered workload');
+  }
   for (const arm of arms) {
     const runtime = evidence.runtime[arm];
     if (
       runtime.ownerKey !== evidence.fixture.ownerKey ||
+      (sealedIdentity !== undefined && runtime.ownerKey !== sealedIdentity.ownerKey) ||
       runtime.assembledHandleCount !== 6 ||
       !equalJson(runtime.ownedFamilies, declarationFamilies) ||
       runtime.providerEvaluationCount !== 0 ||
@@ -299,6 +492,24 @@ function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): Evalu
   ) {
     failures.push('physical server copy digests are not bound to packed server bytes');
   }
+  if (
+    evidence.fixture.serverCopies[0]?.postWriteContents.digest !==
+      evidence.fixture.serverCopies[1]?.postWriteContents.digest ||
+    !equalJson(
+      evidence.fixture.serverCopies[0]?.postWriteContents,
+      evidence.fixture.serverCopies[1]?.postWriteContents,
+    ) ||
+    evidence.fixture.serverCopies.some((copy) => {
+      const failuresForCopy: string[] = [];
+      validateContentSubject(copy.postWriteContents, failuresForCopy, 'post-write server copy');
+      return (
+        failuresForCopy.length > 0 ||
+        !equalJson(copy.overlayFiles, evidence.fixture.serverCopies[0]?.overlayFiles)
+      );
+    })
+  ) {
+    failures.push('post-write server copies are not byte-identical');
+  }
   const compilerArtifact = evidence.provenance.packages.find(
     (entry) => entry.name === '@kovojs/compiler',
   );
@@ -313,6 +524,12 @@ function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): Evalu
     ] as const;
     if (
       manifest.ownerKey !== evidence.runtime['arm-b'].ownerKey ||
+      (sealedIdentity !== undefined && manifest.ownerKey !== sealedIdentity.ownerKey) ||
+      (sealedIdentity !== undefined &&
+        (manifest.appId !== sealedIdentity.appId ||
+          manifest.providerKey !== sealedIdentity.providerKey ||
+          manifest.providerExportBinding !== sealedIdentity.providerExportBinding ||
+          manifest.providerImportSpecifier !== sealedIdentity.providerImportSpecifier)) ||
       manifest.completed !== 'complete' ||
       manifest.schema !== 'kovo.generated-app-contract/v6' ||
       required.some(
@@ -346,6 +563,15 @@ function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): Evalu
       failures,
       'generated module',
     );
+  }
+  const primaryContract = evidence.generation.armB.contracts[0];
+  if (
+    !primaryContract ||
+    primaryContract.configSubject.sha256 !== sha256(sealed['config.ts']) ||
+    primaryContract.providerSubject.sha256 !== sha256(sealed['provider.ts']) ||
+    primaryContract.generatedModuleSubject.sha256 !== sha256(sealed['generated-app.ts'])
+  ) {
+    failures.push('primary generated contract is not bound to sealed source bytes');
   }
   validateDiagnosticMap(
     evidence.resolverIntegrity,
@@ -384,23 +610,38 @@ function ownershipGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): Evalu
     failures,
     'evidence-binding mutation',
   );
-  if (
-    criteria.receiverFlowContract.unprovedAppDerivedCallMustDiagnose &&
-    !equalJson(
-      evidence.receiverFlow.nestedAppDerived.diagnostics.map((entry) => entry.code),
-      ['D1A007'],
-    )
-  ) {
-    failures.push('nested app-derived receiver did not fail closed');
+  assertExactKeySet(
+    Object.keys(evidence.receiverFlow.unsupported),
+    Object.keys(criteria.receiverFlowContract.unsupported),
+    'unsupported receiver flows',
+  );
+  for (const [name, expectedCode] of Object.entries(
+    criteria.receiverFlowContract.unsupported,
+  )) {
+    const observed = evidence.receiverFlow.unsupported[name];
+    if (
+      !observed ||
+      !equalJson(observed.diagnostics.map((entry) => entry.code), [expectedCode]) ||
+      observed.recognizedFactoryCount !== 0 ||
+      observed.ownerKey !== null
+    ) {
+      failures.push(`${name} app-derived receiver did not fail closed`);
+    }
   }
-  const unrelated = evidence.receiverFlow.unrelatedSameNamedMember;
-  if (
-    criteria.receiverFlowContract.unrelatedSameNamedMemberMustRemainUnrecognized &&
-    (unrelated.diagnostics.length !== 0 ||
-      unrelated.recognizedFactoryCount !== 0 ||
-      unrelated.ownerKey !== null)
-  ) {
-    failures.push('unrelated same-named member was recognized');
+  assertExactKeySet(
+    Object.keys(evidence.receiverFlow.controls),
+    criteria.receiverFlowContract.negativeControls,
+    'receiver-flow controls',
+  );
+  for (const [name, unrelated] of Object.entries(evidence.receiverFlow.controls)) {
+    if (
+      criteria.receiverFlowContract.unrelatedSameNamedMemberMustRemainUnrecognized &&
+      (unrelated.diagnostics.length !== 0 ||
+        unrelated.recognizedFactoryCount !== 0 ||
+        unrelated.ownerKey !== null)
+    ) {
+      failures.push(`${name} unrelated same-named member was recognized`);
+    }
   }
   return gate(failures);
 }
@@ -427,6 +668,14 @@ function publicForgeryGate(evidence: D1RawEvidenceV6): EvaluationGate {
 
 function diagnosticGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): EvaluationGate {
   const failures: string[] = [];
+  const recomputed = recomputeTypescriptDiagnostic(criteria);
+  if (
+    recomputed.code !== criteria.diagnosticThresholds.typescriptCode ||
+    recomputed.length !== criteria.diagnosticThresholds.spanLength ||
+    !recomputed.message.includes(criteria.diagnosticThresholds.suggestedProperty)
+  ) {
+    failures.push('independently recomputed TypeScript diagnostic differs from criteria');
+  }
   for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
     const diagnostic = evidence.diagnostics[variant];
     if (
@@ -439,8 +688,74 @@ function diagnosticGate(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): Eval
     ) {
       failures.push(`${variant} TypeScript diagnostic contract failed`);
     }
+    if (
+      diagnostic.code !== recomputed.code ||
+      diagnostic.length !== recomputed.length ||
+      diagnostic.message !== recomputed.message
+    ) {
+      failures.push(`${variant} TypeScript diagnostic differs from independent recomputation`);
+    }
   }
   return gate(failures);
+}
+
+function recomputeTypescriptDiagnostic(criteria: D1CriteriaV6): {
+  readonly code: number;
+  readonly length: number;
+  readonly message: string;
+} {
+  const source = [
+    'type ExpectedDefinition = {',
+    '  readonly access: { readonly kind: "public" };',
+    '  load(): { readonly ok: boolean };',
+    '};',
+    'const definition: ExpectedDefinition = {',
+    '  access: { kind: "public" },',
+    `  ${criteria.diagnosticThresholds.misspelledProperty}() { return { ok: true }; },`,
+    '};',
+    'void definition;',
+    '',
+  ].join('\n');
+  const fileName = '/d1-v6-independent-diagnostic.ts';
+  const options: ts.CompilerOptions = {
+    exactOptionalPropertyTypes: true,
+    noEmit: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2024,
+  };
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const base = ts.createCompilerHost(options);
+  const host: ts.CompilerHost = {
+    ...base,
+    fileExists: (candidate) => candidate === fileName || base.fileExists(candidate),
+    getSourceFile: (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
+      candidate === fileName
+        ? sourceFile
+        : base.getSourceFile(
+            candidate,
+            languageVersion,
+            onError,
+            shouldCreateNewSourceFile,
+          ),
+    readFile: (candidate) => (candidate === fileName ? source : base.readFile(candidate)),
+  };
+  const diagnostic = ts
+    .getPreEmitDiagnostics(ts.createProgram({ host, options, rootNames: [fileName] }))
+    .find((entry) => entry.file?.fileName === fileName && entry.code === 2561);
+  if (!diagnostic) {
+    throw new Error('D1 v6 independent TypeScript diagnostic did not produce TS2561.');
+  }
+  return {
+    code: diagnostic.code,
+    length: diagnostic.length ?? 0,
+    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+  };
 }
 
 function performanceGates(
@@ -476,6 +791,9 @@ function performanceGates(
       scheduleFailures.push(`runner metadata ${field} is missing`);
     }
   }
+  if (evidence.runner.runnerName !== criteria.performanceThresholds.runnerName) {
+    scheduleFailures.push('runner name differs from preregistration');
+  }
   const baseline = evidence.measurements.baseline;
   validateMeasurementSummary(
     baseline,
@@ -483,11 +801,13 @@ function performanceGates(
     scheduleFailures,
     'baseline',
   );
+  validateSampleIdentities(baseline, 'baseline', evidence.schedules, scheduleFailures);
   const result = {} as Record<AppContractArm, EvaluationGate>;
   for (const arm of arms) {
     const failures = [...scheduleFailures];
     const candidate = evidence.measurements[arm];
     validateMeasurementSummary(candidate, criteria.performanceThresholds, failures, arm);
+    validateSampleIdentities(candidate, arm, evidence.schedules, failures);
     if (
       pairedDeltaPercent(candidate.coldTscSamples, baseline.coldTscSamples, 0.5) >
       criteria.performanceThresholds.coldTscPairedP50DeltaPercentMaximum
@@ -543,6 +863,37 @@ function performanceGates(
     result[arm] = gate(failures);
   }
   return result;
+}
+
+function validateSampleIdentities(
+  measurement: D1RawEvidenceV6['measurements']['baseline'],
+  variant: 'arm-a' | 'arm-b' | 'baseline',
+  schedules: D1RawEvidenceV6['schedules'],
+  failures: string[],
+): void {
+  const groups = [
+    ['cold-tsc', measurement.coldTscSamples, schedules.tsc],
+    ['warm-tsc', measurement.warmTscSamples, schedules.tsc],
+    ['cold-completion', measurement.coldCompletionSamples, schedules.coldCompletion],
+    ['warm-completion', measurement.warmCompletionSamples, schedules.warmCompletion],
+  ] as const;
+  for (const [kind, samples, schedule] of groups) {
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = samples[index]!;
+      const order = schedule[index];
+      if (
+        !order ||
+        sample.iteration !== index ||
+        sample.blockIndex !== Math.floor(index / 6) ||
+        sample.variant !== variant ||
+        sample.orderIndex !== order.indexOf(variant) ||
+        sample.sampleId !== `${kind}:${index}:${order.join('>')}:${variant}`
+      ) {
+        failures.push(`${variant} ${kind} sample identity is inconsistent`);
+        break;
+      }
+    }
+  }
 }
 
 function validateMeasurementSummary(
@@ -684,8 +1035,734 @@ function validateDiagnosticMap(
   }
 }
 
+async function assertCriteriaAuthority(criteria: D1CriteriaV6): Promise<void> {
+  const actual = await readFile(new URL('../criteria-v6.json', import.meta.url));
+  if (
+    sha256(actual) !== criteriaSha256 ||
+    sha256(`${JSON.stringify(criteria, null, 2)}\n`) !== criteriaSha256
+  ) {
+    throw new Error('D1 v6 malformed evidence: criteria bytes differ from preregistration.');
+  }
+}
+
+async function readSealedAuthority(
+  overrides: D1V6SealedAuthority,
+): Promise<Readonly<Record<SealedArtifactName, Buffer>>> {
+  assertExactKeySet(
+    Object.keys(overrides),
+    Object.keys(overrides).filter((name) =>
+      sealedArtifactNames.includes(name as SealedArtifactName),
+    ),
+    'sealed authority overrides',
+  );
+  const entries = await Promise.all(
+    sealedArtifactNames.map(async (name) => {
+      const override = overrides[name];
+      const bytes =
+        override === undefined
+          ? await readFile(new URL(`../sealed-v6/${name}`, import.meta.url))
+          : Buffer.isBuffer(override)
+            ? Buffer.from(override)
+            : Buffer.from(override);
+      return [name, bytes] as const;
+    }),
+  );
+  return Object.fromEntries(entries) as Record<SealedArtifactName, Buffer>;
+}
+
+function tarEntries(
+  compressed: Buffer,
+  failures: string[],
+  label: string,
+): ReadonlyMap<string, Buffer> {
+  let tar: Buffer;
+  try {
+    tar = gunzipSync(compressed, { maxOutputLength: 32 * 1024 * 1024 });
+  } catch {
+    failures.push(`${label} is not bounded gzip`);
+    return new Map();
+  }
+  const entries = new Map<string, Buffer>();
+  let offset = 0;
+  while (offset + 512 <= tar.byteLength) {
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) return entries;
+    const name = tarText(header, 0, 100);
+    const prefix = tarText(header, 345, 500);
+    const path = prefix.length > 0 ? `${prefix}/${name}` : name;
+    const size = tarOctal(header, 124, 136);
+    const start = offset + 512;
+    const end = start + size;
+    if (
+      path.length === 0 ||
+      path.includes('..') ||
+      !Number.isSafeInteger(size) ||
+      size < 0 ||
+      end > tar.byteLength ||
+      entries.has(path)
+    ) {
+      failures.push(`${label} has an invalid tar entry`);
+      return new Map();
+    }
+    entries.set(path, Buffer.from(tar.subarray(start, end)));
+    offset = start + Math.ceil(size / 512) * 512;
+  }
+  failures.push(`${label} has no zero-block terminator`);
+  return new Map();
+}
+
+function tarText(bytes: Buffer, start: number, end: number): string {
+  const zero = bytes.indexOf(0, start);
+  return bytes
+    .subarray(start, zero >= start && zero < end ? zero : end)
+    .toString('utf8');
+}
+
+function tarOctal(bytes: Buffer, start: number, end: number): number {
+  const value = tarText(bytes, start, end).trim();
+  return value.length === 0 || !/^[0-7]+$/u.test(value)
+    ? 0
+    : Number.parseInt(value, 8);
+}
+
+function deriveSealedOwnerIdentity(
+  sealed: Readonly<Record<SealedArtifactName, Buffer>>,
+  failures: string[],
+):
+  | {
+      readonly appId: string;
+      readonly generatedOwnerKey: string;
+      readonly ownerKey: string;
+      readonly providerExportBinding: string;
+      readonly providerImportSpecifier: string;
+      readonly providerKey: string;
+    }
+  | undefined {
+  const configSource = sealed['config.ts'].toString('utf8');
+  const providerSource = sealed['provider.ts'].toString('utf8');
+  const generatedSource = sealed['generated-app.ts'].toString('utf8');
+  const configFile = ts.createSourceFile(
+    'sealed/config.ts',
+    configSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const exportAssignment = configFile.statements.find(ts.isExportAssignment);
+  const configObject = exportAssignment
+    ? evaluatorObjectLiteral(exportAssignment.expression, 'Object', 'freeze')
+    : undefined;
+  if (!configObject) {
+    failures.push('sealed config AST is not an exact frozen object');
+    return undefined;
+  }
+  const appId = evaluatorStringProperty(configObject, 'appId');
+  const providerExportBinding = evaluatorStringProperty(
+    configObject,
+    'providerExportBinding',
+  );
+  const providerImportSpecifier = evaluatorStringProperty(
+    configObject,
+    'providerImportSpecifier',
+  );
+  const providerKey = evaluatorStringProperty(configObject, 'providerKey');
+  const providerReference = evaluatorIdentifierProperty(configObject, 'provider');
+  if (
+    !appId ||
+    !providerExportBinding ||
+    !providerImportSpecifier ||
+    !providerKey ||
+    providerReference !== providerExportBinding
+  ) {
+    failures.push('sealed config AST identity fields are incomplete');
+    return undefined;
+  }
+  const configImport = configFile.statements
+    .filter(ts.isImportDeclaration)
+    .find(
+      (statement) =>
+        ts.isStringLiteralLike(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === providerImportSpecifier &&
+        statement.importClause?.namedBindings &&
+        ts.isNamedImports(statement.importClause.namedBindings) &&
+        statement.importClause.namedBindings.elements.some(
+          (specifier) =>
+            (specifier.propertyName?.text ?? specifier.name.text) ===
+              providerExportBinding && specifier.name.text === providerExportBinding,
+        ),
+    );
+  const providerFile = ts.createSourceFile(
+    'sealed/provider.ts',
+    providerSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const providerDeclaration = providerFile.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === providerExportBinding,
+    );
+  const providerObject = providerDeclaration?.initializer
+    ? evaluatorUnwrap(providerDeclaration.initializer)
+    : undefined;
+  if (
+    !configImport ||
+    !providerObject ||
+    !ts.isObjectLiteralExpression(providerObject) ||
+    evaluatorStringProperty(providerObject, 'key') !== providerKey
+  ) {
+    failures.push('sealed provider AST does not authenticate the config identity');
+    return undefined;
+  }
+  const generatedFile = ts.createSourceFile(
+    'sealed/generated-app.ts',
+    generatedSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const generatedDeclaration = generatedFile.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === '__kovoGeneratedContract',
+    );
+  const generatedObject = generatedDeclaration?.initializer
+    ? evaluatorObjectLiteral(generatedDeclaration.initializer, 'Object', 'freeze')
+    : undefined;
+  const generatedOwnerKey = generatedObject
+    ? evaluatorStringProperty(generatedObject, 'ownerKey')
+    : undefined;
+  if (
+    !generatedObject ||
+    evaluatorStringProperty(generatedObject, 'appId') !== appId ||
+    evaluatorStringProperty(generatedObject, 'providerExportBinding') !==
+      providerExportBinding ||
+    evaluatorStringProperty(generatedObject, 'providerImportSpecifier') !==
+      providerImportSpecifier ||
+    evaluatorStringProperty(generatedObject, 'providerKey') !== providerKey ||
+    !generatedOwnerKey
+  ) {
+    failures.push('sealed generated AST does not bind the provider/config identity');
+    return undefined;
+  }
+  const ownerKey = `d1v6:${sha256(
+    JSON.stringify({
+      appId,
+      providerExportBinding,
+      providerImportSpecifier,
+      providerKey,
+    }),
+  )}`;
+  return {
+    appId,
+    generatedOwnerKey,
+    ownerKey,
+    providerExportBinding,
+    providerImportSpecifier,
+    providerKey,
+  };
+}
+
+function evaluatorObjectLiteral(
+  expression: ts.Expression,
+  receiver: string,
+  member: string,
+): ts.ObjectLiteralExpression | undefined {
+  const value = evaluatorUnwrap(expression);
+  if (
+    !ts.isCallExpression(value) ||
+    value.arguments.length !== 1 ||
+    !ts.isPropertyAccessExpression(value.expression) ||
+    !ts.isIdentifier(value.expression.expression) ||
+    value.expression.expression.text !== receiver ||
+    value.expression.name.text !== member
+  ) {
+    return undefined;
+  }
+  const argument = evaluatorUnwrap(value.arguments[0]!);
+  return ts.isObjectLiteralExpression(argument) ? argument : undefined;
+}
+
+function evaluatorStringProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const property = evaluatorProperty(object, name);
+  const value = property ? evaluatorUnwrap(property.initializer) : undefined;
+  return value && ts.isStringLiteralLike(value) ? value.text : undefined;
+}
+
+function evaluatorIdentifierProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const property = evaluatorProperty(object, name);
+  const value = property ? evaluatorUnwrap(property.initializer) : undefined;
+  return value && ts.isIdentifier(value) ? value.text : undefined;
+}
+
+function evaluatorProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.PropertyAssignment | undefined {
+  return object.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === name) ||
+        (ts.isStringLiteralLike(property.name) && property.name.text === name)),
+  );
+}
+
+function evaluatorUnwrap(expression: ts.Expression): ts.Expression {
+  let value = expression;
+  while (
+    ts.isParenthesizedExpression(value) ||
+    ts.isAsExpression(value) ||
+    ts.isSatisfiesExpression(value) ||
+    ts.isNonNullExpression(value) ||
+    ts.isTypeAssertionExpression(value)
+  ) {
+    value = value.expression;
+  }
+  return value;
+}
+
 function gate(failures: readonly string[]): EvaluationGate {
   return { details: [...failures], pass: failures.length === 0 };
+}
+
+function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV6): void {
+  assertExactKeys(evidence, exactRawKeys, 'raw evidence');
+  assertExactKeys(
+    evidence.provenance,
+    [
+      'buildCommands',
+      'frameworkHeadCommit',
+      'frameworkSourceCommit',
+      'frameworkSourceContents',
+      'frameworkSourceTreeClean',
+      'packages',
+      'packedCompiler',
+    ],
+    'raw evidence.provenance',
+  );
+  assertContentSubjectShape(evidence.provenance.frameworkSourceContents, 'framework source');
+  for (const [index, artifact] of evidence.provenance.packages.entries()) {
+    assertExactKeys(
+      artifact,
+      [
+        'name',
+        'packedContents',
+        'sourceContents',
+        'sourceSha256',
+        'tarballSha256',
+      ],
+      `package[${index}]`,
+    );
+    assertContentSubjectShape(artifact.packedContents, `package[${index}].packedContents`);
+    assertContentSubjectShape(artifact.sourceContents, `package[${index}].sourceContents`);
+  }
+  assertExactKeys(
+    evidence.provenance.packedCompiler,
+    ['entrypoints', 'schema', 'workspaceSourceResolutionForbidden'],
+    'packedCompiler',
+  );
+  for (const entry of evidence.provenance.packedCompiler.entrypoints) {
+    assertExactKeys(
+      entry,
+      ['packedFile', 'realpath', 'requested', 'resolvedSha256'],
+      'packedCompiler.entrypoint',
+    );
+    assertFileSubjectShape(entry.packedFile, 'packedCompiler.entrypoint.packedFile');
+  }
+
+  assertExactKeys(evidence.fixture, ['counts', 'ownerKey', 'serverCopies'], 'fixture');
+  assertExactKeySet(
+    Object.keys(evidence.fixture.counts),
+    [...Object.keys(criteria.workload), 'providerDefinitionCount'],
+    'fixture.counts',
+  );
+  for (const copy of evidence.fixture.serverCopies) {
+    assertExactKeys(
+      copy,
+      ['basePackedContentsSha256', 'overlayFiles', 'physicalRoot', 'postWriteContents'],
+      'fixture.serverCopy',
+    );
+    for (const file of copy.overlayFiles) assertFileSubjectShape(file, 'overlay file');
+    assertContentSubjectShape(copy.postWriteContents, 'post-write copy');
+  }
+
+  assertExactKeys(evidence.matrix, matrixCaseNames, 'matrix');
+  for (const name of matrixCaseNames) {
+    assertExactKeys(evidence.matrix[name], arms, `matrix.${name}`);
+    for (const arm of arms) assertMatrixEvidenceShape(evidence.matrix[name][arm], `${name}.${arm}`);
+  }
+  assertExactKeys(evidence.compiler, ['combinedGraphs', 'families'], 'compiler');
+  assertExactKeys(
+    evidence.compiler.combinedGraphs,
+    ['arm-a', 'arm-b', 'baseline'],
+    'compiler.combinedGraphs',
+  );
+  for (const subject of Object.values(evidence.compiler.combinedGraphs)) {
+    assertSemanticSubjectShape(subject, 'combined graph');
+  }
+  assertExactKeys(evidence.compiler.families, declarationFamilies, 'compiler.families');
+  for (const family of declarationFamilies) {
+    assertExactKeys(
+      evidence.compiler.families[family],
+      ['arm-a', 'arm-b', 'baseline'],
+      `compiler.families.${family}`,
+    );
+    for (const variant of ['arm-a', 'arm-b', 'baseline'] as const) {
+      const entry = evidence.compiler.families[family][variant];
+      assertExactKeys(
+        entry,
+        [
+          'arm',
+          'canonicalGraph',
+          'canonicalIr',
+          'compiledOwnerKey',
+          'family',
+          'recognized',
+          'serverPackageRoots',
+          'sourceSha256',
+          'sourceSubject',
+        ],
+        `compiler.families.${family}.${variant}`,
+      );
+      assertSemanticSubjectShape(entry.canonicalGraph, 'family graph');
+      assertSemanticSubjectShape(entry.canonicalIr, 'family IR');
+      assertFileSubjectShape(entry.sourceSubject, 'family source');
+    }
+  }
+
+  assertExactKeys(
+    evidence.receiverFlow,
+    ['controls', 'unsupported'],
+    'receiverFlow',
+  );
+  assertExactKeys(
+    evidence.receiverFlow.unsupported,
+    Object.keys(criteria.receiverFlowContract.unsupported),
+    'receiverFlow.unsupported',
+  );
+  assertExactKeys(
+    evidence.receiverFlow.controls,
+    criteria.receiverFlowContract.negativeControls,
+    'receiverFlow.controls',
+  );
+  for (const value of Object.values(evidence.receiverFlow.unsupported)) {
+    assertMatrixEvidenceShape(value, 'receiverFlow.unsupported entry');
+  }
+  for (const value of Object.values(evidence.receiverFlow.controls)) {
+    assertMatrixEvidenceShape(value, 'receiverFlow.control entry');
+  }
+  assertDiagnosticRecordShape(evidence.resolverIntegrity, 'resolverIntegrity');
+  assertExactKeys(
+    evidence.semanticEquivalence,
+    ['collisionSubjects', 'mutationDiagnostics'],
+    'semanticEquivalence',
+  );
+  assertExactKeys(
+    evidence.semanticEquivalence.collisionSubjects,
+    criteria.semanticEquivalenceContract.collisionFixtures,
+    'semanticEquivalence.collisionSubjects',
+  );
+  for (const collision of Object.values(evidence.semanticEquivalence.collisionSubjects)) {
+    assertExactKeys(
+      collision,
+      ['byteExact', 'canonicalSha256', 'originalSha256'],
+      'semantic collision',
+    );
+  }
+  assertDiagnosticRecordShape(
+    evidence.semanticEquivalence.mutationDiagnostics,
+    'semantic mutation diagnostics',
+  );
+  assertExactKeys(evidence.evidenceBindings, ['mutationDiagnostics'], 'evidenceBindings');
+  assertDiagnosticRecordShape(
+    evidence.evidenceBindings.mutationDiagnostics,
+    'binding mutation diagnostics',
+  );
+
+  assertExactKeys(evidence.generation, ['armB'], 'generation');
+  assertExactKeys(
+    evidence.generation.armB,
+    ['compilerRecognitionDiagnostics', 'contracts', 'mutationDiagnostics'],
+    'generation.armB',
+  );
+  for (const diagnostic of evidence.generation.armB.compilerRecognitionDiagnostics) {
+    assertDiagnosticShape(diagnostic, 'generation compiler diagnostic');
+  }
+  assertDiagnosticRecordShape(
+    evidence.generation.armB.mutationDiagnostics,
+    'generation mutation diagnostics',
+  );
+  for (const contract of evidence.generation.armB.contracts) {
+    assertExactKeys(
+      contract,
+      ['configSubject', 'generatedModuleSubject', 'manifest', 'providerSubject'],
+      'generated contract',
+    );
+    assertFileSubjectShape(contract.configSubject, 'generated config');
+    assertFileSubjectShape(contract.generatedModuleSubject, 'generated module');
+    assertFileSubjectShape(contract.providerSubject, 'generated provider');
+    assertExactKeys(
+      contract.manifest,
+      [
+        'appId',
+        'compilerSourceSha256',
+        'completed',
+        'configSha256',
+        'generatedModuleSha256',
+        'ownerKey',
+        'providerExportBinding',
+        'providerImportSpecifier',
+        'providerKey',
+        'providerSourceSha256',
+        'schema',
+        'serverPackedContentsSha256',
+      ],
+      'generated manifest',
+    );
+  }
+
+  assertExactKeys(evidence.runtime, arms, 'runtime');
+  for (const runtime of Object.values(evidence.runtime)) {
+    assertExactKeys(
+      runtime,
+      [
+        'assembledHandleCount',
+        'crossAppError',
+        'ownedFamilies',
+        'ownerKey',
+        'providerEvaluationCount',
+      ],
+      'runtime arm',
+    );
+  }
+  assertExactKeys(
+    evidence.publicForgery,
+    ['fakeAccessAsPublicAccess', 'fakeHtmlAsTrustedHtml', 'forbiddenOptionNamesPresent'],
+    'publicForgery',
+  );
+  assertExactKeys(
+    evidence.publicForgery.fakeAccessAsPublicAccess,
+    ['componentPublicAccess', 'routePublicAccess'],
+    'publicForgery.access',
+  );
+  assertExactKeys(
+    evidence.publicForgery.fakeHtmlAsTrustedHtml,
+    ['diagnosticCodes', 'recognizedTrustedHtml'],
+    'publicForgery.html',
+  );
+
+  assertExactKeys(evidence.diagnostics, ['arm-a', 'arm-b', 'baseline'], 'diagnostics');
+  for (const diagnostic of Object.values(evidence.diagnostics)) {
+    assertExactKeys(
+      diagnostic,
+      ['code', 'expectedStart', 'fileName', 'length', 'message', 'start'],
+      'TypeScript diagnostic',
+    );
+  }
+  assertExactKeys(evidence.measurements, ['arm-a', 'arm-b', 'baseline'], 'measurements');
+  for (const measurement of Object.values(evidence.measurements)) {
+    assertExactKeys(
+      measurement,
+      [
+        'coldCompletionP50Ms',
+        'coldCompletionSamples',
+        'coldTscP50Ms',
+        'coldTscSamples',
+        'completionCandidateCount',
+        'completionCandidateDigest',
+        'completionCandidateNames',
+        'declarationBytes',
+        'typecheckDiagnosticCodes',
+        'warmCompletionP95Ms',
+        'warmCompletionSamples',
+        'warmTscP50Ms',
+        'warmTscSamples',
+      ],
+      'measurement',
+    );
+    for (const sample of [...measurement.coldTscSamples, ...measurement.warmTscSamples]) {
+      assertTimedSampleShape(sample, false);
+    }
+    for (const sample of [
+      ...measurement.coldCompletionSamples,
+      ...measurement.warmCompletionSamples,
+    ]) {
+      assertTimedSampleShape(sample, true);
+    }
+  }
+  assertExactKeys(
+    evidence.mutationCoverage,
+    ['correlated', 'oneSided', 'selectionBranches'],
+    'mutationCoverage',
+  );
+  assertExactKeys(
+    evidence.mutationCoverage.oneSided,
+    criteria.mutationContract.oneSided,
+    'mutationCoverage.oneSided',
+  );
+  assertExactKeys(
+    evidence.mutationCoverage.correlated,
+    criteria.mutationContract.correlated,
+    'mutationCoverage.correlated',
+  );
+  assertExactKeys(
+    evidence.mutationCoverage.selectionBranches,
+    criteria.mutationContract.selectionBranchesRequired,
+    'mutationCoverage.selectionBranches',
+  );
+  for (const entry of [
+    ...Object.values(evidence.mutationCoverage.oneSided),
+    ...Object.values(evidence.mutationCoverage.correlated),
+  ]) {
+    assertExactKeys(entry, ['detected'], 'mutation coverage entry');
+  }
+  for (const entry of Object.values(evidence.mutationCoverage.selectionBranches)) {
+    assertExactKeys(entry, ['decision'], 'selection branch entry');
+  }
+  assertExactKeys(
+    evidence.runner,
+    [
+      'architecture',
+      'cpuModel',
+      'nodeVersion',
+      'operatingSystem',
+      'runnerName',
+      'schema',
+      'typescriptVersion',
+    ],
+    'runner',
+  );
+  assertExactKeys(evidence.schedules, ['coldCompletion', 'tsc', 'warmCompletion'], 'schedules');
+  assertExactKeys(
+    evidence.sealedArtifacts,
+    [
+      'compilerPackedSha256',
+      'configSha256',
+      'generatedAppSha256',
+      'providerSha256',
+      'serverOverlayPackedSha256',
+    ],
+    'sealedArtifacts',
+  );
+}
+
+function assertContentSubjectShape(subject: ContentSubject, label: string): void {
+  assertExactKeys(subject, ['digest', 'files', 'schema'], label);
+  for (const file of subject.files) assertFileSubjectShape(file, `${label}.file`);
+}
+
+function assertFileSubjectShape(subject: FileSubject, label: string): void {
+  assertExactKeys(subject, ['bytes', 'executable', 'path', 'schema', 'sha256'], label);
+}
+
+function assertMatrixEvidenceShape(
+  value: D1RawEvidenceV6['matrix'][MatrixCaseName][AppContractArm],
+  label: string,
+): void {
+  assertExactKeys(
+    value,
+    [
+      'diagnostics',
+      'ownerKey',
+      'recognizedFactoryCount',
+      'resolverSchema',
+      'serverPackageRoots',
+      'sourceSha256',
+      'sourceSubject',
+      'typescriptDiagnosticCodes',
+    ],
+    label,
+  );
+  for (const diagnostic of value.diagnostics) assertDiagnosticShape(diagnostic, `${label}.diagnostic`);
+  assertFileSubjectShape(value.sourceSubject, `${label}.source`);
+}
+
+function assertSemanticSubjectShape(
+  value: D1RawEvidenceV6['compiler']['combinedGraphs']['baseline'],
+  label: string,
+): void {
+  assertExactKeys(value, ['canonical', 'digest', 'schema'], label);
+}
+
+function assertDiagnosticRecordShape(
+  value: Readonly<Record<string, readonly PrototypeDiagnostic[]>>,
+  label: string,
+): void {
+  for (const [name, diagnostics] of Object.entries(value)) {
+    for (const diagnostic of diagnostics) assertDiagnosticShape(diagnostic, `${label}.${name}`);
+  }
+}
+
+function assertDiagnosticShape(value: PrototypeDiagnostic, label: string): void {
+  assertExactKeys(value, ['code', 'fileName', 'length', 'message', 'start'], label);
+}
+
+function assertTimedSampleShape(
+  sample: object,
+  completion: boolean,
+): void {
+  assertExactKeys(
+    sample,
+    completion
+      ? [
+          'blockIndex',
+          'candidateCount',
+          'candidateDigest',
+          'iteration',
+          'milliseconds',
+          'orderIndex',
+          'sampleId',
+          'variant',
+        ]
+      : ['blockIndex', 'iteration', 'milliseconds', 'orderIndex', 'sampleId', 'variant'],
+    'timed sample',
+  );
+}
+
+export function assertD1V6EvaluationShape(evaluation: D1EvaluationV6): void {
+  assertExactKeys(
+    evaluation,
+    ['arms', 'criteria', 'decision', 'priorEvidenceDisposition', 'schema'],
+    'evaluation',
+  );
+  assertExactKeys(evaluation.arms, arms, 'evaluation.arms');
+  for (const arm of arms) {
+    assertExactKeys(evaluation.arms[arm], ['eligible', 'gates'], `evaluation.${arm}`);
+    assertExactKeys(
+      evaluation.arms[arm].gates,
+      [
+        'artifacts',
+        'compilerAndGraph',
+        'diagnostics',
+        'matrix',
+        'ownershipAndBindings',
+        'performance',
+        'publicForgery',
+      ],
+      `evaluation.${arm}.gates`,
+    );
+    for (const gateValue of Object.values(evaluation.arms[arm].gates)) {
+      assertExactKeys(gateValue, ['details', 'pass'], 'evaluation gate');
+    }
+  }
+  assertExactKeys(
+    evaluation.priorEvidenceDisposition,
+    ['v1', 'v2', 'v3', 'v4', 'v5'],
+    'evaluation.priorEvidenceDisposition',
+  );
 }
 
 function assertExactKeys(value: object, expected: readonly string[], label: string): void {

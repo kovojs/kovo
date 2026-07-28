@@ -16,6 +16,7 @@ import type {
 export interface D1CriteriaV6 {
   readonly artifactContract: {
     readonly exactPackageNames: readonly string[];
+    readonly overlayFilesExact: number;
     readonly packedCompilerEntrypoints: readonly string[];
     readonly sealedArtifactNames: readonly string[];
     readonly [key: string]: unknown;
@@ -77,10 +78,13 @@ export interface D1CriteriaV6 {
     readonly semanticMutations: Readonly<Record<string, string>>;
     readonly [key: string]: unknown;
   };
-  readonly semanticThresholds: Readonly<Record<string, number>>;
+  readonly semanticThresholds: Readonly<Record<string, number>> & {
+    readonly providerDefinitionCountExact: number;
+  };
   readonly workload: {
     readonly declarationFilesPerVariant: number;
     readonly declarationsPerFile: number;
+    readonly serverOverlayFileCount: number;
     readonly [key: string]: number;
   };
 }
@@ -159,11 +163,21 @@ export interface D1RawEvidenceV6 {
     >;
   };
   readonly receiverFlow: {
-    readonly nestedAppDerived: MatrixEvidence;
-    readonly unrelatedSameNamedMember: MatrixEvidence;
+    readonly controls: Readonly<Record<string, MatrixEvidence>>;
+    readonly unsupported: Readonly<Record<string, MatrixEvidence>>;
   };
   readonly resolverIntegrity: Readonly<Record<string, readonly PrototypeDiagnostic[]>>;
   readonly semanticEquivalence: {
+    readonly collisionSubjects: Readonly<
+      Record<
+        string,
+        {
+          readonly byteExact: boolean;
+          readonly canonicalSha256: string;
+          readonly originalSha256: string;
+        }
+      >
+    >;
     readonly mutationDiagnostics: Readonly<Record<string, readonly PrototypeDiagnostic[]>>;
   };
   readonly evidenceBindings: {
@@ -190,6 +204,11 @@ export interface D1RawEvidenceV6 {
   };
   readonly diagnostics: Readonly<Record<AppContractArm | 'baseline', TypeDiagnosticEvidence>>;
   readonly measurements: Readonly<Record<AppContractArm | 'baseline', SuccessfulTypeMeasurement>>;
+  readonly mutationCoverage: {
+    readonly correlated: Readonly<Record<string, { readonly detected: boolean }>>;
+    readonly oneSided: Readonly<Record<string, { readonly detected: boolean }>>;
+    readonly selectionBranches: Readonly<Record<string, { readonly decision: string }>>;
+  };
   readonly runner: TypeMeasurementEvidence['runner'];
   readonly schedules: TypeMeasurementEvidence['schedules'];
 }

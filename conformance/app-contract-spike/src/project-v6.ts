@@ -1,6 +1,8 @@
 import { readFile, readdir, symlink, unlink } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
 
+import ts from 'typescript';
+
 import {
   fileSubject,
   sha256,
@@ -298,6 +300,52 @@ export function semanticMutationSubjects(
   };
 }
 
+export function semanticCollisionEvidence(): Readonly<
+  Record<
+    | 'authored-callee-literal'
+    | 'authored-multiline-literal'
+    | 'authored-span-shaped-object'
+    | 'comment-callee-text'
+    | 'repeated-callee-text'
+    | 'template-newline-collision',
+    {
+      readonly byteExact: boolean;
+      readonly canonicalSha256: string;
+      readonly originalSha256: string;
+    }
+  >
+> {
+  const sources = {
+    'authored-callee-literal': `export const text = "app.query({ load() {} })";\n`,
+    'authored-multiline-literal':
+      'export const text = `first\\ngeneratedQuery({ load() {} })\\nlast`;\n',
+    'authored-span-shaped-object':
+      'export const authored = { end: 41, sourceSpan: { start: 7 }, start: 3 };\n',
+    'comment-callee-text': '// app.query({}) generatedQuery({}) directQuery({})\nexport const ok = true;\n',
+    'repeated-callee-text': [
+      'const generatedQuery = (value: unknown) => value;',
+      'export const first = generatedQuery({ value: 1 });',
+      'export const second = generatedQuery({ value: 2 });',
+      '',
+    ].join('\n'),
+    'template-newline-collision':
+      'export const text = `return ` + "\\`" + `\\napp.query({})\\n` + "\\`" + `;`;\n',
+  } as const;
+  return Object.fromEntries(
+    Object.entries(sources).map(([name, source]) => {
+      const canonical = canonicalizeFactorySource(source);
+      return [
+        name,
+        {
+          byteExact: canonical === source,
+          canonicalSha256: sha256(canonical),
+          originalSha256: sha256(source),
+        },
+      ];
+    }),
+  ) as ReturnType<typeof semanticCollisionEvidence>;
+}
+
 export async function publicForgeryEvidence(project: PrototypeProject): Promise<{
   readonly fakeAccessAsPublicAccess: {
     readonly componentPublicAccess: boolean;
@@ -434,7 +482,11 @@ function stableDiagnostic(
 
 function canonicalize(value: unknown, key?: string): unknown {
   if (spanKey(key)) return undefined;
-  if (typeof value === 'string') return normalizeCalleeSyntax(value);
+  if (typeof value === 'string') {
+    return key === 'source' || key === 'loweredSource'
+      ? canonicalizeFactorySource(value)
+      : value;
+  }
   if (Array.isArray(value)) {
     return value.map((entry) => canonicalize(entry)).filter((entry) => entry !== undefined);
   }
@@ -462,43 +514,150 @@ function spanKey(key: string | undefined): boolean {
   );
 }
 
-function normalizeCalleeSyntax(value: string): string {
-  let normalized = value
-    .replaceAll(/import \{ app \} from ['"][^'"]+['"];\n?/gu, '')
-    .replaceAll(/import \{ ([^}]+) \} from '@kovojs\/server';/gu, (_match, rawNames: string) => {
-      const names = rawNames
-        .split(',')
-        .map((name) => name.trim())
-        .filter(
-          (name) => name.length > 0 && !(declarationFamilies as readonly string[]).includes(name),
-        );
-      return names.length > 0 ? `import { ${names.join(', ')} } from '@kovojs/server';` : '';
-    })
-    .replaceAll(/import \{ ([^}]+) \} from '#kovo';\n?/gu, (_match, rawNames: string) => {
-      const names = rawNames
-        .split(',')
-        .map((name) => name.trim())
-        .filter((name) => {
-          const imported = name.split(/\s+as\s+/u)[0];
-          return imported !== undefined && !declarationFamilies.includes(imported as DeclarationFamily);
-        });
-      return names.length > 0 ? `import { ${names.join(', ')} } from '#kovo';` : '';
-    })
-    .replaceAll(/"end":\d+/gu, '"end":0')
-    .replaceAll(/"start":\d+/gu, '"start":0')
-    .replaceAll(
-      '/** @jsxImportSource @kovojs/server */\n\n',
-      '/** @jsxImportSource @kovojs/server */\n',
-    );
-  for (const family of declarationFamilies) {
-    const title = `${family[0]!.toUpperCase()}${family.slice(1)}`;
-    normalized = normalized
-      .replaceAll(`app.${family}`, family)
-      .replaceAll(`direct${title}(`, `${family}(`)
-      .replaceAll(`generated${title}(`, `${family}(`);
+function canonicalizeFactorySource(value: string): string {
+  const sourceFile = ts.createSourceFile(
+    'd1-canonical-source.tsx',
+    value,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const factoryBindings = new Map<string, DeclarationFamily>();
+  const appBindings = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      !statement.importClause?.namedBindings ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+    const moduleName = statement.moduleSpecifier.text;
+    for (const specifier of statement.importClause.namedBindings.elements) {
+      const imported = specifier.propertyName?.text ?? specifier.name.text;
+      if (
+        (moduleName === '@kovojs/server' || moduleName === '#kovo') &&
+        declarationFamilies.includes(imported as DeclarationFamily)
+      ) {
+        factoryBindings.set(specifier.name.text, imported as DeclarationFamily);
+      }
+      if (
+        imported === 'app' &&
+        (moduleName.endsWith('/kovo.js') || moduleName.endsWith('/kovo.ts'))
+      ) {
+        appBindings.add(specifier.name.text);
+      }
+    }
   }
-  normalized = normalized.replaceAll('return `\n', 'return `').replaceAll(/\n{3,}/gu, '\n\n');
-  return normalized.startsWith('\n') ? normalized.slice(1) : normalized;
+  const exactCallees = new Map<ts.Expression, DeclarationFamily>();
+  const visitCalls = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const expression = unwrapCanonicalExpression(node.expression);
+      if (ts.isIdentifier(expression)) {
+        const family = factoryBindings.get(expression.text);
+        if (family) exactCallees.set(expression, family);
+      } else if (
+        ts.isPropertyAccessExpression(expression) &&
+        ts.isIdentifier(expression.expression) &&
+        appBindings.has(expression.expression.text) &&
+        declarationFamilies.includes(expression.name.text as DeclarationFamily)
+      ) {
+        exactCallees.set(expression, expression.name.text as DeclarationFamily);
+      }
+    }
+    ts.forEachChild(node, visitCalls);
+  };
+  visitCalls(sourceFile);
+
+  let nestedTemplateChanged = false;
+  const transformed = ts.transform(sourceFile, [
+    (context) => {
+      const visitor: ts.Visitor = (node) => {
+        if (ts.isNoSubstitutionTemplateLiteral(node)) {
+          const canonical = canonicalizeFactorySource(node.text);
+          if (canonical !== node.text) {
+            nestedTemplateChanged = true;
+            return context.factory.createNoSubstitutionTemplateLiteral(canonical);
+          }
+          return node;
+        }
+        if (ts.isImportDeclaration(node) && exactCallees.size > 0) {
+          return canonicalImportDeclaration(node, context.factory);
+        }
+        if (ts.isExpression(node)) {
+          const family = exactCallees.get(node);
+          if (family) return context.factory.createIdentifier(family);
+        }
+        return ts.visitEachChild(node, visitor, context);
+      };
+      return (node) => ts.visitNode(node, visitor) as ts.SourceFile;
+    },
+  ]);
+  try {
+    if (exactCallees.size === 0 && !nestedTemplateChanged) return value;
+    return ts
+      .createPrinter({ newLine: ts.NewLineKind.LineFeed, removeComments: false })
+      .printFile(transformed.transformed[0] as ts.SourceFile);
+  } finally {
+    transformed.dispose();
+  }
+}
+
+function canonicalImportDeclaration(
+  declaration: ts.ImportDeclaration,
+  factory: ts.NodeFactory,
+): ts.ImportDeclaration | undefined {
+  if (
+    !ts.isStringLiteralLike(declaration.moduleSpecifier) ||
+    !declaration.importClause?.namedBindings ||
+    !ts.isNamedImports(declaration.importClause.namedBindings)
+  ) {
+    return declaration;
+  }
+  const moduleName = declaration.moduleSpecifier.text;
+  const elements = declaration.importClause.namedBindings.elements.filter((specifier) => {
+    const imported = specifier.propertyName?.text ?? specifier.name.text;
+    if (
+      (moduleName === '@kovojs/server' || moduleName === '#kovo') &&
+      declarationFamilies.includes(imported as DeclarationFamily)
+    ) {
+      return false;
+    }
+    return !(
+      imported === 'app' &&
+      (moduleName.endsWith('/kovo.js') || moduleName.endsWith('/kovo.ts'))
+    );
+  });
+  if (elements.length === 0 && !declaration.importClause.name) return undefined;
+  return factory.updateImportDeclaration(
+    declaration,
+    declaration.modifiers,
+    factory.updateImportClause(
+      declaration.importClause,
+      declaration.importClause.isTypeOnly,
+      declaration.importClause.name,
+      elements.length > 0
+        ? factory.updateNamedImports(declaration.importClause.namedBindings, elements)
+        : undefined,
+    ),
+    declaration.moduleSpecifier,
+    declaration.attributes,
+  );
+}
+
+function unwrapCanonicalExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function familyReached(family: DeclarationFamily, component: unknown, route: unknown): boolean {

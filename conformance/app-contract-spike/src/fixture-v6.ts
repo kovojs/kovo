@@ -83,11 +83,14 @@ export interface PrototypeFixture {
   readonly matrixEntries: Readonly<
     Record<MatrixCaseName, Readonly<Record<AppContractArm, string>>>
   >;
-  readonly nestedFlowProbe: string;
   readonly ownerKey: string;
   readonly providerFile: string;
   readonly root: string;
   readonly runtimeEntries: Readonly<Record<AppContractArm, string>>;
+  readonly receiverFlowEntries: {
+    readonly controls: Readonly<Record<string, string>>;
+    readonly unsupported: Readonly<Record<string, string>>;
+  };
   readonly secondaryProviderFile: string;
   readonly serverA: string;
   readonly serverB: string;
@@ -96,7 +99,6 @@ export interface PrototypeFixture {
   readonly serverOverlayTarball: string;
   readonly serverOverlayTarballSha256: string;
   readonly shared: string;
-  readonly unrelatedMemberProbe: string;
 }
 
 export async function createPrototypeFixture(
@@ -229,26 +231,7 @@ export async function createPrototypeFixture(
   const matrixEntries = await writeMatrixFixtures({ app, consumer, shared });
   const familyEntries = await writeFamilyFixtures(app);
   const runtimeEntries = await writeRuntimeFixtures(app);
-  const nestedFlowProbe = join(app, 'src/probes/nested-derived.ts');
-  await writeSource(
-    nestedFlowProbe,
-    [
-      "import { app } from '../kovo.js';",
-      'const levelOne = { levelTwo: [{ current: app }] };',
-      'const active = levelOne.levelTwo[0]!.current;',
-      'export const item = active.query({ load() { return 1; } });',
-      '',
-    ].join('\n'),
-  );
-  const unrelatedMemberProbe = join(app, 'src/probes/unrelated-member.ts');
-  await writeSource(
-    unrelatedMemberProbe,
-    [
-      'const service = { query(definition: unknown) { return definition; } };',
-      'export const item = service.query({ load() { return 1; } });',
-      '',
-    ].join('\n'),
-  );
+  const receiverFlowEntries = await writeReceiverFlowFixtures(app);
 
   return {
     app,
@@ -258,11 +241,11 @@ export async function createPrototypeFixture(
     generated: [generatedApp, generatedShared, generatedDuplicate],
     generatedApp,
     matrixEntries,
-    nestedFlowProbe,
     ownerKey,
     providerFile,
     root,
     runtimeEntries,
+    receiverFlowEntries,
     secondaryProviderFile,
     serverA: await realpath(serverA),
     serverB: await realpath(serverB),
@@ -271,7 +254,6 @@ export async function createPrototypeFixture(
     serverOverlayTarball: serverOverlay.tarball,
     serverOverlayTarballSha256: serverOverlay.sha256,
     shared,
-    unrelatedMemberProbe,
   };
 }
 
@@ -975,6 +957,76 @@ async function writeFamilyFixtures(
     }
   }
   return entries;
+}
+
+async function writeReceiverFlowFixtures(app: string): Promise<{
+  readonly controls: Readonly<Record<string, string>>;
+  readonly unsupported: Readonly<Record<string, string>>;
+}> {
+  const prefix = "import { app } from '../kovo.js';\n";
+  const definition = '{ load() { return 1; } }';
+  const sources = {
+    'array-binding-element': `${prefix}const [active] = [app];\nexport const item = active!.query(${definition});\n`,
+    'awaited-dynamic-import': `const module = await import('../kovo.js');\nexport const item = module.app.query(${definition});\n`,
+    'bound-call': `${prefix}const invoke = app.query.bind(app);\nexport const item = invoke(${definition});\n`,
+    'callback-parameter': `${prefix}export const item = [app].map((active) => active.query(${definition}))[0];\n`,
+    'callback-return': `${prefix}export const item = [1].map(() => app.query(${definition}))[0];\n`,
+    'dynamic-import': `import('../kovo.js').then((module) => module.app.query(${definition}));\n`,
+    'function-body-alias': `${prefix}function invoke() { const active = app; return active.query(${definition}); }\nexport const item = invoke();\n`,
+    'function-parameter': `${prefix}const invoke = (active: typeof app) => active.query(${definition});\nexport const item = invoke(app);\n`,
+    'function-return': `${prefix}function select() { return app; }\nexport const item = select().query(${definition});\n`,
+    'nested-property': `${prefix}const holder = { deep: { value: app } };\nconst active = holder.deep.value;\nexport const item = active.query(${definition});\n`,
+    'object-binding-element': `${prefix}const { value: active } = { value: app };\nexport const item = active.query(${definition});\n`,
+    'wrapper-chain': `${prefix}const first = () => app;\nconst second = () => first();\nexport const item = second().query(${definition});\n`,
+  } as const;
+  const unsupported: Record<string, string> = {};
+  for (const [name, source] of Object.entries(sources)) {
+    const fileName = join(app, `src/probes/unsupported-${name}.ts`);
+    await writeSource(fileName, source);
+    unsupported[name] = fileName;
+  }
+
+  const importedModule = join(app, 'src/probes/unrelated-module.ts');
+  await writeSource(
+    importedModule,
+    'export const app = { query(definition: unknown) { return definition; } };\n',
+  );
+  const controls = {
+    'unrelated-defineKovo-named-function': join(
+      app,
+      'src/probes/control-unrelated-define-kovo.ts',
+    ),
+    'unrelated-imported-app-query-member': join(app, 'src/probes/control-unrelated-imported.ts'),
+    'unrelated-local-app-query-member': join(app, 'src/probes/control-unrelated-local.ts'),
+  };
+  await writeSource(
+    controls['unrelated-local-app-query-member'],
+    [
+      'const app = { query(definition: unknown) { return definition; } };',
+      `export const item = app.query(${definition});`,
+      '',
+    ].join('\n'),
+  );
+  await writeSource(
+    controls['unrelated-imported-app-query-member'],
+    [
+      "import { app } from './unrelated-module.js';",
+      `export const item = app.query(${definition});`,
+      '',
+    ].join('\n'),
+  );
+  await writeSource(
+    controls['unrelated-defineKovo-named-function'],
+    [
+      'function defineKovo() {',
+      '  return { query(definition: unknown) { return definition; } };',
+      '}',
+      'const app = defineKovo();',
+      `export const item = app.query(${definition});`,
+      '',
+    ].join('\n'),
+  );
+  return { controls, unsupported };
 }
 
 function familySource(family: DeclarationFamily, variant: AppContractArm | 'baseline'): string {

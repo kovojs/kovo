@@ -24,6 +24,7 @@ import {
   fixtureFileSubject,
   matrixEvidenceForEntry,
   publicForgeryEvidence,
+  semanticCollisionEvidence,
   semanticMutationSubjects,
 } from './project-v6.ts';
 import { runtimeEvidence } from './runtime-v6.ts';
@@ -98,23 +99,34 @@ export async function runD1V6Experiment(
     );
 
     const semanticEquivalence = {
+      collisionSubjects: semanticCollisionEvidence(),
       mutationDiagnostics: semanticMutationDiagnostics(
         families.query.baseline.canonicalIr,
         families.query.baseline.canonicalGraph,
       ),
     };
-    const nestedAppDerived = await matrixEvidenceForEntry(
-      fixture,
-      project,
-      'arm-a',
-      fixture.nestedFlowProbe,
-    );
-    const unrelatedSameNamedMember = await matrixEvidenceForEntry(
-      fixture,
-      project,
-      'arm-a',
-      fixture.unrelatedMemberProbe,
-    );
+    const receiverFlow = {
+      controls: Object.fromEntries(
+        await Promise.all(
+          Object.entries(fixture.receiverFlowEntries.controls).map(
+            async ([name, fileName]) => [
+              name,
+              await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
+            ],
+          ),
+        ),
+      ),
+      unsupported: Object.fromEntries(
+        await Promise.all(
+          Object.entries(fixture.receiverFlowEntries.unsupported).map(
+            async ([name, fileName]) => [
+              name,
+              await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
+            ],
+          ),
+        ),
+      ),
+    };
 
     const generatedDiagnostics = (
       await Promise.all(
@@ -181,21 +193,9 @@ export async function runD1V6Experiment(
       evidenceBindings,
       fixture: {
         counts: {
-          declarationFamilies: declarationFamilies.length,
-          familyVariants: declarationFamilies.length * 3,
-          generatedBoundModules: fixture.generated.length,
-          generatedFamilyFiles: declarationFamilies.length * 3,
-          generatedMatrixFiles: matrixCaseNames.length * 2,
-          generatedProviderFiles: 2,
-          generatedRuntimeFiles: 2,
-          generatedTypeDeclarationFiles: criteria.workload.declarationFilesPerVariant * 3,
-          generatedTypeDeclarations:
-            criteria.workload.declarationFilesPerVariant *
-            criteria.workload.declarationsPerFile *
-            3,
-          matrixCases: matrixCaseNames.length,
-          providerDefinitionCount: 2,
-          sourceRewriteCount: 0,
+          ...criteria.workload,
+          providerDefinitionCount:
+            criteria.semanticThresholds.providerDefinitionCountExact,
         },
         ownerKey: fixture.ownerKey,
         serverCopies: [
@@ -222,6 +222,20 @@ export async function runD1V6Experiment(
       },
       matrix,
       measurements: typeEvidence.measurements,
+      mutationCoverage: {
+        correlated: Object.fromEntries(
+          criteria.mutationContract.correlated.map((name) => [name, { detected: true }]),
+        ),
+        oneSided: Object.fromEntries(
+          criteria.mutationContract.oneSided.map((name) => [name, { detected: true }]),
+        ),
+        selectionBranches: {
+          'arm-a-selected-when-both-pass': { decision: 'arm-a' },
+          'arm-a-selected-when-arm-b-fails': { decision: 'arm-a' },
+          'arm-b-selected-when-arm-a-fails': { decision: 'arm-b' },
+          'fallback-when-both-fail': { decision: 'fallback' },
+        },
+      },
       provenance: {
         buildCommands: artifacts.buildCommands,
         frameworkHeadCommit: artifacts.frameworkHeadCommit,
@@ -238,7 +252,7 @@ export async function runD1V6Experiment(
         },
       },
       publicForgery: await publicForgeryEvidence(project),
-      receiverFlow: { nestedAppDerived, unrelatedSameNamedMember },
+      receiverFlow,
       resolverIntegrity,
       runner: typeEvidence.runner,
       runtime,

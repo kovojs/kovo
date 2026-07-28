@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { evaluateD1V6 } from './evaluator-v6.ts';
+import { assertD1V6EvaluationShape, evaluateD1V6 } from './evaluator-v6.ts';
 import { runD1V6Experiment } from './experiment-v6.ts';
 import type { D1CriteriaV6, D1EvaluationV6, D1RawEvidenceV6 } from './types-v6.ts';
 
@@ -36,6 +36,7 @@ export async function runD1V6Measurement(mode: 'verify' | 'write'): Promise<void
 
   const committedEvidence = await readJson<D1RawEvidenceV6>(evidenceUrl);
   const committedEvaluation = await readJson<D1EvaluationV6>(resultsUrl);
+  assertD1V6EvaluationShape(committedEvaluation);
   const reevaluatedCommitted = await evaluateD1V6(criteria, committedEvidence);
   assertEqual(
     reevaluatedCommitted,
@@ -59,6 +60,7 @@ export async function runD1V6Measurement(mode: 'verify' | 'write'): Promise<void
         bothArmsRerun: true,
         committedEvidenceReevaluatesExactly: true,
         decision: freshEvaluation.decision,
+        gates: freshEvaluation.arms,
         everyDecisionRelevantGateCompared: true,
         schema: 'kovo.app-contract-d1-measure-verify/v6',
         timingSamplesReevaluatedByThresholds: true,
