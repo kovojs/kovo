@@ -513,7 +513,9 @@ describe('DevEx benchmark foundation', () => {
         },
         source.ratificationOptions,
       ),
-    ).toThrow('exact code-owned Kovo release and benchmark consumer census');
+    ).toThrow(
+      'production baseline ratification requires the exact scenario authenticated by the fresh code-owned pack producer',
+    );
   });
 
   it('represents deterministic documentation snapshot sizes without inventing thresholds', () => {

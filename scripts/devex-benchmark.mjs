@@ -52,6 +52,7 @@ const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
 const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v1';
 const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
+const authenticatedProductionScenarios = new WeakSet();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
@@ -1655,6 +1656,15 @@ function validateProposal(proposal) {
  * supplies the product target and rationale; the harness never invents a threshold from one run.
  */
 export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
+  if (
+    baselineReport?.scenario?.name === 'kovo-packed-check' &&
+    (!authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
+      !sameJson(baselineReport.scenario.definition, options.authenticatedProductionScenario))
+  ) {
+    throw new Error(
+      'production baseline ratification requires the exact scenario authenticated by the fresh code-owned pack producer',
+    );
+  }
   const findings = [
     ...validateBudgets(budgets, {
       baselineReports: options.baselineReports,
@@ -2177,6 +2187,7 @@ function acquireFreshKovoScenario(environment, options = {}) {
   });
   try {
     const materialized = materializeFreshKovoScenario(produced.repositoryRoot, environment);
+    authenticatedProductionScenarios.add(materialized.scenario);
     return {
       ...materialized,
       dispose: produced.dispose,
@@ -2372,14 +2383,38 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
         `production ratification accepts only the authenticated code-owned Kovo producer:\n- ${productionScenarioFindings.join('\n- ')}`,
       );
     }
-    const updated = ratifyBudgets(budgets, baselineReport, readJson(path.resolve(args.proposal)), {
-      baselineReportPath: relativeBaselinePath,
-      baselineReportBytes: baselineBytes,
-      repoRoot: budgetsRoot,
+    const baselineEnvironment = {
+      ...baselineReport.scenario.definition.environment,
+      sourceCommit: baselineReport.scenario.definition.provenance.sourceCommit,
+      sourceTree: baselineReport.scenario.definition.provenance.sourceTree,
+    };
+    const authenticated = acquireFreshKovoScenario(baselineEnvironment, {
+      repositoryRoot: budgetsRoot,
     });
-    if (args.write) writeJson(args.budgets, updated);
-    else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
-    return 0;
+    try {
+      validateFreshKovoScenario(authenticated, baselineEnvironment);
+      if (!sameJson(authenticated.scenario, baselineReport.scenario.definition)) {
+        throw new Error(
+          'baseline scenario does not match the exact scenario reproduced by the fresh code-owned pack producer',
+        );
+      }
+      const updated = ratifyBudgets(
+        budgets,
+        baselineReport,
+        readJson(path.resolve(args.proposal)),
+        {
+          authenticatedProductionScenario: authenticated.scenario,
+          baselineReportPath: relativeBaselinePath,
+          baselineReportBytes: baselineBytes,
+          repoRoot: budgetsRoot,
+        },
+      );
+      if (args.write) writeJson(args.budgets, updated);
+      else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
+      return 0;
+    } finally {
+      authenticated.dispose();
+    }
   }
   if (!args.scenario) {
     process.stderr.write(usage());
