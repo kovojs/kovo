@@ -1,86 +1,206 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { createRequire } from 'node:module';
 import { basename, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 
 const defaultAcceptEncoding = 'br,gzip';
+const defaultHarnessTimeoutMs = 180_000;
+const defaultLighthouseTimeoutMs = 120_000;
+const defaultMaxCriticalAssetCount = 64;
+const defaultMaxDecodedBodyBytes = 16 * 1024 * 1024;
+const defaultMaxEncodedBodyBytes = 8 * 1024 * 1024;
+const defaultRequestTimeoutMs = 15_000;
+const hardMaxHarnessTimeoutMs = 10 * 60_000;
+const hardMaxLighthouseTimeoutMs = 5 * 60_000;
+const hardMaxCriticalAssetCount = 256;
+const hardMaxDecodedBodyBytes = 64 * 1024 * 1024;
+const hardMaxEncodedBodyBytes = 32 * 1024 * 1024;
+const hardMaxRequestTimeoutMs = 60_000;
 const defaultViewports = [
   { height: 844, name: 'mobile', width: 390 },
   { height: 900, name: 'desktop', width: 1440 },
 ];
+const axeRequire = createRequire(new URL('../tests/integration/package.json', import.meta.url));
+const wcagTags = Object.freeze(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
 
 export async function runFcpHarness(options) {
+  validateAccessibilityOptions(options);
+  const limits = validatedHarnessLimits(options);
+  const controller = new AbortController();
+  const deadlineAt = performance.now() + limits.harnessTimeoutMs;
+  const deadlineError = new Error(
+    `FCP harness exceeded ${limits.harnessTimeoutMs} ms global deadline`,
+  );
+  let deadlineTimer;
+  const deadline = new Promise((_, reject) => {
+    deadlineTimer = setTimeout(() => {
+      controller.abort(deadlineError);
+      reject(deadlineError);
+    }, limits.harnessTimeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      runFcpHarnessWithinDeadline(options, limits, controller.signal, deadlineAt),
+      deadline,
+    ]);
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
+}
+
+async function runFcpHarnessWithinDeadline(options, limits, signal, deadlineAt) {
   const url = new URL(options.url);
   const outputDir = options.outputDir ?? defaultOutputDir(url);
   mkdirSync(outputDir, { recursive: true });
 
-  const documentProbe = await probeUrl(url, {
-    acceptEncoding: options.acceptEncoding ?? defaultAcceptEncoding,
-  });
-  const documentHtml = decodeProbeBody(documentProbe).toString('utf8');
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const documentProbe = await probeUrl(url, { ...limits, signal });
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  assertSuccessfulProbe(documentProbe, 'document');
+  const documentBody = decodeProbeBody(documentProbe, limits);
+  const documentHtml = documentBody.toString('utf8');
   const inventory = htmlAssetInventory(documentHtml, url);
+  if (inventory.criticalAssetUrls.length > limits.maxCriticalAssetCount) {
+    throw new Error(
+      `${url.href}: critical asset inventory contains ${inventory.criticalAssetUrls.length} URLs, exceeding the limit of ${limits.maxCriticalAssetCount}`,
+    );
+  }
   const assetProbes = [];
 
   for (const assetUrl of inventory.criticalAssetUrls) {
-    assetProbes.push(
-      await probeUrl(assetUrl, { acceptEncoding: options.acceptEncoding ?? defaultAcceptEncoding }),
-    );
+    remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+    const assetProbe = await probeUrl(assetUrl, { ...limits, signal });
+    remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+    assertSuccessfulProbe(assetProbe, 'critical asset');
+    const assetBody = decodeProbeBody(assetProbe, limits);
+    assetProbes.push(probeSummary(assetProbe, assetBody));
   }
 
-  const browser = options.browser === false ? undefined : await runBrowserSmoke(url, outputDir);
-  const lighthouse = options.lighthouse ? runLighthouse(url, outputDir) : undefined;
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const browserRunner = options.runBrowserSmoke ?? runBrowserSmoke;
+  const browser =
+    options.browser === false
+      ? undefined
+      : await browserRunner(url, outputDir, {
+          accessibility: options.accessibility === true,
+          requestTimeoutMs: limits.requestTimeoutMs,
+          signal,
+          terminalState: options.terminalState,
+        });
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
+  const lighthouseRunner = options.runLighthouse ?? runLighthouse;
+  const lighthouse = options.lighthouse
+    ? await lighthouseRunner(url, outputDir, {
+        signal,
+        timeoutMs: Math.min(
+          limits.lighthouseTimeoutMs,
+          remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs),
+        ),
+      })
+    : undefined;
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
   const result = {
-    assetProbes: assetProbes.map(probeSummary),
+    assetProbes,
     browser,
-    document: probeSummary(documentProbe),
+    document: probeSummary(documentProbe, documentBody),
     inventory,
     lighthouse,
     outputDir,
+    probeLimits: {
+      harnessTimeoutMs: limits.harnessTimeoutMs,
+      lighthouseTimeoutMs: limits.lighthouseTimeoutMs,
+      maxCriticalAssetCount: limits.maxCriticalAssetCount,
+      maxDecodedBodyBytes: limits.maxDecodedBodyBytes,
+      maxEncodedBodyBytes: limits.maxEncodedBodyBytes,
+      requestTimeoutMs: limits.requestTimeoutMs,
+    },
     url: url.href,
   };
+  if (options.browser !== false) {
+    result.browserGate = browserGateResult(browser, {
+      accessibilityRequested: options.accessibility === true,
+    });
+  }
+  result.gate = fcpGateResult(result, { lighthouseRequested: options.lighthouse === true });
 
+  remainingDeadlineMs(signal, deadlineAt, limits.harnessTimeoutMs);
   writeFileSync(join(outputDir, 'summary.json'), `${JSON.stringify(result, null, 2)}\n`);
   return result;
 }
 
 export async function probeUrl(url, options = {}, redirectCount = 0) {
+  const probeOptions = validatedProbeOptions(options);
+  const signal = options.signal;
+  throwIfAborted(signal);
   const target = new URL(url);
   const transport = target.protocol === 'https:' ? httpsRequest : httpRequest;
   const startedAt = performance.now();
 
   return await new Promise((resolve, reject) => {
+    let settled = false;
+    let timeout;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', abortRequest);
+      callback(value);
+    };
     const request = transport(
       target,
       {
         headers: {
-          'Accept-Encoding': options.acceptEncoding ?? defaultAcceptEncoding,
+          'Accept-Encoding': probeOptions.acceptEncoding,
           'User-Agent': 'kovo-fcp-harness/1',
         },
       },
       (response) => {
         const chunks = [];
+        let encodedBytes = 0;
         let firstByteAt;
         response.once('data', () => {
           firstByteAt = performance.now();
         });
-        response.on('data', (chunk) => chunks.push(chunk));
-        response.on('error', reject);
+        response.on('data', (chunk) => {
+          encodedBytes += chunk.byteLength;
+          if (encodedBytes > probeOptions.maxEncodedBodyBytes) {
+            response.destroy(
+              new Error(
+                `${target.href}: encoded response exceeded ${probeOptions.maxEncodedBodyBytes} bytes`,
+              ),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on('error', (error) => settle(reject, error));
         response.on('end', async () => {
           const status = response.statusCode ?? 0;
           const location = readHeader(response.headers, 'location');
           if (status >= 300 && status < 400 && location && redirectCount < 5) {
+            clearTimeout(timeout);
             try {
-              resolve(await probeUrl(new URL(location, target), options, redirectCount + 1));
+              settle(
+                resolve,
+                await probeUrl(
+                  new URL(location, target),
+                  { ...probeOptions, signal },
+                  redirectCount + 1,
+                ),
+              );
             } catch (error) {
-              reject(error);
+              settle(reject, error);
             }
             return;
           }
           const endedAt = performance.now();
-          resolve({
+          settle(resolve, {
             body: Buffer.concat(chunks),
             headers: normalizedHeaders(response.headers),
             status,
@@ -95,7 +215,17 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
         });
       },
     );
-    request.on('error', reject);
+    const abortRequest = () => {
+      request.destroy(abortReason(signal));
+    };
+    signal?.addEventListener('abort', abortRequest, { once: true });
+    request.on('error', (error) => settle(reject, error));
+    timeout = setTimeout(() => {
+      request.destroy(
+        new Error(`${target.href}: request exceeded ${probeOptions.requestTimeoutMs} ms`),
+      );
+    }, probeOptions.requestTimeoutMs);
+    timeout.unref?.();
     request.end();
   });
 }
@@ -154,9 +284,16 @@ export function htmlAssetInventory(html, baseUrl) {
   };
 }
 
-function runLighthouse(url, outputDir) {
+export function runLighthouse(url, outputDir, options = {}) {
   const outputPath = join(outputDir, 'lighthouse.json');
-  const result = spawnSync(
+  const spawn = options.spawn ?? spawnSync;
+  const timeoutMs = boundedPositiveInteger(
+    options.timeoutMs,
+    defaultLighthouseTimeoutMs,
+    hardMaxLighthouseTimeoutMs,
+    'lighthouseTimeoutMs',
+  );
+  const result = spawn(
     'npx',
     [
       '--yes',
@@ -168,11 +305,20 @@ function runLighthouse(url, outputDir) {
       '--chrome-flags=--headless=new --no-sandbox',
       '--quiet',
     ],
-    { encoding: 'utf8' },
+    {
+      encoding: 'utf8',
+      timeout: timeoutMs,
+    },
   );
   if (result.status !== 0) {
+    const timedOut = result.error?.code === 'ETIMEDOUT';
     return {
-      error: result.stderr || result.stdout || `lighthouse exited ${result.status}`,
+      error:
+        result.stderr ||
+        result.stdout ||
+        (timedOut
+          ? `lighthouse exceeded ${timeoutMs} ms`
+          : result.error?.message || `lighthouse exited ${result.status}`),
       outputPath,
       ok: false,
     };
@@ -195,13 +341,23 @@ function runLighthouse(url, outputDir) {
   };
 }
 
-async function runBrowserSmoke(url, outputDir) {
+async function runBrowserSmoke(url, outputDir, options = {}) {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
+  const closeOnAbort = () => {
+    void browser.close().catch(() => undefined);
+  };
+  options.signal?.addEventListener('abort', closeOnAbort, { once: true });
   const results = [];
+  const axePath = options.accessibility === true ? axeRequire.resolve('axe-core/axe.min.js') : null;
+  const axeSource = axePath === null ? null : readFileSync(axePath, 'utf8');
+  const axeSourceDigest =
+    axeSource === null ? null : `sha256:${createHash('sha256').update(axeSource).digest('hex')}`;
 
   try {
+    throwIfAborted(options.signal);
     for (const viewport of defaultViewports) {
+      throwIfAborted(options.signal);
       const page = await browser.newPage({ viewport });
       const consoleErrors = [];
       const pageErrors = [];
@@ -210,10 +366,67 @@ async function runBrowserSmoke(url, outputDir) {
       });
       page.on('pageerror', (error) => pageErrors.push(error.message));
 
-      await page.goto(url.href, { waitUntil: 'load' });
+      const navigation = await page.goto(url.href, {
+        timeout: options.requestTimeoutMs,
+        waitUntil: 'load',
+      });
+      throwIfAborted(options.signal);
+      const navigationStatus = navigation?.status() ?? 0;
+      if (navigationStatus < 200 || navigationStatus >= 300) {
+        throw new Error(
+          `browser document request returned non-success status ${navigationStatus}: ${url.href}`,
+        );
+      }
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => undefined);
+      throwIfAborted(options.signal);
+      const terminalState =
+        options.accessibility === true
+          ? {
+              name: options.terminalState.name,
+              selector: options.terminalState.selector,
+            }
+          : null;
+      if (terminalState !== null) {
+        await page.waitForSelector(terminalState.selector, {
+          state: 'visible',
+          timeout: options.terminalState.timeoutMs ?? 10000,
+        });
+        const matchCount = await page.locator(terminalState.selector).count();
+        if (matchCount !== 1) {
+          throw new Error(
+            `terminal state selector must match exactly one element; observed ${matchCount}: ${terminalState.selector}`,
+          );
+        }
+        terminalState.matchCount = matchCount;
+      }
       const screenshotPath = join(outputDir, `${viewport.name}.png`);
       await page.screenshot({ fullPage: false, path: screenshotPath });
+      const screenshotBytes = readFileSync(screenshotPath);
+      const screenshot = {
+        bytes: screenshotBytes.byteLength,
+        fullPage: false,
+        path: screenshotPath,
+        sha256: `sha256:${createHash('sha256').update(screenshotBytes).digest('hex')}`,
+        viewport,
+      };
+      let accessibility = null;
+      if (axeSource !== null) {
+        // Runtime evaluation preserves the application's real CSP/Trusted Types policy. DOM-based
+        // script injection is intentionally rejected by Kovo's generated Trusted Types bootstrap.
+        await page.evaluate(axeSource);
+        const axeResult = await page.evaluate(
+          async (tags) =>
+            await globalThis.axe.run(document, {
+              runOnly: { type: 'tag', values: tags },
+              resultTypes: ['incomplete', 'passes', 'violations'],
+            }),
+          wcagTags,
+        );
+        accessibility = summarizeAxeResult(axeResult, {
+          sourceDigest: axeSourceDigest,
+          terminalState,
+        });
+      }
       const facts = await page.evaluate(() => {
         const paintEntries = performance.getEntriesByType('paint').map((entry) => ({
           name: entry.name,
@@ -243,28 +456,141 @@ async function runBrowserSmoke(url, outputDir) {
           title: document.title,
         };
       });
+      throwIfAborted(options.signal);
+      const terminalObservation =
+        terminalState === null
+          ? null
+          : {
+              ...terminalState,
+              matched: true,
+              url: page.url(),
+            };
 
       await page.close();
       results.push({
         ...facts,
         consoleErrors,
+        accessibility,
         pageErrors,
+        screenshot,
         screenshotPath,
+        terminalState: terminalObservation,
         viewport,
       });
     }
   } finally {
+    options.signal?.removeEventListener('abort', closeOnAbort);
     await browser.close();
   }
 
   return results;
 }
 
-function probeSummary(probe) {
+export function summarizeAxeResult(result, options) {
+  const compactNodes = (nodes) =>
+    nodes.map((node) => ({
+      failureSummary: node.failureSummary ?? null,
+      target: node.target,
+    }));
+  const compactRule = (rule) => ({
+    help: rule.help,
+    helpUrl: rule.helpUrl,
+    id: rule.id,
+    impact: rule.impact ?? null,
+    nodes: compactNodes(rule.nodes ?? []),
+  });
+  const violations = (result.violations ?? []).map(compactRule);
+  return {
+    engine: {
+      name: result.testEngine?.name ?? 'axe-core',
+      sourceSha256: options.sourceDigest,
+      version: result.testEngine?.version ?? null,
+    },
+    incomplete: (result.incomplete ?? []).map(compactRule),
+    pass: violations.length === 0,
+    passes: (result.passes ?? []).map((rule) => ({
+      id: rule.id,
+      nodes: rule.nodes?.length ?? 0,
+    })),
+    terminalState: options.terminalState,
+    violations,
+    wcagTags,
+  };
+}
+
+export function browserGateResult(browserResults, options = {}) {
+  const failures = [];
+  if (!Array.isArray(browserResults) || browserResults.length === 0) {
+    failures.push('browser smoke produced no viewport results');
+    return { failures, pass: false };
+  }
+  for (const result of browserResults) {
+    const prefix = result.viewport?.name ?? 'unknown viewport';
+    if (!result.firstViewportTextVisible) failures.push(`${prefix}: first viewport has no text`);
+    if ((result.consoleErrors?.length ?? 0) > 0) {
+      failures.push(`${prefix}: ${result.consoleErrors.length} console error(s)`);
+    }
+    if ((result.pageErrors?.length ?? 0) > 0) {
+      failures.push(`${prefix}: ${result.pageErrors.length} page error(s)`);
+    }
+    const fcpEntry = result.paintEntries?.find((entry) => entry.name === 'first-contentful-paint');
+    if (!Number.isFinite(fcpEntry?.startTime) || fcpEntry.startTime < 0) {
+      failures.push(`${prefix}: first-contentful-paint was not observed`);
+    }
+    if (options.accessibilityRequested === true) {
+      if (result.terminalState?.matched !== true) {
+        failures.push(`${prefix}: terminal state was not observed`);
+      }
+      if (result.terminalState?.matchCount !== 1) {
+        failures.push(
+          `${prefix}: terminal state selector matched ${result.terminalState?.matchCount ?? 0} elements`,
+        );
+      }
+      if (result.accessibility?.pass !== true) {
+        failures.push(
+          `${prefix}: ${result.accessibility?.violations.length ?? 0} axe violation(s)`,
+        );
+      }
+    }
+    if (
+      !/^sha256:[0-9a-f]{64}$/u.test(result.screenshot?.sha256 ?? '') ||
+      !(result.screenshot?.bytes > 0)
+    ) {
+      failures.push(`${prefix}: screenshot artifact metadata is missing`);
+    }
+  }
+  return { failures, pass: failures.length === 0 };
+}
+
+export function fcpGateResult(result, options = {}) {
+  const failures = [];
+  if (result.browserGate?.pass === false) {
+    failures.push(...result.browserGate.failures.map((failure) => `browser: ${failure}`));
+  }
+  if (options.lighthouseRequested === true) {
+    if (result.lighthouse?.ok !== true) {
+      failures.push(
+        `lighthouse: ${result.lighthouse?.error?.trim() || 'requested run did not succeed'}`,
+      );
+    } else if (
+      !Number.isFinite(result.lighthouse.audits?.fcpMs) ||
+      result.lighthouse.audits.fcpMs < 0
+    ) {
+      failures.push('lighthouse: first-contentful-paint is missing or invalid');
+    }
+  }
+  return { failures, pass: failures.length === 0 };
+}
+
+export function fcpHarnessExitCode(result) {
+  return result.gate?.pass === false ? 1 : 0;
+}
+
+function probeSummary(probe, decodedBody) {
   return {
     contentEncoding: readHeader(probe.headers, 'content-encoding') ?? null,
     contentType: readHeader(probe.headers, 'content-type') ?? null,
-    decodedBytes: decodeProbeBody(probe).byteLength,
+    decodedBytes: decodedBody.byteLength,
     encodedBytes: probe.body.byteLength,
     headers: probe.headers,
     status: probe.status,
@@ -274,12 +600,35 @@ function probeSummary(probe) {
   };
 }
 
-function decodeProbeBody(probe) {
+function decodeProbeBody(probe, options = {}) {
+  const { maxDecodedBodyBytes } = validatedProbeOptions(options);
   const encoding = (readHeader(probe.headers, 'content-encoding') ?? '').toLowerCase();
-  if (encoding === 'br') return brotliDecompressSync(probe.body);
-  if (encoding === 'gzip') return gunzipSync(probe.body);
-  if (encoding === 'deflate') return inflateSync(probe.body);
-  return probe.body;
+  if ((encoding === '' || encoding === 'identity') && probe.body.byteLength > maxDecodedBodyBytes) {
+    throw new Error(`${probe.url}: decoded response exceeded ${maxDecodedBodyBytes} bytes`);
+  }
+  if (encoding === '' || encoding === 'identity') return probe.body;
+  if (!['br', 'gzip', 'deflate'].includes(encoding)) {
+    throw new Error(`${probe.url}: unsupported content encoding ${JSON.stringify(encoding)}`);
+  }
+  try {
+    if (encoding === 'br') {
+      return brotliDecompressSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+    }
+    if (encoding === 'gzip') {
+      return gunzipSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+    }
+    return inflateSync(probe.body, { maxOutputLength: maxDecodedBodyBytes });
+  } catch (error) {
+    if (
+      error?.code === 'ERR_BUFFER_TOO_LARGE' ||
+      /larger than .*maxOutputLength|Cannot create a Buffer larger than/u.test(error?.message ?? '')
+    ) {
+      throw new Error(`${probe.url}: decoded response exceeded ${maxDecodedBodyBytes} bytes`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 function readOpeningTags(html, tagName) {
@@ -393,8 +742,113 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function boundedPositiveInteger(value, fallback, maximum, label) {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved <= 0 || resolved > maximum) {
+    throw new Error(`${label} must be a positive integer no greater than ${maximum}`);
+  }
+  return resolved;
+}
+
+function validatedHarnessLimits(options = {}) {
+  return {
+    ...validatedProbeOptions(options),
+    harnessTimeoutMs: boundedPositiveInteger(
+      options.harnessTimeoutMs,
+      defaultHarnessTimeoutMs,
+      hardMaxHarnessTimeoutMs,
+      'harnessTimeoutMs',
+    ),
+    lighthouseTimeoutMs: boundedPositiveInteger(
+      options.lighthouseTimeoutMs,
+      defaultLighthouseTimeoutMs,
+      hardMaxLighthouseTimeoutMs,
+      'lighthouseTimeoutMs',
+    ),
+    maxCriticalAssetCount: boundedPositiveInteger(
+      options.maxCriticalAssetCount,
+      defaultMaxCriticalAssetCount,
+      hardMaxCriticalAssetCount,
+      'maxCriticalAssetCount',
+    ),
+  };
+}
+
+function validatedProbeOptions(options = {}) {
+  const acceptEncoding = options.acceptEncoding ?? defaultAcceptEncoding;
+  if (typeof acceptEncoding !== 'string' || acceptEncoding.trim().length === 0) {
+    throw new Error('acceptEncoding must be a non-empty string');
+  }
+  return {
+    acceptEncoding,
+    maxDecodedBodyBytes: boundedPositiveInteger(
+      options.maxDecodedBodyBytes,
+      defaultMaxDecodedBodyBytes,
+      hardMaxDecodedBodyBytes,
+      'maxDecodedBodyBytes',
+    ),
+    maxEncodedBodyBytes: boundedPositiveInteger(
+      options.maxEncodedBodyBytes,
+      defaultMaxEncodedBodyBytes,
+      hardMaxEncodedBodyBytes,
+      'maxEncodedBodyBytes',
+    ),
+    requestTimeoutMs: boundedPositiveInteger(
+      options.requestTimeoutMs,
+      defaultRequestTimeoutMs,
+      hardMaxRequestTimeoutMs,
+      'requestTimeoutMs',
+    ),
+  };
+}
+
+function abortReason(signal) {
+  return signal?.reason instanceof Error
+    ? signal.reason
+    : new Error('FCP harness operation was aborted');
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function remainingDeadlineMs(signal, deadlineAt, harnessTimeoutMs) {
+  throwIfAborted(signal);
+  const remaining = Math.ceil(deadlineAt - performance.now());
+  if (remaining <= 0) {
+    throw new Error(`FCP harness exceeded ${harnessTimeoutMs} ms global deadline`);
+  }
+  return remaining;
+}
+
+function assertSuccessfulProbe(probe, label) {
+  if (probe.status < 200 || probe.status >= 300) {
+    throw new Error(`${label} request returned non-success status ${probe.status}: ${probe.url}`);
+  }
+}
+
+function validateAccessibilityOptions(options) {
+  if (options.accessibility !== true) {
+    if (options.terminalState !== undefined) {
+      throw new Error('terminal-state capture requires accessibility mode');
+    }
+    return;
+  }
+  if (options.browser === false) {
+    throw new Error('accessibility capture requires browser mode');
+  }
+  if (
+    typeof options.terminalState?.name !== 'string' ||
+    options.terminalState.name.trim().length === 0 ||
+    typeof options.terminalState?.selector !== 'string' ||
+    options.terminalState.selector.trim().length === 0
+  ) {
+    throw new Error('accessibility capture requires an explicit terminal state name and selector');
+  }
+}
+
 function parseCliArgs(args) {
-  const options = { browser: true, lighthouse: false };
+  const options = { accessibility: false, browser: true, lighthouse: false };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--') continue;
@@ -404,6 +858,10 @@ function parseCliArgs(args) {
     }
     if (arg === '--lighthouse') {
       options.lighthouse = true;
+      continue;
+    }
+    if (arg === '--a11y') {
+      options.accessibility = true;
       continue;
     }
     if (arg === '--no-browser') {
@@ -434,6 +892,116 @@ function parseCliArgs(args) {
       if (!options.acceptEncoding) throw new Error('Missing value for --accept-encoding.');
       continue;
     }
+    if (arg === '--harness-timeout-ms') {
+      options.harnessTimeoutMs = parseCliPositiveInteger(args[index + 1], '--harness-timeout-ms');
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--harness-timeout-ms=')) {
+      options.harnessTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--harness-timeout-ms='.length),
+        '--harness-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--lighthouse-timeout-ms') {
+      options.lighthouseTimeoutMs = parseCliPositiveInteger(
+        args[index + 1],
+        '--lighthouse-timeout-ms',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--lighthouse-timeout-ms=')) {
+      options.lighthouseTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--lighthouse-timeout-ms='.length),
+        '--lighthouse-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--max-critical-asset-count') {
+      options.maxCriticalAssetCount = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-critical-asset-count',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-critical-asset-count=')) {
+      options.maxCriticalAssetCount = parseCliPositiveInteger(
+        arg.slice('--max-critical-asset-count='.length),
+        '--max-critical-asset-count',
+      );
+      continue;
+    }
+    if (arg === '--request-timeout-ms') {
+      options.requestTimeoutMs = parseCliPositiveInteger(args[index + 1], '--request-timeout-ms');
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--request-timeout-ms=')) {
+      options.requestTimeoutMs = parseCliPositiveInteger(
+        arg.slice('--request-timeout-ms='.length),
+        '--request-timeout-ms',
+      );
+      continue;
+    }
+    if (arg === '--max-encoded-body-bytes') {
+      options.maxEncodedBodyBytes = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-encoded-body-bytes',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-encoded-body-bytes=')) {
+      options.maxEncodedBodyBytes = parseCliPositiveInteger(
+        arg.slice('--max-encoded-body-bytes='.length),
+        '--max-encoded-body-bytes',
+      );
+      continue;
+    }
+    if (arg === '--max-decoded-body-bytes') {
+      options.maxDecodedBodyBytes = parseCliPositiveInteger(
+        args[index + 1],
+        '--max-decoded-body-bytes',
+      );
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--max-decoded-body-bytes=')) {
+      options.maxDecodedBodyBytes = parseCliPositiveInteger(
+        arg.slice('--max-decoded-body-bytes='.length),
+        '--max-decoded-body-bytes',
+      );
+      continue;
+    }
+    if (arg === '--terminal-name') {
+      const name = args[index + 1];
+      if (!name) throw new Error('Missing value for --terminal-name.');
+      options.terminalState = { ...options.terminalState, name };
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--terminal-name=')) {
+      const name = arg.slice('--terminal-name='.length);
+      if (!name) throw new Error('Missing value for --terminal-name.');
+      options.terminalState = { ...options.terminalState, name };
+      continue;
+    }
+    if (arg === '--terminal-selector') {
+      const selector = args[index + 1];
+      if (!selector) throw new Error('Missing value for --terminal-selector.');
+      options.terminalState = { ...options.terminalState, selector };
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--terminal-selector=')) {
+      const selector = arg.slice('--terminal-selector='.length);
+      if (!selector) throw new Error('Missing value for --terminal-selector.');
+      options.terminalState = { ...options.terminalState, selector };
+      continue;
+    }
     if (arg === '--url') {
       const url = args[index + 1];
       if (!url) throw new Error('Missing value for --url.');
@@ -454,10 +1022,26 @@ function parseCliArgs(args) {
   }
   if (!options.url) {
     throw new Error(
-      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>]`,
+      `Usage: node ${basename(process.argv[1] ?? 'scripts/fcp-harness.mjs')} <url> [--json] [--lighthouse] [--no-browser] [--output <dir>] [--harness-timeout-ms <ms>] [--lighthouse-timeout-ms <ms>] [--request-timeout-ms <ms>] [--max-critical-asset-count <count>] [--max-encoded-body-bytes <bytes>] [--max-decoded-body-bytes <bytes>] [--a11y --terminal-name <name> --terminal-selector <selector>]`,
     );
   }
+  if (options.accessibility && (!options.terminalState?.name || !options.terminalState?.selector)) {
+    throw new Error('--a11y requires --terminal-name and --terminal-selector.');
+  }
+  if (options.accessibility && options.browser === false) {
+    throw new Error('--a11y cannot be combined with --no-browser.');
+  }
+  if (!options.accessibility && options.terminalState !== undefined) {
+    throw new Error('--terminal-name and --terminal-selector require --a11y.');
+  }
   return options;
+}
+
+function parseCliPositiveInteger(value, option) {
+  if (!/^[1-9]\d*$/u.test(value ?? '')) {
+    throw new Error(`${option} requires a positive integer.`);
+  }
+  return Number(value);
 }
 
 function printTextSummary(result) {
@@ -471,6 +1055,12 @@ function printTextSummary(result) {
     `document-content-encoding=${result.document.contentEncoding ?? '-'}`,
     `document-vary=${result.document.vary ?? '-'}`,
     `document-ttfb-ms=${result.document.timings.ttfbMs ?? '-'}`,
+    `harness-timeout-ms=${result.probeLimits.harnessTimeoutMs}`,
+    `lighthouse-timeout-ms=${result.probeLimits.lighthouseTimeoutMs}`,
+    `request-timeout-ms=${result.probeLimits.requestTimeoutMs}`,
+    `max-critical-asset-count=${result.probeLimits.maxCriticalAssetCount}`,
+    `max-encoded-body-bytes=${result.probeLimits.maxEncodedBodyBytes}`,
+    `max-decoded-body-bytes=${result.probeLimits.maxDecodedBodyBytes}`,
     `inline-style-bytes=${result.inventory.inlineStyleBytes}`,
     `inline-script-bytes=${result.inventory.inlineScriptBytes}`,
     `body-bytes=${result.inventory.bodyBytes}`,
@@ -500,7 +1090,24 @@ function printTextSummary(result) {
       `browser-${smoke.viewport.name}-resources=${smoke.resources.length}`,
       `browser-${smoke.viewport.name}-console-errors=${smoke.consoleErrors.length}`,
       `browser-${smoke.viewport.name}-page-errors=${smoke.pageErrors.length}`,
-      `browser-${smoke.viewport.name}-screenshot=${smoke.screenshotPath}`,
+      `browser-${smoke.viewport.name}-screenshot=${smoke.screenshot.path}`,
+      `browser-${smoke.viewport.name}-screenshot-bytes=${smoke.screenshot.bytes}`,
+      `browser-${smoke.viewport.name}-screenshot-sha256=${smoke.screenshot.sha256}`,
+    );
+    if (smoke.accessibility) {
+      lines.push(
+        `browser-${smoke.viewport.name}-terminal-state=${smoke.terminalState.name}`,
+        `browser-${smoke.viewport.name}-terminal-selector=${smoke.terminalState.selector}`,
+        `browser-${smoke.viewport.name}-axe-version=${smoke.accessibility.engine.version}`,
+        `browser-${smoke.viewport.name}-axe-pass=${smoke.accessibility.pass}`,
+        `browser-${smoke.viewport.name}-axe-violations=${smoke.accessibility.violations.length}`,
+      );
+    }
+  }
+  if (result.browserGate) {
+    lines.push(
+      `browser-gate-pass=${result.browserGate.pass}`,
+      `browser-gate-failures=${result.browserGate.failures.join(';') || '-'}`,
     );
   }
 
@@ -519,6 +1126,10 @@ function printTextSummary(result) {
       );
     }
   }
+  lines.push(
+    `fcp-gate-pass=${result.gate.pass}`,
+    `fcp-gate-failures=${result.gate.failures.join(';') || '-'}`,
+  );
 
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -529,6 +1140,7 @@ if (import.meta.url === new URL(process.argv[1], 'file:').href) {
     const result = await runFcpHarness(options);
     if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     else printTextSummary(result);
+    process.exitCode = fcpHarnessExitCode(result);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

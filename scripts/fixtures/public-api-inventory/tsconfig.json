@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@fixture/api": ["./packages/api/src/index.ts"],
+      "@fixture/api/*": ["./packages/api/src/*.ts"],
+      "@fixture/glyphs": ["./packages/glyphs/src/index.ts"],
+      "@fixture/glyphs/*": ["./packages/glyphs/src/*.ts"]
+    },
+    "strict": true,
+    "target": "ES2024"
+  }
+}

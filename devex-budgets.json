@@ -1,0 +1,132 @@
+{
+  "schema": "kovo-devex-budgets/v5",
+  "runner": {
+    "status": "unratified",
+    "fingerprint": null
+  },
+  "workload": {
+    "status": "unratified",
+    "identity": null
+  },
+  "procedure": {
+    "minimumStatisticalSamples": 5,
+    "statistic": "median",
+    "noiseStatistic": "median-absolute-deviation",
+    "thresholdFormula": "budget + noiseMultiplier * noise"
+  },
+  "metrics": {
+    "check.cold.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 30000,
+      "ratification": null
+    },
+    "check.cold.peakRssBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "check.warm.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 10000,
+      "ratification": null
+    },
+    "check.warm.peakRssBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "check.oneFileIncremental.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 2000,
+      "ratification": null
+    },
+    "check.oneFileIncremental.peakRssBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "create.install.cold.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "create.install.installedBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "dev.editToDiagnostic.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 1000,
+      "ratification": null
+    },
+    "dev.editToServedResult.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 500,
+      "ratification": null
+    },
+    "dev.ready.cold.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 15000,
+      "ratification": null
+    },
+    "dev.ready.warm.durationMs": {
+      "unit": "ms",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 5000,
+      "ratification": null
+    },
+    "browser.bootstrapBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "docs.snapshot.compressedBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "docs.snapshot.installedBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "deterministic",
+      "provisionalTarget": null,
+      "ratification": null
+    },
+    "ui.fullCatalog.peakRssBytes": {
+      "unit": "bytes",
+      "direction": "max",
+      "sampling": "statistical",
+      "provisionalTarget": 2147483648,
+      "ratification": null,
+      "knownFailure": "KF-DEVEX-007"
+    }
+  }
+}

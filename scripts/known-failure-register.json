@@ -1,0 +1,328 @@
+{
+  "schema": "kovo-known-failures/v1",
+  "ownershipLedger": "plans/devex-gates.md",
+  "entries": [
+    {
+      "id": "KF-DEVEX-001",
+      "title": "Fresh SQLite scaffold requires an undeclared auth-origin fix",
+      "owner": "Track 1 development-origin work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed SQLite scaffold login journey",
+      "retirementCondition": "The packed SQLite golden journey reaches login without an undocumented origin edit and its regression test passes.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G1"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-001",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "A packed SQLite scaffold reaches login using only creator-emitted configuration and instructions.",
+      "gap": "Needs the shared packed scaffold journey and a bounded login request probe; no source-link substitute is accepted."
+    },
+    {
+      "id": "KF-DEVEX-002",
+      "title": "Dev server stays silent for at least 75 seconds after listen",
+      "owner": "Track 1 dev-reporter work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed dev-server readiness output",
+      "retirementCondition": "The packed dev journey emits the required ready line immediately after socket bind and passes the ratified G2 timing gate.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G2"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-002",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 120000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
+      "gap": "Needs the packed journey runner's observable listen marker so the probe can distinguish silent output from a server that never listened."
+    },
+    {
+      "id": "KF-DEVEX-003",
+      "title": "CLI help exits 1",
+      "owner": "Track 1 help/version exit-contract work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed CLI process contract",
+      "retirementCondition": "Every packed help path writes usage to stdout and exits zero under the CLI exit-code contract suite.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G5"]
+      },
+      "state": "retired",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "help",
+          "--id",
+          "KF-DEVEX-003",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "The packed kovo --help command exits 0, writes usage to stdout, and does not classify help as an error.",
+      "retirement": {
+        "evidence": "The authenticated packed @kovojs/cli help probe now exits zero with usage on stdout and no stderr.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
+    },
+    {
+      "id": "KF-DEVEX-004",
+      "title": "Bare check with no graph reports OK",
+      "owner": "Track 1 source-proof work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed CLI graph-input validation",
+      "retirementCondition": "A packed empty consumer fails closed without source graph or explicit artifact and the adversarial G7 suite passes.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G7"]
+      },
+      "state": "executable",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "empty-check",
+          "--id",
+          "KF-DEVEX-004",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "The packed kovo check command fails closed when an empty consumer has no source graph or explicit artifact."
+    },
+    {
+      "id": "KF-DEVEX-005",
+      "title": "Failed build can leave a plausible graph under dist/.kovo",
+      "owner": "Track 1 transactional-build work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed build artifact promotion",
+      "retirementCondition": "A deterministic failed packed build leaves the last good dist byte-identical and promotes no graph beneath dist/.kovo.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G8"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-005",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 240000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched.",
+      "gap": "Needs a packed app fixture with one successful build followed by a deterministic compiler failure and artifact digest comparison."
+    },
+    {
+      "id": "KF-DEVEX-006",
+      "title": "Fresh-app check is coupled to KV417 trusted-boundary setup",
+      "owner": "Track 1 source/deployment-proof split work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed starter source-check path",
+      "retirementCondition": "Both freshly packed scaffold variants complete the quick source check without deployment-only KV417 setup while builds remain fail-closed.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G1", "G7"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-006",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 240000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup.",
+      "gap": "Needs the packed starter and its generated checking scripts preserved as the test input before those scripts are removed."
+    },
+    {
+      "id": "KF-DEVEX-007",
+      "title": "Full 44-component catalog check reaches 4.4-4.8 GiB and OOMs",
+      "owner": "Track 1 kovo-add source-closure work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed full-catalog check process",
+      "retirementCondition": "The packed all-44-component fixture typechecks, checks, and builds with unimported copies under the ratified peak-RSS budget.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G4"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-007",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 600000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target.",
+      "gap": "Needs the full-catalog packed fixture and RSS-enforced runner; devex-budgets.json records the non-binding provisional target."
+    },
+    {
+      "id": "KF-DEVEX-008",
+      "title": "Starter tests import an internal classifier mock",
+      "owner": "Track 5b test-harness batch",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed starter test harness",
+      "retirementCondition": "The packed starter test run uses only the public inferred artifact-scoped harness and contains no internal classifier mock.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 5",
+        "scorecardGates": ["G24"]
+      },
+      "state": "retired",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "starter-test-surface",
+          "--id",
+          "KF-DEVEX-008",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "Packed starter tests use only the app-public inferred harness and no internal classifier import.",
+      "retirement": {
+        "evidence": "The authenticated create-kovo tarball contains the bootstrap-first public HTTP test journey and no internal classifier mock or test-setup shim.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
+    },
+    {
+      "id": "KF-DEVEX-009",
+      "title": "update-docs reports success after writing placeholder-only content",
+      "owner": "Track 3 version-matched agent-docs work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed offline agent-docs command",
+      "retirementCondition": "The packed offline update-docs command fails closed whenever version-matched substantive local documentation cannot be produced.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 3",
+        "scorecardGates": ["G13"]
+      },
+      "state": "retired",
+      "probe": {
+        "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/packed-cli-contract.mjs",
+          "offline-docs",
+          "--id",
+          "KF-DEVEX-009",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 180000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "Packed kovo update-docs fails when it cannot produce version-matched substantive local documentation.",
+      "retirement": {
+        "evidence": "The authenticated packed CLI installs at least 70 substantive version-matched local docs from its embedded snapshot with no placeholder corpus.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
+    },
+    {
+      "id": "KF-DEVEX-010",
+      "title": "Opaque trusted-boundary path returns an internal 500",
+      "owner": "Track 1 diagnostic-empathy work item",
+      "childLedger": "plans/devex-gates.md",
+      "observedLayer": "packed request-runtime diagnostic path",
+      "retirementCondition": "The minimized packed request receives the intended safe diagnostic or response and never an unexplained internal 500.",
+      "planOwnership": {
+        "registerTrack": "Track 0",
+        "reproducerTrack": "Track 2",
+        "fixTrack": "Track 1",
+        "scorecardGates": ["G9"]
+      },
+      "state": "pending-repro",
+      "probe": {
+        "path": "scripts/known-failure-probes/pending.mjs",
+        "command": [
+          "node",
+          "scripts/known-failure-probes/pending.mjs",
+          "--id",
+          "KF-DEVEX-010",
+          "--packed-manifest",
+          "{packedManifest}"
+        ],
+        "timeoutMs": 240000,
+        "packedInput": true,
+        "resultSchema": "kovo-known-failure-probe-result/v1"
+      },
+      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500.",
+      "gap": "Needs a minimized packed request fixture that preserves the opaque boundary and distinguishes the intended diagnostic from an infrastructure failure."
+    }
+  ]
+}

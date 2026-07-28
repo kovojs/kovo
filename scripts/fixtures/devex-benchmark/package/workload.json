@@ -1,0 +1,8 @@
+{
+  "kind": "kovo-check-input",
+  "components": [
+    {
+      "key": "fixture-card"
+    }
+  ]
+}
