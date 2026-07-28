@@ -24,11 +24,15 @@ reproducer, while the named implementation work item owns retirement.
 | KF-DEVEX-009 | Track 2          | Track 3   | Track 3 version-matched agent-docs work item    | G13    |
 | KF-DEVEX-010 | Track 2          | Track 1   | Track 1 diagnostic-empathy work item            | G9     |
 
-- [ ] Add a versioned machine-readable register for each confirmed baseline defect.
+- [x] Add a versioned machine-readable register for each confirmed baseline defect.
+  - Evidence: `scripts/known-failure-register.json` contains the closed ten-ID baseline under
+    `known-failures/v1`.
 - [ ] Give every entry a stable ID, owner, observed layer, expected-failure probe, retirement
       condition, and scorecard/track owner.
-- [ ] Make the register gate fail for missing probes, duplicate IDs, stale paths, or an
+- [x] Make the register gate fail for missing probes, duplicate IDs, stale paths, or an
       unexpectedly passing probe that was not retired.
+  - Evidence: `scripts/known-failure-register.test.mjs` passes its schema, path, classifier, and
+    retirement mutation cases.
 - [ ] Reproduce the auth-origin, silent-ready, help-exit, vacuous-check, stale-graph, KV417
       coupling, full-catalog OOM, starter internal mock, placeholder-doc success, and opaque-500
       defects through packed or artifact-level probes.
@@ -46,22 +50,35 @@ reproducer, while the named implementation work item owns retirement.
 
 ## Benchmark and budgets
 
-- [ ] Add a deterministic benchmark driver for cold, warm, and one-file incremental checks.
+- [x] Add a deterministic benchmark driver for cold, warm, and one-file incremental checks.
+  - Evidence: the authenticated N=1 packed smoke in Latest verification proves the v2 cold,
+    warm-prime/timed, and changed-revision incremental phase census.
 - [ ] Record ready, edit-to-diagnostic, edit-to-served-result, phase timings, peak RSS, and browser
       bootstrap bytes.
-- [ ] Version the budget schema and reject malformed, invented, or unratified binding budgets.
+  - Partial evidence: check timings, peak RSS, and browser bootstrap bytes are recorded; ready and
+    edit-latency drivers remain absent.
+- [x] Version the budget schema and reject malformed, invented, or unratified binding budgets.
+  - Evidence: `pnpm run test:devex-foundation-schema` validates `kovo-devex-budgets/v5` and its
+    hostile ratification fixtures while reporting all 16 metrics as unratified.
 - [ ] Ratify each numeric gate from a named runner, baseline, target rationale, sample count,
       statistic, measured noise, and threshold formula.
 
 ## Inventory and public-surface evidence
 
-- [ ] Exclude nested dependencies, generated/dist/cache trees, packed fixtures, and throwaway apps
+- [x] Exclude nested dependencies, generated/dist/cache trees, packed fixtures, and throwaway apps
       from authored-consumer evidence.
-- [ ] Report authored examples, docs, package internals, generated emit, conformance, and tests as
+  - Evidence: the foundation inventory reports 45 excluded directories and passes the reviewed
+    exclusion policy.
+- [x] Report authored examples, docs, package internals, generated emit, conformance, and tests as
       separate consumer classes.
-- [ ] Report manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
+  - Evidence: the inventory reports 90/83/153/18/3/456 files across the six classes.
+- [x] Report manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
       generated-family members as distinct units.
-- [ ] Add hostile fixtures proving excluded files cannot create false consumers.
+  - Evidence: the current census separates 1,839 manifest subpaths, 102 TypeScript entrypoints,
+    1,842 exported declarations, and 1,737 generated-family members.
+- [x] Add hostile fixtures proving excluded files cannot create false consumers.
+  - Evidence: `scripts/public-api-inventory.test.mjs` passes nested dependency, generated/cache,
+    packed-app, and throwaway-app hostile cases.
 - [ ] Add the packed all-44-component reproducer while unimported copied files remain on disk.
 
 ## CI posture
@@ -75,4 +92,13 @@ reproducer, while the named implementation work item owns retirement.
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+- `pnpm run test:devex-foundation-schema` passed (3 files, 43 tests); register status is 3 retired,
+  1 executable, and 6 pending reproducers.
+- `pnpm run test:devex-known-failures-available` passed: KF-003/008/009 retired-pass, KF-004
+  expected-fail, and the six missing reproducers remain `pending-repro`.
+- `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
+- Authenticated local N=1 smoke: cold 9,831.77 ms / 2,179,629,056 bytes; warm 9,302.31 ms /
+  2,332,835,840 bytes; incremental 9,294.38 ms / 2,305,835,008 bytes; browser bootstrap 2,173
+  bytes. This proves the driver only and is not ratification evidence.
+- `pnpm run check:publish` rebuilt, packed, inspected, and attested all 14 public packages; the
+  packed CLI consumer installed with 265 production dependencies and zero advisories.

@@ -50,6 +50,6 @@ reference material; `SPEC.md` remains normative.
 
 - **Agent-docs suite:** `pnpm exec vitest run` over snapshot generation, storage, CLI/MCP
   retrieval, update, and llms generation passed (7 files, 29 tests).
-- `pnpm run check:publish` generated a 77-file snapshot
-  (`sha256:f47894b042e4e5e814eecac4e05dfc55aededcc27794c8b10e05861f22cab57a`),
-  packed all 14 public packages, and passed the offline packed CLI consumer.
+- `pnpm run check:publish` generated an authenticated 77-file snapshot, packed all 14 public
+  packages, and passed the offline packed CLI consumer. The digest remains source-revision-bound
+  rather than copied into this evolving ledger.

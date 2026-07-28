@@ -93,15 +93,15 @@ fresh scaffold dogfooding. The throwaway apps were tested through local package 
 tarball acceptance remains a required Track 2 fixture; link-only TypeScript and dependency-install
 failures were excluded from product findings.
 
-The raw metrics need one correction before they become a release baseline. The inventory analyzed
-102 TypeScript public entrypoints and found 1,839 exported declarations. Separately,
-`public-packages.json` declares 1,839 public subpaths because 1,737 are generated icon glyph paths.
-Those are different units that happen to have the same current total. (The same unit discipline
-applies to `@kovojs/server`: 524 root export names vs 554 exported declarations across all public
-subpaths — both correct, different units.) More importantly, the consumer scan included nested
-`examples/**/node_modules` and generated/dist trees, so the earlier 1,212 zero-consumer and 583
-example-consumer figures are not authoritative and are intentionally excluded from this plan.
-Track 2 fixes the scanner and recomputes demand evidence before it drives a public decision.
+The corrected Track 2 inventory analyzes 102 TypeScript public entrypoints and finds 1,842 exported
+declarations. Separately, `public-packages.json` declares 1,839 public subpaths because 1,737 are
+generated icon glyph paths. Those are different units and are now reported independently. (The
+same unit discipline applies to `@kovojs/server`: 524 root export names vs 554 exported declarations
+across all public subpaths — both correct, different units.) The consumer scan excludes nested
+dependencies and generated/dist/cache/packed/throwaway trees, then reports 90 authored-example,
+83 authored-doc, 153 package-internal, 18 generated-emit, 3 conformance, and 456 test files as
+separate classes. The earlier 1,212 zero-consumer and 583 example-consumer figures remain excluded
+because they came from the contaminated scanner.
 
 ### Public-surface findings
 
@@ -394,6 +394,8 @@ and generated examples.
       starter tests, placeholder `update-docs` success, opaque trusted-boundary 500s) mapped to a
       failing packed test. "Known failures are represented by failing tests" gates against this
       register, not an open-ended set.
+  - Partial evidence: the versioned ten-ID register and its retirement/integrity gate pass; six
+    entries still lack executable reproducers, so the parent remains open.
 
 ### Track 1 — First ten minutes and a trustworthy loop (starts immediately)
 
@@ -559,7 +561,10 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
       failure is a statistically significant budget breach under that recorded procedure, not a
       single noisy sample. Name the runner: provision a pinned reference runner or explicitly
       accept GitHub-hosted with a measured noise floor. Budgets bind only after ratification.
-- [ ] (M) Fix the inventory before using demand evidence.
+  - Partial evidence: the authenticated packed cold/warm/incremental driver, v2 phase census, RSS,
+    bootstrap-byte capture, and v5 fail-closed budget schema pass. Ready/edit drivers, a pinned
+    reference runner, N≥5 baseline, noise measurement, and ratification remain open.
+- [x] (M) Fix the inventory before using demand evidence.
   - Exclude nested `**/node_modules/**`, every generated/dist/cache tree, packed fixtures, and
     throwaway apps; report authored examples, authored docs, package internals, generated emit,
     conformance, and tests separately.
@@ -567,6 +572,9 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
     if an exclusion regresses.
   - Report public manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
     generated-family members as separate units.
+  - Evidence: the 43-test foundation gate and hostile fixtures pass; the current clean census is
+    1,839 manifest subpaths, 102 TypeScript entrypoints, 1,842 exported declarations, and 1,737
+    generated-family members across the six separately reported consumer classes.
 - [ ] (S) Add the packed full-catalog reproducer: copy all 44 UI components into a fresh app, then
       typecheck, check, and build while unimported copied files are present; register the current
       4.4-4.8 GiB OOM as an expected-failing entry with its budget in `devex-budgets.json` (the
