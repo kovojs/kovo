@@ -4165,11 +4165,11 @@
     "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
     "serverCopies": [
       {
-        "basePackedContentsSha256": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90",
+        "basePackedContentsSha256": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb",
         "physicalRoot": "<fixture>/store/server-a"
       },
       {
-        "basePackedContentsSha256": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90",
+        "basePackedContentsSha256": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb",
         "physicalRoot": "<fixture>/store/server-b"
       }
     ]
@@ -4199,19 +4199,19 @@
             "executable": false,
             "path": "app/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9"
+            "sha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000001",
             "compilerSourceSha256": "03f490279aaf6a8b972a1e9e835b0bd03da03456dc8bb5ece16d1cc7d1c0fde7",
             "completed": "complete",
             "configSha256": "5adb3761ffdccc624f6b0cedc479ceb085d6073aa9f534c87e14e65d32065bfa",
-            "generatedModuleSha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9",
+            "generatedModuleSha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6",
             "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
             "providerKey": "contacts-provider",
             "providerSourceSha256": "58a27bc6145178a2c8538866ddea893168622421fd36eaedf2dea0b0b42cdee6",
             "schema": "kovo.generated-app-contract/v5",
-            "serverPackedContentsSha256": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90"
+            "serverPackedContentsSha256": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb"
           },
           "providerSubject": {
             "bytes": 552,
@@ -4234,19 +4234,19 @@
             "executable": false,
             "path": "packages/shared/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9"
+            "sha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000001",
             "compilerSourceSha256": "03f490279aaf6a8b972a1e9e835b0bd03da03456dc8bb5ece16d1cc7d1c0fde7",
             "completed": "complete",
             "configSha256": "5adb3761ffdccc624f6b0cedc479ceb085d6073aa9f534c87e14e65d32065bfa",
-            "generatedModuleSha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9",
+            "generatedModuleSha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6",
             "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
             "providerKey": "contacts-provider",
             "providerSourceSha256": "58a27bc6145178a2c8538866ddea893168622421fd36eaedf2dea0b0b42cdee6",
             "schema": "kovo.generated-app-contract/v5",
-            "serverPackedContentsSha256": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90"
+            "serverPackedContentsSha256": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb"
           },
           "providerSubject": {
             "bytes": 552,
@@ -4269,19 +4269,19 @@
             "executable": false,
             "path": "packages/secondary/.kovo/app.ts",
             "schema": "kovo.app-contract-d1-file-subject/v1",
-            "sha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9"
+            "sha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6"
           },
           "manifest": {
             "appId": "00000000-0000-4000-8000-000000000001",
             "compilerSourceSha256": "03f490279aaf6a8b972a1e9e835b0bd03da03456dc8bb5ece16d1cc7d1c0fde7",
             "completed": "complete",
             "configSha256": "5adb3761ffdccc624f6b0cedc479ceb085d6073aa9f534c87e14e65d32065bfa",
-            "generatedModuleSha256": "53baff2e3ddafd9e1c85a9c31c660e774078308a94be108447ba371c208c86f9",
+            "generatedModuleSha256": "5d0677da13994a1b0f35f502c9a20c68495202f18cc6b181361b4810d64725f6",
             "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
             "providerKey": "contacts-provider",
             "providerSourceSha256": "58a27bc6145178a2c8538866ddea893168622421fd36eaedf2dea0b0b42cdee6",
             "schema": "kovo.generated-app-contract/v5",
-            "serverPackedContentsSha256": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90"
+            "serverPackedContentsSha256": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb"
           },
           "providerSubject": {
             "bytes": 552,
@@ -5351,23 +5351,23 @@
   "measurements": {
     "baseline": {
       "coldCompletionMs": [
-        221.27,
-        248.81,
-        224.83,
-        172.99,
-        266.27,
-        263.32
+        131.04,
+        97.63,
+        101.31,
+        90,
+        86.84,
+        86.89
       ],
-      "coldCompletionP50Ms": 224.83,
+      "coldCompletionP50Ms": 90,
       "coldTscMs": [
-        446.28,
-        687,
-        483.29,
-        481.86,
-        553.3,
-        623.19
+        253.98,
+        255.28,
+        253.12,
+        256.39,
+        253.67,
+        253.53
       ],
-      "coldTscP50Ms": 483.29,
+      "coldTscP50Ms": 253.67,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
       "completionCandidateNames": [
@@ -5386,67 +5386,67 @@
       "declarationBytes": 12604,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.22,
-        0.15,
-        0.17,
-        0.15,
-        0.15,
-        0.12,
-        0.35,
-        0.11,
-        0.11,
-        0.1,
-        0.14,
+        0.2,
         0.13,
-        0.21,
+        0.13,
         0.12,
+        0.11,
+        0.11,
+        0.11,
         0.1,
         0.1,
         0.1,
         0.1,
         0.1,
-        0.35,
-        0.41,
         0.1,
-        0.15,
         0.1,
-        0.45,
-        0.12,
         0.1,
-        0.32,
-        0.12,
-        0.33
+        0.1,
+        0.09,
+        0.1,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.1,
+        0.1,
+        0.09,
+        0.09
       ],
-      "warmCompletionP95Ms": 0.41,
+      "warmCompletionP95Ms": 0.13,
       "warmTscMs": [
-        355.5,
-        401.6,
-        367.22,
-        428.74,
-        397.56,
-        418.82
+        191.74,
+        186.69,
+        187.24,
+        186.72,
+        193.04,
+        195.73
       ],
-      "warmTscP50Ms": 397.56
+      "warmTscP50Ms": 187.24
     },
     "arm-a": {
       "coldCompletionMs": [
-        235.2,
-        228.86,
-        194.21,
-        285.39,
-        209.25,
-        173.38
+        103.16,
+        94.43,
+        95.25,
+        95.39,
+        95.32,
+        89.83
       ],
-      "coldCompletionP50Ms": 209.25,
+      "coldCompletionP50Ms": 95.25,
       "coldTscMs": [
-        430.31,
-        624.04,
-        597.68,
-        619.63,
-        483.56,
-        455.63
+        262.18,
+        263.46,
+        262.6,
+        262.73,
+        262.56,
+        263.93
       ],
-      "coldTscP50Ms": 483.56,
+      "coldTscP50Ms": 262.6,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
       "completionCandidateNames": [
@@ -5465,67 +5465,67 @@
       "declarationBytes": 12702,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.19,
-        0.15,
         0.17,
-        0.13,
-        0.44,
-        0.12,
-        0.11,
         0.14,
-        0.11,
-        0.12,
-        0.12,
-        0.11,
         0.13,
-        0.11,
-        0.1,
-        0.1,
-        0.11,
+        0.13,
+        0.13,
         0.12,
-        0.1,
-        0.13,
-        0.33,
         0.11,
-        0.15,
-        0.15,
+        0.11,
+        0.1,
         0.11,
         0.1,
         0.1,
         0.1,
-        0.13,
-        0.38
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.09,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.09
       ],
-      "warmCompletionP95Ms": 0.38,
+      "warmCompletionP95Ms": 0.14,
       "warmTscMs": [
-        366.82,
-        303.79,
-        434.68,
-        355.62,
-        339.53,
-        405.21
+        190.56,
+        198.41,
+        190.34,
+        192.33,
+        190.02,
+        188.38
       ],
-      "warmTscP50Ms": 355.62
+      "warmTscP50Ms": 190.34
     },
     "arm-b": {
       "coldCompletionMs": [
-        295.32,
-        215.83,
-        227.38,
-        231.78,
-        174.53,
-        196.42
+        96.01,
+        102.97,
+        101.93,
+        115,
+        93.31,
+        95.94
       ],
-      "coldCompletionP50Ms": 215.83,
+      "coldCompletionP50Ms": 96.01,
       "coldTscMs": [
-        672.26,
-        602.69,
-        482.51,
-        688.89,
-        661.11,
-        437.82
+        265.88,
+        267.14,
+        264.91,
+        271.12,
+        273.55,
+        274.43
       ],
-      "coldTscP50Ms": 602.69,
+      "coldTscP50Ms": 267.14,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
       "completionCandidateNames": [
@@ -5544,47 +5544,47 @@
       "declarationBytes": 13418,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.16,
         0.15,
-        0.14,
-        0.17,
-        0.18,
         0.13,
-        0.4,
-        0.31,
+        0.13,
+        0.12,
+        0.12,
         0.12,
         0.1,
-        0.11,
-        0.11,
-        0.16,
-        0.24,
-        0.1,
-        0.1,
-        0.1,
-        0.11,
-        0.32,
-        0.34,
-        0.36,
-        0.1,
-        0.11,
-        0.14,
-        0.11,
         0.1,
         0.1,
         0.1,
         0.1,
-        0.31
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.09,
+        0.1,
+        0.1,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.09,
+        0.1,
+        0.09,
+        0.09,
+        0.09
       ],
-      "warmCompletionP95Ms": 0.36,
+      "warmCompletionP95Ms": 0.13,
       "warmTscMs": [
-        510,
-        336.73,
-        334.04,
-        411.1,
-        333.44,
-        321.66
+        194.54,
+        192.35,
+        187.63,
+        188.89,
+        190.24,
+        189.42
       ],
-      "warmTscP50Ms": 334.04
+      "warmTscP50Ms": 189.42
     }
   },
   "provenance": {
@@ -5593,12 +5593,20 @@
       "pnpm --filter @kovojs/browser run build:dist",
       "pnpm --filter @kovojs/server run build:dist",
       "pnpm --filter @kovojs/compiler run build:dist",
-      "pnpm --filter @kovojs/browser pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/browser",
-      "pnpm --filter @kovojs/compiler pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/compiler",
-      "pnpm --filter @kovojs/core pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/core",
-      "pnpm --filter @kovojs/server pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/server"
+      "pnpm --filter @kovojs/browser pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/staging-packs/browser",
+      "canonicalize @kovojs/browser published dependency order",
+      "npm pack --ignore-scripts --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/browser",
+      "pnpm --filter @kovojs/compiler pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/staging-packs/compiler",
+      "canonicalize @kovojs/compiler published dependency order",
+      "npm pack --ignore-scripts --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/compiler",
+      "pnpm --filter @kovojs/core pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/staging-packs/core",
+      "canonicalize @kovojs/core published dependency order",
+      "npm pack --ignore-scripts --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/core",
+      "pnpm --filter @kovojs/server pack --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/staging-packs/server",
+      "canonicalize @kovojs/server published dependency order",
+      "npm pack --ignore-scripts --pack-destination /private/var/folders/j9/g5ff8shs5hj9cjfsbn67g8mc0000gn/T/kovo-app-contract-d1-v5-2123d1860/packed/server"
     ],
-    "frameworkHeadCommit": "41b8de3f4916a475eed30031301aed0e817323d6",
+    "frameworkHeadCommit": "b5a3cc891d12a11f822cca3841e287c59b017988",
     "frameworkSourceCommit": "6ae9fb70ec1c32c417d6bddb00028e243ab2307c",
     "frameworkSourceContents": {
       "digest": "59f2eacee75b9e8f112387b5754d68eed40cef9426945549a6990c97740294fd",
@@ -13311,7 +13319,7 @@
       {
         "name": "@kovojs/browser",
         "packedContents": {
-          "digest": "56085359b0176af6fbf6c4138b10f03c56009d2ca85656b8fdad6a688dc002e2",
+          "digest": "16bf3821cc2ca6ca7db07c81d084dfdc13be0b8c5b35dc365a78a97f17431b31",
           "files": [
             {
               "bytes": 994,
@@ -13797,11 +13805,11 @@
               "sha256": "00fd9f67f91368e3acdda30ad73f536f6f9572c1705afc78144eaccdf98fe9b7"
             },
             {
-              "bytes": 2095,
+              "bytes": 2096,
               "executable": false,
               "path": "package.json",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "92153d18f4e62c27e1ff57ec93b85e4bd1a10e17cc36bac0923064c69cf4085c"
+              "sha256": "1f4576fc6b166bd9a6dbf1e3ad4f684efda32ea7df64e07fd96e3728ba72ee64"
             },
             {
               "bytes": 572,
@@ -15322,7 +15330,7 @@
       {
         "name": "@kovojs/compiler",
         "packedContents": {
-          "digest": "efdae29db24b03d070fc750d1103174ccf17b08394266d3054ce797d5919f38d",
+          "digest": "dd15efbd022488547fa86c491ab934d5c64cb5860bbd4047d799a2c8f911c324",
           "files": [
             {
               "bytes": 695529,
@@ -15696,11 +15704,11 @@
               "sha256": "23f8186dc16738f86f33efa0bbda176806ce1ae0a9bb3b174dd7dc231bfb014d"
             },
             {
-              "bytes": 1872,
+              "bytes": 1873,
               "executable": false,
               "path": "package.json",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "602c4545e65fd98b765914aa3c53a1f58e5088226076d9b88e264a76295c28f3"
+              "sha256": "edde5471833764d1a036d653e022b0385f4b9d368b54ec49086e564db3f70b66"
             },
             {
               "bytes": 615,
@@ -17592,7 +17600,7 @@
       {
         "name": "@kovojs/core",
         "packedContents": {
-          "digest": "846976fae4d269ec1797f6ee5e952a79992151d4f5929aee5b1e8f2ec6cc845b",
+          "digest": "6f66419a87014b84da1581ee8a85cc241fb255d43f6774d278ae9aa62cdc2c15",
           "files": [
             {
               "bytes": 1115,
@@ -18855,11 +18863,11 @@
               "sha256": "f62bf19e820b90ee1552e943aaf323fc62a63076fe64a5f1ebd108d1dd194341"
             },
             {
-              "bytes": 7808,
+              "bytes": 7809,
               "executable": false,
               "path": "package.json",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "b343d4fbae0412bc80f0adca0a01eb6213113b5e0094ec76d33b18c9defeba0d"
+              "sha256": "9695e0e110e302882644515bce75b79569961e1ef2c52c42a9315fe774d9c765"
             },
             {
               "bytes": 762,
@@ -19666,7 +19674,7 @@
       {
         "name": "@kovojs/server",
         "packedContents": {
-          "digest": "a67c0cf5a704d10f41d276102c56ba422ae616fa772ae70eeac7a6e79d800d90",
+          "digest": "94cc601aca0b257d872e75f7df5fe1572ab35dc566e86e8fb155b8cc8dc8e0fb",
           "files": [
             {
               "bytes": 15379,
@@ -21678,11 +21686,11 @@
               "sha256": "82982b29821edf236b5faccc38bc49b86cfcc7a490a2e9c3d7b50f3fdcc5e229"
             },
             {
-              "bytes": 6524,
+              "bytes": 6525,
               "executable": false,
               "path": "package.json",
               "schema": "kovo.app-contract-d1-file-subject/v1",
-              "sha256": "44102fe8e2dec22174ab04afae927d04365b3151224532bb61aa480765310ca7"
+              "sha256": "377bc9cff709d489494753f97bfd893aff48beef719a1144e167550b089c1794"
             },
             {
               "bytes": 633,

@@ -59,10 +59,8 @@
           "pass": true
         },
         "performance": {
-          "details": [
-            "cold tsc delta exceeds threshold"
-          ],
-          "pass": false
+          "details": [],
+          "pass": true
         },
         "publicForgery": {
           "details": [],
