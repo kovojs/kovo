@@ -40,14 +40,25 @@ describe('D1 compiler-owned exact project resolver', () => {
     const fixture = await createFixture();
     const cases = {
       array: 'D1A007',
+      'array-binding': 'D1A007',
+      'awaited-dynamic-import': 'D1A009',
+      'bound-call': 'D1A007',
+      'callback-parameter': 'D1A007',
+      'callback-return': 'D1A007',
       computed: 'D1A008',
       destructured: 'D1A003',
       dynamic: 'D1A002',
+      'dynamic-import': 'D1A009',
+      'function-body-alias': 'D1A007',
+      'function-parameter': 'D1A007',
+      'function-return': 'D1A007',
       joined: 'D1A006',
       mutable: 'D1A004',
       nested: 'D1A007',
       object: 'D1A007',
+      'object-binding': 'D1A007',
       reassigned: 'D1A005',
+      'wrapper-chain': 'D1A007',
       'wrapper-returned': 'D1A007',
       wrapper: 'D1A001',
     } as const;
@@ -94,6 +105,50 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.resolver.exactNodeCount).toBe(0);
     expect(result.ownerKey).toBeNull();
     expect(result.parsedFactories).not.toContain('query');
+  });
+
+  it('retains unrelated local/imported members and a same-named defineKovo negative control', async () => {
+    const fixture = await createFixture();
+    const unrelatedModule = join(fixture.root, 'app/src/unrelated-module.ts');
+    await writeSource(
+      unrelatedModule,
+      [
+        'export const app = { query(definition: unknown) { return definition; } };',
+        '',
+      ].join('\n'),
+    );
+    const imported = join(fixture.root, 'app/src/unrelated-imported.ts');
+    await writeSource(
+      imported,
+      [
+        "import { app } from './unrelated-module.js';",
+        'export const item = app.query({ load() { return 1; } });',
+        '',
+      ].join('\n'),
+    );
+    const sameNamed = join(fixture.root, 'app/src/unrelated-define-kovo.ts');
+    await writeSource(
+      sameNamed,
+      [
+        'function defineKovo() {',
+        '  return { query(definition: unknown) { return definition; } };',
+        '}',
+        'const app = defineKovo();',
+        'export const item = app.query({ load() { return 1; } });',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, unrelatedModule, imported, sameNamed],
+    });
+
+    for (const fileName of [imported, sameNamed]) {
+      const result = project.compileEntry(fileName);
+      expect(result.diagnostics, fileName).toEqual([]);
+      expect(result.resolver.exactNodeCount, fileName).toBe(0);
+      expect(result.ownerKey, fileName).toBeNull();
+      expect(result.parsedFactories, fileName).not.toContain('query');
+    }
   });
 
   it.each(['direct', 'named', 'star', 'same-owner'] as const)(
@@ -328,12 +383,30 @@ function rejectedSource(name: string): string {
   switch (name) {
     case 'array':
       return `${prefix}const active = [app][0]!;\nexport const item = active.query(${definition});\n`;
+    case 'array-binding':
+      return `${prefix}const [active] = [app];\nexport const item = active!.query(${definition});\n`;
+    case 'awaited-dynamic-import':
+      return `const module = await import('./provider.js');\nexport const item = module.app.query(${definition});\n`;
+    case 'bound-call':
+      return `${prefix}const invoke = app.query.bind(app);\nexport const item = invoke(${definition});\n`;
+    case 'callback-parameter':
+      return `${prefix}export const item = [app].map((active) => active.query(${definition}))[0];\n`;
+    case 'callback-return':
+      return `${prefix}export const item = [1].map(() => app.query(${definition}))[0];\n`;
     case 'computed':
       return `${prefix}export const item = app['query'](${definition});\n`;
     case 'destructured':
       return `${prefix}const { query } = app;\nexport const item = query(${definition});\n`;
     case 'dynamic':
       return `${prefix}declare const choose: boolean;\nconst factory = choose ? app.query : app.query;\nexport const item = factory(${definition});\n`;
+    case 'dynamic-import':
+      return `import('./provider.js').then((module) => module.app.query(${definition}));\n`;
+    case 'function-body-alias':
+      return `${prefix}function invoke() { const active = app; return active.query(${definition}); }\nexport const item = invoke();\n`;
+    case 'function-parameter':
+      return `${prefix}const invoke = (active: typeof app) => active.query(${definition});\nexport const item = invoke(app);\n`;
+    case 'function-return':
+      return `${prefix}function select() { return app; }\nexport const item = select().query(${definition});\n`;
     case 'joined':
       return `${prefix}declare const choose: boolean;\nconst active = choose ? app : app;\nexport const item = active.query(${definition});\n`;
     case 'mutable':
@@ -342,10 +415,14 @@ function rejectedSource(name: string): string {
       return `${prefix}const holder = { deep: { value: app } };\nconst active = holder.deep.value;\nexport const item = active.query(${definition});\n`;
     case 'object':
       return `${prefix}const active = ({ value: app }).value;\nexport const item = active.query(${definition});\n`;
+    case 'object-binding':
+      return `${prefix}const { value: active } = { value: app };\nexport const item = active.query(${definition});\n`;
     case 'reassigned':
       return `${prefix}const active = app;\n// @ts-expect-error probe\nactive = app;\nexport const item = active.query(${definition});\n`;
     case 'wrapper-returned':
       return `${prefix}const select = () => app;\nexport const item = select().query(${definition});\n`;
+    case 'wrapper-chain':
+      return `${prefix}const first = () => app;\nconst second = () => first();\nexport const item = second().query(${definition});\n`;
     case 'wrapper':
       return `${prefix}const wrapped = (definition: Parameters<typeof app.query>[0]) => app.query(definition);\nexport const item = wrapped(${definition});\n`;
     default:

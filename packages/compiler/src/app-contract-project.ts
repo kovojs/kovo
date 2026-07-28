@@ -29,6 +29,7 @@ export interface CompilerOwnedAppContractDiagnostic {
     | 'D1A006'
     | 'D1A007'
     | 'D1A008'
+    | 'D1A009'
     | 'D1X001';
   readonly fileName: string;
   readonly length: number;
@@ -139,7 +140,19 @@ export function createCompilerOwnedAppContractProject(
     const sourceFile = sourceFileFor(fileName);
     const diagnostics: CompilerOwnedAppContractDiagnostic[] = [];
     const facts: CompilerOwnedAppContractResolution[] = [];
+    const dynamicImport = firstAppProviderDynamicImport(sourceFile, context);
+    if (dynamicImport) {
+      diagnostics.push(
+        diagnosticAt(
+          sourceFile,
+          dynamicImport,
+          'D1A009',
+          'D1A009 receiver provenance refuses dynamically imported app contracts.',
+        ),
+      );
+    }
     const visit = (node: ts.Node): void => {
+      if (diagnostics.length > 0) return;
       if (
         node !== sourceFile &&
         (ts.isArrowFunction(node) ||
@@ -150,7 +163,7 @@ export function createCompilerOwnedAppContractProject(
         return;
       }
       if (ts.isCallExpression(node)) {
-        const proof = proveFactoryCall(sourceFile, node.expression, context);
+        const proof = proveFactoryCall(sourceFile, node, context);
         if (proof.kind === 'diagnostic') {
           diagnostics.push(proof.diagnostic);
         } else if (proof.kind === 'factory') {
@@ -338,9 +351,10 @@ function rejectedEntry(
 
 function proveFactoryCall(
   sourceFile: ts.SourceFile,
-  expression: ts.Expression,
+  call: ts.CallExpression,
   context: ProvenanceContext,
 ): FactoryProof {
+  const expression = call.expression;
   if (ts.isPropertyAccessExpression(expression) && isDeclarationFamily(expression.name.text)) {
     const receiver = proveReceiver(sourceFile, expression.expression, context, new Set(), 0);
     if (receiver.kind !== 'app') return receiver;
@@ -376,6 +390,31 @@ function proveFactoryCall(
     }
   }
 
+  const callback = call.arguments.find(
+    (argument): argument is ts.ArrowFunction | ts.FunctionExpression =>
+      ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
+  );
+  if (
+    callback &&
+    functionContainsDeclarationFactoryAccess(callback) &&
+    (functionContainsAppDeclarationFactory(callback, context) ||
+      expressionDerivesFromApp(expression, context, new Set(), 0) ||
+      call.arguments.some(
+        (argument) =>
+          argument !== callback && expressionDerivesFromApp(argument, context, new Set(), 0),
+      ))
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        sourceFile,
+        expression,
+        'D1A007',
+        'D1A007 receiver provenance refuses an app contract transferred through a callback.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+
   if (!ts.isIdentifier(expression)) return { kind: 'none' };
   const localDeclaration = localSymbolDeclaration(context.checker, expression);
   if (localDeclaration && ts.isBindingElement(localDeclaration)) {
@@ -401,12 +440,33 @@ function proveFactoryCall(
 
   const functionLike = localDeclaration ? functionLikeDeclaration(localDeclaration) : undefined;
   if (functionLike && functionContainsAppDeclarationFactory(functionLike, context)) {
+    const code = functionLike.parameters.length === 0 ? 'D1A007' : 'D1A001';
     return {
       diagnostic: diagnosticAt(
         sourceFile,
         expression,
-        'D1A001',
-        'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly.',
+        code,
+        code === 'D1A001'
+          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly.'
+          : 'D1A007 receiver provenance refuses declaration calls hidden in a function body.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+
+  if (
+    functionLike &&
+    functionContainsDeclarationFactoryAccess(functionLike) &&
+    call.arguments.some((argument) =>
+      expressionDerivesFromApp(argument, context, new Set(), 0),
+    )
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        sourceFile,
+        expression,
+        'D1A007',
+        'D1A007 receiver provenance refuses an app contract transferred through a function parameter.',
       ),
       kind: 'diagnostic',
     };
@@ -419,12 +479,15 @@ function proveFactoryCall(
     expressionContainsDeclarationFactoryAccess(localDeclaration.initializer) &&
     expressionDerivesFromApp(localDeclaration.initializer, context, new Set(), 0)
   ) {
+    const bound = expressionIsBoundAppFactory(localDeclaration.initializer, context);
     return {
       diagnostic: diagnosticAt(
         sourceFile,
         expression,
-        'D1A002',
-        'D1A002 receiver provenance refuses dynamic declaration-factory selection.',
+        bound ? 'D1A007' : 'D1A002',
+        bound
+          ? 'D1A007 receiver provenance refuses declaration factories transferred through Function.bind.'
+          : 'D1A002 receiver provenance refuses dynamic declaration-factory selection.',
       ),
       kind: 'diagnostic',
     };
@@ -468,6 +531,21 @@ function proveReceiver(
 
   if (ts.isIdentifier(expression)) {
     const localDeclaration = localSymbolDeclaration(context.checker, expression);
+    if (
+      localDeclaration &&
+      ts.isBindingElement(localDeclaration) &&
+      declarationDerivesFromApp(localDeclaration, context, new Set(), depth + 1)
+    ) {
+      return {
+        diagnostic: diagnosticAt(
+          diagnosticSourceFile,
+          expression,
+          'D1A007',
+          'D1A007 receiver provenance refuses app contracts transferred through binding elements.',
+        ),
+        kind: 'diagnostic',
+      };
+    }
     if (localDeclaration && ts.isVariableDeclaration(localDeclaration)) {
       const proof = proveVariableReceiver(
         diagnosticSourceFile,
@@ -755,6 +833,133 @@ function functionContainsAppDeclarationFactory(
   };
   visit(declaration.body);
   return found;
+}
+
+function functionContainsDeclarationFactoryAccess(
+  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+): boolean {
+  if (!declaration.body) return false;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (
+      ts.isCallExpression(node) &&
+      ((ts.isPropertyAccessExpression(node.expression) &&
+        isDeclarationFamily(node.expression.name.text)) ||
+        (ts.isElementAccessExpression(node.expression) &&
+          node.expression.argumentExpression !== undefined &&
+          isDeclarationFamily(staticMemberName(node.expression.argumentExpression))))
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(declaration.body);
+  return found;
+}
+
+function expressionIsBoundAppFactory(
+  rawExpression: ts.Expression,
+  context: ProvenanceContext,
+): boolean {
+  const expression = unwrapExpression(rawExpression);
+  if (
+    !ts.isCallExpression(expression) ||
+    !ts.isPropertyAccessExpression(expression.expression) ||
+    expression.expression.name.text !== 'bind'
+  ) {
+    return false;
+  }
+  const target = expression.expression.expression;
+  return (
+    ts.isPropertyAccessExpression(target) &&
+    isDeclarationFamily(target.name.text) &&
+    expressionDerivesFromApp(target.expression, context, new Set(), 0)
+  );
+}
+
+function firstAppProviderDynamicImport(
+  sourceFile: ts.SourceFile,
+  context: ProvenanceContext,
+): ts.CallExpression | undefined {
+  let found: ts.CallExpression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0]!) &&
+      dynamicImportTargetContainsApp(
+        node.arguments[0]!.text,
+        sourceFile.fileName,
+        context,
+        new Set(),
+      )
+    ) {
+      found = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function dynamicImportTargetContainsApp(
+  specifier: string,
+  importer: string,
+  context: ProvenanceContext,
+  seen: Set<string>,
+): boolean {
+  const resolved = resolveModule(specifier, importer, context.options);
+  if (!resolved) return false;
+  const normalized = normalizeFileName(resolved.resolvedFileName);
+  if (seen.has(normalized)) return false;
+  seen.add(normalized);
+  const target =
+    context.program.getSourceFile(resolved.resolvedFileName) ??
+    context.program
+      .getSourceFiles()
+      .find((candidate) => normalizeFileName(candidate.fileName) === normalized);
+  if (!target) return false;
+  let direct = false;
+  const visit = (node: ts.Node): void => {
+    if (direct) return;
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.initializer &&
+      proveDirectDefineKovo(node, unwrapExpression(node.initializer), context)
+    ) {
+      direct = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(target);
+  if (direct) return true;
+  for (const statement of target.statements) {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      !statement.moduleSpecifier ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    if (
+      dynamicImportTargetContainsApp(
+        statement.moduleSpecifier.text,
+        target.fileName,
+        context,
+        seen,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function serverPackageRootForDefineKovo(
