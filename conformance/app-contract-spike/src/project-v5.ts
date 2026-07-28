@@ -446,7 +446,7 @@ function spanKey(key: string | undefined): boolean {
 
 function normalizeCalleeSyntax(value: string): string {
   let normalized = value
-    .replaceAll(/(?:^|\n)import \{ app \} from ['"][^'"]+['"];\n?/gu, '\n')
+    .replaceAll(/import \{ app \} from ['"][^'"]+['"];\n?/gu, '')
     .replaceAll(/import \{ ([^}]+) \} from '@kovojs\/server';/gu, (_match, rawNames: string) => {
       const names = rawNames
         .split(',')
@@ -457,7 +457,11 @@ function normalizeCalleeSyntax(value: string): string {
       return names.length > 0 ? `import { ${names.join(', ')} } from '@kovojs/server';` : '';
     })
     .replaceAll(/"end":\d+/gu, '"end":0')
-    .replaceAll(/"start":\d+/gu, '"start":0');
+    .replaceAll(/"start":\d+/gu, '"start":0')
+    .replaceAll(
+      '/** @jsxImportSource @kovojs/server */\n\n',
+      '/** @jsxImportSource @kovojs/server */\n',
+    );
   for (const family of declarationFamilies) {
     normalized = normalized.replaceAll(`app.${family}`, family);
   }

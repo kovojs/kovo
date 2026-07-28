@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 
@@ -31,7 +31,7 @@ import { measureTypeContracts } from './type-measurement-v5.ts';
 import type { D1CriteriaV5, D1RawEvidenceV5, GeneratedManifestEvidence } from './types-v5.ts';
 
 export async function runD1V5Experiment(criteria: D1CriteriaV5): Promise<D1RawEvidenceV5> {
-  const root = await mkdtemp(join(tmpdir(), 'kovo-app-contract-d1-v5-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'kovo-app-contract-d1-v5-')));
   try {
     const artifacts = await buildAndPackFresh(root);
     const packed = await loadAuthenticatedPackedCompiler(artifacts);
