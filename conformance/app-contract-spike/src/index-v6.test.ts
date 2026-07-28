@@ -136,10 +136,12 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
       [
         'declaration subject without count claim',
         (value) => {
-          const input = value.workloadSubjects.declarationInputs.baseline[0]!;
-          input.source += '\n';
-          input.subject.bytes = Buffer.byteLength(input.source);
-          input.subject.sha256 = sha256(input.source);
+          const inputs =
+            value.workloadSubjects.declarationInputs.baseline;
+          const duplicate = clone(inputs[0]!);
+          duplicate.subject.path =
+            `app/d1-measure/baseline/declarations-${inputs.length}.ts`;
+          inputs.push(duplicate);
         },
       ],
       [
