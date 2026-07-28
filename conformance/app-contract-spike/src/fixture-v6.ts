@@ -613,9 +613,17 @@ function providerContext(options: {
       (declaration) =>
         ts.isIdentifier(declaration.name) && declaration.name.text === options.appExportName,
     );
-  const appObject = appDeclaration?.initializer
-    ? objectLiteralFromExpression(appDeclaration.initializer)
+  const appInitializer = appDeclaration?.initializer
+    ? unwrapTsExpression(appDeclaration.initializer)
     : undefined;
+  const appArgument =
+    appInitializer &&
+    ts.isCallExpression(appInitializer) &&
+    ts.isIdentifier(appInitializer.expression) &&
+    appInitializer.expression.text === 'defineKovo'
+      ? appInitializer.arguments[0]
+      : undefined;
+  const appObject = appArgument ? unwrapTsExpression(appArgument) : undefined;
   const providerImport = providerAst.statements
     .filter(ts.isImportDeclaration)
     .find(
@@ -630,6 +638,7 @@ function providerContext(options: {
     );
   if (
     !appObject ||
+    !ts.isObjectLiteralExpression(appObject) ||
     !providerImport ||
     stringLiteralProperty(appObject, 'appId') !== config.appId ||
     stringLiteralProperty(appObject, 'providerKey') !== config.providerKey ||
@@ -640,15 +649,28 @@ function providerContext(options: {
   ) {
     throw new Error(
       `D1 provider app AST disagrees with config: ${options.providerFile}: ${JSON.stringify({
-        appId: appObject && stringLiteralProperty(appObject, 'appId'),
-        foundApp: Boolean(appObject),
+        appId:
+          appObject &&
+          ts.isObjectLiteralExpression(appObject) &&
+          stringLiteralProperty(appObject, 'appId'),
+        foundApp: Boolean(appObject && ts.isObjectLiteralExpression(appObject)),
         foundImport: Boolean(providerImport),
-        provider: appObject && identifierProperty(appObject, 'provider'),
+        provider:
+          appObject &&
+          ts.isObjectLiteralExpression(appObject) &&
+          identifierProperty(appObject, 'provider'),
         providerExportBinding:
-          appObject && stringLiteralProperty(appObject, 'providerExportBinding'),
+          appObject &&
+          ts.isObjectLiteralExpression(appObject) &&
+          stringLiteralProperty(appObject, 'providerExportBinding'),
         providerImportSpecifier:
-          appObject && stringLiteralProperty(appObject, 'providerImportSpecifier'),
-        providerKey: appObject && stringLiteralProperty(appObject, 'providerKey'),
+          appObject &&
+          ts.isObjectLiteralExpression(appObject) &&
+          stringLiteralProperty(appObject, 'providerImportSpecifier'),
+        providerKey:
+          appObject &&
+          ts.isObjectLiteralExpression(appObject) &&
+          stringLiteralProperty(appObject, 'providerKey'),
       })}.`,
     );
   }
