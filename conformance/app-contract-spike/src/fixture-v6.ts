@@ -222,7 +222,7 @@ export async function createPrototypeFixture(
     configFile: duplicateConfigFile,
     packageRoot: duplicate,
     providerDefinitionFile: join(duplicate, 'src/provider.ts'),
-    providerFile,
+    providerFile: secondaryProviderFile,
     serverPackageRoot: serverB,
   });
 
