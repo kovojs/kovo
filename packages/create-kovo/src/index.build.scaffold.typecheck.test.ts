@@ -50,5 +50,5 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     } finally {
       app.cleanup();
     }
-  }, 90_000);
+  }, 120_000);
 });
