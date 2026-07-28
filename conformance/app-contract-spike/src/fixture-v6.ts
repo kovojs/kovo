@@ -638,7 +638,19 @@ function providerContext(options: {
       config.providerImportSpecifier ||
     identifierProperty(appObject, 'provider') !== config.providerExportBinding
   ) {
-    throw new Error(`D1 provider app AST disagrees with config: ${options.providerFile}.`);
+    throw new Error(
+      `D1 provider app AST disagrees with config: ${options.providerFile}: ${JSON.stringify({
+        appId: appObject && stringLiteralProperty(appObject, 'appId'),
+        foundApp: Boolean(appObject),
+        foundImport: Boolean(providerImport),
+        provider: appObject && identifierProperty(appObject, 'provider'),
+        providerExportBinding:
+          appObject && stringLiteralProperty(appObject, 'providerExportBinding'),
+        providerImportSpecifier:
+          appObject && stringLiteralProperty(appObject, 'providerImportSpecifier'),
+        providerKey: appObject && stringLiteralProperty(appObject, 'providerKey'),
+      })}.`,
+    );
   }
 
   const definitionAst = ts.createSourceFile(
