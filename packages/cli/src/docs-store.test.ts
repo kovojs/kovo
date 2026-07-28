@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -28,11 +36,11 @@ describe('installed agent docs store', () => {
     const result = await installAgentDocsSnapshot({ cwd: root, snapshot });
     const manifest = await readActiveAgentDocsManifest({
       cwd: root,
-      expectedVersion: '1.2.3',
+      expectedSnapshot: snapshot,
     });
     const matches = await searchInstalledAgentDocs({
       cwd: root,
-      expectedVersion: '1.2.3',
+      expectedSnapshot: snapshot,
       task: 'quickstart page',
     });
 
@@ -77,7 +85,7 @@ describe('installed agent docs store', () => {
       }),
     ).rejects.toThrow('injected snapshot write failure');
     expect(
-      (await readActiveAgentDocsManifest({ cwd: root, expectedVersion: '1.2.3' })).snapshotDigest,
+      (await readActiveAgentDocsManifest({ cwd: root, expectedSnapshot: first })).snapshotDigest,
     ).toBe(first.snapshotDigest);
   });
 
@@ -108,7 +116,7 @@ describe('installed agent docs store', () => {
 
     expect(preparedDirectory).toContain(second.snapshotDigest.slice('sha256:'.length));
     expect(
-      (await readActiveAgentDocsManifest({ cwd: root, expectedVersion: '1.2.3' })).snapshotDigest,
+      (await readActiveAgentDocsManifest({ cwd: root, expectedSnapshot: first })).snapshotDigest,
     ).toBe(first.snapshotDigest);
   });
 
@@ -124,10 +132,32 @@ describe('installed agent docs store', () => {
     await expect(
       searchInstalledAgentDocs({
         cwd: root,
-        expectedVersion: '1.2.3',
+        expectedSnapshot: snapshot,
         task: 'quickstart',
       }),
     ).rejects.toThrow(/byte length mismatch|content digest mismatch/u);
+  });
+
+  it('rejects a locally rewritten manifest even when its self-asserted snapshot digest is kept', async () => {
+    const root = fixtureRoot();
+    const snapshot = fixtureSnapshot(root);
+    const installed = await installAgentDocsSnapshot({ cwd: root, snapshot });
+    const manifestPath = path.join(root, installed.directory, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      files: Array<{ path: string; sha256: string }>;
+    };
+    const quickstart = manifest.files.find((file) => file.path === 'guides/quickstart.md');
+    if (quickstart === undefined) throw new Error('fixture quickstart manifest entry is missing');
+    quickstart.sha256 = `sha256:${'a'.repeat(64)}`;
+    writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+
+    await expect(
+      searchInstalledAgentDocs({
+        cwd: root,
+        expectedSnapshot: snapshot,
+        task: 'quickstart',
+      }),
+    ).rejects.toThrow('does not match the snapshot bundled with the CLI');
   });
 
   it('does not install through a planted docs symlink', async () => {
@@ -145,28 +175,39 @@ describe('installed agent docs store', () => {
 
   it('rejects stale installed versions and bounded-query abuse', async () => {
     const root = fixtureRoot();
-    await installAgentDocsSnapshot({ cwd: root, snapshot: fixtureSnapshot(root) });
+    const installed = fixtureSnapshot(root);
+    await installAgentDocsSnapshot({ cwd: root, snapshot: installed });
+    const otherVersion = fixtureSnapshot(root, '9.9.9');
 
     await expect(
-      readActiveAgentDocsManifest({ cwd: root, expectedVersion: '9.9.9' }),
+      readActiveAgentDocsManifest({ cwd: root, expectedSnapshot: otherVersion }),
     ).rejects.toThrow('does not match CLI');
     await expect(
-      searchInstalledAgentDocs({ cwd: root, limit: 9, task: 'quickstart' }),
+      searchInstalledAgentDocs({
+        cwd: root,
+        expectedSnapshot: installed,
+        limit: 9,
+        task: 'quickstart',
+      }),
     ).rejects.toThrow('result limit');
-    await expect(searchInstalledAgentDocs({ cwd: root, task: 'x'.repeat(257) })).rejects.toThrow(
-      '1..256 UTF-8 bytes',
-    );
+    await expect(
+      searchInstalledAgentDocs({
+        cwd: root,
+        expectedSnapshot: installed,
+        task: 'x'.repeat(257),
+      }),
+    ).rejects.toThrow('1..256 UTF-8 bytes');
   });
 });
 
-function fixtureSnapshot(root: string) {
+function fixtureSnapshot(root: string, version = '1.2.3') {
   return decodeInstalledAgentDocsSnapshot(
     buildAgentDocsSnapshot({
       root,
       sourceCommit: SOURCE_COMMIT,
-      version: '1.2.3',
+      version,
     }).compressed,
-    { expectedVersion: '1.2.3' },
+    { expectedVersion: version },
   );
 }
 

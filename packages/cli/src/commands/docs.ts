@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 
+import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { searchInstalledAgentDocs } from '../docs-store.js';
 import { readCliPackageVersion } from '../package-version.js';
 import type { CliProcessResult } from '../shared.js';
@@ -23,9 +24,11 @@ interface DocsResultRecord {
 /** @internal Retrieve a bounded result from the exact docs snapshot selected by update-docs. */
 export async function runDocsCommand(options: DocsCommandOptions): Promise<CliProcessResult> {
   try {
+    const version = options.version ?? readCliPackageVersion();
+    const expectedSnapshot = readInstalledAgentDocsSnapshot({ expectedVersion: version });
     const results = await searchInstalledAgentDocs({
       cwd: resolve(options.cwd ?? process.cwd()),
-      expectedVersion: options.version ?? readCliPackageVersion(),
+      expectedSnapshot,
       ...(options.limit === undefined ? {} : { limit: options.limit }),
       task: options.task,
     });
@@ -34,7 +37,7 @@ export async function runDocsCommand(options: DocsCommandOptions): Promise<CliPr
       exitCode: 0,
       output:
         options.format === 'json'
-          ? `${JSON.stringify({ results: records, schema: 'kovo-docs/v1' })}\n`
+          ? `${JSON.stringify({ results: records, version: 'kovo-docs/v1' })}\n`
           : renderHumanDocsResults(records),
     };
   } catch (error) {
@@ -42,7 +45,7 @@ export async function runDocsCommand(options: DocsCommandOptions): Promise<CliPr
     if (options.format === 'json') {
       return {
         exitCode: 2,
-        output: `${JSON.stringify({ error: { message }, schema: 'kovo-docs/v1' })}\n`,
+        output: `${JSON.stringify({ error: { message }, version: 'kovo-docs/v1' })}\n`,
       };
     }
     return { exitCode: 2, output: `kovo-docs/v1\nERROR ${message}\n` };

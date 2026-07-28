@@ -121,11 +121,11 @@ export async function installAgentDocsSnapshot({
 /** @internal Authenticate and return the active content-addressed manifest. */
 export async function readActiveAgentDocsManifest({
   cwd,
-  expectedVersion,
+  expectedSnapshot,
   fileSystem,
 }: {
   cwd: string;
-  expectedVersion?: string;
+  expectedSnapshot: InstalledAgentDocsSnapshot;
   fileSystem?: FrameworkFileSystemBoundary;
 }): Promise<InstalledAgentDocsManifest> {
   const boundary = fileSystem ?? (await createFrameworkFileSystemBoundary(cwd));
@@ -141,9 +141,14 @@ export async function readActiveAgentDocsManifest({
     throw new TypeError('installed docs pointer exceeds its byte limit');
   }
   const pointer = parsePointer(pointerBytes);
-  if (expectedVersion !== undefined && pointer.version !== expectedVersion) {
+  if (
+    pointer.snapshotDigest !== expectedSnapshot.snapshotDigest ||
+    pointer.publicManifestDigest !== expectedSnapshot.publicManifestDigest ||
+    pointer.sourceCommit !== expectedSnapshot.sourceCommit ||
+    pointer.version !== expectedSnapshot.version
+  ) {
     throw new TypeError(
-      `installed docs version ${JSON.stringify(pointer.version)} does not match CLI ${JSON.stringify(expectedVersion)}; run \`kovo update-docs\``,
+      `installed docs snapshot does not match CLI ${JSON.stringify(expectedSnapshot.version)}; run \`kovo update-docs\``,
     );
   }
   const digest = pointer.snapshotDigest.slice('sha256:'.length);
@@ -162,20 +167,23 @@ export async function readActiveAgentDocsManifest({
   ) {
     throw new TypeError('installed docs pointer does not match its content-addressed manifest');
   }
+  if (canonicalJson(manifest) !== canonicalJson(snapshotManifest(expectedSnapshot))) {
+    throw new TypeError('installed docs manifest does not match the snapshot bundled with the CLI');
+  }
   return manifest;
 }
 
 /** @internal Retrieve bounded, digest-checked docs results from the active snapshot. */
 export async function searchInstalledAgentDocs({
   cwd,
-  expectedVersion,
+  expectedSnapshot,
   fileSystem,
   limit = 5,
   maxExcerptBytes = 4_096,
   task,
 }: {
   cwd: string;
-  expectedVersion?: string;
+  expectedSnapshot: InstalledAgentDocsSnapshot;
   fileSystem?: FrameworkFileSystemBoundary;
   limit?: number;
   maxExcerptBytes?: number;
@@ -191,8 +199,8 @@ export async function searchInstalledAgentDocs({
   const boundary = fileSystem ?? (await createFrameworkFileSystemBoundary(cwd));
   const manifest = await readActiveAgentDocsManifest({
     cwd,
+    expectedSnapshot,
     fileSystem: boundary,
-    ...(expectedVersion === undefined ? {} : { expectedVersion }),
   });
   const digest = manifest.snapshotDigest.slice('sha256:'.length);
   const ranked: Array<{

@@ -2,24 +2,46 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAgentDocsSnapshot } from '../../../../scripts/agent-docs-snapshot.mjs';
-import { decodeInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
+import {
+  decodeInstalledAgentDocsSnapshot,
+  type InstalledAgentDocsSnapshot,
+} from '../docs-snapshot.js';
 import { installAgentDocsSnapshot } from '../docs-store.js';
 import { runDocsCommand } from './docs.js';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const roots: string[] = [];
+const snapshotState = vi.hoisted(() => ({ snapshot: undefined as unknown }));
+
+vi.mock('../docs-snapshot.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../docs-snapshot.js')>();
+  return {
+    ...actual,
+    readInstalledAgentDocsSnapshot({ expectedVersion }: { expectedVersion: string }) {
+      const snapshot = snapshotState.snapshot as InstalledAgentDocsSnapshot | undefined;
+      if (snapshot === undefined) throw new Error('test snapshot was not configured');
+      if (snapshot.version !== expectedVersion) {
+        throw new TypeError(
+          `agent docs snapshot version ${JSON.stringify(snapshot.version)} does not match installed CLI ${JSON.stringify(expectedVersion)}`,
+        );
+      }
+      return snapshot;
+    },
+  };
+});
 
 afterEach(() => {
+  snapshotState.snapshot = undefined;
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
 describe('kovo docs', () => {
   it('renders human and JSON results from the same authenticated snapshot facts', async () => {
     const root = fixtureRoot();
-    const snapshot = fixtureSnapshot(root);
+    const snapshot = useFixtureSnapshot(root);
     await installAgentDocsSnapshot({ cwd: root, snapshot });
 
     const human = await runDocsCommand({
@@ -41,9 +63,9 @@ describe('kovo docs', () => {
     expect(json.exitCode).toBe(0);
     const record = JSON.parse(json.output) as {
       results: Array<{ path: string; snapshotDigest: string; version: string }>;
-      schema: string;
+      version: string;
     };
-    expect(record.schema).toBe('kovo-docs/v1');
+    expect(record.version).toBe('kovo-docs/v1');
     expect(record.results[0]).toMatchObject({
       path: 'guides/quickstart.md',
       snapshotDigest: snapshot.snapshotDigest,
@@ -53,6 +75,7 @@ describe('kovo docs', () => {
 
   it('reports missing, stale, and invalid requests as usage/config failures', async () => {
     const root = fixtureRoot();
+    const snapshot = useFixtureSnapshot(root);
     const missing = await runDocsCommand({
       cwd: root,
       task: 'quickstart',
@@ -61,7 +84,7 @@ describe('kovo docs', () => {
     expect(missing.exitCode).toBe(2);
     expect(missing.output).toContain('run `kovo update-docs`');
 
-    await installAgentDocsSnapshot({ cwd: root, snapshot: fixtureSnapshot(root) });
+    await installAgentDocsSnapshot({ cwd: root, snapshot });
     const stale = await runDocsCommand({
       cwd: root,
       format: 'json',
@@ -70,8 +93,8 @@ describe('kovo docs', () => {
     });
     expect(stale.exitCode).toBe(2);
     expect(JSON.parse(stale.output)).toMatchObject({
-      error: { message: expect.stringContaining('does not match CLI') },
-      schema: 'kovo-docs/v1',
+      error: { message: expect.stringContaining('does not match installed CLI') },
+      version: 'kovo-docs/v1',
     });
 
     const invalid = await runDocsCommand({
@@ -85,8 +108,8 @@ describe('kovo docs', () => {
   });
 });
 
-function fixtureSnapshot(root: string) {
-  return decodeInstalledAgentDocsSnapshot(
+function useFixtureSnapshot(root: string): InstalledAgentDocsSnapshot {
+  const snapshot = decodeInstalledAgentDocsSnapshot(
     buildAgentDocsSnapshot({
       root,
       sourceCommit: SOURCE_COMMIT,
@@ -94,6 +117,8 @@ function fixtureSnapshot(root: string) {
     }).compressed,
     { expectedVersion: '1.2.3' },
   );
+  snapshotState.snapshot = snapshot;
+  return snapshot;
 }
 
 function fixtureRoot(): string {
