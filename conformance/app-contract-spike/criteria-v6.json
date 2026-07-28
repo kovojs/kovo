@@ -1,0 +1,360 @@
+{
+  "schema": "kovo.app-contract-d1-criteria/v6",
+  "status": "pre-registered-before-v6-implementation",
+  "preRegisteredAt": "2026-07-28",
+  "frameworkSourceBaselineCommit": "2123d186086a23d48cb89f266d83b09e1120da78",
+  "supersedes": "kovo.app-contract-d1-criteria/v5",
+  "invalidatedEvidence": {
+    "v1": "In-memory aliases, unbound re-exports, source rewrites, and local type mocks did not exercise either proposed contract.",
+    "v2": "Real current packages were measured without implementing either proposed app-bound compiler prototype.",
+    "v3": "Caller-supplied structural source spans could claim arbitrary framework exports through compiler entrypoints.",
+    "v4": "The matrix executed workspace compiler source instead of the authenticated packed compiler, duplicate-copy discovery missed re-export chains, unsupported app-derived receivers could fail open without diagnostics, and the evaluator did not require exact IR/graph or owner/source/package bindings.",
+    "v5": "Arm B reused one non-app-scoped free-function fixture and synthesized D1B201 instead of executing generated app-scoped factories; owner, artifact, copy, canonicalization, count, and timing claims were mutually self-authenticating or incomplete."
+  },
+  "decisionStatus": "D1 remains open until v6 evidence passes and the active plan records the selected contract",
+  "armBContradictionResolution": {
+    "contradiction": "A genuinely bound generated wrapper cannot simultaneously be recognized as an unchanged direct @kovojs/server free-function import.",
+    "resolution": "Arm B may add exactly one compiler-owned generated-module identity class, rooted in an authenticated #kovo target and generated-module digest. It may not accept caller-supplied identity facts.",
+    "planConsequence": "Selecting Arm B requires updating the active D1 wording before D1 can close; v6 must not claim that Arm B used zero new identity classes.",
+    "forbiddenSyntheticDiagnostic": "D1B201"
+  },
+  "declarationFamilies": [
+    "endpoint",
+    "layout",
+    "mutation",
+    "query",
+    "route",
+    "task"
+  ],
+  "matrix": {
+    "ordinary-local-import": {
+      "arm-a": "accept",
+      "arm-b": "accept"
+    },
+    "named-re-export": {
+      "arm-a": "accept",
+      "arm-b": "accept"
+    },
+    "star-re-export": {
+      "arm-a": "accept",
+      "arm-b": "accept"
+    },
+    "aliased-import": {
+      "arm-a": "accept",
+      "arm-b": "accept"
+    },
+    "destructured-factory": {
+      "arm-a": "reject:D1A003",
+      "arm-b": "reject:D1B003"
+    },
+    "wrapper-function": {
+      "arm-a": "reject:D1A001",
+      "arm-b": "reject:D1B001"
+    },
+    "dynamic-factory-selection": {
+      "arm-a": "reject:D1A002",
+      "arm-b": "reject:D1B002"
+    },
+    "object-derived-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B007"
+    },
+    "array-derived-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B007"
+    },
+    "wrapper-returned-receiver": {
+      "arm-a": "reject:D1A007",
+      "arm-b": "reject:D1B007"
+    },
+    "computed-factory-access": {
+      "arm-a": "reject:D1A008",
+      "arm-b": "reject:D1B008"
+    },
+    "monorepo-shared-app-package": {
+      "arm-a": "accept",
+      "arm-b": "accept"
+    },
+    "mutable-receiver": {
+      "arm-a": "reject:D1A004",
+      "arm-b": "reject:D1B004"
+    },
+    "reassigned-receiver": {
+      "arm-a": "reject:D1A005",
+      "arm-b": "reject:D1B005"
+    },
+    "joined-receiver": {
+      "arm-a": "reject:D1A006",
+      "arm-b": "reject:D1B006"
+    },
+    "duplicate-direct-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-named-reexport-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-star-reexport-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    },
+    "duplicate-same-owner-key-copies": {
+      "arm-a": "reject:D1X001",
+      "arm-b": "reject:D1X001"
+    }
+  },
+  "receiverFlowContract": {
+    "unsupported": {
+      "array-binding-element": "D1A007",
+      "object-binding-element": "D1A007",
+      "callback-parameter": "D1A007",
+      "callback-return": "D1A007",
+      "function-parameter": "D1A007",
+      "function-body-alias": "D1A007",
+      "function-return": "D1A007",
+      "wrapper-chain": "D1A007",
+      "dynamic-import": "D1A009",
+      "awaited-dynamic-import": "D1A009",
+      "bound-call": "D1A007",
+      "nested-property": "D1A007"
+    },
+    "negativeControls": [
+      "unrelated-local-app-query-member",
+      "unrelated-imported-app-query-member",
+      "unrelated-defineKovo-named-function"
+    ],
+    "unprovedAppDerivedCallMustDiagnose": true,
+    "unrelatedSameNamedMemberMustRemainUnrecognized": true,
+    "diagnosticCountPerUnsupportedFixtureExact": 1
+  },
+  "artifactContract": {
+    "exactPackageNames": [
+      "@kovojs/browser",
+      "@kovojs/compiler",
+      "@kovojs/core",
+      "@kovojs/server"
+    ],
+    "packedCompilerEntrypoints": [
+      "@kovojs/compiler",
+      "@kovojs/compiler/internal"
+    ],
+    "sealedArtifactNames": [
+      "compiler-packed.tgz",
+      "server-overlay-packed.tgz",
+      "config.ts",
+      "provider.ts",
+      "generated-app.ts"
+    ],
+    "evaluatorMustHashActualSealedBytes": true,
+    "claimDigestMayNotAuthenticateClaimDigest": true,
+    "resolvedCompilerRealpathsMustBeUnderExtractedPackage": true,
+    "workspaceCompilerSourceResolutionForbidden": true,
+    "duplicateBaseCopiesExact": 2,
+    "duplicateBaseCopiesMustBeByteIdentical": true,
+    "postWriteCopyHashRequired": true,
+    "overlayPolicy": "declared-and-independently-sealed",
+    "overlayFilesExact": 3,
+    "tarballContainerDigestRequired": true
+  },
+  "ownerContract": {
+    "expectedAppId": "00000000-0000-4000-8000-000000000006",
+    "expectedProviderKey": "contacts-provider-v6",
+    "derivation": "sha256 of canonical AST-derived appId, providerKey, provider import specifier, and provider export binding",
+    "configAndProviderAstMustBeParsedIndependently": true,
+    "generatedOwnerMustEqualDerivedOwner": true,
+    "compiledOwnerMustEqualDerivedOwner": true,
+    "runtimeOwnerMustEqualDerivedOwner": true,
+    "ownerLiteralInAuthoredSourceForbidden": true,
+    "correlatedForgeryMutations": [
+      "config-generated-owner",
+      "provider-generated-owner",
+      "config-provider-generated-owner",
+      "owner-manifest-runtime",
+      "appId-providerKey-owner"
+    ]
+  },
+  "semanticEquivalenceContract": {
+    "baselineAndArmACanonicalIrMustMatchExactly": true,
+    "baselineAndArmACanonicalGraphMustMatchExactly": true,
+    "baselineAndArmBCanonicalIrMustMatchExactly": true,
+    "baselineAndArmBCanonicalGraphMustMatchExactly": true,
+    "canonicalizationMayChangeOnly": [
+      "structured-source-span-fields",
+      "exact-factory-callee-ast-node"
+    ],
+    "stringReplacementForbidden": true,
+    "collisionFixtures": [
+      "authored-callee-literal",
+      "authored-multiline-literal",
+      "authored-span-shaped-object",
+      "repeated-callee-text",
+      "comment-callee-text",
+      "template-newline-collision"
+    ],
+    "semanticMutations": {
+      "ir-add": "D1E101",
+      "ir-delete": "D1E102",
+      "ir-change": "D1E103",
+      "graph-add": "D1E104",
+      "graph-delete": "D1E105",
+      "graph-change": "D1E106"
+    }
+  },
+  "mutationContract": {
+    "oneSided": [
+      "config-bytes",
+      "provider-bytes",
+      "generated-module-bytes",
+      "compiler-entrypoint-bytes",
+      "server-artifact-bytes",
+      "server-overlay-bytes",
+      "matrix-source-bytes",
+      "runtime-owner",
+      "compiled-owner",
+      "generated-owner",
+      "build-command",
+      "source-commit",
+      "count",
+      "typescript-diagnostic",
+      "completion-sample-identity"
+    ],
+    "correlated": [
+      "config-bytes-and-claimed-digest",
+      "provider-bytes-and-claimed-digest",
+      "generated-bytes-manifest-and-claimed-digest",
+      "compiler-bytes-and-entrypoint-claims",
+      "server-bytes-copy-and-packed-claims",
+      "canonical-ir-and-digest",
+      "canonical-graph-and-digest",
+      "owner-config-provider-generated-runtime-claims",
+      "count-and-workload-claims",
+      "timing-samples-and-summary"
+    ],
+    "selectionBranchesRequired": [
+      "arm-a-selected-when-both-pass",
+      "arm-b-selected-when-arm-a-fails",
+      "arm-a-selected-when-arm-b-fails",
+      "fallback-when-both-fail"
+    ],
+    "surplusKeyMutationsRequiredAtEveryDeclaredSchemaNode": true
+  },
+  "workload": {
+    "matrixCases": 19,
+    "matrixArms": 2,
+    "generatedMatrixFiles": 38,
+    "declarationFamilies": 6,
+    "familyVariants": 3,
+    "generatedFamilyFiles": 18,
+    "generatedRuntimeFiles": 2,
+    "generatedProviderFiles": 2,
+    "generatedBoundModules": 3,
+    "unsupportedReceiverFiles": 12,
+    "negativeControlFiles": 3,
+    "typeMeasurementVariants": 3,
+    "declarationFilesPerVariant": 12,
+    "declarationsPerFile": 4,
+    "generatedTypeDeclarationFiles": 36,
+    "generatedTypeDeclarations": 144,
+    "appSourceRewriteCount": 0,
+    "serverOverlayFileCount": 3,
+    "sealedArtifactCount": 5,
+    "buildCommandCount": 16
+  },
+  "buildCommands": [
+    "pnpm --filter @kovojs/core run build:dist",
+    "pnpm --filter @kovojs/browser run build:dist",
+    "pnpm --filter @kovojs/server run build:dist",
+    "pnpm --filter @kovojs/compiler run build:dist",
+    "pnpm --filter @kovojs/browser pack --pack-destination <artifact>/staging-packs/browser",
+    "canonicalize @kovojs/browser published dependency order",
+    "npm pack --ignore-scripts --pack-destination <artifact>/packed/browser",
+    "pnpm --filter @kovojs/compiler pack --pack-destination <artifact>/staging-packs/compiler",
+    "canonicalize @kovojs/compiler published dependency order",
+    "npm pack --ignore-scripts --pack-destination <artifact>/packed/compiler",
+    "pnpm --filter @kovojs/core pack --pack-destination <artifact>/staging-packs/core",
+    "canonicalize @kovojs/core published dependency order",
+    "npm pack --ignore-scripts --pack-destination <artifact>/packed/core",
+    "pnpm --filter @kovojs/server pack --pack-destination <artifact>/staging-packs/server",
+    "canonicalize @kovojs/server published dependency order",
+    "npm pack --ignore-scripts --pack-destination <artifact>/packed/server"
+  ],
+  "semanticThresholds": {
+    "matrixMatchesExact": 38,
+    "matrixDistinctSourceSubjectsExact": 38,
+    "armACompilerAndGraphFamiliesExact": 6,
+    "armBCompilerAndGraphFamiliesExact": 6,
+    "runtimeOwnedFamiliesPerArmExact": 6,
+    "assembledHandleCountPerArmExact": 6,
+    "providerDefinitionCountExact": 2,
+    "providerEvaluationDuringDeclarationImportExact": 0,
+    "duplicatePhysicalServerCopiesExact": 2,
+    "duplicateDiagnosticCountExact": 1,
+    "unsupportedReceiverDiagnosticsExact": 12,
+    "negativeControlRecognitionsExact": 0,
+    "semanticEquivalenceMutationsExact": 6,
+    "oneSidedMutationsExact": 15,
+    "correlatedMutationsExact": 10,
+    "selectionBranchesExact": 4,
+    "packedCompilerEntrypointsExact": 2
+  },
+  "diagnosticThresholds": {
+    "typescriptCode": 2561,
+    "misspelledProperty": "lod",
+    "suggestedProperty": "load",
+    "spanLength": 3,
+    "messageCharactersMaximum": 240,
+    "matrixDiagnosticSpanCharactersMaximum": 32,
+    "matrixDiagnosticMessageCharactersMaximum": 240,
+    "allRejectedCasesRequireOneBoundedDiagnostic": true
+  },
+  "performanceThresholds": {
+    "runnerName": "apple-m4-darwin-arm64-node24-ts6-d1-v6",
+    "coldTscRepeats": 12,
+    "warmTscRepeats": 12,
+    "coldCompletionRepeats": 12,
+    "warmCompletionRepeats": 60,
+    "completeSixOrderBlocksRequired": true,
+    "pairedBlockNormalizationRequired": true,
+    "perSampleCompletionIdentityRequired": true,
+    "coldTscPairedP50DeltaPercentMaximum": 10,
+    "warmTscPairedP50DeltaPercentMaximum": 15,
+    "coldCompletionPairedP50DeltaPercentMaximum": 20,
+    "warmCompletionP95MillisecondsMaximum": 5,
+    "warmCompletionPairedP95DeltaPercentMaximum": 50,
+    "declarationBytesDeltaPercentMaximum": 35,
+    "completionCandidateCountMustEqualBaseline": true,
+    "completionCandidateDigestMustEqualBaseline": true,
+    "runnerMetadataRequired": [
+      "runnerName",
+      "architecture",
+      "cpuModel",
+      "nodeVersion",
+      "operatingSystem",
+      "typescriptVersion"
+    ]
+  },
+  "evaluatorContract": {
+    "criteriaFileSha256MustBeHardcodedAfterPreregistration": true,
+    "rawEvidenceDeepExactKeysRequired": true,
+    "criteriaDeepExactKeysRequired": true,
+    "resultDeepExactKeysRequired": true,
+    "surplusKeysFailClosed": true,
+    "countsRecomputedFromSubjects": true,
+    "buildCommandsComparedExactly": true,
+    "sourceCommitRecomputedFromGit": true,
+    "generatedFilesAndDeclarationsRecounted": true,
+    "typescriptDiagnosticsRecomputed": true,
+    "sealedArtifactsReadOutsideRawEvidence": true,
+    "verifyRunsMustEmitDetailedGateResults": true,
+    "cleanDetailedVerifyRunsRequired": 2,
+    "gateRunsRequired": 2
+  },
+  "decisionRule": {
+    "preferenceWhenBothEligible": "arm-a",
+    "whenOnlyArmAEligible": "arm-a",
+    "whenOnlyArmBEligible": "arm-b",
+    "whenNeitherEligible": "fallback",
+    "decisionDoesNotCloseD1": true
+  }
+}
