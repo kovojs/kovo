@@ -465,7 +465,8 @@ function normalizeCalleeSyntax(value: string): string {
   for (const family of declarationFamilies) {
     normalized = normalized.replaceAll(`app.${family}`, family);
   }
-  return normalized.replaceAll(/\n{3,}/gu, '\n\n');
+  normalized = normalized.replaceAll('return `\n', 'return `').replaceAll(/\n{3,}/gu, '\n\n');
+  return normalized.startsWith('\n') ? normalized.slice(1) : normalized;
 }
 
 function familyReached(family: DeclarationFamily, component: unknown, route: unknown): boolean {
