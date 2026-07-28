@@ -42,23 +42,42 @@ describe('D1 compiler-owned exact project resolver', () => {
     const cases = {
       array: 'D1A007',
       'array-binding': 'D1A007',
+      'apply-transfer': 'D1A007',
+      'assignment-destructured-factory': 'D1A003',
+      'assignment-destructured-receiver': 'D1A007',
       'awaited-dynamic-import': 'D1A009',
       'bound-call': 'D1A007',
+      'call-transfer': 'D1A007',
       'callback-parameter': 'D1A007',
       'callback-return': 'D1A007',
+      'class-method-capture': 'D1A007',
       computed: 'D1A008',
+      'default-parameter': 'D1A007',
       destructured: 'D1A003',
       dynamic: 'D1A002',
       'dynamic-import': 'D1A009',
+      'dynamic-import-local-reexport': 'D1A009',
+      'factory-parameter': 'D1A007',
       'function-body-alias': 'D1A007',
       'function-parameter': 'D1A007',
       'function-return': 'D1A007',
+      'iife-capture': 'D1A007',
+      'iife-parameter': 'D1A007',
       joined: 'D1A006',
+      'later-assigned-factory': 'D1A007',
+      'later-assigned-receiver': 'D1A007',
       mutable: 'D1A004',
+      'named-callback-parameter': 'D1A007',
+      'named-callback-return': 'D1A007',
       nested: 'D1A007',
       object: 'D1A007',
       'object-binding': 'D1A007',
+      'object-method-parameter': 'D1A007',
       reassigned: 'D1A005',
+      'reflect-apply-transfer': 'D1A007',
+      'uninvoked-body-alias': 'D1A007',
+      'uninvoked-destructured-factory': 'D1A003',
+      'uninvoked-exported-body': 'D1A007',
       'wrapper-chain': 'D1A007',
       'wrapper-returned': 'D1A007',
       wrapper: 'D1A001',
@@ -113,10 +132,7 @@ describe('D1 compiler-owned exact project resolver', () => {
     const unrelatedModule = join(fixture.root, 'app/src/unrelated-module.ts');
     await writeSource(
       unrelatedModule,
-      [
-        'export const app = { query(definition: unknown) { return definition; } };',
-        '',
-      ].join('\n'),
+      ['export const app = { query(definition: unknown) { return definition; } };', ''].join('\n'),
     );
     const imported = join(fixture.root, 'app/src/unrelated-imported.ts');
     await writeSource(
@@ -152,27 +168,98 @@ describe('D1 compiler-owned exact project resolver', () => {
     }
   });
 
+  it('retains unrelated callbacks, methods, assignments, transfers, and dynamic bridges', async () => {
+    const fixture = await createFixture();
+    const unrelatedModule = join(fixture.root, 'app/src/adjacent-unrelated-module.ts');
+    await writeSource(
+      unrelatedModule,
+      [
+        'const service = { query(definition: unknown) { return definition; } };',
+        'export { service as app };',
+        '',
+      ].join('\n'),
+    );
+    const sources = [
+      [
+        'callback',
+        'const service = { query(definition: unknown) { return definition; } };\nconst invoke = (active: typeof service) => active.query({});\nexport const item = [service].map(invoke)[0];\n',
+      ],
+      [
+        'method',
+        'const service = { query(definition: unknown) { return definition; } };\nconst helper = { invoke(active: typeof service) { return active.query({}); } };\nexport const item = helper.invoke(service);\n',
+      ],
+      [
+        'assignment',
+        'const service = { query(definition: unknown) { return definition; } };\nlet active: typeof service;\nactive = service;\nexport const item = active.query({});\n',
+      ],
+      [
+        'transfer',
+        'const service = { query(definition: unknown) { return definition; } };\nexport const first = service.query.call(service, {});\nexport const second = service.query.apply(service, [{}]);\n',
+      ],
+      [
+        'dynamic-bridge',
+        "const module = await import('./adjacent-unrelated-module.js');\nexport const item = module.app.query({});\n",
+      ],
+    ] as const;
+    const files = await Promise.all(
+      sources.map(async ([name, source]) => {
+        const fileName = join(fixture.root, `app/src/adjacent-unrelated-${name}.ts`);
+        await writeSource(fileName, source);
+        return fileName;
+      }),
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, unrelatedModule, ...files],
+    });
+
+    for (const fileName of files) {
+      const result = project.compileEntry(fileName);
+      expect(result.diagnostics, fileName).toEqual([]);
+      expect(result.resolver.exactNodeCount, fileName).toBe(0);
+      expect(result.ownerKey, fileName).toBeNull();
+      expect(result.parsedFactories, fileName).not.toContain('query');
+    }
+  });
+
   it('recognizes only an authenticated generated #kovo free function', async () => {
     const fixture = await createFixture();
     const generated = join(fixture.root, 'app/.kovo/app.ts');
-    const generatedSource = [
-      '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
-      "import { app } from '../src/provider.js';",
-      'export const query = app.query;',
-      '',
-    ].join('\n');
-    await writeSource(generated, generatedSource);
-    await writeJson(join(fixture.root, 'app/.kovo/app.manifest.json'), {
-      generatedModuleSha256: createHash('sha256').update(generatedSource).digest('hex'),
-      schema: 'kovo.generated-app-contract/v6',
+    const configFile = join(fixture.root, 'app/src/kovo.config.ts');
+    const configSource = generatedConfigSource();
+    await writeSource(configFile, configSource);
+    const compilerSourceSha256 = '1'.repeat(64);
+    const serverPackedContentsSha256 = '2'.repeat(64);
+    const generatedSource = generatedSourceFor({
+      compilerSourceSha256,
+      ownerKey,
+      serverPackedContentsSha256,
     });
+    await writeSource(generated, generatedSource);
+    const manifestFile = join(fixture.root, 'app/.kovo/app.manifest.json');
+    const manifest = {
+      appId: '00000000-0000-4000-8000-000000000001',
+      compilerSourceSha256,
+      completed: 'complete',
+      configSha256: createHash('sha256').update(configSource).digest('hex'),
+      generatedModuleSha256: createHash('sha256').update(generatedSource).digest('hex'),
+      ownerKey,
+      providerExportBinding: 'contactsProvider',
+      providerImportSpecifier: './provider-impl.js',
+      providerKey: 'contacts',
+      providerSourceSha256: createHash('sha256')
+        .update("export const contactsProvider = { key: 'contacts' } as const;\n")
+        .digest('hex'),
+      schema: 'kovo.generated-app-contract/v6',
+      serverPackedContentsSha256,
+    } as const;
+    await writeJson(manifestFile, manifest);
     const entry = join(fixture.root, 'app/src/generated-entry.ts');
     await writeSource(
       entry,
       "import { query } from '#kovo';\nexport const item = query({ load() { return 1; } });\n",
     );
     const project = createCompilerOwnedAppContractProject({
-      rootNames: [fixture.provider, generated, entry],
+      rootNames: [fixture.provider, configFile, generated, entry],
     });
 
     const result = project.compileEntry(entry);
@@ -188,24 +275,42 @@ describe('D1 compiler-owned exact project resolver', () => {
     const rejected = {
       array: `${generatedImport}const active = [query][0]!;\nexport const item = active(${definition});\n`,
       computed: `${generatedNamespaceImport}export const item = generated['query'](${definition});\n`,
+      'default-parameter': `${generatedImport}const invoke = (factory: typeof query = query) => factory(${definition});\nexport const item = invoke();\n`,
       destructured: `${generatedNamespaceImport}const { query } = generated;\nexport const item = query(${definition});\n`,
       dynamic: `${generatedImport}declare const choose: boolean;\nconst factory = ({ left: query, right: query })[choose ? 'left' : 'right'];\nexport const item = factory(${definition});\n`,
+      'iife-capture': `${generatedImport}export const item = (() => query(${definition}))();\n`,
+      'iife-parameter': `${generatedImport}export const item = ((factory: typeof query) => factory(${definition}))(query);\n`,
       joined: `${generatedImport}declare const choose: boolean;\nconst active = choose ? query : query;\nexport const item = active(${definition});\n`,
+      'later-assigned-factory': `${generatedImport}let invoke: typeof query;\ninvoke = query;\nexport const item = invoke(${definition});\n`,
       mutable: `${generatedImport}let active = query;\nexport const item = active(${definition});\n`,
+      'named-callback-parameter': `${generatedImport}const invoke = (factory: typeof query) => factory(${definition});\nexport const item = [query].map(invoke)[0];\n`,
+      'namespace-static': `${generatedNamespaceImport}export const item = generated.query(${definition});\n`,
       object: `${generatedImport}const active = ({ value: query }).value;\nexport const item = active(${definition});\n`,
+      'object-method-capture': `${generatedImport}const helper = { invoke() { return query(${definition}); } };\nexport const item = helper.invoke();\n`,
       reassigned: `${generatedImport}const active = query;\n// @ts-expect-error probe\nactive = query;\nexport const item = active(${definition});\n`,
+      'reflect-apply-transfer': `${generatedImport}export const item = Reflect.apply(query, undefined, [${definition}]);\n`,
+      'uninvoked-exported-body': `${generatedImport}export function buildDeclaration() { return query(${definition}); }\n`,
       'wrapper-returned': `${generatedImport}const select = () => query;\nexport const item = select()(${definition});\n`,
       wrapper: `${generatedImport}const wrapped = (value: Parameters<typeof query>[0]) => query(value);\nexport const item = wrapped(${definition});\n`,
     } as const;
     const expected = {
       array: 'D1B007',
       computed: 'D1B008',
+      'default-parameter': 'D1B007',
       destructured: 'D1B003',
       dynamic: 'D1B002',
+      'iife-capture': 'D1B007',
+      'iife-parameter': 'D1B007',
       joined: 'D1B006',
+      'later-assigned-factory': 'D1B007',
       mutable: 'D1B004',
+      'named-callback-parameter': 'D1B007',
+      'namespace-static': 'D1B008',
       object: 'D1B007',
+      'object-method-capture': 'D1B007',
       reassigned: 'D1B005',
+      'reflect-apply-transfer': 'D1B007',
+      'uninvoked-exported-body': 'D1B007',
       'wrapper-returned': 'D1B007',
       wrapper: 'D1B001',
     } as const;
@@ -217,7 +322,12 @@ describe('D1 compiler-owned exact project resolver', () => {
       }),
     );
     const rejectionProject = createCompilerOwnedAppContractProject({
-      rootNames: [fixture.provider, generated, ...rejectedFiles.map(([, fileName]) => fileName)],
+      rootNames: [
+        fixture.provider,
+        configFile,
+        generated,
+        ...rejectedFiles.map(([, fileName]) => fileName),
+      ],
     });
     for (const [name, fileName] of rejectedFiles) {
       expect(
@@ -228,11 +338,42 @@ describe('D1 compiler-owned exact project resolver', () => {
 
     await writeSource(generated, `${generatedSource}// forged after manifest\n`);
     const forgedProject = createCompilerOwnedAppContractProject({
-      rootNames: [fixture.provider, generated, entry],
+      rootNames: [fixture.provider, configFile, generated, entry],
     });
-    expect(forgedProject.compileEntry(entry).diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      ['D1B009'],
-    );
+    expect(
+      forgedProject.compileEntry(entry).diagnostics.map((diagnostic) => diagnostic.code),
+    ).toEqual(['D1B009']);
+
+    const forgedOwner = `d1v6:${'0'.repeat(64)}`;
+    const correlatedSource = generatedSource.replace(ownerKey, forgedOwner);
+    await writeSource(generated, correlatedSource);
+    await writeJson(manifestFile, {
+      ...manifest,
+      generatedModuleSha256: createHash('sha256').update(correlatedSource).digest('hex'),
+      ownerKey: forgedOwner,
+    });
+    const correlatedForgeryProject = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, configFile, generated, entry],
+    });
+    expect(
+      correlatedForgeryProject.compileEntry(entry).diagnostics.map((diagnostic) => diagnostic.code),
+    ).toEqual(['D1B009']);
+
+    await writeSource(generated, generatedSource);
+    await writeJson(manifestFile, manifest);
+    const providerSnapshotProject = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, configFile, generated, entry],
+    });
+    const changedProviderSource =
+      "export const contactsProvider = { key: 'contacts', changed: true } as const;\n";
+    await writeSource(join(fixture.root, 'app/src/provider-impl.ts'), changedProviderSource);
+    await writeJson(manifestFile, {
+      ...manifest,
+      providerSourceSha256: createHash('sha256').update(changedProviderSource).digest('hex'),
+    });
+    expect(
+      providerSnapshotProject.compileEntry(entry).diagnostics.map((diagnostic) => diagnostic.code),
+    ).toEqual(['D1B009']);
   });
 
   it.each(['direct', 'named', 'star', 'same-owner'] as const)(
@@ -319,6 +460,10 @@ async function createFixture(): Promise<Fixture> {
     "export const contactsProvider = { key: 'contacts' } as const;\n",
   );
   await writeSource(provider, providerSource('contacts'));
+  await writeSource(
+    join(app, 'src/local-bridge.ts'),
+    "import { app } from './provider.js';\nexport { app };\n",
+  );
   const namedBridge = join(app, 'src/named-bridge.ts');
   await writeSource(namedBridge, "export { app } from './provider.js';\n");
   const starBridge = join(app, 'src/star-bridge.ts');
@@ -438,6 +583,7 @@ async function createServerPackage(root: string): Promise<string> {
       'export declare function query(definition: { load(): unknown }): unknown;',
       'export declare function route(path: string, definition: unknown): unknown;',
       'export declare function task(definition: unknown): unknown;',
+      'export declare function publicAccess(reason: string): unknown;',
       'export declare function defineKovo<const AppId extends string>(options: {',
       '  readonly appId: AppId;',
       '  readonly provider: unknown;',
@@ -482,6 +628,48 @@ function ownerKeyFor(providerKey: string): string {
     .digest('hex')}`;
 }
 
+function generatedConfigSource(): string {
+  return [
+    "import { contactsProvider } from './provider-impl.js';",
+    'export default Object.freeze({',
+    "  appId: '00000000-0000-4000-8000-000000000001',",
+    '  provider: contactsProvider,',
+    "  providerExportBinding: 'contactsProvider',",
+    "  providerImportSpecifier: './provider-impl.js',",
+    "  providerKey: 'contacts',",
+    '});',
+    '',
+  ].join('\n');
+}
+
+function generatedSourceFor(options: {
+  readonly compilerSourceSha256: string;
+  readonly ownerKey: string;
+  readonly serverPackedContentsSha256: string;
+}): string {
+  return [
+    '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
+    'import { app as app } from "../src/provider.js";',
+    "export { publicAccess } from '@kovojs/server';",
+    'export const __kovoGeneratedContract = Object.freeze({',
+    '  appId: "00000000-0000-4000-8000-000000000001",',
+    `  compilerSourceSha256: ${JSON.stringify(options.compilerSourceSha256)},`,
+    `  ownerKey: ${JSON.stringify(options.ownerKey)},`,
+    '  providerExportBinding: "contactsProvider",',
+    '  providerImportSpecifier: "./provider-impl.js",',
+    '  providerKey: "contacts",',
+    `  serverPackedContentsSha256: ${JSON.stringify(options.serverPackedContentsSha256)},`,
+    '});',
+    'export const endpoint: typeof app.endpoint = app.endpoint;',
+    'export const layout: typeof app.layout = app.layout;',
+    'export const mutation: typeof app.mutation = app.mutation;',
+    'export const query: typeof app.query = app.query;',
+    'export const route: typeof app.route = app.route;',
+    'export const task: typeof app.task = app.task;',
+    '',
+  ].join('\n');
+}
+
 function acceptedSource(specifier: string, name: string): string {
   return `import { ${name} } from '${specifier}';\nexport const item = ${name}.query({ load() { return 1; } });\n`;
 }
@@ -494,40 +682,78 @@ function rejectedSource(name: string): string {
       return `${prefix}const active = [app][0]!;\nexport const item = active.query(${definition});\n`;
     case 'array-binding':
       return `${prefix}const [active] = [app];\nexport const item = active!.query(${definition});\n`;
+    case 'apply-transfer':
+      return `${prefix}export const item = app.query.apply(app, [${definition}]);\n`;
+    case 'assignment-destructured-factory':
+      return `${prefix}let query: typeof app.query;\n({ query } = app);\nexport const item = query(${definition});\n`;
+    case 'assignment-destructured-receiver':
+      return `${prefix}let active: typeof app;\n({ value: active } = { value: app });\nexport const item = active.query(${definition});\n`;
     case 'awaited-dynamic-import':
       return `const module = await import('./provider.js');\nexport const item = module.app.query(${definition});\n`;
     case 'bound-call':
       return `${prefix}const invoke = app.query.bind(app);\nexport const item = invoke(${definition});\n`;
+    case 'call-transfer':
+      return `${prefix}export const item = app.query.call(app, ${definition});\n`;
     case 'callback-parameter':
       return `${prefix}export const item = [app].map((active) => active.query(${definition}))[0];\n`;
     case 'callback-return':
       return `${prefix}export const item = [1].map(() => app.query(${definition}))[0];\n`;
+    case 'class-method-capture':
+      return `${prefix}class Invoker { invoke() { return app.query(${definition}); } }\nexport const item = new Invoker().invoke();\n`;
     case 'computed':
       return `${prefix}export const item = app['query'](${definition});\n`;
+    case 'default-parameter':
+      return `${prefix}const invoke = (active: typeof app = app) => active.query(${definition});\nexport const item = invoke();\n`;
     case 'destructured':
       return `${prefix}const { query } = app;\nexport const item = query(${definition});\n`;
     case 'dynamic':
       return `${prefix}declare const choose: boolean;\nconst factory = choose ? app.query : app.query;\nexport const item = factory(${definition});\n`;
     case 'dynamic-import':
       return `import('./provider.js').then((module) => module.app.query(${definition}));\n`;
+    case 'dynamic-import-local-reexport':
+      return `const module = await import('./local-bridge.js');\nexport const item = module.app.query(${definition});\n`;
+    case 'factory-parameter':
+      return `${prefix}const invoke = (factory: typeof app.query) => factory(${definition});\nexport const item = invoke(app.query);\n`;
     case 'function-body-alias':
       return `${prefix}function invoke() { const active = app; return active.query(${definition}); }\nexport const item = invoke();\n`;
     case 'function-parameter':
       return `${prefix}const invoke = (active: typeof app) => active.query(${definition});\nexport const item = invoke(app);\n`;
     case 'function-return':
       return `${prefix}function select() { return app; }\nexport const item = select().query(${definition});\n`;
+    case 'iife-capture':
+      return `${prefix}export const item = (() => app.query(${definition}))();\n`;
+    case 'iife-parameter':
+      return `${prefix}export const item = ((active: typeof app) => active.query(${definition}))(app);\n`;
     case 'joined':
       return `${prefix}declare const choose: boolean;\nconst active = choose ? app : app;\nexport const item = active.query(${definition});\n`;
+    case 'later-assigned-factory':
+      return `${prefix}let invoke: typeof app.query;\ninvoke = app.query;\nexport const item = invoke(${definition});\n`;
+    case 'later-assigned-receiver':
+      return `${prefix}let active: typeof app;\nactive = app;\nexport const item = active.query(${definition});\n`;
     case 'mutable':
       return `${prefix}let active = app;\nexport const item = active.query(${definition});\n`;
+    case 'named-callback-parameter':
+      return `${prefix}const invoke = (active: typeof app) => active.query(${definition});\nexport const item = [app].map(invoke)[0];\n`;
+    case 'named-callback-return':
+      return `${prefix}const invoke = () => app.query(${definition});\nexport const item = [1].map(invoke)[0];\n`;
     case 'nested':
       return `${prefix}const holder = { deep: { value: app } };\nconst active = holder.deep.value;\nexport const item = active.query(${definition});\n`;
     case 'object':
       return `${prefix}const active = ({ value: app }).value;\nexport const item = active.query(${definition});\n`;
     case 'object-binding':
       return `${prefix}const { value: active } = { value: app };\nexport const item = active.query(${definition});\n`;
+    case 'object-method-parameter':
+      return `${prefix}const helper = { invoke(active: typeof app) { return active.query(${definition}); } };\nexport const item = helper.invoke(app);\n`;
     case 'reassigned':
       return `${prefix}const active = app;\n// @ts-expect-error probe\nactive = app;\nexport const item = active.query(${definition});\n`;
+    case 'reflect-apply-transfer':
+      return `${prefix}export const item = Reflect.apply(app.query, app, [${definition}]);\n`;
+    case 'uninvoked-body-alias':
+      return `${prefix}export function buildDeclaration() { const first = app; const second = first; return second.query(${definition}); }\n`;
+    case 'uninvoked-destructured-factory':
+      return `${prefix}export function buildDeclaration() { const { query } = app; return query(${definition}); }\n`;
+    case 'uninvoked-exported-body':
+      return `${prefix}export function buildDeclaration() { const active = app; return active.query(${definition}); }\n`;
     case 'wrapper-returned':
       return `${prefix}const select = () => app;\nexport const item = select().query(${definition});\n`;
     case 'wrapper-chain':

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import * as ts from 'typescript';
 
@@ -85,6 +85,7 @@ export interface CreateCompilerOwnedAppContractProjectOptions {
 
 type ReceiverProof =
   | {
+      readonly identity: DerivedAppContractIdentity;
       readonly kind: 'app';
       readonly ownerKey: string;
       readonly serverPackageRoot: string;
@@ -120,6 +121,23 @@ interface ProvenanceContext {
   readonly options: ts.CompilerOptions;
   readonly program: ts.Program;
 }
+
+interface DerivedAppContractIdentity {
+  readonly appId: string;
+  readonly ownerKey: string;
+  readonly providerAppExportName: string;
+  readonly providerAppFileName: string;
+  readonly providerDefinitionFileName: string;
+  readonly providerExportBinding: string;
+  readonly providerImportSpecifier: string;
+  readonly providerKey: string;
+}
+
+type AnalyzableFunctionLike =
+  | ts.ArrowFunction
+  | ts.FunctionDeclaration
+  | ts.FunctionExpression
+  | ts.MethodDeclaration;
 
 /**
  * Build the Arm A project from filesystem roots. Identity is derived from compiler-owned AST and
@@ -193,6 +211,25 @@ export function createCompilerOwnedAppContractProject(
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
+    if (diagnostics.length === 0) {
+      const hidden = firstHiddenAppContractCall(sourceFile, context);
+      if (hidden?.proof.kind === 'diagnostic') {
+        diagnostics.push(hidden.proof.diagnostic);
+      } else if (hidden?.proof.kind === 'factory') {
+        const generated = ts.isIdentifier(unwrapExpression(hidden.call.expression));
+        const code = generated ? 'D1B007' : 'D1A007';
+        diagnostics.push(
+          diagnosticAt(
+            sourceFile,
+            hidden.call.expression,
+            code,
+            generated
+              ? 'D1B007 generated app provenance refuses declaration calls hidden in an uninvoked function or method body.'
+              : 'D1A007 receiver provenance refuses declaration calls hidden in an uninvoked function or method body.',
+          ),
+        );
+      }
+    }
 
     const integrity = validateCompilerOwnedAppContractResolutions(facts);
     if (integrity.length > 0) {
@@ -364,7 +401,19 @@ function proveFactoryCall(
   const expression = call.expression;
   if (ts.isPropertyAccessExpression(expression) && isDeclarationFamily(expression.name.text)) {
     const receiver = proveReceiver(sourceFile, expression.expression, context, new Set(), 0);
-    if (receiver.kind !== 'app') return receiver;
+    if (receiver.kind === 'diagnostic') return receiver;
+    if (receiver.kind !== 'app') {
+      const namespace = unwrapExpression(expression.expression);
+      if (ts.isIdentifier(namespace) && namespaceResolvesToGeneratedApp(namespace, context)) {
+        return generatedDiagnostic(
+          sourceFile,
+          expression,
+          'D1B008',
+          'generated app factories require a static named import',
+        );
+      }
+      return receiver;
+    }
     return {
       exportName: expression.name.text,
       kind: 'factory',
@@ -404,26 +453,106 @@ function proveFactoryCall(
   const unsafeGenerated = proveUnsafeGeneratedFactoryCall(sourceFile, call, context);
   if (unsafeGenerated) return unsafeGenerated;
 
-  const callback = call.arguments.find(
-    (argument): argument is ts.ArrowFunction | ts.FunctionExpression =>
-      ts.isArrowFunction(argument) || ts.isFunctionExpression(argument),
+  if (isTransferredAppFactoryInvocation(expression, call.arguments, context)) {
+    return {
+      diagnostic: diagnosticAt(
+        sourceFile,
+        expression,
+        'D1A007',
+        'D1A007 receiver provenance refuses declaration factories invoked through Function.call, Function.apply, or Reflect.apply.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+
+  const callbackCandidates = call.arguments
+    .map((argument) => functionLikeForExpression(argument, context.checker))
+    .filter((candidate): candidate is AnalyzableFunctionLike => candidate !== undefined);
+  const callback = callbackCandidates.find(
+    (candidate) =>
+      (functionContainsDeclarationFactoryAccess(candidate) ||
+        functionInvokesParameter(candidate, context.checker)) &&
+      (functionContainsAppDeclarationFactory(candidate, context) ||
+        expressionDerivesFromApp(expression, context, new Set(), 0) ||
+        call.arguments.some((argument) =>
+          expressionDerivesFromApp(argument, context, new Set(), 0),
+        )),
   );
-  if (
-    callback &&
-    functionContainsDeclarationFactoryAccess(callback) &&
-    (functionContainsAppDeclarationFactory(callback, context) ||
-      expressionDerivesFromApp(expression, context, new Set(), 0) ||
-      call.arguments.some(
-        (argument) =>
-          argument !== callback && expressionDerivesFromApp(argument, context, new Set(), 0),
-      ))
-  ) {
+  if (callback) {
     return {
       diagnostic: diagnosticAt(
         sourceFile,
         expression,
         'D1A007',
         'D1A007 receiver provenance refuses an app contract transferred through a callback.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+  const generatedCallback = callbackCandidates.find((candidate) => {
+    if (functionContainsGeneratedFactoryCall(candidate, context)) return true;
+    return (
+      functionInvokesParameter(candidate, context.checker) &&
+      (expressionDerivesFromGeneratedFactory(expression, context, new Set(), 0) ||
+        call.arguments.some((argument) =>
+          expressionDerivesFromGeneratedFactory(argument, context, new Set(), 0),
+        ))
+    );
+  });
+  if (generatedCallback) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B007',
+      'generated app factory provenance refuses a transfer through a callback',
+    );
+  }
+
+  const functionLike = functionLikeForExpression(expression, context.checker);
+  if (functionLike && functionContainsAppDeclarationFactory(functionLike, context)) {
+    const code = functionLike.parameters.length === 0 ? 'D1A007' : 'D1A001';
+    return {
+      diagnostic: diagnosticAt(
+        sourceFile,
+        expression,
+        code,
+        code === 'D1A001'
+          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly.'
+          : 'D1A007 receiver provenance refuses declaration calls hidden in a function body.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
+  if (
+    functionLike &&
+    (functionContainsGeneratedFactoryCall(functionLike, context) ||
+      ((functionContainsDeclarationFactoryAccess(functionLike) ||
+        functionInvokesParameter(functionLike, context.checker)) &&
+        (call.arguments.some((argument) =>
+          expressionDerivesFromGeneratedFactory(argument, context, new Set(), 0),
+        ) ||
+          functionHasGeneratedFactoryDerivedParameterInitializer(functionLike, context))))
+  ) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B007',
+      'generated app factory provenance refuses a transfer through a function parameter or body',
+    );
+  }
+  if (
+    functionLike &&
+    (functionContainsDeclarationFactoryAccess(functionLike) ||
+      functionInvokesParameter(functionLike, context.checker)) &&
+    (call.arguments.some((argument) => expressionDerivesFromApp(argument, context, new Set(), 0)) ||
+      functionHasAppDerivedParameterInitializer(functionLike, context))
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        sourceFile,
+        expression,
+        'D1A007',
+        'D1A007 receiver provenance refuses an app contract or declaration factory transferred through a function parameter.',
       ),
       kind: 'diagnostic',
     };
@@ -452,38 +581,22 @@ function proveFactoryCall(
     }
   }
 
-  const functionLike = localDeclaration ? functionLikeDeclaration(localDeclaration) : undefined;
-  if (functionLike && functionContainsAppDeclarationFactory(functionLike, context)) {
-    const code = functionLike.parameters.length === 0 ? 'D1A007' : 'D1A001';
-    return {
-      diagnostic: diagnosticAt(
-        sourceFile,
-        expression,
-        code,
-        code === 'D1A001'
-          ? 'D1A001 receiver provenance refuses wrapper results because the declaration call-site owner cannot be proved exactly.'
-          : 'D1A007 receiver provenance refuses declaration calls hidden in a function body.',
-      ),
-      kind: 'diagnostic',
-    };
-  }
-
-  if (
-    functionLike &&
-    functionContainsDeclarationFactoryAccess(functionLike) &&
-    call.arguments.some((argument) =>
-      expressionDerivesFromApp(argument, context, new Set(), 0),
-    )
-  ) {
-    return {
-      diagnostic: diagnosticAt(
-        sourceFile,
-        expression,
-        'D1A007',
-        'D1A007 receiver provenance refuses an app contract transferred through a function parameter.',
-      ),
-      kind: 'diagnostic',
-    };
+  if (localDeclaration && ts.isVariableDeclaration(localDeclaration)) {
+    const assignment = firstAppDerivedAssignment(localDeclaration, context);
+    if (assignment) {
+      const code = assignment.destructured ? 'D1A003' : 'D1A007';
+      return {
+        diagnostic: diagnosticAt(
+          sourceFile,
+          expression,
+          code,
+          code === 'D1A003'
+            ? 'D1A003 receiver provenance refuses destructuring assignments from an app contract.'
+            : 'D1A007 receiver provenance refuses declaration factories transferred through a later assignment.',
+        ),
+        kind: 'diagnostic',
+      };
+    }
   }
 
   if (
@@ -622,9 +735,25 @@ function proveVariableReceiver(
   }
   const nextSeen = new Set(seen);
   nextSeen.add(declaration);
-  if (!declaration.initializer) return { kind: 'none' };
-  const derives = expressionDerivesFromApp(declaration.initializer, context, new Set(), depth + 1);
-  if (!derives) return { kind: 'none' };
+  const declaredInitializer = declaration.initializer;
+  const assignment = firstAppDerivedAssignment(declaration, context);
+  const derives =
+    declaredInitializer !== undefined &&
+    expressionDerivesFromApp(declaredInitializer, context, new Set(), depth + 1);
+  if (!derives && !assignment) return { kind: 'none' };
+  if (!derives && assignment) {
+    return {
+      diagnostic: diagnosticAt(
+        diagnosticSourceFile,
+        expression,
+        'D1A007',
+        assignment.destructured
+          ? 'D1A007 receiver provenance refuses app contracts transferred through a destructuring assignment.'
+          : 'D1A007 receiver provenance refuses app contracts transferred through a later assignment.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
   if (!variableDeclarationIsConst(declaration)) {
     return {
       diagnostic: diagnosticAt(
@@ -648,7 +777,8 @@ function proveVariableReceiver(
     };
   }
 
-  const initializer = unwrapExpression(declaration.initializer);
+  if (!declaredInitializer) return { kind: 'none' };
+  const initializer = unwrapExpression(declaredInitializer);
   if (ts.isConditionalExpression(initializer) || isJoiningBinaryExpression(initializer)) {
     return {
       diagnostic: diagnosticAt(
@@ -697,19 +827,31 @@ function proveDirectDefineKovo(
   const providerIdentity = importedProviderIdentity(argument, providerKey, context);
   if (!appId || !providerKey || !providerIdentity) return undefined;
   // Bind the proof to the declaration that owns the initializer, not merely an equivalent call.
-  if (initializer.getSourceFile() !== declaration.getSourceFile()) return undefined;
+  if (
+    initializer.getSourceFile() !== declaration.getSourceFile() ||
+    !ts.isIdentifier(declaration.name)
+  ) {
+    return undefined;
+  }
+  const identityFields = {
+    appId,
+    providerExportBinding: providerIdentity.exportBinding,
+    providerImportSpecifier: providerIdentity.importSpecifier,
+    providerKey,
+  };
+  const ownerKey = `d1v6:${createHash('sha256')
+    .update(JSON.stringify(identityFields))
+    .digest('hex')}`;
   return {
+    identity: {
+      ...identityFields,
+      ownerKey,
+      providerAppExportName: declaration.name.text,
+      providerAppFileName: declaration.getSourceFile().fileName,
+      providerDefinitionFileName: providerIdentity.definitionFileName,
+    },
     kind: 'app',
-    ownerKey: `d1v6:${createHash('sha256')
-      .update(
-        JSON.stringify({
-          appId,
-          providerExportBinding: providerIdentity.exportBinding,
-          providerImportSpecifier: providerIdentity.importSpecifier,
-          providerKey,
-        }),
-      )
-      .digest('hex')}`,
+    ownerKey,
     serverPackageRoot,
   };
 }
@@ -718,7 +860,13 @@ function importedProviderIdentity(
   options: ts.ObjectLiteralExpression,
   providerKey: string | undefined,
   context: ProvenanceContext,
-): { readonly exportBinding: string; readonly importSpecifier: string } | undefined {
+):
+  | {
+      readonly definitionFileName: string;
+      readonly exportBinding: string;
+      readonly importSpecifier: string;
+    }
+  | undefined {
   if (!providerKey) return undefined;
   const providerProperty = options.properties.find(
     (property): property is ts.PropertyAssignment =>
@@ -750,6 +898,7 @@ function importedProviderIdentity(
   ) as ts.ObjectLiteralExpression;
   if (stringProperty(providerDefinition, 'key') !== providerKey) return undefined;
   return {
+    definitionFileName: resolvedDeclaration.getSourceFile().fileName,
     exportBinding: localDeclaration.propertyName?.text ?? localDeclaration.name.text,
     importSpecifier: importDeclaration.moduleSpecifier.text,
   };
@@ -847,7 +996,7 @@ function declarationDerivesFromApp(
 }
 
 function functionReturnsApp(
-  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
   seen: Set<ts.Declaration>,
   depth: number,
@@ -875,11 +1024,18 @@ function functionReturnsApp(
 }
 
 function functionContainsAppDeclarationFactory(
-  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
 ): boolean {
-  if (!declaration.body) return false;
-  let found = false;
+  return firstAppDeclarationFactoryCall(declaration, context) !== undefined;
+}
+
+function firstAppDeclarationFactoryCall(
+  declaration: AnalyzableFunctionLike,
+  context: ProvenanceContext,
+): ts.CallExpression | undefined {
+  if (!declaration.body) return undefined;
+  let found: ts.CallExpression | undefined;
   const visit = (node: ts.Node): void => {
     if (found) return;
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
@@ -890,9 +1046,104 @@ function functionContainsAppDeclarationFactory(
         isDeclarationFamily(callee.name.text) &&
         expressionDerivesFromApp(callee.expression, context, new Set(), 0)
       ) {
-        found = true;
+        found = node;
         return;
       }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(declaration.body);
+  return found;
+}
+
+function firstHiddenAppContractCall(
+  sourceFile: ts.SourceFile,
+  context: ProvenanceContext,
+):
+  | {
+      readonly call: ts.CallExpression;
+      readonly proof: Exclude<FactoryProof, { kind: 'none' }>;
+    }
+  | undefined {
+  let found:
+    | {
+        readonly call: ts.CallExpression;
+        readonly proof: Exclude<FactoryProof, { kind: 'none' }>;
+      }
+    | undefined;
+  const inspectBody = (declaration: AnalyzableFunctionLike): void => {
+    if (!declaration.body || found) return;
+    const inspect = (node: ts.Node): void => {
+      if (found || (node !== declaration.body && ts.isFunctionLike(node))) return;
+      if (ts.isCallExpression(node)) {
+        const proof = proveFactoryCall(sourceFile, node, context);
+        if (proof.kind !== 'none') {
+          found = { call: node, proof };
+          return;
+        }
+      }
+      ts.forEachChild(node, inspect);
+    };
+    inspect(declaration.body);
+  };
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (isAnalyzableFunctionLike(node)) {
+      inspectBody(node);
+      if (found) return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+function functionHasAppDerivedParameterInitializer(
+  declaration: AnalyzableFunctionLike,
+  context: ProvenanceContext,
+): boolean {
+  return declaration.parameters.some(
+    (parameter) =>
+      parameter.initializer !== undefined &&
+      expressionDerivesFromApp(parameter.initializer, context, new Set(), 0),
+  );
+}
+
+function functionHasGeneratedFactoryDerivedParameterInitializer(
+  declaration: AnalyzableFunctionLike,
+  context: ProvenanceContext,
+): boolean {
+  return declaration.parameters.some(
+    (parameter) =>
+      parameter.initializer !== undefined &&
+      expressionDerivesFromGeneratedFactory(parameter.initializer, context, new Set(), 0),
+  );
+}
+
+function functionInvokesParameter(
+  declaration: AnalyzableFunctionLike,
+  checker: ts.TypeChecker,
+): boolean {
+  if (!declaration.body) return false;
+  const parameters = new Set(
+    declaration.parameters.flatMap((parameter) => {
+      if (!ts.isIdentifier(parameter.name)) return [];
+      const symbol = checker.getSymbolAtLocation(parameter.name);
+      return symbol ? [symbol] : [];
+    }),
+  );
+  if (parameters.size === 0) return false;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(unwrapExpression(node.expression)) &&
+      parameters.has(checker.getSymbolAtLocation(unwrapExpression(node.expression))!)
+    ) {
+      found = true;
+      return;
     }
     ts.forEachChild(node, visit);
   };
@@ -933,8 +1184,7 @@ function proveGeneratedAppFactory(
       context,
       new Set(),
       false,
-    ) ||
-    !generatedModuleMatchesManifest(generatedSourceFile)
+    )
   ) {
     return {
       diagnostic: diagnosticAt(
@@ -979,6 +1229,24 @@ function proveGeneratedAppFactory(
       kind: 'diagnostic',
     };
   }
+  if (
+    !generatedModuleMatchesManifest(
+      generatedSourceFile,
+      receiver.identity,
+      receiver.serverPackageRoot,
+      context,
+    )
+  ) {
+    return {
+      diagnostic: diagnosticAt(
+        callSourceFile,
+        expression,
+        'D1B009',
+        'D1B009 generated app factory source, manifest, config, provider, or correlated artifact digest does not match the exact derived contract.',
+      ),
+      kind: 'diagnostic',
+    };
+  }
   return {
     exportName: declaration.name.text,
     kind: 'factory',
@@ -993,6 +1261,14 @@ function proveUnsafeGeneratedFactoryCall(
   context: ProvenanceContext,
 ): Extract<FactoryProof, { kind: 'diagnostic' }> | undefined {
   const expression = unwrapExpression(call.expression);
+  if (isTransferredGeneratedFactoryInvocation(expression, call.arguments, context)) {
+    return generatedDiagnostic(
+      sourceFile,
+      expression,
+      'D1B007',
+      'generated app factories may not be invoked through Function.call, Function.apply, or Reflect.apply',
+    );
+  }
   if (
     ts.isElementAccessExpression(expression) &&
     expression.argumentExpression &&
@@ -1055,12 +1331,22 @@ function proveUnsafeGeneratedFactoryCall(
       'generated app factory wrappers are not an exact generated binding',
     );
   }
+  if (!declaration || !ts.isVariableDeclaration(declaration)) return undefined;
+  const assignment = firstGeneratedFactoryDerivedAssignment(declaration, context);
   if (
-    !declaration ||
-    !ts.isVariableDeclaration(declaration) ||
     !declaration.initializer ||
     !expressionDerivesFromGeneratedFactory(declaration.initializer, context, new Set(), 0)
   ) {
+    if (assignment) {
+      return generatedDiagnostic(
+        sourceFile,
+        expression,
+        assignment.destructured ? 'D1B003' : 'D1B007',
+        assignment.destructured
+          ? 'generated app factories may not be transferred through destructuring assignments'
+          : 'generated app factories may not be transferred through later assignments',
+      );
+    }
     return undefined;
   }
   if (!variableDeclarationIsConst(declaration)) {
@@ -1110,15 +1396,7 @@ function proveUnsafeGeneratedFactoryCall(
 function generatedDiagnostic(
   sourceFile: ts.SourceFile,
   node: ts.Node,
-  code:
-    | 'D1B001'
-    | 'D1B002'
-    | 'D1B003'
-    | 'D1B004'
-    | 'D1B005'
-    | 'D1B006'
-    | 'D1B007'
-    | 'D1B008',
+  code: 'D1B001' | 'D1B002' | 'D1B003' | 'D1B004' | 'D1B005' | 'D1B006' | 'D1B007' | 'D1B008',
   detail: string,
 ): Extract<FactoryProof, { kind: 'diagnostic' }> {
   return {
@@ -1171,10 +1449,7 @@ function expressionDerivesFromGeneratedFactory(
       ? localSymbolDeclaration(context.checker, expression.expression)
       : undefined;
     const functionLike = declaration ? functionLikeDeclaration(declaration) : undefined;
-    if (
-      functionLike &&
-      functionReturnsGeneratedFactory(functionLike, context, seen, depth + 1)
-    ) {
+    if (functionLike && functionReturnsGeneratedFactory(functionLike, context, seen, depth + 1)) {
       return true;
     }
   }
@@ -1196,7 +1471,7 @@ function expressionDerivesFromGeneratedFactory(
 }
 
 function functionReturnsGeneratedFactory(
-  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
   seen: Set<ts.Declaration>,
   depth: number,
@@ -1224,7 +1499,7 @@ function functionReturnsGeneratedFactory(
 }
 
 function functionContainsGeneratedFactoryCall(
-  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+  declaration: AnalyzableFunctionLike,
   context: ProvenanceContext,
 ): boolean {
   if (!declaration.body) return false;
@@ -1277,7 +1552,7 @@ function namespaceResolvesToGeneratedApp(
   return (
     target !== undefined &&
     normalizeFileName(target.fileName).includes('/.kovo/') &&
-    generatedModuleMatchesManifest(target)
+    generatedModuleHasMatchingSelfDigest(target)
   );
 }
 
@@ -1330,7 +1605,7 @@ function sourceReachesGeneratedModuleThroughKovoAlias(
   return false;
 }
 
-function generatedModuleMatchesManifest(sourceFile: ts.SourceFile): boolean {
+function generatedModuleHasMatchingSelfDigest(sourceFile: ts.SourceFile): boolean {
   try {
     const manifest = JSON.parse(
       readFileSync(join(dirname(sourceFile.fileName), 'app.manifest.json'), 'utf8'),
@@ -1340,17 +1615,243 @@ function generatedModuleMatchesManifest(sourceFile: ts.SourceFile): boolean {
     };
     return (
       manifest.schema === 'kovo.generated-app-contract/v6' &&
-      manifest.generatedModuleSha256 ===
-        createHash('sha256').update(sourceFile.text).digest('hex')
+      manifest.generatedModuleSha256 === createHash('sha256').update(sourceFile.text).digest('hex')
     );
   } catch {
     return false;
   }
 }
 
-function functionContainsDeclarationFactoryAccess(
-  declaration: ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression,
+function generatedModuleMatchesManifest(
+  sourceFile: ts.SourceFile,
+  identity: DerivedAppContractIdentity,
+  serverPackageRoot: string,
+  context: ProvenanceContext,
 ): boolean {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(dirname(sourceFile.fileName), 'app.manifest.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const manifestKeys = [
+      'appId',
+      'compilerSourceSha256',
+      'completed',
+      'configSha256',
+      'generatedModuleSha256',
+      'ownerKey',
+      'providerExportBinding',
+      'providerImportSpecifier',
+      'providerKey',
+      'providerSourceSha256',
+      'schema',
+      'serverPackedContentsSha256',
+    ] as const;
+    if (
+      !exactObjectKeys(manifest, manifestKeys) ||
+      manifest.schema !== 'kovo.generated-app-contract/v6' ||
+      manifest.completed !== 'complete' ||
+      manifest.appId !== identity.appId ||
+      manifest.ownerKey !== identity.ownerKey ||
+      manifest.providerExportBinding !== identity.providerExportBinding ||
+      manifest.providerImportSpecifier !== identity.providerImportSpecifier ||
+      manifest.providerKey !== identity.providerKey ||
+      !isSha256(manifest.compilerSourceSha256) ||
+      !isSha256(manifest.serverPackedContentsSha256) ||
+      manifest.generatedModuleSha256 !== sha256Text(sourceFile.text)
+    ) {
+      return false;
+    }
+    const providerSource = readFileSync(identity.providerDefinitionFileName, 'utf8');
+    const providerSourceFile = programSourceFile(
+      context.program,
+      identity.providerDefinitionFileName,
+    );
+    if (
+      !providerSourceFile ||
+      providerSourceFile.text !== providerSource ||
+      manifest.providerSourceSha256 !== sha256Text(providerSource)
+    ) {
+      return false;
+    }
+    // v6 carries compiler/server digests but exposes no independent production trust root for them.
+    // The resolver can require their exact shape and source/manifest correlation; the sealed
+    // conformance evaluator remains responsible for authenticating those two external artifacts.
+    const configFileName = join(dirname(identity.providerAppFileName), 'kovo.config.ts');
+    const configSource = readFileSync(configFileName, 'utf8');
+    const configSourceFile = programSourceFile(context.program, configFileName);
+    if (
+      !configSourceFile ||
+      configSourceFile.text !== configSource ||
+      manifest.configSha256 !== sha256Text(configSource) ||
+      !configSourceMatchesIdentity(configSourceFile, identity)
+    ) {
+      return false;
+    }
+    const packageManifest = JSON.parse(
+      readFileSync(join(serverPackageRoot, 'package.json'), 'utf8'),
+    ) as { readonly name?: unknown };
+    if (packageManifest.name !== '@kovojs/server') return false;
+    return (
+      sourceFile.text ===
+      expectedGeneratedModuleSource(
+        sourceFile.fileName,
+        identity,
+        manifest.compilerSourceSha256,
+        manifest.serverPackedContentsSha256,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+function configSourceMatchesIdentity(
+  sourceFile: ts.SourceFile,
+  identity: DerivedAppContractIdentity,
+): boolean {
+  const assignment = sourceFile.statements.find(ts.isExportAssignment);
+  if (!assignment) return false;
+  const object = objectLiteralFromFreeze(assignment.expression);
+  if (
+    !object ||
+    !exactPropertyNames(object, [
+      'appId',
+      'provider',
+      'providerExportBinding',
+      'providerImportSpecifier',
+      'providerKey',
+    ]) ||
+    stringProperty(object, 'appId') !== identity.appId ||
+    stringProperty(object, 'providerExportBinding') !== identity.providerExportBinding ||
+    stringProperty(object, 'providerImportSpecifier') !== identity.providerImportSpecifier ||
+    stringProperty(object, 'providerKey') !== identity.providerKey ||
+    identifierPropertyValue(object, 'provider') !== identity.providerExportBinding
+  ) {
+    return false;
+  }
+  return sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteralLike(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === identity.providerImportSpecifier &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some(
+        (specifier) =>
+          (specifier.propertyName?.text ?? specifier.name.text) ===
+            identity.providerExportBinding &&
+          specifier.name.text === identity.providerExportBinding,
+      ),
+  );
+}
+
+function objectLiteralFromFreeze(
+  expression: ts.Expression,
+): ts.ObjectLiteralExpression | undefined {
+  const unwrapped = unwrapExpression(expression);
+  if (
+    !ts.isCallExpression(unwrapped) ||
+    unwrapped.arguments.length !== 1 ||
+    !ts.isPropertyAccessExpression(unwrapped.expression) ||
+    !ts.isIdentifier(unwrapped.expression.expression) ||
+    unwrapped.expression.expression.text !== 'Object' ||
+    unwrapped.expression.name.text !== 'freeze'
+  ) {
+    return undefined;
+  }
+  const argument = unwrapExpression(unwrapped.arguments[0]!);
+  return ts.isObjectLiteralExpression(argument) ? argument : undefined;
+}
+
+function expectedGeneratedModuleSource(
+  generatedFileName: string,
+  identity: DerivedAppContractIdentity,
+  compilerSourceSha256: string,
+  serverPackedContentsSha256: string,
+): string {
+  const relativeProvider = relative(dirname(generatedFileName), identity.providerAppFileName)
+    .replaceAll('\\', '/')
+    .replace(/\.[cm]?tsx?$/u, '.js');
+  const providerImport = relativeProvider.startsWith('.')
+    ? relativeProvider
+    : `./${relativeProvider}`;
+  return [
+    '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
+    `import { ${identity.providerAppExportName} as app } from ${JSON.stringify(providerImport)};`,
+    "export { publicAccess } from '@kovojs/server';",
+    'export const __kovoGeneratedContract = Object.freeze({',
+    `  appId: ${JSON.stringify(identity.appId)},`,
+    `  compilerSourceSha256: ${JSON.stringify(compilerSourceSha256)},`,
+    `  ownerKey: ${JSON.stringify(identity.ownerKey)},`,
+    `  providerExportBinding: ${JSON.stringify(identity.providerExportBinding)},`,
+    `  providerImportSpecifier: ${JSON.stringify(identity.providerImportSpecifier)},`,
+    `  providerKey: ${JSON.stringify(identity.providerKey)},`,
+    `  serverPackedContentsSha256: ${JSON.stringify(serverPackedContentsSha256)},`,
+    '});',
+    'export const endpoint: typeof app.endpoint = app.endpoint;',
+    'export const layout: typeof app.layout = app.layout;',
+    'export const mutation: typeof app.mutation = app.mutation;',
+    'export const query: typeof app.query = app.query;',
+    'export const route: typeof app.route = app.route;',
+    'export const task: typeof app.task = app.task;',
+    '',
+  ].join('\n');
+}
+
+function exactObjectKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const orderedExpected = [...expected].sort();
+  return (
+    actual.length === orderedExpected.length &&
+    actual.every((entry, index) => entry === orderedExpected[index])
+  );
+}
+
+function exactPropertyNames(
+  object: ts.ObjectLiteralExpression,
+  expected: readonly string[],
+): boolean {
+  const actual = object.properties.flatMap((property) => {
+    if (
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+      (ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name))
+    ) {
+      return [property.name.text];
+    }
+    return [];
+  });
+  return (
+    actual.length === object.properties.length &&
+    exactObjectKeys(Object.fromEntries(actual.map((name) => [name, true])), expected)
+  );
+}
+
+function identifierPropertyValue(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  for (const property of object.properties) {
+    if (
+      ts.isPropertyAssignment(property) &&
+      ((ts.isIdentifier(property.name) && property.name.text === name) ||
+        (ts.isStringLiteralLike(property.name) && property.name.text === name))
+    ) {
+      const value = unwrapExpression(property.initializer);
+      return ts.isIdentifier(value) ? value.text : undefined;
+    }
+  }
+  return undefined;
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
+}
+
+function sha256Text(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function functionContainsDeclarationFactoryAccess(declaration: AnalyzableFunctionLike): boolean {
   if (!declaration.body) return false;
   let found = false;
   const visit = (node: ts.Node): void => {
@@ -1391,6 +1892,66 @@ function expressionIsBoundAppFactory(
     isDeclarationFamily(target.name.text) &&
     expressionDerivesFromApp(target.expression, context, new Set(), 0)
   );
+}
+
+function isTransferredAppFactoryInvocation(
+  rawExpression: ts.Expression,
+  arguments_: readonly ts.Expression[],
+  context: ProvenanceContext,
+): boolean {
+  const expression = unwrapExpression(rawExpression);
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'Reflect' &&
+    expression.name.text === 'apply'
+  ) {
+    const target = arguments_[0] && unwrapExpression(arguments_[0]);
+    return (
+      target !== undefined &&
+      ts.isPropertyAccessExpression(target) &&
+      isDeclarationFamily(target.name.text) &&
+      expressionDerivesFromApp(target.expression, context, new Set(), 0)
+    );
+  }
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    (expression.name.text === 'call' || expression.name.text === 'apply')
+  ) {
+    const target = unwrapExpression(expression.expression);
+    return (
+      ts.isPropertyAccessExpression(target) &&
+      isDeclarationFamily(target.name.text) &&
+      expressionDerivesFromApp(target.expression, context, new Set(), 0)
+    );
+  }
+  return false;
+}
+
+function isTransferredGeneratedFactoryInvocation(
+  rawExpression: ts.Expression,
+  arguments_: readonly ts.Expression[],
+  context: ProvenanceContext,
+): boolean {
+  const expression = unwrapExpression(rawExpression);
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'Reflect' &&
+    expression.name.text === 'apply'
+  ) {
+    const target = arguments_[0];
+    return (
+      target !== undefined && expressionDerivesFromGeneratedFactory(target, context, new Set(), 0)
+    );
+  }
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    (expression.name.text === 'call' || expression.name.text === 'apply')
+  ) {
+    return expressionDerivesFromGeneratedFactory(expression.expression, context, new Set(), 0);
+  }
+  return false;
 }
 
 function firstAppProviderDynamicImport(
@@ -1455,6 +2016,34 @@ function dynamicImportTargetContainsApp(
   if (direct) return true;
   for (const statement of target.statements) {
     if (
+      ts.isExportAssignment(statement) &&
+      expressionDerivesFromApp(statement.expression, context, new Set(), 0)
+    ) {
+      return true;
+    }
+    if (
+      ts.isVariableStatement(statement) &&
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) &&
+      statement.declarationList.declarations.some(
+        (declaration) =>
+          declaration.initializer !== undefined &&
+          expressionDerivesFromApp(declaration.initializer, context, new Set(), 0),
+      )
+    ) {
+      return true;
+    }
+    if (
+      ts.isExportDeclaration(statement) &&
+      !statement.moduleSpecifier &&
+      statement.exportClause &&
+      ts.isNamedExports(statement.exportClause) &&
+      statement.exportClause.elements.some((specifier) =>
+        expressionDerivesFromApp(specifier.propertyName ?? specifier.name, context, new Set(), 0),
+      )
+    ) {
+      return true;
+    }
+    if (
       !ts.isExportDeclaration(statement) ||
       !statement.moduleSpecifier ||
       !ts.isStringLiteralLike(statement.moduleSpecifier)
@@ -1462,12 +2051,7 @@ function dynamicImportTargetContainsApp(
       continue;
     }
     if (
-      dynamicImportTargetContainsApp(
-        statement.moduleSpecifier.text,
-        target.fileName,
-        context,
-        seen,
-      )
+      dynamicImportTargetContainsApp(statement.moduleSpecifier.text, target.fileName, context, seen)
     ) {
       return true;
     }
@@ -1532,6 +2116,97 @@ function variableIsReassigned(
     if (reassigned) return true;
   }
   return false;
+}
+
+function firstAppDerivedAssignment(
+  declaration: ts.VariableDeclaration,
+  context: ProvenanceContext,
+): { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined {
+  if (!ts.isIdentifier(declaration.name)) return undefined;
+  const symbol = context.checker.getSymbolAtLocation(declaration.name);
+  if (!symbol) return undefined;
+  const roots = new Set(context.program.getRootFileNames().map(normalizeFileName));
+  for (const sourceFile of context.program.getSourceFiles()) {
+    if (!roots.has(normalizeFileName(sourceFile.fileName))) continue;
+    let found: { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined;
+    const visit = (node: ts.Node): void => {
+      if (found) return;
+      if (
+        ts.isBinaryExpression(node) &&
+        isAssignmentOperator(node.operatorToken.kind) &&
+        assignmentTargetContainsSymbol(node.left, symbol, context.checker) &&
+        expressionDerivesFromApp(node.right, context, new Set(), 0)
+      ) {
+        found = {
+          destructured: !ts.isIdentifier(unwrapExpression(node.left)),
+          node,
+        };
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function firstGeneratedFactoryDerivedAssignment(
+  declaration: ts.VariableDeclaration,
+  context: ProvenanceContext,
+): { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined {
+  if (!ts.isIdentifier(declaration.name)) return undefined;
+  const symbol = context.checker.getSymbolAtLocation(declaration.name);
+  if (!symbol) return undefined;
+  const roots = new Set(context.program.getRootFileNames().map(normalizeFileName));
+  for (const sourceFile of context.program.getSourceFiles()) {
+    if (!roots.has(normalizeFileName(sourceFile.fileName))) continue;
+    let found: { readonly destructured: boolean; readonly node: ts.BinaryExpression } | undefined;
+    const visit = (node: ts.Node): void => {
+      if (found) return;
+      if (
+        ts.isBinaryExpression(node) &&
+        isAssignmentOperator(node.operatorToken.kind) &&
+        assignmentTargetContainsSymbol(node.left, symbol, context.checker) &&
+        expressionDerivesFromGeneratedFactory(node.right, context, new Set(), 0)
+      ) {
+        found = {
+          destructured: !ts.isIdentifier(unwrapExpression(node.left)),
+          node,
+        };
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function assignmentTargetContainsSymbol(
+  expression: ts.Expression,
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (
+      ts.isShorthandPropertyAssignment(node) &&
+      checker.getShorthandAssignmentValueSymbol(node) === symbol
+    ) {
+      found = true;
+      return;
+    }
+    if (ts.isIdentifier(node) && checker.getSymbolAtLocation(node) === symbol) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return found;
 }
 
 function reachableServerPackageRoots(entry: ts.SourceFile, context: ProvenanceContext): string[] {
@@ -1696,10 +2371,9 @@ function localSymbolDeclaration(
   return symbol?.valueDeclaration ?? symbol?.declarations?.[0];
 }
 
-function functionLikeDeclaration(
-  declaration: ts.Declaration,
-): ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression | undefined {
+function functionLikeDeclaration(declaration: ts.Declaration): AnalyzableFunctionLike | undefined {
   if (ts.isFunctionDeclaration(declaration)) return declaration;
+  if (ts.isMethodDeclaration(declaration)) return declaration;
   if (
     ts.isVariableDeclaration(declaration) &&
     declaration.initializer &&
@@ -1709,6 +2383,38 @@ function functionLikeDeclaration(
     return declaration.initializer;
   }
   return undefined;
+}
+
+function functionLikeForExpression(
+  rawExpression: ts.Expression,
+  checker: ts.TypeChecker,
+): AnalyzableFunctionLike | undefined {
+  const expression = unwrapExpression(rawExpression);
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return expression;
+  if (ts.isIdentifier(expression)) {
+    const declaration = localSymbolDeclaration(checker, expression);
+    return declaration ? functionLikeDeclaration(declaration) : undefined;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    const symbol = checker.getSymbolAtLocation(expression.name);
+    const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    return declaration ? functionLikeDeclaration(declaration) : undefined;
+  }
+  if (ts.isElementAccessExpression(expression) && expression.argumentExpression) {
+    const symbol = checker.getSymbolAtLocation(expression.argumentExpression);
+    const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    return declaration ? functionLikeDeclaration(declaration) : undefined;
+  }
+  return undefined;
+}
+
+function isAnalyzableFunctionLike(node: ts.Node): node is AnalyzableFunctionLike {
+  return (
+    ts.isArrowFunction(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isMethodDeclaration(node)
+  );
 }
 
 function enclosingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | undefined {
@@ -1814,6 +2520,16 @@ function isDeclarationFamily(value: string | undefined): value is AppContractDec
 
 function normalizeFileName(fileName: string): string {
   return fileName.replaceAll('\\', '/');
+}
+
+function programSourceFile(program: ts.Program, fileName: string): ts.SourceFile | undefined {
+  const normalized = normalizeFileName(fileName);
+  return (
+    program.getSourceFile(fileName) ??
+    program
+      .getSourceFiles()
+      .find((candidate) => normalizeFileName(candidate.fileName) === normalized)
+  );
 }
 
 function countHandlerRoots(value: unknown): number {
