@@ -439,6 +439,7 @@ export function runKnownFailureProbes(register, options = {}) {
     return {
       schemaValid: false,
       executableClosureComplete: false,
+      availablePass: false,
       pass: false,
       findings,
       results: [],
@@ -479,6 +480,7 @@ export function runKnownFailureProbes(register, options = {}) {
   return {
     schemaValid: true,
     executableClosureComplete,
+    availablePass: executableOutcomesAccepted,
     pass: executableClosureComplete && executableOutcomesAccepted,
     findings: [],
     results,
@@ -518,7 +520,7 @@ function usage() {
     'Usage: node scripts/known-failure-register.mjs [--validate-schema | --run-available | --require-executable] [options]',
     '',
     '  --validate-schema        Validate data and mappings; does not claim executable closure.',
-    '  --run-available          Run available expected-failure probes; remains red while gaps exist.',
+    '  --run-available          Gate runnable expected-failure probes; pending gaps remain closure debt.',
     '  --packed-manifest <file> Supply the packed-public-packages manifest to packed probes.',
     '  --ownership-ledger <file> Inject a ledger fixture; integration defaults to plans/devex-gates.md.',
     '  --require-executable     Fail while any entry still has a pending repro gap.',
@@ -567,7 +569,9 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
       process.stdout.write(
         `known-failures/v1 ${result.results
           .map((item) => `${item.id}=${item.status}`)
-          .join(' ')}\n${
+          .join(
+            ' ',
+          )}\n${result.availablePass ? 'AVAILABLE_PROBES_PASS' : 'AVAILABLE_PROBES_FAILED'}\n${
           result.executableClosureComplete
             ? result.pass
               ? 'EXECUTABLE_CLOSURE_COMPLETE'
@@ -576,7 +580,7 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
         }\n`,
       );
     }
-    return result.pass ? 0 : 1;
+    return result.availablePass ? 0 : 1;
   }
   const output = {
     schema: register.schema,

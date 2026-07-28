@@ -162,6 +162,8 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Publish readiness
         run: vp exec pnpm run check:publish
+      - name: Gate available DevEx known-failure probes
+        run: vp exec pnpm run test:devex-known-failures-available
       - name: Enforce packed security evidence budgets
         run: |
           vp exec pnpm run check:pack-security

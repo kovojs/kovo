@@ -22,6 +22,8 @@ const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
   readFileSync(path.join(repoRoot, 'scripts/known-failure-register.json'), 'utf8'),
 );
+const rootPackage = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+const ciWorkflowSource = readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
 const budgets = JSON.parse(readFileSync(path.join(repoRoot, 'devex-budgets.json'), 'utf8'));
 const ownershipLedgerPath = path.join(
   repoRoot,
@@ -87,6 +89,16 @@ describe('known-failure register', () => {
     expect(schema.stdout).not.toContain('\nOK\n');
     expect(closure.status).toBe(1);
     expect(closure.stderr).toContain('repro coverage is incomplete');
+  });
+
+  it('publishes a packed-manifest-backed available-probe gate in CI', () => {
+    expect(rootPackage.scripts['test:devex-known-failures-available']).toBe(
+      'node scripts/known-failure-register.mjs --run-available --packed-manifest .release/packed-packages.json',
+    );
+    expect(rootPackage.scripts['devex:known-failures']).toBe(
+      'pnpm run test:devex-known-failures-available',
+    );
+    expect(ciWorkflowSource).toContain('run: vp exec pnpm run test:devex-known-failures-available');
   });
 
   it('owns probe exit semantics in code and rejects a data-defined protocol', () => {
@@ -263,11 +275,13 @@ describe('known-failure register', () => {
     });
 
     expect(xfail.executableClosureComplete).toBe(false);
+    expect(xfail.availablePass).toBe(true);
     expect(xfail.pass).toBe(false);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
       expect.objectContaining({ id: 'KF-DEVEX-003' }),
       expect.objectContaining({ id: 'KF-DEVEX-004' }),
     ]);
+    expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
       expect.objectContaining({ id: 'KF-DEVEX-003' }),
@@ -296,6 +310,7 @@ describe('known-failure register', () => {
         ledgerResolver,
         spawnSync: () => hostile,
       });
+      expect(result.availablePass).toBe(false);
       expect(result.pass).toBe(false);
       expect(result.results.some((item) => item.status === 'xfail')).toBe(false);
       expect(result.results.filter((item) => item.status === 'infrastructure-error')).toHaveLength(
@@ -311,7 +326,12 @@ describe('known-failure register', () => {
         throw new Error('must not execute');
       },
     });
-    expect(ledgerFailure).toMatchObject({ pass: false, results: [], schemaValid: false });
+    expect(ledgerFailure).toMatchObject({
+      availablePass: false,
+      pass: false,
+      results: [],
+      schemaValid: false,
+    });
   });
 
   it('executes retired rows as ordinary passing regressions and turns recurrence red', () => {
@@ -337,6 +357,8 @@ describe('known-failure register', () => {
       id: 'KF-DEVEX-003',
       status: 'retired-pass',
     });
+    expect(passing.availablePass).toBe(true);
+    expect(passing.pass).toBe(false);
 
     const regression = runKnownFailureProbes(retired, {
       repoRoot,
@@ -344,6 +366,7 @@ describe('known-failure register', () => {
       ledgerResolver,
       spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
     });
+    expect(regression.availablePass).toBe(false);
     expect(regression.pass).toBe(false);
     expect(regression.results).toContainEqual({
       id: 'KF-DEVEX-003',
