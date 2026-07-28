@@ -353,7 +353,7 @@ export function runGate({ write = false } = {}) {
       `${JSON.stringify(
         {
           $comment:
-            'api-surface gate ratchet baseline. toDocument = known undocumented public exports. toRemove = recursive public signatures that still name internal/generated/non-public helper types. Shrinks as plans/api-cleanup.md and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+            'api-surface gate ratchet baseline. toDocument = known undocumented public exports. toRemove = recursive public signatures that still name internal/generated/non-public helper types. Shrinks under plans/api-surface-foundations.md. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
           toDocument: violations,
           toRemove: recursivePublicnessViolations,
         },

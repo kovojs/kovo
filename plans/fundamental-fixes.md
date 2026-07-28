@@ -178,7 +178,7 @@ packages/cli/src/index.kovo-check.test.ts`.
         Evidence: `pnpm exec vitest run packages/drizzle/src/trust-escapes-static.test.ts` covers
         unshadowed global `Function`/`document.write` recognition and local shadows.
   - [x] Finish the remaining capability-owned compiler comparisons for `recordChange` through
-        `plans/capability-surface-redesign.md`.
+        the archived Capability Surface Redesign ledger (`plans/archive.md`).
         Evidence: `packages/compiler/src/webhook-record-change.test.ts` keeps `recordChange` as a
         checked compatibility/manual-change bridge, while `packages/compiler/src/registry.test.ts` and
         `packages/cli/src/index.kovo-explain.test.ts` prove webhook mutation dispatch facts now own
@@ -276,7 +276,7 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`
   - [x] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
   - [x] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
   - Acceptance: after F1, plan has explicit open items for any remaining write-capable public API seam.
-  - Evidence: `plans/capability-surface-redesign.md` now closes query write authority, webhook
+  - Evidence: the archived Capability Surface Redesign ledger now closes query write authority, webhook
     write-authority, and direct-DB detector hardening decisions with focused compiler/Drizzle/CLI
     evidence.
 

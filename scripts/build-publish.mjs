@@ -14,7 +14,8 @@ import {
 import { computeIconPlan, iconPublishExports } from '../packages/icons/scripts/icon-plan.mjs';
 
 /**
- * Publish-build generator for the public packages (plan `plans/api-cleanup.md`
+ * Publish-build generator for the public packages (`rules/api-surface.md`;
+ * active work in `plans/api-surface-foundations.md`, originating cleanup ledger
  * Phase 3 dist-exports flip; see `STABILITY.md` Distribution and
  * `rules/api-surface.md`).
  *

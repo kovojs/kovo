@@ -2,7 +2,7 @@
 
 This document states what Kovo promises about its public API and how it changes.
 It is the answer to "is this safe to depend on?" — the question the audit found had
-no answer. Tracked by `plans/api-cleanup.md`.
+no answer. Tracked by `plans/api-surface-foundations.md`.
 
 ## What is "public"
 
@@ -80,4 +80,5 @@ to consumers. The generator (`scripts/build-publish.mjs`) derives each package's
 build entries and `publishConfig` from its top-level `exports`/`bin`;
 `node scripts/build-publish.mjs` (the generator's default build+verify mode, run in CI
 as `pnpm run check:publish`) builds every public package and proves each published
-target resolves to a built file. See `plans/api-cleanup.md` Phase 3.
+target resolves to a built file. See `rules/api-surface.md`; the originating cleanup ledger is
+retired in `plans/archive.md`.

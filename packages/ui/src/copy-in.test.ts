@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-// Phase 7 of plans/api-cleanup.md — the @kovojs/ui copy-in model.
+// The archived API-cleanup Phase 7 established the @kovojs/ui copy-in model; see plans/archive.md.
 //
 // @kovojs/ui is `private: true`. External apps do NOT install it; they copy a
 // component's .tsx source into their own app ("you own the code", shadcn-style).

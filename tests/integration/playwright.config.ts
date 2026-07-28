@@ -37,7 +37,7 @@ export default defineConfig({
     // Flake gate: prints a clear annotation per test that passed only on retry
     // and optionally exits non-zero when KOVO_FAIL_ON_FLAKY=1 (plans/bugs-and-testing.md D2).
     [fileURLToPath(new URL('./flaky-reporter.ts', import.meta.url))],
-    // CI timing history for generated shard balancing (plans/better-testing.md).
+    // CI timing history for generated shard balancing (historical ledger: plans/archive.md).
     [fileURLToPath(new URL('./timing-reporter.ts', import.meta.url))],
   ],
   // Booting a fixture cold-compiles its app through Vite; give workers headroom.
