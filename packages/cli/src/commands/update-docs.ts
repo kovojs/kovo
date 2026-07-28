@@ -3,7 +3,10 @@ import { Buffer as NativeBuffer } from 'node:buffer';
 import { resolve } from 'node:path';
 
 import { renderKovoRulesBlock, replaceKovoRulesBlock } from '@kovojs/core/internal/agent-docs';
-import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import {
+  createFrameworkFileSystemBoundary,
+  createFrameworkOutputFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { installAgentDocsSnapshot } from '../docs-store.js';
@@ -26,6 +29,7 @@ export async function runUpdateDocsCommand(
   const cwd = resolve(options.cwd ?? process.cwd());
   try {
     const output = createFrameworkOutputFileSystemBoundary(cwd);
+    const fileSystem = await createFrameworkFileSystemBoundary(cwd);
     const version = options.version ?? readCliPackageVersion();
     // Agent instructions are executable authority for coding agents. Authenticate only the exact
     // versioned snapshot beside the executing CLI; mutable website bytes are never an input.
@@ -42,16 +46,21 @@ export async function runUpdateDocsCommand(
       source: `./${digestDirectory}/kovo-rules.md`,
       version,
     });
-    const agentsBytes = await output.fileBytes('AGENTS.md');
-    const currentAgents = agentsBytes === undefined ? '' : utf8Text(agentsBytes);
-    // Validate marker structure before any snapshot write. The companion AGENTS.md update then
-    // runs after every immutable file is digest-proved but before current.json selects the corpus.
-    const nextAgents = replaceKovoRulesBlock(currentAgents, rulesBlock);
+    // Validate the bounded, identity-checked durable document before any snapshot write.
+    await fileSystem.updateDurableFile('AGENTS.md', (current) => {
+      replaceKovoRulesBlock(current === undefined ? '' : utf8Text(current), rulesBlock);
+      return undefined;
+    });
     const installed = await installAgentDocsSnapshot({
       beforeSelect: async () => {
-        await output.writeFile('AGENTS.md', nextAgents);
+        // Recompute under the exclusive durable-file lock so a concurrent legitimate edit is
+        // retained and a concurrent malformed-marker edit prevents snapshot selection.
+        await fileSystem.updateDurableFile('AGENTS.md', (current) =>
+          replaceKovoRulesBlock(current === undefined ? '' : utf8Text(current), rulesBlock),
+        );
       },
       cwd,
+      fileSystem,
       output,
       snapshot,
     });

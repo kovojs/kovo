@@ -143,6 +143,18 @@ describe('kovo update-docs', () => {
     expect(existsSync(path.join(root, '.kovo/docs'))).toBe(false);
   });
 
+  it('rejects an oversized AGENTS.md before allocating or staging the snapshot', async () => {
+    const root = temporaryRoot('oversized-agents');
+    useFixtureSnapshot('1.0.0');
+    writeFileSync(path.join(root, 'AGENTS.md'), 'x'.repeat(1024 * 1024 + 1));
+
+    const result = await runUpdateDocsCommand({ cwd: root, version: '1.0.0' });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('exceeds its byte limit');
+    expect(existsSync(path.join(root, '.kovo/docs'))).toBe(false);
+  });
+
   it('does not select or write a snapshot through project output symlinks', async () => {
     const root = temporaryRoot('alias');
     const outside = temporaryRoot('outside');
