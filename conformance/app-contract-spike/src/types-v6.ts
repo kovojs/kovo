@@ -90,6 +90,7 @@ export interface StablePackageArtifact {
   readonly packedContents: ContentSubject;
   readonly sourceContents: ContentSubject;
   readonly sourceSha256: string;
+  readonly tarballSha256: string;
 }
 
 export interface GeneratedManifestEvidence {
@@ -99,6 +100,8 @@ export interface GeneratedManifestEvidence {
   readonly configSha256: string;
   readonly generatedModuleSha256: string;
   readonly ownerKey: string;
+  readonly providerExportBinding: string;
+  readonly providerImportSpecifier: string;
   readonly providerKey: string;
   readonly providerSourceSha256: string;
   readonly schema: string;
@@ -132,8 +135,17 @@ export interface D1RawEvidenceV6 {
     readonly ownerKey: string;
     readonly serverCopies: readonly {
       readonly basePackedContentsSha256: string;
+      readonly overlayFiles: readonly FileSubject[];
       readonly physicalRoot: string;
+      readonly postWriteContents: ContentSubject;
     }[];
+  };
+  readonly sealedArtifacts: {
+    readonly compilerPackedSha256: string;
+    readonly configSha256: string;
+    readonly generatedAppSha256: string;
+    readonly providerSha256: string;
+    readonly serverOverlayPackedSha256: string;
   };
   readonly matrix: Readonly<
     Record<MatrixCaseName, Readonly<Record<AppContractArm, MatrixEvidence>>>
@@ -209,6 +221,7 @@ export interface D1EvaluationV6 {
     readonly v2: 'invalidated';
     readonly v3: 'invalidated';
     readonly v4: 'invalidated';
+    readonly v5: 'invalidated';
   };
   readonly schema: 'kovo.app-contract-d1-evaluation/v6';
 }

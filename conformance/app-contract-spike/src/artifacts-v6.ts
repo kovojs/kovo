@@ -28,6 +28,7 @@ export interface PackedArtifact {
   readonly sourceContents: ContentSubject;
   readonly sourceSha256: string;
   readonly tarball: string;
+  readonly tarballSha256: string;
 }
 
 export interface FreshArtifactSet {
@@ -76,7 +77,9 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
     await mkdir(stagingDestination, { recursive: true });
     const args = ['--filter', name, 'pack', '--pack-destination', stagingDestination];
     run('pnpm', args, repoRoot);
-    buildCommands.push(`pnpm ${args.join(' ')}`);
+    buildCommands.push(
+      `pnpm --filter ${name} pack --pack-destination <artifact>/staging-packs/${packageName}`,
+    );
     const stagingTarballName = (await readdir(stagingDestination)).find((entry) =>
       entry.endsWith('.tgz'),
     );
@@ -96,10 +99,13 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
     await mkdir(destination, { recursive: true });
     const repackArgs = ['pack', '--ignore-scripts', '--pack-destination', destination];
     run('npm', repackArgs, stagedPackageRoot);
-    buildCommands.push(`npm ${repackArgs.join(' ')}`);
+    buildCommands.push(
+      `npm pack --ignore-scripts --pack-destination <artifact>/packed/${packageName}`,
+    );
     const tarballName = (await readdir(destination)).find((entry) => entry.endsWith('.tgz'));
     if (!tarballName) throw new Error(`Deterministic repack for ${name} did not emit a tarball.`);
     const tarball = join(destination, tarballName);
+    canonicalizeTarball(tarball);
     const extracted = join(root, 'extracted', packageName);
     await mkdir(extracted, { recursive: true });
     run('tar', ['-xzf', tarball, '-C', extracted], repoRoot);
@@ -112,6 +118,7 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
       sourceContents,
       sourceSha256: sourceContents.digest,
       tarball,
+      tarballSha256: sha256(await readFile(tarball)),
     };
   }
 
@@ -123,6 +130,32 @@ export async function buildAndPackFresh(root: string): Promise<FreshArtifactSet>
     frameworkSourceTreeClean,
     packages: packed,
   };
+}
+
+export async function packSealedOverlay(
+  packageRoot: string,
+  destination: string,
+): Promise<{ readonly sha256: string; readonly tarball: string }> {
+  await mkdir(destination, { recursive: true });
+  const before = new Set((await readdir(destination)).filter((entry) => entry.endsWith('.tgz')));
+  run(
+    'npm',
+    ['pack', '--ignore-scripts', '--pack-destination', destination],
+    packageRoot,
+  );
+  const created = (await readdir(destination)).filter(
+    (entry) => entry.endsWith('.tgz') && !before.has(entry),
+  );
+  if (created.length !== 1) {
+    throw new Error(`D1 v6 sealed overlay pack emitted ${created.length} tarballs.`);
+  }
+  const tarball = join(destination, created[0]!);
+  canonicalizeTarball(tarball);
+  return { sha256: sha256(await readFile(tarball)), tarball };
+}
+
+export async function directorySubject(directory: string): Promise<ContentSubject> {
+  return directoryContentSubject(directory);
 }
 
 async function canonicalizePublishedDependencyOrder(packageRoot: string): Promise<void> {
@@ -328,4 +361,19 @@ function run(command: string, args: readonly string[], cwd: string): string {
     );
   }
   return result.stdout;
+}
+
+function canonicalizeTarball(tarball: string): void {
+  const helper = join(repoRoot, 'scripts/lib/deterministic-tarball.mjs');
+  run(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      'import { canonicalizePackedTarball } from process.argv[1]; canonicalizePackedTarball(process.argv[2]);',
+      pathToFileURL(helper).href,
+      tarball,
+    ],
+    repoRoot,
+  );
 }

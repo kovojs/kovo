@@ -2,7 +2,16 @@ import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, realpath, rename, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 
-import type { FreshArtifactSet } from './artifacts-v6.ts';
+import ts from 'typescript';
+
+import {
+  directorySubject,
+  fileSubject,
+  packSealedOverlay,
+  type ContentSubject,
+  type FileSubject,
+  type FreshArtifactSet,
+} from './artifacts-v6.ts';
 
 export const declarationFamilies = [
   'endpoint',
@@ -57,6 +66,7 @@ export interface GeneratedContract {
   readonly generatedFile: string;
   readonly manifestFile: string;
   readonly packageRoot: string;
+  readonly providerDefinitionFile: string;
   readonly providerFile: string;
   readonly serverPackageRoot: string;
 }
@@ -81,6 +91,10 @@ export interface PrototypeFixture {
   readonly secondaryProviderFile: string;
   readonly serverA: string;
   readonly serverB: string;
+  readonly serverCopyContents: readonly [ContentSubject, ContentSubject];
+  readonly serverOverlayFiles: readonly FileSubject[];
+  readonly serverOverlayTarball: string;
+  readonly serverOverlayTarballSha256: string;
   readonly shared: string;
   readonly unrelatedMemberProbe: string;
 }
@@ -104,6 +118,22 @@ export async function createPrototypeFixture(
   await linkKovoDependency(serverA, 'browser', browser);
   await linkKovoDependency(serverB, 'core', core);
   await linkKovoDependency(serverB, 'browser', browser);
+  const serverCopyContents = [
+    await directorySubject(serverA),
+    await directorySubject(serverB),
+  ] as const;
+  if (serverCopyContents[0].digest !== serverCopyContents[1].digest) {
+    throw new Error('D1 v6 duplicate server copies differ after overlay writes.');
+  }
+  const serverOverlayFiles = await Promise.all(
+    ['package.json', 'd1/index.d.mts', 'd1/index.mjs'].map((fileName) =>
+      fileSubject(serverA, fileName),
+    ),
+  );
+  const serverOverlay = await packSealedOverlay(
+    serverA,
+    join(root, 'sealed-packs/server-overlay'),
+  );
 
   const app = join(root, 'app');
   const shared = join(root, 'packages/shared');
@@ -143,6 +173,7 @@ export async function createPrototypeFixture(
     join(app, 'src/provider.ts'),
     `export const ${providerExportBinding} = { key: '${providerKey}' } as const;\n`,
   );
+  const providerDefinitionFile = join(app, 'src/provider.ts');
   const providerFile = join(app, 'src/kovo.ts');
   await writeSource(providerFile, primaryProviderSource());
   await writeSource(join(app, 'src/named.ts'), "export { app } from './kovo.js';\n");
@@ -173,6 +204,7 @@ export async function createPrototypeFixture(
     artifacts,
     configFile,
     packageRoot: app,
+    providerDefinitionFile,
     providerFile,
     serverPackageRoot: serverA,
   });
@@ -180,6 +212,7 @@ export async function createPrototypeFixture(
     artifacts,
     configFile,
     packageRoot: shared,
+    providerDefinitionFile,
     providerFile,
     serverPackageRoot: serverA,
   });
@@ -188,6 +221,7 @@ export async function createPrototypeFixture(
     artifacts,
     configFile: duplicateConfigFile,
     packageRoot: duplicate,
+    providerDefinitionFile: join(duplicate, 'src/provider.ts'),
     providerFile,
     serverPackageRoot: serverB,
   });
@@ -232,6 +266,10 @@ export async function createPrototypeFixture(
     secondaryProviderFile,
     serverA: await realpath(serverA),
     serverB: await realpath(serverB),
+    serverCopyContents,
+    serverOverlayFiles,
+    serverOverlayTarball: serverOverlay.tarball,
+    serverOverlayTarballSha256: serverOverlay.sha256,
     shared,
     unrelatedMemberProbe,
   };
@@ -246,7 +284,7 @@ export async function validateGeneratedContract(
     unknown
   >;
   const generatedSource = await readFile(contract.generatedFile, 'utf8');
-  const providerSource = await readFile(contract.providerFile, 'utf8');
+  const providerSource = await readFile(contract.providerDefinitionFile, 'utf8');
   const configSource = await readFile(contract.configFile, 'utf8');
   const expected: Readonly<Record<string, string>> = {
     compilerSourceSha256: artifacts.packages.compiler.sourceSha256,
@@ -312,6 +350,7 @@ async function installSyntheticRuntimeOverlay(
   const manifestFile = join(packageRoot, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8')) as {
     exports?: Record<string, unknown>;
+    files?: string[];
   };
   manifest.exports = {
     ...(manifest.exports ?? {}),
@@ -320,6 +359,7 @@ async function installSyntheticRuntimeOverlay(
       default: './d1/index.mjs',
     },
   };
+  manifest.files = [...new Set([...(manifest.files ?? []), 'd1'])].sort();
   await writeJson(manifestFile, manifest);
   await writeSource(join(packageRoot, 'd1/index.mjs'), syntheticRuntimeSource());
   await writeSource(join(packageRoot, 'd1/index.d.mts'), syntheticDeclarationSource());
@@ -427,12 +467,22 @@ async function generateBoundContract(options: {
   readonly artifacts: FreshArtifactSet;
   readonly configFile: string;
   readonly packageRoot: string;
+  readonly providerDefinitionFile: string;
   readonly providerFile: string;
   readonly serverPackageRoot: string;
 }): Promise<GeneratedContract> {
   const providerSource = await readFile(options.providerFile, 'utf8');
+  const providerDefinitionSource = await readFile(options.providerDefinitionFile, 'utf8');
   const configSource = await readFile(options.configFile, 'utf8');
-  const context = providerContext(providerSource, options.providerFile);
+  const context = providerContext({
+    appExportName: options.appExportName ?? 'app',
+    configFile: options.configFile,
+    configSource,
+    providerDefinitionFile: options.providerDefinitionFile,
+    providerDefinitionSource,
+    providerFile: options.providerFile,
+    providerSource,
+  });
   const generatedFile = join(options.packageRoot, '.kovo/app.ts');
   const manifestFile = join(options.packageRoot, '.kovo/app.manifest.json');
   const providerImport = relative(dirname(generatedFile), options.providerFile)
@@ -449,9 +499,16 @@ async function generateBoundContract(options: {
     'export const __kovoGeneratedContract = Object.freeze({',
     `  appId: ${JSON.stringify(context.appId)},`,
     `  compilerSourceSha256: ${JSON.stringify(options.artifacts.packages.compiler.sourceSha256)},`,
-    `  ownerKey: ${JSON.stringify(ownerKeyFor(context.appId, context.providerKey))},`,
-    `  providerExportBinding: ${JSON.stringify(providerExportBinding)},`,
-    `  providerImportSpecifier: ${JSON.stringify(providerImportSpecifier)},`,
+    `  ownerKey: ${JSON.stringify(
+      ownerKeyFor(
+        context.appId,
+        context.providerKey,
+        context.providerExportBinding,
+        context.providerImportSpecifier,
+      ),
+    )},`,
+    `  providerExportBinding: ${JSON.stringify(context.providerExportBinding)},`,
+    `  providerImportSpecifier: ${JSON.stringify(context.providerImportSpecifier)},`,
     `  providerKey: ${JSON.stringify(context.providerKey)},`,
     `  serverPackedContentsSha256: ${JSON.stringify(
       options.artifacts.packages.server.packedContents.digest,
@@ -471,11 +528,16 @@ async function generateBoundContract(options: {
     completed: 'complete',
     configSha256: sha256(configSource),
     generatedModuleSha256: sha256(moduleSource),
-    ownerKey: ownerKeyFor(context.appId, context.providerKey),
-    providerExportBinding,
-    providerImportSpecifier,
+    ownerKey: ownerKeyFor(
+      context.appId,
+      context.providerKey,
+      context.providerExportBinding,
+      context.providerImportSpecifier,
+    ),
+    providerExportBinding: context.providerExportBinding,
+    providerImportSpecifier: context.providerImportSpecifier,
     providerKey: context.providerKey,
-    providerSourceSha256: sha256(providerSource),
+    providerSourceSha256: sha256(providerDefinitionSource),
     schema: 'kovo.generated-app-contract/v6',
     serverPackedContentsSha256: options.artifacts.packages.server.packedContents.digest,
   };
@@ -486,21 +548,188 @@ async function generateBoundContract(options: {
     generatedFile,
     manifestFile,
     packageRoot: options.packageRoot,
+    providerDefinitionFile: options.providerDefinitionFile,
     providerFile: options.providerFile,
     serverPackageRoot: options.serverPackageRoot,
   };
 }
 
-function providerContext(
-  source: string,
-  fileName: string,
-): { readonly appId: string; readonly providerKey: string } {
-  const observedAppId = source.match(/appId:\s*['"]([^'"]+)['"]/u)?.[1];
-  const observedProviderKey = source.match(/providerKey:\s*['"]([^'"]+)['"]/u)?.[1];
-  if (!observedAppId || !observedProviderKey) {
-    throw new Error(`D1 provider context is not statically extractable from ${fileName}.`);
+function providerContext(options: {
+  readonly appExportName: string;
+  readonly configFile: string;
+  readonly configSource: string;
+  readonly providerDefinitionFile: string;
+  readonly providerDefinitionSource: string;
+  readonly providerFile: string;
+  readonly providerSource: string;
+}): {
+  readonly appId: string;
+  readonly providerExportBinding: string;
+  readonly providerImportSpecifier: string;
+  readonly providerKey: string;
+} {
+  const configAst = ts.createSourceFile(
+    options.configFile,
+    options.configSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const configExport = configAst.statements.find(ts.isExportAssignment);
+  const configObject = configExport
+    ? objectLiteralFromExpression(configExport.expression)
+    : undefined;
+  if (!configObject) {
+    throw new Error(`D1 config AST is not a frozen object: ${options.configFile}.`);
   }
-  return { appId: observedAppId, providerKey: observedProviderKey };
+  const config = {
+    appId: stringLiteralProperty(configObject, 'appId'),
+    providerExportBinding: stringLiteralProperty(configObject, 'providerExportBinding'),
+    providerImportSpecifier: stringLiteralProperty(configObject, 'providerImportSpecifier'),
+    providerKey: stringLiteralProperty(configObject, 'providerKey'),
+    providerReference: identifierProperty(configObject, 'provider'),
+  };
+  if (
+    !config.appId ||
+    !config.providerExportBinding ||
+    !config.providerImportSpecifier ||
+    !config.providerKey ||
+    config.providerReference !== config.providerExportBinding
+  ) {
+    throw new Error(`D1 config identity is not statically authenticated: ${options.configFile}.`);
+  }
+
+  const providerAst = ts.createSourceFile(
+    options.providerFile,
+    options.providerSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const appDeclaration = providerAst.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) && declaration.name.text === options.appExportName,
+    );
+  const appObject = appDeclaration?.initializer
+    ? objectLiteralFromExpression(appDeclaration.initializer)
+    : undefined;
+  const providerImport = providerAst.statements
+    .filter(ts.isImportDeclaration)
+    .find(
+      (statement) =>
+        ts.isStringLiteralLike(statement.moduleSpecifier) &&
+        statement.moduleSpecifier.text === config.providerImportSpecifier &&
+        statement.importClause?.namedBindings &&
+        ts.isNamedImports(statement.importClause.namedBindings) &&
+        statement.importClause.namedBindings.elements.some(
+          (specifier) => specifier.name.text === config.providerExportBinding,
+        ),
+    );
+  if (
+    !appObject ||
+    !providerImport ||
+    stringLiteralProperty(appObject, 'appId') !== config.appId ||
+    stringLiteralProperty(appObject, 'providerKey') !== config.providerKey ||
+    stringLiteralProperty(appObject, 'providerExportBinding') !== config.providerExportBinding ||
+    stringLiteralProperty(appObject, 'providerImportSpecifier') !==
+      config.providerImportSpecifier ||
+    identifierProperty(appObject, 'provider') !== config.providerExportBinding
+  ) {
+    throw new Error(`D1 provider app AST disagrees with config: ${options.providerFile}.`);
+  }
+
+  const definitionAst = ts.createSourceFile(
+    options.providerDefinitionFile,
+    options.providerDefinitionSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const providerDeclaration = definitionAst.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find(
+      (declaration) =>
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === config.providerExportBinding,
+    );
+  const providerObject = providerDeclaration?.initializer
+    ? objectLiteralFromExpression(providerDeclaration.initializer)
+    : undefined;
+  if (!providerObject || stringLiteralProperty(providerObject, 'key') !== config.providerKey) {
+    throw new Error(
+      `D1 provider definition AST disagrees with config: ${options.providerDefinitionFile}.`,
+    );
+  }
+  return {
+    appId: config.appId,
+    providerExportBinding: config.providerExportBinding,
+    providerImportSpecifier: config.providerImportSpecifier,
+    providerKey: config.providerKey,
+  };
+}
+
+function objectLiteralFromExpression(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
+  const unwrapped = unwrapTsExpression(expression);
+  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped;
+  if (
+    ts.isCallExpression(unwrapped) &&
+    unwrapped.arguments.length === 1 &&
+    ((ts.isPropertyAccessExpression(unwrapped.expression) &&
+      ts.isIdentifier(unwrapped.expression.expression) &&
+      unwrapped.expression.expression.text === 'Object' &&
+      unwrapped.expression.name.text === 'freeze') ||
+      (ts.isIdentifier(unwrapped.expression) && unwrapped.expression.text === 'defineKovo'))
+  ) {
+    const argument = unwrapTsExpression(unwrapped.arguments[0]!);
+    return ts.isObjectLiteralExpression(argument) ? argument : undefined;
+  }
+  return undefined;
+}
+
+function stringLiteralProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const property = object.properties.find(
+    (candidate): candidate is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(candidate) &&
+      ((ts.isIdentifier(candidate.name) && candidate.name.text === name) ||
+        (ts.isStringLiteralLike(candidate.name) && candidate.name.text === name)),
+  );
+  const value = property ? unwrapTsExpression(property.initializer) : undefined;
+  return value && ts.isStringLiteralLike(value) ? value.text : undefined;
+}
+
+function identifierProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const property = object.properties.find(
+    (candidate): candidate is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(candidate) &&
+      ((ts.isIdentifier(candidate.name) && candidate.name.text === name) ||
+        (ts.isStringLiteralLike(candidate.name) && candidate.name.text === name)),
+  );
+  const value = property ? unwrapTsExpression(property.initializer) : undefined;
+  return value && ts.isIdentifier(value) ? value.text : undefined;
+}
+
+function unwrapTsExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 async function writeMatrixFixtures(options: {
@@ -705,16 +934,30 @@ async function writeFamilyFixtures(
 }
 
 function familySource(family: DeclarationFamily, variant: AppContractArm | 'baseline'): string {
-  const factory = variant === 'arm-a' ? `app.${family}` : family;
-  const imports =
-    variant === 'arm-b'
-      ? `import { ${family}, publicAccess${family === 'layout' ? ', route' : ''} } from '#kovo';`
-      : [
-          `import { ${family}, publicAccess${family === 'layout' ? ', route' : ''} } from '@kovojs/server';`,
-          "import { app } from '../../../src/kovo.js';",
-        ].join('\n');
+  const directFactory = `direct${family[0]!.toUpperCase()}${family.slice(1)}`;
+  const generatedFactory = `generated${family[0]!.toUpperCase()}${family.slice(1)}`;
+  const factory =
+    variant === 'arm-a'
+      ? `app.${family}`
+      : variant === 'arm-b'
+        ? generatedFactory
+        : directFactory;
+  const imports = [
+    `import { ${family} as ${directFactory}, publicAccess${
+      family === 'layout' ? ', route as directRoute' : ''
+    } } from '@kovojs/server';`,
+    `import { ${family} as ${generatedFactory}${
+      family === 'layout' ? ', route as generatedRoute' : ''
+    } } from '#kovo';`,
+    "import { app } from '../../../src/kovo.js';",
+  ].join('\n');
   if (family === 'layout') {
-    const routeFactory = variant === 'arm-a' ? 'app.route' : 'route';
+    const routeFactory =
+      variant === 'arm-a'
+        ? 'app.route'
+        : variant === 'arm-b'
+          ? 'generatedRoute'
+          : 'directRoute';
     return [
       '/** @jsxImportSource @kovojs/server */',
       imports,
@@ -831,12 +1074,17 @@ function configSource(): string {
   ].join('\n');
 }
 
-function ownerKeyFor(observedAppId: string, observedProviderKey: string): string {
+function ownerKeyFor(
+  observedAppId: string,
+  observedProviderKey: string,
+  observedProviderExportBinding = providerExportBinding,
+  observedProviderImportSpecifier = providerImportSpecifier,
+): string {
   return `d1v6:${sha256(
     JSON.stringify({
       appId: observedAppId,
-      providerExportBinding,
-      providerImportSpecifier,
+        providerExportBinding: observedProviderExportBinding,
+        providerImportSpecifier: observedProviderImportSpecifier,
       providerKey: observedProviderKey,
     }),
   )}`;

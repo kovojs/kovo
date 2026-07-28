@@ -10,7 +10,7 @@ import ts from 'typescript';
 
 import type { PrototypeFixture } from './fixture-v6.ts';
 
-type MeasuredVariant = 'arm-a' | 'arm-b' | 'baseline';
+export type MeasuredVariant = 'arm-a' | 'arm-b' | 'baseline';
 
 const require = createRequire(import.meta.url);
 const tscPath = require.resolve('typescript/bin/tsc');
@@ -42,19 +42,33 @@ export interface PerformanceCriteria {
 }
 
 export interface SuccessfulTypeMeasurement {
-  readonly coldCompletionMs: readonly number[];
+  readonly coldCompletionSamples: readonly CompletionSample[];
   readonly coldCompletionP50Ms: number;
-  readonly coldTscMs: readonly number[];
+  readonly coldTscSamples: readonly TimedSample[];
   readonly coldTscP50Ms: number;
   readonly completionCandidateCount: number;
   readonly completionCandidateDigest: string;
   readonly completionCandidateNames: readonly string[];
   readonly declarationBytes: number;
   readonly typecheckDiagnosticCodes: readonly number[];
-  readonly warmCompletionMs: readonly number[];
+  readonly warmCompletionSamples: readonly CompletionSample[];
   readonly warmCompletionP95Ms: number;
-  readonly warmTscMs: readonly number[];
+  readonly warmTscSamples: readonly TimedSample[];
   readonly warmTscP50Ms: number;
+}
+
+export interface TimedSample {
+  readonly blockIndex: number;
+  readonly iteration: number;
+  readonly milliseconds: number;
+  readonly orderIndex: number;
+  readonly sampleId: string;
+  readonly variant: MeasuredVariant;
+}
+
+export interface CompletionSample extends TimedSample {
+  readonly candidateCount: number;
+  readonly candidateDigest: string;
 }
 
 export interface TypeDiagnosticEvidence {
@@ -74,6 +88,7 @@ export interface TypeMeasurementEvidence {
     readonly cpuModel: string;
     readonly nodeVersion: string;
     readonly operatingSystem: string;
+    readonly runnerName: string;
     readonly schema: 'kovo.app-contract-d1-runner/v1';
     readonly typescriptVersion: string;
   };
@@ -85,12 +100,12 @@ export interface TypeMeasurementEvidence {
 }
 
 interface TypeMeasurementSamples {
-  readonly coldCompletionMs: number[];
-  readonly coldTscMs: number[];
+  readonly coldCompletionSamples: CompletionSample[];
+  readonly coldTscSamples: TimedSample[];
   completionCandidateNames: readonly string[];
   declarationBytes: number;
-  readonly warmCompletionMs: number[];
-  readonly warmTscMs: number[];
+  readonly warmCompletionSamples: CompletionSample[];
+  readonly warmTscSamples: TimedSample[];
 }
 
 interface WarmCompletionSession {
@@ -122,6 +137,7 @@ export async function measureTypeContracts(
       cpuModel: cpus()[0]?.model ?? 'unknown',
       nodeVersion: process.version,
       operatingSystem: `${platform()} ${release()}`,
+      runnerName: 'apple-m4-darwin-arm64-node24-ts6-d1-v6',
       schema: 'kovo.app-contract-d1-runner/v1',
       typescriptVersion: ts.version,
     },
@@ -236,7 +252,10 @@ function variantSyntax(variant: MeasuredVariant): {
   if (variant === 'arm-b') {
     return {
       factory: 'query',
-      imports: "import { publicAccess, query } from '#kovo';",
+      imports: [
+        "import { publicAccess } from '@kovojs/server';",
+        "import { query } from '#kovo';",
+      ].join('\n'),
     };
   }
   return {
@@ -264,12 +283,12 @@ async function measureSuccessfulVariants(
     measuredVariants.map((variant) => [
       variant,
       {
-        coldCompletionMs: [],
-        coldTscMs: [],
+        coldCompletionSamples: [],
+        coldTscSamples: [],
         completionCandidateNames: [],
         declarationBytes: 0,
-        warmCompletionMs: [],
-        warmTscMs: [],
+        warmCompletionSamples: [],
+        warmTscSamples: [],
       } satisfies TypeMeasurementSamples,
     ]),
   ) as unknown as Record<MeasuredVariant, TypeMeasurementSamples>;
@@ -282,10 +301,14 @@ async function measureSuccessfulVariants(
       await rm(join(directory, '.tsbuildinfo'), { force: true });
       const cold = typecheck(directory);
       if (!cold.ok) throw new Error(`D1 v6 type fixture failed: ${cold.output}`);
-      samples[variant].coldTscMs.push(cold.elapsedMs);
+      samples[variant].coldTscSamples.push(
+        timedSample('cold-tsc', index, order, variant, cold.elapsedMs),
+      );
       const warm = typecheck(directory);
       if (!warm.ok) throw new Error(`D1 v6 warm type fixture failed: ${warm.output}`);
-      samples[variant].warmTscMs.push(warm.elapsedMs);
+      samples[variant].warmTscSamples.push(
+        timedSample('warm-tsc', index, order, variant, warm.elapsedMs),
+      );
     }
   }
   for (const variant of measuredVariants) {
@@ -298,7 +321,9 @@ async function measureSuccessfulVariants(
     coldCompletionSchedule.push(order);
     for (const variant of order) {
       const completion = await completionMeasurement(directories[variant]);
-      samples[variant].coldCompletionMs.push(completion.elapsedMs);
+      samples[variant].coldCompletionSamples.push(
+        completionSample('cold-completion', index, order, variant, completion),
+      );
       samples[variant].completionCandidateNames = completion.names;
     }
   }
@@ -321,7 +346,9 @@ async function measureSuccessfulVariants(
       warmCompletionSchedule.push(order);
       for (const variant of order) {
         const completion = warmCompletionMeasurement(sessions[variant]);
-        samples[variant].warmCompletionMs.push(completion.elapsedMs);
+        samples[variant].warmCompletionSamples.push(
+          completionSample('warm-completion', index, order, variant, completion),
+        );
         samples[variant].completionCandidateNames = completion.names;
       }
     }
@@ -335,11 +362,19 @@ async function measureSuccessfulVariants(
     if (variantSamples.completionCandidateNames.length === 0) {
       throw new Error(`D1 v6 completion fixture produced no candidates for ${variant}.`);
     }
+    const coldCompletionMs = variantSamples.coldCompletionSamples.map(
+      (sample) => sample.milliseconds,
+    );
+    const coldTscMs = variantSamples.coldTscSamples.map((sample) => sample.milliseconds);
+    const warmCompletionMs = variantSamples.warmCompletionSamples.map(
+      (sample) => sample.milliseconds,
+    );
+    const warmTscMs = variantSamples.warmTscSamples.map((sample) => sample.milliseconds);
     measurements[variant] = {
-      coldCompletionMs: rounded(variantSamples.coldCompletionMs),
-      coldCompletionP50Ms: round(percentile(variantSamples.coldCompletionMs, 0.5)),
-      coldTscMs: rounded(variantSamples.coldTscMs),
-      coldTscP50Ms: round(percentile(variantSamples.coldTscMs, 0.5)),
+      coldCompletionSamples: roundedCompletionSamples(variantSamples.coldCompletionSamples),
+      coldCompletionP50Ms: round(percentile(coldCompletionMs, 0.5)),
+      coldTscSamples: roundedTimedSamples(variantSamples.coldTscSamples),
+      coldTscP50Ms: round(percentile(coldTscMs, 0.5)),
       completionCandidateCount: variantSamples.completionCandidateNames.length,
       completionCandidateDigest: createHash('sha256')
         .update(variantSamples.completionCandidateNames.join('\n'))
@@ -347,10 +382,10 @@ async function measureSuccessfulVariants(
       completionCandidateNames: variantSamples.completionCandidateNames,
       declarationBytes: variantSamples.declarationBytes,
       typecheckDiagnosticCodes: [],
-      warmCompletionMs: rounded(variantSamples.warmCompletionMs),
-      warmCompletionP95Ms: round(percentile(variantSamples.warmCompletionMs, 0.95)),
-      warmTscMs: rounded(variantSamples.warmTscMs),
-      warmTscP50Ms: round(percentile(variantSamples.warmTscMs, 0.5)),
+      warmCompletionSamples: roundedCompletionSamples(variantSamples.warmCompletionSamples),
+      warmCompletionP95Ms: round(percentile(warmCompletionMs, 0.95)),
+      warmTscSamples: roundedTimedSamples(variantSamples.warmTscSamples),
+      warmTscP50Ms: round(percentile(warmTscMs, 0.5)),
     };
   }
   return {
@@ -546,13 +581,51 @@ function measurementOrder(index: number): readonly MeasuredVariant[] {
   return balancedVariantOrders[index % balancedVariantOrders.length]!;
 }
 
+function timedSample(
+  kind: string,
+  iteration: number,
+  order: readonly MeasuredVariant[],
+  variant: MeasuredVariant,
+  milliseconds: number,
+): TimedSample {
+  return {
+    blockIndex: Math.floor(iteration / balancedVariantOrders.length),
+    iteration,
+    milliseconds,
+    orderIndex: order.indexOf(variant),
+    sampleId: `${kind}:${iteration}:${order.join('>')}:${variant}`,
+    variant,
+  };
+}
+
+function completionSample(
+  kind: string,
+  iteration: number,
+  order: readonly MeasuredVariant[],
+  variant: MeasuredVariant,
+  completion: { readonly elapsedMs: number; readonly names: readonly string[] },
+): CompletionSample {
+  const names = unique(completion.names);
+  return {
+    ...timedSample(kind, iteration, order, variant, completion.elapsedMs),
+    candidateCount: names.length,
+    candidateDigest: createHash('sha256').update(names.join('\n')).digest('hex'),
+  };
+}
+
 function percentile(values: readonly number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
 }
 
-function rounded(values: readonly number[]): readonly number[] {
-  return values.map(round);
+function roundedTimedSamples(values: readonly TimedSample[]): readonly TimedSample[] {
+  return values.map((sample) => ({ ...sample, milliseconds: round(sample.milliseconds) }));
+}
+
+function roundedCompletionSamples(
+  values: readonly CompletionSample[],
+): readonly CompletionSample[] {
+  return values.map((sample) => ({ ...sample, milliseconds: round(sample.milliseconds) }));
 }
 
 function round(value: number): number {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath, rm } from 'node:fs/promises';
+import { cp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 
@@ -30,7 +30,10 @@ import { runtimeEvidence } from './runtime-v6.ts';
 import { measureTypeContracts } from './type-measurement-v6.ts';
 import type { D1CriteriaV6, D1RawEvidenceV6, GeneratedManifestEvidence } from './types-v6.ts';
 
-export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEvidenceV6> {
+export async function runD1V6Experiment(
+  criteria: D1CriteriaV6,
+  options: { readonly sealDirectory?: string } = {},
+): Promise<D1RawEvidenceV6> {
   const temporaryRoot = await realpath(tmpdir());
   const root = join(temporaryRoot, 'kovo-app-contract-d1-v6-2123d1860');
   if (dirname(root) !== temporaryRoot) {
@@ -135,7 +138,7 @@ export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEv
           manifest: JSON.parse(
             await readFile(contract.manifestFile, 'utf8'),
           ) as GeneratedManifestEvidence,
-          providerSubject: await fixtureFileSubject(fixture, contract.providerFile),
+          providerSubject: await fixtureFileSubject(fixture, contract.providerDefinitionFile),
         };
       }),
     );
@@ -155,6 +158,7 @@ export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEv
         packedContents: artifact.packedContents,
         sourceContents: artifact.sourceContents,
         sourceSha256: artifact.sourceSha256,
+        tarballSha256: artifact.tarballSha256,
       };
     });
     const serverDigest = artifacts.packages.server.packedContents.digest;
@@ -171,7 +175,7 @@ export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEv
       }),
     };
 
-    return {
+    const evidence: D1RawEvidenceV6 = {
       compiler: { combinedGraphs, families },
       diagnostics: typeEvidence.diagnostics,
       evidenceBindings,
@@ -197,11 +201,15 @@ export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEv
         serverCopies: [
           {
             basePackedContentsSha256: serverDigest,
+            overlayFiles: fixture.serverOverlayFiles,
             physicalRoot: stableFixturePath(fixture, fixture.serverA),
+            postWriteContents: fixture.serverCopyContents[0],
           },
           {
             basePackedContentsSha256: serverDigest,
+            overlayFiles: fixture.serverOverlayFiles,
             physicalRoot: stableFixturePath(fixture, fixture.serverB),
+            postWriteContents: fixture.serverCopyContents[1],
           },
         ],
       },
@@ -235,12 +243,50 @@ export async function runD1V6Experiment(criteria: D1CriteriaV6): Promise<D1RawEv
       runner: typeEvidence.runner,
       runtime,
       schedules: typeEvidence.schedules,
+      sealedArtifacts: {
+        compilerPackedSha256: artifacts.packages.compiler.tarballSha256,
+        configSha256: contracts[0]!.configSubject.sha256,
+        generatedAppSha256: contracts[0]!.generatedModuleSubject.sha256,
+        providerSha256: contracts[0]!.providerSubject.sha256,
+        serverOverlayPackedSha256: fixture.serverOverlayTarballSha256,
+      },
       schema: 'kovo.app-contract-d1-raw-evidence/v6',
       semanticEquivalence,
     };
+    if (options.sealDirectory) {
+      await sealArtifacts(options.sealDirectory, {
+        compilerTarball: artifacts.packages.compiler.tarball,
+        configFile: fixture.generatedApp.configFile,
+        generatedAppFile: fixture.generatedApp.generatedFile,
+        providerFile: fixture.generatedApp.providerDefinitionFile,
+        serverOverlayTarball: fixture.serverOverlayTarball,
+      });
+    }
+    return evidence;
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+}
+
+async function sealArtifacts(
+  directory: string,
+  files: {
+    readonly compilerTarball: string;
+    readonly configFile: string;
+    readonly generatedAppFile: string;
+    readonly providerFile: string;
+    readonly serverOverlayTarball: string;
+  },
+): Promise<void> {
+  await rm(directory, { force: true, recursive: true });
+  await mkdir(directory, { recursive: true });
+  await Promise.all([
+    cp(files.compilerTarball, join(directory, 'compiler-packed.tgz')),
+    cp(files.serverOverlayTarball, join(directory, 'server-overlay-packed.tgz')),
+    cp(files.configFile, join(directory, 'config.ts')),
+    cp(files.providerFile, join(directory, 'provider.ts')),
+    cp(files.generatedAppFile, join(directory, 'generated-app.ts')),
+  ]);
 }
 
 function semanticMutationDiagnostics(

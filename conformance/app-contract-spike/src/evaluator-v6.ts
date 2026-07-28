@@ -39,6 +39,7 @@ const exactRawKeys = [
   'runner',
   'runtime',
   'schedules',
+  'sealedArtifacts',
   'schema',
   'semanticEquivalence',
 ] as const;
@@ -99,6 +100,7 @@ export async function evaluateD1V6(
       v2: 'invalidated',
       v3: 'invalidated',
       v4: 'invalidated',
+      v5: 'invalidated',
     },
     schema: 'kovo.app-contract-d1-evaluation/v6',
   };
@@ -487,19 +489,23 @@ function performanceGates(
     const candidate = evidence.measurements[arm];
     validateMeasurementSummary(candidate, criteria.performanceThresholds, failures, arm);
     if (
-      deltaPercent(candidate.coldTscP50Ms, baseline.coldTscP50Ms) >
+      pairedDeltaPercent(candidate.coldTscSamples, baseline.coldTscSamples, 0.5) >
       criteria.performanceThresholds.coldTscPairedP50DeltaPercentMaximum
     ) {
       failures.push('cold tsc delta exceeds threshold');
     }
     if (
-      deltaPercent(candidate.warmTscP50Ms, baseline.warmTscP50Ms) >
+      pairedDeltaPercent(candidate.warmTscSamples, baseline.warmTscSamples, 0.5) >
       criteria.performanceThresholds.warmTscPairedP50DeltaPercentMaximum
     ) {
       failures.push('warm tsc delta exceeds threshold');
     }
     if (
-      deltaPercent(candidate.coldCompletionP50Ms, baseline.coldCompletionP50Ms) >
+      pairedDeltaPercent(
+        candidate.coldCompletionSamples,
+        baseline.coldCompletionSamples,
+        0.5,
+      ) >
       criteria.performanceThresholds.coldCompletionPairedP50DeltaPercentMaximum
     ) {
       failures.push('cold completion delta exceeds threshold');
@@ -507,7 +513,11 @@ function performanceGates(
     if (
       candidate.warmCompletionP95Ms >
         criteria.performanceThresholds.warmCompletionP95MillisecondsMaximum ||
-      deltaPercent(candidate.warmCompletionP95Ms, baseline.warmCompletionP95Ms) >
+      pairedDeltaPercent(
+        candidate.warmCompletionSamples,
+        baseline.warmCompletionSamples,
+        0.95,
+      ) >
         criteria.performanceThresholds.warmCompletionPairedP95DeltaPercentMaximum
     ) {
       failures.push('warm completion p95 exceeds threshold');
@@ -541,15 +551,23 @@ function validateMeasurementSummary(
   failures: string[],
   name: string,
 ): void {
+  const coldTscMs = measurement.coldTscSamples.map((sample) => sample.milliseconds);
+  const warmTscMs = measurement.warmTscSamples.map((sample) => sample.milliseconds);
+  const coldCompletionMs = measurement.coldCompletionSamples.map(
+    (sample) => sample.milliseconds,
+  );
+  const warmCompletionMs = measurement.warmCompletionSamples.map(
+    (sample) => sample.milliseconds,
+  );
   if (
-    measurement.coldTscMs.length !== thresholds.coldTscRepeats ||
-    measurement.warmTscMs.length !== thresholds.warmTscRepeats ||
-    measurement.coldCompletionMs.length !== thresholds.coldCompletionRepeats ||
-    measurement.warmCompletionMs.length !== thresholds.warmCompletionRepeats ||
-    measurement.coldTscP50Ms !== round(percentile(measurement.coldTscMs, 0.5)) ||
-    measurement.warmTscP50Ms !== round(percentile(measurement.warmTscMs, 0.5)) ||
-    measurement.coldCompletionP50Ms !== round(percentile(measurement.coldCompletionMs, 0.5)) ||
-    measurement.warmCompletionP95Ms !== round(percentile(measurement.warmCompletionMs, 0.95))
+    coldTscMs.length !== thresholds.coldTscRepeats ||
+    warmTscMs.length !== thresholds.warmTscRepeats ||
+    coldCompletionMs.length !== thresholds.coldCompletionRepeats ||
+    warmCompletionMs.length !== thresholds.warmCompletionRepeats ||
+    measurement.coldTscP50Ms !== round(percentile(coldTscMs, 0.5)) ||
+    measurement.warmTscP50Ms !== round(percentile(warmTscMs, 0.5)) ||
+    measurement.coldCompletionP50Ms !== round(percentile(coldCompletionMs, 0.5)) ||
+    measurement.warmCompletionP95Ms !== round(percentile(warmCompletionMs, 0.95))
   ) {
     failures.push(`${name} timing samples and summaries are inconsistent`);
   }
@@ -559,6 +577,18 @@ function validateMeasurementSummary(
       sha256(measurement.completionCandidateNames.join('\n'))
   ) {
     failures.push(`${name} completion candidate subject is inconsistent`);
+  }
+  for (const sample of [
+    ...measurement.coldCompletionSamples,
+    ...measurement.warmCompletionSamples,
+  ]) {
+    if (
+      sample.candidateCount !== measurement.completionCandidateCount ||
+      sample.candidateDigest !== measurement.completionCandidateDigest
+    ) {
+      failures.push(`${name} per-sample completion identity is inconsistent`);
+      break;
+    }
   }
 }
 
@@ -701,6 +731,22 @@ function percentile(values: readonly number[], fraction: number): number {
 function deltaPercent(candidate: number, baseline: number): number {
   if (baseline === 0) return candidate === 0 ? 0 : Number.POSITIVE_INFINITY;
   return ((candidate - baseline) / baseline) * 100;
+}
+
+function pairedDeltaPercent(
+  candidate: readonly { readonly iteration: number; readonly milliseconds: number }[],
+  baseline: readonly { readonly iteration: number; readonly milliseconds: number }[],
+  fraction: number,
+): number {
+  if (candidate.length !== baseline.length) return Number.POSITIVE_INFINITY;
+  const baselineByIteration = new Map(
+    baseline.map((sample) => [sample.iteration, sample.milliseconds] as const),
+  );
+  const deltas = candidate.map((sample) => {
+    const paired = baselineByIteration.get(sample.iteration);
+    return paired === undefined ? Number.POSITIVE_INFINITY : deltaPercent(sample.milliseconds, paired);
+  });
+  return percentile(deltas, fraction);
 }
 
 function round(value: number): number {

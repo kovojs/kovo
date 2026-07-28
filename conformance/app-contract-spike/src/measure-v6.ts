@@ -7,10 +7,13 @@ import type { D1CriteriaV6, D1EvaluationV6, D1RawEvidenceV6 } from './types-v6.t
 const criteriaUrl = new URL('../criteria-v6.json', import.meta.url);
 const evidenceUrl = new URL('../raw-evidence-v6.json', import.meta.url);
 const resultsUrl = new URL('../results-v6.json', import.meta.url);
+const sealedUrl = new URL('../sealed-v6/', import.meta.url);
 
 export async function runD1V6Measurement(mode: 'verify' | 'write'): Promise<void> {
   const criteria = await readJson<D1CriteriaV6>(criteriaUrl);
-  const freshEvidence = await runD1V6Experiment(criteria);
+  const freshEvidence = await runD1V6Experiment(criteria, {
+    ...(mode === 'write' ? { sealDirectory: sealedUrl.pathname } : {}),
+  });
   const freshEvaluation = await evaluateD1V6(criteria, freshEvidence);
 
   if (mode === 'write') {
