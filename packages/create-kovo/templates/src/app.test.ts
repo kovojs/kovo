@@ -1,47 +1,125 @@
-import { isKovoApp } from '@kovojs/server';
-import { describe, expect, it } from 'vitest';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { createServer } from 'node:net';
 
-import app from './app.js';
-import { ContactsRegion } from './components/contacts.js';
-import { contactsQuery } from './queries.js';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// SPEC.md §9.5: unit tests inspect the same pure app aggregate that `kovo build` and
-// static export replay. Request dispatch runs against the built bootstrap-first artifact
-// in endpoint-posture.test.ts rather than locking Vitest's shared timer realm.
-describe('starter app', () => {
-  it('is a closed Kovo app aggregate', () => {
-    expect(isKovoApp(app)).toBe(true);
+// SPEC §6.6/§12: Vitest remains an assertion/orchestration process. The supported `kovo dev`
+// runner owns an isolated runtime and installs the real framework bootstrap before it evaluates
+// the eager app graph. Tests observe only public HTTP Response, header, and HTML behavior.
+let appServer: ChildProcessWithoutNullStreams | undefined;
+let appServerError: Error | undefined;
+let appOrigin = '';
+let appServerOutput = '';
+
+beforeAll(async () => {
+  const port = await reservePort();
+  appOrigin = `http://127.0.0.1:${port}`;
+  appServer = spawn('kovo', ['dev', './src/app.tsx'], {
+    env: {
+      ...process.env,
+      BETTER_AUTH_URL: appOrigin,
+      HOST: '127.0.0.1',
+      NODE_ENV: 'development',
+      PORT: String(port),
+    },
+  });
+  appServer.stdout.on('data', (chunk: Buffer) => {
+    appServerOutput += chunk.toString('utf8');
+  });
+  appServer.stderr.on('data', (chunk: Buffer) => {
+    appServerOutput += chunk.toString('utf8');
+  });
+  appServer.once('error', (error) => {
+    appServerError = error;
+  });
+  const response = await fetchWhenReady(`${appOrigin}/api/health`, appServer);
+  await response.body?.cancel();
+}, 90_000);
+
+afterAll(async () => {
+  await stopProcess(appServer);
+});
+
+describe('starter app public HTTP journey', () => {
+  it('serves the public health response', async () => {
+    const response = await fetch(`${appOrigin}/api/health`);
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status, appServerOutput).toBe(200);
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(response.headers.get('content-type')).toContain('application/json');
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
-  it('requires the framework-provided read-only database context', async () => {
-    await expect(contactsQuery.load(undefined)).rejects.toThrow(
-      'contacts query requires the framework-provided context.db',
-    );
-  });
+  it('renders the signed-out HTML document', async () => {
+    const response = await fetch(`${appOrigin}/login`);
+    const html = await response.text();
 
-  it('preserves submitted contact fields on duplicate-email failure renders', () => {
-    const html = String(
-      ContactsRegion.definition.render({ contacts: { items: [] } }, undefined, {
-        forms: {
-          addContact: {
-            failure: {
-              code: 'DUPLICATE_EMAIL',
-              payload: { email: 'ada@example.com' },
-            },
-            submitted: {
-              company: 'Dogfood LLC',
-              email: 'ada@example.com',
-              name: 'Ada Clone',
-            },
-          },
-        },
-      }),
-    );
-
-    expect(html).toContain('name="name"');
-    expect(html).toContain('value="Ada Clone"');
-    expect(html).toContain('value="ada@example.com"');
-    expect(html).toContain('value="Dogfood LLC"');
-    expect(html).toContain('ada@example.com is already in the contact book.');
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status, appServerOutput).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(html).toContain('<title>Sign in · Kovo Starter</title>');
+    expect(html).toContain('<main');
+    expect(html).toContain('name="email"');
+    expect(html).toContain('name="password"');
   });
 });
+
+async function reservePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', resolve);
+  });
+  const address = probe.address();
+  if (address === null || typeof address === 'string') {
+    probe.close();
+    throw new Error('starter test could not reserve a local TCP port');
+  }
+  await new Promise<void>((resolve, reject) => {
+    probe.close((error) => (error ? reject(error) : resolve()));
+  });
+  return address.port;
+}
+
+async function fetchWhenReady(
+  url: string,
+  server: ChildProcessWithoutNullStreams,
+): Promise<Response> {
+  const deadline = Date.now() + 85_000;
+  while (Date.now() < deadline) {
+    if (appServerError !== undefined) {
+      throw new Error(`Kovo dev could not start: ${appServerError.message}`);
+    }
+    if (hasExited(server)) {
+      throw new Error(`Kovo dev exited before ready:\n${appServerOutput.trim()}`);
+    }
+    try {
+      return await fetch(url);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw new Error(`Kovo dev did not become ready:\n${appServerOutput.trim()}`);
+}
+
+async function stopProcess(server: ChildProcessWithoutNullStreams | undefined): Promise<void> {
+  if (server === undefined || hasExited(server)) return;
+  server.kill('SIGTERM');
+  await waitForExit(server);
+  if (hasExited(server)) return;
+  server.kill('SIGKILL');
+  await waitForExit(server);
+}
+
+function hasExited(server: ChildProcessWithoutNullStreams): boolean {
+  return server.exitCode !== null || server.signalCode !== null;
+}
+
+async function waitForExit(server: ChildProcessWithoutNullStreams): Promise<void> {
+  if (hasExited(server)) return;
+  await Promise.race([
+    new Promise<void>((resolve) => server.once('exit', () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+  ]);
+}

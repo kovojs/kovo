@@ -25,7 +25,6 @@ const SECURITY_SURFACE_FILES = new Set([
   'src/mutations.ts',
   'src/queries.ts',
   'src/schema.ts',
-  'src/test-setup.ts',
 ]);
 const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';

@@ -23,10 +23,9 @@ export default defineConfig({
     },
   },
   test: {
-    // Generated unit tests import the eager app aggregate. Install the test-only verdict shim in a
-    // global setup module so every test observes it before app/auth modules evaluate; production
-    // builds and servers never load this file.
-    setupFiles: ['./src/test-setup.ts'],
+    // SPEC §6.6/§12: app.test.ts keeps Vitest's mutable timer realm separate and launches the app
+    // through Kovo's bootstrap-first dev runner. The authored app graph is evaluated only in that
+    // child runtime, then tested over its public HTTP boundary.
     server: {
       deps: {
         external: ['undici'],

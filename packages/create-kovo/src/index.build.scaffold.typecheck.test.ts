@@ -1,13 +1,11 @@
-import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 import { describe, it } from 'vitest';
 
 import {
   createStarterApp,
-  resolveStarterBin,
+  runStarterAppHttpTest,
   runStarterTypecheck,
-  withStarterBinOnPath,
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: scaffold typecheck)', () => {
@@ -40,7 +38,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     }
   });
 
-  it('runs the generated in-app tests (app aggregate + data layer)', () => {
+  it('runs the generated public HTTP journey after the real runtime bootstrap', () => {
     const app = createStarterApp({
       name: 'Vitest Proof',
       tempParent: join(process.cwd(), 'node_modules/.tmp'),
@@ -48,11 +46,7 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     });
 
     try {
-      execFileSync(resolveStarterBin(app.root, 'vitest'), ['--run', 'src/app.test.ts'], {
-        cwd: app.root,
-        env: withStarterBinOnPath(app.root),
-        stdio: 'pipe',
-      });
+      runStarterAppHttpTest(app.root);
     } finally {
       app.cleanup();
     }
