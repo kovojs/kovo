@@ -44,6 +44,28 @@ const sealedArtifactSha256 = {
   'server-overlay-packed.tgz':
     '07539e5059bf11ab8409faec35c51e575d18d66059accffbad84baa88511d3ba',
 } as const satisfies Readonly<Record<(typeof sealedArtifactNames)[number], string>>;
+const resolverMutationCodes = {
+  'blank-owner-key': 'D1A105',
+  'blank-server-package-root': 'D1A106',
+  'duplicate-span': 'D1A101',
+  'overlapping-span': 'D1A102',
+  'stale-source-reparse': 'D1A104',
+  'wrong-node-span': 'D1A103',
+} as const;
+const generatedMutationCodes = {
+  'compiler-source-digest': 'D1B103',
+  'completion-token': 'D1B106',
+  'config-source-digest': 'D1B102',
+  'generated-module-digest': 'D1B105',
+  'provider-source-digest': 'D1B101',
+  'server-packed-contents-digest': 'D1B104',
+} as const;
+const evidenceBindingMutationCodes = {
+  'matrix-source': 'D1E202',
+  'packed-compiler-entrypoint': 'D1E204',
+  'runtime-owner': 'D1E201',
+  'server-copy-digest': 'D1E203',
+} as const;
 type SealedArtifactName = (typeof sealedArtifactNames)[number];
 export type D1V6SealedAuthority = Partial<
   Readonly<Record<SealedArtifactName, string | Buffer>>
@@ -575,38 +597,19 @@ function ownershipGate(
   }
   validateDiagnosticMap(
     evidence.resolverIntegrity,
-    {
-      'blank-owner-key': 'D1A105',
-      'blank-server-package-root': 'D1A106',
-      'duplicate-span': 'D1A101',
-      'overlapping-span': 'D1A102',
-      'stale-source-reparse': 'D1A104',
-      'wrong-node-span': 'D1A103',
-    },
+    resolverMutationCodes,
     failures,
     'resolver mutation',
   );
   validateDiagnosticMap(
     evidence.generation.armB.mutationDiagnostics,
-    {
-      'compiler-source-digest': 'D1B103',
-      'completion-token': 'D1B106',
-      'config-source-digest': 'D1B102',
-      'generated-module-digest': 'D1B105',
-      'provider-source-digest': 'D1B101',
-      'server-packed-contents-digest': 'D1B104',
-    },
+    generatedMutationCodes,
     failures,
     'generated mutation',
   );
   validateDiagnosticMap(
     evidence.evidenceBindings.mutationDiagnostics,
-    {
-      'matrix-source': 'D1E202',
-      'packed-compiler-entrypoint': 'D1E204',
-      'runtime-owner': 'D1E201',
-      'server-copy-digest': 'D1E203',
-    },
+    evidenceBindingMutationCodes,
     failures,
     'evidence-binding mutation',
   );
@@ -1464,6 +1467,11 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
   for (const value of Object.values(evidence.receiverFlow.controls)) {
     assertMatrixEvidenceShape(value, 'receiverFlow.control entry');
   }
+  assertExactKeys(
+    evidence.resolverIntegrity,
+    Object.keys(resolverMutationCodes),
+    'resolverIntegrity',
+  );
   assertDiagnosticRecordShape(evidence.resolverIntegrity, 'resolverIntegrity');
   assertExactKeys(
     evidence.semanticEquivalence,
@@ -1482,11 +1490,21 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
       'semantic collision',
     );
   }
+  assertExactKeys(
+    evidence.semanticEquivalence.mutationDiagnostics,
+    Object.keys(criteria.semanticEquivalenceContract.semanticMutations),
+    'semantic mutation diagnostics',
+  );
   assertDiagnosticRecordShape(
     evidence.semanticEquivalence.mutationDiagnostics,
     'semantic mutation diagnostics',
   );
   assertExactKeys(evidence.evidenceBindings, ['mutationDiagnostics'], 'evidenceBindings');
+  assertExactKeys(
+    evidence.evidenceBindings.mutationDiagnostics,
+    Object.keys(evidenceBindingMutationCodes),
+    'binding mutation diagnostics',
+  );
   assertDiagnosticRecordShape(
     evidence.evidenceBindings.mutationDiagnostics,
     'binding mutation diagnostics',
@@ -1501,6 +1519,11 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
   for (const diagnostic of evidence.generation.armB.compilerRecognitionDiagnostics) {
     assertDiagnosticShape(diagnostic, 'generation compiler diagnostic');
   }
+  assertExactKeys(
+    evidence.generation.armB.mutationDiagnostics,
+    Object.keys(generatedMutationCodes),
+    'generation mutation diagnostics',
+  );
   assertDiagnosticRecordShape(
     evidence.generation.armB.mutationDiagnostics,
     'generation mutation diagnostics',

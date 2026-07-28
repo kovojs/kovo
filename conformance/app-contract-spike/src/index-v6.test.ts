@@ -449,12 +449,24 @@ function surplusRawMutations(): Array<
     ['resolver-integrity', (value) => addSurplus(value.resolverIntegrity)],
     ['semantic-equivalence', (value) => addSurplus(value.semanticEquivalence)],
     [
+      'semantic-mutation-diagnostics',
+      (value) => addSurplus(value.semanticEquivalence.mutationDiagnostics),
+    ],
+    [
       'collision-subject',
       (value) => addSurplus(value.semanticEquivalence.collisionSubjects['comment-callee-text']!),
     ],
     ['evidence-bindings', (value) => addSurplus(value.evidenceBindings)],
+    [
+      'binding-mutation-diagnostics',
+      (value) => addSurplus(value.evidenceBindings.mutationDiagnostics),
+    ],
     ['generation', (value) => addSurplus(value.generation)],
     ['generation-arm', (value) => addSurplus(value.generation.armB)],
+    [
+      'generation-mutation-diagnostics',
+      (value) => addSurplus(value.generation.armB.mutationDiagnostics),
+    ],
     ['generated-contract', (value) => addSurplus(value.generation.armB.contracts[0]!)],
     ['generated-manifest', (value) => addSurplus(value.generation.armB.contracts[0]!.manifest)],
     ['runtime-map', (value) => addSurplus(value.runtime)],
