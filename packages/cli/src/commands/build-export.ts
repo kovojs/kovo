@@ -3,6 +3,8 @@ import { execFile as builtinExecFile } from 'node:child_process';
 import { Buffer as builtinBuffer } from 'node:buffer';
 import { hash as builtinHash } from 'node:crypto';
 import {
+  accessSync as builtinAccessSync,
+  constants as builtinFsConstants,
   existsSync as builtinExistsSync,
   lstatSync as builtinLstatSync,
   mkdtempSync as builtinMkdtempSync,
@@ -183,6 +185,8 @@ import {
 const execFile = builtinExecFile;
 const bufferFrom = builtinBuffer.from;
 const hash = builtinHash;
+const accessSync = builtinAccessSync;
+const fsWriteOk = builtinFsConstants.W_OK;
 const existsSync = builtinExistsSync;
 const lstatSync = builtinLstatSync;
 const mkdtempSync = builtinMkdtempSync;
@@ -207,6 +211,15 @@ const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
+
+/**
+ * A caller-selected path/configuration was unusable before Kovo could evaluate the build proof.
+ *
+ * The class is module-private so app code cannot manufacture an exit-2 result and disguise a
+ * compiler/security finding as a usage mistake. G5 in plans/worldclass-devex.md reserves exit 2
+ * for invocation/configuration mistakes while SPEC §5.2 build findings remain exit 1.
+ */
+class KovoCommandConfigurationError extends Error {}
 
 // Exact first-party package names whose source entries may live inside the invocation root while
 // dogfooding the workspace. Ordinary workspace/package dependencies remain app source and must be
@@ -609,9 +622,16 @@ export async function runBuildCommand(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
   try {
-    options = snapshotKovoBuildOptions(options);
+    options = configurationBoundary(() => snapshotKovoBuildOptions(options));
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    assertReadableKovoInputFile(resolvedAppModulePath, 'kovo build app module');
+    const outDir = resolve(invocationRoot, options.outDir);
+    assertKovoOutputDirectoryTarget(outDir, 'kovo build --out');
+    const configPath = findKovoBuildConfig(invocationRoot);
+    if (configPath !== undefined) {
+      assertReadableKovoInputFile(configPath, 'kovo build config');
+    }
     // SPEC §5.2.3: capture path-free artifact identity inputs before config or app evaluation.
     // The resulting stamp identifies the exact lock bytes, shipped guarantee register, graph
     // schema, and resolved Kovo package versions that were in force for this build.
@@ -622,7 +642,6 @@ export async function runBuildCommand(
     // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
-    const configPath = findKovoBuildConfig(invocationRoot);
     const approvedConfig =
       configPath === undefined
         ? undefined
@@ -631,15 +650,11 @@ export async function runBuildCommand(
             invocationRoot,
             security.paranoidStaticAdvisory,
           );
-    const loadedConfig = await loadKovoBuildConfig(
-      invocationRoot,
-      resolvedAppModulePath,
-      approvedConfig,
+    const loadedConfig = await configurationBoundaryAsync(() =>
+      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
     );
-    const selectedPreset = selectedKovoBuildPreset(
-      options,
-      loadedConfig.preset,
-      security.invocationEnv,
+    const selectedPreset = configurationBoundary(() =>
+      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
     );
     // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
     // let it overlap the vite app load below AND the kovo-check security preflight, instead of
@@ -729,7 +744,6 @@ export async function runBuildCommand(
     const escapeObligationManifest = escapeObligationManifestForBuild(attestedCheckGraph);
     // Metric E signatures are a separate domain-separated subject family under the same anchor.
     const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(attestedCheckGraph);
-    const outDir = resolve(invocationRoot, options.outDir);
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
       resolvedAppModulePath,
@@ -3364,7 +3378,9 @@ function selectedKovoBuildPreset(
   const envPreset = kovoInvocationEnvironmentValue(invocationEnv, 'KOVO_PRESET');
   if (envPreset) {
     const parsedPreset = parseKovoBuildPresetName(envPreset);
-    if (!parsedPreset) throw new Error(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
+    if (!parsedPreset) {
+      throw new KovoCommandConfigurationError(`unsupported KOVO_PRESET ${stableValue(envPreset)}`);
+    }
     return { name: parsedPreset };
   }
 
@@ -3382,7 +3398,11 @@ function selectedKovoBuildPreset(
 
 function selectedConfiguredKovoBuildPreset(preset: KovoBuildPreset): SelectedKovoBuildPreset {
   const name = parseKovoBuildPresetName(preset.name);
-  if (!name) throw new Error(`unsupported kovo.config preset ${stableValue(preset.name)}`);
+  if (!name) {
+    throw new KovoCommandConfigurationError(
+      `unsupported kovo.config preset ${stableValue(preset.name)}`,
+    );
+  }
   return { name, preset };
 }
 
@@ -3753,13 +3773,15 @@ function kovoBuildPresetFromModule(
       : undefined;
   const value = moduleDefault ?? module;
   if (value === undefined || value === null) return undefined;
-  if (!isRecord(value)) throw new Error(`${configPath} must export a config object.`);
+  if (!isRecord(value)) {
+    throw new KovoCommandConfigurationError(`${configPath} must export a config object.`);
+  }
 
   const token = buildOwnDataValue(value, 'preset', `${configPath} config`);
   if (token === undefined) return undefined;
   const preset = resolveKovoBuildPreset(token);
   if (preset === undefined) {
-    throw new Error(
+    throw new KovoCommandConfigurationError(
       `${configPath} preset must be a framework-owned value returned directly by node(), vercel(), or cloudflare().`,
     );
   }
@@ -5668,15 +5690,20 @@ export async function runExportCommandStructured(
   let primaryError: unknown;
   let hasPrimaryError = false;
   try {
-    options = snapshotKovoExportOptions(options);
-    const resolvedOptions = resolveKovoExportOptions(options, security.invocationCwd);
+    options = configurationBoundary(() => snapshotKovoExportOptions(options));
+    const resolvedOptions = configurationBoundary(() =>
+      resolveKovoExportOptions(options, security.invocationCwd),
+    );
+    assertKovoExportInputPaths(resolvedOptions);
     const exportRoot = resolvedOptions.root ?? dirname(resolvedOptions.appModulePath);
     const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
       resolvedOptions.appModulePath,
       exportRoot,
       security.paranoidStaticAdvisory,
     );
-    const currentManifestPlan = await staticExportManifestPlan(resolvedOptions);
+    const currentManifestPlan = await configurationBoundaryAsync(() =>
+      staticExportManifestPlan(resolvedOptions),
+    );
     manifestPlan = currentManifestPlan;
     const staticExport = await (async () => {
       loadedExport = await loadExportAppModule(
@@ -5738,9 +5765,107 @@ export async function runExportCommandStructured(
   return result;
 }
 
+function configurationBoundary<Value>(run: () => Value): Value {
+  try {
+    return run();
+  } catch (error) {
+    throw asKovoCommandConfigurationError(error);
+  }
+}
+
+async function configurationBoundaryAsync<Value>(run: () => Promise<Value>): Promise<Value> {
+  try {
+    return await run();
+  } catch (error) {
+    throw asKovoCommandConfigurationError(error);
+  }
+}
+
+function asKovoCommandConfigurationError(error: unknown): KovoCommandConfigurationError {
+  if (error instanceof KovoCommandConfigurationError) return error;
+  return new KovoCommandConfigurationError(error instanceof Error ? error.message : String(error));
+}
+
+function assertReadableKovoInputFile(fileName: string, label: string): void {
+  try {
+    const status = statSync(fileName);
+    if (!status.isFile()) {
+      throw new KovoCommandConfigurationError(
+        `${label} must be a readable regular file: ${stableValue(fileName)}.`,
+      );
+    }
+    // Validate readability at the input boundary. Compiler/source snapshots still re-read through
+    // their confined capabilities and own the authoritative byte/race checks.
+    readFileSync(fileName);
+  } catch (error) {
+    if (error instanceof KovoCommandConfigurationError) throw error;
+    throw new KovoCommandConfigurationError(
+      `${label} is missing or unreadable: ${stableValue(fileName)}.`,
+    );
+  }
+}
+
+function assertReadableKovoInputDirectory(directory: string, label: string): void {
+  try {
+    const status = lstatSync(directory);
+    if (status.isSymbolicLink() || !status.isDirectory()) {
+      throw new KovoCommandConfigurationError(
+        `${label} must be a readable, non-symbolic-link directory: ${stableValue(directory)}.`,
+      );
+    }
+    readdirSync(directory);
+  } catch (error) {
+    if (error instanceof KovoCommandConfigurationError) throw error;
+    throw new KovoCommandConfigurationError(
+      `${label} is missing or unreadable: ${stableValue(directory)}.`,
+    );
+  }
+}
+
+function assertKovoOutputDirectoryTarget(directory: string, label: string): void {
+  if (existsSync(directory)) {
+    assertReadableKovoInputDirectory(directory, label);
+    assertWritableKovoOutputParent(directory, label);
+    return;
+  }
+
+  // A missing output leaf is valid, but its nearest existing parent must already be a usable
+  // directory. The framework-owned output boundary remains responsible for race-safe creation.
+  let parent = dirname(directory);
+  while (!existsSync(parent)) {
+    const next = dirname(parent);
+    if (next === parent) break;
+    parent = next;
+  }
+  assertReadableKovoInputDirectory(parent, `${label} parent`);
+  assertWritableKovoOutputParent(parent, `${label} parent`);
+}
+
+function assertWritableKovoOutputParent(directory: string, label: string): void {
+  try {
+    accessSync(directory, fsWriteOk);
+  } catch {
+    throw new KovoCommandConfigurationError(`${label} is not writable: ${stableValue(directory)}.`);
+  }
+}
+
+function assertKovoExportInputPaths(options: KovoExportOptions): void {
+  assertReadableKovoInputFile(options.appModulePath, 'kovo export app module');
+  assertKovoOutputDirectoryTarget(options.outDir, 'kovo export --out');
+  if (options.root !== undefined) {
+    assertReadableKovoInputDirectory(options.root, 'kovo export --root');
+  }
+  if (options.manifestFile !== undefined) {
+    assertReadableKovoInputFile(options.manifestFile, 'kovo export --manifest');
+  }
+  if (options.distDir !== undefined) {
+    assertReadableKovoInputDirectory(options.distDir, 'kovo export --dist');
+  }
+}
+
 function snapshotKovoBuildOptions(value: KovoBuildOptions): KovoBuildOptions {
   if (typeof value !== 'object' || value === null) {
-    throw new TypeError('Kovo build options must be an object.');
+    throw new KovoCommandConfigurationError('Kovo build options must be an object.');
   }
   const appModulePath = requiredBuildOptionString(value, 'appModulePath', 'build');
   const outDir = requiredBuildOptionString(value, 'outDir', 'build');
@@ -5767,7 +5892,7 @@ function snapshotKovoBuildOptions(value: KovoBuildOptions): KovoBuildOptions {
 
 function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions {
   if (typeof value !== 'object' || value === null) {
-    throw new TypeError('Kovo export options must be an object.');
+    throw new KovoCommandConfigurationError('Kovo export options must be an object.');
   }
   const snapshot = buildCreateNullRecord<unknown>();
   snapshot.appModulePath = requiredBuildOptionString(value, 'appModulePath', 'export');
@@ -5804,7 +5929,9 @@ function requiredBuildOptionString(
 }
 
 function requiredString(value: unknown, label: string): string {
-  if (typeof value !== 'string') throw new TypeError(`Kovo ${label} must be an own string.`);
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new KovoCommandConfigurationError(`Kovo ${label} must be a non-empty own string.`);
+  }
   return value;
 }
 
@@ -6221,7 +6348,9 @@ function appFromModule(module: unknown, source: string): KovoApp {
     if (isKovoApp(app)) return app;
   }
 
-  throw new Error(`kovo export expected ${source} to export a Kovo app as default or named 'app'.`);
+  throw new KovoCommandConfigurationError(
+    `kovo expected ${source} to export a Kovo app as default or named 'app'.`,
+  );
 }
 
 function isKovoApp(value: unknown): value is KovoApp {
@@ -6524,7 +6653,7 @@ function stringifyBuildValue(value: unknown, space?: number): string {
 function buildErrorResult(error: unknown): CliCommandResult {
   return {
     error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
-    exitCode: 1,
+    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
   };
 }
 
@@ -6555,6 +6684,6 @@ function exportErrorResult(
 
   return {
     error: `kovo: export failed: ${error instanceof Error ? error.message : String(error)}`,
-    exitCode: 1,
+    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
   };
 }

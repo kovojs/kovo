@@ -19,7 +19,7 @@ describe('build filesystem authority', () => {
       outDir: './dist',
     });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(reads).toBe(0);
   });
 
@@ -33,7 +33,7 @@ describe('build filesystem authority', () => {
       outDir: './dist',
     });
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(reads).toBe(0);
   });
 
@@ -52,7 +52,7 @@ describe('build filesystem authority', () => {
         outDir: './dist',
         vite: false,
       });
-      expect(result.exitCode).toBe(1);
+      expect(result.exitCode).toBe(2);
     } finally {
       if (descriptor === undefined) Reflect.deleteProperty(Object.prototype, 'vite');
       else Object.defineProperty(Object.prototype, 'vite', descriptor);

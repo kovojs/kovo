@@ -568,7 +568,7 @@ describe('kovo export', () => {
           '--dist',
           distDir,
         ]),
-      ).resolves.toBe(1);
+      ).resolves.toBe(2);
 
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -621,7 +621,7 @@ describe('kovo export', () => {
           '--dist',
           distDir,
         ]),
-      ).resolves.toBe(1);
+      ).resolves.toBe(2);
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(/symbolic-link/u);
