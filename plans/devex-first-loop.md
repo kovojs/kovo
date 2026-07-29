@@ -166,7 +166,9 @@ proof; shared root verification belongs in the latest-verification block.
   known-failure, and packed-journey suites passed (7 files, 104 tests before the feedback merge;
   post-merge source-closure/project-quality checks passed 5 tests). KF-DEVEX-002 now separates a
   120-second listener-acquisition ceiling from the unchanged five-second post-bind readiness
-  contract; the scorecard budget remains unratified.
+  contract. The exact packed probe completed in 46.65 seconds as a classified expected failure
+  rather than an infrastructure timeout; the post-bind scorecard budget remains unmet and
+  unratified.
 - **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
   (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
 - **First-loop proof:** `pnpm run test:devex-known-failures-available` passes all ten registered

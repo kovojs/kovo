@@ -57,9 +57,9 @@ describe('known-failure register', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 1,
+      executable: 2,
       'pending-repro': 0,
-      retired: 9,
+      retired: 8,
     });
     expect(
       register.entries.every(
@@ -352,12 +352,14 @@ describe('known-failure register', () => {
     expect(xfail.availablePass).toBe(true);
     expect(xfail.pass).toBe(true);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
+      expect.objectContaining({ id: 'KF-DEVEX-002' }),
       expect.objectContaining({ id: 'KF-DEVEX-007' }),
     ]);
     expect(xpass.executableClosureComplete).toBe(true);
     expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
+      expect.objectContaining({ id: 'KF-DEVEX-002' }),
       expect.objectContaining({ id: 'KF-DEVEX-007' }),
     ]);
   });
@@ -426,7 +428,6 @@ describe('known-failure register', () => {
     expect(executed).toContain('KF-DEVEX-003');
     expect(passing.results.filter((result) => result.status === 'retired-pass')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-pass' },
-      { id: 'KF-DEVEX-002', status: 'retired-pass' },
       { id: 'KF-DEVEX-003', status: 'retired-pass' },
       { id: 'KF-DEVEX-004', status: 'retired-pass' },
       { id: 'KF-DEVEX-005', status: 'retired-pass' },
@@ -448,7 +449,6 @@ describe('known-failure register', () => {
     expect(regression.pass).toBe(false);
     expect(regression.results.filter((result) => result.status === 'retired-regression')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-regression' },
-      { id: 'KF-DEVEX-002', status: 'retired-regression' },
       { id: 'KF-DEVEX-003', status: 'retired-regression' },
       { id: 'KF-DEVEX-004', status: 'retired-regression' },
       { id: 'KF-DEVEX-005', status: 'retired-regression' },

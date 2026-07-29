@@ -50,7 +50,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G2"]
       },
-      "state": "retired",
+      "state": "executable",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -66,11 +66,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
-      "retirement": {
-        "evidence": "The authenticated packed dev-ready probe observed the listener and the structured loopback URL, mode, app, database, and devtool report within the five-second readiness budget.",
-        "verification": "pnpm run test:devex-known-failures-available"
-      }
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens."
     },
     {
       "id": "KF-DEVEX-003",
