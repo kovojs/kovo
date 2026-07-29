@@ -518,11 +518,21 @@ function renderEntry(entry, slug, targets, depth = 4) {
 
   if (parsed) {
     for (const example of parsed.examples) {
-      lines.push('', '**Example**', '', '```ts', example, '```');
+      lines.push('', '**Example**', '', ...renderExample(example));
     }
   }
 
   return lines.join('\n');
+}
+
+function renderExample(example) {
+  const lines = example.split('\n');
+  const directive = /^\/\/\s*(kovo-sample:\s*illustrative\s+reason="[^"]+")\s*$/u.exec(
+    lines[0],
+  )?.[1];
+  if (!directive) return ['```ts', example, '```'];
+  const source = lines.slice(1).join('\n').replace(/^\n+/u, '');
+  return [`<!-- ${directive} -->`, '', '```ts', source, '```'];
 }
 
 /** The category grouping shared by the rendered page and the sidebar manifest,

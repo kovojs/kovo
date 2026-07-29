@@ -13,6 +13,7 @@
  *
  * @example
  * ```ts
+ * // kovo-sample: illustrative reason="The stale-version handler depends on an app-local Drizzle schema, database handle, and mutation input."
  * import { compareAndSet } from '@kovojs/drizzle';
  * import { StaleVersionError } from '@kovojs/server';
  *

@@ -1002,6 +1002,7 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
       checkJs: true,
       exactOptionalPropertyTypes: false,
       jsx: 'preserve',
+      jsxImportSource: '@kovojs/server',
       module: 'NodeNext',
       moduleResolution: 'NodeNext',
       noEmit: true,

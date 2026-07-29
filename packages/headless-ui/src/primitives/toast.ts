@@ -151,7 +151,7 @@ export interface ToastDismissPayload {
  * ```ts
  * import type { ToastEventDefinition } from '@kovojs/headless-ui/toast';
  *
- * declare const value: ToastEventDefinition;
+ * declare const value: ToastEventDefinition<'show', { message: string }>;
  * ```
  */
 export interface ToastEventDefinition<Name extends string, Payload> {

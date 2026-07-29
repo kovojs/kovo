@@ -272,6 +272,10 @@ function assertOptionalCookieString(value: unknown, label: string): asserts valu
  * allowed and recorded for `kovo explain --cookies`.
  *
  * @example
+ * import { serializeCookie, unsafeCookie } from '@kovojs/server';
+ *
+ * declare const value: string;
+ *
  * serializeCookie('embed_sid', value, {
  *   class: 'session',
  *   sameSite: 'none',

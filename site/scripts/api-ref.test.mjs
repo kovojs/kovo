@@ -81,6 +81,7 @@ function packageManifest(overrides = {}) {
 describe('api-ref generator', () => {
   let outDir;
   let result;
+  let browserPage;
   let corePage;
   let drizzlePage;
   let headlessUiPage;
@@ -89,6 +90,7 @@ describe('api-ref generator', () => {
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     result = await generateApiReference({ outDir });
+    browserPage = await readFile(path.join(outDir, 'browser.md'), 'utf8');
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
     drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
     headlessUiPage = await readFile(path.join(outDir, 'headless-ui.md'), 'utf8');
@@ -293,6 +295,15 @@ describe('api-ref generator', () => {
     );
     expect(drizzlePage).not.toContain('```ts\n```ts');
     expect(headlessUiPage).not.toContain('```ts\n```ts');
+  });
+
+  it('renders reviewed JSDoc skips as non-visible directives outside the code fence', () => {
+    expect(browserPage).toContain(
+      '<!-- kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry." -->',
+    );
+    expect(browserPage).not.toContain(
+      '```ts\n// kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."',
+    );
   });
 
   it('omits generated transition machinery and UI style tables from public docs', () => {

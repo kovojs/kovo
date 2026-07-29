@@ -57,7 +57,7 @@ export interface AvatarProps extends AvatarStateProps {
  *
  * @example
  * import type { AvatarImageProps } from "@kovojs/ui/avatar";
- * const props: AvatarImageProps = { alt: 'alt' };
+ * const props: AvatarImageProps = { alt: 'Profile photo', src: '/avatar.png' };
  */
 export interface AvatarImageProps extends AvatarStateProps {
   alt: string;

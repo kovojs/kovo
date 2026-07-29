@@ -118,6 +118,7 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
  * (SPEC §10.4, §10.6).
  *
  * @example
+ * // kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."
  * import { form } from '@kovojs/core';
  * import type { OptimisticFor } from '@kovojs/browser';
  * import { addToCart } from './mutations';

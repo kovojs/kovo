@@ -373,7 +373,7 @@ export type Serializable<T> = T extends JsonValue
  * export const Counter = component({
  *   state: (): CounterState => ({ count: 0 }),
  *   render: (_queries: Record<string, never>, state: CounterState) =>
- *     `<button>${state.count}</button>`,
+ *     <button>{state.count}</button>,
  * });
  */
 export function component<
@@ -1126,6 +1126,7 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
  * (SPEC §6.3).
  *
  * @example
+ * // kovo-sample: illustrative reason="The form descriptor depends on an app-local mutation declaration."
  * import { form } from '@kovojs/core';
  * import { addToCart } from './mutations';
  *

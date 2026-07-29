@@ -85,7 +85,7 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = async (url, options) 
  *   importModule: (specifier) => import(specifier),
  *   root: document,
  *   queryStore: store,
- *   enhancedMutations: { fetch: defaultEnhancedFetch, queryPlans: {}, root, store },
+ *   enhancedMutations: { fetch: defaultEnhancedFetch, root, store },
  * });
  */
 export function createBrowserKovoRoot(options: CreateBrowserKovoRootOptions = {}): BrowserKovoRoot {

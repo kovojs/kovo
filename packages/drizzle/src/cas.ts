@@ -73,6 +73,7 @@ export interface DrizzleUpdateResult {
  *
  * @example
  * ```ts
+ * // kovo-sample: illustrative reason="The compare-and-set expression depends on an app-local Drizzle schema, database handle, and mutation input."
  * // In a mutation handler with kovo({ atomic: 'stock', version: 'ver' }):
  * const cas = await compareAndSet(
  *   db.update(products)
