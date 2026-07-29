@@ -92,16 +92,13 @@ You author inline closures; the compiler extracts each into a named, exported ha
 signature `(event, ctx)`. This is the contract the loader invokes. The gallery toggle above lowers to
 this generated client module:
 
-```js
+```ts
 // generated — but valid, authorable Kovo source
 import { handler } from '@kovojs/browser';
 
-export const GalleryToggleDemo$button_click =
-  handler <
-  { pressed: boolean } >
-  ((event, ctx) => {
-    ctx.state.pressed = !ctx.state.pressed;
-  });
+export const GalleryToggleDemo$button_click = handler<{ pressed: boolean }>((event, ctx) => {
+  ctx.state.pressed = !ctx.state.pressed;
+});
 ```
 
 ```html

@@ -1049,6 +1049,9 @@ export const guards: {
   rateLimit: <Request = any>(...args: any[]) => any;
   role: <Request = any>(...args: any[]) => any;
 };
+export const handler: <State = unknown>(
+  fn: (event: Event, context: { state: State }) => void,
+) => unknown;
 export const hmacSignature: any;
 export const installKovoLoader: any;
 export const layout: <Request = any, Params = any, Page = any, Regions = any>(

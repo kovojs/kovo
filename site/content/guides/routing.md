@@ -267,16 +267,20 @@ The reference app guards routes with the same combinators it uses on mutations â
 for "signed in" and `guards.role('admin')` for authorization:
 
 ```tsx
+import { guards, route } from '@kovojs/server';
+
 export const accountRoute = route('/account', {
   guard: guards.authed(),
   page(_in, req) {
     /* req.session.user typed */
+    return <main>Account</main>;
   },
 });
 export const adminRoute = route('/admin', {
   guard: guards.role('admin'),
   page(_in, req) {
     /* â€¦ */
+    return <main>Admin</main>;
   },
 });
 ```

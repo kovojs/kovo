@@ -130,6 +130,9 @@ Annotate the column that ties a table's rows to a principal in the schema:
 
 ```ts
 // schema.ts — `owner:` names the principal column
+import { kovo } from '@kovojs/drizzle';
+import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+
 export const orders = pgTable(
   'orders',
   {
@@ -177,10 +180,16 @@ signer, or custom binding callback:
 
 ```ts
 import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+import { mutation, publicAccess, s } from '@kovojs/server';
 
 export const commerceCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
 
-export const addToCart = mutation({ csrf: commerceCsrf /* … */ });
+export const addToCart = mutation({
+  access: publicAccess('public storefront cart'),
+  csrf: commerceCsrf,
+  input: s.object({ productId: s.string() }),
+  handler: (input) => ({ ok: true, productId: input.productId }),
+});
 ```
 
 Kovo emits the hidden field for mutation forms. Do not copy the returned configuration into a raw
@@ -379,8 +388,18 @@ export const users = pgTable(
 Project only the fields the UI needs:
 
 ```ts
+import { domain, guards, query, s } from '@kovojs/server';
+
+interface SupportRequest {
+  session?: { user?: { roles: readonly string[] } | null } | null;
+}
+
+const user = domain('user');
+declare const users: any;
+declare const eq: any;
+
 export const supportUser = query({
-  guard: guards.role('support'),
+  guard: guards.role<SupportRequest>('support'),
   args: s.object({ userId: s.string() }),
   load: (args, context: { db?: any }) =>
     context?.db

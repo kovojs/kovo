@@ -197,22 +197,13 @@ hand.
 
 A mutation fragment can patch into a long-lived document that predates the fragment's styles or, with
 split CSS, into a page that never loaded them. Declare stylesheets on the route/component metadata
-that owns the generated live target; ordinary enhanced success fragments carry those assets from the
-generated renderer. Failure-only policies can provide `failureStylesheets` for submitted-form
-rerenders:
+that owns the generated live target. Enhanced success and failure fragments inherit those assets
+from the generated renderer:
 
 ```ts
 export const cartPage = route('/cart', {
   stylesheets: siteStylesheets,
   page: () => <CartPage />,
-});
-
-export const addToCart = mutation({
-  failureStylesheets: siteStylesheets,
-  input: addToCartInput,
-  handler(input, request) {
-    return request.db.cart.add(input);
-  },
 });
 ```
 
