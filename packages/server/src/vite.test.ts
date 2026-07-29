@@ -174,7 +174,7 @@ export const SnapshotButton = component({
   it('threads project-proven stock Better Auth mutation forms through dev transforms', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-dev-auth-forms-'));
     const runtimeSource = `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
 export function createAppAuthBindings(options) {
   return createBetterAuthPostgresBindingsFromEnvironment({ ...options });
 }

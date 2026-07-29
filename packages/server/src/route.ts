@@ -2,6 +2,7 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
 import {
   type ComponentChild,
   type JsonValue,
+  type PathParams as CorePathParams,
   type Redirect,
   type RouteSearchValue,
 } from '@kovojs/core';
@@ -215,7 +216,9 @@ export interface RouteBoundaries<
 /** The body passed to `layout()`: optional parent, guard, queries, and chrome render function. */
 export interface LayoutDefinition<
   Request = unknown,
-  Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  Queries extends Readonly<Record<string, QueryDefinition<string, any, any, Request>>> = Readonly<
+    Record<string, QueryDefinition<string, any, any, Request>>
+  >,
   Page extends LayoutRenderResult = LayoutRenderResult,
   Regions extends LayoutRegionResults = LayoutRegionResults,
 > extends PageHintOptions {
@@ -227,14 +230,23 @@ export interface LayoutDefinition<
   render?: (
     queries: LayoutQueryResults<Queries>,
     state: undefined,
-    slots: LayoutRenderSlots<Request, Regions>,
+    slots: {
+      /** The child layout or route page output this layout wraps. */
+      children: ComponentChild;
+      /** Named route-level sibling regions rendered before layout composition. */
+      regions: Regions;
+      /** The request after configured app lifecycle providers have run. */
+      request: Request;
+    },
   ) => Page | Promise<Page>;
 }
 
 /** A first-class page-chrome segment, as returned by `layout()`. */
 export interface LayoutDeclaration<
   Request = unknown,
-  Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  Queries extends Readonly<Record<string, QueryDefinition<string, any, any, Request>>> = Readonly<
+    Record<string, QueryDefinition<string, any, any, Request>>
+  >,
   Page extends LayoutRenderResult = LayoutRenderResult,
   Regions extends LayoutRegionResults = LayoutRegionResults,
 > extends LayoutDefinition<Request, Queries, Page, Regions> {}
@@ -242,7 +254,8 @@ export interface LayoutDeclaration<
 /** App-scoped layout factory whose guards and render slots see the configured request shape. */
 export interface LayoutFactory<Request = unknown> {
   <
-    const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+    const Queries extends Readonly<Record<string, QueryDefinition<string, any, any, Request>>> =
+      Readonly<Record<string, QueryDefinition<string, any, any, Request>>>,
     Page extends LayoutRenderResult = LayoutRenderResult,
     Regions extends LayoutRegionResults = LayoutRegionResults,
   >(
@@ -258,12 +271,12 @@ export interface LayoutFactory<Request = unknown> {
 /** The typed context a route `page` receives: parsed `params`, `search`, the `path`, and `signUrl`. */
 export interface RouteRequest<
   Path extends string,
-  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+  ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+  SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
 > {
-  params: RouteParamsFor<Path, ParamsSchema>;
+  params: ParamsSchema extends Schema<infer Params> ? Params : CorePathParams<Path>;
   path: Path;
-  search: RouteSearchFor<SearchSchema>;
+  search: SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
   /**
    * Mint a signed, short-lived, scope-bound capability URL for a stored object (SPEC §6.6 / §9.1).
    * The URL points at the framework-owned download route, whose verify sink runs before any storage
@@ -278,8 +291,8 @@ export interface RouteRequest<
 /** The body of a route passed to `route()`: `page`, param/search schemas, guards, and meta/hints. */
 export interface RouteDefinition<
   Path extends string,
-  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+  ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+  SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -333,8 +346,8 @@ export type RouteRegionResults<Regions> =
 /** A `RouteDefinition` with its `path` attached, as returned by `route()`. */
 export interface RouteDeclaration<
   Path extends string,
-  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+  ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+  SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
@@ -360,7 +373,8 @@ export interface RouteRequestInput {
  */
 export function layout<
   Request = unknown,
-  const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+  const Queries extends Readonly<Record<string, QueryDefinition<string, any, any, Request>>> =
+    Readonly<Record<string, QueryDefinition<string, any, any, Request>>>,
   Page extends LayoutRenderResult = LayoutRenderResult,
   Regions extends LayoutRegionResults = LayoutRegionResults,
 >(
@@ -405,8 +419,8 @@ export function layout<
 export interface RouteFactory<Request = unknown> {
   <
     const Path extends string,
-    const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-    const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+    const ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+    const SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
     Page extends RoutePageResult = RoutePageResult,
     Regions extends RouteRegionDefinitions<any, Request, Page> = RouteRegionDefinitions<
       any,
@@ -455,8 +469,8 @@ export interface RouteFactory<Request = unknown> {
  */
 export function route<
   const Path extends string,
-  const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-  const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+  const ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+  const SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
   Request = unknown,
   Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,

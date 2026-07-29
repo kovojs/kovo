@@ -501,13 +501,16 @@ declare const frameworkManagedDbProviderBrand: unique symbol;
  * callable that claims to return a raw database. Framework packages register its resolver in a
  * private WeakMap; casts or structurally similar objects cannot mint a working provider.
  */
-export interface FrameworkManagedDbProvider<DbValue> {
+export interface AppDbProvider<DbValue> {
   readonly [frameworkManagedDbProviderBrand]: (value: DbValue) => DbValue;
 }
 
+/** @internal Legacy implementation name; authored/provider contracts use {@link AppDbProvider}. */
+export type FrameworkManagedDbProvider<DbValue> = AppDbProvider<DbValue>;
+
 /** A request DB resolver or an opaque framework-owned provider token. */
 export type DbProvider<RawRequest, DbValue, SessionValue = unknown> =
-  | FrameworkManagedDbProvider<DbValue>
+  | AppDbProvider<DbValue>
   | ((request: LifecycleRequest<RawRequest, SessionValue, never>) => Promise<DbValue> | DbValue);
 
 type FrameworkManagedDbResolver = (request: unknown) => unknown;
@@ -533,7 +536,7 @@ export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionVal
     readonly admit?: () => Promise<void> | void;
     readonly developmentPosture?: FrameworkManagedDbDevelopmentPosture;
   } = {},
-): FrameworkManagedDbProvider<DbValue> {
+): AppDbProvider<DbValue> {
   const token = witnessFreeze(witnessCreateNullRecord());
   witnessWeakMapSet(
     frameworkManagedDbProviders,
@@ -548,7 +551,7 @@ export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionVal
   );
   // The private WeakMap is the runtime proof; this assertion only carries the already-minted
   // provider's DB type through createApp authoring without placing a forgeable brand on the token.
-  return token as unknown as FrameworkManagedDbProvider<DbValue>;
+  return token as unknown as AppDbProvider<DbValue>;
 }
 
 /**
@@ -568,7 +571,7 @@ export function frameworkManagedDbProviderDevelopmentPosture(
 /** @internal Return whether a value is an exact framework-minted opaque DB provider token. */
 export function isFrameworkManagedDbProvider(
   provider: unknown,
-): provider is FrameworkManagedDbProvider<unknown> {
+): provider is AppDbProvider<unknown> {
   return (
     typeof provider === 'object' &&
     provider !== null &&

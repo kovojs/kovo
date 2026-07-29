@@ -16,7 +16,7 @@ import { frameworkEgressFetch } from './egress.js';
 import {
   isFrameworkManagedDbProvider,
   resolveLifecycleRequest,
-  type FrameworkManagedDbProvider,
+  type AppDbProvider,
   type SessionProvider,
 } from './guards.js';
 import type { ServerErrorHandler } from './diagnostics.js';
@@ -129,7 +129,7 @@ export interface CreateAgentSessionOptions<
   DbValue = unknown,
 > {
   clientIp?: (request: Request) => string | undefined;
-  db?: FrameworkManagedDbProvider<DbValue>;
+  db?: AppDbProvider<DbValue>;
   onError?: ServerErrorHandler;
   onSessionSetCookie?: (rawSetCookie: string) => void;
   request: Request;

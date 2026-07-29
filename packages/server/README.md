@@ -56,10 +56,7 @@ the bootstrap import as the literal first import, as required by `SPEC.md` §6.6
 ```ts
 import '@kovojs/server/runtime-bootstrap';
 
-import {
-  createRequestHandler,
-  type InferKovoAppTypes,
-} from '@kovojs/server/custom-adapters';
+import { createRequestHandler, type InferKovoAppTypes } from '@kovojs/server/custom-adapters';
 import { toNodeHandler } from '@kovojs/server/node';
 import app from './app.js';
 
@@ -89,7 +86,14 @@ import {
   rewrapAtRest,
 } from '@kovojs/server/confidential';
 import { createRequestHandler } from '@kovojs/server/custom-adapters';
-import { declarePublicRead, readonlyDb } from '@kovojs/server/data';
+import {
+  declarePublicRead,
+  readonlyDb,
+  type AppDbProvider,
+  type Reader,
+  type Writer,
+} from '@kovojs/server/data';
+import { replayMutationWireBody, type MutationReplayBody } from '@kovojs/server/replay';
 import { createDelegationAuthority, onBehalfOf } from '@kovojs/server/delegation';
 import { derived } from '@kovojs/server/derived-data';
 import { EgressBlockedError, EgressConfigError } from '@kovojs/server/egress';

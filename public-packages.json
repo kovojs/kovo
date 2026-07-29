@@ -1879,7 +1879,7 @@
           "./webhooks",
           "./write-safety"
         ],
-        "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
+        "generated": ["./generated/db-capabilities", "./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
           "./internal/audit-facts",

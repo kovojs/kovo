@@ -128,9 +128,18 @@ declare const frameworkWireBodyBrand: unique symbol;
  * satisfy framework wire response types without going through this choke or an audited
  * endpoint/raw-Response escape path (SPEC §9.1/§9.4).
  */
-export type FrameworkWireBody = string & {
+/**
+ * Audited, framework-compatible body accepted by a custom mutation replay store.
+ *
+ * Construct persisted strings with {@link replayMutationWireBody}; the private brand is an
+ * author-time guardrail while replay decoding and response sinks retain runtime enforcement.
+ */
+export type MutationReplayBody = string & {
   readonly [frameworkWireBodyBrand]: true;
 };
+
+/** @internal Framework protocol name retained only inside response machinery. */
+export type FrameworkWireBody = MutationReplayBody;
 
 /** @internal Sole constructor for framework-owned query/mutation wire bodies. */
 export function frameworkWireBody(body: string): FrameworkWireBody {
@@ -154,7 +163,7 @@ export interface ReplayMutationWireBodyOptions {
 export function replayMutationWireBody(
   body: string,
   options: ReplayMutationWireBodyOptions,
-): FrameworkWireBody {
+): MutationReplayBody {
   if (typeof options !== 'object' || options === null) {
     throw new TypeError('replayMutationWireBody() options must be an object.');
   }

@@ -13,6 +13,7 @@ import { PgDialect, bigint, pgSchema, pgTable, serial, text } from 'drizzle-orm/
 import { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { postgresSystemDbForGeneratedIntegration } from './generated-db-capabilities.js';
 import {
   drainCrossOwnerReadAuditFacts,
   drainPostgresRlsSilentDenyDiagnostics,
@@ -4954,7 +4955,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const systemCapability = runtime.systemDb({
+      expect(runtime).not.toHaveProperty('systemDb');
+      const systemCapability = postgresSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'repair every note in engine-role proof',
         surface: 'postgres-runtime.test',
@@ -4964,6 +4966,13 @@ describe('createPostgresAppRuntimeDb', () => {
       const _rawDb: KovoPostgresRuntimeDb = systemCapability;
       void _rawDb;
       const systemDb = usePostgresSystemDb(systemCapability, (db) => db);
+      expect(() =>
+        postgresSystemDbForGeneratedIntegration({} as KovoPostgresAppRuntimeDb, {
+          operation: 'write',
+          reason: 'Reject a structurally forged runtime',
+          surface: 'postgres-runtime.test#forged-runtime',
+        }),
+      ).toThrow(/invalid Postgres app runtime/u);
       await systemDb.update(notes).set({ title: 'System repaired' });
       await expect(systemDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([
         { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System repaired' },
@@ -5879,7 +5888,7 @@ function assertOpaquePostgresProviderTypes(runtime: KovoPostgresAppRuntimeDb): v
   if (false) {
     // @ts-expect-error SPEC §10.3: the app provider is an opaque token, not a raw callback.
     runtime.db({});
-    runtime.systemDb({
+    postgresSystemDbForGeneratedIntegration(runtime, {
       // @ts-expect-error SPEC §10.3 C9: public system capabilities are write-only.
       operation: 'read',
       reason: 'compile-time negative proof',

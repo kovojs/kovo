@@ -1,5 +1,5 @@
 import { kovo, sql } from '@kovojs/drizzle';
-import { createPostgresTestRuntime } from '@kovojs/server/testing';
+import { createPostgresTestRuntime } from '@kovojs/server/internal/testing';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
@@ -21,7 +21,7 @@ const notes = pgTable(
 
 const schema = { notes };
 
-describe('@kovojs/server/testing Postgres helpers', () => {
+describe('@kovojs/server internal Postgres test helpers', () => {
   it('writes as one principal and hides owner-scoped rows from another principal', async () => {
     const runtime = await createPostgresTestRuntime({ schema });
 

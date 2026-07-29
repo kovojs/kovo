@@ -10,6 +10,7 @@ import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';
 import { describe, expect, it } from 'vitest';
 
+import { postgresSystemDbForGeneratedIntegration } from './generated-db-capabilities.js';
 import {
   extractCompilerBoundKovoRuntimeDbMetadata,
   installGeneratedTableSecurityManifestForCommand,
@@ -358,7 +359,7 @@ describe('framework-derived Postgres owner guard', () => {
       });
 
       const systemDb = usePostgresSystemDb(
-        runtime.systemDb({
+        postgresSystemDbForGeneratedIntegration(runtime, {
           operation: 'write',
           reason: 'owner-guard negative authority test',
           surface: 'postgres-owner-guard.test',

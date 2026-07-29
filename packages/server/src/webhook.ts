@@ -462,8 +462,32 @@ export type WebhookDefinition<
   Value = unknown,
   Tx = unknown,
   Writes extends WebhookDeclaredWrites | undefined = undefined,
-> = WebhookDefinitionBase<InputSchema, Value, Tx, Writes> &
-  (WebhookVerifiedDefinition | WebhookNoneDefinition);
+> = {
+  access?: AccessDecision;
+  handler: (
+    input: InferSchema<InputSchema> & Record<string, unknown>,
+    context: WebhookHandlerContext<InferSchema<InputSchema> & Record<string, unknown>, Tx, Writes>,
+  ) => Promise<Value | WebhookFail> | (Value | WebhookFail);
+  idempotency?: (
+    input: InferSchema<InputSchema> & Record<string, unknown>,
+  ) => WebhookReplayIdentity | undefined;
+  input: InputSchema;
+  replayStore?: WebhookReplayStore;
+  transaction?: <Result>(
+    context: WebhookTransactionContext<InferSchema<InputSchema> & Record<string, unknown>>,
+    run: (tx: Tx) => Promise<Result>,
+  ) => Promise<Result>;
+  writes?: Writes;
+} & (
+  | {
+      verify: WebhookVerifier;
+      verifyJustification?: never;
+    }
+  | {
+      verify: 'none';
+      verifyJustification: string;
+    }
+);
 
 /**
  * The registry-visible endpoint declaration returned by {@link webhook} (SPEC §9.1):

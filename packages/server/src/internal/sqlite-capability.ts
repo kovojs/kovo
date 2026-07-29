@@ -10,6 +10,7 @@ import {
 
 const sqliteSystemDbBrand: unique symbol = Symbol('kovo.sqlite-system-db');
 const sqliteSystemDbValues = createWitnessWeakMap<KovoSqliteSystemDb, BetterSQLite3Database>();
+const sqliteAppRuntimeSystemDbs = createWitnessWeakMap<object, KovoSqliteSystemDb>();
 
 /**
  * Opaque framework-owned SQLite system-write database capability.
@@ -41,8 +42,27 @@ export function useSqliteSystemDb<Result>(
   const db = witnessWeakMapGet(sqliteSystemDbValues, capability);
   if (db === undefined) {
     throw new Error(
-      'KV414: invalid SQLite system DB capability; use createSqliteAppRuntime().systemDb(...) (SPEC §10.3).',
+      'KV414: invalid SQLite system DB capability; generated integrations must use sqliteSystemDbForGeneratedIntegration(...) (SPEC §10.3).',
     );
   }
   return witnessReflectApply<Result>(use, undefined, [db]);
+}
+
+/** @internal Bind an exact SQLite app-runtime token to its private integration capability. */
+export function registerSqliteAppRuntimeSystemDb(
+  runtime: object,
+  capability: KovoSqliteSystemDb,
+): void {
+  witnessWeakMapSet(sqliteAppRuntimeSystemDbs, runtime, capability);
+}
+
+/** @internal Recover a system capability only from an exact framework-minted SQLite runtime. */
+export function sqliteSystemDbForAppRuntime(runtime: object): KovoSqliteSystemDb {
+  const capability = witnessWeakMapGet(sqliteAppRuntimeSystemDbs, runtime);
+  if (capability === undefined) {
+    throw new Error(
+      'KV414: invalid SQLite app runtime; use createSqliteAppRuntime() before generated integration wiring (SPEC §10.3).',
+    );
+  }
+  return capability;
 }

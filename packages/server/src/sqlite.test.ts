@@ -11,6 +11,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import * as sqlitePublicApi from '@kovojs/server/sqlite';
+import { sqliteSystemDbForGeneratedIntegration } from './generated-db-capabilities.js';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import { installGeneratedTableSecurityManifestForCommand } from './generated-table-security-registry.js';
 import { domain } from './domain.js';
@@ -57,7 +58,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         tables: [schema.parent, schema.child],
       });
       runtimes.push(runtime);
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Inspect the framework-owned SQLite storage posture',
         surface: 'sqlite.test#memory-posture',
@@ -143,7 +144,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         ),
       ).toThrow(/KV433/u);
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Verify rawRead rejection left SQLite state unchanged',
         surface: 'sqlite.test#raw-read-choke',
@@ -184,13 +185,14 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       runtimes.push(runtime);
 
       expect(typeof runtime.db).toBe('object');
+      expect(runtime).not.toHaveProperty('systemDb');
       expect(Reflect.ownKeys(runtime.db)).toEqual([]);
       expect(Object.isFrozen(runtime.db)).toBe(true);
       expect(runtime.db).not.toHaveProperty('select');
       expect(sqlitePublicApi).not.toHaveProperty('createSqliteSystemDb');
       expect(sqlitePublicApi).not.toHaveProperty('useSqliteSystemDb');
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Better Auth owns local session rows before request authentication',
         surface: 'sqlite.test#createBindings',
@@ -203,7 +205,14 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         useSqliteSystemDb({} as Parameters<typeof useSqliteSystemDb>[0], () => undefined),
       ).toThrow(/KV414/u);
       expect(() =>
-        runtime.systemDb({
+        sqliteSystemDbForGeneratedIntegration({} as sqlitePublicApi.KovoSqliteAppRuntime, {
+          operation: 'write',
+          reason: 'Reject a structurally forged runtime',
+          surface: 'sqlite.test#forged-runtime',
+        }),
+      ).toThrow(/invalid SQLite app runtime/u);
+      expect(() =>
+        sqliteSystemDbForGeneratedIntegration(runtime, {
           // @ts-expect-error SQLite system capabilities are intentionally write-only.
           operation: 'read',
           reason: 'read-scoped authority would be dishonest for the unrestricted adapter handle',
@@ -211,14 +220,14 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         }),
       ).toThrow(/operation must be write/u);
       expect(() =>
-        runtime.systemDb({
+        sqliteSystemDbForGeneratedIntegration(runtime, {
           operation: 'write',
           reason: 'forged\nsecond audit row',
           surface: 'sqlite.test#forged',
         }),
       ).toThrow(/printable/u);
       expect(() =>
-        runtime.systemDb({
+        sqliteSystemDbForGeneratedIntegration(runtime, {
           operation: 'write',
           reason: 'bounded audit reason',
           surface: `sqlite.test#${'x'.repeat(4_097)}`,
@@ -557,7 +566,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         seed: [{ rows: [{ id: 'p1' }], table: parent }],
         tables: [parent, child],
       });
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Exercise the synchronized-builtin declared-write authorizer regression',
         surface: 'sqlite.test#synchronized-builtin-writer',
@@ -797,7 +806,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         readError = error;
       }
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Inspect the engine state after the rejected cascade regression',
         surface: 'sqlite.test#foreign-key-authorizer-parity',
@@ -905,7 +914,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         seed: [{ rows: [{ id: 'p1' }], table: parent }],
         tables: [parent, child],
       });
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Exercise late better-sqlite3 prepare poisoning',
         surface: 'sqlite.test#driver-prepare-poison',
@@ -1012,7 +1021,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         runMutation(addParent, { name: 'Async SQLite' }, {}, { db: runtime.db }),
       ).resolves.toMatchObject({ ok: true, value: 'server-async-1' });
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Verify the committed async mutation row',
         surface: 'sqlite.test#async-mutation',
@@ -1059,7 +1068,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
         value: 'child-1',
       });
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Verify managed FK-bearing DML completed without retaining a child row',
         surface: 'sqlite.test#fk-managed-dml',
@@ -1129,7 +1138,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       ).resolves.toMatchObject({ ok: true, value: 'server-pinned' });
       Object.defineProperty(allowed, drizzleTableName, originalName);
 
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Verify late table retarget stays bound to its enrolled identity',
         surface: 'sqlite.test#late-table-retarget',
@@ -1217,7 +1226,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
 
       expect(handlerCalls).toBe(1);
       expect(rollbackHandlerCalls).toBe(1);
-      const capability = runtime.systemDb({
+      const capability = sqliteSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'Verify scoped async transaction commit and rollback behavior',
         surface: 'sqlite.test#scoped-async-mutation',

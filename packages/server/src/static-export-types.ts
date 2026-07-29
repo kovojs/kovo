@@ -89,7 +89,12 @@ export type StaticExportNonExportablePolicy = 'error' | 'skip';
 
 /** Options for exporting a `KovoApp` request shell to static route documents. */
 export interface StaticExportOptions {
-  assets?: readonly StaticExportAssetInput[];
+  assets?: readonly {
+    contentType?: string;
+    headers?: HeadersInit;
+    path: string;
+    source: string | URL;
+  }[];
   diagnostics?: readonly import('./static-export-diagnostics.js').StaticExportCompileDiagnostic[];
   onNonExportable?: StaticExportNonExportablePolicy;
   origin?: string;
@@ -102,8 +107,24 @@ export interface StaticExportOptions {
 
 /** Static export output produced by `exportStaticApp()`. */
 export interface StaticExportResult {
-  artifacts: readonly StaticExportArtifact[];
-  assets: readonly StaticExportAssetArtifact[];
-  clientModules: readonly StaticExportClientModuleArtifact[];
+  artifacts: readonly {
+    body: string;
+    headers: Record<string, string>;
+    path: string;
+    status: number;
+  }[];
+  assets: readonly {
+    headers: Record<string, string>;
+    path: string;
+    source: string;
+    status: number;
+  }[];
+  clientModules: readonly {
+    body: string;
+    headers: Record<string, string>;
+    href: string;
+    path: string;
+    status: number;
+  }[];
   diagnostics: readonly import('./static-export-diagnostics.js').StaticExportDiagnostic[];
 }

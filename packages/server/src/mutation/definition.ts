@@ -11,7 +11,7 @@ import { snapshotMutationCsrfOptions, type CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeWireAttribute } from '../html.js';
-import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
+import type { ServerFragmentRenderable } from '../renderable.js';
 import { requestStateBoundedMutationReplayIdentity } from '../request-state-intrinsics.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import {
@@ -39,6 +39,7 @@ import { validateMutationCsrfPosture } from './csrf-posture.js';
 
 declare const mutationRequestDbBrand: unique symbol;
 declare const mutationFormDefinitionBrand: unique symbol;
+declare const mutationQueueValueBrand: unique symbol;
 
 // Keep the authority mint in the same private module scope as mutation(). If it lived in a shared
 // helper module, a production bundler would need to export the mint to this chunk and an app could
@@ -86,7 +87,9 @@ export type MutationRequestDb<DbValue> = (DbValue extends object
 
 /** Mutation handler request shape with the provider DB narrowed to the transaction handle. */
 export type MutationHandlerRequest<Request> = Request extends { db: infer DbValue }
-  ? Omit<Request, 'db'> & { db: MutationRequestDb<DbValue> }
+  ? Omit<Request, 'db'> & {
+      db: DbValue extends object ? Omit<DbValue, 'transaction'> : DbValue;
+    }
   : Request;
 
 /**
@@ -115,7 +118,12 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
 export interface MutationSuccess<Value, Input = unknown> {
   changes: ChangeRecord[];
   input: Input;
-  rerunQueryInstances?: QueryRerun[];
+  rerunQueryInstances?: {
+    input?: unknown;
+    instanceKey?: string;
+    key: string;
+    whole?: boolean;
+  }[];
   rerunQueries: string[];
   ok: true;
   responseHeaders?: import('../response.js').ResponseHeaders;
@@ -279,11 +287,19 @@ export class MutationQueue<Name extends string = string> {
  * `queue: true` for the common per-mutation queue derived from that mutation's own source identity;
  * use `queue('checkout')` only when several mutations intentionally share one queue.
  */
-export function queue<const Name extends string>(name: Name): MutationQueue<Name> {
+export function queue<const Name extends string>(
+  name: Name,
+): {
+  readonly [mutationQueueValueBrand]: Name;
+  readonly name: Name;
+} {
   if (typeof name !== 'string' || name.length === 0) {
     throw new TypeError('queue(name) requires a non-empty queue name.');
   }
-  return MutationQueue.create(name);
+  return MutationQueue.create(name) as {
+    readonly [mutationQueueValueBrand]: Name;
+    readonly name: Name;
+  };
 }
 
 function isMutationQueue(value: unknown): value is MutationQueue {
@@ -330,7 +346,17 @@ export interface MutationDefinition<
   handler: (
     input: InferSchema<InputSchema>,
     request: GuardedRequest,
-    context: MutationContext<Errors>,
+    context: {
+      fail<const Code extends Extract<keyof Errors, string>>(
+        code: Code,
+        payload: InferSchema<Errors[Code]> & JsonValue,
+      ): MutationFail<Code, InferSchema<Errors[Code]> & JsonValue>;
+      invalidate<const DomainKey extends string, InvalidationInput = unknown>(
+        domain: Domain<DomainKey>,
+        options?: InvalidateOptions<InvalidationInput>,
+      ): ChangeRecord<DomainKey, InvalidationInput>;
+      setCookie?: (name: string, value: string, options?: CookieOptions) => void;
+    },
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
   key: Key;
@@ -347,10 +373,37 @@ export interface MutationDefinition<
    * enforcement.
    */
   machineReplayPrincipal?: (request: GuardedRequest) => string;
-  optimistic?: MutationOptimisticMap<Key, InputSchema>;
+  optimistic?: Record<
+    string,
+    | ((draft: any, input: InferSchema<InputSchema>) => void)
+    | {
+        keys: (
+          input: InferSchema<InputSchema>,
+        ) => string | Record<string, string | number | boolean>;
+        transform: (draft: any, input: InferSchema<InputSchema>) => void;
+      }
+    | 'await-fragment'
+  >;
   /** Explicit privilege-lifecycle door; Kovo never infers this semantic fact from table names. */
-  principalEpoch?: PrincipalEpochMutationDeclaration<InferSchema<InputSchema>, GuardedRequest>;
-  queue?: string | true | MutationQueue;
+  principalEpoch?:
+    | {
+        readonly action: 'advance';
+        readonly principal: (input: InferSchema<InputSchema>, request: GuardedRequest) => string;
+        readonly reason:
+          | 'principal-created'
+          | 'password-change'
+          | 'role-change'
+          | 'tenant-change'
+          | 'admin-change'
+          | 'provider-revocation'
+          | 'manual-security-invalidation';
+      }
+    | {
+        readonly action: 'tombstone';
+        readonly principal: (input: InferSchema<InputSchema>, request: GuardedRequest) => string;
+        readonly reason: 'principal-deletion' | 'provider-deletion';
+      };
+  queue?: string | true | ReturnType<typeof queue>;
   /**
    * Mutation-local success redirect policy for dynamic POST-redirect-GET targets (SPEC §9.1 PRG).
    * Accepts three forms:
@@ -369,10 +422,23 @@ export interface MutationDefinition<
     | string
     | Redirect
     | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string | Redirect);
-  registry?: MutationRegistry;
-  stream?: (
-    context: MutationStreamContext<Value, InferSchema<InputSchema>, GuardedRequest>,
-  ) => MutationStreamSource<Value, InferSchema<InputSchema>, GuardedRequest>;
+  registry?: {
+    inferredTouches?: readonly {
+      crossTable?: true;
+      domain: string;
+      keys: null | string;
+      via?: string;
+    }[];
+    queries?: readonly import('../query.js').QueryDefinition<string, any, any, any>[];
+    /** Raw-SQL write table allowlist for opaque mutation writes (SPEC §10.3). */
+    tables?: readonly string[];
+    touches?: readonly Domain[];
+  };
+  stream?: (context: {
+    input: InferSchema<InputSchema>;
+    request: GuardedRequest;
+    result: MutationSuccess<Value, InferSchema<InputSchema>>;
+  }) => AsyncIterable<unknown> | Iterable<unknown>;
   transaction?: <Result>(
     request: Request,
     run: (transactionRequest: GuardedRequest) => Promise<Result>,
@@ -499,7 +565,18 @@ export interface MutationFactory<Request = unknown> {
         | { access?: never; guard: Guard<ContextRequest, GuardedRequest> }
         | { access?: never; guard?: never }
       ) &
-      MutationCsrfDeclaration<ContextRequest, GuardedRequest>,
+      (
+        | {
+            csrf?: CsrfOptions<ContextRequest>;
+            csrfJustification?: never;
+            machineReplayPrincipal?: never;
+          }
+        | {
+            csrf: false;
+            csrfJustification: string;
+            machineReplayPrincipal?: (request: GuardedRequest) => string;
+          }
+      ),
   ): MutationDefinition<string, InputSchema, Errors, ContextRequest, Value, GuardedRequest> &
     MutationFormDefinition<string, ContextRequest>;
 }
@@ -556,7 +633,18 @@ export function mutation<
       | { access?: never; guard: Guard<Request, GuardedRequest> }
       | { access?: never; guard?: never }
     ) &
-    MutationCsrfDeclaration<Request, GuardedRequest>,
+    (
+      | {
+          csrf?: CsrfOptions<Request>;
+          csrfJustification?: never;
+          machineReplayPrincipal?: never;
+        }
+      | {
+          csrf: false;
+          csrfJustification: string;
+          machineReplayPrincipal?: (request: GuardedRequest) => string;
+        }
+    ),
 ): MutationDefinition<string, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<string, Request>;
 export function mutation<
@@ -577,14 +665,28 @@ export function mutation<
       | { access?: never; guard: Guard<Request, GuardedRequest> }
       | { access?: never; guard?: never }
     ) &
-    MutationCsrfDeclaration<Request, GuardedRequest>,
+    (
+      | {
+          csrf?: CsrfOptions<Request>;
+          csrfJustification?: never;
+          machineReplayPrincipal?: never;
+        }
+      | {
+          csrf: false;
+          csrfJustification: string;
+          machineReplayPrincipal?: (request: GuardedRequest) => string;
+        }
+    ),
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
   MutationFormDefinition<Key, Request>;
 export function mutation(
-  keyOrDefinition: string | MutationDefinitionWithoutKey,
-  definition?: MutationDefinitionWithoutKey,
+  keyOrDefinition: string | object,
+  definition?: object,
 ): MutationDefinition<string> & MutationFormDefinition<string> {
-  return constructMutationDeclaration(keyOrDefinition, definition);
+  return constructMutationDeclaration(
+    keyOrDefinition as string | MutationDefinitionWithoutKey,
+    definition as MutationDefinitionWithoutKey | undefined,
+  );
 }
 
 /** @internal Runtime-validating constructor used by fixed-key framework adapters. */
@@ -921,9 +1023,38 @@ function mutationFormDefinitionOwnDataValue(
  * @param boundary - The renderer invoked when `renderer` throws.
  * @returns The fragment renderer with an `errorBoundary` attached.
  */
-export function errorBoundary<Renderer extends FragmentRenderer>(
+export function errorBoundary<
+  Renderer extends {
+    errorBoundary?: {
+      render(
+        error: unknown,
+        input: unknown,
+      ): Promise<ServerFragmentRenderable> | ServerFragmentRenderable;
+      target?: string;
+    };
+    mode?: 'append' | 'prepend' | 'replace';
+    render(input: unknown): Promise<ServerFragmentRenderable> | ServerFragmentRenderable;
+    stylesheets?: readonly import('../hints.js').StylesheetAsset[];
+    target: string;
+    updateCoverage?: 'fragment' | 'plan';
+  },
+>(
   renderer: Renderer,
-  boundary: ErrorBoundaryRenderer,
-): Renderer & { errorBoundary: ErrorBoundaryRenderer } {
+  boundary: {
+    render(
+      error: unknown,
+      input: unknown,
+    ): Promise<ServerFragmentRenderable> | ServerFragmentRenderable;
+    target?: string;
+  },
+): Renderer & {
+  errorBoundary: {
+    render(
+      error: unknown,
+      input: unknown,
+    ): Promise<ServerFragmentRenderable> | ServerFragmentRenderable;
+    target?: string;
+  };
+} {
   return { ...renderer, errorBoundary: boundary };
 }

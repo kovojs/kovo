@@ -11179,6 +11179,22 @@
       }
     },
     {
+      "id": "@kovojs/server/data#AppDbProvider",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/data",
+      "symbol": "AppDbProvider",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
       "id": "@kovojs/server/data#CrossOwnerReadDeclaration",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/data",
@@ -11371,6 +11387,22 @@
       }
     },
     {
+      "id": "@kovojs/server/data#Reader",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/data",
+      "symbol": "Reader",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
       "id": "@kovojs/server/data#readonlyDb",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/data",
@@ -11423,6 +11455,22 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/data",
       "symbol": "SharedCacheKeyContribution",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
+      "id": "@kovojs/server/data#Writer",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/data",
+      "symbol": "Writer",
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/server/data",
@@ -13119,6 +13167,22 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/replay",
       "symbol": "createMemoryMutationReplayStore",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/replay",
+      "story": "server-replay",
+      "evidence": "server-task-topology-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
+      "id": "@kovojs/server/replay#MutationReplayBody",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/replay",
+      "symbol": "MutationReplayBody",
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/server/replay",
@@ -14833,11 +14897,12 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/sqlite",
       "symbol": "KovoSqliteSystemDb",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/sqlite",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/server",
       "story": "server-sqlite",
-      "evidence": "server-task-topology-contract"
+      "evidence": "server-task-topology-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/static-export#exportStaticApp",
@@ -15548,88 +15613,96 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "createPostgresTestRuntime",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#KovoPostgresTestAdminDb",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "KovoPostgresTestAdminDb",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#KovoPostgresTestDb",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "KovoPostgresTestDb",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#KovoPostgresTestRuntime",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "KovoPostgresTestRuntime",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#KovoPostgresTestRuntimeOptions",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "KovoPostgresTestRuntimeOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#KovoPostgresTestSystemDb",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "KovoPostgresTestSystemDb",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/postgres",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#mutationCsrfTokenForTesting",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "mutationCsrfTokenForTesting",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "move",
+      "canonicalHome": "@kovojs/test/csrf",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/testing#renderWithRequestForTesting",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/testing",
       "symbol": "renderWithRequestForTesting",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/testing",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/server",
       "story": "server-testing",
-      "evidence": "test-contract"
+      "evidence": "test-contract",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "id": "@kovojs/server/vite#kovo",
@@ -20401,10 +20474,10 @@
       "specifier": "@kovojs/server",
       "symbol": "Reader",
       "state": "removed",
-      "decision": "internalize",
-      "canonicalHome": "internal:@kovojs/server",
-      "story": "server-authoring",
-      "evidence": "server-authoring-contract",
+      "decision": "move",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
       "migrationBatch": "server-task-topology-v1"
     },
     {
@@ -22761,10 +22834,10 @@
       "specifier": "@kovojs/server",
       "symbol": "Writer",
       "state": "removed",
-      "decision": "internalize",
-      "canonicalHome": "internal:@kovojs/server",
-      "story": "server-authoring",
-      "evidence": "server-authoring-contract",
+      "decision": "move",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
       "migrationBatch": "server-task-topology-v1"
     },
     {
@@ -24650,10 +24723,11 @@
     },
     {
       "specifier": "@kovojs/server/testing",
-      "task": "Use @kovojs/server/testing to pGlite-backed Postgres helpers for tests that need real owner-scoped RLS behavior.",
+      "task": "Migrate focused framework testing to the task-specific @kovojs/test entrypoints.",
       "owner": "testing",
       "story": "server-testing",
-      "state": "public"
+      "state": "removed",
+      "migrationBatch": "server-task-topology-v1"
     },
     {
       "specifier": "@kovojs/server/vite",

@@ -21,6 +21,7 @@ import { kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { postgresSystemDbForGeneratedIntegration } from './generated-db-capabilities.js';
 import { usePostgresSystemDb } from './internal/postgres-capability.js';
 import { createSigningKeyRing } from './keyring.js';
 import {
@@ -102,7 +103,7 @@ describe('principal erasure receipts (SPEC §10.3)', () => {
     await storage.put(otherBlob, 'other blob');
 
     const executor = usePostgresSystemDb(
-      appRuntime.systemDb({
+      postgresSystemDbForGeneratedIntegration(appRuntime, {
         operation: 'write',
         reason: 'seed principal-erasure regression sinks',
         surface: 'principal-erasure.test.ts',

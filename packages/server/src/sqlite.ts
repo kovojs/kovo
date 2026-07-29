@@ -14,12 +14,11 @@ import { getTableConfig } from 'drizzle-orm/sqlite-core';
 
 import {
   createSqliteSystemDb,
-  type KovoSqliteSystemDb,
+  registerSqliteAppRuntimeSystemDb,
 } from '@kovojs/server/internal/sqlite-capability';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 
-import { snapshotAuditReason, snapshotAuditText } from './audit-justification.js';
-import { createFrameworkManagedDbProvider, type FrameworkManagedDbProvider } from './guards.js';
+import { createFrameworkManagedDbProvider, type AppDbProvider } from './guards.js';
 import type {
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
@@ -67,8 +66,6 @@ import {
   registerFrameworkSqliteTransactionFacade,
   snapshotFrameworkNativeDrizzleTableForExecution,
 } from './sql-safe-handle.js';
-
-export type { KovoSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 
 type SqliteTable = Parameters<typeof getTableConfig>[0];
 type SqliteTableConfig = ReturnType<typeof getTableConfig>;
@@ -151,7 +148,7 @@ export interface KovoSqliteAppRuntimeOptions {
 }
 
 /** Opaque provider accepted by `createApp({ db })` without exposing raw Drizzle methods. */
-export type KovoSqliteDbProvider = FrameworkManagedDbProvider<BetterSQLite3Database>;
+export type KovoSqliteDbProvider = AppDbProvider<BetterSQLite3Database>;
 
 /** Frozen handles produced by the experimental single-principal SQLite runtime. */
 export interface KovoSqliteAppRuntime {
@@ -167,8 +164,6 @@ export interface KovoSqliteAppRuntime {
   readonly readonlyDb: Reader<BetterSQLite3Database>;
   /** SQLite setup is synchronous; this promise preserves the starter's uniform boot shape. */
   readonly ready: Promise<void>;
-  /** Mint a system-write capability for one reviewed first-party integration such as Better Auth. */
-  systemDb(options: { operation: 'write'; reason: string; surface: string }): KovoSqliteSystemDb;
 }
 
 interface SqliteColumnSnapshot {
@@ -461,7 +456,7 @@ export function createSqliteAppRuntime(
     const systemDb = createSqliteSystemDb(db);
     let closed = false;
 
-    return witnessFreeze({
+    const appRuntime: KovoSqliteAppRuntime = witnessFreeze({
       close(): void {
         if (closed) return;
         closed = true;
@@ -476,11 +471,9 @@ export function createSqliteAppRuntime(
       principalEpochStore,
       readonlyDb: runtime.readonlyDb,
       ready: securityPromiseResolve(undefined),
-      systemDb(systemOptions): KovoSqliteSystemDb {
-        snapshotSystemDbOptions(systemOptions);
-        return systemDb;
-      },
     });
+    registerSqliteAppRuntimeSystemDb(appRuntime, systemDb);
+    return appRuntime;
   } catch (error) {
     if (nativeDatabase !== undefined) {
       witnessReflectApply(nativeControls.databaseClose, nativeDatabase, []);
@@ -1700,22 +1693,6 @@ function snapshotDenseArray(value: unknown, label: string, maximum: number): rea
     witnessArrayAppend(snapshot, descriptor.value, label);
   }
   return witnessFreeze(snapshot);
-}
-
-function snapshotSystemDbOptions(options: {
-  operation: 'write';
-  reason: string;
-  surface: string;
-}): void {
-  if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
-    throw new TypeError('SQLite system DB options must be an own-data object.');
-  }
-  const snapshot = snapshotOwnDataRecord(options, 'SQLite system DB options');
-  if (snapshot.operation !== 'write') {
-    throw new TypeError('SQLite system DB operation must be write.');
-  }
-  snapshotAuditReason(snapshot.reason, 'SQLite system DB capability reason (SPEC §10.3)');
-  snapshotAuditText(snapshot.surface, 'SQLite system DB capability surface (SPEC §10.3)');
 }
 
 function warnExperimentalSqliteRuntime(): void {

@@ -89,12 +89,6 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 
-interface QueryDeltaListMeta {
-  domain: string;
-  key: string;
-  path: string;
-}
-
 const DEFAULT_QUERY_LIST_ITEMS = 100;
 const MAX_QUERY_RESULT_DEPTH = 64;
 const MAX_QUERY_RESULT_NODES = 100_000;
@@ -204,12 +198,20 @@ export interface QueryDefinition<
    * when the delta is smaller. The compiler populates this; framework/test code
    * may set it directly.
    */
-  delta?: readonly QueryDeltaListMeta[];
+  delta?: readonly { domain: string; key: string; path: string }[];
   guard?: {
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
   instanceKey?: QueryInstanceKey<Input>;
-  load?(input: Input, context: QueryLoadContext<Request>): Promise<Value> | Value;
+  load?(
+    input: Input,
+    context: {
+      request: Request;
+      signal: AbortSignal;
+    } & (Request extends { db: infer RequestDb } ? { db: RequestDb } : { db?: never }) &
+      (Request extends { session: infer Session } ? { session: Session } : { session?: never }) &
+      (Request extends { env: infer RequestEnv } ? { env: Readonly<RequestEnv> } : { env?: never }),
+  ): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
   read?: QueryReadConfig;
@@ -304,15 +306,24 @@ export interface RegisteredQueryDefinition {
    * Delta-eligible collections for this query (SPEC §9.1.1). The compiler
    * populates this; framework/test code may set it directly.
    */
-  delta?: readonly QueryDeltaListMeta[];
-  guard?: BivariantQueryGuard;
+  delta?: readonly { domain: string; key: string; path: string }[];
+  guard?: {
+    call(request: unknown): GuardResult | Promise<GuardResult>;
+  }['call'];
   instanceKey?: ((input: unknown) => string | undefined) | string;
   key: string;
-  load?: BivariantQueryLoad;
+  load?: {
+    call(...args: any[]): unknown;
+  }['call'];
   output?: Schema<unknown>;
   read?: QueryReadConfig;
   reads?: readonly Domain[];
-  version?: BivariantQueryVersion | number | string;
+  version?:
+    | {
+        call(input: unknown, value: unknown): number | string | undefined;
+      }['call']
+    | number
+    | string;
 }
 
 /**
@@ -332,7 +343,17 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
   }['call'];
   instanceKey?: ((input: unknown) => string | undefined) | string;
   load?: {
-    call(input: any, context?: QueryLoadContext<Request>): Value | Promise<Value>;
+    call(
+      input: any,
+      context?: {
+        request: Request;
+        signal: AbortSignal;
+      } & (Request extends { db: infer RequestDb } ? { db: RequestDb } : { db?: never }) &
+        (Request extends { session: infer Session } ? { session: Session } : { session?: never }) &
+        (Request extends { env: infer RequestEnv }
+          ? { env: Readonly<RequestEnv> }
+          : { env?: never }),
+    ): Value | Promise<Value>;
   }['call'];
   output?: Schema<Value>;
   read?: QueryReadConfig;
@@ -381,28 +402,89 @@ export interface QueryFactory<Request = unknown> {
  *   reads: [product],
  * });
  */
-export function query<const Definition extends object>(
-  definition: PreserveDefinitionInference<Definition> &
-    QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
+export function query<const Definition extends Omit<QueryDefinition<string, any, any, any>, 'key'>>(
+  definition: Definition &
+    (Exclude<
+      keyof Definition,
+      keyof Omit<QueryDefinition<string, any, any, any>, 'key'>
+    > extends never
+      ? 'access' | 'guard' extends keyof Definition
+        ? {
+            readonly __kovoQueryAccessBoundary: 'query() cannot declare both access and guard; choose exactly one access decision';
+          }
+        : Definition extends { load?: (...args: any[]) => infer Result }
+          ? Awaited<Result> extends JsonValue
+            ? unknown
+            : {
+                readonly __kovoQueryJsonBoundary: 'query() load result must be JSON-serializable; annotate Drizzle json/jsonb columns with .$type<...>() or declare output: s.record(...)';
+              }
+          : unknown
+      : {
+          readonly __kovoQueryDefinitionBoundary: 'query() definition contains unsupported field(s)';
+        }),
 ): Definition extends { args: Schema<infer Input> }
-  ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
+  ? Omit<Definition, 'args'> & {
+      args: Schema<Input> & {
+        <Props extends object = any>(
+          mapper: (props: Props) => Input,
+        ): {
+          args: (props: Props) => Input;
+          query: QueryDefinition<string, unknown, Input, unknown>;
+          schema: Schema<Input>;
+        };
+      };
+      key: string;
+      reads: readonly Domain[];
+    }
   : Definition & { key: string; reads: readonly Domain[] };
-export function query<const Key extends string, const Definition extends object>(
+export function query<
+  const Key extends string,
+  const Definition extends Omit<QueryDefinition<string, any, any, any>, 'key'>,
+>(
   key: Key,
-  definition: PreserveDefinitionInference<Definition> &
-    QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
+  definition: Definition &
+    (Exclude<
+      keyof Definition,
+      keyof Omit<QueryDefinition<string, any, any, any>, 'key'>
+    > extends never
+      ? 'access' | 'guard' extends keyof Definition
+        ? {
+            readonly __kovoQueryAccessBoundary: 'query() cannot declare both access and guard; choose exactly one access decision';
+          }
+        : Definition extends { load?: (...args: any[]) => infer Result }
+          ? Awaited<Result> extends JsonValue
+            ? unknown
+            : {
+                readonly __kovoQueryJsonBoundary: 'query() load result must be JSON-serializable; annotate Drizzle json/jsonb columns with .$type<...>() or declare output: s.record(...)';
+              }
+          : unknown
+      : {
+          readonly __kovoQueryDefinitionBoundary: 'query() definition contains unsupported field(s)';
+        }),
 ): Definition extends { args: Schema<infer Input> }
-  ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
+  ? Omit<Definition, 'args'> & {
+      args: Schema<Input> & {
+        <Props extends object = any>(
+          mapper: (props: Props) => Input,
+        ): {
+          args: (props: Props) => Input;
+          query: QueryDefinition<string, unknown, Input, unknown>;
+          schema: Schema<Input>;
+        };
+      };
+      key: Key;
+      reads: readonly Domain[];
+    }
   : Definition & { key: Key; reads: readonly Domain[] };
 export function query(
-  keyOrDefinition: string | Omit<RegisteredQueryDefinition, 'key'>,
+  keyOrDefinition: string | object,
   maybeDefinition?: unknown,
   ..._jsonBoundary: unknown[]
 ): unknown {
   const [key, definition] =
     typeof keyOrDefinition === 'string'
       ? [keyOrDefinition, maybeDefinition as Omit<RegisteredQueryDefinition, 'key'> | undefined]
-      : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition];
+      : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition as Omit<RegisteredQueryDefinition, 'key'>];
   if (!definition) {
     throw new TypeError('query() requires a definition object.');
   }

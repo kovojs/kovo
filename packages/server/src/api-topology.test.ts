@@ -29,6 +29,8 @@ import * as tasksApi from '@kovojs/server/tasks';
 import * as webhooksApi from '@kovojs/server/webhooks';
 import * as writeSafetyApi from '@kovojs/server/write-safety';
 import type { InferKovoAppTypes, KovoApp } from '@kovojs/server/custom-adapters';
+import type { AppDbProvider, Reader, Writer } from '@kovojs/server/data';
+import type { MutationReplayBody } from '@kovojs/server/replay';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 const taskValues = [
@@ -112,6 +114,13 @@ describe('@kovojs/server public topology', () => {
     expectTypeOf<InferKovoAppTypes<KovoApp<{ readonly request: Request }>>>().toEqualTypeOf<{
       readonly request: Request;
     }>();
+    expectTypeOf<MutationReplayBody>().toMatchTypeOf<string>();
+    expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().toHaveProperty('select');
+    expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().not.toHaveProperty('insert');
+    expectTypeOf<Writer<{ select(): unknown; insert(): unknown }>>().toHaveProperty('insert');
+    expectTypeOf<postgresApi.KovoPostgresAppRuntimeDb['db']>().toEqualTypeOf<
+      AppDbProvider<postgresApi.KovoPostgresRuntimeDb>
+    >();
     expect(serverRoot.defineKovo).toBeTypeOf('function');
     expect(serverRoot.route).toBeTypeOf('function');
     expect(serverRoot.mutation).toBeTypeOf('function');

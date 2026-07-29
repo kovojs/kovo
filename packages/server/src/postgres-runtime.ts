@@ -21,11 +21,7 @@ import {
   type QueryResultRow,
 } from 'pg';
 
-import {
-  createPostgresSystemDb,
-  registerPostgresAppRuntimeDb,
-  type KovoPostgresSystemDb,
-} from '@kovojs/server/internal/postgres-capability';
+import { registerPostgresAppRuntimeDb } from '@kovojs/server/internal/postgres-capability';
 import { runtimeEnvironmentValue } from '@kovojs/server/internal/runtime-environment';
 import { securityEvent } from './security-event.js';
 
@@ -58,7 +54,7 @@ import {
 import {
   createFrameworkManagedDbProvider,
   requestPassedRoleGuard,
-  type FrameworkManagedDbProvider,
+  type AppDbProvider,
 } from './guards.js';
 import { mintFrameworkLoadShedError } from './app-load-shed.js';
 import {
@@ -1418,7 +1414,7 @@ interface PostgresRequestScope {
 export type KovoPostgresResolvedRuntimeDriver = 'node-postgres' | 'pglite';
 
 /** Driver selector accepted by the generated app Postgres runtime. */
-export type KovoPostgresRuntimeDriver = KovoPostgresResolvedRuntimeDriver | 'pg';
+export type KovoPostgresRuntimeDriver = 'node-postgres' | 'pglite' | 'pg';
 
 /** Drizzle database handle shape returned by the generated Postgres app runtime. */
 export type KovoPostgresRuntimeDb = PgliteDatabase | NodePgDatabase;
@@ -1567,7 +1563,7 @@ export interface KovoPostgresMigrationRunReport {
 /** One generated, reviewable Postgres migration plan. */
 export interface KovoPostgresMigrationPlan {
   /** Runtime driver used to inspect the current database. */
-  driver: KovoPostgresResolvedRuntimeDriver;
+  driver: Exclude<KovoPostgresRuntimeDriver, 'pg'>;
   /** Reversible SQL for rolling back the generated additive changes. */
   downSql: string;
   /** True when the current database already matches the schema for supported additive changes. */
@@ -1583,7 +1579,7 @@ export interface KovoPostgresAppRuntimeDb {
   /** Framework-system durable one-time capability replay truth (SPEC §6.6/§10.3). */
   readonly capabilityReplayStore: CapabilityReplayStore;
   /** Opaque framework provider token accepted by `createApp({ db })`. */
-  readonly db: FrameworkManagedDbProvider<KovoPostgresRuntimeDb>;
+  readonly db: AppDbProvider<KovoPostgresRuntimeDb>;
   /** Framework-system durable mutation idempotency truth (SPEC §10.3). */
   readonly mutationReplayStore: MutationReplayStore;
   /** Framework-system persistent monotone principal revocation truth (SPEC §6.6/§10.3). */
@@ -1595,14 +1591,10 @@ export interface KovoPostgresAppRuntimeDb {
     target: PostgresPendingReplayTarget,
     options: PostgresPendingReplayReleaseOptions,
   ): Promise<boolean>;
-  /** Framework-owned non-request DB capability for generated auth/seed wiring, still RLS-subject. */
-  systemDb(options: { operation: 'write'; reason: string; surface: string }): KovoPostgresSystemDb;
   /** Framework-system durable webhook idempotency truth (SPEC §10.3). */
   readonly webhookReplayStore: WebhookReplayStore;
   close(): Promise<void>;
 }
-
-export type { KovoPostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 
 /** Privileged external Postgres provisioning options for the app schema. */
 export interface KovoPostgresProvisionOptions extends KovoPostgresAppRuntimeOptions {
@@ -1653,7 +1645,7 @@ export interface KovoPostgresPostureReport {
     /** The live relation name checked through the engine catalog. */
     tableName: string;
   }[];
-  driver: KovoPostgresResolvedRuntimeDriver;
+  driver: Exclude<KovoPostgresRuntimeDriver, 'pg'>;
   ok: boolean;
   issues: readonly KovoPostgresPostureIssue[];
   roleTopology: {
@@ -1873,17 +1865,6 @@ export function createPostgresAppRuntimeDb(
         durableReplaySqlExecutor(),
         target,
         releaseOptions,
-      );
-    },
-    systemDb(options) {
-      return createPostgresSystemDb(
-        dbForRequest({
-          principalPosture: declareSystemPrincipal(options.reason, {
-            ingress: 'endpoint',
-            operation: options.operation,
-            surface: options.surface,
-          }),
-        }),
       );
     },
     webhookReplayStore: webhookStore,

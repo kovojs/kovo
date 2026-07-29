@@ -9,6 +9,7 @@ export type {
   MutationReplayStoreOptions,
 } from './replay.js';
 export type { ReplayMutationWireBodyOptions } from './response.js';
+export type { MutationReplayBody } from './response.js';
 export type {
   PostgresPendingReplayReleaseOptions,
   PostgresPendingReplayTarget,

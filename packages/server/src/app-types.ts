@@ -23,8 +23,6 @@ import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.
 import type { Reader } from './managed-db.js';
 import type { PrincipalEpochStore } from './principal-epoch.js';
 
-type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
-
 /**
  * Read-surface variant of an app lifecycle request. Query, layout, and route callbacks receive this
  * shape from app-scoped `createApp()` authoring helpers: if a DB provider exists, `request.db` is a
@@ -134,7 +132,11 @@ export interface AppDocumentOptions {
 }
 
 /** Request-shell context passed to a custom `renderRoute` hook (SPEC §9.5). */
-export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRouteDeclaration> {
+export interface AppRouteRenderContext<
+  Route extends { readonly path: string } = {
+    readonly path: string;
+  },
+> {
   params: Record<string, string>;
   request: Request;
   route: Route;

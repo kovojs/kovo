@@ -10,6 +10,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { signCapability, verifyCapability } from './capability-url.js';
+import { postgresSystemDbForGeneratedIntegration } from './generated-db-capabilities.js';
 import { usePostgresSystemDb } from './internal/postgres-capability.js';
 import {
   createPostgresAppRuntimeDb,
@@ -132,7 +133,7 @@ describe('Postgres durable replay stores', () => {
     runtimes.push(runtime);
     await runtime.ready;
     const executor = usePostgresSystemDb(
-      runtime.systemDb({
+      postgresSystemDbForGeneratedIntegration(runtime, {
         operation: 'write',
         reason: 'exercise framework-owned durable replay truth',
         surface: 'postgres-replay.test.ts',

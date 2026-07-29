@@ -2381,6 +2381,16 @@
       "state": "removed",
       "owner": "server-api",
       "decisions": [
+        "@kovojs/server/sqlite#KovoSqliteSystemDb",
+        "@kovojs/server/testing",
+        "@kovojs/server/testing#createPostgresTestRuntime",
+        "@kovojs/server/testing#KovoPostgresTestAdminDb",
+        "@kovojs/server/testing#KovoPostgresTestDb",
+        "@kovojs/server/testing#KovoPostgresTestRuntime",
+        "@kovojs/server/testing#KovoPostgresTestRuntimeOptions",
+        "@kovojs/server/testing#KovoPostgresTestSystemDb",
+        "@kovojs/server/testing#mutationCsrfTokenForTesting",
+        "@kovojs/server/testing#renderWithRequestForTesting",
         "@kovojs/server#accept",
         "@kovojs/server#ActiveSigningKey",
         "@kovojs/server#advancePrincipalEpoch",
@@ -5994,14 +6004,16 @@
           }
         },
         {
-          "id": "271-reader-refusal",
-          "action": "refuse",
+          "id": "271-reader-move",
+          "action": "rewrite",
           "from": {
             "specifier": "@kovojs/server",
             "symbol": "Reader"
           },
-          "category": "app-context",
-          "reason": "Reader is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "Reader"
+          }
         },
         {
           "id": "272-readonly-db-move",
@@ -7900,14 +7912,129 @@
           }
         },
         {
-          "id": "432-writer-refusal",
-          "action": "refuse",
+          "id": "432-writer-move",
+          "action": "rewrite",
           "from": {
             "specifier": "@kovojs/server",
             "symbol": "Writer"
           },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "Writer"
+          }
+        },
+        {
+          "id": "433-sqlite-system-db-internalize",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server/sqlite",
+            "symbol": "KovoSqliteSystemDb"
+          },
           "category": "app-context",
-          "reason": "Writer is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+          "reason": "The system database carrier bypasses app-scoped authorization and has no supported application-owned replacement."
+        },
+        {
+          "id": "434-server-testing-subpath-remove",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server/testing"
+          },
+          "category": "ambiguous-binding",
+          "reason": "Namespace or side-effect access cannot be split safely between the focused Postgres and CSRF testing entrypoints."
+        },
+        {
+          "id": "435-create-postgres-test-runtime-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "createPostgresTestRuntime"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "createPostgresTestRuntime"
+          }
+        },
+        {
+          "id": "436-postgres-test-admin-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "KovoPostgresTestAdminDb"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "KovoPostgresTestAdminDb"
+          }
+        },
+        {
+          "id": "437-postgres-test-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "KovoPostgresTestDb"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "KovoPostgresTestDb"
+          }
+        },
+        {
+          "id": "438-postgres-test-runtime-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "KovoPostgresTestRuntime"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "KovoPostgresTestRuntime"
+          }
+        },
+        {
+          "id": "439-postgres-test-runtime-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "KovoPostgresTestRuntimeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "KovoPostgresTestRuntimeOptions"
+          }
+        },
+        {
+          "id": "440-postgres-test-system-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "KovoPostgresTestSystemDb"
+          },
+          "to": {
+            "specifier": "@kovojs/test/postgres",
+            "symbol": "KovoPostgresTestSystemDb"
+          }
+        },
+        {
+          "id": "441-mutation-csrf-test-token-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "mutationCsrfTokenForTesting"
+          },
+          "to": {
+            "specifier": "@kovojs/test/csrf",
+            "symbol": "mutationCsrfTokenForTesting"
+          }
+        },
+        {
+          "id": "442-render-with-request-test-helper-internalize",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server/testing",
+            "symbol": "renderWithRequestForTesting"
+          },
+          "category": "app-context",
+          "reason": "A migration needs the consuming app, artifact, and project root to construct createKovoTestHarness, so source syntax alone cannot preserve behavior."
         }
       ],
       "fixtures": {
@@ -7940,8 +8067,12 @@
       "tool": {
         "path": "scripts/migrate-drizzle-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": ["--check"],
-        "writeArgs": ["--write"]
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
       },
       "releaseNote": "docs/releases/drizzle-typed-annotations-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo and Drizzle package versions and reverse only files reported as rewritten by the structured Drizzle migration result.",

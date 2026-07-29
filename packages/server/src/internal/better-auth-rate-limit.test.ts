@@ -14,6 +14,7 @@ vi.mock('@kovojs/better-auth/internal/server-mount-adapter', () => ({
   invokeBetterAuthMountAdapter: vi.fn(),
 }));
 
+import { postgresSystemDbForGeneratedIntegration } from '../generated-db-capabilities.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresAppRuntimeDb } from '../postgres-runtime.js';
 import { usePostgresSystemDb } from './postgres-capability.js';
 import { createBetterAuthPostgresRateLimitBucketConsumer } from './better-auth.js';
@@ -108,7 +109,7 @@ async function consumers() {
   });
   runtimes.push(runtime);
   await runtime.ready;
-  const systemDb = runtime.systemDb({
+  const systemDb = postgresSystemDbForGeneratedIntegration(runtime, {
     operation: 'write',
     reason: 'Prove atomic bounded Better Auth rate-limit decisions',
     surface: 'packages/server/src/internal/better-auth-rate-limit.test.ts',

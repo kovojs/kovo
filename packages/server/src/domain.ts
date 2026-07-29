@@ -46,9 +46,9 @@ export type Tag<Key extends string = string> = Domain<Key>;
  *
  * export const cartItem = tag('cart-item');
  */
-export function tag(): Tag<string>;
-export function tag<const Key extends string>(key: Key): Tag<Key>;
-export function tag<const Key extends string>(key?: Key): Tag<Key> {
+export function tag(): Domain<string>;
+export function tag<const Key extends string>(key: Key): Domain<Key>;
+export function tag<const Key extends string>(key?: Key): Domain<Key> {
   return { key: (key ?? DERIVED_DOMAIN_KEY) as Key };
 }
 

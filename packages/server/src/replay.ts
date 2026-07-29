@@ -10,7 +10,7 @@ import {
   blessRedirectResponse,
   cloneResponseHeaders,
   isBlessedRedirectResponse,
-  type FrameworkWireBody,
+  type MutationReplayBody,
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
@@ -86,7 +86,7 @@ const memoryMutationReplayStores = createWitnessWeakSet<object>();
 
 /** Persistable framework mutation response accepted by a SPEC §10.3 replay store. */
 export type MutationReplayResponse = ServerResponseBase<
-  FrameworkWireBody,
+  MutationReplayBody,
   ResponseHeaders,
   200 | 303 | 401 | 403 | 409 | 422 | 429 | 500
 >;

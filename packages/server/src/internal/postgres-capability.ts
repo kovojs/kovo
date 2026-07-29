@@ -44,7 +44,7 @@ export function usePostgresSystemDb<Result>(
   const db = witnessWeakMapGet(postgresSystemDbValues, capability);
   if (db === undefined) {
     throw new Error(
-      'KV414: invalid Postgres system DB capability; use createPostgresAppRuntimeDb().systemDb(...) (SPEC §10.3).',
+      'KV414: invalid Postgres system DB capability; generated integrations must use postgresSystemDbForGeneratedIntegration(...) (SPEC §10.3).',
     );
   }
   return witnessReflectApply<Result>(use, undefined, [db]);

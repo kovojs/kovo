@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import { createFileSystemStorage as coreCreateFileSystemStorage, createMemoryStorage as coreCreateMemoryStorage, createS3CompatibleStorage as coreCreateS3CompatibleStorage } from '@kovojs/core/storage';
-import { customVerifier as coreCustomVerifier, hmacSignature as coreHmacSignature, standardWebhooks as coreStandardWebhooks } from '@kovojs/core/webhooks';
+import {
+  createFileSystemStorage as coreCreateFileSystemStorage,
+  createMemoryStorage as coreCreateMemoryStorage,
+  createS3CompatibleStorage as coreCreateS3CompatibleStorage,
+} from '@kovojs/core/storage';
+import {
+  customVerifier as coreCustomVerifier,
+  hmacSignature as coreHmacSignature,
+  standardWebhooks as coreStandardWebhooks,
+} from '@kovojs/core/webhooks';
 import { type SecretValue } from '@kovojs/core/security';
 
 import * as packageRootApi from '@kovojs/server';
-import * as packageTestingApi from '@kovojs/server/testing';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalAuditFactsApi from '@kovojs/server/internal/audit-facts';
 import * as packageInternalCapabilitiesApi from '@kovojs/server/internal/capabilities';
@@ -102,8 +109,10 @@ const rejectedRootAppResponseHeaders: import('@kovojs/server').AppResponseHeader
   'X-Accel-Redirect': '/internal/admin',
 };
 void rejectedRootAppResponseHeaders;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoPostgresSystemDb = import('@kovojs/server').KovoPostgresSystemDb;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootKovoPostgresSystemDb =
+  // @ts-expect-error SPEC §10.3 keeps framework-system database capabilities out of app APIs.
+  import('@kovojs/server').KovoPostgresSystemDb;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootUsePostgresSystemDb =
   // @ts-expect-error SPEC §6.6/§10.3: raw capability consumers are package-internal.
@@ -1188,10 +1197,13 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(viteApi.kovo({ app: './src/app.tsx' }).name).toBe('kovo');
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './generated/db-capabilities': './src/generated-db-capabilities.ts',
+      './internal/testing': './src/internal/testing.ts',
       './runtime-bootstrap': './src/runtime-bootstrap.ts',
       './vite': './src/vite-source.ts',
     });
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
+    expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./testing');
 
     expect(packageRootApi.createApp).toBe(appApi.createApp);
     expect(packageRootApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
@@ -1202,7 +1214,6 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.route).toBe(routeApi.route);
     expect(packageRootApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
-    expect(packageTestingApi).not.toHaveProperty('createRequestHandler');
     expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
       internalClientModulesApi.renderVersionedClientModuleResponse,
     );

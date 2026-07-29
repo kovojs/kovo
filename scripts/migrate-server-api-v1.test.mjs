@@ -34,6 +34,39 @@ describe('server API v1 migration executable', () => {
     );
   });
 
+  it('moves the retired server testing helpers to focused test entrypoints', () => {
+    const source = [
+      "import { createPostgresTestRuntime, type KovoPostgresTestDb, mutationCsrfTokenForTesting } from '@kovojs/server/testing';",
+      "export { type KovoPostgresTestRuntimeOptions } from '@kovojs/server/testing';",
+      '',
+    ].join('\n');
+
+    const result = analyzeServerApiV1Migration({ fileName: 'app.test.ts', source });
+
+    expect(result.status).toBe('rewritten');
+    if (result.status !== 'rewritten') return;
+    expect(result.source).toBe(
+      [
+        "import { createPostgresTestRuntime, type KovoPostgresTestDb } from '@kovojs/test/postgres';",
+        "import { mutationCsrfTokenForTesting } from '@kovojs/test/csrf';",
+        "export { type KovoPostgresTestRuntimeOptions } from '@kovojs/test/postgres';",
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it.each([
+    ["import { renderWithRequestForTesting } from '@kovojs/server/testing';", 'app-context'],
+    ["import '@kovojs/server/testing';", 'ambiguous-binding'],
+    ["import { KovoSqliteSystemDb } from '@kovojs/server/sqlite';", 'app-context'],
+  ])('refuses removed server carriers without guessing: %s', (source, category) => {
+    const result = analyzeServerApiV1Migration({ fileName: 'removed.ts', source });
+
+    expect(result.status).toBe('refused');
+    if (result.status !== 'refused') return;
+    expect(result.refusals[0]?.category).toBe(category);
+  });
+
   it('keeps a write batch unchanged when any file needs application context', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-server-api-v1-'));
     const rewritePath = path.join(root, 'app.ts');

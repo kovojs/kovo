@@ -1,4 +1,5 @@
 import type { ComponentChild, JsonValue, RouteSearchValue } from '@kovojs/core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
 import {
   appDeclarationMetadata,
@@ -44,9 +45,8 @@ import {
 } from './endpoint.js';
 import {
   guards,
+  type AppDbProvider,
   type DbProvider,
-  type FrameworkManagedDbProvider,
-  type FrameworkPostgresOwnerKeyColumn,
   type Guard,
   type GuardResult,
   type RateLimitOptions,
@@ -59,7 +59,6 @@ import {
   type MutationFail,
   type MutationFormDefinition,
   type MutationHandlerRequest,
-  type MutationContext,
 } from './mutation.js';
 import type { MutationReplayStore } from './replay.js';
 import type { PrincipalEpochStore } from './principal-epoch.js';
@@ -67,7 +66,6 @@ import {
   query,
   type QueryDefinition,
   type QueryInstanceKey,
-  type QueryLoadContext,
   type QueryReadConfig,
 } from './query.js';
 import type { Domain } from './domain.js';
@@ -243,7 +241,9 @@ export interface MutationHandle<
   readonly handler: (
     input: Input,
     request: Request,
-    context: MutationContext<Errors>,
+    context: Parameters<
+      MutationDefinition<string, Schema<Input>, Errors, Request, Value, Request>['handler']
+    >[2],
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   readonly input: Schema<Input>;
   readonly __kovoMutationTypes?: (input: Input, request: Request, errors: Errors) => Value;
@@ -266,7 +266,11 @@ export interface AppQueryFactory<Request, Owner extends string | undefined> {
     instanceKey?: string;
     load?: (
       input: undefined,
-      context: QueryLoadContext<AppRequestForAccess<Request, Access>>,
+      context: Parameters<
+        NonNullable<
+          QueryDefinition<string, Value, undefined, AppRequestForAccess<Request, Access>>['load']
+        >
+      >[1],
     ) => Promise<Value> | Value;
     output?: Schema<Value>;
     read?: QueryReadConfig;
@@ -281,7 +285,11 @@ export interface AppQueryFactory<Request, Owner extends string | undefined> {
     instanceKey?: ((input: Input) => string | undefined) | string;
     load?: (
       input: Input,
-      context: QueryLoadContext<AppRequestForAccess<Request, Access>>,
+      context: Parameters<
+        NonNullable<
+          QueryDefinition<string, Value, Input, AppRequestForAccess<Request, Access>>['load']
+        >
+      >[1],
     ) => Promise<Value> | Value;
     output?: Schema<Value>;
     read?: QueryReadConfig;
@@ -306,7 +314,16 @@ export interface AppMutationFactory<Request, Owner extends string | undefined> {
       handler: (
         input: InferSchema<InputSchema>,
         request: MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
-        context: MutationContext<Errors>,
+        context: Parameters<
+          MutationDefinition<
+            string,
+            InputSchema,
+            Errors,
+            MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
+            Value,
+            MutationHandlerRequest<AppRequestForAccess<Request, Access>>
+          >['handler']
+        >[2],
       ) => Promise<Value | MutationFail> | Value | MutationFail;
       input: InputSchema;
       optimistic?: readonly QueryOptimisticBinding<InferSchema<InputSchema>, unknown, Owner>[];
@@ -513,7 +530,7 @@ export interface DefineKovoOptions<
             env: Readonly<EnvValue>;
           },
       ) => Promise<DbValue> | DbValue)
-    | FrameworkManagedDbProvider<DbValue>;
+    | AppDbProvider<DbValue>;
   document?: AppDocumentOptions | DocumentDeclaration;
   egress?: AppEgressOptions;
   env?: Schema<EnvValue>;
@@ -663,14 +680,7 @@ export interface KovoContract<
   assemble<const Assembly extends AppAssemblyOptions<Request, DbValue, Owner>>(
     options: Assembly,
   ): KovoApp<{
-    readonly contract: KovoContract<
-      RawRequest,
-      SessionValue,
-      DbValue,
-      EnvValue,
-      Request,
-      Owner
-    >;
+    readonly contract: KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>;
     readonly db: DbValue;
     readonly declarations: {
       readonly endpoint: Assembly extends {
@@ -711,7 +721,7 @@ export interface KovoContract<
   }>;
   owns<KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
-    keyColumn: FrameworkPostgresOwnerKeyColumn<Key>,
+    keyColumn: AnyPgColumn<{ data: Key }>,
   ): Guard<Request, AuthenticatedAppRequest<Request>>;
   rateLimit(options: RateLimitOptions<Request>): Guard<Request>;
   role(role: string): Guard<Request, AuthenticatedAppRequest<Request>>;
@@ -818,7 +828,7 @@ export function defineKovo<
     RawRequest,
     AuthProvider,
     DbValue,
-    FrameworkManagedDbProvider<DbValue>,
+    AppDbProvider<DbValue>,
     EnvSchema,
     Request,
     Owner
@@ -935,7 +945,7 @@ export function defineKovo(options: any): any {
     contract,
     'owns',
     immutable(
-      (keyOf: (request: Request) => unknown, keyColumn: FrameworkPostgresOwnerKeyColumn<unknown>) =>
+      (keyOf: (request: Request) => unknown, keyColumn: AnyPgColumn<{ data: unknown }>) =>
         guards.owns<any, any, unknown>(keyOf, keyColumn) as Guard<Request>,
     ),
   );
@@ -951,10 +961,7 @@ export function defineKovo(options: any): any {
         Request,
         Owner,
         AppAssemblyOptions<Request, DbValue, Owner>
-      >(
-        state,
-        assembly,
-      ),
+      >(state, assembly),
     ),
   );
 
@@ -1142,14 +1149,7 @@ function assembleContract<
   state: ContractState,
   assembly: Assembly,
 ): KovoApp<{
-  readonly contract: KovoContract<
-    RawRequest,
-    SessionValue,
-    DbValue,
-    EnvValue,
-    Request,
-    Owner
-  >;
+  readonly contract: KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>;
   readonly db: DbValue;
   readonly declarations: {
     readonly endpoint: Assembly extends {

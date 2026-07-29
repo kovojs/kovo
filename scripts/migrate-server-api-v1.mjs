@@ -35,7 +35,17 @@ const migrationLedger = JSON.parse(
 );
 const batch = migrationLedger.batches.find((entry) => entry.id === BATCH);
 if (!batch) throw new Error(`${BATCH} is missing from api-migrations.json`);
-const RULES = new Map(batch.rules.map((rule) => [rule.from.symbol, rule]));
+const RULES = new Map(
+  batch.rules
+    .filter((rule) => typeof rule.from.symbol === 'string')
+    .map((rule) => [ruleKey(rule.from.specifier, rule.from.symbol), rule]),
+);
+const SUBPATH_RULES = new Map(
+  batch.rules
+    .filter((rule) => rule.from.symbol === undefined)
+    .map((rule) => [rule.from.specifier, rule]),
+);
+const SOURCE_SPECIFIERS = new Set(batch.rules.map((rule) => rule.from.specifier));
 
 /**
  * Split direct named root imports and re-exports by semantic task. The migration deliberately
@@ -67,18 +77,18 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
     if (
       ts.isImportDeclaration(statement) &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === SERVER_ROOT
+      SOURCE_SPECIFIERS.has(statement.moduleSpecifier.text)
     ) {
-      analyzeImport(statement, sourceFile, source, edits, refusals);
+      analyzeImport(statement, statement.moduleSpecifier.text, sourceFile, source, edits, refusals);
       continue;
     }
     if (
       ts.isExportDeclaration(statement) &&
       statement.moduleSpecifier &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === SERVER_ROOT
+      SOURCE_SPECIFIERS.has(statement.moduleSpecifier.text)
     ) {
-      analyzeExport(statement, sourceFile, source, edits, refusals);
+      analyzeExport(statement, statement.moduleSpecifier.text, sourceFile, source, edits, refusals);
       continue;
     }
     if (
@@ -86,7 +96,7 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
       ts.isExternalModuleReference(statement.moduleReference) &&
       statement.moduleReference.expression &&
       ts.isStringLiteral(statement.moduleReference.expression) &&
-      statement.moduleReference.expression.text === SERVER_ROOT
+      SOURCE_SPECIFIERS.has(statement.moduleReference.expression.text)
     ) {
       refusals.push(dynamicRefusal(statement, sourceFile, 'CommonJS-style import'));
     }
@@ -97,7 +107,7 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
       node.arguments.some(
-        (argument) => ts.isStringLiteral(argument) && argument.text === SERVER_ROOT,
+        (argument) => ts.isStringLiteral(argument) && SOURCE_SPECIFIERS.has(argument.text),
       )
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'dynamic import'));
@@ -107,7 +117,7 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'require' &&
       node.arguments.some(
-        (argument) => ts.isStringLiteral(argument) && argument.text === SERVER_ROOT,
+        (argument) => ts.isStringLiteral(argument) && SOURCE_SPECIFIERS.has(argument.text),
       )
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'CommonJS require'));
@@ -116,7 +126,7 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
       ts.isImportTypeNode(node) &&
       ts.isLiteralTypeNode(node.argument) &&
       ts.isStringLiteral(node.argument.literal) &&
-      node.argument.literal.text === SERVER_ROOT
+      SOURCE_SPECIFIERS.has(node.argument.literal.text)
     ) {
       refusals.push(dynamicRefusal(node, sourceFile, 'import type query'));
     }
@@ -140,7 +150,7 @@ export function analyzeServerApiV1Migration({ fileName, source }) {
   };
 }
 
-function analyzeImport(node, sourceFile, source, edits, refusals) {
+function analyzeImport(node, sourceSpecifier, sourceFile, source, edits, refusals) {
   if (node.attributes || node.assertClause) {
     refusals.push(
       refusal(
@@ -153,7 +163,21 @@ function analyzeImport(node, sourceFile, source, edits, refusals) {
     return;
   }
   const clause = node.importClause;
-  if (!clause) return;
+  if (!clause) {
+    const subpathRule = SUBPATH_RULES.get(sourceSpecifier);
+    if (subpathRule) {
+      refusals.push(
+        refusal(
+          subpathRule.category,
+          node,
+          sourceFile,
+          subpathRule.reason ??
+            `Side-effect access to ${sourceSpecifier} has no mechanical public replacement.`,
+        ),
+      );
+    }
+    return;
+  }
   if (clause.name) {
     refusals.push(
       refusal(
@@ -176,7 +200,13 @@ function analyzeImport(node, sourceFile, source, edits, refusals) {
     );
     return;
   }
-  const groups = groupSpecifiers(clause.namedBindings.elements, sourceFile, source, refusals);
+  const groups = groupSpecifiers(
+    clause.namedBindings.elements,
+    sourceSpecifier,
+    sourceFile,
+    source,
+    refusals,
+  );
   if (!groups.changed || refusals.length > 0) return;
   const quote = quoteFor(node.moduleSpecifier, source);
   const statements = [];
@@ -192,7 +222,7 @@ function analyzeImport(node, sourceFile, source, edits, refusals) {
   });
 }
 
-function analyzeExport(node, sourceFile, source, edits, refusals) {
+function analyzeExport(node, sourceSpecifier, sourceFile, source, edits, refusals) {
   if (
     node.attributes ||
     node.assertClause ||
@@ -209,7 +239,13 @@ function analyzeExport(node, sourceFile, source, edits, refusals) {
     );
     return;
   }
-  const groups = groupSpecifiers(node.exportClause.elements, sourceFile, source, refusals);
+  const groups = groupSpecifiers(
+    node.exportClause.elements,
+    sourceSpecifier,
+    sourceFile,
+    source,
+    refusals,
+  );
   if (!groups.changed || refusals.length > 0) return;
   const quote = quoteFor(node.moduleSpecifier, source);
   const statements = [];
@@ -225,12 +261,12 @@ function analyzeExport(node, sourceFile, source, edits, refusals) {
   });
 }
 
-function groupSpecifiers(elements, sourceFile, source, refusals) {
+function groupSpecifiers(elements, sourceSpecifier, sourceFile, source, refusals) {
   const byModule = new Map();
   let changed = false;
   for (const element of elements) {
     const imported = element.propertyName?.text ?? element.name.text;
-    const rule = RULES.get(imported);
+    const rule = RULES.get(ruleKey(sourceSpecifier, imported));
     if (rule?.action === 'refuse') {
       refusals.push(
         refusal(
@@ -242,13 +278,30 @@ function groupSpecifiers(elements, sourceFile, source, refusals) {
       );
       continue;
     }
-    const target = rule?.action === 'rewrite' ? rule.to.specifier : SERVER_ROOT;
-    if (target !== SERVER_ROOT) changed = true;
+    if (!rule && SUBPATH_RULES.has(sourceSpecifier)) {
+      const subpathRule = SUBPATH_RULES.get(sourceSpecifier);
+      refusals.push(
+        refusal(
+          subpathRule.category,
+          element,
+          sourceFile,
+          subpathRule.reason ??
+            `${imported} from ${sourceSpecifier} has no mechanical public replacement.`,
+        ),
+      );
+      continue;
+    }
+    const target = rule?.action === 'rewrite' ? rule.to.specifier : sourceSpecifier;
+    if (target !== sourceSpecifier) changed = true;
     const members = byModule.get(target) ?? [];
     members.push(source.slice(element.getStart(sourceFile), element.getEnd()));
     byModule.set(target, members);
   }
   return { byModule, changed };
+}
+
+function ruleKey(specifier, symbol) {
+  return `${specifier}\0${symbol}`;
 }
 
 function refusal(category, node, sourceFile, reason) {

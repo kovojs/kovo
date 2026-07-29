@@ -12,7 +12,10 @@ export type {
   PublicReadRowsScope,
   RawReadDeclaration,
   RawReadPolicyOptions,
+  Reader,
+  Writer,
 } from './managed-db.js';
+export type { AppDbProvider } from './guards.js';
 export type { QueryReadConfig } from './query.js';
 export type { ChangeRecord, InvalidateOptions } from './change-record.js';
 export type {
