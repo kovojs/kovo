@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -34,6 +35,64 @@ describe('kovo check current-source proof', () => {
     }
   });
 
+  it('publishes an exact census of every source-check phase against the requested source', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-source-check-census-'));
+    const source = sourceCheckCensusApp();
+
+    try {
+      writeSourceCheckFixture(root, source);
+      rmSync(join(root, 'tsconfig.json'));
+      const result = await runCli(root, ['check', '--no-cache'], {
+        KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: 'src/app.tsx',
+      });
+
+      expect(result.exitCode, result.stderr).toBe(0);
+      const census = sourceCheckPhaseCensus(result.stdout);
+      const expectedPhases = [
+        { name: 'lifecycle-policy', status: 'not-applicable' },
+        { name: 'config-trust', status: 'executed' },
+        { name: 'typescript', status: 'not-applicable' },
+        { name: 'project-quality', status: 'not-applicable' },
+        { name: 'sound-subset', status: 'not-applicable' },
+        { name: 'session-authority', status: 'executed' },
+        { name: 'app-source-trust', status: 'executed' },
+        { name: 'app-evaluation', status: 'executed' },
+        { name: 'stylesheet', status: 'executed' },
+        { name: 'build-check-graph', status: 'executed' },
+        { name: 'graph-diagnostics', status: 'executed' },
+      ] as const;
+      expect(census).toMatchObject({
+        checkGraphDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+        schema: 'kovo-check-phase-census/v1',
+        source: {
+          codeUnitLength: source.length,
+          contentHash: sourceDigest(source),
+          encoding: 'utf16le',
+          path: 'src/app.tsx',
+        },
+      });
+      expect(census.phases.map(({ name, status }) => ({ name, status }))).toEqual(expectedPhases);
+      for (const [index, phase] of census.phases.entries()) {
+        expect(phase.durationMs, phase.name).toBeGreaterThanOrEqual(0);
+        if (expectedPhases[index]!.status === 'not-applicable') {
+          expect(phase.durationMs, phase.name).toBe(0);
+        }
+      }
+
+      const revisedSource = sourceCheckCensusApp('revised source-check phase census fixture');
+      writeFileSync(appPath(root), revisedSource, 'utf8');
+      const revisedResult = await runCli(root, ['check', '--no-cache'], {
+        KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: 'src/app.tsx',
+      });
+      expect(revisedResult.exitCode, revisedResult.stderr).toBe(0);
+      const revisedCensus = sourceCheckPhaseCensus(revisedResult.stdout);
+      expect(revisedCensus.source.contentHash).toBe(sourceDigest(revisedSource));
+      expect(revisedCensus.checkGraphDigest).not.toBe(census.checkGraphDigest);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('re-derives warm source proof, catches type/compiler changes, and leaves KV417 to build', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-source-check-'));
     const appPath = join(root, 'src/app.tsx');
@@ -60,12 +119,18 @@ describe('kovo check current-source proof', () => {
       expect(existsSync(join(root, 'dist'))).toBe(false);
 
       writeFileSync(appPath, sourceCheckApp(false));
-      const compilerFailure = await runCli(root, ['check', '--no-cache']);
+      const compilerFailure = await runCli(root, ['check', '--no-cache'], {
+        KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE: 'src/app.tsx',
+      });
       expect(compilerFailure.exitCode, `${compilerFailure.stdout}\n${compilerFailure.stderr}`).toBe(
         1,
       );
       expect(compilerFailure.stderr).toContain('kovo-check/v1\nERROR KV436 QUERY ');
       expect(compilerFailure.stderr).toContain('Missing explicit access decision.');
+      expect(sourceCheckPhaseCensus(compilerFailure.stderr).phases.at(-1)).toMatchObject({
+        name: 'graph-diagnostics',
+        status: 'executed',
+      });
       expect(existsSync(join(root, 'dist'))).toBe(false);
 
       writeFileSync(appPath, sourceCheckApp());
@@ -85,6 +150,7 @@ describe('kovo check current-source proof', () => {
 async function runCli(
   root: string,
   args: readonly string[],
+  env: NodeJS.ProcessEnv = {},
 ): Promise<{ exitCode: number; stderr: string; stdout: string }> {
   const result = spawnSync(
     process.execPath,
@@ -97,7 +163,7 @@ async function runCli(
     {
       cwd: root,
       encoding: 'utf8',
-      env: process.env,
+      env: { ...process.env, ...env },
       maxBuffer: 64 * 1024 * 1024,
     },
   );
@@ -107,6 +173,36 @@ async function runCli(
     stderr: result.stderr,
     stdout: result.stdout,
   };
+}
+
+interface SourceCheckPhaseCensusEvidence {
+  readonly checkGraphDigest: string;
+  readonly phases: readonly {
+    readonly durationMs: number;
+    readonly name: string;
+    readonly status: 'executed' | 'not-applicable';
+  }[];
+  readonly schema: 'kovo-check-phase-census/v1';
+  readonly source: {
+    readonly codeUnitLength: number;
+    readonly contentHash: string;
+    readonly encoding: 'utf16le';
+    readonly path: string;
+  };
+}
+
+function sourceCheckPhaseCensus(stdout: string): SourceCheckPhaseCensusEvidence {
+  const line = stdout
+    .split(/\r?\n/u)
+    .find((candidate) => candidate.startsWith('kovo-check-phase-census/v1 '));
+  if (line === undefined) throw new Error('kovo check did not emit its requested phase census');
+  return JSON.parse(
+    line.slice('kovo-check-phase-census/v1 '.length),
+  ) as SourceCheckPhaseCensusEvidence;
+}
+
+function sourceDigest(source: string): string {
+  return `sha256:${createHash('sha256').update(Buffer.from(source, 'utf16le')).digest('hex')}`;
 }
 
 function writeSourceCheckFixture(root: string, appSource: string): void {
@@ -180,6 +276,25 @@ const currentSourceRoute = app.route('/', {
 export default app.assemble({
   queries: [currentSourceQuery],
   routes: [currentSourceRoute],
+});
+`;
+}
+
+function sourceCheckCensusApp(reason = 'source-check phase census fixture'): string {
+  return `
+import { defineKovo } from '@kovojs/server';
+
+export const app = defineKovo({
+  appId: '22222222-2222-4222-8222-222222222222',
+});
+export const censusQuery = app.query({
+  access: { kind: 'public', reason: ${JSON.stringify(reason)} },
+  load: () => ({ ready: true }),
+});
+
+export default app.assemble({
+  queries: [censusQuery],
+  routes: [],
 });
 `;
 }

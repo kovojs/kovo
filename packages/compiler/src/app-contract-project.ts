@@ -80,6 +80,12 @@ export interface CompilerOwnedAppContractEntry {
 
 /** @internal Exact, source-bound app member fact consumed by compiler-owned static analyzers. */
 export interface CompilerOwnedAppContractStaticFact {
+  readonly declaration?: {
+    readonly end: number;
+    readonly kind: 'mutation' | 'page';
+    readonly name: string;
+    readonly start: number;
+  };
   readonly end: number;
   readonly fileName: string;
   readonly memberName: AppContractMemberName;
@@ -596,7 +602,9 @@ export function createCompilerOwnedAppContractProject(
           );
         }
         for (const member of analysis.memberFacts) {
+          const declaration = appContractMemberDeclaration(member, checker);
           facts.push({
+            ...(declaration === undefined ? {} : { declaration }),
             end: member.end,
             fileName,
             memberName: member.memberName,
@@ -678,6 +686,59 @@ export function createCompilerOwnedAppContractProject(
       );
     },
   });
+}
+
+function appContractMemberDeclaration(
+  member: CompilerOwnedAppContractMemberResolution,
+  checker: ts.TypeChecker,
+): CompilerOwnedAppContractStaticFact['declaration'] {
+  const call = member.node.parent;
+  if (!ts.isCallExpression(call) || call.expression !== member.node) return undefined;
+  const firstArgument = call.arguments[0];
+  let kind: 'mutation' | 'page';
+  let name: string | undefined;
+  if (member.memberName === 'route') {
+    kind = 'page';
+    name =
+      firstArgument !== undefined && ts.isStringLiteralLike(firstArgument)
+        ? firstArgument.text
+        : undefined;
+  } else if (member.memberName === 'integrateMutation') {
+    kind = 'mutation';
+    name =
+      firstArgument === undefined
+        ? undefined
+        : exactStringLiteralTypeValue(checker.getTypeAtLocation(firstArgument), checker, 'key');
+  } else {
+    return undefined;
+  }
+  if (name === undefined) return undefined;
+  return Object.freeze({
+    end: call.getEnd(),
+    kind,
+    name,
+    start: call.getStart(member.sourceFile),
+  });
+}
+
+function exactStringLiteralTypeValue(
+  value: ts.Type,
+  checker: ts.TypeChecker,
+  propertyName: string,
+): string | undefined {
+  const property = checker.getPropertyOfType(value, propertyName);
+  if (property === undefined) return undefined;
+  const declaration = property.valueDeclaration ?? property.declarations?.[0];
+  if (declaration === undefined) return undefined;
+  const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
+  const variants = propertyType.isUnion() ? propertyType.types : [propertyType];
+  let result: string | undefined;
+  for (const variant of variants) {
+    if (!variant.isStringLiteral()) return undefined;
+    if (result !== undefined && result !== variant.value) return undefined;
+    result = variant.value;
+  }
+  return result;
 }
 
 function rejectedEntry(

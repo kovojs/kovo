@@ -1,6 +1,10 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  snapshotBuildAppContractSourceAnchorsForTests,
   snapshotBuildCompilerDiagnosticAnchorsForTests,
   snapshotBuildCompilerSourceAnchorsForTests,
 } from './commands/build-export.js';
@@ -141,6 +145,100 @@ void reserveInventory;
         expect.stringContaining("mutation('inventory/reserve'"),
       ],
     );
+  });
+
+  it('associates integrated adapter mutation keys with their exact authored calls', () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-adapter-source-anchor-'));
+    try {
+      const serverRoot = join(root, 'node_modules/@kovojs/server');
+      mkdirSync(serverRoot, { recursive: true });
+      writeFileSync(
+        join(serverRoot, 'package.json'),
+        JSON.stringify({
+          exports: { '.': './index.d.ts' },
+          name: '@kovojs/server',
+          type: 'module',
+          version: '0.0.0-test',
+        }),
+      );
+      writeFileSync(
+        join(serverRoot, 'index.d.ts'),
+        [
+          'export declare function endpoint(path: string, definition: unknown): unknown;',
+          'export declare function integrateMutation<const Mutation>(definition: Mutation): Mutation;',
+          'export declare function layout(definition: unknown): unknown;',
+          'export declare function mutation(definition: unknown): unknown;',
+          'export declare function query(definition: { load(): unknown }): unknown;',
+          'export declare function route(path: string, definition: unknown): unknown;',
+          'export declare function task(definition: unknown): unknown;',
+          'export declare function publicAccess(reason: string): unknown;',
+          'export declare function defineKovo<const AppId extends string>(options: {',
+          '  readonly appId: AppId;',
+          '  readonly db?: unknown;',
+          '  readonly provider?: unknown;',
+          '  readonly providerKey?: string;',
+          '}): {',
+          '  readonly endpoint: typeof endpoint;',
+          '  readonly integrateMutation: typeof integrateMutation;',
+          '  readonly layout: typeof layout;',
+          '  readonly mutation: typeof mutation;',
+          '  readonly query: typeof query;',
+          '  readonly route: typeof route;',
+          '  readonly task: typeof task;',
+          '  readonly assemble: (options: unknown) => unknown;',
+          '};',
+          '',
+        ].join('\n'),
+      );
+      const sourceRoot = join(root, 'src');
+      mkdirSync(sourceRoot, { recursive: true });
+      const contractPath = join(sourceRoot, 'kovo.ts');
+      const integrationPath = join(sourceRoot, 'auth-integration.ts');
+      const contractSource = [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n');
+      const integrationSource = [
+        "import { app } from './kovo.js';",
+        'interface GeneratedMutation<Key extends string> { readonly key: Key }',
+        "declare const signIn: GeneratedMutation<'auth/sign-in'>;",
+        "declare const signOut: GeneratedMutation<'auth/sign-out'>;",
+        'export const integratedSignOut = app.integrateMutation(signOut);',
+        'export const integratedSignIn = app.integrateMutation(signIn);',
+        '',
+      ].join('\n');
+      writeFileSync(contractPath, contractSource);
+      writeFileSync(integrationPath, integrationSource);
+      const files = [
+        {
+          fileName: relative(process.cwd(), contractPath),
+          source: contractSource,
+        },
+        {
+          fileName: relative(process.cwd(), integrationPath),
+          source: integrationSource,
+        },
+      ];
+
+      const [signIn, signOut] = snapshotBuildAppContractSourceAnchorsForTests(files, [
+        { kind: 'mutation', name: 'auth/sign-in' },
+        { kind: 'mutation', name: 'auth/sign-out' },
+      ]);
+
+      expect(signIn?.file).toBe(relative(process.cwd(), integrationPath));
+      expect(integrationSource.slice(signIn?.start, signIn?.end)).toBe(
+        'app.integrateMutation(signIn)',
+      );
+      expect(signOut?.file).toBe(relative(process.cwd(), integrationPath));
+      expect(integrationSource.slice(signOut?.start, signOut?.end)).toBe(
+        'app.integrateMutation(signOut)',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('fails closed when a runtime declaration cannot be associated uniquely', () => {

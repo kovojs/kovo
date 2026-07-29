@@ -29,6 +29,7 @@ import {
   resolve as builtinResolve,
   sep as builtinPathSeparator,
 } from 'node:path';
+import { performance as builtinPerformance } from 'node:perf_hooks';
 import {
   fileURLToPath as builtinFileURLToPath,
   pathToFileURL as builtinPathToFileURL,
@@ -233,6 +234,7 @@ const pathSeparator = builtinPathSeparator;
 const fileURLToPath = builtinFileURLToPath;
 const pathToFileURL = builtinPathToFileURL;
 const promisify = builtinPromisify;
+const performanceNow = builtinPerformance.now.bind(builtinPerformance);
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
@@ -270,6 +272,33 @@ const KOVO_FRAMEWORK_SOURCE_MAX_FILES = 40_000;
 const KOVO_FRAMEWORK_SOURCE_MAX_DEPTH = 64;
 const KOVO_FRAMEWORK_SOURCE_MAX_FILE_BYTES = 16 * 1024 * 1024;
 const KOVO_FRAMEWORK_SOURCE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+const KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV = 'KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE';
+const KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA = 'kovo-check-phase-census/v1';
+const KOVO_SOURCE_CHECK_PHASES = [
+  'lifecycle-policy',
+  'config-trust',
+  'typescript',
+  'project-quality',
+  'sound-subset',
+  'session-authority',
+  'app-source-trust',
+  'app-evaluation',
+  'stylesheet',
+  'build-check-graph',
+  'graph-diagnostics',
+] as const;
+
+type KovoSourceCheckPhase = (typeof KOVO_SOURCE_CHECK_PHASES)[number];
+type KovoSourceCheckPhaseStatus = 'executed' | 'not-applicable';
+
+interface KovoSourceCheckPhaseCensus {
+  readonly phases: {
+    readonly durationMs: number;
+    readonly name: KovoSourceCheckPhase;
+    readonly status: KovoSourceCheckPhaseStatus;
+  }[];
+  readonly sourcePath: string;
+}
 
 // Resolve the framework graph while this bootstrap-first module is initializing. App evaluation
 // must not be able to rewrite package manifests and widen the later production-build exemption
@@ -666,11 +695,16 @@ export async function runSourceCheckCommand(
     options = configurationBoundary(() => snapshotKovoSourceCheckOptions(options));
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    const phaseCensus = sourceCheckPhaseCensus(security.invocationEnv);
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo check app module');
     const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
     if (strictLifecyclePolicy) {
+      const startedAt = startSourceCheckPhase(phaseCensus);
       const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot);
       if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+      recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'executed', startedAt);
+    } else {
+      recordSourceCheckPhase(phaseCensus, 'lifecycle-policy', 'not-applicable');
     }
     const configPath = findKovoBuildConfig(invocationRoot);
     if (configPath !== undefined) {
@@ -678,44 +712,64 @@ export async function runSourceCheckCommand(
     }
 
     if (configPath !== undefined) {
+      const startedAt = startSourceCheckPhase(phaseCensus);
       runPreEvaluationBuildConfigTrustPreflight(
         configPath,
         invocationRoot,
         security.paranoidStaticAdvisory,
         'check',
       );
+      recordSourceCheckPhase(phaseCensus, 'config-trust', 'executed', startedAt);
+    } else {
+      recordSourceCheckPhase(phaseCensus, 'config-trust', 'not-applicable');
     }
 
     // Keep the independent whole-project analyzers sequential and run them before allocating the
     // entry-reachable compiler graph. A copied catalog is deliberately outside that closure, but
     // TypeScript, formatting, and lint still inspect it. Retaining both heaps made valid
     // 44-component apps exceed 2 GiB even when the processes did not overlap.
-    await runTypeScriptBuildPreflight(
+    const typescriptStartedAt = startSourceCheckPhase(phaseCensus);
+    const typescriptExecuted = await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
       security.invocationEnv,
       'check',
     );
+    recordSourceCheckPhase(
+      phaseCensus,
+      'typescript',
+      typescriptExecuted ? 'executed' : 'not-applicable',
+      typescriptStartedAt,
+    );
     if (strictLifecyclePolicy) {
+      const projectQualityStartedAt = startSourceCheckPhase(phaseCensus);
       const projectQuality = await runProjectQualityCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-check/v1',
       );
       if (projectQuality.exitCode !== 0) return projectQuality;
+      recordSourceCheckPhase(phaseCensus, 'project-quality', 'executed', projectQualityStartedAt);
+      const soundSubsetStartedAt = startSourceCheckPhase(phaseCensus);
       const soundSubset = await runSoundSubsetCheck(
         invocationRoot,
         security.invocationEnv,
         'kovo-check/v1',
       );
       if (soundSubset.exitCode !== 0) return soundSubset;
+      recordSourceCheckPhase(phaseCensus, 'sound-subset', 'executed', soundSubsetStartedAt);
+    } else {
+      recordSourceCheckPhase(phaseCensus, 'project-quality', 'not-applicable');
+      recordSourceCheckPhase(phaseCensus, 'sound-subset', 'not-applicable');
     }
 
     // SPEC §6.6 rule 6: source checking evaluates the same authored authority as build. Capture
     // source/config authority before any authored module is evaluated, but only after independent
     // process preflights have exited and released their bounded heaps.
+    const sessionAuthorityStartedAt = startSourceCheckPhase(phaseCensus);
     const reachableSessionAuthorityFacts =
       await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    recordSourceCheckPhase(phaseCensus, 'session-authority', 'executed', sessionAuthorityStartedAt);
 
     return await deriveCurrentSourceCheck(
       resolvedAppModulePath,
@@ -723,6 +777,7 @@ export async function runSourceCheckCommand(
       reachableSessionAuthorityFacts,
       security,
       invocationRoot,
+      phaseCensus,
     );
   } catch (error) {
     return sourceCheckErrorResult(error);
@@ -1222,12 +1277,16 @@ async function deriveCurrentSourceCheck(
   reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
   security: KovoCommandSecurityDisposition,
   invocationRoot: string,
+  phaseCensus: KovoSourceCheckPhaseCensus | undefined,
 ): Promise<KovoCheckResult> {
+  const appSourceTrustStartedAt = startSourceCheckPhase(phaseCensus);
   const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
     resolvedAppModulePath,
     invocationRoot,
     security.paranoidStaticAdvisory,
   );
+  recordSourceCheckPhase(phaseCensus, 'app-source-trust', 'executed', appSourceTrustStartedAt);
+  const appEvaluationStartedAt = startSourceCheckPhase(phaseCensus);
   const loadedBuildApp = await withBuildGraphDerivationContext(() =>
     loadBuildAppModule(
       resolvedAppModulePath,
@@ -1236,25 +1295,143 @@ async function deriveCurrentSourceCheck(
       preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
     ),
   );
+  recordSourceCheckPhase(phaseCensus, 'app-evaluation', 'executed', appEvaluationStartedAt);
   // Stylesheet compilation is source proof even though asset placement is deployment proof.
+  const stylesheetStartedAt = startSourceCheckPhase(phaseCensus);
   await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+  recordSourceCheckPhase(phaseCensus, 'stylesheet', 'executed', stylesheetStartedAt);
   const app = appFromModule(
     loadedBuildApp.appModule,
     resolvedAppModulePath,
     loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
   );
+  const buildCheckGraphStartedAt = startSourceCheckPhase(phaseCensus);
   const artifacts = await buildCheckGraph(app, {
     cache,
     execution: loadedBuildApp.serverExecutionModule,
+    includeDevexCheckGraphDigest: phaseCensus !== undefined,
     preEvaluationStaticTrust,
     reachableSessionAuthorityFacts,
     root: invocationRoot,
   });
-  return kovoCheckWithDiagnosticSourceCatalog(
+  recordSourceCheckPhase(phaseCensus, 'build-check-graph', 'executed', buildCheckGraphStartedAt);
+  const graphDiagnosticsStartedAt = startSourceCheckPhase(phaseCensus);
+  const result = kovoCheckWithDiagnosticSourceCatalog(
     artifacts.graph,
     { paranoidStaticAdvisory: security.paranoidStaticAdvisory },
     artifacts.diagnosticSourceCatalog,
   );
+  recordSourceCheckPhase(phaseCensus, 'graph-diagnostics', 'executed', graphDiagnosticsStartedAt);
+  return appendSourceCheckPhaseCensus(result, phaseCensus, artifacts);
+}
+
+function sourceCheckPhaseCensus(
+  invocationEnv: NodeJS.ProcessEnv,
+): KovoSourceCheckPhaseCensus | undefined {
+  const sourcePath = kovoInvocationEnvironmentValue(
+    invocationEnv,
+    KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV,
+  );
+  if (sourcePath === undefined) return undefined;
+  if (!exactBuildAnalysisPath(sourcePath)) {
+    throw new KovoCommandConfigurationError(
+      `${KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV} must name one project-relative source file.`,
+    );
+  }
+  return { phases: [], sourcePath };
+}
+
+function recordSourceCheckPhase(
+  census: KovoSourceCheckPhaseCensus | undefined,
+  name: KovoSourceCheckPhase,
+  status: KovoSourceCheckPhaseStatus,
+  startedAt?: number,
+): void {
+  if (census === undefined) return;
+  const expected = KOVO_SOURCE_CHECK_PHASES[census.phases.length];
+  if (expected !== name) {
+    throw new TypeError(
+      `kovo check phase census expected ${expected ?? '<complete>'}, received ${name}.`,
+    );
+  }
+  let durationMs = 0;
+  if (status === 'executed') {
+    if (startedAt === undefined) {
+      throw new TypeError(`kovo check phase census has no start time for executed phase ${name}.`);
+    }
+    durationMs = performanceNow() - startedAt;
+  }
+  if (!(durationMs >= 0 && durationMs < Infinity)) {
+    throw new TypeError(`kovo check phase census measured an invalid duration for ${name}.`);
+  }
+  buildSecurityArrayAppend(
+    census.phases,
+    { durationMs, name, status },
+    'Kovo source-check phase census',
+  );
+}
+
+function startSourceCheckPhase(census: KovoSourceCheckPhaseCensus | undefined): number | undefined {
+  return census === undefined ? undefined : performanceNow();
+}
+
+function appendSourceCheckPhaseCensus(
+  result: KovoCheckResult,
+  census: KovoSourceCheckPhaseCensus | undefined,
+  artifacts: KovoBuildCheckArtifacts,
+): KovoCheckResult {
+  if (census === undefined) return result;
+  if (census.phases.length !== KOVO_SOURCE_CHECK_PHASES.length) {
+    throw new TypeError(
+      `kovo check phase census recorded ${String(census.phases.length)} of ${String(
+        KOVO_SOURCE_CHECK_PHASES.length,
+      )} required phases.`,
+    );
+  }
+
+  let requestedSource: BuildCheckSourceFile | undefined;
+  const sourceFiles = buildSnapshotDenseArray(
+    artifacts.sourceFiles,
+    'Kovo source-check census input files',
+  );
+  for (let index = 0; index < sourceFiles.length; index += 1) {
+    const candidate = sourceFiles[index]!;
+    if (candidate.fileName === census.sourcePath) {
+      requestedSource = candidate;
+      break;
+    }
+  }
+  if (requestedSource === undefined) {
+    throw new KovoCommandConfigurationError(
+      `${KOVO_DEVEX_CHECK_PHASE_CENSUS_ENV} source ${census.sourcePath} is outside the analyzed app closure.`,
+    );
+  }
+
+  if (artifacts.devexCheckGraphDigest === undefined) {
+    throw new TypeError('kovo check phase census omitted its check-graph digest.');
+  }
+  const sourceDigest = `sha256:${hash(
+    'sha256',
+    bufferFrom(requestedSource.source, 'utf16le'),
+    'hex',
+  )}`;
+  const evidence = {
+    checkGraphDigest: artifacts.devexCheckGraphDigest,
+    phases: census.phases,
+    schema: KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA,
+    source: {
+      codeUnitLength: requestedSource.source.length,
+      contentHash: sourceDigest,
+      encoding: 'utf16le',
+      path: requestedSource.fileName,
+    },
+  };
+  return {
+    ...result,
+    output: `${result.output}${KOVO_DEVEX_CHECK_PHASE_CENSUS_SCHEMA} ${stringifyBuildValue(
+      evidence,
+    )}\n`,
+  };
 }
 
 interface PreEvaluationStaticTrust {
@@ -1643,9 +1820,9 @@ async function runTypeScriptBuildPreflight(
   invocationRoot: string,
   invocationEnv: NodeJS.ProcessEnv,
   command: 'build' | 'check' = 'build',
-): Promise<void> {
+): Promise<boolean> {
   const tsconfigPath = findBuildTsconfig(appModulePath, invocationRoot);
-  if (tsconfigPath === undefined) return;
+  if (tsconfigPath === undefined) return false;
 
   const projectDir = dirname(tsconfigPath);
   let tscBin: string;
@@ -1699,6 +1876,7 @@ async function runTypeScriptBuildPreflight(
       },
     );
     await projectOutput.writeFile(projectBuildInfoFile, readFileSync(buildInfoFile));
+    return true;
   } catch (error) {
     throw new Error(`kovo ${command} TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
   } finally {
@@ -1753,6 +1931,7 @@ function paranoidBuildCheckMayProceed(output: string): boolean {
 
 interface KovoBuildCheckArtifacts {
   components?: readonly SourceComponentGraphFacts[];
+  devexCheckGraphDigest?: string;
   diagnosticSourceCatalog: KovoCheckDiagnosticSourceCatalog;
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
@@ -1975,6 +2154,7 @@ async function buildCheckGraph(
   options: {
     cache: boolean;
     execution: BuildExecutionModule;
+    includeDevexCheckGraphDigest?: boolean;
     preEvaluationStaticTrust: PreEvaluationStaticTrust;
     reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[];
     root: string;
@@ -2041,21 +2221,20 @@ async function buildCheckGraph(
       ? {}
       : { tableSecurity: staticArtifacts.runtimeRegistry.tableSecurity }),
   };
-  if (diagnostics.length > 0) {
-    return {
-      diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
-      graph: {
-        ...result.graph,
-        diagnostics,
-      },
-      queryShapeFacts: staticArtifacts.queryShapeFacts,
-      runtimeRegistry,
-      sourceFiles: staticArtifacts.sourceFiles,
-    };
-  }
+  const finalGraph =
+    diagnostics.length === 0
+      ? result.graph
+      : {
+          ...result.graph,
+          diagnostics,
+        };
+  const devexCheckGraphDigest = options.includeDevexCheckGraphDigest
+    ? `sha256:${hash('sha256', bufferFrom(stringifyBuildValue(finalGraph), 'utf8'), 'hex')}`
+    : undefined;
   return {
+    ...(devexCheckGraphDigest === undefined ? {} : { devexCheckGraphDigest }),
     diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
-    graph: result.graph,
+    graph: finalGraph,
     queryShapeFacts: staticArtifacts.queryShapeFacts,
     runtimeRegistry,
     sourceFiles: staticArtifacts.sourceFiles,
@@ -3035,6 +3214,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     appContractProject?.projectMutationRegistryFacts(sourceFiles) ??
     projectMutationRegistryFactsFromFiles(sourceFiles);
   const appContractStaticFacts = appContractProject?.staticFacts(sourceFiles) ?? [];
+  collectAppContractDeclarationAnchors(registryDeclarationAnchors, appContractStaticFacts);
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
     // Every identity input comes from the same descriptor-bound source census. Supplying the
@@ -3229,6 +3409,34 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   };
 }
 
+function collectAppContractDeclarationAnchors(
+  target: Map<string, KovoDiagnosticSourceAnchor | null>,
+  facts: readonly CompilerOwnedAppContractStaticFact[],
+): void {
+  const snapshot = buildSnapshotDenseArray(facts, 'Compiler-owned app-contract declarations');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const fact = snapshot[index]!;
+    const declaration = fact.declaration;
+    if (declaration === undefined) continue;
+    const expectedKind =
+      fact.memberName === 'route'
+        ? 'page'
+        : fact.memberName === 'integrateMutation'
+          ? 'mutation'
+          : undefined;
+    if (expectedKind !== declaration.kind) {
+      throw new TypeError(
+        `Compiler-owned app-contract ${fact.memberName} declaration has invalid ${declaration.kind} registry kind.`,
+      );
+    }
+    collectRegistryDeclarationAnchor(target, `${declaration.kind}\0${declaration.name}`, {
+      end: declaration.end,
+      file: fact.fileName,
+      start: declaration.start,
+    });
+  }
+}
+
 function collectRegistryDeclarationAnchors(
   target: Map<string, KovoDiagnosticSourceAnchor | null>,
   fileName: string,
@@ -3271,6 +3479,16 @@ function collectRegistryDeclarationAnchor(
   source: KovoDiagnosticSourceAnchor,
 ): void {
   if (buildMapHas(target, key)) {
+    const existing = buildMapGet(target, key);
+    if (
+      existing !== null &&
+      existing !== undefined &&
+      existing.file === source.file &&
+      existing.start === source.start &&
+      existing.end === source.end
+    ) {
+      return;
+    }
     // Duplicate declarations are invalid at runtime. Preserve explicit ambiguity so every
     // downstream association fails closed instead of guessing which authored range owns the fact.
     buildMapSet(target, key, null);
@@ -3487,6 +3705,25 @@ export function snapshotBuildCompilerSourceAnchorsForTests(
     ),
     routes,
   };
+}
+
+/**
+ * Internal regression seam for declaration provenance that requires the exact TypeScript project
+ * used by build/check (for example, adapter mutations whose public key is carried by a type).
+ */
+export function snapshotBuildAppContractSourceAnchorsForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+  declarations: readonly {
+    readonly kind: 'mutation' | 'page';
+    readonly name: string;
+  }[],
+): readonly (CoreGraph.SourceAnchor | undefined)[] {
+  const anchors = sourceGraphFactsFromFiles(files).registryDeclarationAnchors;
+  return buildMapDense(
+    declarations,
+    'Build app-contract source-anchor declarations',
+    (declaration) => requiredRegistryDeclarationSource(anchors, declaration.kind, declaration.name),
+  );
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {

@@ -141,6 +141,11 @@ proof; shared root verification belongs in the latest-verification block.
     `vp fmt --list-different` as the oversized phase, so KF-DEVEX-007 remains open.
 - [ ] Publish an instrumented `kovo check` phase census and meet the ratified cold/warm/one-file
       budgets without dropping a diagnostic-producing phase.
+  - Current proof: the focused source-check census fixture records all 11 ordered phases, including
+    explicit not-applicable phases and per-phase durations, and binds the requested source plus
+    check-graph digest. The census does not claim unmeasured command setup/serialization overhead;
+    packed-profile integration, a pinned runner, N≥5 baseline/noise evidence, and ratification
+    remain open.
 - [ ] Complete one packed create→build→deploy→public-200 journey on the selected Node host.
 
 ## Exit

@@ -213,7 +213,51 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(staticFacts.map((fact) => fact.memberName)).toEqual(
       expect.arrayContaining(['authenticated', 'mutation', 'publicAccess', 'route']),
     );
+    expect(
+      staticFacts.filter((fact) => fact.memberName === 'route').map((fact) => fact.declaration),
+    ).toEqual([
+      expect.objectContaining({ name: '/public' }),
+      expect.objectContaining({ name: '/private' }),
+    ]);
     expect(staticFacts.every((fact) => fact.source === result.source)).toBe(true);
+  });
+
+  it('binds integrated adapter mutations to their exact literal key and call span', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/auth-integration.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const source = [
+      "import { app } from './kovo.js';",
+      'interface GeneratedMutation<Key extends string> { readonly key: Key }',
+      "declare const signIn: GeneratedMutation<'auth/sign-in'>;",
+      'export const integratedSignIn = app.integrateMutation(signIn);',
+      '',
+    ].join('\n');
+    await writeSource(entry, source);
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const declaration = project
+      .staticFacts()
+      .find(
+        (fact) => fact.fileName === entry && fact.memberName === 'integrateMutation',
+      )?.declaration;
+
+    expect(declaration).toEqual(
+      expect.objectContaining({ kind: 'mutation', name: 'auth/sign-in' }),
+    );
+    expect(source.slice(declaration?.start, declaration?.end)).toBe(
+      'app.integrateMutation(signIn)',
+    );
   });
 
   it('derives imported mutation-form facts from exact app.mutation and a pristine shared schema', async () => {
@@ -973,6 +1017,7 @@ async function createServerPackage(root: string): Promise<string> {
     [
       'export declare function endpoint(path: string, definition: unknown): unknown;',
       'export declare function layout(definition: unknown): unknown;',
+      'export declare function integrateMutation<const Mutation>(definition: Mutation): Mutation;',
       'export declare function mutation(definition: unknown): unknown;',
       'export declare function query(definition: { load(): unknown }): unknown;',
       'export declare function route(path: string, definition: unknown): unknown;',
@@ -985,6 +1030,7 @@ async function createServerPackage(root: string): Promise<string> {
       '  readonly providerKey?: string;',
       '}): {',
       '  readonly endpoint: typeof endpoint;',
+      '  readonly integrateMutation: typeof integrateMutation;',
       '  readonly layout: typeof layout;',
       '  readonly mutation: typeof mutation;',
       '  readonly query: typeof query;',
