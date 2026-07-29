@@ -42,7 +42,7 @@ export type TaskCronCatchUp = 'skip' | 'backfill';
 /** Mutation request helpers for durable task scheduling (SPEC §9.6). */
 export interface TaskSchedulingRequest {
   cancel(handle: TaskHandle): Promise<boolean>;
-  schedule<const Task extends TaskDefinition<string, Schema<unknown>, any>>(
+  schedule<const Task extends TaskDefinition<string, Schema<unknown>, unknown>>(
     definition: Task,
     args: TaskInput<Task>,
     options?: TaskScheduleOptions,
@@ -86,7 +86,7 @@ export interface TaskIngressRunOptions {
 export interface TaskPrincipalReadScope {
   /** Bind a stateful-sink key to this framework-minted principal scope. */
   stateKey(key: string): ScopedKey;
-  runQuery<const Query extends TaskRunnableQuery<any>>(
+  runQuery<const Query extends TaskRunnableQuery<unknown>>(
     definition: Query,
     input: TaskRunnableQueryInput<Query>,
   ): Promise<unknown>;
@@ -101,7 +101,7 @@ export interface TaskPrincipalReadScope {
 export interface TaskPrincipalWriteScope {
   /** Bind a stateful-sink key to this framework-minted principal scope. */
   stateKey(key: string): ScopedKey;
-  runMutation<const Mutation extends TaskRunnableMutation<any>>(
+  runMutation<const Mutation extends TaskRunnableMutation<unknown>>(
     definition: Mutation,
     input: TaskRunnableMutationInput<Mutation>,
   ): Promise<unknown>;
@@ -140,15 +140,15 @@ export interface TaskRunContext {
   declareSystemWrite(reason: string): TaskPrincipalWriteScope;
   /** Bind genuine cross-principal task state to the finite durable-task-system posture. */
   systemStateKey(key: string): ScopedKey;
-  runMutation<const Mutation extends TaskRunnableMutation<any>>(
+  runMutation<const Mutation extends TaskRunnableMutation<unknown>>(
     definition: Mutation,
     input: TaskRunnableMutationInput<Mutation>,
   ): Promise<unknown>;
-  runQuery<const Query extends TaskRunnableQuery<any>>(
+  runQuery<const Query extends TaskRunnableQuery<unknown>>(
     definition: Query,
     input: TaskRunnableQueryInput<Query>,
   ): Promise<unknown>;
-  schedule<const Task extends TaskDefinition<string, Schema<unknown>, any>>(
+  schedule<const Task extends TaskDefinition<string, Schema<unknown>, unknown>>(
     definition: Task,
     args: TaskInput<Task>,
     options?: TaskScheduleOptions,
@@ -182,7 +182,7 @@ export interface TaskDefinition<
 
 /** Serialized input type accepted by `request.schedule(task, args)`. */
 export type TaskInput<Task> =
-  Task extends TaskDefinition<string, infer InputSchema, any> ? InferSchema<InputSchema> : never;
+  Task extends TaskDefinition<string, infer InputSchema, unknown> ? InferSchema<InputSchema> : never;
 
 /** App-scoped task factory. `createApp()` uses this to contextually type task declarations. */
 export interface TaskFactory {

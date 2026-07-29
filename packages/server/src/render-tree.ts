@@ -83,14 +83,14 @@ export class ComponentXmlError extends Error {
  * through as strings (still attribute-escaped and URL-scheme-checked at emission by the JSX runtime).
  */
 export interface ComponentRegistryEntry {
-  component: Component<any>;
+  component: Component<never>;
   props?: Schema<Record<string, unknown>>;
 }
 
 /** Input accepted by {@link renderRegistry}: tag → component, or tag → `{ component, props }` (SPEC §4.10). */
 export type ComponentRegistryInput = Record<
   string,
-  ComponentRegistryEntry | Component<any>
+  ComponentRegistryEntry | Component<never>
 >;
 
 declare const componentRegistryBrand: unique symbol;

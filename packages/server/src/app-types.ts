@@ -387,4 +387,8 @@ export interface AppMutationDeclaration<_AppRequest = unknown> {
 }
 
 /** Task declaration shape accepted by `createApp({ tasks })` and stored on `KovoApp` (SPEC §9.6). */
-export type AppTaskDeclaration<_AppRequest = unknown> = TaskDefinition<string, any, any>;
+export type AppTaskDeclaration<_AppRequest = unknown> = TaskDefinition<
+  string,
+  Schema<unknown>,
+  unknown
+>;

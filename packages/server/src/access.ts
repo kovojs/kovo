@@ -31,7 +31,10 @@ export interface VerifiedMachineAccess {
  * guards run at request time and project their private names into access audits.
  * `publicAccess(reason)` and `verifiedAccess` are the explicit no-guard sentinels.
  */
-export type AccessDecision = readonly Guard<any, any>[] | PublicAccess | VerifiedMachineAccess;
+export type AccessDecision =
+  | readonly Guard<never, never>[]
+  | PublicAccess
+  | VerifiedMachineAccess;
 
 const snapshottedGuardAccessDecisions = createWitnessWeakSet<object>();
 const snapshottedStructuredAccessDecisions = createWitnessWeakSet<object>();
@@ -49,7 +52,7 @@ witnessWeakSetAdd(snapshottedGuardAccessDecisions, invalidAccessDecision as obje
 /** @internal Test whether an access decision is an executable guard array. */
 export function isGuardAccessDecision(
   access: AccessDecision | undefined,
-): access is readonly Guard<any, any>[] {
+): access is readonly Guard<never, never>[] {
   return nativeArrayIsArray(access);
 }
 
@@ -61,7 +64,7 @@ export function isGuardAccessDecision(
  */
 export function isExecutableGuardAccessDecision(
   access: AccessDecision | undefined,
-): access is readonly Guard<any, any>[] {
+): access is readonly Guard<never, never>[] {
   return executableGuardAccessDecision(access) !== undefined;
 }
 
@@ -74,7 +77,7 @@ export function isExecutableGuardAccessDecision(
  */
 export function executableGuardAccessDecision(
   access: AccessDecision | undefined,
-): readonly Guard<any, any>[] | undefined {
+): readonly Guard<never, never>[] | undefined {
   if (!nativeArrayIsArray(access)) return undefined;
   const snapshot = snapshotAccessDecision(access);
   if (!nativeArrayIsArray(snapshot) || snapshot.length === 0) return undefined;
@@ -90,7 +93,7 @@ export function executableGuardAccessDecision(
     }
   }
 
-  return snapshot as readonly Guard<any, any>[];
+  return snapshot as readonly Guard<never, never>[];
 }
 
 /**
