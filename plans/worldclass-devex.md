@@ -190,9 +190,9 @@ surface remains proof-carrying and browser-free auditable.
 
 ## Target authoring experience
 
-The exact name is subject to the ordinary API naming review, and the declaration-factory shape
-(receiver methods vs a generated app-scoped module) is decision gate D1's to make; implementation
-should target this ergonomic outcome rather than merely shortening imports:
+The exact name is subject to the ordinary API naming review. D1 selected receiver methods over a
+generated app-scoped module; implementation should target this ergonomic outcome rather than
+merely shortening imports:
 
 ```ts
 // src/kovo.ts
@@ -323,7 +323,7 @@ The target package topology is:
 
 ## Decision gates
 
-- [ ] **D1 — app-contract shape (timebox: 2 calendar weeks of spike effort).** Build _two_ spike
+- [x] **D1 — app-contract shape (timebox: 2 calendar weeks of spike effort).** Build _two_ spike
       arms and compare on the same fixture matrix:
   - Arm A: receiver provenance for `app.route/layout/query/mutation/endpoint/task` — the compiler
     proves the receiver originates from the app-authored `defineKovo` call across ordinary local
@@ -344,6 +344,16 @@ The target package topology is:
     app-context generic threaded through the existing free-function primitives plus
     compiler-generated (never hand-authored) registry augmentation, and renegotiate G22-G24 with
     revised targets recorded in this file.
+  - Decision: both arms are eligible; select Arm A by the preregistered preference rule. The
+    receiver-provenance compiler fails closed on unsupported flows while preserving the same
+    canonical IR/graph as the direct and generated-factory controls.
+  - Evidence: `conformance/app-contract-spike/results-v6.json` records every gate passing. On the
+    named Apple M4/Node 24/TS 6 runner, Arm A's paired cold/warm TypeScript and
+    cold/warm-completion deltas were
+    -1.75%/-1.53%/+0.66%/+11.11%, with declaration bytes +1.46%; Arm B measured
+    +2.54%/-0.01%/-1.23%/+11.11% and +8.66%. Both retained the exact 11-candidate completion
+    subject. Two clean `measure:verify` runs, the 41-test v6 evaluator, and the 14-test compiler
+    provenance/forgery suite passed against authenticated packed subjects.
 - [x] **D2 — release model.** Per-batch removals land continuously on `main`; exactly **one**
       published breaking technical-preview minor ships the cumulative cut together with
       `kovo fix api-v1`. Interim publishes, if any, are documented as unstable snapshots in
@@ -669,8 +679,10 @@ and budget both type correctness and compiler performance. Seeds child ledger `a
     optimism, named handles/error localization).
   - Define deterministic membership and HMR teardown: no ambient registry, import-order
     dependence, process-global accumulation, or second app assembly call.
-- [ ] (L) Run the D1 spike (both arms, shared fixture matrix) and record the decision with its
+- [x] (L) Run the D1 spike (both arms, shared fixture matrix) and record the decision with its
       measured criteria in the D1 checkbox.
+  - Evidence: the D1 checkbox records the Arm A decision, measured thresholds, authenticated
+    artifacts, adversarial mutation coverage, and clean-rerun commands.
 - [ ] (M) Make public `KovoApp` an opaque minimal token and move normalized options, providers,
       registries, runtime authorities, route arrays, and framework DB carriers into private state
       accessed by framework-owned functions.
