@@ -24,6 +24,11 @@ import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import { toNodeHandler } from '@kovojs/server/node';
 ```
 
+Assembled apps remain empty, WeakMap-owned runtime tokens. Custom adapters and test harnesses can
+import the type-only `InferKovoAppTypes` helper from `@kovojs/server/custom-adapters` to recover the
+inferred request/DB contract and exact declaration-handle unions without exposing runtime
+providers, registries, or assembly arrays.
+
 Custom adapters must keep this side-effect import literally first:
 
 ```ts

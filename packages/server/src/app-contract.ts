@@ -660,9 +660,55 @@ export interface KovoContract<
   all<const Items extends readonly Guard<Request, any>[]>(
     ...items: Items
   ): Guard<Request, AppRequestForAccess<Request, Items>>;
-  assemble(
-    options: AppAssemblyOptions<Request, DbValue, Owner>,
-  ): KovoApp<KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>>;
+  assemble<const Assembly extends AppAssemblyOptions<Request, DbValue, Owner>>(
+    options: Assembly,
+  ): KovoApp<{
+    readonly contract: KovoContract<
+      RawRequest,
+      SessionValue,
+      DbValue,
+      EnvValue,
+      Request,
+      Owner
+    >;
+    readonly db: DbValue;
+    readonly declarations: {
+      readonly endpoint: Assembly extends {
+        readonly endpoints?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+      readonly layout: Assembly extends {
+        readonly layouts?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+      readonly mutation: Assembly extends {
+        readonly mutations?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+      readonly query: Assembly extends {
+        readonly queries?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+      readonly route: Assembly extends {
+        readonly routes?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+      readonly task: Assembly extends {
+        readonly tasks?: readonly (infer Handle)[];
+      }
+        ? Handle
+        : never;
+    };
+    readonly env: Readonly<EnvValue>;
+    readonly rawRequest: RawRequest;
+    readonly request: Request;
+    readonly session: SessionValue;
+  }>;
   owns<KeyedRequest extends Request = Request, Key = unknown>(
     keyOf: (request: KeyedRequest) => Key,
     keyColumn: FrameworkPostgresOwnerKeyColumn<Key>,
@@ -1083,10 +1129,57 @@ function assembleContract<
   EnvValue extends Record<string, unknown>,
   Request,
   Owner extends AppId,
+  const Assembly extends AppAssemblyOptions<Request, DbValue, Owner>,
 >(
   state: ContractState,
-  assembly: AppAssemblyOptions<Request, DbValue, Owner>,
-): KovoApp<KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>> {
+  assembly: Assembly,
+): KovoApp<{
+  readonly contract: KovoContract<
+    RawRequest,
+    SessionValue,
+    DbValue,
+    EnvValue,
+    Request,
+    Owner
+  >;
+  readonly db: DbValue;
+  readonly declarations: {
+    readonly endpoint: Assembly extends {
+      readonly endpoints?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+    readonly layout: Assembly extends {
+      readonly layouts?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+    readonly mutation: Assembly extends {
+      readonly mutations?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+    readonly query: Assembly extends {
+      readonly queries?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+    readonly route: Assembly extends {
+      readonly routes?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+    readonly task: Assembly extends {
+      readonly tasks?: readonly (infer Handle)[];
+    }
+      ? Handle
+      : never;
+  };
+  readonly env: Readonly<EnvValue>;
+  readonly rawRequest: RawRequest;
+  readonly request: Request;
+  readonly session: SessionValue;
+}> {
   assertContractOpen(state, 'app.assemble()');
   state.phase = 'assembling';
 
@@ -1115,9 +1208,7 @@ function assembleContract<
     } as CreateAppOptions<SessionValue, DbValue, RawRequest, Request, EnvValue>);
     state.runtimeApp = runtimeApp;
     state.phase = 'closed';
-    return createKovoAppToken<
-      KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>
-    >(runtimeApp);
+    return createKovoAppToken(runtimeApp);
   } catch (error) {
     state.phase = 'failed';
     throw error;

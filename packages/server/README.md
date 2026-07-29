@@ -56,13 +56,22 @@ the bootstrap import as the literal first import, as required by `SPEC.md` §6.6
 ```ts
 import '@kovojs/server/runtime-bootstrap';
 
-import { createRequestHandler } from '@kovojs/server/custom-adapters';
+import {
+  createRequestHandler,
+  type InferKovoAppTypes,
+} from '@kovojs/server/custom-adapters';
 import { toNodeHandler } from '@kovojs/server/node';
 import app from './app.js';
+
+type AppTypes = InferKovoAppTypes<typeof app>;
 
 const handle = createRequestHandler(app);
 export const nodeHandler = toNodeHandler(handle);
 ```
+
+`InferKovoAppTypes` is the narrow compile-time bridge for custom adapters and test harnesses. It
+retains the inferred request/DB contract and exact assembled declaration-handle unions; the runtime
+app remains an empty token whose providers, registries, and declaration arrays stay private.
 
 ## Advanced capability catalog
 

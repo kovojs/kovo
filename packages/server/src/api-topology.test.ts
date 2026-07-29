@@ -28,7 +28,8 @@ import * as storageKeysApi from '@kovojs/server/storage-keys';
 import * as tasksApi from '@kovojs/server/tasks';
 import * as webhooksApi from '@kovojs/server/webhooks';
 import * as writeSafetyApi from '@kovojs/server/write-safety';
-import { describe, expect, it } from 'vitest';
+import type { InferKovoAppTypes, KovoApp } from '@kovojs/server/custom-adapters';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 const taskValues = [
   agentApi.agent,
@@ -108,6 +109,9 @@ const taskValues = [
 
 describe('@kovojs/server public topology', () => {
   it('keeps daily app declaration at root and loads every advanced task path', () => {
+    expectTypeOf<InferKovoAppTypes<KovoApp<{ readonly request: Request }>>>().toEqualTypeOf<{
+      readonly request: Request;
+    }>();
     expect(serverRoot.defineKovo).toBeTypeOf('function');
     expect(serverRoot.route).toBeTypeOf('function');
     expect(serverRoot.mutation).toBeTypeOf('function');

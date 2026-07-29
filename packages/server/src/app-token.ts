@@ -17,19 +17,24 @@ declare const kovoAppTokenBrand: unique symbol;
  * WeakMap. The private symbol is an author-time guardrail only; exact map membership is the runtime
  * proof.
  */
-export interface KovoApp<Contract = unknown> {
-  readonly [kovoAppTokenBrand]: Contract;
+export interface KovoApp<AppTypes = unknown> {
+  readonly [kovoAppTokenBrand]: AppTypes;
 }
+
+/**
+ * Extract the author-usable contract and exact declaration-handle unions retained by an opaque
+ * {@link KovoApp}. Runtime providers, registries, and assembly arrays are deliberately absent.
+ */
+export type InferKovoAppTypes<App extends KovoApp> =
+  App extends KovoApp<infer AppTypes> ? AppTypes : never;
 
 const runtimeApps = createWitnessWeakMap<object, RuntimeKovoApp>();
 
 /** @internal Close one normalized runtime aggregate behind an opaque public token. */
-export function createKovoAppToken<Contract>(
-  app: RuntimeKovoApp,
-): KovoApp<Contract> {
+export function createKovoAppToken(app: RuntimeKovoApp): KovoApp<never> {
   const token = witnessFreeze(witnessCreateNullRecord());
   witnessWeakMapSet(runtimeApps, token, app);
-  return token as unknown as KovoApp<Contract>;
+  return token as unknown as KovoApp<never>;
 }
 
 /** Test exact opaque-token identity without reflecting over caller-owned properties. */

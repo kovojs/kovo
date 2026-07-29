@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { publicAccess } from './access.js';
 import { defineKovo } from './app-contract.js';
-import { resolveKovoAppToken } from './app-token.js';
+import { resolveKovoAppToken, type InferKovoAppTypes } from './app-token.js';
 import { registerAppMutationAdapter } from './app-mutation-adapter.js';
 import { createRequestHandler } from './app.js';
 import { mutation } from './mutation/definition.js';
@@ -57,6 +57,10 @@ describe('defineKovo app contract', () => {
     expect(dbCalls).toBe(0);
 
     const token = contract.assemble({ queries: [contacts] });
+    type AppTypes = InferKovoAppTypes<typeof token>;
+    expectTypeOf<AppTypes['declarations']['query']>().toEqualTypeOf<typeof contacts>();
+    expectTypeOf<AppTypes['declarations']['mutation']>().toBeNever();
+    expectTypeOf<AppTypes['db']>().toEqualTypeOf<typeof db>();
     const runtime = resolveKovoAppToken(token, 'app-contract test');
     expect(runtime.env).toEqual({ APP_NAME: 'Kovo CRM' });
     expect(runtime.queries).toHaveLength(1);

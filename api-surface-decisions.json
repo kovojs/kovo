@@ -11078,6 +11078,22 @@
       }
     },
     {
+      "id": "@kovojs/server/custom-adapters#InferKovoAppTypes",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/custom-adapters",
+      "symbol": "InferKovoAppTypes",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/custom-adapters",
+      "story": "server-custom-adapters",
+      "evidence": "server-task-topology-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
       "id": "@kovojs/server/custom-adapters#KovoApp",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/custom-adapters",
