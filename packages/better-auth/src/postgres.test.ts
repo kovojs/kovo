@@ -9,6 +9,7 @@ import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { kovo } from '../../drizzle/src/index.js';
+import { postgresSystemDbForGeneratedIntegration } from '../../server/src/generated-db-capabilities.js';
 import { runMutation } from '../../server/src/mutation.js';
 import {
   bigint,
@@ -90,11 +91,11 @@ const strongSecretText = 'better-auth-postgres-test-secret-32-chars';
 const bindingTestRows = pgTable(
   'kovo_better_auth_binding_test_rows',
   { id: text('id').primaryKey() },
-  kovo({
+  kovo((columns) => ({
     domain: 'better-auth-binding-test',
-    key: 'id',
+    key: columns.id,
     reference: true,
-  }),
+  })),
 );
 const rateLimit = pgTable('rateLimit', {
   count: integer('count').notNull(),
@@ -421,7 +422,7 @@ async function createSystemDb(): Promise<KovoPostgresSystemDb> {
   });
   runtimes.push(runtime);
   await runtime.ready;
-  return runtime.systemDb({
+  return postgresSystemDbForGeneratedIntegration(runtime, {
     operation: 'write',
     reason: 'Better Auth Postgres binding unit test',
     surface: 'packages/better-auth/src/postgres.test.ts',

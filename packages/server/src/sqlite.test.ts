@@ -353,7 +353,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       const wrapper = Object.assign(
         (columns: Parameters<Exclude<typeof original, undefined>>[0]) => {
           callbackHits += 1;
-          if (callbackHits === 2) {
+          if (callbackHits === 1) {
             if (mutation === 'table') {
               Object.defineProperty(table, Table.Symbol.Name, {
                 configurable: true,
@@ -399,7 +399,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       const before = sqliteRuntimeDirectories();
       try {
         expect(() => sqlitePublicApi.createSqliteAppRuntime({ tables: [table] })).toThrow(/KV414/u);
-        expect(callbackHits).toBe(2);
+        expect(callbackHits).toBe(1);
         expect(sqliteRuntimeDirectories()).toEqual(before);
       } finally {
         release();
@@ -1350,7 +1350,10 @@ if (process.env.NODE_ENV === 'production') {
   const table = sqliteTable(
     'kovo_development_posture_proof',
     { id: text('id').primaryKey() },
-    kovo({ domain: 'kovo_development_posture_proof', key: 'id' }),
+    kovo((columns) => ({
+      domain: 'kovo_development_posture_proof',
+      key: columns.id,
+    })),
   );
   const runtime = sqlite.createSqliteAppRuntime({ tables: [table] });
   runtime.close();
@@ -1426,7 +1429,7 @@ try {
   const table = sqliteTable(
     'kovo_native_driver_order_proof',
     { id: text('id').primaryKey() },
-    kovo({ domain: 'kovo_native_driver_order_proof', key: 'id' }),
+    kovo((columns) => ({ domain: 'kovo_native_driver_order_proof', key: columns.id })),
   );
   runtime = sqlite.createSqliteAppRuntime({ tables: [table] });
   runtime.close();

@@ -7,6 +7,7 @@ import {
   sqliteTable,
   text,
 } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
+import { sqliteSystemDbForGeneratedIntegration } from '../../server/src/generated-db-capabilities.js';
 import { mount } from './mount.js';
 import { betterAuthPasswordResetMailDoor } from './password-reset-mail.js';
 import {
@@ -276,7 +277,7 @@ function bindingOptions(
     secret: betterAuthSqliteSecret(strongSecretText),
     signInAccess: { kind: 'public', reason: 'test sign-in' },
     signOutAccess: { kind: 'public', reason: 'test sign-out' },
-    systemDb: runtime.systemDb({
+    systemDb: sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Better Auth SQLite posture test',
       surface: 'packages/better-auth/src/sqlite.test.ts',

@@ -9,6 +9,7 @@ import {
   sqliteTable,
   text,
 } from '../../server/node_modules/drizzle-orm/sqlite-core/index.js';
+import { sqliteSystemDbForGeneratedIntegration } from '../../server/src/generated-db-capabilities.js';
 import { runMutation } from '../../server/src/mutation.js';
 import { currentPrincipalEpoch } from '../../server/src/principal-epoch.js';
 import { mount } from './mount.js';
@@ -90,7 +91,7 @@ describe('Better Auth development seed session posture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Reproduce sibling-domain session cookie precedence',
       surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
@@ -192,7 +193,7 @@ describe('Better Auth development seed session posture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Reproduce canonical-origin and request-scheme cookie skew',
       surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
@@ -315,7 +316,7 @@ describe('Better Auth development seed session posture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove Better Auth seed and sign-in session posture',
       surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
@@ -385,7 +386,7 @@ describe('Better Auth development seed session posture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove shared Better Auth credential rate-limit state',
       surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',
@@ -473,7 +474,7 @@ describe('Better Auth development seed session posture', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const runtime = createSqliteAppRuntime({ tables: Object.values(authSchema) });
     runtimes.push(runtime);
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove unknown Better Auth paths cannot grow limiter storage',
       surface: 'packages/better-auth/src/sqlite.seed-session.test.ts',

@@ -2,9 +2,12 @@ import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { csrfToken } from '@kovojs/server/internal/csrf';
 import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
-import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
 import { kovo } from '../../drizzle/src/index.js';
+import {
+  postgresSystemDbForGeneratedIntegration,
+  sqliteSystemDbForGeneratedIntegration,
+} from '../../server/src/generated-db-capabilities.js';
 import { runMutation } from '../../server/src/mutation.js';
 import { sql } from '../../server/node_modules/drizzle-orm/index.js';
 import {
@@ -35,7 +38,7 @@ const postgresUser = pgTable(
     name: pgText('name').notNull(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
-  kovo({ domain: 'auth', key: 'id', owner: (table) => table.id }),
+  kovo((columns) => ({ domain: 'auth', key: columns.id, owner: columns.id })),
 );
 const postgresSession = pgTable(
   'session',
@@ -51,7 +54,12 @@ const postgresSession = pgTable(
       .notNull()
       .references(() => postgresUser.id, { onDelete: 'cascade' }),
   },
-  kovo({ domain: 'auth', key: 'userId', owner: 'userId', secret: ['token'] }),
+  kovo((columns) => ({
+    domain: 'auth',
+    key: columns.userId,
+    owner: columns.userId,
+    secret: [columns.token],
+  })),
 );
 const postgresAccount = pgTable(
   'account',
@@ -72,12 +80,17 @@ const postgresAccount = pgTable(
       .notNull()
       .references(() => postgresUser.id, { onDelete: 'cascade' }),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'auth',
-    key: 'userId',
-    owner: 'userId',
-    secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
-  }),
+    key: columns.userId,
+    owner: columns.userId,
+    secret: [
+      columns.password,
+      columns.accessToken,
+      columns.refreshToken,
+      columns.idToken,
+    ],
+  })),
 );
 const postgresVerification = pgTable('verification', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -95,12 +108,12 @@ const postgresRateLimit = pgTable(
     key: pgText('key').notNull().unique(),
     lastRequest: pgBigint('lastRequest', { mode: 'number' }).notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`false`,
     domain: 'auth-rate-limit',
-    key: 'id',
+    key: columns.id,
     secret: true,
-  }),
+  })),
 );
 const postgresSchema = {
   account: postgresAccount,
@@ -164,7 +177,7 @@ const sqliteRateLimit = sqliteTable(
     key: sqliteText('key').notNull().unique(),
     lastRequest: integer('lastRequest').notNull(),
   },
-  kovo({ exempt: true }),
+  kovo(() => ({ exempt: true })),
 );
 const sqliteSchema = {
   account: sqliteAccount,
@@ -336,7 +349,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
   const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: postgresSchema });
   try {
     await runtime.ready;
-    const systemDb = runtime.systemDb({
+    const systemDb = postgresSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove Better Auth Postgres bootstrap-first intrinsic isolation',
       surface: 'packages/better-auth/src/intrinsic-boundary.security-fixture.ts#postgres',
@@ -401,7 +414,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
 async function exerciseSqlite(): Promise<IntrinsicExerciseResult['sqlite']> {
   const runtime = createSqliteAppRuntime({ tables: Object.values(sqliteSchema) });
   try {
-    const systemDb = runtime.systemDb({
+    const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove Better Auth SQLite bootstrap-first intrinsic isolation',
       surface: 'packages/better-auth/src/intrinsic-boundary.security-fixture.ts#sqlite',
