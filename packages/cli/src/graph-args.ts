@@ -274,7 +274,8 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   ):
     | { artifact: boolean; inputPath: string | undefined; ok: true }
     | { message: string; ok: false } => {
-    const artifactPath = invocation.options.artifact;
+    const artifactPath =
+      'artifact' in invocation.options ? invocation.options.artifact : undefined;
     if (inputPath !== undefined && artifactPath !== undefined) {
       return {
         message: 'kovo: explain accepts either a review graph or --artifact, not both.\n',

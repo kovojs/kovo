@@ -3,6 +3,7 @@ import type {
   KovoCheckInput,
   KovoGraphProof,
 } from '@kovojs/core/internal/graph';
+import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import {
   computeRenderPlanFingerprint,
@@ -35,7 +36,7 @@ export function createKovoGraphProof(
 ): KovoGraphProof {
   const inputs = requiredAnalysisInputs(graph);
   const compilerVersion = requiredCompilerVersion(graph);
-  const token = `sha256:${appBuildToken}`;
+  const token: `sha256:${string}` = `sha256:${appBuildToken}`;
   if (!sha256Pattern.test(token)) {
     throw new TypeError('Kovo build produced an invalid app build token.');
   }
@@ -151,7 +152,12 @@ export function deriveKovoAppBuildToken(
 
   const hrefs = new Set<string>();
   for (const module of [...compiledModules, ...stableModules]) {
-    hrefs.add(versionedClientModuleHref({ path: module.path, source: module.source }));
+    hrefs.add(
+      versionedClientModuleHref(
+        module.path,
+        clientModuleRepresentationDigest(module.source),
+      ),
+    );
   }
   const hash = createHash('sha256');
   updateBuildTokenFrame(hash, 'domain', 'kovo-app-build-token/v1');
