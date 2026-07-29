@@ -584,8 +584,9 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
   - Preserve failed app directories as CI artifacts with secrets redacted.
   - Also capture: styled-UI screenshot + a11y check (G10), concept census (G14), cold-install
     time and install size (G16), and the agent-journey fixture (G12, with Track 3).
-  - Evidence: exact authenticated Postgres/PGlite and SQLite reports at `273f19723` pass all nine
-    phases with enhanced CRUD, zero two-state axe violations, screenshot digests, concept census,
+  - Evidence: the exact combined authenticated report at `b0bf20b05` passes all nine phases for
+    Postgres/PGlite and SQLite with enhanced CRUD, zero two-state axe violations, screenshot
+    digests, concept census,
     install metrics, redacted failure preservation, and an explicit controlled SPEC §14 build
     posture.
 - [ ] (M) Add `scripts/devex-benchmark.mjs` and `devex-budgets.json`: report cold, warm, and

@@ -47,9 +47,9 @@ reproducer, while the named implementation work item owns retirement.
   - Evidence: `node scripts/pack-public-packages.mjs` authenticated all 14 packages before the
     two exact journey runs.
 - [x] Run default Postgres/PGlite-dev create→install→ready→first-200→login→CRUD→test→check→build.
-  - Evidence: the packed Postgres report at commit `273f19723` passes all nine phases.
+  - Evidence: the combined packed report at commit `b0bf20b05` passes all nine Postgres phases.
 - [x] Run the corresponding explicitly experimental SQLite journey.
-  - Evidence: the packed SQLite report at commit `273f19723` passes all nine phases.
+  - Evidence: the combined packed report at commit `b0bf20b05` passes all nine SQLite phases.
 - [x] Preserve failed apps as redacted CI artifacts.
   - Evidence: diagnosed journey failures produced bounded, redacted failure manifests;
     `scripts/golden-journey/artifacts.test.mjs` proves the preservation contract.
@@ -116,7 +116,7 @@ reproducer, while the named implementation work item owns retirement.
   subpaths, 1,849 exported declarations, 47 excluded directories, and a complete ten-ID register.
 - `pnpm run test:devex-known-failures-available` passed: nine retired behaviors pass,
   nightly KF-DEVEX-007 remains the sole expected failure, and executable closure is complete.
-- Exact authenticated packed journeys at `273f19723` passed for Postgres/PGlite and SQLite,
+- Exact authenticated packed journeys at `b0bf20b05` passed for Postgres/PGlite and SQLite,
   including login, enhanced CRUD, test, check, controlled-retention build, screenshot, and a11y.
 - `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
 - `node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1`
