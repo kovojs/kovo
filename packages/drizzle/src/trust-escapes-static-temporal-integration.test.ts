@@ -134,7 +134,7 @@ describe('temporal/provenance combined blockers', () => {
     ],
   ])('C1 preserves Promise identity through a class %s', (_label, poison) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void) {
           resolve({ ok: true });
@@ -223,7 +223,7 @@ describe('temporal/provenance combined blockers', () => {
     ],
   ])('C2 rejects %s', (_label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('dynamic-static-projection', { input: s.object({}), run(_input, context) {
         class DeferredValue {
           static then(resolve: (value: { ok: true }) => void) {
@@ -251,7 +251,7 @@ describe('temporal/provenance combined blockers', () => {
     ],
   ])('C3 invalidates a validated root through a %s', (_label, setup) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('root-alias', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         run(input) {
@@ -305,7 +305,7 @@ describe('temporal/provenance combined blockers', () => {
     ],
   ])('does not inherit a shadowed unsafe static %s', (_label, setup) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class DeferredValue {
         static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
       }
@@ -349,7 +349,7 @@ describe('temporal/provenance combined blockers', () => {
   it.each([
     [
       'validated input',
-      `import { s, task } from '@kovojs/server';
+      `import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
        task('opaque-target/input', { input: s.object({}), run(input) {
          function replace({ target }: { target: object }) {
            Object.defineProperty(target, 'value', { value: 1 });

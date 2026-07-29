@@ -1,13 +1,9 @@
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  publicAccess,
-  renderRouteHtml,
-  route,
-  toNodeHandler,
-  type ServerErrorHandler,
-} from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+import { toNodeHandler } from '@kovojs/server/node';
+import { type ServerErrorHandler } from '@kovojs/server/diagnostics';
 import { trustedHtml } from '@kovojs/browser';
 
 import {

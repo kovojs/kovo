@@ -623,7 +623,7 @@ function addHeaderSinkProofRoutes(root: string): void {
   writeFileSync(
     join(root, 'src/header-raw-proof.ts'),
     [
-      "import { customVerifier, endpoint, publicAccess } from '@kovojs/server';",
+      "import { customVerifier } from '@kovojs/core/webhooks'\nimport { endpoint, publicAccess } from '@kovojs/server';",
       '',
       rawProof.replaceAll(/^const rawHeader/gmu, 'export const rawHeader').trimEnd(),
       '',

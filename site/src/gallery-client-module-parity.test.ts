@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { describe, expect, it } from 'vitest';
 
 import {

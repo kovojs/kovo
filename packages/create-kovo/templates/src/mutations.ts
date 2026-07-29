@@ -1,4 +1,5 @@
-import { s, trustedAssign } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { trustedAssign } from '@kovojs/server/write-safety';
 import { eq } from 'drizzle-orm';
 
 import { app } from './kovo.js';

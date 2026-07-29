@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 
 // The docs site's client islands (SPEC §4.4, §7 L1): search ⌘K, theme toggle,
 // the code-window copy button, and the greppable on:load sidebar sync. They are

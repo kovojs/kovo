@@ -17,7 +17,7 @@ import {
   compilerOwnedProjectMutationRegistryFactsFromFiles,
   deriveBrowserPostureManifestFromSourceFiles,
 } from '@kovojs/compiler/internal';
-import { toNodeHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server/node';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
 import { resolveKovoAppToken } from '@kovojs/server/internal/build';
 import { dataPlaneSourceFiles } from '@kovojs/server/internal/data-plane-static-analysis';

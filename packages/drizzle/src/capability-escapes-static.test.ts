@@ -25,7 +25,7 @@ function capabilitiesForFiles(files: readonly TrustEscapeSourceFileInput[]) {
 describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M3)', () => {
   it('surfaces the write-governance escapes serverValue and trustedAssign', () => {
     const capabilities = capabilitiesFor(`
-      import { serverValue, trustedAssign } from '@kovojs/server';
+      import { serverValue, trustedAssign } from '@kovojs/server/write-safety';
       export function grant(input: { role: string }) {
         const a = serverValue(generatedId, 'server-generated key');
         const b = trustedAssign(input.role, {
@@ -64,7 +64,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces an unsafeRegex ReDoS-risk acceptance with its source and justification (KV434)', () => {
     const capabilities = capabilitiesFor(`
-      import { unsafeRegex } from '@kovojs/server';
+      import { unsafeRegex } from '@kovojs/server/security';
       export const re = unsafeRegex(/(a+)+$/, 'legacy importer format is trusted');
     `);
 
@@ -80,7 +80,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces declarePublicRelation with its relation and reason', () => {
     const capabilities = capabilitiesFor(`
-      import { declarePublicRelation } from '@kovojs/server';
+      import { declarePublicRelation } from '@kovojs/server/postgres';
       export const rel = declarePublicRelation({
         relation: 'public.kovo_order_totals_mv',
         reason: 'aggregate totals contain no tenant identifiers',
@@ -116,7 +116,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces accept.unverified upload escapes', () => {
     const capabilities = capabilitiesFor(`
-      import { accept } from '@kovojs/server';
+      import { accept } from '@kovojs/server/security';
       export const zip = accept.unverified(['application/zip'], 'legacy importer trusts client type');
     `);
 
@@ -148,7 +148,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('surfaces an unsafeCookie downgrade capability with its weakened floor', () => {
     const capabilities = capabilitiesFor(`
-      import { serializeCookie, unsafeCookie } from '@kovojs/server';
+      import { serializeCookie } from '@kovojs/server'; import { unsafeCookie } from '@kovojs/server/security';
       export const header = serializeCookie('embed_sid', value, {
         class: 'session',
         sameSite: 'none',
@@ -267,7 +267,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('resolves aliased imports back to the original escape name', () => {
     const capabilities = capabilitiesFor(`
-      import { unsafeRegex as ur } from '@kovojs/server';
+      import { unsafeRegex as ur } from '@kovojs/server/security';
       export const re = ur(/(a+)+$/, 'aliased still audited');
     `);
 
@@ -278,7 +278,7 @@ describe('@kovojs/drizzle capability-escape collector (SPEC §6.6, audit-only, M
 
   it('emits escapes with no justification (audit surfaces them either way)', () => {
     const capabilities = capabilitiesFor(`
-      import { serverValue } from '@kovojs/server';
+      import { serverValue } from '@kovojs/server/write-safety';
       export const x = serverValue(id);
     `);
 
@@ -296,7 +296,7 @@ describe('@kovojs/drizzle cookie-downgrade collector (SPEC §6.6/§9.1, audit-on
         {
           fileName: 'app.tsx',
           source: `
-            import { serializeCookie, unsafeCookie } from '@kovojs/server';
+            import { serializeCookie } from '@kovojs/server'; import { unsafeCookie } from '@kovojs/server/security';
             export const header = serializeCookie('embed_sid', value, {
               class: 'session',
               sameSite: 'none',
@@ -327,7 +327,7 @@ describe('@kovojs/drizzle cookie-downgrade collector (SPEC §6.6/§9.1, audit-on
         {
           fileName: 'app.tsx',
           source: `
-            import { serializeCookie, unsafeCookie } from '@kovojs/server';
+            import { serializeCookie } from '@kovojs/server'; import { unsafeCookie } from '@kovojs/server/security';
             export const header = serializeCookie('legacy_token', value, {
               class: 'auth',
               httpOnly: false,
@@ -360,7 +360,7 @@ describe('@kovojs/drizzle static build trust-fact aggregate', () => {
         fileName: 'app.mjs',
         source: `
           import { execFileSync } from 'node:child_process';
-          import { mutation, serializeCookie, serverValue, unsafeCookie } from '@kovojs/server';
+          import { mutation, serializeCookie } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety'; import { unsafeCookie } from '@kovojs/server/security';
           export const header = serializeCookie('embed_sid', value, {
             class: 'session',
             unsafe: unsafeCookie({

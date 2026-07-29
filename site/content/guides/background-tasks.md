@@ -16,7 +16,8 @@ Start with one durable function:
 
 ```ts
 // Source-verified shape from packages/server/src/task.ts
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const sendWelcomeEmail = task('email/send-welcome', {
   input: s.object({ email: s.string().email(), userId: s.string() }),
@@ -102,7 +103,8 @@ Recurring tasks are declared on the task itself:
 
 ```ts
 // Source-verified shape from packages/server/src/task.ts
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const nightlyCleanup = task('maintenance/nightly-cleanup', {
   catchUp: 'backfill',
@@ -125,7 +127,7 @@ framework surface:
 
 ```ts
 // Source-verified shape from packages/server/src/task-queue.ts and task-observability.ts
-import { createDurableTaskStatus } from '@kovojs/server';
+import { createDurableTaskStatus } from '@kovojs/server/tasks';
 
 declare const operatorDb: {
   query(text: string, values?: readonly unknown[]): Promise<{ rows: unknown[] }>;

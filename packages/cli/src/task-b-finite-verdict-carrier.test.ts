@@ -22,7 +22,8 @@ export const raw = mutation('raw', {
   {
     fileName: 'src/kv450.ts',
     source: `
-import { createFileSystemStorage, mutation } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const read = mutation('read', {
   async handler(input) {
@@ -35,7 +36,9 @@ export const read = mutation('read', {
   {
     fileName: 'src/kv452.ts',
     source: `
-import { createFileSystemStorage, endpoint, publicScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { endpoint } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-derived' });
 const documents = {};
 export const persist = endpoint('/persist', {
@@ -54,7 +57,9 @@ const routePageFiles = [
   {
     fileName: 'src/routes.tsx',
     source: `
-import { createFileSystemStorage, respond, route, type ScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { respond, route } from '@kovojs/server'
+import { type ScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const report = route('/report', {
   async page(context) {

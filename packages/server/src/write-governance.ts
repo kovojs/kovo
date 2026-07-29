@@ -51,7 +51,7 @@ const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>
  * @param reason - A short justification, surfaced in review.
  * @returns `value`, unchanged.
  * @example
- * import { serverValue } from '@kovojs/server';
+ * import { serverValue } from '@kovojs/server/write-safety';
  *
  * declare const db: any;
  * declare const input: { userId: string };
@@ -74,7 +74,7 @@ export function serverValue<T>(value: T, reason: string): T {
  * @param obligation - A required structured invariant/basis/evidence record, recorded for audit.
  * @returns `value`, unchanged.
  * @example
- * import { trustedAssign } from '@kovojs/server';
+ * import { trustedAssign } from '@kovojs/server/write-safety';
  *
  * declare const db: any;
  * declare const input: { role: string };

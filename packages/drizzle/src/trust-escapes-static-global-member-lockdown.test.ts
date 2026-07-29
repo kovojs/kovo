@@ -92,7 +92,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     'rejects an Object.defineProperty replacement of %s.%s',
     (namespace, member, invocation, source) => {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         class Deferred {
           static then(resolve: (value: { ok: true }) => void): void {
             resolve({ ok: true });
@@ -137,7 +137,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a reviewed member changed through %s', (_label, replacement, invocation, source) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -182,7 +182,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
         fileName: 'app.ts',
         source: `
           import './poison.js';
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           task('cross-module-member-lockdown', {
             input: s.object({}),
             async run() { return Promise.resolve(); },
@@ -213,7 +213,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects an ordinary object carrier changed through %s', (_label, replacement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -233,7 +233,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('rejects a namespace reached through an object destructuring alias', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -254,7 +254,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('rejects destructured global namespace and mutation-method aliases', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -275,7 +275,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps computed Object namespace seeds fail closed', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -329,7 +329,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('keeps folded %s mutation authority fail closed', (_label, replacement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -348,7 +348,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps a const-aliased folded local member name open', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const namespaceKey = 'Ob' + 'ject';
       const localRegistry = { [namespaceKey]: { local: true } };
       void localRegistry[namespaceKey];
@@ -370,7 +370,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a namespace reached through a %s array projection', (_label, replacement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -404,7 +404,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a %s', (_label, replacement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -445,7 +445,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a %s', (_label, replacement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -470,7 +470,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
       (_value, index) => `const alias${index + 1} = alias${index};`,
     ).join('\n');
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -491,7 +491,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps pristine reviewed members and local lookalikes open', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       Object.defineProperty(LocalPromise, 'resolve', { value: () => ({ ok: true }) });
       task('pristine-members', {
@@ -511,7 +511,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps finite object, array, and destructuring carriers of local lookalikes open', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       const holder = { nested: { promises: [LocalPromise] } };
       const { nested: { promises: [localNamespace] } } = holder;
@@ -608,7 +608,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a namespace installed through %s', (_label, prelude) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -648,7 +648,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a namespace reached through a %s', (_label, prelude) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -692,7 +692,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects a namespace reaching a %s', (_label, prelude) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -711,7 +711,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('rejects a namespace passed into a local mutation helper', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -733,7 +733,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('rejects a namespace substituted into an authored callback parameter', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -768,7 +768,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ['map', `[Promise].map((value) => value)[0]`],
   ])('rejects a namespace reached through Array.%s', (_label, receiver) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -800,7 +800,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
           });`,
       ).join('\n');
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         class Deferred {
           static then(resolve: (value: { ok: true }) => void): void {
             resolve({ ok: true });
@@ -832,7 +832,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
           });`,
       ).join('\n');
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         class Deferred {
           static then(resolve: (value: { ok: true }) => void): void {
             resolve({ ok: true });
@@ -851,7 +851,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('fails closed when exact Array.of carrier semantics are authored-mutable', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -871,7 +871,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('tracks Set duplicate collapse for indexed reads and destructuring', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -897,7 +897,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('tracks a later custom-iterator yield that can occupy the first materialized slot', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -1001,7 +1001,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('rejects Promise flowing through %s', (_label, prelude, poison) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -1021,7 +1021,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps iterable carriers, call spreads, and parameter patterns open for local lookalikes', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       const localCarriers = [
         Array.of(LocalPromise)[0]!,
@@ -1098,7 +1098,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ],
   ])('keeps an opaque iterable %s fail closed', (_label, poison) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -1129,7 +1129,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
       ),
     ).join('\n');
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       const LocalResponse = { json: () => ({ ok: true }) };
       const LocalArray = { isArray: () => true };
@@ -1156,7 +1156,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ['decimal to hexadecimal', `const holder = { 0: Promise };`, `holder[0x0]`],
   ])('canonicalizes %s numeric carrier keys', (_label, prelude, receiver) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Deferred {
         static then(resolve: (value: { ok: true }) => void): void {
           resolve({ ok: true });
@@ -1195,7 +1195,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
         fileName: 'app.ts',
         source: `
           import { replace } from './barrel.js';
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           class Deferred {
             static then(resolve: (value: { ok: true }) => void): void {
               resolve({ ok: true });
@@ -1216,7 +1216,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps an authored getter returning a local lookalike from poisoning the global member', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       const holder = { get promise() { return LocalPromise; } };
       Object.defineProperty(holder.promise, 'resolve', { value: () => ({ ok: true }) });
@@ -1231,7 +1231,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('does not close the global member for helper and callback substitution of local lookalikes', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       function visit(
         value: typeof LocalPromise,
@@ -1254,7 +1254,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps reusable callback-helper substitution bound to the actual safe invocation', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       type Namespace = { resolve: (...args: never[]) => unknown };
       const LocalPromise: Namespace = { resolve: () => ({ ok: true }) };
       function visit(value: Namespace, callback: (value: Namespace) => void): void {
@@ -1277,7 +1277,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('closes reusable callback-helper substitution at the actually poisoned invocation', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       type Namespace = { resolve: (...args: never[]) => unknown };
       const LocalPromise: Namespace = { resolve: () => ({ ok: true }) };
       function visit(value: Namespace, callback: (value: Namespace) => void): void {
@@ -1300,7 +1300,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
 
   it('keeps reusable helper return substitution call-site-sensitive', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       function identity<T>(value: T): T { return value; }
       void identity(Promise);
@@ -1319,7 +1319,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
   it('keeps cyclic exact-global aliases sound and bounded', () => {
     const startedAt = cpuUsage();
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       function noop(value: PromiseConstructor): void { void value; }
       let root!: PromiseConstructor;
       let cycle!: PromiseConstructor;
@@ -1374,7 +1374,7 @@ describe('KV424 exact global namespace-member lockdown', () => {
     ).join('\n');
     const startedAt = cpuUsage();
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const alias0 = Promise;
       ${aliases}
       Object.defineProperty(alias18, 'resolve', { value: () => ({ ok: true }) });

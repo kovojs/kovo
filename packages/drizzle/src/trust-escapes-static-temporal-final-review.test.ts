@@ -82,7 +82,7 @@ describe('temporal final adversarial review', () => {
     ],
   ])('C1 rejects a Promise carrier through %s', (label, poison) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       ${deferredWithLateAuthority}
       ${poison}
       task('c1-review', { input: s.object({}), async run() { return Promise.resolve(); } });
@@ -96,7 +96,7 @@ describe('temporal final adversarial review', () => {
     ['JSON', 'stringify', 'JSON.stringify({ ok: true })'],
   ])('C1 rejects a class static-block carrier of %s.%s', (namespace, member, invocation) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       ${deferredWithLateAuthority}
       class Holder { static { (this as any).namespace = ${namespace}; } }
       Object.defineProperty((Holder as any).namespace, '${member}', {
@@ -116,7 +116,7 @@ describe('temporal final adversarial review', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { Holder } from './carrier.js';
           ${deferredWithLateAuthority}
           Object.defineProperty(Holder.promise, 'resolve', { value: () => DeferredValue });
@@ -136,7 +136,7 @@ describe('temporal final adversarial review', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { install } from './install.js';
           ${deferredWithLateAuthority}
           class Holder {}
@@ -273,7 +273,7 @@ describe('temporal final adversarial review', () => {
     ],
   ])('C2 rejects a class-derived thenable through %s', (label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c2-review', { input: s.object({}), run() {
         ${deferred}
         ${statement}
@@ -297,7 +297,7 @@ describe('temporal final adversarial review', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { Child } from './classes.js';
           delete (Child as any).value;
           task('c2-import-delete', { input: s.object({}), run() { return Child.value; } });
@@ -318,7 +318,7 @@ describe('temporal final adversarial review', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { inherit } from './inherit.js';
           task('c2-import-helper', { input: s.object({}), run() {
             ${deferred}
@@ -344,7 +344,7 @@ describe('temporal final adversarial review', () => {
     ['Map constructor read', `return new Map([['value', DeferredValue]]).get('value');`],
   ])('C2 rejects an adjacent %s container carrier', (label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c2-container-review', { input: s.object({}), run() {
         ${deferred}
         ${statement}
@@ -377,7 +377,7 @@ describe('temporal final adversarial review', () => {
     ['async callback', `return Promise.resolve(1).then(async () => DeferredValue);`],
   ])('C2 rejects an adjacent native-Promise %s', (label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c2-promise-review', { input: s.object({}), run() {
         ${deferred}
         ${statement}
@@ -406,7 +406,7 @@ describe('temporal final adversarial review', () => {
     ['nested destructuring', `const [[alias]] = [input.items];`],
   ])('C3 invalidates the root through a %s alias', (label, setup) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-review', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         run(input) {
@@ -471,7 +471,7 @@ describe('temporal final adversarial review', () => {
     ],
   ])('C3 invalidates writes through %s', (label, mutation) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-callback-review', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         run(input) {
@@ -486,7 +486,7 @@ describe('temporal final adversarial review', () => {
 
   it('C3 invalidates a for-await binding derived from the root', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-for-await-review', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         async run(input) {
@@ -504,7 +504,7 @@ describe('temporal final adversarial review', () => {
 
   it('C3 invalidates a root projection mutated in a native-Promise callback', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-promise-callback-review', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         async run(input) {
@@ -530,7 +530,7 @@ describe('temporal final adversarial review', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { poison } from './helper.js';
           ${deferred}
           task('c3-import-helper', {
@@ -548,7 +548,7 @@ describe('temporal final adversarial review', () => {
 
   it('keeps an unrelated stable computed static member precise', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const unrelated = 'metadata';
       class Holder {
         static [unrelated] = { ok: true };
@@ -565,7 +565,7 @@ describe('temporal final adversarial review', () => {
 
   it('keeps a safe class-expression shadow precise', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class Base { static value = { ok: true }; }
       const Child = class Inner extends Base { static value = { ok: true }; };
       task('precision-class-expression', {
@@ -587,7 +587,7 @@ describe('temporal final adversarial review', () => {
     ).join('\n');
     const startedAt = performance.now();
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const LocalPromise = { resolve: () => ({ ok: true }) };
       ${carriers}
       task('precision-carrier-budget', {

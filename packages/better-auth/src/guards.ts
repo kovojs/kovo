@@ -1,5 +1,6 @@
 import { guards } from '@kovojs/server';
-import type { AuthenticatedRequest, Guard, SessionRequestLike } from '@kovojs/server';
+import type { AuthenticatedRequest, SessionRequestLike } from '@kovojs/server/routing';
+import type { Guard } from '@kovojs/server';
 
 import { betterAuthApply, betterAuthCaptureOwnMethod } from './internal/intrinsics.js';
 

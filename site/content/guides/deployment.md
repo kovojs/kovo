@@ -148,7 +148,7 @@ the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Res
 
 ```ts
 // handler.ts
-import { createRequestHandler } from '@kovojs/server';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import app from './app.js';
 
 export const handler = createRequestHandler(app);
@@ -161,7 +161,7 @@ Then keep the host listener in a separated adapter entry:
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { toNodeHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server/node';
 import { handler } from './handler.js';
 
 createServer(toNodeHandler(handler)).listen(Number(process.env.PORT ?? 3000));

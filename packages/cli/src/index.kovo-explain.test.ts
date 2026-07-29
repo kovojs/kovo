@@ -1255,7 +1255,9 @@ export const save = mutation('cart/save', {
         {
           fileName: 'admin.ts',
           source: [
-            `import { serverValue, unsafeRegex, declarePublicRelation, accept } from '@kovojs/server';`,
+            `import { serverValue } from '@kovojs/server/write-safety'
+import { unsafeRegex, accept } from '@kovojs/server/security'
+import { declarePublicRelation } from '@kovojs/server/postgres';`,
             `export const id = serverValue(generatedId, 'server-generated order id');`,
             `export const re = unsafeRegex(/(a+)+$/, 'legacy importer format is trusted');`,
             `export const rel = declarePublicRelation({ relation: 'public.totals', reason: 'no tenant ids' });`,
@@ -1357,7 +1359,8 @@ export const save = mutation('cart/save', {
         {
           fileName: 'embed.ts',
           source: [
-            `import { serializeCookie, unsafeCookie } from '@kovojs/server';`,
+            `import { serializeCookie } from '@kovojs/server'
+import { unsafeCookie } from '@kovojs/server/security';`,
             `export const header = serializeCookie('embed_sid', value, {`,
             `  class: 'session',`,
             `  unsafe: unsafeCookie({ downgrade: { sameSite: 'none' }, justification: 'third-party embed' }),`,

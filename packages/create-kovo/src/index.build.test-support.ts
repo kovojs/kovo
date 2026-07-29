@@ -277,8 +277,8 @@ export function addStorageQueryWriteProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { publicAccess, publicScopedKey, query, type JsonValue, type QueryLoadContext, type Reader, type StorageCapability } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { publicScopedKey, type JsonValue } from '@kovojs/core'\nimport { type StorageCapability } from '@kovojs/core/storage';",
     'storage query write proof import',
   );
   queries = replaceRequired(
@@ -357,8 +357,8 @@ export function addOpaqueStorageQueryWriteProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { createMemoryStorage, publicAccess, publicScopedKey, query, s, type JsonValue, type QueryLoadContext, type Reader, type ScopedKey } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import { createMemoryStorage } from '@kovojs/core/storage'\nimport { publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { publicScopedKey, type JsonValue, type ScopedKey } from '@kovojs/core';",
     'opaque storage query proof import',
   );
   queries = replaceRequired(
@@ -429,7 +429,7 @@ export function addStorageMutationWriteProof(root: string): void {
     join(root, 'src/storage-mutation-proof.tsx'),
     [
       '/** @jsxImportSource @kovojs/server */',
-      "import { createMemoryStorage, mutation, mutationFormAttributes, publicAccess, publicScopedKey, s } from '@kovojs/server';",
+      "import { createMemoryStorage } from '@kovojs/core/storage'\nimport { mutation, mutationFormAttributes, publicAccess, s } from '@kovojs/server'\nimport { publicScopedKey } from '@kovojs/core';",
       '',
       "import { appCsrf } from './auth.js';",
       '',
@@ -546,14 +546,14 @@ export function addRawSqlOwnerWriteProof(
   let mutations = readFileSync(mutationsPath, 'utf8');
   mutations = replaceRequired(
     mutations,
-    "import { mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';",
+    "import { mutation, s, type MutationContext } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
     [
       options.trusted
         ? "import { sql, trustedSql } from '@kovojs/drizzle';"
         : staticStatement
           ? "import { staticSql } from '@kovojs/drizzle';"
           : "import { sql } from '@kovojs/drizzle';",
-      "import { domain, mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';",
+      "import { domain, mutation, s, type MutationContext } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
     ].join('\n'),
     'raw SQL proof server import',
   );
@@ -685,8 +685,8 @@ export function addStarterMutationDbScopeProof(
     [
       ...(staticStructured ? [] : ["import { sql, trustedSql } from '@kovojs/drizzle';"]),
       staticStructured
-        ? "import { mutation, publicAccess, s, serverValue } from '@kovojs/server';"
-        : "import { endpoint, mutation, publicAccess, s, serverValue, type EndpointDbContext } from '@kovojs/server';",
+        ? "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety';"
+        : "import { endpoint, mutation, publicAccess, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety'\nimport { type EndpointDbContext } from '@kovojs/server/routing';",
       ...(staticStructured ? [] : ["import { eq } from 'drizzle-orm';"]),
       '',
       "import { appCsrf, type AppRequest } from './auth.js';",
@@ -1018,7 +1018,10 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      `import { ${includeWebhookTransactionProof ? 'createMemoryWebhookReplayStore, ' : ''}domain, endpoint, mutation, publicAccess, ${includeReadonlyRuntimeChokeProbe ? 'query, ' : ''}s, trustedAssign, webhook, ${includeWebhookTransactionProof ? 'webhookReplayIdentity, ' : ''}type EndpointDbContext, type MutationContext${includeReadonlyRuntimeChokeProbe ? ', type QueryLoadContext' : ''} } from '@kovojs/server';`,
+      `import { domain, endpoint, mutation, publicAccess, ${includeReadonlyRuntimeChokeProbe ? 'query, ' : ''}s, type MutationContext${includeReadonlyRuntimeChokeProbe ? ', type QueryLoadContext' : ''} } from '@kovojs/server';
+import { trustedAssign } from '@kovojs/server/write-safety';
+import { webhook${includeWebhookTransactionProof ? ', createMemoryWebhookReplayStore, webhookReplayIdentity' : ''} } from '@kovojs/server/webhooks';
+import type { EndpointDbContext } from '@kovojs/server/routing';`,
       '',
       `import { ${includeReadonlyMutationAttempt ? 'readonlyAppDb, ' : ''}type AppDb } from './db.js';`,
       [
@@ -2049,8 +2052,8 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { domain, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     'auth secret proof imports',
   );
   queries = replaceRequired(
@@ -2154,9 +2157,9 @@ export function addOpaqueAuthSecretLeakProof(
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     [
-      "import { domain, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
       "import { eq } from 'drizzle-orm';",
     ].join('\n'),
     'auth secret proof server imports',
@@ -2333,7 +2336,7 @@ export function addOpaqueAuthSecretLeakProof(
     [
       '/** @jsxImportSource @kovojs/server */',
       "import { component } from '@kovojs/core';",
-      "import { createApp, createRequestHandler, domain, mutation, publicAccess, route, s, type RequestHandler } from '@kovojs/server';",
+      "import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server'\nimport { createRequestHandler, type RequestHandler } from '@kovojs/server/custom-adapters';",
       '',
       "import { appSessionProvider } from './auth.js';",
       "import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';",
@@ -2509,10 +2512,10 @@ export function addRequestClosedDeclassificationProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     [
       "import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core/security';",
-      "import { query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     ].join('\n'),
     'request-closed declassification proof imports',
   );
@@ -2626,12 +2629,12 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     [
       "import { secret } from '@kovojs/core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { sql as drizzleSql } from 'drizzle-orm';",
-      "import { domain, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { domain, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     ].join('\n'),
     'runtime secret proof query imports',
   );
@@ -2958,12 +2961,12 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     [
       "import { count, eq, sql as drizzleSql } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { declareSecretReadCapability, domain, endpoint, publicAccess, query, s, type EndpointDbContext, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { declareSecretReadCapability } from '@kovojs/server/secret-reading'\nimport { domain, endpoint, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type EndpointDbContext } from '@kovojs/server/routing'\nimport { type JsonValue } from '@kovojs/core';",
     ].join('\n'),
     'sqlite runtime secret provenance query imports',
   );
@@ -3433,7 +3436,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { and, eq } from 'drizzle-orm';",
       "import { sqliteTable, text } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety';",
       '',
       "import { appCsrf, type AppRequest } from './auth.js';",
       "import { readonlyAppDb } from './db.js';",
@@ -3786,7 +3789,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
       '',
       "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -4111,7 +4114,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, webhookReplayIdentity, type EndpointDbContext, type JsonValue, type QueryLoadContext, type Reader, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety'\nimport { task, type TaskSchedulingRequest } from '@kovojs/server/tasks'\nimport { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'\nimport { type EndpointDbContext } from '@kovojs/server/routing'\nimport { type JsonValue } from '@kovojs/core';",
       '',
       "import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';",
       "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",

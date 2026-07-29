@@ -11,13 +11,11 @@ function diagnosticsFor(source: string, code: 'KV449' | 'KV452') {
 }
 
 const prelude = `
-import {
-  createFileSystemStorage,
-  derived,
-  endpoint,
-  publicScopedKey,
-  task,
-} from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { derived } from '@kovojs/server/derived-data'
+import { endpoint } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core'
+import { task } from '@kovojs/server/tasks';
 
 const storage = createFileSystemStorage({ root: '/srv/kovo-derived-test' });
 const vectorAdapter = {

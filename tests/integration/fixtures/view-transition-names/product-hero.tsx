@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { trustedUrl } from '@kovojs/server';
+import { trustedUrl } from '@kovojs/browser';
 
 import type { ProductRecord } from './shared';
 

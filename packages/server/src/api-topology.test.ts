@@ -37,7 +37,6 @@ const taskValues = [
   agentApi.runAgentTurn,
   agentApi.tool,
   clientModulesApi.createMemoryVersionedClientModuleRegistry,
-  clientModulesApi.createMemoryVersionedClientModuleStore,
   commandApi.cmd,
   commandApi.commandAllowlist,
   commandApi.runCommand,
@@ -83,6 +82,7 @@ const taskValues = [
   renderTreeApi.renderTree,
   renderingApi.renderRouteHtml,
   replayApi.createMemoryMutationReplayStore,
+  replayApi.replayMutationWireBody,
   secretReadingApi.declareSecretReadCapability,
   securityApi.InlineUnverifiedUploadError,
   securityApi.RedosPatternError,
@@ -139,7 +139,6 @@ describe('@kovojs/server public topology', () => {
       'FrameworkManagedDbProvider',
       'isKovoApp',
       'LiveTargetAttestationAuthority',
-      'replayMutationWireBody',
     ]) {
       expect(name in serverRoot, name).toBe(false);
     }

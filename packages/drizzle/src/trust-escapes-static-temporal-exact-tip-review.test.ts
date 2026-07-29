@@ -121,7 +121,7 @@ describe('temporal exact-tip adversarial review', () => {
     'rejects a returned %s thenable before late authority can escape settlement',
     (label, body, protocol) => {
       const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('object-thenable-rereview', {
         input: s.object({}),
         run() { ${body} },
@@ -157,7 +157,7 @@ describe('temporal exact-tip adversarial review', () => {
     ],
   ])('rejects authored thenables assimilated through %s', (label, body) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('thenable-assimilation-rereview', {
         input: s.object({}),
         async run() { ${body} },
@@ -181,7 +181,7 @@ describe('temporal exact-tip adversarial review', () => {
     ['exact native Promise', `return Promise.resolve({ ok: true });`],
   ])('keeps the %s precision control inside the plain-data subset', (label, body) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('thenable-precision-rereview', {
         input: s.object({}),
         run() { ${body} },
@@ -193,7 +193,7 @@ describe('temporal exact-tip adversarial review', () => {
 
   it('keeps a primitive copied through Object.fromEntries independent from its source root', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('from-entries-fresh-slot', {
         input: s.object({ item: s.object({ value: s.string() }) }),
         run(input) {
@@ -228,7 +228,7 @@ describe('temporal exact-tip adversarial review', () => {
     ],
   ])('keeps Object.fromEntries %s mutations linked to the source root', (label, mutation) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('from-entries-live-reference', {
         input: s.object({ key: s.string(), item: s.object({ value: s.string() }) }),
         run(input) {
@@ -246,7 +246,7 @@ describe('temporal exact-tip adversarial review', () => {
 
   it('uses the last Object.fromEntries duplicate when projecting a fresh record', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('from-entries-last-write-wins', {
         input: s.object({ item: s.object({ value: s.string() }) }),
         run(input) {

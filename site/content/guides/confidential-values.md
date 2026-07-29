@@ -158,11 +158,8 @@ For confidential-at-rest columns, encrypt before the write:
 
 ```ts
 // Source-verified shape from packages/server/src/confidential-at-rest.ts
-import {
-  createConfidentialAtRestCipher,
-  createSigningKeyRing,
-  encryptAtRest,
-} from '@kovojs/server';
+import { createConfidentialAtRestCipher, encryptAtRest } from '@kovojs/server/confidential';
+import { createSigningKeyRing } from '@kovojs/server/signing';
 
 declare const env: { SSN_KEY: string };
 declare const input: { id: string; ssn: string };

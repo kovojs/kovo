@@ -272,7 +272,7 @@ function assertOptionalCookieString(value: unknown, label: string): asserts valu
  * allowed and recorded for `kovo explain --cookies`.
  *
  * @example
- * import { unsafeCookie, type CookieOptions } from '@kovojs/server';
+ * import { unsafeCookie, type CookieOptions } from '@kovojs/server/security';
  *
  * const embeddedSessionCookie: CookieOptions = {
  *   class: 'session',

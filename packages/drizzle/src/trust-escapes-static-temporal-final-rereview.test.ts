@@ -161,7 +161,7 @@ describe('temporal final independent rereview', () => {
     ],
   ])('C1 closes %s', (label, poison) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       ${lateDeferred}
       ${poison}
       task('c1-rereview', { input: s.object({}), async run() { return Promise.resolve(); } });
@@ -605,7 +605,7 @@ describe('temporal final independent rereview', () => {
     ['Promise.race assimilation', `return Promise.race([DeferredValue]);`],
   ])('C2 closes %s', (label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c2-rereview', { input: s.object({}), run() {
         ${localDeferred}
         class Holder {}
@@ -842,7 +842,7 @@ describe('temporal final independent rereview', () => {
     ],
   ])('C3 closes %s', (label, mutation) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-rereview', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         async run(input) {
@@ -865,7 +865,7 @@ describe('temporal final independent rereview', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { identity2 } from './helper.js';
           ${lateDeferred}
           Object.defineProperty(identity2(Promise), 'resolve', {
@@ -893,7 +893,7 @@ describe('temporal final independent rereview', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { helpers } from './helper.js';
           ${localDeferred}
           task('c3-import-rereview', {
@@ -923,7 +923,7 @@ describe('temporal final independent rereview', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { install } from './helper.js';
           task('c2-import-callback-rereview', { input: s.object({}), run() {
             class Holder {}
@@ -962,7 +962,7 @@ describe('temporal final independent rereview', () => {
     ],
   ])('keeps safe temporal control precise: %s', (label, statement) => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('temporal-precision-rereview', { input: s.object({}), run() {
         ${statement}
       } });
@@ -972,7 +972,7 @@ describe('temporal final independent rereview', () => {
 
   it('keeps a detached primitive input copy precise', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('c3-clone-precision-rereview', {
         input: s.object({ item: s.object({ value: s.string() }) }),
         run(input) {
@@ -1000,7 +1000,7 @@ describe('temporal final independent rereview', () => {
     ).join('\n');
     const startedAt = performance.now();
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       ${cases}
     `);
     const elapsed = performance.now() - startedAt;

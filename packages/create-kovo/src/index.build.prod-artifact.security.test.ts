@@ -94,7 +94,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         join(root, 'src', 'summary-carrier-proof.ts'),
         [
           "import { kovoAnalyzerSummary } from '@kovojs/drizzle';",
-          "import { mutation, s, serverValue } from '@kovojs/server';",
+          "import { mutation, s } from '@kovojs/server'\nimport { serverValue } from '@kovojs/server/write-safety';",
           "import { eq } from 'drizzle-orm';",
           "import { appAuthed, appCsrf, type AppRequest } from './auth.js';",
           "import { account } from './schema.js';",
@@ -1411,8 +1411,8 @@ function addQueryWireProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   const queries = replaceRequired(
     readFileSync(queriesPath, 'utf8'),
-    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { publicAccess, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
+    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server'\nimport { type JsonValue } from '@kovojs/core';",
     '/_q wire proof query import',
   );
   writeFileSync(

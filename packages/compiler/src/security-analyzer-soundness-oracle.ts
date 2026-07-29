@@ -1132,7 +1132,7 @@ function precisionGrantWitnessSource(id: ServerProvenancePrecisionGrantId): stri
         false,
       );
     case 'call-scoped-key':
-      return `import { task } from '@kovojs/server';
+      return `import { task } from '@kovojs/server/tasks';
 export const analyzerOracle = task('precision-scoped-key', {
   run(_input, ctx) {
     const scoped = ctx.actAs({ id: 'precision-principal' });
@@ -1326,7 +1326,7 @@ function transferWitnessSource(id: SecurityAbstractTransferId, noise: boolean): 
         noise,
       );
     case 'expression.call-scoped-key':
-      return `import { task } from '@kovojs/server';
+      return `import { task } from '@kovojs/server/tasks';
 export const analyzerOracle = task('analyzer-oracle', {
   run(_input, ctx) {
 ${noise ? '    const oracleNoise = 0;\n    void oracleNoise;\n' : ''}    const scoped = ctx.actAs({ id: 'oracle-principal' });

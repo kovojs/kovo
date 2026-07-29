@@ -1,4 +1,5 @@
-import { createMemoryStorage, s } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { s } from '@kovojs/server';
 
 const uploads = createMemoryStorage();
 

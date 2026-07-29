@@ -1,5 +1,6 @@
 import { domain, publicAccess, s } from '@kovojs/server';
-import type { AccessDecision, EndpointAuthDeclaration } from '@kovojs/server';
+import type { AccessDecision } from '@kovojs/server';
+import type { EndpointAuthDeclaration } from '@kovojs/server/routing';
 
 import type { BetterAuthSessionPayload } from '../session.js';
 import { betterAuthDeepFreeze } from './intrinsics.js';

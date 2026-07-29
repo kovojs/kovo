@@ -1,4 +1,5 @@
-import { createMemoryVersionedClientModuleRegistry, defineKovo, stylesheet } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { defineKovo, stylesheet } from '@kovojs/server';
 
 import {
   appRuntimeDbProvider,

@@ -47,7 +47,8 @@ function kv449Project(
 describe('SPEC §4.3/§5.2 finite compiler-owned security IR', () => {
   it('rejects laundering a whole request carrier through serverValue before mutation', () => {
     const diagnostics = kv449(`
-import { endpoint, serverValue } from '@kovojs/server';
+import { endpoint } from '@kovojs/server'
+import { serverValue } from '@kovojs/server/write-safety';
 function poison(target, replacement) { target.request = replacement; }
 export const report = endpoint('/report', {
   handler(input, context) {
@@ -1761,14 +1762,10 @@ export const report = endpoint('/report', {
 
   it('accepts exact reviewed command and module-scope storage capability doors', () => {
     const diagnostics = kv449(`
-import {
-  cmd,
-  commandAllowlist,
-  createFileSystemStorage,
-  mutation,
-  publicScopedKey,
-  runCommand,
-} from '@kovojs/server';
+import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core';
 const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
 const command = cmd('/usr/bin/true', [], { allow });
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
@@ -1787,14 +1784,11 @@ export const verify = mutation({
   // @kovo-security-certifies KV450 finite-scoped-key-sink-provenance
   it('proves exact scoped-key constructors at every non-database stateful key position', () => {
     const result = compile(`
-import {
-  createFileSystemStorage,
-  mutation,
-  publicScopedKey,
-  respond,
-  scopedKey,
-  task,
-} from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation, respond } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core'
+import { scopedKey } from '@kovojs/server/storage-keys'
+import { task } from '@kovojs/server/tasks';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const followup = task('followup', {
   async run(args, ctx) {
@@ -1825,13 +1819,10 @@ export const verify = mutation({
 
   it('rejects raw, cast, forged, and runtime-selected keys at every stateful sink family', () => {
     const diagnostics = kv450(`
-import {
-  createFileSystemStorage,
-  mutation,
-  respond,
-  task,
-  type ScopedKey,
-} from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation, respond } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks'
+import { type ScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 const followup = task('followup', { async run() {} });
 export const verify = mutation({
@@ -1858,7 +1849,8 @@ export const verify = mutation({
 
   it('fails closed when signUrl or schedule options can hide or replace a key', () => {
     const diagnostics = kv450(`
-import { mutation, task } from '@kovojs/server';
+import { mutation } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks';
 const followup = task('followup', { async run() {} });
 export const verify = mutation({
   async handler(input, request, context) {
@@ -1884,7 +1876,8 @@ export const verify = mutation({
       `
 import { DeclassifyPolicy, secret, trustedReveal } from '@kovojs/core/security';
 import { sql, trustedSql } from '@kovojs/drizzle';
-import { endpoint, declareSecretReadCapability } from '@kovojs/server';
+import { endpoint } from '@kovojs/server'
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
 import { eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { accounts, items } from './schema.js';
@@ -1978,7 +1971,8 @@ export const report = endpoint('/report', {
     expect(
       kv449(`
 import { sql, trustedSql } from '@kovojs/drizzle';
-import { declareSecretReadCapability, query } from '@kovojs/server';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
 export const report = query({
   async load(_input, context) {
     const statement = trustedSql(sql.raw('select id, classified from accounts'), {
@@ -2008,7 +2002,8 @@ export const report = query({ async load(_input, context) {
 `,
       `
 import { sql, trustedSql } from '@kovojs/drizzle';
-import { declareSecretReadCapability, query } from '@kovojs/server';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
 export const report = query({ async load(_input, context) {
   const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
   const escaped = statement;
@@ -2018,7 +2013,8 @@ export const report = query({ async load(_input, context) {
 `,
       `
 import { sql, trustedSql } from '@kovojs/drizzle';
-import { declareSecretReadCapability, query } from '@kovojs/server';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
 export const report = query({ async load(_input, context) {
   const statement = trustedSql(sql.raw('select id, classified from accounts'), { justification: 'reviewed' });
   const result = await context.db.execute(statement);
@@ -2045,7 +2041,7 @@ export const report = query({ async load(_input, context) {
     ],
     [
       'a renamed declared-secret capability import',
-      `import { declareSecretReadCapability as declareRead } from '@kovojs/server';`,
+      `import { declareSecretReadCapability as declareRead } from '@kovojs/server/secret-reading';`,
       `declareRead(statement, { columns: ['classified'], justification: 'renamed', source: 'accounts.classified', table: 'accounts' });`,
     ],
     [
@@ -2055,7 +2051,7 @@ export const report = query({ async load(_input, context) {
     ],
     [
       'computed declared-secret metadata',
-      `import { declareSecretReadCapability } from '@kovojs/server';`,
+      `import { declareSecretReadCapability } from '@kovojs/server/secret-reading';`,
       `declareSecretReadCapability(statement, { [input.key]: ['classified'], justification: 'computed', source: 'accounts.classified', table: 'accounts' });`,
     ],
     [
@@ -2157,14 +2153,16 @@ export const verify = mutation({ handler() { return runCommand(command); } });
     ).not.toEqual([]);
     expect(
       kv449(`
-import { mutation, runCommand } from '@kovojs/server';
+import { mutation } from '@kovojs/server'
+import { runCommand } from '@kovojs/server/command';
 const invoke = runCommand;
 export const verify = mutation({ handler() { return invoke(command); } });
 `),
     ).not.toEqual([]);
     expect(
       kv449(`
-import { createFileSystemStorage, mutation } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server';
 let storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 storage = replacement;
 export const verify = mutation({ handler() { return storage.stat('fixed-key'); } });
@@ -2172,7 +2170,8 @@ export const verify = mutation({ handler() { return storage.stat('fixed-key'); }
     ).not.toEqual([]);
     expect(
       kv449(`
-import { createFileSystemStorage, mutation } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server';
 export const verify = mutation({
   handler(input) {
     const storage = createFileSystemStorage({ root: input.root });
@@ -3266,7 +3265,9 @@ export const report = endpoint('/report', {
 
   it('enrolls inline and same-file referenced server roots in emitted manifests', () => {
     const result = compile(`
-import { endpoint, mutation, query, task, webhook } from '@kovojs/server';
+import { endpoint, mutation, query } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks'
+import { webhook } from '@kovojs/server/webhooks';
 
 async function loadCatalog(_input, ctx) {
   return ctx.db.select();
@@ -3454,7 +3455,8 @@ export const report = endpoint('/report', {
     expect(
       kv449Project(
         `
-import { mutation, query, trustedAssign } from '@kovojs/server';
+import { mutation, query } from '@kovojs/server'
+import { trustedAssign } from '@kovojs/server/write-safety';
 import { eq } from 'drizzle-orm';
 import { contacts } from './schema.js';
 
@@ -3573,7 +3575,7 @@ export const readonlyAppDb = appRuntimeReadonlyDb;
         runtimeSource
           .replace(
             "import { createSqliteAppRuntime } from '@kovojs/server/sqlite';",
-            "import { createPostgresAppRuntimeDb } from '@kovojs/server';",
+            "import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';",
           )
           .replace(
             'createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES })',
@@ -3660,20 +3662,20 @@ export const readonlyAppDb = appRuntimeReadonlyDb;
     ],
     [
       'a replaced exact trustedAssign binding',
-      `import { trustedAssign } from '@kovojs/server';`,
+      `import { trustedAssign } from '@kovojs/server/write-safety';`,
       `trustedAssign = () => new Response('raw');
        return trustedAssign(input.id, 'replaced');`,
     ],
     [
       'a mutable trustedAssign container',
-      `import { trustedAssign } from '@kovojs/server';`,
+      `import { trustedAssign } from '@kovojs/server/write-safety';`,
       `const helpers = { trustedAssign };
        helpers.trustedAssign = () => new Response('raw');
        return helpers.trustedAssign(input.id, 'container');`,
     ],
     [
       'an exact trustedAssign call carrying managed authority',
-      `import { trustedAssign } from '@kovojs/server';`,
+      `import { trustedAssign } from '@kovojs/server/write-safety';`,
       `return trustedAssign(request.db, 'authority laundering');`,
     ],
   ])(

@@ -3,15 +3,11 @@ import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  publicAccess,
-  renderRouteHtml,
-  route,
-  toNodeHandler,
-} from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+import { toNodeHandler } from '@kovojs/server/node';
 import ts from 'typescript';
 
 import {

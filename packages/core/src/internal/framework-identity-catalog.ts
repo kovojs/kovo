@@ -301,6 +301,17 @@ appendCatalogEntry(
     ['authoring', 'routing'],
   ),
 );
+appendCatalogFactories(
+  catalogEntries,
+  ['createMemoryWebhookReplayStore', 'webhookReplayIdentity'],
+  (exportName) =>
+    serverTaskSurface(
+      exportName,
+      '@kovojs/server/webhooks',
+      ['public-webhooks', 'webhook'],
+      ['authoring', 'routing'],
+    ),
+);
 appendCatalogEntry(
   catalogEntries,
   serverTaskSurface(
@@ -354,12 +365,51 @@ appendCatalogEntry(
   catalogEntries,
   serverTaskSurface('hashPassword', '@kovojs/server/password', ['password', 'public-password']),
 );
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('createMemoryVersionedClientModuleRegistry', '@kovojs/server/client-modules', [
+    'client-modules',
+    'public-client-modules',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('createSigningKeyRing', '@kovojs/server/signing', [
+    'keyring',
+    'public-signing',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('createStorageDownloadEndpoint', '@kovojs/server/storage-downloads', [
+    'capability-route',
+    'public-storage-downloads',
+  ]),
+);
+appendCatalogFactories(
+  catalogEntries,
+  [
+    'checkPostgresAppDbPosture',
+    'createPostgresAppRuntimeDb',
+    'declarePublicRelation',
+    'migratePostgresAppDb',
+    'planPostgresAppDbMigration',
+    'postgresAppRuntimeOptions',
+    'postgresSchemaModule',
+    'provisionPostgresAppDb',
+  ],
+  (exportName) =>
+    serverTaskSurface(exportName, '@kovojs/server/postgres', [
+      'postgres-runtime',
+      'public-postgres',
+    ]),
+);
 appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
 appendCatalogEntry(catalogEntries, serverData('stream'));
 appendCatalogFactories(catalogEntries, ['cmd', 'commandAllowlist', 'runCommand'], serverCommand);
 appendCatalogFactories(
   catalogEntries,
-  ['createFileSystemStorage', 'createS3CompatibleStorage'],
+  ['createFileSystemStorage', 'createMemoryStorage', 'createS3CompatibleStorage'],
   coreStorage,
 );
 appendCatalogEntry(catalogEntries, coreScopedKey('publicScopedKey'));

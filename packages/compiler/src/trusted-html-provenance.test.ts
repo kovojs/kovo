@@ -699,10 +699,10 @@ export const C = component({
     ).toHaveLength(1);
   });
 
-  it('resolves trustedHtml through the @kovojs/server rendering re-export', () => {
+  it('resolves trustedHtml through its canonical browser home', () => {
     expect(
       kv426(`
-import { trustedHtml } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => <article>{trustedHtml(post.body)}</article>,
@@ -730,7 +730,7 @@ export const C = component({
   render: ({ post }) => <article>{kovo.trustedHtml(post.body)}</article>,
 });
 `),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
 
     expect(
       kv426(`
@@ -1088,7 +1088,7 @@ export const C = component({
   it('resolves trustedUrl through @kovojs/server and keeps local lookalikes clean', () => {
     expect(
       kv426(`
-import { trustedUrl } from '@kovojs/server';
+import { trustedUrl } from '@kovojs/browser';
 export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => <a href={trustedUrl(post.href)}>read</a>,

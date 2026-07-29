@@ -1,4 +1,8 @@
-import type { CustomWebhookVerifier, WebhookVerificationRequest, WebhookVerifier } from '@kovojs/core/webhooks';
+import type {
+  CustomWebhookVerifier,
+  WebhookVerificationRequest,
+  WebhookVerifier,
+} from '@kovojs/core/webhooks';
 import {
   hasFrameworkDurableReplayStoreReceipt,
   propagateFrameworkDurableReplayStoreReceipt,
@@ -755,7 +759,8 @@ function assertWebhookReplayStoreOptions(options: {
  * @param definition - The `verify`, `input` schema, and `handler` (plus optional idempotency/transaction).
  * @returns A `WebhookDeclaration` (a verified `EndpointDeclaration`).
  * @example
- * import { domain, webhook, s } from '@kovojs/server';
+ * import { domain, s } from '@kovojs/server'
+ * import { webhook } from '@kovojs/server/webhooks';
  *
  * const order = domain('order');
  *
@@ -1786,7 +1791,7 @@ function webhookAuth(definition: WebhookVerificationFields): EndpointAuthDeclara
 
   return {
     kind: 'verifier',
-    name: definition.verify.resolved.scheme,
+    name: definition.verify.scheme,
   } satisfies EndpointAuthDeclaration;
 }
 
@@ -1796,7 +1801,7 @@ function webhookCsrfJustification(name: string, definition: WebhookVerificationF
 }
 
 function webhookVerifierScheme(verifier: WebhookVerifier): string {
-  return verifier.kind === 'custom' ? verifier.scheme : verifier.resolved.scheme;
+  return verifier.scheme;
 }
 
 async function verifyWebhook(

@@ -1,4 +1,4 @@
-import type { JsonValue } from '@kovojs/server';
+import type { JsonValue } from '@kovojs/core';
 
 import { app } from './kovo.js';
 import { contacts } from './schema.js';

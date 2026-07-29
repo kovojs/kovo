@@ -15,7 +15,8 @@ part of a normal app workflow. Reach for a raw endpoint only when the client can
 Start with the field and let the mutation own the upload:
 
 ```ts
-import { createMemoryStorage, mutation, publicAccess, s } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { mutation, publicAccess, s } from '@kovojs/server';
 
 const avatarStorage = createMemoryStorage();
 
@@ -69,7 +70,7 @@ Use a filesystem store in local development so you can see the bytes land:
 
 ```ts
 // Source-verified shape from packages/core/src/storage.ts
-import { createFileSystemStorage } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage';
 
 export const avatarStorage = createFileSystemStorage({
   root: '.kovo/storage',
@@ -94,7 +95,7 @@ import {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
-} from '@kovojs/server';
+} from '@kovojs/core/storage';
 
 declare const s3Client: any;
 
@@ -113,13 +114,11 @@ adapter in deployed apps.
 To serve the file back, mount a storage download endpoint and mint the URL from request context:
 
 ```ts
-import {
-  createMemoryStorage,
-  createStorageDownloadEndpoint,
-  publicScopedKey,
-  route,
-  type SigningKeyRing,
-} from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage'
+import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'
+import { publicScopedKey } from '@kovojs/core'
+import { route } from '@kovojs/server'
+import { type SigningKeyRing } from '@kovojs/server/signing';
 
 const avatarStorage = createMemoryStorage();
 // Construct this opaque ring in lock-first deployment configuration from a dedicated

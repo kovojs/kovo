@@ -217,16 +217,8 @@ export default createApp({
     const root = fixture('safe-command');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import {
-  cmd,
-  commandAllowlist,
-  createApp,
-  mutation,
-  publicAccess,
-  route,
-  runCommand,
-  s,
-} from '@kovojs/server';
+      `import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
 const command = cmd('/usr/bin/true', [], { allow });
 export const safeMutation = mutation({
@@ -340,15 +332,9 @@ export default createApp({
     const root = fixture('framework-file-authority');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import {
-  createApp,
-  createFileSystemStorage,
-  mutation,
-  publicAccess,
-  rootedFiles,
-  route,
-  s,
-} from '@kovojs/server';
+      `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server'
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { rootedFiles } from '@kovojs/server/files';
 export const unsafeFiles = mutation({
   access: publicAccess('request-minted file authority audit'),
   input: s.object({ value: s.string() }),
@@ -377,16 +363,8 @@ export default createApp({
     const root = fixture('framework-command-authority');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import {
-  cmd,
-  commandAllowlist,
-  createApp,
-  mutation,
-  publicAccess,
-  route,
-  runCommand,
-  s,
-} from '@kovojs/server';
+      `import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 export const unsafeCommand = mutation({
   access: publicAccess('request-minted command authority audit'),
   input: s.object({ value: s.string() }),
@@ -415,15 +393,9 @@ export default createApp({
     const staticRoot = JSON.stringify(root);
     writeFileSync(
       join(root, 'app.ts'),
-      `import {
-  createApp,
-  createFileSystemStorage,
-  mutation,
-  publicAccess,
-  rootedFiles,
-  route,
-  s,
-} from '@kovojs/server';
+      `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server'
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { rootedFiles } from '@kovojs/server/files';
 const files = await rootedFiles(${staticRoot});
 const storage = createFileSystemStorage({ root: ${staticRoot} });
 export const safeFiles = mutation({
@@ -651,7 +623,8 @@ export default createApp({ routes: [unsafeRoute] });
     const root = fixture('object-factory-authority');
     writeFileSync(
       join(root, 'app.mjs'),
-      `import { createApp, mutation, publicAccess, rootedFiles, route, s } from '@kovojs/server';
+      `import { createApp, mutation, publicAccess, route, s } from '@kovojs/server'
+import { rootedFiles } from '@kovojs/server/files';
 const factories = { mutation };
 export const unsafeMutation = factories.mutation({
   access: publicAccess('object factory authority audit'),
@@ -774,19 +747,11 @@ export default createApp({
       `import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  cmd,
-  commandAllowlist,
-  createApp,
-  createFileSystemStorage,
-  mutation,
-  publicAccess,
-  rootedFiles,
-  route,
-  runCommand,
-  s,
-  trustedHtml,
-} from '@kovojs/server';
+import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server'
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { rootedFiles } from '@kovojs/server/files'
+import { trustedHtml } from '@kovojs/browser';
 
 export const unsafeMatrix = mutation({
   access: publicAccess('strict request-derived authority matrix'),
@@ -843,14 +808,8 @@ export default createApp({
     const root = fixture('strict-public-wire-carriers');
     writeFileSync(
       join(root, 'app.ts'),
-      `import {
-  createApp,
-  publicAccess,
-  query,
-  route,
-  trustedHtml,
-  type QueryLoadContext,
-} from '@kovojs/server';
+      `import { createApp, publicAccess, query, route, type QueryLoadContext } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 
 declare global {
   interface ImportMeta {
@@ -913,13 +872,8 @@ export default createApp({ queries: [unsafeQuery], routes: [unsafeRoute] });
     const root = fixture('strict-endpoint-wire');
     writeFileSync(
       join(root, 'app.ts'),
-      `import {
-  createApp,
-  endpoint,
-  publicAccess,
-  route,
-  trustedHtml,
-} from '@kovojs/server';
+      `import { createApp, endpoint, publicAccess, route } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 
 declare global {
   interface ImportMeta {
@@ -968,7 +922,8 @@ export default createApp({
     const safeRoot = fixture('strict-session-value-safe');
     writeFileSync(
       join(safeRoot, 'app.ts'),
-      `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+      `import { createApp, publicAccess, route } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 export default createApp<{ session: string }>({
   routes: [
     route('/', {
@@ -993,7 +948,8 @@ export default createApp<{ session: string }>({
     const unsafeRoot = fixture('strict-session-set-cookie-unsafe');
     writeFileSync(
       join(unsafeRoot, 'app.ts'),
-      `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+      `import { createApp, publicAccess, route } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 export default createApp<{ session: string }>({
   routes: [
     route('/', {
@@ -1199,23 +1155,12 @@ export default createApp({ routes: [serializationRoute] });
     writeFileSync(
       join(root, 'app.ts'),
       `import { execFileSync } from 'node:child_process';
-import {
-  createApp,
-  publicAccess,
-  query,
-  route,
-  trustedHtml,
-  webhook,
-  type MutationReplayStore,
-  type MutationReplayResponse,
-  type Schema,
-  type ScopedKey,
-  type VersionedClientModuleInput,
-  type VersionedClientModuleStore,
-  type WebhookReplayIdentity,
-  type WebhookReplayStore,
-  type WebhookWireResponse,
-} from '@kovojs/server';
+import { createApp, publicAccess, query, route, type Schema } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser'
+import { webhook, type WebhookReplayIdentity, type WebhookReplayStore, type WebhookWireResponse } from '@kovojs/server/webhooks'
+import { type MutationReplayStore, type MutationReplayResponse } from '@kovojs/server/replay'
+import { type ScopedKey } from '@kovojs/core'
+import { type VersionedClientModuleInput, type VersionedClientModuleStore } from '@kovojs/server/client-modules';
 
 class BaseSchema implements Schema<Record<string, never>> {
   parse(_input: unknown): Record<string, never> {
@@ -1337,15 +1282,9 @@ export default createApp({
     writeFileSync(
       join(root, 'app.ts'),
       String.raw`import * as server from '@kovojs/server';
-import {
-  createApp,
-  endpoint,
-  publicAccess,
-  rootedFiles,
-  route,
-  type EndpointDefinition,
-  type EndpointHandler,
-} from '@kovojs/server';
+import { createApp, endpoint, publicAccess, route, type EndpointDefinition } from '@kovojs/server'
+import { rootedFiles } from '@kovojs/server/files'
+import { type EndpointHandler } from '@kovojs/server/routing';
 
 declare global {
   interface ImportMeta {

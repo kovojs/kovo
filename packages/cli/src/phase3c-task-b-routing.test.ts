@@ -13,7 +13,9 @@ import {
 } from '@kovojs/drizzle/internal/static';
 
 const source = `
-import { createApp, endpoint, layout, mutation, query, route, task, webhook } from '@kovojs/server';
+import { createApp, endpoint, layout, mutation, query, route } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks'
+import { webhook } from '@kovojs/server/webhooks';
 
 export const app = createApp({});
 export const api = endpoint('/api', { handler() { return { ok: true }; } });

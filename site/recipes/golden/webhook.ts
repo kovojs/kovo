@@ -1,5 +1,6 @@
 import { hmacSignature } from '@kovojs/core/webhooks';
-import { s, webhook } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { webhook } from '@kovojs/server/webhooks';
 
 export function defineOrderWebhook(secret: string) {
   return webhook('/webhooks/orders', {

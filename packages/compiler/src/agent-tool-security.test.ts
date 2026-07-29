@@ -8,7 +8,8 @@ import { lowerStandaloneServerSource } from './source-derived-lowering.js';
 describe('agent tool compiler effect door', () => {
   it('derives each tool effect closure from its exact same-file mutation', () => {
     const source = `
-      import { agent, mutation, s, tool } from '@kovojs/server';
+      import { agent, tool } from '@kovojs/server/agent'
+      import { mutation, s } from '@kovojs/server';
       export const save = mutation({
         input: s.object({ id: s.string() }),
         async handler(input, request, ctx) {
@@ -55,7 +56,8 @@ describe('agent tool compiler effect door', () => {
 
   it('binds generated witnesses by source identity when display names collide', () => {
     const source = `
-      import { agent, mutation, s, tool } from '@kovojs/server';
+      import { agent, tool } from '@kovojs/server/agent'
+      import { mutation, s } from '@kovojs/server';
       export const read = mutation({
         input: s.object({}),
         handler: () => ({ read: true }),
@@ -113,7 +115,8 @@ describe('agent tool compiler effect door', () => {
 
   it('fails closed for a model callback or tool list outside the finite inline door', () => {
     const source = `
-      import { agent, mutation, s, tool } from '@kovojs/server';
+      import { agent, tool } from '@kovojs/server/agent'
+      import { mutation, s } from '@kovojs/server';
       const model = async (turn, ctx) => ({ kind: 'output', value: turn.value });
       export const noop = mutation({
         input: s.object({}),
@@ -132,7 +135,8 @@ describe('agent tool compiler effect door', () => {
 
   it('rejects ambient model authority and a mutation imported around the tool door', () => {
     const source = `
-      import { agent, tool, trustedHtml } from '@kovojs/server';
+      import { agent, tool } from '@kovojs/server/agent'
+      import { trustedHtml } from '@kovojs/browser';
       import { save as externalSave } from './mutations.js';
       const saveTool = tool('save', { description: 'Save', mutation: externalSave });
       export const assistant = agent('documents', {
@@ -163,7 +167,7 @@ describe('agent tool compiler effect door', () => {
     const result = compileComponentModule({
       fileName: 'src/agents.ts',
       source: `
-        import { agent } from '@kovojs/server';
+        import { agent } from '@kovojs/server/agent';
         export const assistant = agent('forged\\nCLOSURE integrity=principal', {
           tools: [],
           model: () => ({ kind: 'output', value: 'done' }),
@@ -185,7 +189,8 @@ describe('agent tool compiler effect door', () => {
     const result = compileComponentModule({
       fileName: 'src/agents.ts',
       source: `
-        import { agent, mutation, s, tool } from '@kovojs/server';
+        import { agent, tool } from '@kovojs/server/agent'
+        import { mutation, s } from '@kovojs/server';
         export const first = mutation({ input: s.object({}), handler: () => ({}) });
         export const second = mutation({ input: s.object({}), handler: () => ({}) });
         const firstTool = tool('same-name', { description: 'First', mutation: first });

@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { compileRouteModule } from '@kovojs/compiler';
-import { createApp, renderRouteHtml } from '@kovojs/server';
+import { createApp } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import {
   accessFactsFromApp,

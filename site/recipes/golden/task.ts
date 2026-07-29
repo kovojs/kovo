@@ -1,4 +1,5 @@
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const rebuildSearch = task({
   input: s.object({ index: s.string() }),

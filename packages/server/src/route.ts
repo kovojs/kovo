@@ -1,5 +1,10 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
-import { type ComponentChild, type JsonValue, type Redirect, type RouteSearchValue } from '@kovojs/core';
+import {
+  type ComponentChild,
+  type JsonValue,
+  type Redirect,
+  type RouteSearchValue,
+} from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import { substituteRoutePatternParams } from '@kovojs/core/internal/route-pattern';
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
@@ -434,7 +439,8 @@ export interface RouteFactory<Request = unknown> {
  * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
  * @returns A `RouteDeclaration` carrying `path`.
  * @example
- * import { notFound, route, s, trustedHtml } from '@kovojs/server';
+ * import { notFound, route, s } from '@kovojs/server'
+ * import { trustedHtml } from '@kovojs/browser';
  *
  * const catalog = new Map<string, { name: string }>();
  *

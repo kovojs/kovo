@@ -535,10 +535,10 @@ export const save = mutation('cart/save', {
     expect(handler?.paramNames).toEqual(['input', 'request']);
   });
 
-  it('records mutation handlers through subpath, namespace, and local aliases', () => {
+  it('records mutation handlers through root, namespace, and local aliases', () => {
     const source = `
-import { mutation as defineMutation } from '@kovojs/server/api/data';
-import * as data from '@kovojs/server/api/data';
+import { mutation as defineMutation } from '@kovojs/server';
+import * as data from '@kovojs/server';
 const makeMutation = defineMutation;
 export const save = makeMutation({ handler(input, request) { return request.db.insert(input); } });
 export const remove = data.mutation({ handler(input, request) { return request.db.delete(input); } });
@@ -1121,7 +1121,7 @@ export const sendReceipt = task('email/send-receipt', {
 
   it('records webhook direct write sink facts with the webhook path owner', () => {
     const source = `
-import { webhook } from '@kovojs/server';
+import { webhook } from '@kovojs/server/webhooks';
 
 export const paymentWebhook = webhook('/webhooks/payment', {
   async handler(request) {
@@ -1149,7 +1149,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 
   it('records webhook transaction raw-driver escape facts with the webhook path owner', () => {
     const source = `
-import { webhook } from '@kovojs/server';
+import { webhook } from '@kovojs/server/webhooks';
 
 export const paymentWebhook = webhook('/webhooks/payment', {
   async handler(input, context) {
@@ -1220,7 +1220,8 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
 
   it('records webhook recordChange facts with declared write keys', () => {
     const source = `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -1260,7 +1261,8 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 
   it('records destructured webhook recordChange facts', () => {
     const source = `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -1300,7 +1302,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
 
   it('records durable task handlers through namespace and local aliases', () => {
     const source = `
-import * as data from '@kovojs/server/api/data';
+import * as data from '@kovojs/server/tasks';
 const defineTask = data.task;
 export const sendReceipt = defineTask('email/send-receipt', {
   async run(args, ctx) { await ctx.runMutation(markSent, { id: args.id }); },

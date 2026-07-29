@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderRouteHtml } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {

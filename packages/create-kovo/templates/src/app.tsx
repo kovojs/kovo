@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { redirect } from '@kovojs/server';
+import { redirect } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { LoginForm, SignOutForm } from './components/auth-forms.js';

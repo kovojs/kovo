@@ -137,7 +137,8 @@ if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1
  * @example
  * import '@kovojs/server/runtime-bootstrap';
  *
- * import { createApp, createRequestHandler, route } from '@kovojs/server';
+ * import { createApp, route } from '@kovojs/server'
+ * import { createRequestHandler } from '@kovojs/server/custom-adapters';
  *
  * const app = createApp({
  *   routes: [route('/', { page: () => <h1>Home</h1> })],

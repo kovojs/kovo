@@ -1,5 +1,5 @@
+import type { CsrfOptions } from '@kovojs/server/security';
 import type {
-  CsrfOptions,
   MutationDefinition,
   MutationResult,
   QueryDefinition,

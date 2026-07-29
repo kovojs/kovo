@@ -290,7 +290,8 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
 
   it('keeps exact reviewed root-free framework receiver chains out of root widening', () => {
     const { call } = analyzeSource(`
-      import { createMemoryVersionedClientModuleRegistry, s } from '@kovojs/server';
+      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules'
+      import { s } from '@kovojs/server';
       const clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules.put({ source: 'export const value = 1;' });
       const count = s.number().int().min(1).default(1);
@@ -336,7 +337,7 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
 
   it('keeps unknown reviewed-receiver members root-bearing by default', () => {
     const { call } = analyzeSource(`
-      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
       const clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules.futureMethod();
     `);
@@ -346,7 +347,8 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
 
   it('does not let a reviewed receiver token survive a mutable root-factory overwrite', () => {
     const { call } = analyzeSource(`
-      import { createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
+      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules'
+      import { route } from '@kovojs/server';
       let clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules = route;
       clientModules.put({ source: 'export const value = 1;' });

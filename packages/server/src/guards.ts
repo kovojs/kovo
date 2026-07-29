@@ -867,7 +867,8 @@ function createOwnershipGuard<
  * query, or mutation (SPEC §6.5).
  *
  * @example
- * import { guards, route, type SessionRequestLike } from '@kovojs/server';
+ * import { guards, route } from '@kovojs/server'
+ * import { type SessionRequestLike } from '@kovojs/server/routing';
  *
  * interface AppRequest extends SessionRequestLike {}
  *

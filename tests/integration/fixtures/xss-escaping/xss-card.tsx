@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component, form } from '@kovojs/core';
-import { trustedUrl } from '@kovojs/server';
+import { trustedUrl } from '@kovojs/browser';
 
 import { payloadQuery, type PayloadResult } from './shared';
 

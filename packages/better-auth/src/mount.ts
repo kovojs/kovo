@@ -1,4 +1,4 @@
-import type { EndpointDeclaration } from '@kovojs/server';
+import type { EndpointDeclaration } from '@kovojs/server/routing';
 import { createBetterAuthMountEndpoint } from '@kovojs/server/internal/better-auth';
 
 import type { BetterAuthMountAdapter } from './mount-adapter.js';

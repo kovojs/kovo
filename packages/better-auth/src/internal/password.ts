@@ -1,7 +1,7 @@
 import {
   hashPassword as kovoHashPassword,
   verifyPassword as kovoVerifyPassword,
-} from '@kovojs/server';
+} from '@kovojs/server/password';
 
 import {
   betterAuthCredentialConsumers,

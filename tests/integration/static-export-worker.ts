@@ -1,4 +1,5 @@
-import { createApp, exportStaticApp, guards, route } from '@kovojs/server';
+import { createApp, guards, route } from '@kovojs/server';
+import { exportStaticApp } from '@kovojs/server/static-export';
 
 import { createStaticExportL0L1App } from './fixtures/static-export-l0-l1/app-definition.ts';
 import type {

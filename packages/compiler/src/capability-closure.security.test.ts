@@ -310,7 +310,9 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'roots.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import { createApp, endpoint, layout, mutation, query, route, task, webhook } from '@kovojs/server';
+          import { createApp, endpoint, layout, mutation, query, route } from '@kovojs/server'
+          import { task } from '@kovojs/server/tasks'
+          import { webhook } from '@kovojs/server/webhooks';
           import { handler } from '@kovojs/browser';
           export const app = createApp({});
           export const page = route('/page', { access: {}, render() { return null; } });
@@ -1057,17 +1059,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import {
-            createApp,
-            createMemoryStorage,
-            createMemoryVersionedClientModuleRegistry,
-            domain,
-            mutation,
-            publicScopedKey,
-            query,
-            route,
-            s,
-          } from '@kovojs/server';
+          import { createApp, domain, mutation, query, route, s } from '@kovojs/server'
+          import { createMemoryStorage } from '@kovojs/core/storage'
+          import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules'
+          import { publicScopedKey } from '@kovojs/core';
 
           const records = domain('records');
           const recordsQuery = query('records', {
@@ -1110,7 +1105,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { createMemoryStorage, route } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'
+          import { route } from '@kovojs/server';
           const storage = createMemoryStorage();
           storage.acquireAuthority();
           export const page = route('/storage-escape', { page() { return null; } });
@@ -1540,7 +1536,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'server.ts',
         source: `
           import '@kovojs/server/runtime-bootstrap';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           import { handler } from './handler.js';
           export const listener = toNodeHandler(handler);
         `,
@@ -2892,13 +2888,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'app.ts',
         source: `
-          import {
-            createPostgresAppRuntimeDb,
-            createS3CompatibleStorage,
-            rootedFiles,
-            route,
-            runCommand,
-          } from '@kovojs/server';
+          import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres'
+          import { createS3CompatibleStorage } from '@kovojs/core/storage'
+          import { rootedFiles } from '@kovojs/server/files'
+          import { route } from '@kovojs/server'
+          import { runCommand } from '@kovojs/server/command';
           export const page = route('/doors', { render() {
             return [createPostgresAppRuntimeDb, createS3CompatibleStorage, rootedFiles, runCommand];
           } });
@@ -3124,7 +3118,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'node-entry.ts',
         source: `
           import { readFileSync } from 'node:fs';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           const raw = async () => new Response(readFileSync('/tmp/secret'));
           export const listener = toNodeHandler(raw);
         `,
@@ -3149,7 +3143,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         source: `
           import '@kovojs/server/runtime-bootstrap';
           import { createServer } from 'node:http';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           import { handler } from './handler.js';
           createServer(toNodeHandler(handler)).listen(3000);
         `,
@@ -3157,7 +3151,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'handler.ts',
         source: `
-          import { createRequestHandler } from '@kovojs/server';
+          import { createRequestHandler } from '@kovojs/server/custom-adapters';
           import { app } from './app.js';
           export const handler = createRequestHandler(app);
         `,
@@ -3192,7 +3186,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
           import { handler } from './handler.js';
           import '@kovojs/server/runtime-bootstrap';
           import { createServer } from 'node:http';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           createServer(toNodeHandler(handler)).listen(3000);
         `,
       },
@@ -3216,7 +3210,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
           import fs = require('node:fs');
           import '@kovojs/server/runtime-bootstrap';
           import { createServer } from 'node:http';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           import { handler } from './handler.js';
           fs.statSync('.');
           createServer(toNodeHandler(handler)).listen(3000);
@@ -3239,7 +3233,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'server.ts',
         source: `
           import '@kovojs/server/runtime-bootstrap';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           const handler = async () => new Response('ok');
           export const listener = toNodeHandler(handler);
         `,
@@ -3259,7 +3253,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         source: `
           import '@kovojs/server/runtime-bootstrap';
           import { createServer } from 'node:http';
-          import { toNodeHandler } from '@kovojs/server';
+          import { toNodeHandler } from '@kovojs/server/node';
           import { handler } from './handler.js';
           createServer(toNodeHandler(handler)).listen(3000);
         `,

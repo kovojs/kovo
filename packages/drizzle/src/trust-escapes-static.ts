@@ -47,6 +47,7 @@ import {
   canonicalFrameworkExportForExpression,
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  moduleSpecifierResolvesToFrameworkExport,
 } from './static/framework-identity.js';
 import {
   runtimeArrayLength,
@@ -3770,9 +3771,42 @@ const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@kovojs/better-auth',
   '@kovojs/browser',
   '@kovojs/core',
+  '@kovojs/core/diagnostics',
+  '@kovojs/core/security',
+  '@kovojs/core/storage',
+  '@kovojs/core/webhooks',
   '@kovojs/drizzle',
   '@kovojs/server',
+  '@kovojs/server/agent',
+  '@kovojs/server/client-modules',
+  '@kovojs/server/command',
+  '@kovojs/server/confidential',
+  '@kovojs/server/custom-adapters',
+  '@kovojs/server/data',
+  '@kovojs/server/delegation',
+  '@kovojs/server/derived-data',
+  '@kovojs/server/diagnostics',
+  '@kovojs/server/egress',
+  '@kovojs/server/files',
+  '@kovojs/server/node',
+  '@kovojs/server/password',
+  '@kovojs/server/postgres',
+  '@kovojs/server/principal-epochs',
+  '@kovojs/server/principal-erasure',
+  '@kovojs/server/render-tree',
+  '@kovojs/server/rendering',
+  '@kovojs/server/replay',
+  '@kovojs/server/routing',
+  '@kovojs/server/secret-reading',
+  '@kovojs/server/security',
+  '@kovojs/server/signing',
   '@kovojs/server/sqlite',
+  '@kovojs/server/static-export',
+  '@kovojs/server/storage-downloads',
+  '@kovojs/server/storage-keys',
+  '@kovojs/server/tasks',
+  '@kovojs/server/webhooks',
+  '@kovojs/server/write-safety',
   '@kovojs/style',
   '@kovojs/ui/badge',
   '@kovojs/ui/button',
@@ -7786,10 +7820,13 @@ function requestExactPristineDirectImport(
   exportName: string,
 ): import('ts-morph').Identifier | undefined {
   const callee = unwrapStaticExpression(expression);
-  return Node.isIdentifier(callee) &&
+  const direct =
+    Node.isIdentifier(callee) &&
     callee.getText() === exportName &&
-    requestExpressionIsDirectImportedExport(callee, module, exportName) &&
-    requestExactImportedCarrierIsPristine(callee, module, exportName)
+    requestExpressionIsDirectImportedExport(callee, module, exportName);
+  const pristine =
+    direct && requestExactImportedCarrierIsPristine(callee, module, exportName);
+  return direct && pristine
     ? callee
     : undefined;
 }
@@ -10017,7 +10054,9 @@ function requestExactModuleScopeConstCallDeclaration(
   call: import('ts-morph').CallExpression,
   exportName: 'createMemoryStorage' | 'createSigningKeyRing' | 'createStorageDownloadEndpoint',
 ): import('ts-morph').VariableDeclaration | undefined {
-  if (!requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', exportName)) {
+  const module = exportName === 'createMemoryStorage' ? '@kovojs/core' : '@kovojs/server';
+  const direct = requestExactPristineDirectImport(call.getExpression(), module, exportName);
+  if (!direct) {
     return undefined;
   }
   const declaration = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
@@ -13986,6 +14025,25 @@ const REQUEST_DIRECT_IMPORTED_BINDING_KEYS = new WeakMap<
   Map<string, ReadonlySet<string>>
 >();
 
+function requestModuleSpecifierExportsCanonicalMember(
+  specifier: string | undefined,
+  module: string,
+  exportName: string,
+): boolean {
+  if (
+    module === '@kovojs/browser' ||
+    module === '@kovojs/core' ||
+    module === '@kovojs/drizzle' ||
+    module === '@kovojs/headless-ui' ||
+    module === '@kovojs/server' ||
+    module === '@kovojs/style' ||
+    module === 'drizzle-orm'
+  ) {
+    return moduleSpecifierResolvesToFrameworkExport(specifier, frameworkExport(module, exportName));
+  }
+  return specifier === module;
+}
+
 function requestDirectImportedBindingKeys(
   sourceFile: SourceFile,
   module: string,
@@ -14002,7 +14060,14 @@ function requestDirectImportedBindingKeys(
   if (cached) return cached;
   const bindings = new Set<string>();
   for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== module) continue;
+    const moduleMatches = requestModuleSpecifierExportsCanonicalMember(
+      declaration.getModuleSpecifierValue(),
+      module,
+      exportName,
+    );
+    if (!moduleMatches) {
+      continue;
+    }
     if (kind === 'namespace') {
       const symbol = declaration.getNamespaceImport()?.getSymbol();
       if (symbol) bindings.add(requestSymbolKey(symbol));
@@ -14102,7 +14167,11 @@ function requestExactImportedCarrierIsPristine(
       .getImportDeclarations()
       .some(
         (declaration) =>
-          declaration.getModuleSpecifierValue() === module &&
+          requestModuleSpecifierExportsCanonicalMember(
+            declaration.getModuleSpecifierValue(),
+            module,
+            exportName,
+          ) &&
           declaration.getNamedImports().some((entry) => {
             if (entry.isTypeOnly() || entry.getName() !== exportName) return false;
             return (entry.getAliasNode() ?? entry.getNameNode()).getText() === localName;
@@ -14131,7 +14200,11 @@ function requestExactImportedCarrierIsPristine(
       for (const declaration of sourceFile.getExportDeclarations()) {
         if (declaration.isTypeOnly()) continue;
         const exported = declaration.getNamedExports();
-        if (declaration.getModuleSpecifierValue() === module) {
+        if (requestModuleSpecifierExportsCanonicalMember(
+          declaration.getModuleSpecifierValue(),
+          module,
+          exportName,
+        )) {
           if (
             exported.length === 0 ||
             exported.some(
@@ -14193,7 +14266,11 @@ function requestExactImportedCarrierIsPristine(
           if (
             specifier &&
             isStringLiteralLike(specifier) &&
-            specifier.getLiteralText() === module
+            requestModuleSpecifierExportsCanonicalMember(
+              specifier.getLiteralText(),
+              module,
+              exportName,
+            )
           ) {
             return false;
           }

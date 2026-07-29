@@ -655,14 +655,16 @@ function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
   return [
     {
       expectation: 'enforced',
-      importLine: 'import { task, webhook } from "@kovojs/server";',
+      importLine:
+        'import { task } from "@kovojs/server/tasks"\nimport { webhook } from "@kovojs/server/webhooks";',
       kind: 'control',
       label: 'direct task/webhook imports',
       source: directDbTaskWebhookSource({ taskCallee: 'task', webhookCallee: 'webhook' }),
     },
     {
       expectation: 'enforced',
-      importLine: 'import { task as defineTask, webhook as defineWebhook } from "@kovojs/server";',
+      importLine:
+        'import { task as defineTask } from "@kovojs/server/tasks";\nimport { webhook as defineWebhook } from "@kovojs/server/webhooks";',
       kind: 'import-alias',
       label: 'task/webhook named import aliases',
       source: directDbTaskWebhookSource({
@@ -672,17 +674,22 @@ function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
     },
     {
       expectation: 'enforced',
-      importLine: 'import * as srv from "@kovojs/server";',
+      importLine:
+        'import * as tasks from "@kovojs/server/tasks";\nimport * as webhooks from "@kovojs/server/webhooks";',
       kind: 'namespace-import',
       label: 'task/webhook namespace members',
-      source: directDbTaskWebhookSource({ taskCallee: 'srv.task', webhookCallee: 'srv.webhook' }),
+      source: directDbTaskWebhookSource({
+        taskCallee: 'tasks.task',
+        webhookCallee: 'webhooks.webhook',
+      }),
     },
     {
       expectation: 'enforced',
       extraFiles: [
         {
           fileName: 'server-barrel.ts',
-          source: 'export { task as defineTask, webhook as defineWebhook } from "@kovojs/server";',
+          source:
+            'export { task as defineTask } from "@kovojs/server/tasks"\nexport { webhook as defineWebhook } from "@kovojs/server/webhooks";',
         },
       ],
       importLine: 'import { defineTask, defineWebhook } from "./server-barrel";',
@@ -695,7 +702,8 @@ function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
     },
     {
       expectation: 'enforced',
-      importLine: 'import { task, webhook } from "@kovojs/server";',
+      importLine:
+        'import { task } from "@kovojs/server/tasks"\nimport { webhook } from "@kovojs/server/webhooks";',
       kind: 'wrapper-helper',
       label: 'handler-local wrapper helper write',
       source: directDbTaskWebhookSource({
@@ -717,7 +725,8 @@ function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
     },
     {
       expectation: 'enforced',
-      importLine: 'import { task, webhook } from "@kovojs/server";',
+      importLine:
+        'import { task } from "@kovojs/server/tasks"\nimport { webhook } from "@kovojs/server/webhooks";',
       kind: 'closure',
       label: 'handler-local closure write',
       source: directDbTaskWebhookSource({
@@ -735,7 +744,8 @@ function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
     },
     {
       expectation: 'enforced',
-      importLine: 'import { task, webhook } from "@kovojs/server";',
+      importLine:
+        'import { task } from "@kovojs/server/tasks"\nimport { webhook } from "@kovojs/server/webhooks";',
       kind: 'local-shadow',
       label: 'handler-local insert shadow fails closed',
       source: directDbTaskWebhookSource({

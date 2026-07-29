@@ -778,7 +778,7 @@ function addBugz31GlobalMemberLockdownProof(root: string): void {
   writeFileSync(
     join(root, 'src/bugz31-intrinsic-member-proof.ts'),
     [
-      "import { s, task } from '@kovojs/server';",
+      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
       "import './bugz31-intrinsic-poison.js';",
       '',
       "task('bugz31-promise-resolve', {",
@@ -819,7 +819,7 @@ function addBugz31AssimilationProof(root: string): void {
   writeFileSync(
     join(root, 'src/bugz31-assimilation-proof.ts'),
     [
-      "import { s, task } from '@kovojs/server';",
+      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
       '',
       'class Bugz31AssimilationDeferred {',
       '  static then(resolve: (value: { ok: true }) => void): void {',
@@ -900,7 +900,7 @@ function addBugz31TrustedInputProvenanceProof(root: string): void {
   writeFileSync(
     join(root, 'src/bugz31-root-provenance-proof.ts'),
     [
-      "import { s, task } from '@kovojs/server';",
+      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
       '',
       'class Bugz31InputDeferred {',
       '  static then(resolve: (value: { ok: true }) => void): void {',
@@ -1103,7 +1103,7 @@ function addBugz31GlobalMemberCarrierProof(
   writeFileSync(
     join(root, 'src/bugz31-member-carrier-proof.ts'),
     [
-      "import { s, task } from '@kovojs/server';",
+      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
       "import { Bugz31Deferred } from './bugz31-member-carrier-poison.js';",
       '',
       "task('bugz31-carrier-promise-resolve', {",

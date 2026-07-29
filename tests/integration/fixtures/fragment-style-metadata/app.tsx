@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
-import { createApp, mutation, route, s, stream, trustedUrl } from '@kovojs/server';
+import { createApp, mutation, route, s, stream } from '@kovojs/server';
+import { trustedUrl } from '@kovojs/browser';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
   kovoFixtureStylesheetManifest,

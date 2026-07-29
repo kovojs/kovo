@@ -242,7 +242,7 @@ export const CartBadge = component({
         `
 import { component } from '@kovojs/core';
 import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
-import { task } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 import { removeItem } from './actions';
 
 export const RecordRemoval = task('tasks/record-removal', {
@@ -719,7 +719,8 @@ export const addToCart = mutation('cart/add', {
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const source = `
-import { mutation, serverValue } from '@kovojs/server';
+import { mutation } from '@kovojs/server'
+import { serverValue } from '@kovojs/server/write-safety';
 import { eq } from 'drizzle-orm';
 import { account } from './schema.js';
 export const update = mutation({
@@ -802,7 +803,9 @@ export const update = mutation({ handler() { return RawResponse.json({ ok: true 
             {
               fileName: 'src/routes.tsx',
               source: `
-import { createFileSystemStorage, respond, route, type ScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { respond, route } from '@kovojs/server'
+import { type ScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const report = route('/report', {
   async page(context) {

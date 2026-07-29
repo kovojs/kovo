@@ -1,15 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { ErrorBoundary, type ComponentChild } from '@kovojs/core';
-import {
-  createApp,
-  layout,
-  publicAccess,
-  renderRouteHtml,
-  route,
-  stylesheet,
-  type KovoApp,
-  type ServerErrorHandler,
-} from '@kovojs/server';
+import { createApp, layout, publicAccess, route, stylesheet } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+import { type KovoApp } from '@kovojs/server/custom-adapters';
+import { type ServerErrorHandler } from '@kovojs/server/diagnostics';
 
 import {
   addToCart,

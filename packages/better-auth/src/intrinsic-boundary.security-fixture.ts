@@ -1,4 +1,4 @@
-import { createPostgresAppRuntimeDb } from '@kovojs/server';
+import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { csrfToken } from '@kovojs/server/internal/csrf';
 import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';

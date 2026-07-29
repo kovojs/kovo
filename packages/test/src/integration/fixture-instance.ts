@@ -2,7 +2,7 @@
 // recreated on `reset()` so each test gets an isolated, freshly-seeded PGlite —
 // the app object closes over a mutable `db` holder, so the same request handler
 // keeps working across resets without rebuilding the Vite module graph.
-import type { KovoApp, RequestHandler } from '@kovojs/server';
+import type { KovoApp, RequestHandler } from '@kovojs/server/custom-adapters';
 import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,

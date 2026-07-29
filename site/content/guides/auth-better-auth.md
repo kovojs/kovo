@@ -76,7 +76,8 @@ creating a session; the user still has to submit the CSRF-protected sign-in form
 Register the generated values like any other Kovo session, CSRF configuration, and mutations:
 
 ```tsx
-import { createApp, redirect, route } from '@kovojs/server';
+import { createApp, route } from '@kovojs/server';
+import { redirect } from '@kovojs/core';
 
 declare const appAuthed: any;
 declare const appCsrf: any;
@@ -169,7 +170,7 @@ the bootstrap its literal first import. First define a host-independent handler:
 
 ```ts
 // handler.ts
-import { createRequestHandler } from '@kovojs/server';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import app from './app.js';
 
 export const handler = createRequestHandler(app);
@@ -182,7 +183,7 @@ Then import that handler from the separated adapter entry:
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { toNodeHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server/node';
 import { handler } from './handler.js';
 
 createServer(toNodeHandler(handler)).listen(3000);

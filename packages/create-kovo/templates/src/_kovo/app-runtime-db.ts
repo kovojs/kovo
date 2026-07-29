@@ -1,10 +1,8 @@
-import {
-  createPostgresAppRuntimeDb,
-  type AccessDecision,
-  type CsrfOptions,
-  type MutationReplayStore,
-  type PrincipalEpochStore,
-} from '@kovojs/server';
+import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
+import { type AccessDecision } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
+import { type MutationReplayStore } from '@kovojs/server/replay';
+import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
 import {
   authed,
   createBetterAuthPostgresBindingsFromEnvironment,

@@ -85,9 +85,9 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/interactive-app.tsx': `export default app`,
       'site/src/app.tsx': `export default app`,
       'site/content/guides/deployment.md':
-        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server/custom-adapters';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server/node';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
       'site/content/guides/request-shell.md':
-        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server/custom-adapters';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server/node';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
     };
 
     expect(evaluateCustomRunnerBootstrapOrdering((file) => files[file])).toEqual([
@@ -153,13 +153,13 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/crm/scripts/demo-serve.mjs': `createRequestHandler`,
       'examples/crm/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/crm/src/app-shell.ts': `createRequestHandler`,
-      'examples/gallery/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
-      'examples/reference/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'examples/gallery/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server/custom-adapters';`,
+      'examples/reference/src/app-shell.ts': `import { createRequestHandler } from '@kovojs/server/custom-adapters';`,
       'examples/stackoverflow/scripts/demo-serve.mjs': `createRequestHandler`,
       'examples/stackoverflow/scripts/serve.mjs': `createSecurityLockedViteServer`,
       'examples/stackoverflow/src/app-shell.ts': `createRequestHandler`,
-      'packages/devtool/src/mount.mjs': `import { createRequestHandler } from '@kovojs/server';`,
-      'site/src/aux.ts': `import { createRequestHandler } from '@kovojs/server';`,
+      'packages/devtool/src/mount.mjs': `import { createRequestHandler } from '@kovojs/server/custom-adapters';`,
+      'site/src/aux.ts': `import { createRequestHandler } from '@kovojs/server/custom-adapters';`,
       'tests/p10-perf.node.mjs': `
         import '../dist/server/src/runtime-bootstrap.mjs';
         import { createRequestHandler } from '../dist/server/src/index.mjs';
@@ -216,9 +216,9 @@ describe('check-security-classifier-corpus gate', () => {
       'examples/stackoverflow/src/interactive-app.tsx': `export default app;`,
       'site/src/app.tsx': `export default siteStaticExportApp;`,
       'site/content/guides/deployment.md':
-        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server/custom-adapters';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server/node';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
       'site/content/guides/request-shell.md':
-        "```ts\nimport { createRequestHandler } from '@kovojs/server';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
+        "```ts\nimport { createRequestHandler } from '@kovojs/server/custom-adapters';\nimport app from './app.js';\nexport const handler = createRequestHandler(app);\n```\n```ts\nimport '@kovojs/server/runtime-bootstrap';\nimport { toNodeHandler } from '@kovojs/server/node';\nimport { handler } from './handler.js';\ntoNodeHandler(handler);\n```",
     };
     const findings = evaluateRequestSafeRuntimeInventoryAlignment((file) => files[file]);
 

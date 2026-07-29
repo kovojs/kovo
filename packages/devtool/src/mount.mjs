@@ -7,13 +7,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
-  route,
-  toNodeHandler,
-} from '@kovojs/server';
+import { createApp, route } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
+import { toNodeHandler } from '@kovojs/server/node';
 
 import { renderPage } from './render.mjs';
 import { renderStyleElement } from './output-security.mjs';

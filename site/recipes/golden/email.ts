@@ -1,4 +1,5 @@
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const sendReceiptEmail = task({
   input: s.object({ orderId: s.string(), to: s.string().email() }),

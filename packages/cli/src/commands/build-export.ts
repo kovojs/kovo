@@ -92,14 +92,12 @@ import {
   type CompilerSecuritySemanticSource,
   type CompilerTaskBFiniteVerdict,
 } from '@kovojs/drizzle/internal/static';
+import type { AccessDecision, Guard, StylesheetAsset } from '@kovojs/server';
+import type { AppEgressOptions } from '@kovojs/server/egress';
 import type {
-  AccessDecision,
-  AppEgressOptions,
-  Guard,
   StaticExportCompileDiagnostic,
   StaticExportResult,
-  StylesheetAsset,
-} from '@kovojs/server';
+} from '@kovojs/server/static-export';
 import type { KovoApp, KovoNeutralBuild } from '@kovojs/server/internal/build';
 import type {
   KovoBuildPreset,

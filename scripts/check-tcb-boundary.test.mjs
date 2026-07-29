@@ -273,7 +273,7 @@ export const classifyGenerated = securityClassifier('template.generated', functi
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
         'packages/create-kovo/templates/src/_kovo/runtime-wiring.ts': `
-import { readonlyDb } from '@kovojs/server';
+import { readonlyDb } from '@kovojs/server/data';
 export function appRuntimeDb(db) {
   return { readonlyDb: readonlyDb(db) };
 }

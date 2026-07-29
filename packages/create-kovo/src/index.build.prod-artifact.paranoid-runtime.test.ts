@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { hashPassword as kovoHashPassword } from '@kovojs/server';
+import { hashPassword as kovoHashPassword } from '@kovojs/server/password';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { demoPasswordEnvVar, writeKovoProject } from './index.js';

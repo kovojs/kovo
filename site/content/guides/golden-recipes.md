@@ -81,7 +81,8 @@ and the write next to each other.
 <!-- kovo-recipe task="mutation" source="site/recipes/golden/mutation.ts" export="defineCreateContact" -->
 
 ```ts
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 interface ContactsRequest {
   contacts: { create(input: { email: string; name: string }): Promise<void> };
@@ -112,7 +113,8 @@ input schema.
 
 ```tsx
 import { component, FieldError, FormError } from '@kovojs/core';
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 export function defineProfileForm(csrf: CsrfOptions<unknown>) {
   const updateProfile = mutation({
@@ -195,7 +197,8 @@ Start tests with memory storage. Keep the server-minted scoped key instead of a 
 <!-- kovo-recipe task="storage" source="site/recipes/golden/storage.ts" export="saveAvatar" -->
 
 ```ts
-import { createMemoryStorage, publicScopedKey } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { publicScopedKey } from '@kovojs/core';
 
 export const avatarStorage = createMemoryStorage();
 
@@ -215,7 +218,8 @@ Use `task()` when work should survive the request and retry after failure.
 <!-- kovo-recipe task="task" source="site/recipes/golden/task.ts" export="rebuildSearch" -->
 
 ```ts
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const rebuildSearch = task({
   input: s.object({ index: s.string() }),
@@ -235,7 +239,8 @@ signature passes.
 
 ```ts
 import { hmacSignature } from '@kovojs/core';
-import { s, webhook } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { webhook } from '@kovojs/server/webhooks';
 
 export function defineOrderWebhook(secret: string) {
   return webhook('/webhooks/orders', {
@@ -261,7 +266,8 @@ Email is durable work plus a bounded egress call. Put the provider call in a tas
 <!-- kovo-recipe task="email" source="site/recipes/golden/email.ts" export="sendReceiptEmail" -->
 
 ```ts
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const sendReceiptEmail = task({
   input: s.object({ orderId: s.string(), to: s.string().email() }),
@@ -305,7 +311,8 @@ key.
 <!-- kovo-recipe task="upload" source="site/recipes/golden/upload.ts" export="avatarUpload" -->
 
 ```ts
-import { createMemoryStorage, s } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { s } from '@kovojs/server';
 
 const uploads = createMemoryStorage();
 
@@ -343,7 +350,8 @@ A route receives `signUrl` from the request shell. Mint a short-lived URL for on
 <!-- kovo-recipe task="capability link" source="site/recipes/golden/capability-link.tsx" export="receiptRoute" -->
 
 ```tsx
-import { publicScopedKey, route, s } from '@kovojs/server';
+import { publicScopedKey } from '@kovojs/core';
+import { route, s } from '@kovojs/server';
 
 export const receiptRoute = route('/receipts/:receiptId', {
   params: s.object({ receiptId: s.string() }),

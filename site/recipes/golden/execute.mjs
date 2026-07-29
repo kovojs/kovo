@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
-import { createSigningKeyRing, publicScopedKey } from '@kovojs/server';
+import { createSigningKeyRing } from '@kovojs/server/signing';
+import { publicScopedKey } from '@kovojs/core';
 
 import { accountRoute } from './auth.js';
 import { receiptRoute } from './capability-link.js';

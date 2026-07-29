@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
 import {
   createMemoryWebhookReplayStore,
-  replayMutationWireBody,
   webhookReplayIdentity,
   type WebhookReplayStore,
-} from '@kovojs/server';
+} from '@kovojs/server/webhooks';
+import { replayMutationWireBody } from '@kovojs/server/replay';
 import type { MutationWireResponse } from '@kovojs/server/internal/wire';
 
 const stripeTimestamp = Math.floor(Date.now() / 1_000);

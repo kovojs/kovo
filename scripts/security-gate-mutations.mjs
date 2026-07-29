@@ -13102,7 +13102,8 @@ function semanticV2MutationFixture() {
   ${handler},
 })`;
   const source = `import { kovoAnalyzerSummary } from '@kovojs/drizzle';
-import { mutation, serverValue } from '@kovojs/server';
+import { mutation } from '@kovojs/server'
+import { serverValue } from '@kovojs/server/write-safety';
 import { eq } from 'drizzle-orm';
 import { account } from './schema.js';
 
@@ -13829,7 +13830,8 @@ function analyzerSummaryCarrierVerdict(moduleUnderTest, statements, callArgument
   });
   const sourceFile = project.createSourceFile(
     'opp-carrier.ts',
-    `import { query, serverValue } from '@kovojs/server';
+    `import { query } from '@kovojs/server'
+import { serverValue } from '@kovojs/server/write-safety';
 function current(context) { return context.request.guard.userId; }
 function opaque(value) { return value; }
 export const list = query('list', {
@@ -15167,7 +15169,8 @@ function assertReviewedCommandCapabilityDoorBehavior(moduleUnderTest) {
   assertFiniteIrAllows(
     moduleUnderTest,
     `
-import { cmd, commandAllowlist, mutation, runCommand } from '@kovojs/server';
+import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'
+import { mutation } from '@kovojs/server';
 const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixed health probe' });
 const command = cmd('/usr/bin/true', [], { allow });
 export const verify = mutation({
@@ -15192,7 +15195,8 @@ function assertScopedKeySinkCompileClosureBehavior(moduleUnderTest) {
   const result = compileFiniteIrFixture(
     moduleUnderTest,
     `
-import { createFileSystemStorage, mutation } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const verify = mutation({
   async handler(input) {
@@ -15332,7 +15336,9 @@ export const report = endpoint('/report', {
 }
 
 const reviewedStorageStatFixture = `
-import { createFileSystemStorage, mutation, publicScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { mutation } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const verify = mutation({
   async handler() {
@@ -15344,7 +15350,8 @@ export const verify = mutation({
 
 const reviewedDeclaredSecretReadFixture = `
 import { sql, trustedSql } from '@kovojs/drizzle';
-import { declareSecretReadCapability, query } from '@kovojs/server';
+import { declareSecretReadCapability } from '@kovojs/server/secret-reading'
+import { query } from '@kovojs/server';
 export const report = query({
   async load(_input, context) {
     const statement = trustedSql(sql.raw('select id, classified from accounts'), {

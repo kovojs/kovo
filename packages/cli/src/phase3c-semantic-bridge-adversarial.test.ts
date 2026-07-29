@@ -45,7 +45,8 @@ function compilerSemanticSources(
 function semanticBridgeFixture(): readonly SourceFile[] {
   const source = `
     import { kovoAnalyzerSummary } from '@kovojs/drizzle';
-    import { mutation, serverValue } from '@kovojs/server';
+    import { mutation } from '@kovojs/server'
+    import { serverValue } from '@kovojs/server/write-safety';
     import { eq } from 'drizzle-orm';
     import { account } from './schema.js';
     function exactGuard(context) { return context.guard.userId; }

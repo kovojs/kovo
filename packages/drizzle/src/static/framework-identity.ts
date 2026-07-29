@@ -150,6 +150,17 @@ export function expressionResolvesToFrameworkExport(
   return frameworkExportEquals(resolved, expected);
 }
 
+/** @internal Whether an exact reviewed package specifier exports the canonical framework member. */
+export function moduleSpecifierResolvesToFrameworkExport(
+  specifier: string | undefined,
+  expected: CanonicalFrameworkExportIdentity,
+): boolean {
+  return frameworkExportEquals(
+    frameworkCatalogExportForModuleSpecifier(specifier, expected.exportName),
+    expected,
+  );
+}
+
 /** @internal */
 export function symbolResolvesToFrameworkExport(
   symbol: MorphSymbol | undefined,

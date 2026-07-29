@@ -2,7 +2,7 @@ import {
   postgresAppRuntimeOptions,
   postgresSchemaModule,
   type KovoPostgresAppRuntimeOptions,
-} from '@kovojs/server';
+} from '@kovojs/server/postgres';
 
 import * as schema from '../schema.js';
 

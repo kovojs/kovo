@@ -1,5 +1,5 @@
-import type { KovoPostgresSystemDb } from '@kovojs/server';
 import { createBetterAuthPostgresRateLimitBucketConsumer } from '@kovojs/server/internal/better-auth';
+import type { KovoPostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 
 import { createBetterAuthBoundedRateLimitStorage } from './rate-limit-storage.js';
 

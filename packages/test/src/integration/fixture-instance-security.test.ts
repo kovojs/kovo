@@ -1,4 +1,4 @@
-import type { KovoApp } from '@kovojs/server';
+import type { KovoApp } from '@kovojs/server/custom-adapters';
 import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,

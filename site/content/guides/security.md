@@ -446,7 +446,7 @@ await db.update(accounts).set({ displayName: input.displayName, role: input.role
 trusted assignment instead:
 
 ```ts
-import { trustedAssign, serverValue } from '@kovojs/server';
+import { trustedAssign, serverValue } from '@kovojs/server/write-safety';
 
 await db.update(accounts).set({
   displayName: input.displayName,
@@ -480,7 +480,9 @@ Do not hand-build storage URLs or raw download endpoints. Use a framework downlo
 short-lived signed URL from the request context.
 
 ```ts
-import { createStorageDownloadEndpoint, guards, route, scopedKey } from '@kovojs/server';
+import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'
+import { guards, route } from '@kovojs/server'
+import { scopedKey } from '@kovojs/server/storage-keys';
 
 export const downloads = createStorageDownloadEndpoint({
   basePath: '/downloads',

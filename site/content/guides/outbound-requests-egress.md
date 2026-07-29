@@ -16,7 +16,8 @@ Use the framework-owned fetch in a task body:
 
 ```ts
 // Source-verified shape from packages/server/src/task.ts
-import { s, task } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { task } from '@kovojs/server/tasks';
 
 export const sendReceipt = task('email/send-receipt', {
   input: s.object({ orderId: s.string() }),

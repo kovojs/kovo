@@ -1,5 +1,6 @@
 import { component, FieldError, FormError } from '@kovojs/core';
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 export function defineProfileForm(csrf: CsrfOptions<unknown>) {
   const updateProfile = mutation({

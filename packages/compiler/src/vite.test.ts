@@ -432,7 +432,9 @@ export function renderSource() {
     });
     const transformed = await plugin.transform(
       `
-import { domain, mutation, query, task, webhook } from '@kovojs/server';
+import { domain, mutation, query } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks'
+import { webhook } from '@kovojs/server/webhooks';
 
 export const contact = domain();
 export const addToCart = mutation({ handler() {}, input: {} });

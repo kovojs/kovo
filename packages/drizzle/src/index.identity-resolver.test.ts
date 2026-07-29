@@ -25,7 +25,7 @@ const DB = pgDatabaseTypes([
 const bridgeFile: SourceFileInput = {
   fileName: 'framework.ts',
   source: [
-    'export { domain as makeDomain, mutation as mutate, query as read, task as runTask, write as writer } from "@kovojs/server";',
+    'export { domain as makeDomain, mutation as mutate, query as read, write as writer } from "@kovojs/server"; export { task as runTask } from "@kovojs/server/tasks";',
     'export type { Reader as AppReader } from "@kovojs/server";',
     'export { kovo as annotate, sql as ksql, trustedSql as trust } from "@kovojs/drizzle";',
   ].join('\n'),
@@ -417,8 +417,8 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     project.createSourceFile(
       '/app/framework.ts',
       [
-        'export { query as dataQuery, s as dataSchema } from "@kovojs/server/api/data";',
-        'export { trustedAssign as grantInput } from "@kovojs/server/write-governance";',
+        'export { query as dataQuery, s as dataSchema } from "@kovojs/server";',
+        'export { trustedAssign as grantInput } from "@kovojs/server/write-safety";',
         'export { sql as kovoSql, trustedSql as reviewedSql } from "@kovojs/drizzle";',
       ].join('\n'),
     );
@@ -477,7 +477,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile(
       '/app/server-root.ts',
-      'export { task as runTask } from "@kovojs/server";',
+      'export { task as runTask } from "@kovojs/server/tasks";',
     );
     project.createSourceFile('/app/server-barrel.ts', 'export * from "./server-root";');
     const sourceFile = project.createSourceFile(

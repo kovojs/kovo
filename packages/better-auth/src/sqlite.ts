@@ -2,11 +2,10 @@ import { snapshotSqliteSchemaRecord } from '@kovojs/server/internal/sqlite';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 import {
   initializePrincipalEpoch,
-  type AccessDecision,
-  type CsrfOptions,
   type PrincipalEpochStore,
-  type SessionProvider,
-} from '@kovojs/server';
+} from '@kovojs/server/principal-epochs';
+import { type AccessDecision, type SessionProvider } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';

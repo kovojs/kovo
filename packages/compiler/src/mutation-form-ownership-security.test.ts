@@ -348,7 +348,8 @@ export const View = component({
     const result = compile(`
 import { Button } from '@kovojs/ui/button';
 import { Badge } from '@kovojs/ui/badge';
-import { redirect, route } from '@kovojs/server';
+import { redirect } from '@kovojs/core'
+import { route } from '@kovojs/server';
 
 export const save = mutation('account/save', {
   input: s.object({}),

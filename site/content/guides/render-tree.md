@@ -12,7 +12,8 @@ your app.
 
 ```tsx
 import { component, type ComponentChild } from '@kovojs/core';
-import { renderRegistry, s } from '@kovojs/server';
+import { renderRegistry } from '@kovojs/server/render-tree';
+import { s } from '@kovojs/server';
 
 const Callout = component({
   render: ({ tone = 'info' }, _state, slots: { children?: ComponentChild }) => (
@@ -35,7 +36,8 @@ the props schema it accepts:
 
 ```tsx
 import { component } from '@kovojs/core';
-import { renderRegistry, s } from '@kovojs/server';
+import { renderRegistry } from '@kovojs/server/render-tree';
+import { s } from '@kovojs/server';
 
 const ProductBadge = component({
   render: ({ sku, label }: { sku: string; label: string }) => (
@@ -62,7 +64,11 @@ escaping and URL-scheme checks when the component emits HTML.
 `parseComponentXml(...)` is pure, so you can validate CMS input before publishing it:
 
 ```ts
-import { ComponentXmlError, parseComponentXml, type ComponentNode } from '@kovojs/server';
+import {
+  ComponentXmlError,
+  parseComponentXml,
+  type ComponentNode,
+} from '@kovojs/server/render-tree';
 
 export function parsePublishedBody(source: string): ComponentNode[] {
   try {
@@ -83,12 +89,8 @@ malformed markup is rejected before it becomes a page-rendering surprise.
 Render the parsed tree where you would otherwise render rich text:
 
 ```tsx
-import {
-  renderTree,
-  trustedHtml,
-  type ComponentNode,
-  type ComponentRegistry,
-} from '@kovojs/server';
+import { renderTree, type ComponentNode, type ComponentRegistry } from '@kovojs/server/render-tree';
+import { trustedHtml } from '@kovojs/browser';
 
 declare const marketingRegistry: ComponentRegistry;
 declare function parsePublishedBody(body: string): ComponentNode[];

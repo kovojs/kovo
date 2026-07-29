@@ -140,12 +140,8 @@ export default defineConfig({ preset: node({ retention: {
       writeFileSync(
         appPath,
         `
-import {
-  createApp,
-  publicAccess,
-  rootedFiles as openRootedFiles,
-  route,
-} from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server'
+import { rootedFiles as openRootedFiles } from '@kovojs/server/files';
 
 const docs = await openRootedFiles(${JSON.stringify(docsRoot)});
 

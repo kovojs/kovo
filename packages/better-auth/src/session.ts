@@ -1,4 +1,5 @@
-import type { SessionProvider, SessionProviderResult } from '@kovojs/server';
+import type { SessionProvider } from '@kovojs/server';
+import type { SessionProviderResult } from '@kovojs/server/routing';
 
 import {
   isBetterAuthCredentialShapedColumn,

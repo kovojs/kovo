@@ -466,7 +466,8 @@ export const account = query({
   it('assigns source-derived registry identities before createApp consumes app modules', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-derived-registry-'));
     const source = `
-import { createApp, mutation, query, s, webhook } from '@kovojs/server';
+import { createApp, mutation, query, s } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 export const addToCart = mutation({
   csrf: false,

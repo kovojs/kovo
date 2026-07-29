@@ -1,7 +1,8 @@
 // plans/open-design-areas.md storage capability floor: a storage-backed download route authorizes by app data first,
 // then serves bytes through the swappable StorageCapability.
 import { createMemoryStorage } from '@kovojs/test/internal/integration/fixture-abi';
-import { createApp, guards, notFound, publicScopedKey, respond, route, s } from '@kovojs/server';
+import { createApp, guards, notFound, respond, route, s } from '@kovojs/server';
+import { publicScopedKey } from '@kovojs/core';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface StorageSession {

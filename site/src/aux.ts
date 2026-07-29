@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createRequestHandler } from '@kovojs/server';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import { bundledKovoRulesSource } from '@kovojs/core/internal/agent-docs';
 
 import { siteStaticExportApp } from './app.js';

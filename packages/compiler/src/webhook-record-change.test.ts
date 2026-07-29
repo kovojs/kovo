@@ -11,7 +11,8 @@ describe('compiler webhook recordChange diagnostics', () => {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -34,7 +35,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
         message:
           'Write touched an undeclared domain. webhook /webhooks/payment recordChange("billing") is outside declared writes (model/contact).',
         severity: kv402.severity,
-        start: { column: 92, line: 10 },
+        start: { column: 92, line: 11 },
       },
     ]);
   });
@@ -43,7 +44,8 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -66,7 +68,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
         message:
           'Write touched an undeclared domain. webhook /webhooks/payment recordChange("billing") is outside declared writes (model/contact).',
         severity: kv402.severity,
-        start: { column: 17, line: 10 },
+        start: { column: 17, line: 11 },
       },
     ]);
   });
@@ -75,7 +77,8 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 
@@ -97,7 +100,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
           message:
             'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
           severity: kv406.severity,
-          start: { column: 26, line: 8 },
+          start: { column: 26, line: 9 },
         }),
       ]),
     );
@@ -107,7 +110,8 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { domain, webhook } from '@kovojs/server';
+import { domain } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 

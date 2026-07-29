@@ -76,7 +76,7 @@ describe('kovo db', () => {
     writeFileSync(
       optionsModulePath,
       [
-        "import type { KovoPostgresAppRuntimeOptions } from '@kovojs/server';",
+        "import type { KovoPostgresAppRuntimeOptions } from '@kovojs/server/postgres';",
         "import * as schema from '../schema.js';",
         '',
         'export const appRuntimeDbOptions = {',

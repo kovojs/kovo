@@ -127,7 +127,7 @@ There's no string-accepting raw-HTML prop to slip markup through. To emit real H
 `trustedHtml` value deliberately, which carries provenance the compiler can audit:
 
 ```tsx
-import { trustedHtml } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 
 declare const comment: { body: string };
 

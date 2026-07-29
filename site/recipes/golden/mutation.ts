@@ -1,4 +1,5 @@
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 interface ContactsRequest {
   contacts: { create(input: { email: string; name: string }): Promise<void> };

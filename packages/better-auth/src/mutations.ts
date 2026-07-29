@@ -1,8 +1,5 @@
-import type {
-  AppMutationAdapter,
-  MutationDefinition,
-  MutationFormDefinition,
-} from '@kovojs/server';
+import type { AppMutationAdapter } from '@kovojs/server/custom-adapters';
+import type { MutationDefinition, MutationFormDefinition } from '@kovojs/server';
 import { createBetterAuthCredentialMutation } from '@kovojs/server/internal/better-auth';
 
 import {

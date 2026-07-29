@@ -1,12 +1,12 @@
 import type {
   AccessDecision,
-  CsrfOptions,
   Domain,
   Guard,
-  GuardDenial,
   MutationDefinition,
   MutationFail,
 } from '@kovojs/server';
+import type { CsrfOptions } from '@kovojs/server/security';
+import type { GuardDenial } from '@kovojs/server/routing';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
 import type { BetterAuthRoleSession } from '../guards.js';

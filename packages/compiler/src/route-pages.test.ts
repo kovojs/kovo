@@ -95,7 +95,8 @@ export const home = route('/', {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { respond as response, rootedFiles as openRoot, route } from '@kovojs/server';
+import { respond as response, route } from '@kovojs/server'
+import { rootedFiles as openRoot } from '@kovojs/server/files';
 
 const makeRoot = openRoot;
 const docs = await makeRoot('/docs');
@@ -122,7 +123,8 @@ export const docsRoute = route('/docs/readme.txt', {
     const safe = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { publicScopedKey, route } from '@kovojs/server';
+import { publicScopedKey } from '@kovojs/core'
+import { route } from '@kovojs/server';
 export const report = route('/report', {
   async page(context) {
     const key = publicScopedKey('reports/public');
@@ -137,7 +139,9 @@ export const report = route('/report', {
     const unsafe = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { createFileSystemStorage, respond, route, type ScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { respond, route } from '@kovojs/server'
+import { type ScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const report = route('/report', {
   async page(context) {
@@ -304,12 +308,12 @@ export const namespace = kovo.route('/namespace', {
     ]);
   });
 
-  it('extracts route declarations and access helpers through public subpaths and local aliases', () => {
+  it('extracts route declarations and access helpers through root and local aliases', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
       source: `
-import { route as defineRoute, layout as defineLayout, publicAccess as allowPublic } from '@kovojs/server/api/routing';
-import * as routing from '@kovojs/server/api/routing';
+import { route as defineRoute, layout as defineLayout, publicAccess as allowPublic } from '@kovojs/server';
+import * as routing from '@kovojs/server';
 import { AliasPage } from './components/alias-page.js';
 
 const makeRoute = defineRoute;
@@ -448,16 +452,8 @@ export const missing = route('/missing', {
     const result = compileRouteModule({
       fileName: 'src/security-surfaces.tsx',
       source: `
-import {
-  endpoint,
-  guards,
-  layout,
-  mutation,
-  publicAccess,
-  query as defineQuery,
-  route,
-  webhook,
-} from '@kovojs/server';
+import { endpoint, guards, layout, mutation, publicAccess, query as defineQuery, route } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const ACCESS_FIELD = 'access';
 const GUARD_FIELD = 'guard';
@@ -585,15 +581,8 @@ export const guardOnlyWebhook = webhook('/guard-only-webhook', {
     const result = compileRouteModule({
       fileName: 'src/security-controls.tsx',
       source: `
-import {
-  endpoint,
-  guards,
-  layout,
-  publicAccess,
-  query,
-  route,
-  webhook,
-} from '@kovojs/server';
+import { endpoint, guards, layout, publicAccess, query, route } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const authed = guards.authed();
 export const publicQuery = query({

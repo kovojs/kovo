@@ -59,7 +59,7 @@ If you own the build script, call `exportStaticApp` directly:
 
 ```ts
 import '@kovojs/server/runtime-bootstrap';
-import { exportStaticApp, type StaticExportOptions } from '@kovojs/server';
+import { exportStaticApp, type StaticExportOptions } from '@kovojs/server/static-export';
 import app from './app.js';
 
 const options: StaticExportOptions = {

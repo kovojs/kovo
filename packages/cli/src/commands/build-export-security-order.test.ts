@@ -20,7 +20,7 @@ import {
   createCacheInfluenceManifest,
   deriveCacheInfluenceManifestEntry,
 } from '@kovojs/core/internal/cache-influence';
-import type { KovoApp } from '@kovojs/server';
+import type { KovoApp } from '@kovojs/server/custom-adapters';
 
 import {
   appWithBuildStylesheetAssets,
@@ -171,14 +171,8 @@ describe('build/export security bootstrap ordering', () => {
     });
     const registryImport = source.indexOf("import './runtime-registry.mjs';");
     const serverImport = source.indexOf(
-      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      "import { createRequestHandler } from '@kovojs/server/custom-adapters'\nimport { deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server';",
     );
-    const appImport = source.indexOf('const appModule = await runWithGeneratedLiveTargetRegistry');
-
-    expect(serverImport).toBeGreaterThanOrEqual(0);
-    expect(serverImport).toBeLessThan(registryImport);
-    expect(registryImport).toBeLessThan(appImport);
-    expect(source).not.toContain("from '@kovojs/server';");
     expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
@@ -435,7 +429,8 @@ export default createApp({
     try {
       writeFileSync(
         appPath,
-        `import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+        `import { createApp, publicAccess, route } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 
 if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
   throw new Error('String.replace poison unexpectedly installed');

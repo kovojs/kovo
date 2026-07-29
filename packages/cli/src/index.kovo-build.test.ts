@@ -1044,15 +1044,8 @@ export default createApp({ routes: [page] });
       writeFileSync(
         appPath,
         `
-import {
-  createApp,
-  endpoint,
-  guards,
-  publicAccess,
-  query as defineQuery,
-  s,
-  webhook,
-} from '@kovojs/server';
+import { createApp, endpoint, guards, publicAccess, query as defineQuery, s } from '@kovojs/server'
+import { webhook } from '@kovojs/server/webhooks';
 
 const requestGuard = guards.authed();
 
@@ -1656,7 +1649,8 @@ export default createApp({ mutations: [actual] });
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = `
-import { createApp, guards, mutation, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, guards, mutation, query, route, s } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 
@@ -1833,7 +1827,7 @@ export default createApp({
       '',
     ].join('\n');
     const sharedSource = [
-      "import { guards, route, trustedHtml } from '@kovojs/server';",
+      "import { guards, route } from '@kovojs/server'\nimport { trustedHtml } from '@kovojs/browser';",
       "const allow = guards.rateLimit({ max: 10, per: 'global' });",
       "export const sharedRoute = route('/shared', {",
       '  guard: allow,',
@@ -1982,7 +1976,7 @@ export default createApp({
       writeRetentionProofConfig(root);
       const reviewedSource = (field: 'name' | 'role') =>
         [
-          "import { createApp, trustedAssign } from '@kovojs/server';",
+          "import { createApp } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
           '',
           'export function reviewedGrant(input) {',
           `  return trustedAssign(input.${field}, {`,
@@ -2073,7 +2067,7 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { createApp, trustedAssign } from '@kovojs/server';",
+          "import { createApp } from '@kovojs/server'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
           "export function unreviewedGrant(input) { return trustedAssign(input.role, 'make check green'); }",
           'export default createApp({ routes: [] });',
           '',
@@ -2524,7 +2518,9 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, domain, mutation, publicAccess, query, route, s, task, trustedHtml } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server'
+import { task } from '@kovojs/server/tasks'
+import { trustedHtml } from '@kovojs/browser';
 
 const contactDomain = domain('model/contact');
 
@@ -2641,7 +2637,8 @@ export const ContactsRegion = defineRegion({
       writeFileSync(
         appPath,
         `
-import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 
 const contactDomain = domain('contact');
 const authDomain = domain('auth');
@@ -3140,11 +3137,9 @@ export const memberships = pgTable('memberships', {
       writeFileSync(
         appPath,
         `
-import {
-  createApp,
-  createMemoryStorage,
-  createStorageDownloadEndpoint,
-} from '@kovojs/server';
+import { createApp } from '@kovojs/server'
+import { createMemoryStorage } from '@kovojs/core/storage'
+import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
 
 const storage = createMemoryStorage();
 const download = createStorageDownloadEndpoint({
@@ -3191,15 +3186,9 @@ export default createApp({ endpoints: [download] });
       writeFileSync(
         appPath,
         `
-import {
-  createApp,
-  createMemoryWebhookReplayStore,
-  domain,
-  hmacSignature,
-  s,
-  webhook,
-  webhookReplayIdentity,
-} from '@kovojs/server';
+import { createApp, domain, s } from '@kovojs/server'
+import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
+import { hmacSignature } from '@kovojs/core/webhooks';
 
 const payment = domain('payment');
 const paymentWebhookReplayStore = createMemoryWebhookReplayStore();
@@ -3283,7 +3272,8 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, endpoint, hmacSignature, publicAccess } from '@kovojs/server';
+import { createApp, endpoint, publicAccess } from '@kovojs/server'
+import { hmacSignature } from '@kovojs/core/webhooks';
 
 const official = hmacSignature({
   encoding: 'hex',
@@ -4462,15 +4452,8 @@ export const homeQuery = {
 
 function appModuleSource(): string {
   return `
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-} from '@kovojs/server';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server'
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 
 import { trustedHtml } from '@kovojs/browser';
 
@@ -4923,7 +4906,9 @@ export default createApp({
 
 function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
-import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook, webhookReplayIdentity } from '@kovojs/server';
+import { createApp, mutation, s } from '@kovojs/server'
+import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
+import { task } from '@kovojs/server/tasks';
 
 const webhookReplayStore = createMemoryWebhookReplayStore();
 const appDb = {
@@ -4976,7 +4961,8 @@ export default createApp({
 
 function webhookRecordChangePreflightAppModuleSource(): string {
   return `
-import { createApp, createMemoryWebhookReplayStore, domain, s, webhook, webhookReplayIdentity } from '@kovojs/server';
+import { createApp, domain, s } from '@kovojs/server'
+import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 
 const contact = domain('model/contact');
 const billing = domain('billing');
@@ -5006,7 +4992,8 @@ export default createApp({
 function trustedHtmlBarrelPreflightAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server'
+import { trustedHtml } from '@kovojs/browser';
 import { Promo } from './promo.js';
 
 export default createApp({

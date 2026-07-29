@@ -43,7 +43,8 @@ Use `webhook()` for third-party POSTs that write Kovo-owned data:
 
 ```ts
 import { hmacSignature } from '@kovojs/core';
-import { domain, s, webhook, webhookReplayIdentity } from '@kovojs/server';
+import { domain, s } from '@kovojs/server';
+import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 
 const order = domain('order');
 declare const providerWebhookReplayStore: any;
@@ -148,7 +149,7 @@ an explicit `Set-Cookie` is still app-authored browser state and is rejected wit
 browser-state authorization proof.
 
 ```ts
-import { mintCsrfField } from '@kovojs/server';
+import { mintCsrfField } from '@kovojs/server/security';
 
 export async function renderUploadForm(request: Request) {
   const csrf = mintCsrfField(request, {

@@ -388,7 +388,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
   it('emits a webhookVerifyNone escape only for verify:none webhooks', () => {
     const escapes = trustEscapesFor(`
-      import { webhook, s } from '@kovojs/server';
+      import { webhook } from '@kovojs/server/webhooks'; import { s } from '@kovojs/server';
       export const paid = webhook('order-paid', {
         path: '/webhooks/order-paid',
         verify: 'none',
@@ -415,7 +415,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
 
   it('emits a verify:none webhook escape with no justification when missing', () => {
     const escapes = trustEscapesFor(`
-      import { webhook, s } from '@kovojs/server';
+      import { webhook } from '@kovojs/server/webhooks'; import { s } from '@kovojs/server';
       export const paid = webhook('order-paid', {
         path: '/webhooks/order-paid',
         verify: 'none',
@@ -948,7 +948,7 @@ export const report = endpoint('/report', {
     {
       code: 'KV450' as const,
       fileName: 'scoped-key-carrier.ts',
-      source: `import { createFileSystemStorage, mutation } from '@kovojs/server';
+      source: `import { createFileSystemStorage } from '@kovojs/core/storage'; import { mutation } from '@kovojs/server';
 const storage = createFileSystemStorage({ root: '/srv/kovo-static' });
 export const read = mutation('read', {
   async handler(input) {
@@ -960,7 +960,7 @@ export const read = mutation('read', {
     {
       code: 'KV452' as const,
       fileName: 'derived-dataset-carrier.ts',
-      source: `import { createFileSystemStorage, endpoint, publicScopedKey } from '@kovojs/server';
+      source: `import { createFileSystemStorage } from '@kovojs/core/storage'; import { endpoint } from '@kovojs/server'; import { publicScopedKey } from '@kovojs/core';
 const storage = createFileSystemStorage({ root: '/srv/kovo-derived' });
 const documents = {};
 export const persist = endpoint('/persist', {
@@ -1283,7 +1283,7 @@ export const report = query('report', {
         execFileSync as runFile,
       } from 'node:child_process';
       import * as processApi from 'child_process';
-      import { endpoint, mutation, query, task, webhook } from '@kovojs/server';
+      import { endpoint, mutation, query } from '@kovojs/server'; import { task } from '@kovojs/server/tasks'; import { webhook } from '@kovojs/server/webhooks';
 
       const { spawnSync: runSpawn } = processApi;
       const required = require('node:child_process');
@@ -1367,7 +1367,7 @@ export const report = query('report', {
   it('keeps the canonical runCommand surface open but rejects raw literal process calls and local lookalikes', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { commandAllowlist, cmd, mutation, runCommand } from '@kovojs/server';
+      import { commandAllowlist, cmd, runCommand } from '@kovojs/server/command'; import { mutation } from '@kovojs/server';
 
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
       const command = cmd('/usr/bin/true', [], { allow });
@@ -1391,7 +1391,7 @@ export const report = query('report', {
   it('does not grant framework trust through reflective or constructor adapters', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { cmd, commandAllowlist, query, runCommand } from '@kovojs/server';
+      import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'; import { query } from '@kovojs/server';
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
       const command = cmd('/usr/bin/true', [], { allow });
       Object.defineProperty(query, 'pwn', {
@@ -1946,7 +1946,7 @@ export const report = query('report', {
 
   it('closes raw credential headers and whole request carriers returned across public wires', () => {
     const facts = sinksFor(`
-      import { endpoint, mutation, query, webhook } from '@kovojs/server';
+      import { endpoint, mutation, query } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
 
       export const mutate = mutation({ handler(_input, request) {
         return { cookie: request.headers.get('COOKIE') };
@@ -2696,15 +2696,7 @@ export const report = query('report', {
 
   it('keeps privileged framework results off query and mutation public wires', () => {
     const facts = sinksFor(`
-      import {
-        cmd,
-        commandAllowlist,
-        mutation,
-        query,
-        respond,
-        rootedFiles,
-        runCommand,
-      } from '@kovojs/server';
+      import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'; import { mutation, query, respond } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
       const command = cmd('/usr/bin/true', [], { allow });
       export const commandOutput = mutation({ handler() { return runCommand(command); } });
@@ -2741,7 +2733,7 @@ export const report = query('report', {
 
   it('keeps runCommand binding-pattern projections off public wires', () => {
     const facts = sinksFor(`
-      import { cmd, commandAllowlist, mutation, runCommand } from '@kovojs/server';
+      import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'; import { mutation } from '@kovojs/server';
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'fixture' });
       const command = cmd('/usr/bin/true', [], { allow });
       export const direct = mutation({ async handler() {
@@ -2987,15 +2979,7 @@ export const report = query('report', {
   it('closes request-minted framework filesystem, storage, and command authority', () => {
     const facts = sinksFor(`
       import * as server from '@kovojs/server';
-      import {
-        cmd,
-        commandAllowlist,
-        createFileSystemStorage,
-        createS3CompatibleStorage,
-        mutation,
-        rootedFiles,
-        runCommand,
-      } from '@kovojs/server';
+      import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'; import { createFileSystemStorage, createS3CompatibleStorage } from '@kovojs/core/storage'; import { mutation } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
 
       export const unsafe = mutation({
         async handler(input) {
@@ -3023,14 +3007,7 @@ export const report = query('report', {
 
   it('keeps module-scope literal framework authority and audited terminal capabilities open', () => {
     const facts = sinksFor(`
-      import {
-        cmd,
-        commandAllowlist,
-        createFileSystemStorage,
-        mutation,
-        rootedFiles,
-        runCommand,
-      } from '@kovojs/server';
+      import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command'; import { createFileSystemStorage } from '@kovojs/core/storage'; import { mutation } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
 
       const files = rootedFiles('/srv/kovo/files');
       const storage = createFileSystemStorage({ root: '/srv/kovo/storage' });
@@ -3052,7 +3029,7 @@ export const report = query('report', {
 
   it('accepts only a pristine module-scope rootedFiles handle as a direct route outcome', () => {
     const safe = sinksFor(`
-      import { createApp, publicAccess, rootedFiles, route } from '@kovojs/server';
+      import { createApp, publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
       const docs = await rootedFiles('/srv/kovo/docs');
       export default createApp({ routes: [route('/docs', {
         access: publicAccess('public docs'),
@@ -3068,7 +3045,7 @@ export const report = query('report', {
       `Object.defineProperty(docs, 'serve', { value: () => new Response('forged') });`,
     ]) {
       const facts = sinksFor(`
-        import { createApp, publicAccess, rootedFiles, route } from '@kovojs/server';
+        import { createApp, publicAccess, route } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
         const docs = await rootedFiles('/srv/kovo/docs');
         ${source}
         export default createApp({ routes: [route('/docs', {
@@ -3122,7 +3099,7 @@ export const report = query('report', {
 
   it('keeps reviewed intrinsic callbacks, request methods, and framework capabilities open', () => {
     const facts = sinksFor(`
-      import { createFileSystemStorage, endpoint, respond } from '@kovojs/server';
+      import { createFileSystemStorage } from '@kovojs/core/storage'; import { endpoint, respond } from '@kovojs/server';
 
       const storage = createFileSystemStorage({ root: '/srv/kovo/storage' });
       export const safe = endpoint('/safe', { async handler(request, context) {
@@ -3143,19 +3120,7 @@ export const report = query('report', {
   // @kovo-security-certifies C13 finite-ir-starter-door-reconciliation
   it('accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed', () => {
     const safe = sinksFor(`
-      import {
-        createApp,
-        createMemoryStorage,
-        createSigningKeyRing,
-        createStorageDownloadEndpoint,
-        mutation,
-        publicAccess,
-        publicScopedKey,
-        query,
-        route,
-        s,
-        task,
-      } from '@kovojs/server';
+      import { createApp, mutation, publicAccess, query, route, s } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'; import { publicScopedKey } from '@kovojs/core'; import { task } from '@kovojs/server/tasks';
 
       const signingKeys = createSigningKeyRing({
         keys: [{
@@ -3232,7 +3197,7 @@ export const report = query('report', {
       ],
       [
         'aliased framework key constructor',
-        "import { publicScopedKey } from '@kovojs/server'; const mintKey = publicScopedKey;",
+        "import { publicScopedKey } from '@kovojs/core'; const mintKey = publicScopedKey;",
         "mintKey('receipts/aliased.txt')",
       ],
       [
@@ -3242,7 +3207,7 @@ export const report = query('report', {
       ],
     ] as const) {
       const facts = sinksFor(`
-        import { createMemoryStorage } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage';
         ${declaration}
         const storage = createMemoryStorage();
         await storage.put(${key}, 'unsafe');
@@ -3253,7 +3218,7 @@ export const report = query('report', {
 
   it('accepts only an exact mutation request scheduling a pristine local task with plain input', () => {
     const safe = sinksFor(`
-      import { mutation, publicScopedKey, s, task } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { publicScopedKey } from '@kovojs/core'; import { task } from '@kovojs/server/tasks';
 
       export const reconcile = task('orders/reconcile', {
         input: s.object({ id: s.string() }),
@@ -3277,7 +3242,7 @@ export const report = query('report', {
 
     const unsafeSources = [
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         const alias = reconcile;
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
@@ -3286,7 +3251,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         (reconcile as any).run = async () => {};
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
@@ -3295,7 +3260,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string(), method: s.string() }), async handler(input, request) {
           await request[input.method](reconcile, { id: input.id });
@@ -3303,7 +3268,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           const scheduler = request;
@@ -3312,7 +3277,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           await request.schedule(reconcile, { id: input.id }, { onReady() {} });
@@ -3320,7 +3285,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           await request.schedule(reconcile, { id: input.id }, { afterMs: 1, at: 2 });
@@ -3328,7 +3293,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           const options = { afterMs: 1 };
@@ -3337,7 +3302,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           const handle = { id: input.id, task: 'orders/reconcile' };
@@ -3345,7 +3310,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           let handle = await request.schedule(reconcile, { id: input.id });
@@ -3353,7 +3318,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           await request.schedule(reconcile, { id: input.id, run() {} });
@@ -3361,7 +3326,7 @@ export const report = query('report', {
         } });
       `,
       `
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const reconcile = task('orders/reconcile', { input: s.object({ id: s.string() }), async run() {} });
         mutation({ input: s.object({ id: s.string() }), async handler(input, request) {
           await request.schedule(reconcile, { ...input });
@@ -3377,7 +3342,7 @@ export const report = query('report', {
 
   it('accepts only exact task composition through pristine task context and posture scopes', () => {
     const safe = sinksFor(`
-      import { domain, mutation, publicAccess, query, s, task } from '@kovojs/server';
+      import { domain, mutation, publicAccess, query, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const attempts = new Map<string, number>();
       const records = domain('records');
       const publicRecords = publicAccess('public task composition fixture');
@@ -3444,7 +3409,7 @@ export const report = query('report', {
       `await context.schedule(follow, { id: input.id }, { onReady() {} });`,
     ]) {
       const facts = sinksFor(`
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const record = mutation({ input: s.object({ id: s.string() }), handler(input) { return input; } });
         const follow = task('orders/follow', {
           input: s.object({ id: s.string(), method: s.string() }),
@@ -3461,7 +3426,7 @@ export const report = query('report', {
       `const record = mutation('records/create', { input: s.object({ id: s.string() }), handler(input) { return input; } }, {});`,
     ]) {
       const facts = sinksFor(`
-        import { mutation, s, task } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         ${declaration}
         task('orders/follow', {
           input: s.object({ id: s.string() }),
@@ -3476,7 +3441,7 @@ export const report = query('report', {
 
   it('accepts only exact mutation composition through the direct webhook context', () => {
     const safe = sinksFor(`
-      import { mutation, s, webhook } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       const record = mutation({
         input: s.object({ id: s.string() }),
         handler(input) { return { id: input.id }; },
@@ -3503,7 +3468,7 @@ export const report = query('report', {
       `await context.actAs('reviewed')[input.method](record, { id: input.id });`,
     ]) {
       const facts = sinksFor(`
-        import { mutation, s, webhook } from '@kovojs/server';
+        import { mutation, s } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
         const record = mutation({ input: s.object({ id: s.string() }), handler(input) { return input; } });
         webhook('/events', {
           input: s.object({ id: s.string(), method: s.string(), principal: s.string() }),
@@ -3665,7 +3630,7 @@ export const report = query('report', {
 
     for (const [label, body] of unsafeTaskBodies) {
       const facts = sinksFor(`
-        import { mutation, query, s, task } from '@kovojs/server';
+        import { mutation, query, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         const record = mutation({
           input: s.object({ id: s.string() }),
           handler(input) { return { id: input.id }; },
@@ -3727,7 +3692,7 @@ export const report = query('report', {
 
     for (const [label, body] of unsafeWebhookBodies) {
       const facts = sinksFor(`
-        import { mutation, query, s, webhook } from '@kovojs/server';
+        import { mutation, query, s } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
         const record = mutation({
           input: s.object({ id: s.string() }),
           handler(input) { return { id: input.id }; },
@@ -3749,7 +3714,7 @@ export const report = query('report', {
 
   it('rejects composition and scheduling across deferred class execution boundaries', () => {
     const deferredTaskFacts = sinksFor(`
-      import { mutation, s, task } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const record = mutation({
         input: s.object({ id: s.string() }),
         handler(input) { return { id: input.id }; },
@@ -3777,7 +3742,7 @@ export const report = query('report', {
     );
 
     const deferredWebhookFacts = sinksFor(`
-      import { mutation, s, webhook } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       const record = mutation({
         input: s.object({ id: s.string() }),
         handler(input) { return { id: input.id }; },
@@ -3807,7 +3772,7 @@ export const report = query('report', {
     );
 
     const deferredInlineFacts = sinksFor(`
-      import { mutation, s, task } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const record = mutation({
         input: s.object({ id: s.string() }),
         handler(input) { return { id: input.id }; },
@@ -3854,7 +3819,7 @@ export const report = query('report', {
     );
 
     const deferredMutationScheduleFacts = sinksFor(`
-      import { mutation, s, task } from '@kovojs/server';
+      import { mutation, s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const follow = task('orders/mutation-follow', {
         input: s.object({ id: s.string() }),
         async run() {},
@@ -3915,14 +3880,7 @@ export const report = query('report', {
     );
 
     const deferredRecordChangeFacts = sinksFor(`
-      import {
-        createMemoryWebhookReplayStore,
-        domain,
-        publicAccess,
-        s,
-        webhook,
-        webhookReplayIdentity,
-      } from '@kovojs/server';
+      import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'; import { domain, publicAccess, s } from '@kovojs/server';
       const orders = domain('orders');
       const replayStore = createMemoryWebhookReplayStore();
       webhook('/events/deferred-record-change', {
@@ -3953,7 +3911,7 @@ export const report = query('report', {
     );
 
     const deferredTaskMapFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const attempts = new Map<string, number>();
       task('orders/deferred-map', {
         input: s.object({ id: s.string() }),
@@ -4132,7 +4090,7 @@ export const report = query('report', {
     expectOpaqueSource(deferredEndpointFacts, 'context.storage.get');
 
     const immediateTaskFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('orders/immediate-fetch', {
         input: s.object({ id: s.string() }),
         async run(_input, context) {
@@ -4143,7 +4101,7 @@ export const report = query('report', {
     expect(immediateTaskFacts).toEqual([]);
 
     const deferredTaskFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('orders/deferred-fetch', {
         input: s.object({ id: s.string() }),
         run(_input, context) {
@@ -4161,7 +4119,7 @@ export const report = query('report', {
     expectOpaqueSource(deferredTaskFacts, 'context.fetch');
 
     const immediateGlobalFetchFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('orders/immediate-global-fetch', {
         input: s.object({}),
         async run() { await fetch('https://example.test/immediate-global'); },
@@ -4170,7 +4128,7 @@ export const report = query('report', {
     expect(immediateGlobalFetchFacts).toEqual([]);
 
     const deferredGlobalFetchFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('orders/deferred-global-fetch', {
         input: s.object({}),
         run() {
@@ -4188,7 +4146,7 @@ export const report = query('report', {
     expectOpaqueSource(deferredGlobalFetchFacts, 'fetch');
 
     const immediateRunCommandFacts = sinksFor(`
-      import { commandAllowlist, cmd, runCommand, s, task } from '@kovojs/server';
+      import { commandAllowlist, cmd, runCommand } from '@kovojs/server/command'; import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'immediate command' });
       const command = cmd('/usr/bin/true', [], { allow });
       task('orders/immediate-command', {
@@ -4199,7 +4157,7 @@ export const report = query('report', {
     expect(immediateRunCommandFacts).toEqual([]);
 
     const deferredRunCommandFacts = sinksFor(`
-      import { commandAllowlist, cmd, runCommand, s, task } from '@kovojs/server';
+      import { commandAllowlist, cmd, runCommand } from '@kovojs/server/command'; import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       const allow = commandAllowlist(['/usr/bin/true'], { justification: 'deferred command' });
       const command = cmd('/usr/bin/true', [], { allow });
       task('orders/deferred-command', {
@@ -4219,7 +4177,7 @@ export const report = query('report', {
     expectOpaqueSource(deferredRunCommandFacts, 'runCommand');
 
     const deferredFetchResponseFacts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('orders/deferred-fetch-response', {
         input: s.object({}),
         async run() {
@@ -4238,13 +4196,7 @@ export const report = query('report', {
     expectOpaqueSource(deferredFetchResponseFacts, 'response.text');
 
     const webhookPrelude = `
-      import {
-        createMemoryWebhookReplayStore,
-        publicAccess,
-        s,
-        webhook,
-        webhookReplayIdentity,
-      } from '@kovojs/server';
+      import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'; import { publicAccess, s } from '@kovojs/server';
       import { contacts } from './schema.js';
       const replayStore = createMemoryWebhookReplayStore();
     `;
@@ -4337,7 +4289,7 @@ export const report = query('report', {
 
   it('refuses transparent class values at framework assimilation boundaries', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
 
       class DeferredValue {
         static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4462,7 +4414,7 @@ export const report = query('report', {
     const missing: Array<{ facts: ReturnType<typeof sinksFor>; label: string }> = [];
     for (const [label, statement] of carriers) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('classes/${label}', { input: s.object({}), run() {
           class DeferredValue {
             static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4483,7 +4435,7 @@ export const report = query('report', {
     expect(missing).toEqual([]);
 
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('classes/safe-helper', { input: s.object({}), run() {
         const reveal = () => ({ ok: true });
         return reveal();
@@ -4547,7 +4499,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { identity, revealDeferred } from './barrel.js';
           class DeferredValue {
             static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4585,7 +4537,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { identity } from './helpers.js';
           task('classes/import-safe-helper', {
             input: s.object({}), run() { return identity({ ok: true }); },
@@ -4598,7 +4550,7 @@ export const report = query('report', {
 
   it('fails closed for classes with assigned, descriptor, and inherited then hooks', () => {
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('classes/assigned-then', { input: s.object({}), run() {
         class DeferredValue {}
         DeferredValue.then = (resolve: (value: { ok: true }) => void) => resolve({ ok: true });
@@ -4716,7 +4668,7 @@ export const report = query('report', {
 
     const missing = carriers.flatMap(([label, statement]) => {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('classes/defaults/${label}', { input: s.object({}), run() {
           class DeferredValue {
             static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4735,7 +4687,7 @@ export const report = query('report', {
     expect(missing).toEqual([]);
 
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       class DeferredValue {
         static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
       }
@@ -4790,7 +4742,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import revealDefault, { revealNamed } from './barrel.js';
           task('classes/default-import-named', {
             input: s.object({}), run() { return revealNamed(); },
@@ -4838,7 +4790,7 @@ export const report = query('report', {
     ] as const;
     const missing = carriers.flatMap(([label, statement]) => {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('classes/inherited/${label}', { input: s.object({}), run() {
           class DeferredValue {
             static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4857,7 +4809,7 @@ export const report = query('report', {
     expect(missing).toEqual([]);
 
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('classes/inherited-safe', { input: s.object({}), run() {
         class Base { static get value() { return { ok: true }; } }
         class Child extends Base {}
@@ -4877,14 +4829,14 @@ export const report = query('report', {
     ).join('\n');
     const startedAt = performance.now();
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('classes/scaling-safe', { input: s.object({}), run() {
         ${helpers}
         return h0({ ok: true });
       } });
     `);
     const unsafe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('classes/scaling-unsafe', { input: s.object({}), run() {
         class DeferredValue {
           static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4906,7 +4858,7 @@ export const report = query('report', {
 
   it('opens exact local Map reads while retaining stored thenable assimilation', () => {
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('map/safe', { input: s.object({}), run() {
         const values = new Map();
         values.set('key', 'safe');
@@ -4916,7 +4868,7 @@ export const report = query('report', {
     expect(safe).toEqual([]);
 
     const unsafe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('map/thenable', { input: s.object({}), run() {
         class DeferredValue {
           static then(resolve: (value: { ok: true }) => void) { resolve({ ok: true }); }
@@ -4934,7 +4886,7 @@ export const report = query('report', {
     );
 
     const cyclic = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('map/cyclic', { input: s.object({}), run() {
         const values = new Map();
         values.set('key', values.get('key'));
@@ -4949,7 +4901,7 @@ export const report = query('report', {
     );
 
     const mutuallyCyclic = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('map/mutually-cyclic', { input: s.object({}), run() {
         const left = new Map();
         const right = new Map();
@@ -4966,7 +4918,7 @@ export const report = query('report', {
 
     const chainLength = 70;
     const longChain = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('map/long-chain', { input: s.object({}), run() {
         ${Array.from({ length: chainLength }, (_, index) => `const map${index} = new Map();`).join('\n')}
         ${Array.from(
@@ -5036,7 +4988,7 @@ export const report = query('report', {
 
     for (const [label, mutation] of mutations) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('root-input/${label}', {
           input: s.object({ value: s.string(), values: s.array(s.string()) }),
           run(input) {
@@ -5101,7 +5053,7 @@ export const report = query('report', {
 
     for (const [label, statement] of carriers) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('root-output/${label}', {
           input: s.object({ value: s.string(), values: s.array(s.string()) }),
           run(input) {
@@ -5121,7 +5073,7 @@ export const report = query('report', {
 
   it('keeps immutable input projections open while retaining opaque carrier controls', () => {
     const safe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('root-input/safe', {
         input: s.object({ value: s.string(), values: s.array(s.string()) }),
         run(input) { return { value: input.value, first: input.values[0] }; },
@@ -5130,7 +5082,7 @@ export const report = query('report', {
     expect(safe).toEqual([]);
 
     const callSiteSafe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('root-input/call-site-safe', {
         input: s.object({ value: s.string(), values: s.array(s.string()) }),
         run(input) {
@@ -5144,7 +5096,7 @@ export const report = query('report', {
     expect(callSiteSafe).toEqual([]);
 
     const unsafe = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       declare function opaque(): unknown;
       declare function mutate(value: unknown): void;
       const values = new Map();
@@ -5248,7 +5200,7 @@ export const report = query('report', {
     for (const [aliasLabel, aliasExpression] of aliases) {
       for (const [writeLabel, write] of writes) {
         const facts = sinksFor(`
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           task('root-call-alias/${aliasLabel}/${writeLabel}', {
             input: s.object({ items: s.array(s.object({ value: s.string() })) }),
             run(input) {
@@ -5289,7 +5241,7 @@ export const report = query('report', {
 
     for (const [label, setup] of aliases) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('root-shallow-alias/${label}', {
           input: s.object({ items: s.array(s.object({ value: s.string() })) }),
           run(input) {
@@ -5329,7 +5281,7 @@ export const report = query('report', {
 
     for (const statement of controls) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('root-shallow-alias-safe', {
           input: s.object({ items: s.array(s.object({ value: s.string() })) }),
           run(input) {
@@ -5344,7 +5296,7 @@ export const report = query('report', {
 
   it('keeps opaque and cyclic local-helper carrier results fail closed', () => {
     const opaque = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       declare function opaque<T>(value: T): readonly [T];
       task('root-shallow-alias-opaque', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
@@ -5360,7 +5312,7 @@ export const report = query('report', {
     );
 
     const cyclic = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('root-shallow-alias-cycle', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         run(input) {
@@ -5410,7 +5362,7 @@ export const report = query('report', {
 
     for (const [label, statement] of controls) {
       const facts = sinksFor(`
-        import { s, task } from '@kovojs/server';
+        import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
         task('root-call-alias-safe/${label}', {
           input: s.object({ items: s.array(s.object({ value: s.string() })) }),
           run(input) {
@@ -5430,7 +5382,7 @@ export const report = query('report', {
     ).join('\n');
     const startedAt = performance.now();
     const facts = sinksFor(`
-      import { s, task } from '@kovojs/server';
+      import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
       task('root-call-alias/bounded-safe-misses', {
         input: s.object({ items: s.array(s.object({ value: s.string() })) }),
         run(input) {
@@ -5478,7 +5430,7 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { s, task } from '@kovojs/server';
+          import { s } from '@kovojs/server'; import { task } from '@kovojs/server/tasks';
           import { RenamedDeferred } from './named-barrel.js';
           import { LocalAlias, NamedDeferred as ImportedAlias } from './star-barrel.js';
           import DefaultAlias from './default-barrel.js';
@@ -5510,7 +5462,7 @@ export const report = query('report', {
 
   it('keeps non-assimilated local work and exact framework outcomes open', () => {
     const facts = sinksFor(`
-      import { endpoint, notFound, redirect, respond, s, task } from '@kovojs/server';
+      import { endpoint, notFound, respond, s } from '@kovojs/server'; import { redirect } from '@kovojs/core'; import { task } from '@kovojs/server/tasks';
       function pureHelper() { return 1; }
       task('classes/immediate-pure', {
         input: s.object({ key: s.string() }),
@@ -5884,7 +5836,7 @@ export const report = query('report', {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
       import * as kovo from '@kovojs/server';
-      import { mutation, query, rootedFiles } from '@kovojs/server';
+      import { mutation, query } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
       const objectFactory = { query };
       const arrayFactory = [query];
       function factory() { return query; }
@@ -6072,16 +6024,7 @@ export const report = query('report', {
   it('closes the authoritative provider, access, schema, verifier, replay, registry, and nested-layout census', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import {
-        createApp,
-        customVerifier,
-        endpoint,
-        hmacSignature,
-        layout,
-        query,
-        route,
-        webhook,
-      } from '@kovojs/server';
+      import { createApp, endpoint, layout, query, route } from '@kovojs/server'; import { customVerifier, hmacSignature } from '@kovojs/core/webhooks'; import { webhook } from '@kovojs/server/webhooks';
 
       const schema = {
         parse(value) { execFileSync('schema-parse'); return value; },
@@ -8087,7 +8030,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db-options.ts',
         source: `
-          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server/postgres';
           import * as schema from '../schema.js';
           export const appRuntimeSchema = postgresSchemaModule(schema);
           const SEED_CONTACTS =
@@ -8106,7 +8049,7 @@ export const report = query('report', {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
           import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
-          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
           import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
           const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
           const authSystemDb = appDatabase.systemDb({
@@ -8662,13 +8605,7 @@ export const report = query('report', {
       extra?: string;
       replayProperty?: string;
     } = {}) => `
-      import {
-        createMemoryWebhookReplayStore,
-        publicAccess,
-        s,
-        webhook,
-        webhookReplayIdentity,
-      } from '@kovojs/server';
+      import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'; import { publicAccess, s } from '@kovojs/server';
       ${declaration}
       ${extra}
       export const hook = webhook('/webhooks/memory', {
@@ -8976,7 +8913,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db-options.ts',
         source: `
-          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server/postgres';
           import * as schema from '../schema.js';
           export const appRuntimeSchema = postgresSchemaModule(schema);
           const SEED_CONTACTS =
@@ -8994,7 +8931,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
-          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
           import { appRuntimeDbOptions } from './app-runtime-db-options.js';
           const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
           export const appRuntimeWebhookReplayStore = appDatabase.webhookReplayStore;
@@ -9003,7 +8940,7 @@ export const report = query('report', {
       {
         fileName: 'webhooks.ts',
         source: `
-          import { publicAccess, s, webhook, webhookReplayIdentity } from '@kovojs/server';
+          import { publicAccess, s } from '@kovojs/server'; import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
           import { appRuntimeWebhookReplayStore } from './_kovo/app-runtime-db.js';
           const webhookReplayStore = appRuntimeWebhookReplayStore;
           export const hook = webhook('/webhooks/exact', {
@@ -9145,7 +9082,7 @@ export const report = query('report', {
       {
         fileName: 'app.tsx',
         source: `
-            import { createApp, createMemoryVersionedClientModuleRegistry } from '@kovojs/server';
+            import { createApp } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
             import {
               appRuntimeDbProvider,
               appRuntimeMutationReplayStore,
@@ -10123,7 +10060,7 @@ export const report = query('report', {
   it('accepts only exact canonical Kovo trusted SQL construction', () => {
     const safe = sinksFor(`
       import { sql, trustedSql } from '@kovojs/drizzle';
-      import { mutation, serverValue } from '@kovojs/server';
+      import { mutation } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety';
       export const write = mutation({ handler(input) {
         trustedSql(
           sql\`update contacts set name = \${input.name} where id = \${serverValue('c1', 'server-owned id')}\`,
@@ -10477,13 +10414,13 @@ export const report = query('report', {
     const bridge = {
       fileName: '_kovo/app-runtime-db.ts',
       source: `
-        import { declareSecretReadCapability } from '@kovojs/server';
+        import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
         export { declareSecretReadCapability };
       `,
     };
     const querySource = `
       import { sql, trustedSql } from '@kovojs/drizzle';
-      import { declareSecretReadCapability, query } from '@kovojs/server';
+      import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';
       export const secretRows = query({ async load(_input, context) {
         if (context?.db === undefined) throw new Error('missing query DB');
         const statement = trustedSql(sql.raw('select id, classified from runtime_secret_proof'), {
@@ -10524,7 +10461,7 @@ export const report = query('report', {
         'namespace package import',
         querySource
           .replace(
-            "import { declareSecretReadCapability, query } from '@kovojs/server';",
+            "import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';",
             "import * as server from '@kovojs/server';\n      import { query } from '@kovojs/server';",
           )
           .replace(
@@ -10535,7 +10472,7 @@ export const report = query('report', {
       [
         'generated bridge import',
         querySource.replace(
-          "import { declareSecretReadCapability, query } from '@kovojs/server';",
+          "import { declareSecretReadCapability } from '@kovojs/server/secret-reading'; import { query } from '@kovojs/server';",
           "import { query } from '@kovojs/server';\n      import { declareSecretReadCapability } from './_kovo/app-runtime-db.js';",
         ),
       ],
@@ -10625,7 +10562,7 @@ export const report = query('report', {
       {
         fileName: 'poison.ts',
         source: `
-          export { declareSecretReadCapability } from '@kovojs/server';
+          export { declareSecretReadCapability } from '@kovojs/server/secret-reading';
         `,
       },
     ]);
@@ -10805,7 +10742,7 @@ export const report = query('report', {
     );
 
     const postgresFacts = sinksFor(`
-      import { createPostgresAppRuntimeDb, mutation, publicAccess } from '@kovojs/server';
+      import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres'; import { mutation, publicAccess } from '@kovojs/server';
       export const unsafe = mutation({
         access: publicAccess('fixture'),
         handler(input) {
@@ -10829,7 +10766,7 @@ export const report = query('report', {
 
     const hostilePrincipalMapper = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createPostgresAppRuntimeDb } from '@kovojs/server';
+      import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
       export const runtime = createPostgresAppRuntimeDb({
         schema: {},
         principalFromRequest(request) {
@@ -10872,11 +10809,7 @@ export const report = query('report', {
 
   it('accepts only the exact static generated client-module registry grammar', () => {
     const facts = sinksFor(`
-      import {
-        createApp,
-        createMemoryVersionedClientModuleRegistry,
-        stylesheet,
-      } from '@kovojs/server';
+      import { createApp, stylesheet } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
       const clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules.put({
         path: '/c/cart.client.js',
@@ -10894,10 +10827,7 @@ export const report = query('report', {
 
   it('accepts the exact inline client-module registry captured by defineKovo', () => {
     const facts = sinksFor(`
-      import {
-        createMemoryVersionedClientModuleRegistry,
-        defineKovo,
-      } from '@kovojs/server';
+      import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules'; import { defineKovo } from '@kovojs/server';
       export const app = defineKovo({
         appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
         clientModules: createMemoryVersionedClientModuleRegistry(),
@@ -10995,11 +10925,7 @@ export const report = query('report', {
     ],
   ])('fails closed for generated client-module registry derived through %s', (_label, setup) => {
     const facts = sinksFor(`
-      import {
-        createApp,
-        createMemoryVersionedClientModuleRegistry,
-        route,
-      } from '@kovojs/server';
+      import { createApp, route } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
       ${setup}
       export default createApp({ clientModules, routes: [] });
     `);
@@ -11213,7 +11139,7 @@ export const report = query('report', {
   it('traverses inherited schema, replay, store, and mutation-replay adapter methods', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, query, webhook } from '@kovojs/server';
+      import { createApp, query } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       class BaseSchema {
         parse(value) { execFileSync('schema-parse'); return value; }
         parseAsync(value) { execFileSync('schema-parse-async'); return value; }
@@ -11542,7 +11468,7 @@ export const report = query('report', {
   it('resolves conditional and destructured factories plus mutable callback/config assignments', () => {
     const facts = sinksFor(`
       import * as server from '@kovojs/server';
-      import { endpoint, rootedFiles } from '@kovojs/server';
+      import { endpoint } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
 
       const { endpoint: destructuredEndpoint } = server;
       const conditionalEndpoint = Math.random() > 0.5 ? endpoint : endpoint;
@@ -11626,7 +11552,7 @@ export const report = query('report', {
 
   it('rejects mutable intrinsic-method rebinding and class toJSON credential serialization', () => {
     const facts = sinksFor(`
-      import { mutation, query, rootedFiles } from '@kovojs/server';
+      import { mutation, query } from '@kovojs/server'; import { rootedFiles } from '@kovojs/server/files';
       const helper: { trim(value: string): unknown } = {
         trim(value) { return value.trim(); },
       };
@@ -11965,7 +11891,7 @@ export const report = query('report', {
       {
         fileName: 'runtime-options.ts',
         source: `
-          import { postgresSchemaModule } from '@kovojs/server';
+          import { postgresSchemaModule } from '@kovojs/server/postgres';
           import * as schema from './schema.js';
           export const appRuntimeSchema = postgresSchemaModule(schema);
         `,
@@ -11978,7 +11904,7 @@ export const report = query('report', {
       {
         fileName: 'runtime-options.ts',
         source: `
-          import { postgresSchemaModule } from '@kovojs/server';
+          import { postgresSchemaModule } from '@kovojs/server/postgres';
           import * as schema from './schema.js';
           const aliasedSchema = schema;
           export const appRuntimeSchema = postgresSchemaModule(aliasedSchema);
@@ -12024,7 +11950,7 @@ export const report = query('report', {
       });
     `;
     const mutationSource = (prefix = '') => `
-      import { mutation, publicAccess, s, serverValue } from '@kovojs/server';
+      import { mutation, publicAccess, s } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety';
       import { eq } from 'drizzle-orm';
       import { contacts } from './schema.js';
       export const addContact = mutation({
@@ -12094,7 +12020,7 @@ export const report = query('report', {
     for (const source of [
       mutationSource()
         .replace(
-          `import { mutation, publicAccess, s, serverValue } from '@kovojs/server';`,
+          `import { mutation, publicAccess, s } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety';`,
           `import { mutation, publicAccess, s } from '@kovojs/server';\nimport * as server from '@kovojs/server';`,
         )
         .replace(`serverValue(id,`, `server.serverValue(id,`),
@@ -12136,7 +12062,7 @@ export const report = query('report', {
     const mutationSource = ({
       assignment,
       extra = '',
-      serverImport = `import { mutation, publicAccess, s, trustedAssign } from '@kovojs/server';`,
+      serverImport = `import { mutation, publicAccess, s } from '@kovojs/server'; import { trustedAssign } from '@kovojs/server/write-safety';`,
     }: {
       assignment: string;
       extra?: string;
@@ -12280,7 +12206,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db-options.ts',
         source: `
-          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server';
+          import { postgresAppRuntimeOptions, postgresSchemaModule } from '@kovojs/server/postgres';
           import * as schema from '../schema.js';
           export const appRuntimeSchema = postgresSchemaModule(schema);
           export const appRuntimeDbOptions = postgresAppRuntimeOptions({
@@ -12292,7 +12218,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
-          import { createPostgresAppRuntimeDb } from '@kovojs/server';
+          import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
           import { appRuntimeDbOptions } from './app-runtime-db-options.js';
           const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
           export const appRuntimeDbProvider = appDatabase.db;
@@ -12714,7 +12640,7 @@ export const report = query('report', {
       server?: string;
       extraImport?: string;
     } = {}) => `
-      import { mutation, publicAccess, s, serverValue } from '@kovojs/server';
+      import { mutation, publicAccess, s } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety';
       import { eq } from 'drizzle-orm';
       import { contacts } from './schema.js';
       ${extraImport}
@@ -13301,14 +13227,7 @@ export const report = query('report', {
 
   it('accepts only exact webhook recordChange capability calls for pristine local domains', () => {
     const source = (recordChange: string, extra = '') => `
-      import {
-        createMemoryWebhookReplayStore,
-        domain,
-        publicAccess,
-        s,
-        webhook,
-        webhookReplayIdentity,
-      } from '@kovojs/server';
+      import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'; import { domain, publicAccess, s } from '@kovojs/server';
       const contact = domain('model/contact');
       const replayStore = createMemoryWebhookReplayStore();
       ${extra}
@@ -13693,12 +13612,7 @@ export const report = query('report', {
 
   it('accepts only the exact module-scope storage download capability grammar', () => {
     const safe = sinksFor(`
-      import {
-        createApp,
-        createMemoryStorage,
-        createSigningKeyRing,
-        createStorageDownloadEndpoint,
-      } from '@kovojs/server';
+      import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
 
       const signingKeys = createSigningKeyRing({
         keys: [{
@@ -13723,46 +13637,41 @@ export const report = query('report', {
 
     for (const source of [
       `
-        import { createSigningKeyRing } from '@kovojs/server';
+        import { createSigningKeyRing } from '@kovojs/server/signing';
         const mint = createSigningKeyRing;
         const signingKeys = mint({
           keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
         });
       `,
       `
-        import { createSigningKeyRing } from '@kovojs/server';
+        import { createSigningKeyRing } from '@kovojs/server/signing';
         const secret = process.env.DOWNLOAD_SECRET;
         const signingKeys = createSigningKeyRing({
           keys: [{ id: 'download-2026', secret, state: 'active' }],
         });
       `,
       `
-        import { createMemoryStorage } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage';
         export const storage = createMemoryStorage();
       `,
       `
-        import { createMemoryStorage } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage';
         const storage = createMemoryStorage();
         await storage['put']('receipts/proof.txt', 'proof');
       `,
       `
-        import { createMemoryStorage } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage';
         const storage = createMemoryStorage();
         await storage.put.call(storage, 'receipts/proof.txt', 'proof');
       `,
       `
-        import { createMemoryStorage } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage';
         const storage = createMemoryStorage();
         storage.put = async () => ({ key: 'forged' });
         await storage.put('receipts/proof.txt', 'proof');
       `,
       `
-        import {
-          createApp,
-          createMemoryStorage,
-          createSigningKeyRing,
-          createStorageDownloadEndpoint,
-        } from '@kovojs/server';
+        import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
         const signingKeys = createSigningKeyRing({
           keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
         });
@@ -13772,12 +13681,7 @@ export const report = query('report', {
         export default createApp({ endpoints: [download] });
       `,
       `
-        import {
-          createApp,
-          createMemoryStorage,
-          createSigningKeyRing,
-          createStorageDownloadEndpoint,
-        } from '@kovojs/server';
+        import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
         const signingKeys = createSigningKeyRing({
           keys: [{ id: 'download-2026', secret: 'download-test-signing-material-2026', state: 'active' }],
         });
@@ -13793,7 +13697,7 @@ export const report = query('report', {
 
   it('keeps exact stored-file parsing separate from opaque storage authority', () => {
     const documented = sinksFor(`
-      import { createMemoryStorage, mutation, s } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage'; import { mutation, s } from '@kovojs/server';
       const inlineStorage = createMemoryStorage();
       const retainedStorage = createMemoryStorage();
       const avatarSchema = s.file()
@@ -13817,7 +13721,7 @@ export const report = query('report', {
     expect(documented).toEqual([]);
 
     const mixed = sinksFor(`
-      import { createMemoryStorage, query, s } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
       const exactStorage = createMemoryStorage();
       const opaqueStorage = createMemoryStorage();
       const opaqueUpload = { upload: opaqueStorage.put.bind(opaqueStorage) };
@@ -13872,7 +13776,7 @@ export const report = query('report', {
       ],
     ] as const) {
       const facts = sinksFor(`
-        import { createMemoryStorage, query, s } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
         const storage = createMemoryStorage();
         export const unsafe = query({ async load(input) {
           ${declaration}
@@ -13910,7 +13814,7 @@ export const report = query('report', {
       ],
     ] as const) {
       const facts = sinksFor(`
-        import { createMemoryStorage, mutation, s } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage'; import { mutation, s } from '@kovojs/server';
         const storage = createMemoryStorage();
         ${setup}
         const schema = ${expression};
@@ -13926,7 +13830,7 @@ export const report = query('report', {
       [
         'exported storage',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           export const storage = createMemoryStorage();
           export const unsafe = query({ async load(input) {
             return s.file().store({ storage: storage }).parseAsync(input.file);
@@ -13936,7 +13840,7 @@ export const report = query('report', {
       [
         'aliased storage',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           const storage = createMemoryStorage();
           const alias = storage;
           export const unsafe = query({ async load(input) {
@@ -13947,7 +13851,7 @@ export const report = query('report', {
       [
         'computed storage member',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           const storage = createMemoryStorage();
           const put = storage['put'];
           void put;
@@ -13959,7 +13863,7 @@ export const report = query('report', {
       [
         'mutated storage property',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           const storage = createMemoryStorage();
           storage.put = async () => ({ key: 'forged' });
           export const unsafe = query({ async load(input) {
@@ -13980,7 +13884,7 @@ export const report = query('report', {
       [
         'post-construction escape',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           const storage = createMemoryStorage();
           const escaped = storage;
           void escaped;
@@ -13992,7 +13896,7 @@ export const report = query('report', {
       [
         'multiple retained consumers',
         `
-          import { createMemoryStorage, query, s } from '@kovojs/server';
+          import { createMemoryStorage } from '@kovojs/core/storage'; import { query, s } from '@kovojs/server';
           const storage = createMemoryStorage();
           export const left = query({ async load(input) {
             return s.file().store({ keyPrefix: 'left', storage: storage }).parseAsync(input.file);
@@ -14010,7 +13914,7 @@ export const report = query('report', {
 
   it('accepts exact direct memory-storage methods without opening capability carriers', () => {
     const exact = sinksFor(`
-      import { createMemoryStorage, mutation, route, s } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage'; import { mutation, route, s } from '@kovojs/server';
       const storage = createMemoryStorage();
       await storage.put('receipts/delete-target.txt', 'delete target');
       export const write = mutation({
@@ -14050,7 +13954,7 @@ export const report = query('report', {
       ],
     ] as const) {
       const facts = sinksFor(`
-        import { createMemoryStorage, mutation } from '@kovojs/server';
+        import { createMemoryStorage } from '@kovojs/core/storage'; import { mutation } from '@kovojs/server';
         const storage = createMemoryStorage();
         ${setup}
         export const write = mutation({
@@ -14064,7 +13968,7 @@ export const report = query('report', {
     }
 
     const exported = sinksFor(`
-      import { createMemoryStorage, mutation } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage'; import { mutation } from '@kovojs/server';
       export const storage = createMemoryStorage();
       export const write = mutation({
         async handler() {
@@ -14091,7 +13995,7 @@ export const report = query('report', {
 
     const nestedModuleAuthority = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createMemoryStorage } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage';
       const storage = createMemoryStorage();
       storage.put('receipts/proof.txt', execFileSync('storage-module-authority'));
     `);
@@ -14105,7 +14009,7 @@ export const report = query('report', {
     );
 
     const deferredQueryWrite = sinksFor(`
-      import { createMemoryStorage, query } from '@kovojs/server';
+      import { createMemoryStorage } from '@kovojs/core/storage'; import { query } from '@kovojs/server';
       const storage = createMemoryStorage();
       export const unsafe = query({
         async load() {
@@ -14126,7 +14030,7 @@ export const report = query('report', {
 
   it('accepts only an exact pristine route-page context.signUrl capability result', () => {
     const safe = sinksFor(`
-      import { publicAccess, publicScopedKey, route } from '@kovojs/server';
+      import { publicAccess, route } from '@kovojs/server'; import { publicScopedKey } from '@kovojs/core';
       export const capabilityPage = route('/capability', {
         access: publicAccess('capability proof'),
         async page(context) {
@@ -15162,7 +15066,7 @@ export const report = query('report', {
   it('scans endpoint and webhook descriptors in the shared app endpoint collection', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, endpoint, webhook } from '@kovojs/server';
+      import { createApp, endpoint } from '@kovojs/server'; import { webhook } from '@kovojs/server/webhooks';
       const plain = endpoint('/plain', { handler() {
         execFileSync('plain-handler');
         return new Response('plain');
@@ -15505,7 +15409,7 @@ export const report = query('report', {
 
   it('accepts only direct named closed redirect calls', () => {
     const direct = sinksFor(`
-      import { redirect } from '@kovojs/server';
+      import { redirect } from '@kovojs/core';
       export const response = redirect('/login', { status: 303 });
     `);
     expect(direct).toEqual([]);
@@ -15528,7 +15432,7 @@ export const report = query('report', {
   it('uses only byte-and-span-bound compiler summaries to discharge nested request-helper noise', () => {
     const source = `
       import { kovoAnalyzerSummary } from '@kovojs/drizzle';
-      import { mutation, serverValue } from '@kovojs/server';
+      import { mutation } from '@kovojs/server'; import { serverValue } from '@kovojs/server/write-safety';
       import { eq } from 'drizzle-orm';
       import { account } from './schema.js';
       function exactGuard(context) { return context.guard.userId; }

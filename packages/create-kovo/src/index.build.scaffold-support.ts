@@ -39,7 +39,7 @@ export function addSqliteDurableTaskRegistration(root: string): void {
   writeFileSync(
     join(root, 'src/sqlite-durable-task-proof.ts'),
     [
-      "import { s, task } from '@kovojs/server';",
+      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
       '',
       "export const sqliteDurableTaskProof = task('sqlite-durable-task-proof', {",
       '  input: s.object({}),',

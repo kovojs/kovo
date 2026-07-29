@@ -439,7 +439,8 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       writeFileSync(
         join(root, 'reader-type-proof.ts'),
         `
-import { declarePublicRead, readonlyDb, type Reader } from '@kovojs/server';
+import { declarePublicRead, readonlyDb } from '@kovojs/server/data'
+import { type Reader } from '@kovojs/server';
 
 type FakeDb = {
   $client: { execute(statement: unknown): Promise<unknown> };

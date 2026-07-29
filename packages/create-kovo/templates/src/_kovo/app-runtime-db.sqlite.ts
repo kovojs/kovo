@@ -5,12 +5,10 @@ import {
   type BetterAuthBindingRequest,
   type BetterAuthCsrfRequestLike,
 } from '@kovojs/better-auth';
-import {
-  type AccessDecision,
-  type CsrfOptions,
-  type MutationReplayStore,
-  type PrincipalEpochStore,
-} from '@kovojs/server';
+import { type AccessDecision } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
+import { type MutationReplayStore } from '@kovojs/server/replay';
+import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
 
 import {
   account,

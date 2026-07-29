@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
-import { renderRouteHtml } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 
 import { homeRoute } from './app.js';
 import { createShopDb, type ShopDb } from './db.js';

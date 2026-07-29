@@ -19,7 +19,7 @@ import {
   type KovoPostgresMigrationRunReport,
   type KovoPostgresPostureReport,
   type KovoPostgresRuntimeDriver,
-} from '@kovojs/server';
+} from '@kovojs/server/postgres';
 import { collectRuntimeRegistryFacts } from '@kovojs/server/internal/data-plane-static-analysis';
 import { installGeneratedTableSecurityManifestForCommand } from '@kovojs/server/internal/execution';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';

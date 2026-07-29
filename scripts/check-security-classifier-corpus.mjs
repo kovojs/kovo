@@ -1511,7 +1511,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/drizzle/src/index.toctou-readonly.test.ts',
         snippets: [
           'flags query() loaders that reach storage put/delete authority',
-          'import { createMemoryStorage, query } from "@kovojs/server";',
+          'import { createMemoryStorage } from "@kovojs/core/storage"\nimport { query } from "@kovojs/server";',
           'const storage = createMemoryStorage();',
           'operationProvenance',
         ],

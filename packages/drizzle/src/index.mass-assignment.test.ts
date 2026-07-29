@@ -79,7 +79,7 @@ function confidentialFacts(domainSource: string, annotation = 'confidentialAtRes
 const HEADER = [
   'import { eq } from "drizzle-orm";',
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-  'import { serverValue, trustedAssign } from "@kovojs/server";',
+  'import { serverValue, trustedAssign } from "@kovojs/server/write-safety";',
   'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
   'import { accounts } from "./schema";',
   '',
@@ -97,8 +97,11 @@ function mutationHandler(
   signature = 'input: { id: string; ownerId: string; role: string; balance: number; name: string }, request: { db: PgAsyncDatabase<any, any>; session: { userId: string } }',
 ): string {
   const header = HEADER.replace(
-    '{ serverValue, trustedAssign }',
-    '{ mutation, serverValue, trustedAssign }',
+    'import { serverValue, trustedAssign } from "@kovojs/server/write-safety";',
+    [
+      'import { mutation } from "@kovojs/server";',
+      'import { serverValue, trustedAssign } from "@kovojs/server/write-safety";',
+    ].join('\n'),
   );
   return `${header}export const updateAccount = mutation("updateAccount", { async handler(${signature}) {\n${body}\n} });\n`;
 }
@@ -618,7 +621,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = passwordFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import { hashPassword } from "@kovojs/server";',
+        'import { hashPassword } from "@kovojs/server/password";',
         'import { users } from "./schema";',
         'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
         '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: await hashPassword(input.password) });',
@@ -632,7 +635,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = passwordFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import { hashPassword } from "@kovojs/server";',
+        'import { hashPassword } from "@kovojs/server/password";',
         'import { users } from "./schema";',
         'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
         '  const passwordHash = await hashPassword(input.password);',
@@ -699,7 +702,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = passwordFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import * as kovoServer from "@kovojs/server";',
+        'import * as kovoServer from "@kovojs/server/password";',
         'import { users } from "./schema";',
         'export const createUser = async (db: PgAsyncDatabase<any, any>, input: { id: string; email: string; password: string }) => {',
         '  await db.insert(users).values({ id: input.id, email: input.email, passwordHash: await kovoServer.hashPassword(input.password) });',
@@ -756,7 +759,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     const result = confidentialFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import { encryptAtRest, type ConfidentialAtRestCipher } from "@kovojs/server";',
+        'import { encryptAtRest, type ConfidentialAtRestCipher } from "@kovojs/server/confidential";',
         'import { profiles } from "./schema";',
         'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, cipher: ConfidentialAtRestCipher) => {',
         '  await db.update(profiles).set({ ssn: encryptAtRest(input.ssn, cipher, { aad: "profile:" + input.id }) }).where(eq(profiles.id, input.id));',
@@ -766,11 +769,11 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     expect(result).toEqual([]);
   });
 
-  it('accepts encrypted-at-rest variables and namespace imports from @kovojs/server', () => {
+  it('accepts encrypted-at-rest variables and namespace imports from the confidential task path', () => {
     const result = confidentialFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-        'import * as server from "@kovojs/server";',
+        'import * as server from "@kovojs/server/confidential";',
         'import { profiles } from "./schema";',
         'export const updateProfile = async (db: PgAsyncDatabase<any, any>, input: { id: string; ssn: string }, cipher: server.ConfidentialAtRestCipher) => {',
         '  const encrypted = server.encryptAtRest(input.ssn, cipher, { aad: "profile:" + input.id });',

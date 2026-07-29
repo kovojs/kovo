@@ -221,7 +221,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-record.ts'),
     [
-      "import { domain, mutation, publicAccess, s, task, trustedAssign } from '@kovojs/server';",
+      "import { domain, mutation, publicAccess, s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { taskProofs } from './schema.js';",
@@ -260,7 +260,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-retry.ts'),
     [
-      "import { domain, mutation, publicAccess, s, task, trustedAssign } from '@kovojs/server';",
+      "import { domain, mutation, publicAccess, s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { taskProofs } from './schema.js';",
@@ -310,7 +310,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-self-reschedule.ts'),
     [
-      "import { domain, mutation, publicAccess, s, task, trustedAssign } from '@kovojs/server';",
+      "import { domain, mutation, publicAccess, s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks'\nimport { trustedAssign } from '@kovojs/server/write-safety';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { taskProofs } from './schema.js';",
@@ -351,7 +351,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule.ts'),
     [
-      "import { domain, mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { domain, mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { recordDurableTask } from './durable-task-record.js';",
@@ -376,7 +376,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-rollback.ts'),
     [
-      "import { mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { recordDurableTask } from './durable-task-record.js';",
       "const publicProof = publicAccess('public durable task rollback proof');",
@@ -397,7 +397,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-delay.ts'),
     [
-      "import { mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { recordDurableTask } from './durable-task-record.js';",
       "const publicProof = publicAccess('public delayed durable task proof');",
@@ -418,7 +418,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-cancel.ts'),
     [
-      "import { mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { recordDurableTask } from './durable-task-record.js';",
       "const publicProof = publicAccess('public cancelled durable task proof');",
@@ -439,7 +439,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-replace.ts'),
     [
-      "import { mutation, publicAccess, publicScopedKey, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { publicScopedKey } from '@kovojs/core'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { recordDurableTask } from './durable-task-record.js';",
       "const publicProof = publicAccess('public replaced durable task proof');",
@@ -466,7 +466,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-flaky.ts'),
     [
-      "import { mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { flakyDurableTask } from './durable-task-retry.js';",
       "const publicProof = publicAccess('public flaky durable task proof');",
@@ -487,7 +487,7 @@ function writeDurableTaskProofModules(root: string): void {
   writeFileSync(
     join(root, 'src/durable-task-schedule-self.ts'),
     [
-      "import { mutation, publicAccess, s, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { mutation, publicAccess, s } from '@kovojs/server'\nimport { type TaskSchedulingRequest } from '@kovojs/server/tasks';",
       "import type { AppRequest } from './auth.js';",
       "import { selfRescheduleTask } from './durable-task-self-reschedule.js';",
       "const publicProof = publicAccess('public self-rescheduled durable task proof');",
@@ -509,7 +509,7 @@ function writeDurableTaskProofModules(root: string): void {
     join(root, 'src/durable-task-count-endpoint.ts'),
     [
       "import { eq } from 'drizzle-orm';",
-      "import { endpoint, publicAccess, type EndpointDbContext } from '@kovojs/server';",
+      "import { endpoint, publicAccess } from '@kovojs/server'\nimport { type EndpointDbContext } from '@kovojs/server/routing';",
       '',
       "import type { AppDb } from './db.js';",
       "import { taskProofs } from './schema.js';",

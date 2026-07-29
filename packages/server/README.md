@@ -71,10 +71,7 @@ home searchable without widening the daily root:
 
 ```ts
 import { agent, agentContent, createAgentSession, runAgentTurn, tool } from '@kovojs/server/agent';
-import {
-  createMemoryVersionedClientModuleRegistry,
-  createMemoryVersionedClientModuleStore,
-} from '@kovojs/server/client-modules';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { cmd, commandAllowlist, runCommand } from '@kovojs/server/command';
 import {
   createConfidentialAtRestCipher,
@@ -126,7 +123,7 @@ import {
   renderTree,
 } from '@kovojs/server/render-tree';
 import { renderRouteHtml } from '@kovojs/server/rendering';
-import { createMemoryMutationReplayStore } from '@kovojs/server/replay';
+import { createMemoryMutationReplayStore, replayMutationWireBody } from '@kovojs/server/replay';
 import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
 import {
   InlineUnverifiedUploadError,

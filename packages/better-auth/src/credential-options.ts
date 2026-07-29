@@ -1,4 +1,5 @@
-import type { AccessDecision, CsrfOptions, Guard } from '@kovojs/server';
+import type { AccessDecision, Guard } from '@kovojs/server';
+import type { CsrfOptions } from '@kovojs/server/security';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
 import type { BetterAuthBindingRequest } from './internal/contracts.js';

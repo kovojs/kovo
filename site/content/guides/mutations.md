@@ -79,7 +79,8 @@ Submit the form once with JavaScript disabled, then again with enhancement turne
 Expected failures belong in the mutation contract:
 
 ```ts
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 declare const cartCsrf: Readonly<CsrfOptions<{ db: any }>>;
 declare const cart: any;
@@ -141,7 +142,8 @@ named helper or domain operation instead.
 Raw SQL and helper calls that hide the write need registry facts:
 
 ```ts
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 declare const cartCsrf: Readonly<CsrfOptions<{ db: any }>>;
 declare const cart: any;
@@ -191,7 +193,8 @@ Domain values those writes affect.
 Optimism is keyed to queries:
 
 ```ts
-import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+import { mutation, publicAccess, s } from '@kovojs/server';
+import { type CsrfOptions } from '@kovojs/server/security';
 
 declare const cartCsrf: Readonly<CsrfOptions<unknown>>;
 declare const addToCartHandler: (input: {

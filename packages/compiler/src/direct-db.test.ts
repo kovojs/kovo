@@ -432,7 +432,7 @@ export const sendReceipt = task({
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { webhook, webhookReplayIdentity } from '@kovojs/server';
+import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 import { appRuntimeDbProvider } from './db.js';
 
 const payment = domain('payment');
@@ -473,7 +473,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { webhook } from '@kovojs/server';
+import { webhook } from '@kovojs/server/webhooks';
 import { appRuntimeDbProvider } from './db.js';
 
 const payment = domain('payment');
@@ -517,7 +517,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
-import { webhook, webhookReplayIdentity } from '@kovojs/server';
+import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 
 const payment = domain('payment');
 

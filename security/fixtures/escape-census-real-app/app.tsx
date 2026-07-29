@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { createApp, guards, mutation, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, guards, mutation, query, route, s } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 

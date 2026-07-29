@@ -13186,6 +13186,38 @@
       }
     },
     {
+      "id": "@kovojs/server/replay#replayMutationWireBody",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/replay",
+      "symbol": "replayMutationWireBody",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/replay",
+      "story": "server-replay",
+      "evidence": "server-task-topology-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
+      "id": "@kovojs/server/replay#ReplayMutationWireBodyOptions",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/replay",
+      "symbol": "ReplayMutationWireBodyOptions",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/replay",
+      "story": "server-replay",
+      "evidence": "server-task-topology-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
       "id": "@kovojs/server/routing#AppRateLimitOptions",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/routing",
@@ -20444,10 +20476,10 @@
       "specifier": "@kovojs/server",
       "symbol": "replayMutationWireBody",
       "state": "removed",
-      "decision": "internalize",
-      "canonicalHome": "internal:@kovojs/server",
-      "story": "server-authoring",
-      "evidence": "server-authoring-contract",
+      "decision": "move",
+      "canonicalHome": "@kovojs/server/replay",
+      "story": "server-replay",
+      "evidence": "server-task-topology-contract",
       "migrationBatch": "server-task-topology-v1"
     },
     {
@@ -20456,10 +20488,10 @@
       "specifier": "@kovojs/server",
       "symbol": "ReplayMutationWireBodyOptions",
       "state": "removed",
-      "decision": "internalize",
-      "canonicalHome": "internal:@kovojs/server",
-      "story": "server-authoring",
-      "evidence": "server-authoring-contract",
+      "decision": "move",
+      "canonicalHome": "@kovojs/server/replay",
+      "story": "server-replay",
+      "evidence": "server-task-topology-contract",
       "migrationBatch": "server-task-topology-v1"
     },
     {

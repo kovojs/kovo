@@ -1,4 +1,5 @@
-import { publicScopedKey, route, s } from '@kovojs/server';
+import { publicScopedKey } from '@kovojs/core';
+import { route, s } from '@kovojs/server';
 
 export const receiptRoute = route('/receipts/:receiptId', {
   params: s.object({ receiptId: s.string() }),

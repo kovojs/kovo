@@ -663,7 +663,8 @@ export default {
       join(root, 'src/app.ts'),
       `import { createHmac } from 'node:crypto';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { defineKovo, mintCsrfToken } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server'
+import { mintCsrfToken } from '@kovojs/server/security';
 
 const nativeApply = Reflect.apply;
 const mutableCrypto = createRequire(import.meta.url)('node:crypto');

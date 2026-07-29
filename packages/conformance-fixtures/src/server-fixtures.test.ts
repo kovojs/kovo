@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {
   domain,
-  createMemoryStorage,
   errorBoundary,
   guards,
   i18n,
@@ -15,6 +14,7 @@ import {
   s,
   t,
 } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
 import { csrfField, csrfToken } from '@kovojs/server/internal/csrf';
 import { runMutation, runQuery, runRoutePage } from '@kovojs/server/internal/execution';
 import {

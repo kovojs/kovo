@@ -6093,24 +6093,28 @@
           }
         },
         {
-          "id": "282-replay-mutation-wire-body-refusal",
-          "action": "refuse",
+          "id": "282-replay-mutation-wire-body-move",
+          "action": "rewrite",
           "from": {
             "specifier": "@kovojs/server",
             "symbol": "replayMutationWireBody"
           },
-          "category": "app-context",
-          "reason": "replayMutationWireBody is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "replayMutationWireBody"
+          }
         },
         {
-          "id": "283-replay-mutation-wire-body-options-refusal",
-          "action": "refuse",
+          "id": "283-replay-mutation-wire-body-options-move",
+          "action": "rewrite",
           "from": {
             "specifier": "@kovojs/server",
             "symbol": "ReplayMutationWireBodyOptions"
           },
-          "category": "app-context",
-          "reason": "ReplayMutationWireBodyOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "ReplayMutationWireBodyOptions"
+          }
         },
         {
           "id": "284-request-handler-move",

@@ -1,4 +1,5 @@
-import { createMemoryStorage, publicScopedKey } from '@kovojs/server';
+import { createMemoryStorage } from '@kovojs/core/storage';
+import { publicScopedKey } from '@kovojs/core';
 
 export const avatarStorage = createMemoryStorage();
 

@@ -1,7 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §9.1/§10.3: concurrent duplicate Kovo-Idem mutation requests reserve
 // one replay record before the handler runs, so the write executes once.
-import { createApp, createMemoryMutationReplayStore, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { createMemoryMutationReplayStore } from '@kovojs/server/replay';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

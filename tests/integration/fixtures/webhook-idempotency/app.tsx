@@ -1,15 +1,12 @@
 // SPEC.md §9.1: webhook idempotency replays the stored response for repeated
 // provider event ids without re-executing the handler.
 import { hmacSignature } from '@kovojs/core/webhooks';
+import { createApp, domain, mutation, s } from '@kovojs/server';
 import {
-  createApp,
   createMemoryWebhookReplayStore,
-  domain,
-  mutation,
-  s,
   webhook,
   webhookReplayIdentity,
-} from '@kovojs/server';
+} from '@kovojs/server/webhooks';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const WEBHOOK_HMAC_SECRET = 'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf';

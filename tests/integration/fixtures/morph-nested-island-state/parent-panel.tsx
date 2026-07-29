@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { trustedHtml } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 
 import { parentQuery, type ParentResult } from './shared';
 

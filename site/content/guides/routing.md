@@ -208,7 +208,7 @@ no-JS POST-redirect-GET path stays inside the type system. A successful no-JS mu
 with a `Location` the route table validates, and the next GET renders the updated page:
 
 ```ts
-import { redirect } from '@kovojs/server';
+import { redirect } from '@kovojs/core';
 
 export async function createDeal() {
   const created = await db.deals.create(formData);

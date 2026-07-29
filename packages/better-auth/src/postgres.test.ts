@@ -2,11 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  createPostgresAppRuntimeDb,
-  type KovoPostgresAppRuntimeDb,
-  type KovoPostgresSystemDb,
-} from '@kovojs/server';
+import { createPostgresAppRuntimeDb, type KovoPostgresAppRuntimeDb } from '@kovojs/server/postgres';
+import type { KovoPostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 import { csrfToken } from '@kovojs/server/internal/csrf';
 import { runEndpoint } from '@kovojs/server/internal/execution';
 import { afterEach, describe, expect, it, vi } from 'vitest';

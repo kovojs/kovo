@@ -153,7 +153,7 @@ objects at the edge. Define the host-independent handler first:
 
 ```ts
 // handler.ts
-import { createRequestHandler } from '@kovojs/server';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import app from './app.js';
 
 export const handler = createRequestHandler(app);
@@ -166,7 +166,7 @@ Keep raw host authority in a separate adapter entry:
 import '@kovojs/server/runtime-bootstrap';
 
 import { createServer } from 'node:http';
-import { toNodeHandler } from '@kovojs/server';
+import { toNodeHandler } from '@kovojs/server/node';
 import { handler } from './handler.js';
 
 createServer(toNodeHandler(handler)).listen(3000);

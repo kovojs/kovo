@@ -441,7 +441,7 @@ describe('Better Auth trusted plaintext zone', () => {
       {
         file: 'bypass.ts',
         source: `
-          import { hashPassword as importedHashAlias } from '@kovojs/server';
+          import { hashPassword as importedHashAlias } from '@kovojs/server/password';
           import { apiAlias as importedApi, handlerAlias as importedHandler } from './raw-authority.js';
           const { ['getSession']: destructuredSession } = importedApi;
           destructuredSession.call(importedApi, { headers: new Headers() });
@@ -471,7 +471,7 @@ describe('Better Auth trusted plaintext zone', () => {
       {
         file: 'owned.ts',
         source: `
-          import { hashPassword as importedHashAlias } from '@kovojs/server';
+          import { hashPassword as importedHashAlias } from '@kovojs/server/password';
           import {
             betterAuthCredentialConsumers as tokenRegistryAlias,
             runBetterAuthCredentialSourceCallableAsync as runGateAlias,

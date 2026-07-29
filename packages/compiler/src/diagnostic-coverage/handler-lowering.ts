@@ -133,7 +133,8 @@ export const FiniteSecurityIrBad = component({
       coverageFixtures.compileComponentModule({
         fileName: 'derived-dataset-ok.tsx',
         source: `
-import { derived, endpoint } from '@kovojs/server';
+import { derived } from '@kovojs/server/derived-data'
+import { endpoint } from '@kovojs/server';
 
 const documents = {};
 const vectors = derived(
@@ -154,7 +155,9 @@ export const persist = endpoint('/persist', {
       coverageFixtures.compileComponentModule({
         fileName: 'derived-dataset-bad.tsx',
         source: `
-import { createFileSystemStorage, endpoint, publicScopedKey } from '@kovojs/server';
+import { createFileSystemStorage } from '@kovojs/core/storage'
+import { endpoint } from '@kovojs/server'
+import { publicScopedKey } from '@kovojs/core';
 
 const documents = {};
 const storage = createFileSystemStorage({ root: '/srv/kovo-derived-coverage' });

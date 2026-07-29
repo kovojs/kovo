@@ -1,5 +1,6 @@
 import { form, type FormInput } from '@kovojs/core';
-import { guards, i18n, metaFromQuery, mutation, s, serverValue, session } from '@kovojs/server';
+import { guards, i18n, metaFromQuery, mutation, s, session } from '@kovojs/server';
+import { serverValue } from '@kovojs/server/write-safety';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
