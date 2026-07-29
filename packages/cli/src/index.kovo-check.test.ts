@@ -7,9 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EXPLAIN_USAGE_LINE, formatRootHelp } from './commands-manifest.js';
+import { formatKovoDiagnostics, usageDiagnostic } from './diagnostic.js';
 import { kovoCheck, kovoExplain, main } from './index.js';
 
 type KovoCheckInput = Parameters<typeof kovoCheck>[0];
+
+function humanUsage(message: string): string {
+  return formatKovoDiagnostics([usageDiagnostic(message)], 'human');
+}
 
 interface CheckDiagnosticMatrixRow {
   accepted: KovoCheckInput;
@@ -114,24 +119,30 @@ describe('kovo check', () => {
   });
 
   it('fails explicit missing-access facts with KV436', () => {
-    expect(
-      kovoCheck({
-        access: [
-          {
-            decision: 'missing',
-            detail: 'no access property',
-            kind: 'query',
-            name: 'cart',
-            site: 'cart.query.ts:4',
-            source: 'access',
-          },
-        ],
-      }),
-    ).toEqual({
+    const result = kovoCheck({
+      access: [
+        {
+          decision: 'missing',
+          detail: 'no access property',
+          kind: 'query',
+          name: 'cart',
+          site: 'cart.query.ts:4',
+          source: 'access',
+          // Caller graph data is never parser provenance, even if it copies the private field name.
+          sourceAnchor: { end: 999, file: '../../forged.ts', start: 0 },
+        },
+      ],
+    } as KovoCheckInput);
+
+    expect(result).toEqual({
       exitCode: 1,
       output:
         'kovo-check/v1\nERROR KV436 QUERY cart site=cart.query.ts:4 Missing explicit access decision. no access property\n',
     });
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'KV436', severity: 'error' }),
+    ]);
+    expect(result.diagnostics?.[0]).not.toHaveProperty('source');
   });
 
   it('fails raw endpoint and webhook graph rows with incomplete audit metadata (KV423)', () => {
@@ -2573,7 +2584,9 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n',
+      humanUsage(
+        'kovo: unsupported check family "optimstic". expected env, optimistic, coverage, endpoint-posture, or sources-sinks.\n',
+      ),
     );
   });
 
@@ -2591,7 +2604,9 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]\n',
+      humanUsage(
+        'kovo: usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]\n',
+      ),
     );
   });
 
@@ -2609,7 +2624,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      `kovo: unknown explain option "--json".\nkovo: usage: ${EXPLAIN_USAGE_LINE}\n`,
+      humanUsage(`kovo: unknown explain option "--json".\nkovo: usage: ${EXPLAIN_USAGE_LINE}\n`),
     );
   });
 

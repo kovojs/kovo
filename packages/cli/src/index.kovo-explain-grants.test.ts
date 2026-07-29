@@ -6,6 +6,7 @@ import { kovoCheck, kovoExplain } from './graph-output.js';
 describe('kovo explain --grants (Plan 3 §3.2 C13 anchor)', () => {
   it('parses the grant graph as an exclusive graph-backed explain mode', () => {
     expect(parseExplainArgs(['--grants', 'graph.json'])).toEqual({
+      format: 'human',
       inputPath: 'graph.json',
       ok: true,
       options: { grants: true },

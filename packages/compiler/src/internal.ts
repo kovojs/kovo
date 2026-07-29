@@ -1,4 +1,8 @@
-export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
+export type {
+  CompilerDiagnostic,
+  CompilerDiagnosticSourceAnchor,
+  SourcePosition,
+} from './diagnostics.js';
 /** @internal Supported runners call this before evaluating app/plugin modules. */
 export { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.js';
 export { snapshotCompileComponentOptions } from './compile-options.js';

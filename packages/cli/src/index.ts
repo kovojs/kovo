@@ -64,7 +64,7 @@ import {
   runGraphCommand,
   writeCheckUsageError,
 } from './graph-output.js';
-import { writeCommandResult, writeUsageError } from './shared.js';
+import { writeCommandResult, writeFormattedCommandResult, writeUsageError } from './shared.js';
 import { runDeploymentEnvironmentCheck } from './deployment-environment-contract.js';
 import {
   scanSourceSinkDrift,
@@ -145,12 +145,13 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
     const parsed = parseCheckArgs(args);
     if (!parsed.ok) return writeCheckUsageError(parsed);
     if ('environment' in parsed) {
-      return writeCommandResult(
+      return writeFormattedCommandResult(
         runDeploymentEnvironmentCheck(
           parsed.inputPath,
           security.invocationCwd,
           security.invocationEnv,
         ),
+        parsed.format,
         'proof',
         'check',
       );
@@ -163,16 +164,19 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
           () => ({ exitCode: 0, output: '' }),
           security.invocationCwd,
         );
-        if (input.exitCode !== 0) return writeCommandResult(input, 'proof', 'check');
+        if (input.exitCode !== 0) {
+          return writeFormattedCommandResult(input, parsed.format, 'proof', 'check');
+        }
       }
       const driftScan = scanSourceSinkDrift(security.invocationCwd);
-      return writeCommandResult(
+      return writeFormattedCommandResult(
         sourcesSinksCheckResult(outputVersion, { driftScan }),
+        parsed.format,
         'proof',
         'check',
       );
     }
-    return writeCommandResult(
+    return writeFormattedCommandResult(
       runGraphCommand(
         inputPath,
         (input) =>
@@ -182,6 +186,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
           }),
         security.invocationCwd,
       ),
+      parsed.format,
       'proof',
       'check',
     );
@@ -190,14 +195,20 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message, 'explain');
     if ('authLifecycle' in parsed.options || 'modelBoundaries' in parsed.options) {
-      return writeCommandResult(kovoExplain({}, parsed.options), 'proof', 'explain');
+      return writeFormattedCommandResult(
+        kovoExplain({}, parsed.options),
+        parsed.format,
+        'proof',
+        'explain',
+      );
     }
-    return writeCommandResult(
+    return writeFormattedCommandResult(
       runGraphCommand(
         parsed.inputPath,
         (input) => kovoExplain(input, parsed.options),
         security.invocationCwd,
       ),
+      parsed.format,
       'proof',
       'explain',
     );
@@ -222,7 +233,12 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
   async build(args, security) {
     const parsed = parseBuildArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message, 'build');
-    return writeCommandResult(await runBuildCommand(parsed.options, security), 'build', 'build');
+    return writeFormattedCommandResult(
+      await runBuildCommand(parsed.options, security),
+      parsed.format,
+      'build',
+      'build',
+    );
   },
   async db(args, security) {
     const parsed = parseDbArgs(args);
@@ -333,8 +349,9 @@ export async function mainAsync(
   if (invocation.command === 'explain' && invocation.form === 'attest') {
     const parsed = parseAttestArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message, 'explain');
-    return writeCommandResult(
+    return writeFormattedCommandResult(
       await runAttestCommand(parsed.options, security.invocationCwd),
+      invocation.options.format,
       'proof',
       'explain',
     );
@@ -342,8 +359,9 @@ export async function mainAsync(
   if (invocation.command === 'check' && invocation.form === 'advisories') {
     const parsed = parseAdvisoryArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message, 'check');
-    return writeCommandResult(
+    return writeFormattedCommandResult(
       await runAdvisoryCheck(parsed.options, security.invocationCwd),
+      invocation.options.format,
       'proof',
       'check',
       'unknown',

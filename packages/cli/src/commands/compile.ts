@@ -54,6 +54,7 @@ import {
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
 import { readCliPackageVersion } from '../package-version.js';
+import { projectKovoDiagnostic } from '../diagnostic.js';
 
 const requireFromCli = createRequire(import.meta.url);
 const cliPackageVersion = readCliPackageVersion();
@@ -763,7 +764,7 @@ async function runCompileComponentCommand(
     }
   }
 
-  return await compileArtifactsResult(options.check, artifacts, warningLines(warnings));
+  return await compileArtifactsResult(options.check, artifacts, warningLines(warnings), warnings);
 }
 
 async function runCompileRouteCommand(
@@ -1685,13 +1686,22 @@ async function compileArtifactsResult(
   check: boolean,
   artifacts: readonly CompileArtifact[],
   warnings: readonly string[] = [],
+  diagnostics: CompileResult['diagnostics'] = [],
 ): Promise<CliCommandResult> {
   const lines = [compileCommandOutputVersion];
   for (const artifact of artifacts) {
     lines.push(...(await compileArtifactActionLines(check, artifact)));
   }
   lines.push(...warnings, `SUMMARY artifacts=${artifacts.length} diagnostics=${warnings.length}`);
-  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+  return {
+    ...(diagnostics.length === 0
+      ? {}
+      : {
+          diagnostics: diagnostics.map((diagnostic) => projectKovoDiagnostic(diagnostic, 'build')),
+        }),
+    exitCode: 0,
+    output: `${lines.join('\n')}\n`,
+  };
 }
 
 async function compileArtifactLines(
@@ -1748,6 +1758,7 @@ function warningLines(diagnostics: CompileResult['diagnostics']): string[] {
 function compileDiagnosticResult(diagnostics: CompileResult['diagnostics']): CliCommandResult {
   assertCompileResultDiagnostics(diagnostics, 'CLI blocking compiler diagnostics');
   return {
+    diagnostics: diagnostics.map((diagnostic) => projectKovoDiagnostic(diagnostic, 'build')),
     error: [
       compileCommandOutputVersion,
       ...diagnostics.map(

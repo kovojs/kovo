@@ -22,6 +22,7 @@ import {
   selfProbe,
 } from './egress-bootstrap.js';
 import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
+import { withKovoBuildContext } from './internal/build-context.js';
 
 async function connectFrameworkDatabaseSocket(databaseUrl: string, port: number): Promise<void> {
   const socket = createDatabaseEgressSocket(databaseUrl);
@@ -243,6 +244,15 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     expect(warn.mock.calls.join('\n')).toContain('metadata remains blocked');
 
     server.close();
+  });
+
+  it('keeps graph-only build evaluation quiet without suppressing real dev boot notices', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    withKovoBuildContext({ graphDerivation: true }, () => createApp());
+    teardown = activeEgressFloor()?.uninstall;
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('end-to-end: createApp({ egress: { allowInternal: [] } }) denies loopback in development', async () => {

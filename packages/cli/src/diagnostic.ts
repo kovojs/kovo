@@ -1,11 +1,15 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
-import type { DiagnosticSeverity } from '@kovojs/core';
-import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
+import {
+  assertRegisteredDiagnostic,
+  diagnosticDefinitions,
+  isDiagnosticCode,
+} from '@kovojs/core/internal/diagnostics';
 
 /** Stable wire version accepted by Kovo's public human, JSON, and GitHub renderers. */
 export const KOVO_DIAGNOSTIC_VERSION = 'kovo-diagnostic/v1' as const;
 
-/** Exact authored-source anchor using zero-based UTF-16 offsets. */
+/** Exact authored-source anchor using zero-based UTF-16 offsets and an exclusive end. */
 export interface KovoDiagnosticSourceAnchor {
   readonly end: number;
   readonly file: string;
@@ -15,15 +19,61 @@ export interface KovoDiagnosticSourceAnchor {
 /** Stable categories used to classify CLI process behavior. */
 export type KovoDiagnosticCategory = 'build' | 'config' | 'proof' | 'runtime' | 'usage';
 
+const CLI_DIAGNOSTIC_DEFINITIONS = {
+  KOVO_BUILD_FINDING: {
+    category: 'build',
+    help: 'Resolve the reported build finding and rerun the command.',
+    severity: 'error',
+  },
+  KOVO_CONFIG_FINDING: {
+    category: 'config',
+    help: 'Correct the reported configuration and rerun the command.',
+    severity: 'error',
+  },
+  KOVO_DIAGNOSTIC_CONTRACT: {
+    category: 'runtime',
+    help: 'Report this framework defect; the command must return authenticated diagnostic facts.',
+    severity: 'error',
+  },
+  KOVO_PROOF_FINDING: {
+    category: 'proof',
+    help: 'Inspect the cited source proof and rerun the command.',
+    severity: 'error',
+  },
+  KOVO_RUNTIME_FINDING: {
+    category: 'runtime',
+    help: 'Resolve the reported runtime finding and rerun the command.',
+    severity: 'error',
+  },
+  KOVO_USAGE: {
+    category: 'usage',
+    help: 'Run `kovo --help` or `kovo help <command>` for generated usage.',
+    severity: 'error',
+  },
+} as const satisfies Readonly<
+  Record<
+    string,
+    {
+      readonly category: KovoDiagnosticCategory;
+      readonly help: string;
+      readonly severity: DiagnosticSeverity;
+    }
+  >
+>;
+
+/** Finite framework-owned code vocabulary for CLI/process facts. */
+export type KovoCliDiagnosticCode = keyof typeof CLI_DIAGNOSTIC_DEFINITIONS;
+
 /**
- * One registry-authenticated, transport-neutral CLI record.
+ * One registry-authenticated, transport-neutral diagnostic record.
  *
- * Severity and help for registered `KV###` diagnostics come from Kovo's
- * diagnostic registry; presentation adapters do not re-derive them.
+ * `KV###` records can only be projected from an exact core-registry object. CLI/process records
+ * can only be minted by the private finite registry above. The serialized fields are evidence,
+ * not authority: copies and cross-realm lookalikes are never accepted by local renderers.
  */
 export interface KovoDiagnosticRecord {
   readonly category: KovoDiagnosticCategory;
-  readonly code: string;
+  readonly code: DiagnosticCode | KovoCliDiagnosticCode;
   readonly help?: string;
   readonly message: string;
   readonly severity: DiagnosticSeverity;
@@ -40,20 +90,13 @@ export interface KovoDiagnosticEnvelope {
 /** Presentation adapters supported by {@link formatKovoDiagnostics}. */
 export type KovoDiagnosticFormat = 'github' | 'human' | 'json';
 
-/** Inputs accepted by {@link createKovoDiagnostic}. */
-export type KovoDiagnosticConstruction = {
-  readonly category: KovoDiagnosticCategory;
-  readonly code: string;
-  readonly help?: string;
-  readonly message: string;
-  readonly severity?: DiagnosticSeverity;
-  readonly source?: KovoDiagnosticSourceAnchor;
-};
-
+const nativeArrayIsArray = Array.isArray;
 const nativeObjectFreeze = Object.freeze;
 const nativeObjectGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
 const nativeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
 const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
+const nativeObjectKeys = Object.keys;
+const nativeObjectPrototype = Object.prototype;
 const nativeReflectApply = Reflect.apply;
 const nativeWeakSetAdd = WeakSet.prototype.add;
 const nativeWeakSetHas = WeakSet.prototype.has;
@@ -61,69 +104,55 @@ const diagnosticRegistry = new WeakSet<object>();
 const envelopeRegistry = new WeakSet<object>();
 
 /**
- * Construct one realm-local CLI record from exact own data.
+ * Project one constructor-authenticated core diagnostic into the stable CLI wire record.
  *
- * The returned object's authority is its membership in `diagnosticRegistry`, not
- * its structural fields. Copies and lookalikes cannot cross this boundary.
+ * This is deliberately not a structural constructor. Code, severity, message, and contextual
+ * help cross only after the originating core realm proves exact WeakSet membership (SPEC §11).
  */
-export function createKovoDiagnostic(input: KovoDiagnosticConstruction): KovoDiagnosticRecord {
-  const fields = exactOwnDataFields(input, {
-    allowed: ['category', 'code', 'help', 'message', 'severity', 'source'],
-    label: 'Kovo diagnostic construction',
-    required: ['category', 'code', 'message'],
-  });
-  const category = diagnosticCategory(fields.category);
-  const code = diagnosticCode(fields.code);
-  const message = nonEmptyString(fields.message, 'Kovo diagnostic message');
-  const providedHelp =
-    fields.help === undefined ? undefined : nonEmptyString(fields.help, 'Kovo diagnostic help');
-  const providedSeverity =
-    fields.severity === undefined ? undefined : diagnosticSeverity(fields.severity);
-  const source =
-    fields.source === undefined ? undefined : validateSourceAnchor(fields.source, 'source');
-
-  let help: string | undefined;
-  let severity: DiagnosticSeverity;
-  if (code.startsWith('KV')) {
-    if (!isDiagnosticCode(code)) {
-      throw new TypeError(`Kovo diagnostic code ${JSON.stringify(code)} is not registered.`);
-    }
-    const definition = diagnosticDefinitions[code];
-    const registryHelp = 'help' in definition ? definition.help : undefined;
-    if (providedSeverity !== undefined && providedSeverity !== definition.severity) {
-      throw new TypeError(`Kovo diagnostic ${code} severity is registry-owned.`);
-    }
-    if (providedHelp !== undefined && providedHelp !== registryHelp) {
-      throw new TypeError(`Kovo diagnostic ${code} help is registry-owned.`);
-    }
-    help = registryHelp;
-    severity = definition.severity;
-  } else {
-    if (providedSeverity === undefined) {
-      throw new TypeError('CLI-owned Kovo diagnostics must declare a severity.');
-    }
-    help = providedHelp;
-    severity = providedSeverity;
+export function projectKovoDiagnostic(
+  diagnostic: RegisteredDiagnostic,
+  category: Exclude<KovoDiagnosticCategory, 'usage'>,
+): KovoDiagnosticRecord {
+  assertRegisteredDiagnostic(diagnostic, 'Kovo diagnostic projection source');
+  const normalizedCategory = diagnosticCategory(category);
+  if (normalizedCategory === 'usage') {
+    throw new TypeError('Registered KV diagnostics cannot be projected as usage errors.');
   }
 
-  const record: KovoDiagnosticRecord = nativeObjectFreeze({
-    category,
+  const code = ownDataValue(diagnostic, 'code', 'Kovo diagnostic projection');
+  const severity = ownDataValue(diagnostic, 'severity', 'Kovo diagnostic projection');
+  const message = ownDataValue(diagnostic, 'message', 'Kovo diagnostic projection');
+  const help = ownDataValue(diagnostic, 'help', 'Kovo diagnostic projection');
+  const sourceValue = ownDataValue(diagnostic, 'source', 'Kovo diagnostic projection');
+  if (!isDiagnosticCode(code)) {
+    throw new TypeError('Kovo diagnostic projection source has an unregistered code.');
+  }
+  const normalizedSeverity = diagnosticSeverity(severity);
+  if (normalizedSeverity !== diagnosticDefinitions[code].severity) {
+    throw new TypeError(`Kovo diagnostic ${code} severity does not match its registry.`);
+  }
+  const normalizedMessage = nonEmptyString(message, 'Kovo diagnostic message');
+  const normalizedHelp =
+    help === undefined ? undefined : nonEmptyString(help, 'Kovo diagnostic help');
+  const source =
+    sourceValue === undefined ? undefined : validateSourceAnchor(sourceValue, 'projection source');
+
+  return enrollDiagnostic({
+    category: normalizedCategory,
     code,
-    ...(help === undefined ? {} : { help }),
-    message,
-    severity,
+    ...(normalizedHelp === undefined ? {} : { help: normalizedHelp }),
+    message: normalizedMessage,
+    severity: normalizedSeverity,
     ...(source === undefined ? {} : { source }),
     version: KOVO_DIAGNOSTIC_VERSION,
   });
-  registryAdd(diagnosticRegistry, record);
-  return record;
 }
 
 /** @internal Create a registry-authenticated frozen envelope. */
 export function createKovoDiagnosticEnvelope(
   diagnostics: readonly KovoDiagnosticRecord[],
 ): KovoDiagnosticEnvelope {
-  if (!Array.isArray(diagnostics)) {
+  if (!nativeReflectApply(nativeArrayIsArray, Array, [diagnostics])) {
     throw new TypeError('Kovo diagnostic envelope requires an array.');
   }
   const records = diagnostics.map((diagnostic, index) =>
@@ -146,8 +175,9 @@ export function assertKovoDiagnosticEnvelope(value: unknown): KovoDiagnosticEnve
 }
 
 /**
- * Render records created by this module as human text, the versioned JSON
- * envelope, or escaped GitHub workflow commands.
+ * Render records created by this module as human text, the versioned JSON envelope, or escaped
+ * GitHub workflow commands. Every adapter reads the already-projected fields; none consults the
+ * diagnostic definition registry or reparses command text.
  */
 export function formatKovoDiagnostics(
   diagnostics: readonly KovoDiagnosticRecord[],
@@ -160,25 +190,23 @@ export function formatKovoDiagnostics(
   if (normalizedFormat === 'github') {
     return envelope.diagnostics.map(formatGithubDiagnostic).join('');
   }
-  return envelope.diagnostics
-    .map((diagnostic) =>
-      diagnostic.message.endsWith('\n') ? diagnostic.message : `${diagnostic.message}\n`,
-    )
-    .join('');
+  return envelope.diagnostics.map(formatHumanDiagnostic).join('');
+}
+
+/** @internal Snapshot one exact source anchor before enrolling it in a trusted producer catalog. */
+export function snapshotKovoDiagnosticSourceAnchor(
+  value: unknown,
+  label = 'source',
+): KovoDiagnosticSourceAnchor {
+  return validateSourceAnchor(value, label);
 }
 
 /** @internal Create the standard invocation-error record used by argv adapters. */
 export function usageDiagnostic(message: string): KovoDiagnosticRecord {
-  return createKovoDiagnostic({
-    category: 'usage',
-    code: 'KOVO_USAGE',
-    help: 'Run `kovo --help` or `kovo help <command>` for generated usage.',
-    message,
-    severity: 'error',
-  });
+  return createCliDiagnostic('KOVO_USAGE', message);
 }
 
-/** @internal Create a transport-neutral record for a non-usage command finding. */
+/** @internal Create a finite CLI-owned record for a non-usage command finding. */
 export function commandFindingDiagnostic(
   category: Exclude<KovoDiagnosticCategory, 'usage'>,
   message: string,
@@ -191,16 +219,47 @@ export function commandFindingDiagnostic(
         : category === 'runtime'
           ? 'KOVO_RUNTIME_FINDING'
           : 'KOVO_PROOF_FINDING';
-  return createKovoDiagnostic({
-    category,
+  return createCliDiagnostic(code, message);
+}
+
+/**
+ * @internal Fail visibly when a legacy producer returned prose without authenticated facts.
+ *
+ * The prose is intentionally not copied into this record: parsing or relabeling a transcript
+ * would manufacture diagnostic authority and collapse multiple facts into one.
+ */
+export function diagnosticContractDiagnostic(
+  category: Exclude<KovoDiagnosticCategory, 'usage'>,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic(
+    'KOVO_DIAGNOSTIC_CONTRACT',
+    `Kovo ${category} command returned a failing result without structured diagnostics.`,
+  );
+}
+
+function createCliDiagnostic(
+  code: KovoCliDiagnosticCode,
+  message: string,
+  sourceValue?: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  const definition = CLI_DIAGNOSTIC_DEFINITIONS[code];
+  const source =
+    sourceValue === undefined ? undefined : validateSourceAnchor(sourceValue, 'CLI source');
+  return enrollDiagnostic({
+    category: definition.category,
     code,
-    help:
-      category === 'proof'
-        ? 'Inspect the cited source proof and rerun the command.'
-        : 'Resolve the reported command finding and rerun the command.',
-    message,
-    severity: 'error',
+    help: definition.help,
+    message: cliDiagnosticMessage(message),
+    severity: definition.severity,
+    ...(source === undefined ? {} : { source }),
+    version: KOVO_DIAGNOSTIC_VERSION,
   });
+}
+
+function enrollDiagnostic(record: KovoDiagnosticRecord): KovoDiagnosticRecord {
+  const enrolled = nativeObjectFreeze(record);
+  registryAdd(diagnosticRegistry, enrolled);
+  return enrolled;
 }
 
 function assertKovoDiagnosticRecord(value: unknown, label: string): KovoDiagnosticRecord {
@@ -208,6 +267,18 @@ function assertKovoDiagnosticRecord(value: unknown, label: string): KovoDiagnost
     throw new TypeError(`${label} lacks local Kovo diagnostic registry identity.`);
   }
   return value as KovoDiagnosticRecord;
+}
+
+function ownDataValue(value: object, key: string, label: string): unknown {
+  const descriptors = nativeReflectApply(nativeObjectGetOwnPropertyDescriptors, Object, [
+    value,
+  ]) as Record<string, PropertyDescriptor>;
+  const descriptor = descriptors[key];
+  if (descriptor === undefined) return undefined;
+  if (!('value' in descriptor)) {
+    throw new TypeError(`${label}.${key} must be an own data field.`);
+  }
+  return descriptor.value;
 }
 
 function exactOwnDataFields(
@@ -218,11 +289,11 @@ function exactOwnDataFields(
     readonly required: readonly string[];
   },
 ): Readonly<Record<string, unknown>> {
-  if (!isObject(value) || Array.isArray(value)) {
+  if (!isObject(value) || nativeReflectApply(nativeArrayIsArray, Array, [value])) {
     throw new TypeError(`${options.label} must be an exact own-data object.`);
   }
   const prototype = nativeReflectApply(nativeObjectGetPrototypeOf, Object, [value]) as unknown;
-  if (prototype !== Object.prototype && prototype !== null) {
+  if (prototype !== nativeObjectPrototype && prototype !== null) {
     throw new TypeError(`${options.label} must not carry a custom prototype.`);
   }
   const symbols = nativeReflectApply(nativeObjectGetOwnPropertySymbols, Object, [
@@ -232,10 +303,9 @@ function exactOwnDataFields(
   const descriptors = nativeReflectApply(nativeObjectGetOwnPropertyDescriptors, Object, [
     value,
   ]) as Record<string, PropertyDescriptor>;
-  const keys = Object.keys(descriptors);
-  const admitted = new Set(options.allowed);
+  const keys = nativeReflectApply(nativeObjectKeys, Object, [descriptors]) as string[];
   for (const key of keys) {
-    if (!admitted.has(key)) {
+    if (!options.allowed.includes(key)) {
       throw new TypeError(`${options.label} contains surplus field ${JSON.stringify(key)}.`);
     }
     if (!('value' in descriptors[key]!)) {
@@ -243,11 +313,13 @@ function exactOwnDataFields(
     }
   }
   for (const key of options.required) {
-    if (!(key in descriptors)) {
+    if (descriptors[key] === undefined) {
       throw new TypeError(`${options.label} is missing field ${JSON.stringify(key)}.`);
     }
   }
-  return nativeObjectFreeze(Object.fromEntries(keys.map((key) => [key, descriptors[key]!.value])));
+  const fields: Record<string, unknown> = {};
+  for (const key of keys) fields[key] = descriptors[key]!.value;
+  return nativeObjectFreeze(fields);
 }
 
 function validateSourceAnchor(value: unknown, label: string): KovoDiagnosticSourceAnchor {
@@ -278,12 +350,11 @@ function diagnosticCategory(value: unknown): KovoDiagnosticCategory {
   return value;
 }
 
-function diagnosticCode(value: unknown): string {
-  const code = nonEmptyString(value, 'Kovo diagnostic code');
-  if (!/^(?:KV\d{3}|KOVO_[A-Z0-9_]+)$/u.test(code)) {
-    throw new TypeError('Kovo diagnostic code must be KV### or KOVO_*.');
+function diagnosticFormat(value: unknown): KovoDiagnosticFormat {
+  if (value !== 'github' && value !== 'human' && value !== 'json') {
+    throw new TypeError('Kovo diagnostic format is invalid.');
   }
-  return code;
+  return value;
 }
 
 function diagnosticSeverity(value: unknown): DiagnosticSeverity {
@@ -293,18 +364,19 @@ function diagnosticSeverity(value: unknown): DiagnosticSeverity {
   return value;
 }
 
-function diagnosticFormat(value: unknown): KovoDiagnosticFormat {
-  if (value !== 'github' && value !== 'human' && value !== 'json') {
-    throw new TypeError('Kovo diagnostic format is invalid.');
-  }
-  return value;
-}
-
 function nonEmptyString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`${label} must be a non-empty string.`);
   }
   return value;
+}
+
+function cliDiagnosticMessage(value: unknown): string {
+  const message = nonEmptyString(value, 'Kovo diagnostic message').replace(/(?:\r?\n)+$/u, '');
+  if (message.length === 0) {
+    throw new TypeError('Kovo diagnostic message must contain non-line-break text.');
+  }
+  return message;
 }
 
 function sourceOffset(value: unknown): number {
@@ -326,6 +398,16 @@ function registryHas(registry: WeakSet<object>, value: object): boolean {
   return nativeReflectApply(nativeWeakSetHas, registry, [value]) as boolean;
 }
 
+function sourceLabel(source: KovoDiagnosticSourceAnchor | undefined): string {
+  return source === undefined ? '' : ` ${source.file}[${source.start}:${source.end}]`;
+}
+
+function formatHumanDiagnostic(diagnostic: KovoDiagnosticRecord): string {
+  assertKovoDiagnosticRecord(diagnostic, 'diagnostic');
+  const header = `${diagnostic.severity.toUpperCase()} ${diagnostic.code}${sourceLabel(diagnostic.source)} ${diagnostic.message}\n`;
+  return diagnostic.help === undefined ? header : `${header}HELP ${diagnostic.help}\n`;
+}
+
 function formatGithubDiagnostic(diagnostic: KovoDiagnosticRecord): string {
   assertKovoDiagnosticRecord(diagnostic, 'diagnostic');
   const level =
@@ -338,7 +420,9 @@ function formatGithubDiagnostic(diagnostic: KovoDiagnosticRecord): string {
   if (diagnostic.source !== undefined) {
     properties.push(`file=${githubProperty(diagnostic.source.file)}`);
   }
-  const title = githubProperty(`${diagnostic.code} ${diagnostic.category}`);
+  const range =
+    diagnostic.source === undefined ? '' : ` [${diagnostic.source.start}:${diagnostic.source.end}]`;
+  const title = githubProperty(`${diagnostic.code} ${diagnostic.category}${range}`);
   properties.push(`title=${title}`);
   const body = githubMessage(
     `${diagnostic.message}${diagnostic.help === undefined ? '' : ` ${diagnostic.help}`}`,

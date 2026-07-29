@@ -15,6 +15,7 @@ import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import { requireKovoCommandResultProtocol } from './command-schema.js';
+import type { KovoDiagnosticSourceAnchor } from './diagnostic.js';
 import type { KovoTargetExplainOptions } from './graph-args.js';
 import type { KovoCheckResult } from './shared.js';
 
@@ -635,6 +636,20 @@ export function accessKv436Line(access: CoreGraph.AccessExplainFact): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+/** Project the KV436 producer fact without reparsing its human protocol line. */
+export function accessKv436Diagnostic(
+  access: CoreGraph.AccessExplainFact,
+  source?: KovoDiagnosticSourceAnchor,
+) {
+  const detail = [access.kind.toUpperCase(), access.name, access.detail ?? '']
+    .filter(Boolean)
+    .join(' ');
+  return createRegisteredDiagnostic('KV436', source === undefined ? {} : { source }, {
+    detail,
+    includeHelp: true,
+  });
 }
 
 export function compareAccessExplain(

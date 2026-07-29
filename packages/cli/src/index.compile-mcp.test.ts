@@ -127,34 +127,35 @@ describe('compile/v1 and kovo mcp', () => {
     ]);
     const kv210 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV210');
     expect(kv210).toMatchObject({
+      category: 'build',
       code: 'KV210',
-      fileName: 'cart-badge.tsx',
       help: diagnosticDefinitions.KV210.help,
-      length: 5,
       message: diagnosticDefinitions.KV210.message,
       severity: 'lint',
-      start: { column: 9, line: 1 },
+      source: { end: 13, file: 'cart-badge.tsx', start: 8 },
+      version: 'kovo-diagnostic/v1',
     });
     const kv201 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV201');
     expect(kv201).toMatchObject({
+      category: 'build',
       code: 'KV201',
-      fileName: 'cart-badge.tsx',
       message: 'Closure captures unserializable value.',
       severity: 'error',
-      start: { column: 9, line: 1 },
+      source: { end: 16, file: 'cart-badge.tsx', start: 8 },
+      version: 'kovo-diagnostic/v1',
     });
     expect(kv201?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
     const kv449 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'KV449');
     expect(kv449).toMatchObject({
+      category: 'build',
       code: 'KV449',
-      fileName: 'cart-badge.tsx',
       help: diagnosticDefinitions.KV449.help,
-      length: 17,
       message: browserAlertKv449Message,
       severity: 'error',
-      start: { column: 24, line: 1 },
+      source: { end: 40, file: 'cart-badge.tsx', start: 23 },
+      version: 'kovo-diagnostic/v1',
     });
 
     const corrected = await compileComponentV1(
@@ -201,11 +202,12 @@ export const Shell = component({
       ).resolves.toMatchObject({
         diagnostics: [
           {
+            category: 'build',
             code: 'KV234',
-            fileName: 'src/shell.tsx',
             message:
               'Package component prefix registration conflict or reservation violation. Effective package prefix "acme-" is claimed by @acme/primitives and @other/widgets.',
             severity: 'error',
+            version: 'kovo-diagnostic/v1',
           },
         ],
         ok: false,
@@ -440,28 +442,31 @@ export const Shell = component({
         structuredContent: {
           diagnostics: [
             {
+              category: 'build',
               code: 'KV210',
               help: diagnosticDefinitions.KV210.help,
-              length: 5,
               severity: 'lint',
-              start: { column: 9, line: 1 },
+              source: { end: 13, file: 'cart-badge.tsx', start: 8 },
+              version: 'kovo-diagnostic/v1',
             },
             {
+              category: 'build',
               code: 'KV201',
               help: expect.stringContaining(
                 'SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.',
               ),
-              length: 8,
               severity: 'error',
-              start: { column: 9, line: 1 },
+              source: { end: 16, file: 'cart-badge.tsx', start: 8 },
+              version: 'kovo-diagnostic/v1',
             },
             {
+              category: 'build',
               code: 'KV449',
               help: diagnosticDefinitions.KV449.help,
-              length: 17,
               message: browserAlertKv449Message,
               severity: 'error',
-              start: { column: 24, line: 1 },
+              source: { end: 40, file: 'cart-badge.tsx', start: 23 },
+              version: 'kovo-diagnostic/v1',
             },
           ],
           ok: false,
@@ -514,12 +519,61 @@ export const Shell = component({
     ).resolves.toMatchObject({
       result: {
         structuredContent: {
+          diagnostics: [],
           exitCode: 0,
           output: 'kovo-check/v1\nOK\n',
           version: 'kovo-check/v1',
         },
       },
     });
+
+    const missingAccess = await finiteMcpRequest({
+      id: 'check-diagnostic-1',
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        arguments: {
+          graph: {
+            access: [
+              {
+                decision: 'missing',
+                detail: 'missing access fact',
+                kind: 'query',
+                name: 'contacts',
+                source: 'access',
+                sourceAnchor: { end: 999, file: '../../forged.ts', start: 0 },
+              },
+            ],
+          },
+        },
+        name: 'kovo_check',
+      },
+    });
+    expect(missingAccess).toMatchObject({
+      result: {
+        structuredContent: {
+          diagnostics: [
+            {
+              category: 'proof',
+              code: 'KV436',
+              help: expect.any(String),
+              message: 'Missing explicit access decision. QUERY contacts missing access fact',
+              severity: 'error',
+              version: 'kovo-diagnostic/v1',
+            },
+          ],
+          exitCode: 1,
+          version: 'kovo-check/v1',
+        },
+      },
+    });
+    expect(
+      (
+        missingAccess.result as {
+          structuredContent: { diagnostics: readonly Record<string, unknown>[] };
+        }
+      ).structuredContent.diagnostics[0],
+    ).not.toHaveProperty('source');
 
     await expect(
       finiteMcpRequest({
@@ -747,28 +801,31 @@ export const Shell = component({
         structuredContent: {
           diagnostics: [
             {
+              category: 'build',
               code: 'KV210',
               help: diagnosticDefinitions.KV210.help,
-              length: 5,
               severity: 'lint',
-              start: { column: 9, line: 1 },
+              source: { end: 13, file: 'cart-badge.tsx', start: 8 },
+              version: 'kovo-diagnostic/v1',
             },
             {
+              category: 'build',
               code: 'KV201',
               help: expect.stringContaining(
                 'SPEC §4.3 and §5.2 require handler lowering to cross only explicit serializable capture channels.',
               ),
-              length: 8,
               severity: 'error',
-              start: { column: 9, line: 1 },
+              source: { end: 16, file: 'cart-badge.tsx', start: 8 },
+              version: 'kovo-diagnostic/v1',
             },
             {
+              category: 'build',
               code: 'KV449',
               help: diagnosticDefinitions.KV449.help,
-              length: 17,
               message: browserAlertKv449Message,
               severity: 'error',
-              start: { column: 24, line: 1 },
+              source: { end: 40, file: 'cart-badge.tsx', start: 23 },
+              version: 'kovo-diagnostic/v1',
             },
           ],
           ok: false,

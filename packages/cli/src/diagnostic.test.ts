@@ -1,33 +1,35 @@
+import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
+import * as DiagnosticModule from './diagnostic.js';
 import {
   assertKovoDiagnosticEnvelope,
-  createKovoDiagnostic,
   createKovoDiagnosticEnvelope,
   formatKovoDiagnostics,
   KOVO_DIAGNOSTIC_VERSION,
+  projectKovoDiagnostic,
   usageDiagnostic,
   type KovoDiagnosticEnvelope,
 } from './diagnostic.js';
 import { formatCommandResultDiagnostics, normalizeCommandResultDiagnostics } from './shared.js';
 
-describe('kovo-diagnostic/v1', () => {
-  const diagnostic = createKovoDiagnostic({
-    category: 'proof',
-    code: 'KV436',
-    message: 'Missing explicit access decision.',
-    source: { end: 27, file: 'src/queries.ts', start: 14 },
-  });
+describe('kovo-diagnostic/v1 authority and renderers', () => {
+  const source = Object.freeze({ end: 27, file: 'src/queries.ts', start: 14 });
+  const registered = createRegisteredDiagnostic(
+    'KV436',
+    { source },
+    { includeHelp: true, message: 'Missing explicit access decision.' },
+  );
+  const diagnostic = projectKovoDiagnostic(registered, 'proof');
 
-  it('constructs one immutable transport-neutral record', () => {
+  it('projects one immutable transport-neutral record from core registry identity', () => {
     expect(diagnostic).toEqual({
       category: 'proof',
       code: 'KV436',
-      help: diagnosticDefinitions.KV436.help,
+      help: registered.help,
       message: 'Missing explicit access decision.',
       severity: 'error',
-      source: { end: 27, file: 'src/queries.ts', start: 14 },
+      source,
       version: KOVO_DIAGNOSTIC_VERSION,
     });
     expect(Object.isFrozen(diagnostic)).toBe(true);
@@ -35,161 +37,65 @@ describe('kovo-diagnostic/v1', () => {
     expect(Object.isFrozen(createKovoDiagnosticEnvelope([diagnostic]).diagnostics)).toBe(true);
   });
 
-  it('renders human, JSON, and GitHub output without re-deriving record fields', () => {
+  it('renders every projected field without consulting the definition registry', () => {
     expect(formatKovoDiagnostics([diagnostic], 'human')).toBe(
-      'Missing explicit access decision.\n',
+      `ERROR KV436 src/queries.ts[14:27] Missing explicit access decision.\nHELP ${registered.help}\n`,
     );
     expect(JSON.parse(formatKovoDiagnostics([diagnostic], 'json'))).toEqual({
       diagnostics: [diagnostic],
       version: KOVO_DIAGNOSTIC_VERSION,
     });
-    const concise = createKovoDiagnostic({
-      category: 'proof',
-      code: 'KOVO_PROOF',
-      help: 'Add an explicit access decision.',
-      message: 'Missing explicit access decision.',
-      severity: 'error',
-      source: { end: 27, file: 'src/queries.ts', start: 14 },
-    });
-    expect(formatKovoDiagnostics([concise], 'github')).toBe(
-      '::error file=src/queries.ts,title=KOVO_PROOF proof::Missing explicit access decision. Add an explicit access decision.\n',
-    );
-
-    const sourceLess = createKovoDiagnostic({
-      category: 'proof',
-      code: 'KOVO_PROOF',
-      help: 'Add an explicit access decision.',
-      message: 'Missing explicit access decision.',
-      severity: 'error',
-    });
-    expect(formatKovoDiagnostics([sourceLess], 'github')).toBe(
-      '::error title=KOVO_PROOF proof::Missing explicit access decision. Add an explicit access decision.\n',
+    expect(formatKovoDiagnostics([diagnostic], 'github')).toBe(
+      `::error file=src/queries.ts,title=KV436 proof [14%3A27]::Missing explicit access decision. ${registered.help!.replaceAll(
+        '\n',
+        '%0A',
+      )}\n`,
     );
   });
 
   it('escapes hostile GitHub command bytes and preserves non-error severity', () => {
-    const hostile = createKovoDiagnostic({
-      category: 'runtime',
-      code: 'KOVO_RUNTIME',
-      message: 'line 1\n::error:: forged%0A',
-      severity: 'warn',
-      source: { end: 2, file: 'src/a,b:thing.ts', start: 1 },
-    });
+    const hostile = projectKovoDiagnostic(
+      createRegisteredDiagnostic(
+        'KV210',
+        { source: Object.freeze({ end: 2, file: 'src/a,b:thing.ts', start: 1 }) },
+        { message: 'line 1\n::error:: forged%0A' },
+      ),
+      'runtime',
+    );
     expect(formatKovoDiagnostics([hostile], 'github')).toBe(
-      '::warning file=src/a%2Cb%3Athing.ts,title=KOVO_RUNTIME runtime::line 1%0A::error:: forged%250A\n',
+      '::notice file=src/a%2Cb%3Athing.ts,title=KV210 runtime [1%3A2]::line 1%0A::error:: forged%250A\n',
     );
   });
 
-  it('rejects malformed codes and source spans', () => {
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'usage',
-        code: 'usage',
-        message: 'bad',
-        severity: 'error',
-      }),
-    ).toThrow(/diagnostic code/u);
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV436',
-        message: 'bad span',
-        severity: 'error',
-        source: { end: 1, file: 'src/app.ts', start: 2 },
-      }),
-    ).toThrow(/source span/u);
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV436',
-        message: 'wrong registry severity',
-        severity: 'warn',
-      }),
-    ).toThrow(/severity is registry-owned/u);
-  });
-
-  it('rejects unknown registry codes and forged registry-owned fields', () => {
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV999',
-        message: 'unknown registry code',
-      }),
-    ).toThrow(/not registered/u);
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV436',
-        help: 'forged help',
-        message: 'wrong registry help',
-      }),
-    ).toThrow(/help is registry-owned/u);
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV436',
-        message: 'wrong registry severity',
-        severity: 'notice',
-      }),
-    ).toThrow(/severity is registry-owned/u);
-  });
-
-  it('accepts only exact, typed own-data construction fields', () => {
-    expect(() =>
-      createKovoDiagnostic({
-        category: 'proof',
-        code: 'KV436',
-        message: 'surplus data',
-        secret: 'must not cross the boundary',
-      } as never),
-    ).toThrow(/surplus field "secret"/u);
-
-    for (const input of [
-      { category: 'bogus', code: 'KV436', message: 'bad category' },
-      { category: 'proof', code: 'KV436', message: 42 },
-      {
-        category: 'runtime',
-        code: 'KOVO_RUNTIME',
-        message: 'bad severity',
-        severity: 'fatal',
-      },
-      {
-        category: 'runtime',
-        code: 'KOVO_RUNTIME',
-        help: 42,
-        message: 'bad help',
-        severity: 'error',
-      },
-      {
-        category: 'proof',
-        code: 'KV436',
-        message: 'bad source',
-        source: { end: '2', file: 'src/app.ts', start: 1 },
-      },
-    ]) {
-      expect(() => createKovoDiagnostic(input as never)).toThrow(TypeError);
-    }
-
-    const inherited = Object.assign(Object.create({ category: 'proof' }) as object, {
-      code: 'KV436',
-      message: 'inherited category',
+  it('rejects malformed source anchors even when the KV object itself is registered', () => {
+    const reversed = createRegisteredDiagnostic('KV436', {
+      source: { end: 1, file: 'src/app.ts', start: 2 },
     });
-    expect(() => createKovoDiagnostic(inherited as never)).toThrow(/custom prototype/u);
-
-    let getterCalled = false;
-    const accessor = {
-      category: 'proof',
-      code: 'KV436',
-      get message() {
-        getterCalled = true;
-        return 'accessor';
-      },
-    };
-    expect(() => createKovoDiagnostic(accessor as never)).toThrow(/own data field/u);
-    expect(getterCalled).toBe(false);
+    const accessor = createRegisteredDiagnostic('KV436', {
+      source: Object.defineProperty({ end: 2, file: 'src/app.ts' }, 'start', {
+        enumerable: true,
+        get: () => 1,
+      }),
+    });
+    expect(() => projectKovoDiagnostic(reversed, 'proof')).toThrow(/source span/u);
+    expect(() => projectKovoDiagnostic(accessor, 'proof')).toThrow(/own data field/u);
   });
 
-  it('does not transfer authority through copies, lookalikes, or prototypes', () => {
+  it('does not let a structural KV lookalike, clone, or copied symbol mint a record', () => {
+    const clone = { ...registered };
+    expect(() => projectKovoDiagnostic(clone as never, 'proof')).toThrow(/projection source/u);
+
+    const symbols = Object.getOwnPropertySymbols(registered);
+    const copiedSymbol = Object.defineProperty({ ...registered }, symbols[0]!, {
+      value: true,
+    });
+    expect(() => projectKovoDiagnostic(copiedSymbol as never, 'proof')).toThrow(
+      /projection source/u,
+    );
+    expect('createKovoDiagnostic' in DiagnosticModule).toBe(false);
+  });
+
+  it('does not transfer local renderer authority through copies or prototypes', () => {
     const copy = { ...diagnostic };
     expect(() => createKovoDiagnosticEnvelope([copy])).toThrow(/registry identity/u);
     expect(() => formatKovoDiagnostics([copy], 'human')).toThrow(/registry identity/u);
@@ -204,7 +110,7 @@ describe('kovo-diagnostic/v1', () => {
     ).toThrow(/envelope lacks local registry identity/u);
   });
 
-  it('gives invocation errors a stable code, help, and category', () => {
+  it('mints invocation errors only through the finite private CLI registry', () => {
     expect(usageDiagnostic('kovo: unknown option "--wat".')).toEqual({
       category: 'usage',
       code: 'KOVO_USAGE',
@@ -216,38 +122,49 @@ describe('kovo-diagnostic/v1', () => {
   });
 
   it.each([
-    ['proof', 'kovo-check/v1\nERROR KV436 missing access decision\n', 'KOVO_PROOF_FINDING'],
-    ['proof', 'kovo-explain/v1\nERROR stale graph\n', 'KOVO_PROOF_FINDING'],
-    ['build', 'kovo-build/v1\nERROR artifact rejected\n', 'KOVO_BUILD_FINDING'],
+    ['proof', 'kovo-check/v1\nERROR KV436 missing access decision\n'],
+    ['proof', 'kovo-explain/v1\nERROR stale graph\n'],
+    ['build', 'kovo-build/v1\nERROR artifact rejected\n'],
   ] as const)(
-    'renders %s command findings as equivalent human, JSON, and GitHub records',
-    (category, output, code) => {
+    'does not relabel or collapse a %s command transcript into diagnostic authority',
+    (category, output) => {
       const result = { exitCode: 1 as const, output };
       const normalized = normalizeCommandResultDiagnostics(result, category);
-      expect(formatCommandResultDiagnostics(result, 'human', category)).toBe(output);
+      expect(normalized.output).toBe(output);
+
       const json = JSON.parse(
         formatCommandResultDiagnostics(result, 'json', category),
       ) as KovoDiagnosticEnvelope;
       expect(json).toEqual({
         diagnostics: [
           expect.objectContaining({
-            category,
-            code,
-            message: output,
+            category: 'runtime',
+            code: 'KOVO_DIAGNOSTIC_CONTRACT',
+            message: `Kovo ${category} command returned a failing result without structured diagnostics.`,
             severity: 'error',
           }),
         ],
         version: KOVO_DIAGNOSTIC_VERSION,
       });
-      expect(formatCommandResultDiagnostics(result, 'github', category)).toBe(
-        `::error title=${code} ${category}::${output.replaceAll('\n', '%0A')} ${
-          category === 'proof'
-            ? 'Inspect the cited source proof and rerun the command.'
-            : 'Resolve the reported command finding and rerun the command.'
-        }\n`,
-      );
+      expect(json.diagnostics[0]?.message).not.toContain(output);
       expect(normalized.exitCode).toBe(1);
-      expect(normalized.diagnostics).toEqual(json.diagnostics);
     },
   );
+
+  it('renders an explicitly attached core fact identically across command adapters', () => {
+    const result = {
+      diagnostics: [diagnostic],
+      exitCode: 1 as const,
+      output: 'legacy fact protocol remains independently versioned\n',
+    };
+    expect(formatCommandResultDiagnostics(result, 'human', 'proof')).toBe(
+      formatKovoDiagnostics([diagnostic], 'human'),
+    );
+    expect(formatCommandResultDiagnostics(result, 'json', 'proof')).toBe(
+      formatKovoDiagnostics([diagnostic], 'json'),
+    );
+    expect(formatCommandResultDiagnostics(result, 'github', 'proof')).toBe(
+      formatKovoDiagnostics([diagnostic], 'github'),
+    );
+  });
 });

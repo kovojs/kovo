@@ -6,6 +6,7 @@ import { kovoExplain } from './graph-output.js';
 describe('kovo explain --model-boundaries (Plan 3 §6 C13 anchor)', () => {
   it('parses as a graph-independent exclusive explain mode', () => {
     expect(parseExplainArgs(['--model-boundaries'])).toEqual({
+      format: 'human',
       inputPath: undefined,
       ok: true,
       options: { modelBoundaries: true },

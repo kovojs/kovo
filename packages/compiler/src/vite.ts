@@ -1856,6 +1856,7 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
   const length = compilerOwnDataValue(value, 'length', label);
   const message = compilerOwnDataValue(value, 'message', label);
   const severity = compilerOwnDataValue(value, 'severity', label);
+  const rawSource = compilerOwnDataValue(value, 'source', label);
   const rawStart = compilerOwnDataValue(value, 'start', label);
   if (
     !isDiagnosticCode(code) ||
@@ -1867,6 +1868,28 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
     (severity !== 'error' && severity !== 'warn' && severity !== 'lint' && severity !== 'notice')
   ) {
     throw new TypeError(`${label} has malformed authority fields.`);
+  }
+  let source: CompilerDiagnostic['source'];
+  if (rawSource !== undefined) {
+    if (!rawSource || typeof rawSource !== 'object') {
+      throw new TypeError(`${label}.source must be an own source-anchor record.`);
+    }
+    const file = compilerOwnDataValue(rawSource, 'file', `${label}.source`);
+    const sourceStart = compilerOwnDataValue(rawSource, 'start', `${label}.source`);
+    const end = compilerOwnDataValue(rawSource, 'end', `${label}.source`);
+    if (
+      typeof file !== 'string' ||
+      file.length === 0 ||
+      typeof sourceStart !== 'number' ||
+      !compilerNumberIsSafeInteger(sourceStart) ||
+      sourceStart < 0 ||
+      typeof end !== 'number' ||
+      !compilerNumberIsSafeInteger(end) ||
+      end < sourceStart
+    ) {
+      throw new TypeError(`${label}.source has malformed file/start/end values.`);
+    }
+    source = Object.freeze({ end, file, start: sourceStart });
   }
   let start: CompilerDiagnostic['start'];
   if (rawStart !== undefined) {
@@ -1890,6 +1913,7 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
     {
       fileName,
       ...(length === undefined ? {} : { length }),
+      ...(source === undefined ? {} : { source }),
       ...(start === undefined ? {} : { start }),
     },
     { ...(help === undefined ? {} : { help }), message },

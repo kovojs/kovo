@@ -7,6 +7,7 @@ import { kovoExplain } from './index.js';
 describe('kovo explain --agent', () => {
   it('prints the exact per-integrity effect closure', () => {
     expect(parseExplainArgs(['--agent'])).toEqual({
+      format: 'human',
       inputPath: undefined,
       ok: true,
       options: { agent: true },

@@ -6,6 +6,16 @@
  * dispatcher, diagnostic construction internals, or transport internals.
  */
 export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
+export { KOVO_DIAGNOSTIC_VERSION } from './diagnostic.js';
+
+export type {
+  KovoCliDiagnosticCode,
+  KovoDiagnosticCategory,
+  KovoDiagnosticEnvelope,
+  KovoDiagnosticFormat,
+  KovoDiagnosticRecord,
+  KovoDiagnosticSourceAnchor,
+} from './diagnostic.js';
 
 export type {
   ExplainKind,

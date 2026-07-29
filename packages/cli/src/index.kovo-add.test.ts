@@ -23,6 +23,7 @@ import {
   vendoredUiComponents,
 } from './add-catalog.js';
 import { addCommandShell } from './commands/compile.js';
+import { formatKovoDiagnostics, usageDiagnostic } from './diagnostic.js';
 
 function importsUiPackage(source: string): boolean {
   const uiPackage = /['"]@kovojs\/ui(?:\/[^'"]*)?['"]/;
@@ -811,7 +812,14 @@ describe('kovo add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'kovo: unknown component "calendar". available: accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip.\n',
+        formatKovoDiagnostics(
+          [
+            usageDiagnostic(
+              'kovo: unknown component "calendar". available: accordion, alert, alert-dialog, autocomplete, avatar, badge, breadcrumb, button, card, checkbox, checkbox-group, collapsible, combobox, command, context-menu, dialog, disclosure, drawer, dropdown-menu, field, hover-card, kbd, menubar, meter, navigation-menu, number-field, otp-field, popover, progress, radio-group, scroll-area, select, separator, sheet, skeleton, slider, switch, table, tabs, toast, toggle, toggle-group, toolbar, tooltip.\n',
+            ),
+          ],
+          'human',
+        ),
       );
     } finally {
       stdout.mockRestore();

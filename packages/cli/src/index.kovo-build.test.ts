@@ -911,6 +911,74 @@ export default createApp({
     }
   });
 
+  it('emits one prelude-free JSON diagnostic with the authored KV436 query range', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-json-diagnostic-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const querySource = `import { query } from '@kovojs/server';
+
+export const contacts = query({
+  load() {
+    return { items: [] };
+  },
+});
+`;
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      mkdirSync(join(root, 'src'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `import { createApp } from '@kovojs/server';
+import { contacts } from './src/queries.js';
+
+export default createApp({ queries: [contacts] });
+`,
+        'utf8',
+      );
+      writeFileSync(join(root, 'src/queries.ts'), querySource, 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', appPath, '--out', outDir, '--format', 'json']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      const callStart = querySource.indexOf('query({');
+      const callEnd = querySource.indexOf(');', callStart) + 1;
+
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).not.toContain('[kovo egress]');
+      expect(stderr).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(errorOutput)).toEqual({
+        diagnostics: [
+          {
+            category: 'proof',
+            code: 'KV436',
+            help: expect.stringContaining('Fixes: add an access guard chain'),
+            message: 'Missing explicit access decision. QUERY queries/contacts missing access fact',
+            severity: 'error',
+            source: {
+              end: callEnd,
+              file: 'src/queries.ts',
+              start: callStart,
+            },
+            version: 'kovo-diagnostic/v1',
+          },
+        ],
+        version: 'kovo-diagnostic/v1',
+      });
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('fails KV448 with root provenance before evaluating raw authority reachable from a route', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-capability-closure-'));
     const appPath = join(root, 'app.mjs');

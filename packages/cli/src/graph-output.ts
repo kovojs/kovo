@@ -1,3 +1,4 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured catalog controls use pinned Reflect.apply. */
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
   assertRegisteredDiagnostic,
@@ -17,6 +18,7 @@ import { requireKovoCommandResultProtocol } from './command-schema.js';
 import type { KovoCheckFamily, KovoExplainOptions } from './graph-args.js';
 import {
   accessDecisions,
+  accessKv436Diagnostic,
   accessKv436Line,
   accessLine,
   accessSummary,
@@ -138,6 +140,12 @@ export {
 } from './graph-args.js';
 export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
+import {
+  projectKovoDiagnostic,
+  snapshotKovoDiagnosticSourceAnchor,
+  type KovoDiagnosticRecord,
+  type KovoDiagnosticSourceAnchor,
+} from './diagnostic.js';
 import { authLifecycleExplainResult } from './auth-lifecycle.js';
 import { modelBoundariesExplainResult } from './model-boundaries.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
@@ -149,6 +157,174 @@ import {
 export const outputVersion = requireKovoCommandResultProtocol('check');
 export const explainOutputVersion = requireKovoCommandResultProtocol('explain');
 export const auditOutputVersion = requireKovoCommandResultProtocol('audit');
+
+const kovoCheckDiagnosticSourceCatalogBrand: unique symbol = Symbol(
+  'kovo.check-diagnostic-source-catalog',
+);
+const NativeArray = Array;
+const NativeMap = Map;
+const NativeObject = Object;
+const NativeReflect = Reflect;
+const NativeWeakMap = WeakMap;
+const nativeArrayIsArray = NativeArray.isArray;
+const nativeMapGet = NativeMap.prototype.get;
+const nativeMapHas = NativeMap.prototype.has;
+const nativeMapSet = NativeMap.prototype.set;
+const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectFreeze = NativeObject.freeze;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
+const nativeReflectApply = NativeReflect.apply;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
+
+/** @internal Parser-owned source fact admitted only through the private catalog constructor. */
+export interface KovoCheckDiagnosticSourceFact {
+  readonly kind: CoreGraph.AccessExplainFact['kind'];
+  readonly name: string;
+  readonly source: KovoDiagnosticSourceAnchor;
+}
+
+/** @internal Opaque parser-owned source catalog; runtime authority is private WeakMap membership. */
+export interface KovoCheckDiagnosticSourceCatalog {
+  readonly [kovoCheckDiagnosticSourceCatalogBrand]: true;
+}
+
+const kovoCheckDiagnosticSourceCatalogs = new NativeWeakMap<
+  KovoCheckDiagnosticSourceCatalog,
+  Map<string, KovoDiagnosticSourceAnchor>
+>();
+
+/**
+ * @internal Enroll parser-owned source ranges for one build-check invocation.
+ *
+ * Graph JSON never crosses this constructor, so structural `sourceAnchor` lookalikes remain
+ * ordinary untrusted data and cannot become GitHub/editor locations (SPEC §2/§11).
+ */
+export function createKovoCheckDiagnosticSourceCatalog(
+  facts: readonly KovoCheckDiagnosticSourceFact[],
+): KovoCheckDiagnosticSourceCatalog {
+  if (!nativeApply<boolean>(nativeArrayIsArray, NativeArray, [facts])) {
+    throw new TypeError('Kovo check diagnostic source facts must be an array.');
+  }
+  const sources = new NativeMap<string, KovoDiagnosticSourceAnchor>();
+  for (let index = 0; index < facts.length; index += 1) {
+    const entry = nativeApply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [facts, String(index)],
+    );
+    if (entry === undefined || !('value' in entry)) {
+      throw new TypeError(`Kovo check diagnostic source facts[${index}] must be dense own data.`);
+    }
+    const fact = entry.value as KovoCheckDiagnosticSourceFact;
+    const kind = diagnosticSourceFactData(fact, 'kind', index);
+    const name = diagnosticSourceFactData(fact, 'name', index);
+    const source = diagnosticSourceFactData(fact, 'source', index);
+    if (!isAccessDiagnosticSourceKind(kind)) {
+      throw new TypeError(`Kovo check diagnostic source facts[${index}].kind is invalid.`);
+    }
+    if (typeof name !== 'string' || name.length === 0 || name.includes('\0')) {
+      throw new TypeError(`Kovo check diagnostic source facts[${index}].name is invalid.`);
+    }
+    const normalizedSource = snapshotKovoDiagnosticSourceAnchor(
+      source,
+      `catalog facts[${index}].source`,
+    );
+    const key = accessDiagnosticSourceKey(kind, name);
+    if (nativeApply<boolean>(nativeMapHas, sources, [key])) {
+      throw new TypeError(`Kovo check diagnostic source facts duplicate ${kind} ${name}.`);
+    }
+    nativeApply(nativeMapSet, sources, [key, normalizedSource]);
+  }
+
+  const catalog = nativeApply<KovoCheckDiagnosticSourceCatalog>(
+    nativeObjectDefineProperty,
+    NativeObject,
+    [
+      {},
+      kovoCheckDiagnosticSourceCatalogBrand,
+      { configurable: false, enumerable: false, value: true, writable: false },
+    ],
+  );
+  nativeApply(nativeObjectFreeze, NativeObject, [catalog]);
+  nativeApply(nativeWeakMapSet, kovoCheckDiagnosticSourceCatalogs, [catalog, sources]);
+  return catalog;
+}
+
+/** @internal Read one source range only after exact catalog identity succeeds. */
+export function kovoCheckDiagnosticSource(
+  catalog: KovoCheckDiagnosticSourceCatalog,
+  kind: CoreGraph.AccessExplainFact['kind'],
+  name: string,
+): KovoDiagnosticSourceAnchor | undefined {
+  const sources = requireKovoCheckDiagnosticSourceCatalog(catalog);
+  return nativeApply<KovoDiagnosticSourceAnchor | undefined>(nativeMapGet, sources, [
+    accessDiagnosticSourceKey(kind, name),
+  ]);
+}
+
+function requireKovoCheckDiagnosticSourceCatalog(
+  catalog: KovoCheckDiagnosticSourceCatalog,
+): Map<string, KovoDiagnosticSourceAnchor> {
+  if (typeof catalog !== 'object' || catalog === null) {
+    throw new TypeError('Kovo check diagnostic source catalog lacks parser-owned identity.');
+  }
+  const sources = nativeApply<Map<string, KovoDiagnosticSourceAnchor> | undefined>(
+    nativeWeakMapGet,
+    kovoCheckDiagnosticSourceCatalogs,
+    [catalog],
+  );
+  if (sources === undefined) {
+    throw new TypeError('Kovo check diagnostic source catalog lacks parser-owned identity.');
+  }
+  return sources;
+}
+
+function diagnosticSourceFactData(
+  fact: KovoCheckDiagnosticSourceFact,
+  key: keyof KovoCheckDiagnosticSourceFact,
+  index: number,
+): unknown {
+  if (typeof fact !== 'object' || fact === null) {
+    throw new TypeError(`Kovo check diagnostic source facts[${index}] must be an object.`);
+  }
+  const descriptor = nativeApply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [fact, key],
+  );
+  if (descriptor === undefined || !('value' in descriptor)) {
+    throw new TypeError(`Kovo check diagnostic source facts[${index}].${key} must be own data.`);
+  }
+  return descriptor.value;
+}
+
+function isAccessDiagnosticSourceKind(
+  value: unknown,
+): value is CoreGraph.AccessExplainFact['kind'] {
+  return (
+    value === 'endpoint' ||
+    value === 'mutation' ||
+    value === 'page' ||
+    value === 'query' ||
+    value === 'webhook'
+  );
+}
+
+function accessDiagnosticSourceKey(
+  kind: CoreGraph.AccessExplainFact['kind'],
+  name: string,
+): string {
+  return `${kind}\0${name}`;
+}
+
+function nativeApply<Result>(
+  target: (...args: never[]) => unknown,
+  receiver: unknown,
+  args: readonly unknown[],
+): Result {
+  return nativeReflectApply(target, receiver, args) as Result;
+}
 
 function operationKinds(operations: readonly { kind: string }[]): string[] {
   return [...new Set(operations.map((operation) => operation.kind))].sort();
@@ -896,6 +1072,24 @@ export function kovoCheck(
   input: KovoCheckInput,
   options: { family?: KovoCheckFamily; paranoidStaticAdvisory?: boolean } = {},
 ): KovoCheckResult {
+  return kovoCheckInternal(input, options);
+}
+
+/** @internal Run build-owned checks with an opaque parser-source catalog. */
+export function kovoCheckWithDiagnosticSourceCatalog(
+  input: KovoCheckInput,
+  options: { family?: KovoCheckFamily; paranoidStaticAdvisory?: boolean },
+  catalog: KovoCheckDiagnosticSourceCatalog,
+): KovoCheckResult {
+  requireKovoCheckDiagnosticSourceCatalog(catalog);
+  return kovoCheckInternal(input, options, catalog);
+}
+
+function kovoCheckInternal(
+  input: KovoCheckInput,
+  options: { family?: KovoCheckFamily; paranoidStaticAdvisory?: boolean },
+  sourceCatalog?: KovoCheckDiagnosticSourceCatalog,
+): KovoCheckResult {
   const invocation = snapshotGraphVerifierInvocation(input, options);
   if (!invocation.ok) return graphVerifierSecurityFailure(outputVersion);
   input = invocation.input;
@@ -910,12 +1104,16 @@ export function kovoCheck(
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
   let failed = false;
+  let diagnosticsComplete = true;
+  const diagnostics: KovoDiagnosticRecord[] = [];
   const staticFindingFails = (code: string): boolean =>
     !(options.paranoidStaticAdvisory === true && isParanoidSecurityAdvisoryCode(code));
 
-  const pushFinding = (line: string, fail = false): void => {
+  const pushFinding = (line: string, fail = false, diagnostic?: KovoDiagnosticRecord): void => {
     lines.push(line);
     failed ||= fail;
+    if (diagnostic !== undefined) diagnostics.push(diagnostic);
+    else if (fail) diagnosticsComplete = false;
   };
 
   if (includeAll) {
@@ -1035,7 +1233,15 @@ export function kovoCheck(
     for (const access of explicitAccessDecisions(graph).filter(
       (fact) => fact.decision === 'missing',
     )) {
-      pushFinding(accessKv436Line(access), true);
+      const source =
+        sourceCatalog === undefined
+          ? undefined
+          : kovoCheckDiagnosticSource(sourceCatalog, access.kind, access.name);
+      pushFinding(
+        accessKv436Line(access),
+        true,
+        projectKovoDiagnostic(accessKv436Diagnostic(access, source), 'proof'),
+      );
     }
 
     for (const finding of unscopedAccesses(graph)) {
@@ -1169,10 +1375,19 @@ export function kovoCheck(
     lines.push('OK');
   }
 
-  return {
+  const result: KovoCheckResult = {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
+  if (diagnosticsComplete) {
+    Object.defineProperty(result, 'diagnostics', {
+      configurable: false,
+      enumerable: false,
+      value: Object.freeze(diagnostics),
+      writable: false,
+    });
+  }
+  return result;
 }
 
 function invalidGraphInputResult(

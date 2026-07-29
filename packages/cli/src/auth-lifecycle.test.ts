@@ -8,6 +8,7 @@ import { kovoExplain } from './graph-output.js';
 describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
   it('parses as a graph-independent exclusive explain mode without changing model boundaries', () => {
     expect(parseExplainArgs(['--auth-lifecycle'])).toEqual({
+      format: 'human',
       inputPath: undefined,
       ok: true,
       options: { authLifecycle: true },

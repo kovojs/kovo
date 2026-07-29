@@ -1,4 +1,5 @@
 import { parseKovoCommandInvocation } from './commands-manifest.js';
+import type { KovoDiagnosticFormat } from './diagnostic.js';
 import { writeUsageError } from './shared.js';
 
 /**
@@ -164,8 +165,18 @@ export function isExplainKind(value: string | undefined): value is ExplainKind {
 }
 
 type CheckArgParseResult =
-  | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
-  | { environment: true; inputPath: string | undefined; ok: true }
+  | {
+      family: KovoCheckFamily;
+      format: KovoDiagnosticFormat;
+      inputPath: string | undefined;
+      ok: true;
+    }
+  | {
+      environment: true;
+      format: KovoDiagnosticFormat;
+      inputPath: string | undefined;
+      ok: true;
+    }
   | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
@@ -175,6 +186,7 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
   if (parsed.value.form === 'environment') {
     return {
       environment: true,
+      format: parsed.value.options.format,
       inputPath: parsed.value.arguments.deployment,
       ok: true,
     };
@@ -188,6 +200,7 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 
   return {
     family: parsed.value.arguments.family ?? 'all',
+    format: parsed.value.options.format,
     inputPath: parsed.value.arguments.graph,
     ok: true,
   };
@@ -213,7 +226,12 @@ export function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
 }
 
 type ExplainArgParseResult =
-  | { inputPath: string | undefined; ok: true; options: KovoExplainOptions }
+  | {
+      format: KovoDiagnosticFormat;
+      inputPath: string | undefined;
+      ok: true;
+      options: KovoExplainOptions;
+    }
   | { message: string; ok: false };
 
 export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
@@ -224,6 +242,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   switch (invocation.form) {
     case 'target':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: {
@@ -235,72 +254,84 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       };
     case 'document':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { document: true },
       };
     case 'sources-sinks':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { sourcesSinks: true },
       };
     case 'tasks':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { tasks: true },
       };
     case 'agent':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { agent: true },
       };
     case 'grants':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { grants: true },
       };
     case 'endpoints':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { endpoints: true },
       };
     case 'revealed':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { revealed: true },
       };
     case 'trust':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { trust: true },
       };
     case 'capabilities':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { capabilities: true },
       };
     case 'cookies':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { cookies: true },
       };
     case 'authorization':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: { authorization: true },
       };
     case 'access':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: {
@@ -310,6 +341,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       };
     case 'unguarded':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: {
@@ -319,6 +351,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       };
     case 'unscoped':
       return {
+        format: invocation.options.format,
         inputPath: invocation.arguments.graph,
         ok: true,
         options: {
@@ -327,9 +360,19 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
         },
       };
     case 'auth-lifecycle':
-      return { inputPath: undefined, ok: true, options: { authLifecycle: true } };
+      return {
+        format: invocation.options.format,
+        inputPath: undefined,
+        ok: true,
+        options: { authLifecycle: true },
+      };
     case 'model-boundaries':
-      return { inputPath: undefined, ok: true, options: { modelBoundaries: true } };
+      return {
+        format: invocation.options.format,
+        inputPath: undefined,
+        ok: true,
+        options: { modelBoundaries: true },
+      };
     case 'attest':
       return {
         message: 'kovo: explain --attest requires asynchronous command dispatch.\n',

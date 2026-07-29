@@ -133,6 +133,7 @@ export type KovoSemanticCommandRequest =
         readonly preset?: 'node' | 'vercel' | 'cloudflare';
         readonly check?: boolean;
         readonly cache?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -142,7 +143,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'check';
       readonly form: 'graph';
-      readonly options?: { readonly [key: PropertyKey]: never };
+      readonly options?: {
+        readonly format?: 'human' | 'json' | 'github';
+      };
     }
   | {
       readonly arguments: {
@@ -150,7 +153,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'check';
       readonly form: 'environment';
-      readonly options?: { readonly [key: PropertyKey]: never };
+      readonly options?: {
+        readonly format?: 'human' | 'json' | 'github';
+      };
     }
   | {
       readonly arguments: {
@@ -163,6 +168,7 @@ export type KovoSemanticCommandRequest =
         readonly attestation?: string;
         readonly state?: string;
         readonly severityFloor?: 'low' | 'moderate' | 'high' | 'critical';
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -297,6 +303,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -310,6 +317,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: boolean;
         readonly layouts?: false;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -323,6 +331,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -336,6 +345,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -349,6 +359,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -362,6 +373,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -370,7 +382,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'document';
-      readonly options?: { readonly [key: PropertyKey]: never };
+      readonly options?: {
+        readonly format?: 'human' | 'json' | 'github';
+      };
     }
   | {
       readonly arguments: {
@@ -380,6 +394,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'sources-sinks';
       readonly options: {
         readonly sourcesSinks: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -390,6 +405,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'tasks';
       readonly options: {
         readonly tasks: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -400,6 +416,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'agent';
       readonly options: {
         readonly agent: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -410,6 +427,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'grants';
       readonly options: {
         readonly grants: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -420,6 +438,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'endpoints';
       readonly options: {
         readonly endpoints: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -430,6 +449,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'revealed';
       readonly options: {
         readonly revealed: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -440,6 +460,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'trust';
       readonly options: {
         readonly trust: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -450,6 +471,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'capabilities';
       readonly options: {
         readonly capabilities: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -460,6 +482,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'cookies';
       readonly options: {
         readonly cookies: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -470,6 +493,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'authorization';
       readonly options: {
         readonly authorization: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -481,6 +505,7 @@ export type KovoSemanticCommandRequest =
       readonly options: {
         readonly access: true;
         readonly failOnFindings?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -492,6 +517,7 @@ export type KovoSemanticCommandRequest =
       readonly options: {
         readonly unguarded: true;
         readonly failOnFindings?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -503,6 +529,7 @@ export type KovoSemanticCommandRequest =
       readonly options: {
         readonly unscoped: true;
         readonly failOnFindings?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -511,6 +538,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'auth-lifecycle';
       readonly options: {
         readonly authLifecycle: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -519,6 +547,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'model-boundaries';
       readonly options: {
         readonly modelBoundaries: true;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -531,6 +560,7 @@ export type KovoSemanticCommandRequest =
         readonly trustAnchor: string;
         readonly escapeReviews?: string;
         readonly escapeCensusReviews?: string;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {

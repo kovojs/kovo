@@ -33,6 +33,10 @@ const packedStarterWorkspacePackages = [
   { name: 'create-kovo', dir: 'create-kovo' },
 ];
 const CONSOLIDATED_VITEST_FILES = new Set([
+  // `static-core` owns the complete forcing mutation harness through
+  // `check:security-gate-mutations`; a second full run in a generic root shard can exceed the
+  // hosted-runner job budget without adding coverage.
+  'scripts/security-gate-mutations.test.mjs',
   'packages/cli/src/index.kovo-compile.test.ts',
   'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
   'packages/core/src/diagnostics.test.ts',
@@ -835,6 +839,8 @@ export function includeVitest(file) {
   return (
     !file.startsWith('tests/integration/') &&
     !file.startsWith('conformance/') &&
+    // These are intentionally incomplete package-boundary fixtures, not root-project tests.
+    !file.startsWith('scripts/fixtures/') &&
     !file.endsWith('.browser.test.ts') &&
     !file.includes('/templates/') &&
     !CONSOLIDATED_VITEST_FILES.has(file) &&

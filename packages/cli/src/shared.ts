@@ -6,7 +6,7 @@ import {
   type KovoCommandName,
 } from './command-schema.js';
 import {
-  commandFindingDiagnostic,
+  diagnosticContractDiagnostic,
   formatKovoDiagnostics,
   usageDiagnostic,
   type KovoDiagnosticCategory,
@@ -20,6 +20,7 @@ import {
  * emit (SPEC.md §11.4 verification surface; §1.1 proof claims).
  */
 export interface KovoCheckResult {
+  readonly diagnostics?: readonly KovoDiagnosticRecord[];
   exitCode: 0 | 1;
   output: string;
 }
@@ -79,13 +80,41 @@ export function writeCommandResult(
     stream.write(normalized.output);
   }
 
-  if (command === undefined) return normalized.exitCode;
-  const exitClass =
-    normalized.exitCode === 0 ? 'success' : normalized.exitCode === 1 ? 'finding' : exitTwoClass;
+  return validatedCommandExitCode(normalized.exitCode, command, exitTwoClass);
+}
+
+/**
+ * @internal Render authenticated diagnostic records for machine consumers while
+ * preserving each command's existing versioned fact protocol in human mode.
+ */
+export function writeFormattedCommandResult(
+  result: CliProcessResult,
+  format: KovoDiagnosticFormat,
+  category: Exclude<KovoDiagnosticCategory, 'usage'> = 'proof',
+  command?: KovoCommandName,
+  exitTwoClass: 'unknown' | 'usage' = 'usage',
+): 0 | 1 | 2 {
+  if (format === 'human') {
+    return writeCommandResult(result, category, command, exitTwoClass);
+  }
+  const normalized = normalizeCommandResultDiagnostics(result, category);
+  const output = formatKovoDiagnostics(normalized.diagnostics ?? [], format);
+  const stream = normalized.exitCode === 0 ? process.stdout : process.stderr;
+  stream.write(output);
+  return validatedCommandExitCode(normalized.exitCode, command, exitTwoClass);
+}
+
+function validatedCommandExitCode(
+  exitCode: 0 | 1 | 2,
+  command: KovoCommandName | undefined,
+  exitTwoClass: 'unknown' | 'usage',
+): 0 | 1 | 2 {
+  if (command === undefined) return exitCode;
+  const exitClass = exitCode === 0 ? 'success' : exitCode === 1 ? 'finding' : exitTwoClass;
   const schemaExitCode = kovoCommandExitCode(command, exitClass);
-  if (schemaExitCode !== normalized.exitCode) {
+  if (schemaExitCode !== exitCode) {
     throw new TypeError(
-      `Kovo ${command} result exit ${normalized.exitCode} contradicts schema class ${exitClass}.`,
+      `Kovo ${command} result exit ${exitCode} contradicts schema class ${exitClass}.`,
     );
   }
   return schemaExitCode;
@@ -113,17 +142,14 @@ export function normalizeCommandResultDiagnostics(
   const existing = 'diagnostics' in result ? result.diagnostics : undefined;
   const diagnostics =
     existing === undefined || existing.length === 0
-      ? Object.freeze([
-          commandFindingDiagnostic(category, 'error' in result ? result.error : result.output),
-        ])
+      ? Object.freeze([diagnosticContractDiagnostic(category)])
       : existing;
-  const human = formatKovoDiagnostics(diagnostics, 'human');
   const normalized: NormalizedCliProcessResult =
     'error' in result
-      ? { error: human, exitCode: result.exitCode }
+      ? { error: lineTerminated(result.error), exitCode: result.exitCode }
       : result.exitCode === 2
-        ? { exitCode: 2 as const, output: human }
-        : { exitCode: 1 as const, output: human };
+        ? { exitCode: 2 as const, output: lineTerminated(result.output) }
+        : { exitCode: 1 as const, output: lineTerminated(result.output) };
   Object.defineProperty(normalized, 'diagnostics', {
     configurable: false,
     enumerable: false,
@@ -157,4 +183,8 @@ export function stableValue(value: string | undefined): string {
 
 export function stableText(value: string): string {
   return value.split(/\s+/).filter(Boolean).join(' ');
+}
+
+function lineTerminated(value: string): string {
+  return value.endsWith('\n') ? value : `${value}\n`;
 }

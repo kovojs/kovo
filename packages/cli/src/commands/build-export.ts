@@ -125,7 +125,19 @@ import { build as viteBuild, createServer as createViteServer, type Plugin } fro
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { requireKovoCommandResultProtocol } from '../command-schema.js';
-import { kovoCheck } from '../graph-output.js';
+import type {
+  KovoDiagnosticFormat,
+  KovoDiagnosticRecord,
+  KovoDiagnosticSourceAnchor,
+} from '../diagnostic.js';
+import {
+  createKovoCheckDiagnosticSourceCatalog,
+  kovoCheck,
+  kovoCheckDiagnosticSource,
+  kovoCheckWithDiagnosticSourceCatalog,
+  type KovoCheckDiagnosticSourceCatalog,
+  type KovoCheckDiagnosticSourceFact,
+} from '../graph-output.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import { kovoCertificatePolicyV1Json, kovoCertificateV1Json } from '../certificate.js';
 import { escapeCensusReviewManifestForBuild } from '../escape-census-review-subjects.js';
@@ -553,7 +565,9 @@ export interface KovoExportCommandResult extends KovoCheckResult {
   staticExport: StaticExportResult;
 }
 
-type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
+type BuildArgParseResult =
+  | { format: KovoDiagnosticFormat; ok: true; options: KovoBuildOptions }
+  | { message: string; ok: false };
 
 interface LoadedKovoBuildConfig {
   path?: string;
@@ -572,6 +586,7 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   const preset = parsed.value.options.preset;
 
   return {
+    format: parsed.value.options.format,
     ok: true,
     options: {
       appModulePath: appModule,
@@ -1005,7 +1020,10 @@ function runPreEvaluationBuildConfigTrustPreflight(
   if (paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
     return { facts, files, path: configPath };
   }
-  throw new Error(`kovo build config preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+  throw new KovoBuildCheckDiagnosticError(
+    `kovo build config preflight failed:\n${buildCheckFailureOutput(result.output)}`,
+    result.diagnostics,
+  );
 }
 
 function runPreEvaluationStaticTrustPreflight(
@@ -1144,7 +1162,10 @@ function runPreEvaluationStaticTrustPreflight(
     };
   }
 
-  throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+  throw new KovoBuildCheckDiagnosticError(
+    `kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`,
+    result.diagnostics,
+  );
 }
 
 function preEvaluationClientEntryFile(
@@ -1383,15 +1404,22 @@ async function runKovoBuildCheckPreflight(
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const artifacts = await buildCheckGraph(app, options);
-  const result = kovoCheck(artifacts.graph, {
-    paranoidStaticAdvisory: options.paranoidStaticAdvisory,
-  });
+  const result = kovoCheckWithDiagnosticSourceCatalog(
+    artifacts.graph,
+    {
+      paranoidStaticAdvisory: options.paranoidStaticAdvisory,
+    },
+    artifacts.diagnosticSourceCatalog,
+  );
   if (result.exitCode === 0) return artifacts;
   if (options.paranoidStaticAdvisory && paranoidBuildCheckMayProceed(result.output)) {
     return artifacts;
   }
 
-  throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+  throw new KovoBuildCheckDiagnosticError(
+    `kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`,
+    result.diagnostics,
+  );
 }
 
 function paranoidBuildCheckMayProceed(output: string): boolean {
@@ -1411,6 +1439,7 @@ function paranoidBuildCheckMayProceed(output: string): boolean {
 
 interface KovoBuildCheckArtifacts {
   components?: readonly SourceComponentGraphFacts[];
+  diagnosticSourceCatalog: KovoCheckDiagnosticSourceCatalog;
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
   routePages?: readonly SourceRoutePageFacts[];
@@ -1650,11 +1679,15 @@ async function buildCheckGraph(
 ): Promise<KovoBuildCheckArtifacts> {
   const staticArtifacts = await staticBuildCheckGraph(app, options);
   const graph = staticArtifacts.graph;
+  const accessFacts = accessFactsWithDiagnosticSourceSites(
+    options.execution.accessFactsFromApp(app),
+    staticArtifacts.diagnosticSourceCatalog,
+  );
   const result = deriveAppGraph({
     ...(staticArtifacts.components === undefined ? {} : { components: staticArtifacts.components }),
     graph: {
       ...graph,
-      access: options.execution.accessFactsFromApp(app),
+      access: accessFacts,
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
@@ -1698,6 +1731,7 @@ async function buildCheckGraph(
   }
   if (diagnostics.length > 0) {
     return {
+      diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
       graph: {
         ...result.graph,
         diagnostics,
@@ -1707,10 +1741,21 @@ async function buildCheckGraph(
     };
   }
   return {
+    diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
     graph: result.graph,
     queryShapeFacts: staticArtifacts.queryShapeFacts,
     sourceFiles: staticArtifacts.sourceFiles,
   };
+}
+
+function accessFactsWithDiagnosticSourceSites(
+  accessFacts: readonly CoreGraph.AccessExplainFact[],
+  catalog: KovoCheckDiagnosticSourceCatalog,
+): CoreGraph.AccessExplainFact[] {
+  return buildMapDense(accessFacts, 'Build access facts with source sites', (fact) => {
+    const source = kovoCheckDiagnosticSource(catalog, fact.kind, fact.name);
+    return source === undefined || fact.site !== undefined ? fact : { ...fact, site: source.file };
+  });
 }
 
 interface BuildCacheIntent {
@@ -2080,6 +2125,10 @@ async function staticBuildCheckGraph(
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
     queryCheckFact(query, drizzleFacts.queries),
   );
+  const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
+    app.queries,
+    sourceGraphFacts.registryDeclarationAnchors,
+  );
   const routeOutcomeFacts = routeFileStreamEndpointFacts(
     app.routes,
     sourceGraphFacts.routeOutcomes,
@@ -2134,6 +2183,7 @@ async function staticBuildCheckGraph(
 
   return {
     components: sourceGraphFacts.components,
+    diagnosticSourceCatalog,
     graph: {
       ...(drizzleFacts.grants.length === 0 ? {} : { grants: drizzleFacts.grants }),
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
@@ -2326,6 +2376,7 @@ interface SourceGraphFacts {
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
   components: SourceComponentGraphFacts[];
+  registryDeclarationAnchors: Map<string, KovoDiagnosticSourceAnchor | null>;
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
 }
@@ -2549,6 +2600,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const compilerTaskBBlockingDiagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const components: SourceComponentGraphFacts[] = [];
+  const registryDeclarationAnchors = buildCreateMap<string, KovoDiagnosticSourceAnchor | null>();
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
 
@@ -2616,18 +2668,22 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       `Compiler semantic graph facts for ${file.fileName}`,
       (fact) => (fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph]),
     );
+    const parsedModule = parseComponentModule(
+      file.fileName,
+      file.source,
+      extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+    );
+    collectRegistryDeclarationAnchors(
+      registryDeclarationAnchors,
+      file.fileName,
+      parsedModule.calls,
+    );
     buildSecurityArrayAppend(
       compilerSecuritySemanticSources,
       {
         fileName: file.fileName,
         graphs: semanticGraphs,
-        operations: componentTaskBSourceOperationFacts(
-          parseComponentModule(
-            file.fileName,
-            file.source,
-            extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-          ),
-        ),
+        operations: componentTaskBSourceOperationFacts(parsedModule),
         source: file.source,
       },
       'CLI compiler semantic source carriers',
@@ -2720,9 +2776,75 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       semanticSources: compilerSecuritySemanticSources,
     }),
     components,
+    registryDeclarationAnchors,
     routeOutcomes,
     routePages,
   };
+}
+
+function collectRegistryDeclarationAnchors(
+  target: Map<string, KovoDiagnosticSourceAnchor | null>,
+  fileName: string,
+  calls: ReturnType<typeof parseComponentModule>['calls'],
+): void {
+  const snapshot = buildSnapshotDenseArray(calls, `Registry declaration calls for ${fileName}`);
+  for (let index = 0; index < snapshot.length; index += 1) {
+    const call = snapshot[index]!;
+    if (call.frameworkFactory !== 'query') continue;
+    const name = sourceQueryDeclarationName(fileName, call);
+    if (name === undefined) continue;
+    const key = `query\0${name}`;
+    if (buildMapHas(target, key)) {
+      // Duplicate declarations are invalid at runtime. Do not guess which authored range owns a
+      // diagnostic if malformed source reaches this preflight; an unanchored finding is safer.
+      buildMapSet(target, key, null);
+      continue;
+    }
+    buildMapSet(target, key, {
+      end: call.end,
+      file: fileName,
+      start: call.start,
+    });
+  }
+}
+
+function sourceQueryDeclarationName(
+  fileName: string,
+  call: ReturnType<typeof parseComponentModule>['calls'][number],
+): string | undefined {
+  const argumentsSnapshot = buildSnapshotDenseArray(
+    call.arguments,
+    `Query declaration arguments for ${fileName}`,
+  );
+  const firstStaticValue = buildOwnDataProperty(
+    call.argumentStaticValues,
+    0,
+    `Query declaration values for ${fileName}`,
+  );
+  if (argumentsSnapshot.length > 0 && !firstStaticValue.present) {
+    throw new TypeError(`Query declaration values for ${fileName}[0] must be a dense own value.`);
+  }
+  const explicit = firstStaticValue.present ? firstStaticValue.value : undefined;
+  if (typeof explicit === 'string' && explicit.length > 0) return explicit;
+  if (argumentsSnapshot.length !== 1 || call.exportedConstName === undefined) return undefined;
+  return deriveRegistryIdentity(fileName, call.exportedConstName).key;
+}
+
+function queryDiagnosticSourceCatalog(
+  queries: readonly KovoApp['queries'][number][],
+  anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
+): KovoCheckDiagnosticSourceCatalog {
+  const facts = buildFlatMapDense(
+    queries,
+    'Build query diagnostic source facts',
+    (query): KovoCheckDiagnosticSourceFact[] => {
+      const source = buildMapGet(anchors, `query\0${query.key}`);
+      return source === undefined || source === null
+        ? []
+        : [{ kind: 'query', name: query.key, source }];
+    },
+  );
+  return createKovoCheckDiagnosticSourceCatalog(facts);
 }
 
 /** Internal executable seam for the TASK B caller-carrier mutation gate (SPEC §6.6). */
@@ -6639,6 +6761,15 @@ class KovoBuildPresetDiagnosticError extends Error {
   }
 }
 
+class KovoBuildCheckDiagnosticError extends Error {
+  readonly diagnostics: readonly KovoDiagnosticRecord[] | undefined;
+
+  constructor(message: string, diagnostics: readonly KovoDiagnosticRecord[] | undefined) {
+    super(message);
+    this.diagnostics = diagnostics;
+  }
+}
+
 function presetDiagnosticOutputLine(diagnostic: KovoBuildPresetDiagnostic): string {
   const label = diagnostic.severity === 'warning' ? 'WARN' : 'ERROR';
   return `${label} ${diagnostic.code} ${stableText(diagnostic.message)}`;
@@ -6651,10 +6782,19 @@ function stringifyBuildValue(value: unknown, space?: number): string {
 }
 
 function buildErrorResult(error: unknown): CliCommandResult {
-  return {
+  const result: CliCommandResult = {
     error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
     exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
   };
+  if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
+    Object.defineProperty(result, 'diagnostics', {
+      configurable: false,
+      enumerable: false,
+      value: error.diagnostics,
+      writable: false,
+    });
+  }
+  return result;
 }
 
 function exportErrorResult(

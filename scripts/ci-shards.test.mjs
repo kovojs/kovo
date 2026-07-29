@@ -264,6 +264,8 @@ describe('ci-shards', () => {
 
   it('keeps consolidated CI-owned files out of root Vitest shards', () => {
     expect(includeVitest('packages/create-kovo/src/index.test.ts')).toBe(true);
+    expect(includeVitest('scripts/security-gate-mutations.test.mjs')).toBe(false);
+    expect(includeVitest('scripts/fixtures/public-api-inventory/tests/api.test.ts')).toBe(false);
     expect(
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts'),
     ).toBe(false);

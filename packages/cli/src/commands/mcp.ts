@@ -34,6 +34,7 @@ import {
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { searchInstalledAgentDocs } from '../docs-store.js';
 import { readCliPackageVersion } from '../package-version.js';
+import { projectKovoDiagnostic, type KovoDiagnosticRecord } from '../diagnostic.js';
 import {
   byteLength,
   compileOutputVersion,
@@ -66,16 +67,8 @@ export interface CompileComponentV1Input {
   source: string;
 }
 
-/** @internal Diagnostic shape returned by the internal `compile_component` MCP tool. */
-export interface CompileComponentV1Diagnostic {
-  code: DiagnosticCode;
-  fileName: string;
-  help?: string;
-  length?: number;
-  message: string;
-  severity: DiagnosticSeverity;
-  start?: { column: number; line: number };
-}
+/** @internal Exact `kovo-diagnostic/v1` record returned by `compile_component`. */
+export type CompileComponentV1Diagnostic = KovoDiagnosticRecord;
 
 /** @internal Result shape returned by the internal `compile_component` MCP tool. */
 export interface CompileComponentV1Result {
@@ -127,31 +120,15 @@ async function compileComponentV1WithWorkspace(
 
   return {
     componentGraphFacts: [...result.componentGraphFacts],
-    // SPEC.md §11.3 owns code severity; this surface only copies the shared compiler facts.
-    diagnostics: result.diagnostics.map((diagnostic) => {
-      const value: CompileComponentV1Diagnostic = {
-        code: diagnostic.code,
-        fileName: diagnostic.fileName,
-        message: diagnostic.message,
-        severity: diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity,
-        ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
-        ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
-        ...(diagnostic.start === undefined
-          ? {}
-          : { start: { column: diagnostic.start.column, line: diagnostic.start.line } }),
-      };
-      return value;
-    }),
+    // SPEC §11: MCP projects the exact compiler-owned diagnostic; it cannot mint a lookalike.
+    diagnostics: result.diagnostics.map((diagnostic) => projectKovoDiagnostic(diagnostic, 'build')),
     emittedFiles: result.files.map((file) => ({
       byteLength: byteLength(file.source),
       fileName: file.fileName,
       kind: file.kind,
     })),
     handlerExports: [...result.handlerExports],
-    ok: result.diagnostics.every(
-      (diagnostic) =>
-        (diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity) !== 'error',
-    ),
+    ok: result.diagnostics.every((diagnostic) => diagnostic.severity !== 'error'),
     platformSubstitutions: [...result.platformSubstitutions],
     queryUpdatePlans: [...result.queryUpdatePlans],
     renderEquivalenceChecks: result.renderEquivalenceChecks.map((check) => ({
@@ -396,7 +373,11 @@ function runKovoCheckTool(args: unknown): KovoCheckResult & { version: typeof ou
   const graph = graphToolInput(options);
   const family = assertKovoCheckFamily(options.family);
   const result = kovoCheck(graph, { family });
-  return { ...result, version: outputVersion };
+  return {
+    ...result,
+    ...(result.diagnostics === undefined ? {} : { diagnostics: result.diagnostics }),
+    version: outputVersion,
+  };
 }
 
 async function runKovoDocsTool(

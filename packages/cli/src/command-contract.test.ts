@@ -19,6 +19,7 @@ import {
   renderShellCompletion,
   resolveKovoBinInvocationPosture,
 } from './commands-manifest.js';
+import { KOVO_DIAGNOSTIC_VERSION, type KovoDiagnosticEnvelope } from './diagnostic.js';
 import { main, mainAsync, runKovoCommand } from './index.js';
 
 describe('semantic CLI contract', () => {
@@ -195,6 +196,7 @@ describe('semantic CLI contract', () => {
         options: {
           cache: false,
           check: false,
+          format: 'human',
           out: 'dist',
           preset: undefined,
         },
@@ -210,6 +212,15 @@ describe('semantic CLI contract', () => {
       parseKovoCommandInvocation('build', ['src/app.tsx', '--out', 'one', '--out', 'two']),
     ).toMatchObject({
       error: 'usage',
+      ok: false,
+    });
+    expect(parseKovoCommandInvocation('check', ['coverage', '--format', 'github'])).toMatchObject({
+      ok: true,
+      value: { options: { format: 'github' } },
+    });
+    expect(parseKovoCommandInvocation('explain', ['--tasks', '--format', 'yaml'])).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining('--format requires human, json, or github'),
       ok: false,
     });
 
@@ -338,7 +349,13 @@ describe('semantic CLI contract', () => {
         arguments: { appModule: './src/app.tsx' },
         command: 'build',
         form: 'build',
-        options: { cache: false, check: true, out: 'dist-prod', preset: 'node' },
+        options: {
+          cache: false,
+          check: true,
+          format: 'json',
+          out: 'dist-prod',
+          preset: 'node',
+        },
       }),
     ).toEqual([
       'build',
@@ -349,6 +366,8 @@ describe('semantic CLI contract', () => {
       'node',
       '--check',
       '--no-cache',
+      '--format',
+      'json',
     ]);
     expect(
       commandRequestToArgv({
@@ -389,6 +408,92 @@ describe('semantic CLI contract', () => {
         options: { preset: 'not-a-preset' },
       }),
     ).toThrow(/requires node, vercel, or cloudflare/u);
+  });
+
+  it('keeps human fact protocols byte-stable and emits authenticated machine diagnostics', async () => {
+    const implicitHuman = captureWrites(() => main(['explain', '--auth-lifecycle']));
+    const explicitHuman = captureWrites(() =>
+      main(['explain', '--auth-lifecycle', '--format', 'human']),
+    );
+    expect(explicitHuman).toEqual(implicitHuman);
+    expect(implicitHuman.stdout).toMatch(/^kovo-explain\/v1\n/u);
+
+    const explainJson = captureWrites(() =>
+      main(['explain', '--auth-lifecycle', '--format', 'json']),
+    );
+    expect(explainJson).toEqual({
+      result: 0,
+      stderr: '',
+      stdout: `${JSON.stringify({
+        diagnostics: [],
+        version: KOVO_DIAGNOSTIC_VERSION,
+      })}\n`,
+    });
+
+    const missingGraph = join(tmpdir(), 'kovo-command-contract-format-missing-graph.json');
+    const checkJson = captureWrites(() => main(['check', missingGraph, '--format', 'json']));
+    expect(checkJson.result).toBe(1);
+    expect(checkJson.stdout).toBe('');
+    const checkEnvelope = JSON.parse(checkJson.stderr) as KovoDiagnosticEnvelope;
+    expect(checkEnvelope).toEqual({
+      diagnostics: [
+        expect.objectContaining({
+          code: 'KOVO_DIAGNOSTIC_CONTRACT',
+          message: 'Kovo proof command returned a failing result without structured diagnostics.',
+          version: KOVO_DIAGNOSTIC_VERSION,
+        }),
+      ],
+      version: KOVO_DIAGNOSTIC_VERSION,
+    });
+    expect(checkEnvelope.diagnostics[0]?.message).not.toContain(missingGraph);
+
+    const checkGithub = captureWrites(() => main(['check', missingGraph, '--format', 'github']));
+    expect(checkGithub).toMatchObject({ result: 1, stdout: '' });
+    expect(checkGithub.stderr).toContain(
+      '::error title=KOVO_DIAGNOSTIC_CONTRACT runtime::Kovo proof command returned',
+    );
+
+    const missingBuild = join(tmpdir(), 'kovo-command-contract-format-missing-app.tsx');
+    const buildJson = await captureWritesAsync(() =>
+      mainAsync(['build', missingBuild, '--check', '--format', 'json']),
+    );
+    expect(buildJson.result).toBe(2);
+    expect(buildJson.stdout).toBe('');
+    expect(JSON.parse(buildJson.stderr)).toMatchObject({
+      diagnostics: [
+        {
+          code: 'KOVO_DIAGNOSTIC_CONTRACT',
+          message: 'Kovo build command returned a failing result without structured diagnostics.',
+        },
+      ],
+      version: KOVO_DIAGNOSTIC_VERSION,
+    });
+
+    const advisoryJson = await captureWritesAsync(() =>
+      mainAsync(['check', 'advisories', missingGraph, '--format', 'json']),
+    );
+    expect(advisoryJson.result).toBe(2);
+    expect(advisoryJson.stdout).toBe('');
+    expect(JSON.parse(advisoryJson.stderr)).toMatchObject({
+      diagnostics: [{ code: 'KOVO_DIAGNOSTIC_CONTRACT' }],
+      version: KOVO_DIAGNOSTIC_VERSION,
+    });
+
+    const attestJson = await captureWritesAsync(() =>
+      mainAsync([
+        'explain',
+        '--attest=https://app.example',
+        `--artifact=${missingGraph}`,
+        `--trust-anchor=sha256:${'a'.repeat(64)}`,
+        '--format=json',
+      ]),
+    );
+    expect(attestJson.result).toBe(1);
+    expect(attestJson.stdout).toBe('');
+    expect(JSON.parse(attestJson.stderr)).toMatchObject({
+      diagnostics: [{ code: 'KOVO_DIAGNOSTIC_CONTRACT' }],
+      version: KOVO_DIAGNOSTIC_VERSION,
+    });
   });
 
   it('uses exit 2 for invocation mistakes and retains exit 1 for proof failures', async () => {

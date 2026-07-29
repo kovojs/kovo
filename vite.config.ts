@@ -344,6 +344,9 @@ export default defineConfig({
       // glob their duplicate test copies into the root unit pool.
       '**/.claude/**',
       '**/*.browser.test.ts',
+      // Test-only fixture packages prove their own package-boundary behavior. Their unresolved
+      // fixture aliases are intentionally not part of the repository root Vitest project.
+      'scripts/fixtures/**',
       // The framework-owned integration specs use @playwright/test, not vitest;
       // they run under their own gate (`vp run integration`).
       'tests/integration/**',

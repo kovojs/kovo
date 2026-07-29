@@ -4898,6 +4898,61 @@
       "expressionSha256": "568af70c3e1f9568f0b3cc310832c8a40cbf24a1c5d7b1bc822907058f3dd94f"
     },
     {
+      "id": "packages/server/src/vite-dev.ts#throw#KV229#1c795264bef90f45b31ba0981608c279d17954f8042c99529c63395bb2525ee5#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "materializeKovoAppShellViteDevStylesheetArray",
+      "expressionSha256": "1c795264bef90f45b31ba0981608c279d17954f8042c99529c63395bb2525ee5"
+    },
+    {
+      "id": "packages/server/src/vite-dev.ts#throw#KV229#3939ac5191f6195cd11601e746a5649261d93ad65ef589cd259f4a241bfdd605#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "materializeKovoAppShellViteDevStylesheets",
+      "expressionSha256": "3939ac5191f6195cd11601e746a5649261d93ad65ef589cd259f4a241bfdd605"
+    },
+    {
+      "id": "packages/server/src/vite-dev.ts#throw#KV229#a77c9e85896f0a7f340f1d3b141fd305b1d9ff3b07a2379ede033c44cf4a8fd6#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "materializeKovoAppShellViteDevStylesheetArray",
+      "expressionSha256": "a77c9e85896f0a7f340f1d3b141fd305b1d9ff3b07a2379ede033c44cf4a8fd6"
+    },
+    {
+      "id": "packages/server/src/vite-dev.ts#throw#KV229#ea0d8cda94d6136f53db9496e478c1968d9b4c57e914a73e5bba59d69671bf65#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "materializeKovoAppShellViteDevStylesheetArray",
+      "expressionSha256": "ea0d8cda94d6136f53db9496e478c1968d9b4c57e914a73e5bba59d69671bf65"
+    },
+    {
+      "id": "packages/server/src/vite-dev.ts#throw#KV229#ff8d9ac02c9e049499abbae60f7ec78f73a5a4e12638582a873ace9c0043fa87#0",
+      "code": "KV229",
+      "enforcementClass": "compile-error",
+      "severity": "error",
+      "layer": "runtime",
+      "channel": "throw",
+      "file": "packages/server/src/vite-dev.ts",
+      "owner": "materializeKovoAppShellViteDevStylesheetArray",
+      "expressionSha256": "ff8d9ac02c9e049499abbae60f7ec78f73a5a4e12638582a873ace9c0043fa87"
+    },
+    {
       "id": "packages/server/src/vite-manifest.ts#throw#KV229#7c9b508aa3140c11557d199367f9c08a2cd394d9ef5643cedd25c3ba569ea8a1#0",
       "code": "KV229",
       "enforcementClass": "compile-error",

@@ -67,6 +67,7 @@ import {
 } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
+import { currentKovoBuildContext } from './internal/build-context.js';
 import { isDurableMutationReplayStore } from './replay.js';
 import { isDurablePrincipalEpochStore, snapshotPrincipalEpochStore } from './principal-epoch.js';
 import {
@@ -428,7 +429,10 @@ function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
     allowPrivateNetwork: devDefault,
     preserveExistingAppPolicy: true,
   });
-  if (devDefault) {
+  // An app evaluated only for compiler graph derivation is not a running development server.
+  // Keep the ordinary dev warning for real app boot, but do not leak an informational prelude
+  // ahead of `kovo build --format json|github`'s single framework-owned diagnostic stream.
+  if (devDefault && currentKovoBuildContext()?.graphDerivation !== true) {
     warn(
       'createApp() installed the default outbound-egress floor in development with local ' +
         'private-network destinations permitted; cloud metadata remains blocked. Pass ' +

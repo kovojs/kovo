@@ -5,7 +5,10 @@ import { parseCompileArgs } from './compile.js';
 
 describe('command argv helper integration', () => {
   it('parses build/export value flags with equals syntax', () => {
-    expect(parseBuildArgs(['src/app.tsx', '--out=dist-prod', '--preset=node'])).toEqual({
+    expect(
+      parseBuildArgs(['src/app.tsx', '--out=dist-prod', '--preset=node', '--format=github']),
+    ).toEqual({
+      format: 'github',
       ok: true,
       options: {
         appModulePath: 'src/app.tsx',

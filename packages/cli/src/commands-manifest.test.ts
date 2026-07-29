@@ -28,6 +28,7 @@ import {
   parseKovoCommandInvocation,
   resolveCommand,
 } from './commands-manifest.js';
+import { formatKovoDiagnostics, usageDiagnostic } from './diagnostic.js';
 import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
 
 /**
@@ -110,13 +111,18 @@ describe('commands manifest', () => {
     const unknown = captureWrites(() => main(['nope']));
     expect(unknown.result).toBe(2);
     expect(unknown.stdout).toBe('');
-    expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
+    expect(unknown.stderr).toBe(
+      formatKovoDiagnostics([usageDiagnostic(formatUnknownCommandMessage('nope'))], 'human'),
+    );
 
     const advisorySync = captureWrites(() => main(['check', 'advisories']));
     expect(advisorySync.result).toBe(2);
     expect(advisorySync.stdout).toBe('');
     expect(advisorySync.stderr).toBe(
-      'kovo: check advisories is asynchronous; call mainAsync() instead.\n',
+      formatKovoDiagnostics(
+        [usageDiagnostic('kovo: check advisories is asynchronous; call mainAsync() instead.\n')],
+        'human',
+      ),
     );
   });
 
@@ -142,15 +148,15 @@ describe('commands manifest', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
     expect(CHECK_USAGE).toBe(
-      'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] | kovo check env [deployment.json] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]',
+      'usage: kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(ADVISORY_USAGE).toBe(
-      'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>]',
+      'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
     expect(BUILD_USAGE).toBe(
-      'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]',
+      'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache] [--format <human|json|github>]',
     );
     expect(DEV_USAGE).toBe(
       'usage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>]',
@@ -186,12 +192,25 @@ describe('commands manifest', () => {
     expect(EXPLAIN_USAGE_LINE).toContain(
       'kovo explain component|mutation|query|page|context|task <target>',
     );
-    expect(EXPLAIN_USAGE).toContain('       kovo explain --capabilities [graph.json]');
-    expect(EXPLAIN_USAGE).toContain('       kovo explain --cookies [graph.json]');
-    expect(EXPLAIN_USAGE).toContain('       kovo explain --tasks [graph.json]');
-    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --capabilities [graph.json]');
-    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --cookies [graph.json]');
-    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --tasks [graph.json]');
+    expect(EXPLAIN_USAGE).toContain(
+      '       kovo explain --capabilities [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE).toContain(
+      '       kovo explain --cookies [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE).toContain(
+      '       kovo explain --tasks [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE_LINE).toContain(
+      'kovo explain --capabilities [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE_LINE).toContain(
+      'kovo explain --cookies [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE_LINE).toContain(
+      'kovo explain --tasks [graph.json] [--format <human|json|github>]',
+    );
+    expect(EXPLAIN_USAGE_LINE).toContain('[--format <human|json|github>]');
   });
 
   it('each manifest usage is consistent with the bin imports', () => {
@@ -247,6 +266,7 @@ describe('commands manifest', () => {
         '--preset',
         'node',
         '--no-cache',
+        '--format=json',
       ]),
     ).toEqual({
       ok: true,
@@ -254,7 +274,13 @@ describe('commands manifest', () => {
         arguments: { appModule: 'src/app.tsx' },
         command: 'build',
         form: 'build',
-        options: { cache: false, check: true, out: 'dist-prod', preset: 'node' },
+        options: {
+          cache: false,
+          check: true,
+          format: 'json',
+          out: 'dist-prod',
+          preset: 'node',
+        },
       },
     });
 
@@ -291,6 +317,7 @@ describe('commands manifest', () => {
         '--state',
         '.kovo/advisory-state.json',
         '--severity-floor=critical',
+        '--format=github',
       ]),
     ).toEqual({
       ok: true,
@@ -301,6 +328,7 @@ describe('commands manifest', () => {
         options: {
           attestation: 'bundle.json',
           feed: 'https://example.test/feed.json',
+          format: 'github',
           severityFloor: 'critical',
           state: '.kovo/advisory-state.json',
         },

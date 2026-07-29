@@ -299,6 +299,21 @@ function flag<
   return { id, flags, description, ...options };
 }
 
+const diagnosticFormatOption = flag(
+  'format',
+  ['--format'],
+  'Select human, JSON, or GitHub diagnostic output.',
+  {
+    category: 'output',
+    invalidValueMessage: 'kovo: --format requires human, json, or github.\n',
+    missingValueMessage: 'kovo: --format requires human, json, or github.\n',
+    value: value('enum', 'human|json|github', {
+      default: 'human',
+      values: ['human', 'json', 'github'],
+    }),
+  },
+);
+
 const checkOptions = [
   flag('feed', ['--feed'], 'Override the default HTTPS advisory feed.', {
     category: 'input',
@@ -324,6 +339,7 @@ const checkOptions = [
       values: ['low', 'moderate', 'high', 'critical'],
     }),
   }),
+  diagnosticFormatOption,
 ] as const;
 
 const explainOptions = [
@@ -404,6 +420,7 @@ const explainOptions = [
     missingValueMessage: 'kovo: explain --escape-census-reviews requires a review file.\n',
     value: value('path', 'reviews.json'),
   }),
+  diagnosticFormatOption,
 ] as const;
 
 const compileOptions = [
@@ -571,6 +588,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         category: 'advanced',
         defaultBoolean: true,
       }),
+      diagnosticFormatOption,
     ],
     order: 30,
     processLifecycle: 'one-shot',
@@ -589,6 +607,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('preset'),
           option('check'),
           option('cache'),
+          option('format'),
         ],
       },
     ],
@@ -630,6 +649,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
             },
           ),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -638,6 +658,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           literal('env', 'Probe deployment environment obligations.'),
           argument('deployment', value('path', 'deployment.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -651,6 +672,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('attestation'),
           option('state'),
           option('severityFloor'),
+          option('format'),
         ],
       },
     ],
@@ -1010,6 +1032,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('optimistic'),
           option('layouts'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1017,6 +1040,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           literal('document', 'Explain the framework-owned document shell.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1024,6 +1048,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('sourcesSinks', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1031,6 +1056,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('tasks', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1038,6 +1064,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('agent', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1045,6 +1072,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('grants', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1052,6 +1080,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('endpoints', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1059,6 +1088,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('revealed', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1066,6 +1096,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('trust', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1073,6 +1104,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('capabilities', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1080,6 +1112,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('cookies', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1087,6 +1120,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           option('authorization', true),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1095,6 +1129,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('access', true),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1103,6 +1138,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('unguarded', true),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
       {
@@ -1111,10 +1147,17 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('unscoped', true),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('format'),
         ],
       },
-      { id: 'auth-lifecycle', tokens: [option('authLifecycle', true)] },
-      { id: 'model-boundaries', tokens: [option('modelBoundaries', true)] },
+      {
+        id: 'auth-lifecycle',
+        tokens: [option('authLifecycle', true), option('format')],
+      },
+      {
+        id: 'model-boundaries',
+        tokens: [option('modelBoundaries', true), option('format')],
+      },
       {
         async: true,
         id: 'attest',
@@ -1124,6 +1167,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('trustAnchor', true),
           option('escapeReviews'),
           option('escapeCensusReviews'),
+          option('format'),
         ],
       },
     ],

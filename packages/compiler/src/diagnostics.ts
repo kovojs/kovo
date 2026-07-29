@@ -17,6 +17,14 @@ export interface CompilerDiagnostic extends RegisteredDiagnostic<DiagnosticCode>
   fileName: string;
   help?: string;
   length?: number;
+  /**
+   * Exact authored-source range, expressed as zero-based UTF-16 offsets with an exclusive end.
+   *
+   * `fileName`/`start`/`length` remain the compiler's line-oriented compatibility view while
+   * tool transports project this range into `kovo-diagnostic/v1` without reading or reparsing
+   * source (SPEC §5.2/§11).
+   */
+  source?: CompilerDiagnosticSourceAnchor;
   start?: SourcePosition;
 }
 
@@ -24,6 +32,13 @@ export interface CompilerDiagnostic extends RegisteredDiagnostic<DiagnosticCode>
 export interface SourcePosition {
   column: number;
   line: number;
+}
+
+/** @internal Exact authored-source anchor carried by compiler-owned diagnostics. */
+export interface CompilerDiagnosticSourceAnchor {
+  readonly end: number;
+  readonly file: string;
+  readonly start: number;
 }
 
 /**
@@ -69,14 +84,21 @@ export function diagnosticFor(
   length?: number,
   detail?: string,
 ): CompilerDiagnostic {
+  const sourceLocation =
+    source === undefined || offset === undefined
+      ? undefined
+      : {
+          source: diagnosticSourceAnchor(fileName, source, offset, length),
+          start: offsetToPosition(source, offset),
+        };
   return createRegisteredDiagnostic(
     code,
     {
       fileName,
-      ...(source !== undefined && offset !== undefined
+      ...(sourceLocation !== undefined
         ? {
             ...(length === undefined ? {} : { length }),
-            start: offsetToPosition(source, offset),
+            ...sourceLocation,
           }
         : {}),
     },
@@ -129,6 +151,19 @@ export function diagnosticAt(
   const offset =
     state.offsetMap === undefined ? rawStart : generatedOffsetToOriginal(state.offsetMap, rawStart);
   const length = span?.length;
+  const rawEnd =
+    rawStart === undefined ? undefined : length === undefined ? rawStart : rawStart + length;
+  const end =
+    state.offsetMap === undefined
+      ? rawEnd
+      : rawEnd === rawStart
+        ? offset
+        : generatedOffsetToOriginal(state.offsetMap, rawEnd === undefined ? undefined : rawEnd - 1);
+  const exclusiveEnd = end === undefined || rawEnd === rawStart ? end : end + 1;
+  const sourceAnchor =
+    offset === undefined || exclusiveEnd === undefined
+      ? undefined
+      : freezeDiagnosticSourceAnchor(factory.fileName, offset, exclusiveEnd);
   return createRegisteredDiagnostic(
     code,
     {
@@ -136,6 +171,7 @@ export function diagnosticAt(
       ...(offset !== undefined
         ? {
             ...(length === undefined ? {} : { length }),
+            ...(sourceAnchor === undefined ? {} : { source: sourceAnchor }),
             start: state.positionFor(offset),
           }
         : {}),
@@ -161,6 +197,15 @@ export function contextualizeCompilerDiagnostic(
     {
       fileName: diagnostic.fileName,
       ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+      ...(diagnostic.source === undefined
+        ? {}
+        : {
+            source: freezeDiagnosticSourceAnchor(
+              diagnostic.source.file,
+              diagnostic.source.start,
+              diagnostic.source.end,
+            ),
+          }),
       ...(diagnostic.start === undefined
         ? {}
         : { start: { column: diagnostic.start.column, line: diagnostic.start.line } }),
@@ -170,6 +215,42 @@ export function contextualizeCompilerDiagnostic(
       message: options.message ?? diagnostic.message,
     },
   );
+}
+
+function diagnosticSourceAnchor(
+  fileName: string,
+  source: string,
+  start: number,
+  length: number | undefined,
+): CompilerDiagnosticSourceAnchor {
+  if (
+    !Number.isSafeInteger(start) ||
+    start < 0 ||
+    start > source.length ||
+    (length !== undefined &&
+      (!Number.isSafeInteger(length) || length < 0 || length > source.length - start))
+  ) {
+    throw new TypeError('Compiler diagnostic source span must be within authored source.');
+  }
+  return freezeDiagnosticSourceAnchor(fileName, start, start + (length ?? 0));
+}
+
+function freezeDiagnosticSourceAnchor(
+  file: string,
+  start: number,
+  end: number,
+): CompilerDiagnosticSourceAnchor {
+  if (
+    typeof file !== 'string' ||
+    file.length === 0 ||
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start
+  ) {
+    throw new TypeError('Compiler diagnostic source anchor must be a finite increasing range.');
+  }
+  return Object.freeze({ end, file, start });
 }
 
 export function offsetToPosition(source: string, offset: number): SourcePosition {

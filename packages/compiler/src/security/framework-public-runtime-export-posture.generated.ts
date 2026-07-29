@@ -32,7 +32,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-28.3' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-28.4' as const;
 
 // Exact package-name closures for first-party packages with no app-public runtime surface.
 // The analyzer executable is authenticated by the release/install channel, not by itself.
@@ -69,14 +69,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/cli", "0.2.0", [
     ["sha256:7b28433b398f349e38f7f7916aee45f6d34d9540a9c531fd96571ed30e2db134", [
       [".",["default","types"]],
-    ], []],
+    ], ["kovo-packed-tree-sha256:b3c0e3d480743d681e2cbe71bea614c94e5c2c10b03d0c2a4d155957cc89cb33"]],
     ["sha256:971cbc49aac49b3169170045bf1b91d0d3e69d60c5edc8e909b33fdcba526a85", [
       [".",["default"]],
-    ], []],
+    ], ["kovo-source-tree-sha256:4c4d94c7c4695a7ecfc99384d80c4aeaa7f70f9fb1084e16e175db5bfc58ef92"]],
     ["sha256:e3d8d6b0ac34c1e039c8584ac63d7423a78026170fcc7ed3a8af90c7335ac658", [
       [".",["default","types"]],
-    ], []],
-  ], "unconditional-request-closure"],
+    ], ["kovo-packed-tree-sha256:b3c0e3d480743d681e2cbe71bea614c94e5c2c10b03d0c2a4d155957cc89cb33"]],
+  ], "exact-implementation"],
   ["@kovojs/core", "0.2.0", [
     ["sha256:357b58eb71e2dacbb6d9976384102ddcb37f724abbed99a46725abfc1cd1e570", [
       [".",["default","types"]],
@@ -5439,7 +5439,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:48b41ac9f133ad412391d23ba33c18054f476596346cb962857cde7002dc5b31"]],
+    ], ["kovo-packed-tree-sha256:c4d75b330dce34e372f0046f7360edf7cc8a96c6785021f1e3874e391b8e96da"]],
     ["sha256:59194e9f5c31a6176a92a8d37a9728860479a4ba55e1dd8b4570b8c0ed4977ea", [
       [".",["default","types"]],
       ["./build",["default","types"]],
@@ -5447,7 +5447,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:48b41ac9f133ad412391d23ba33c18054f476596346cb962857cde7002dc5b31"]],
+    ], ["kovo-packed-tree-sha256:c4d75b330dce34e372f0046f7360edf7cc8a96c6785021f1e3874e391b8e96da"]],
     ["sha256:a924be77487f1241978f78c7214ecb5db96225a2ae60c3c0172ca4c90170055b", [
       [".",["default"]],
       ["./build",["default"]],
@@ -5455,7 +5455,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default"]],
       ["./testing",["default"]],
       ["./vite",["default"]],
-    ], ["kovo-source-tree-sha256:af305d0c89a0e3167d3c59591a1d17e9823bd1b43392ccf3d71b6ea8e6eb3e3e"]],
+    ], ["kovo-source-tree-sha256:e33547aba2d69828b5e56afbca2b58b7bc95b7762704bd90c9ee4c9f307bf542"]],
   ], "exact-implementation"],
   ["@kovojs/style", "0.2.0", [
     ["sha256:2e071714c73748fd43018c9c06e8bab0b41326ee0d43c1b3af862f6a125778b0", [
@@ -5720,6 +5720,9 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ]],
   ["@kovojs/cli", "request-closed", ["database-driver","dynamic-loader","filesystem","network","process","vm","worker"], "none", "The CLI library surface is build-time authority and is not a request-handler capability door.", [
     [".",["<module>","kovoCheck","kovoExplain","runKovoCommand"]],
+  ]],
+  ["@kovojs/cli", "authority-free", [], "none", "The diagnostic schema constant is an authority-free protocol identifier.", [
+    [".",["KOVO_DIAGNOSTIC_VERSION"]],
   ]],
   ["@kovojs/core", "authority-free", [], "none", null, [
     [".",["drainSecretRevealAuditFacts"]],

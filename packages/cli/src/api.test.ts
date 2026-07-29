@@ -1,7 +1,9 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  KOVO_DIAGNOSTIC_VERSION,
   runKovoCommand,
+  type KovoDiagnosticRecord,
   type KovoCommandExitCode,
   type KovoSemanticCommandRequest,
 } from './api.js';
@@ -9,7 +11,14 @@ import * as PublicCli from './api.js';
 
 describe('@kovojs/cli public API', () => {
   it('publishes the semantic command facade without exposing the argv dispatcher', () => {
-    expect(Object.keys(PublicCli).sort()).toEqual(['kovoCheck', 'kovoExplain', 'runKovoCommand']);
+    expect(Object.keys(PublicCli).sort()).toEqual([
+      'KOVO_DIAGNOSTIC_VERSION',
+      'kovoCheck',
+      'kovoExplain',
+      'runKovoCommand',
+    ]);
+    expect(KOVO_DIAGNOSTIC_VERSION).toBe('kovo-diagnostic/v1');
+    expectTypeOf<KovoDiagnosticRecord['version']>().toEqualTypeOf<'kovo-diagnostic/v1'>();
     expect('main' in PublicCli).toBe(false);
     expect('mainAsync' in PublicCli).toBe(false);
 

@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.3",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.4",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -836,27 +836,44 @@
             "surface": "build-compiler"
           },
           "members": {
-            ".": [
-              "<module>",
-              "kovoCheck",
-              "kovoExplain",
-              "runKovoCommand"
-            ]
+            ".": ["<module>", "kovoCheck", "kovoExplain", "runKovoCommand"]
           },
           "review": {
             "basis": "The one-shot semantic command facade and graph verifiers are build-time authority and are not request-handler capability doors.",
-            "evidence": [
-              "packages/cli/src/api.ts",
-              "packages/cli/src/index.ts"
-            ],
+            "evidence": ["packages/cli/src/api.ts", "packages/cli/src/index.ts"],
             "id": "first-party-runtime-posture/2026-07-28"
           },
           "rootKind": "none",
           "securityRole": "request-closed",
           "reason": "The CLI library surface is build-time authority and is not a request-handler capability door."
+        },
+        {
+          "capabilities": [],
+          "disposition": "authority-free",
+          "id": "authority-free-ordinary-runtime-build-compiler-diagnostic-schema-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "build-compiler"
+          },
+          "members": {
+            ".": ["KOVO_DIAGNOSTIC_VERSION"]
+          },
+          "review": {
+            "basis": "The immutable diagnostic wire-version literal carries no raw capability and creates no request root, framework door, trust escape, or sink.",
+            "evidence": ["packages/cli/src/api.ts", "packages/cli/src/diagnostic.ts"],
+            "id": "first-party-runtime-posture/2026-07-28"
+          },
+          "rootKind": "none",
+          "securityRole": "ordinary-runtime",
+          "reason": "The diagnostic schema constant is an authority-free protocol identifier."
         }
       ],
-      "sourceTreeSha256": "adfbab88fe14835d80c647ba8bef678f5b2a3bc48d7935df01d2283f85fcb1bb"
+      "sourceTreeSha256": "4c4d94c7c4695a7ecfc99384d80c4aeaa7f70f9fb1084e16e175db5bfc58ef92"
     },
     {
       "manifestVariants": [
@@ -10187,7 +10204,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "af305d0c89a0e3167d3c59591a1d17e9823bd1b43392ccf3d71b6ea8e6eb3e3e"
+      "sourceTreeSha256": "e33547aba2d69828b5e56afbca2b58b7bc95b7762704bd90c9ee4c9f307bf542"
     },
     {
       "manifestVariants": [

@@ -124,7 +124,7 @@ describe('framework public runtime export posture gate', () => {
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);
-    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_346);
+    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_347);
     expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_839);
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
     expect(rows.every((row) => row.rootKind !== undefined)).toBe(true);
@@ -388,9 +388,8 @@ describe('framework public runtime export posture gate', () => {
     };
 
     const cli = packageBlock('@kovojs/cli');
-    expect(cli).toContain('"unconditional-request-closure"');
-    expect(cli).not.toContain('kovo-source-tree-sha256:');
-    expect(cli).not.toContain('kovo-packed-tree-sha256:');
+    expect(cli).toContain('"exact-implementation"');
+    expect(cli).toContain('kovo-source-tree-sha256:');
 
     expect(generated).toContain(
       "frameworkZeroPublicRequestClosedPackages: readonly string[] = ['@kovojs/compiler']",
@@ -401,15 +400,17 @@ describe('framework public runtime export posture gate', () => {
     expect(server).toContain('"exact-implementation"');
     expect(server).toContain('kovo-source-tree-sha256:');
 
-    const widened = clone(ledger);
-    const cliGroup = packageRow(widened, '@kovojs/cli').postureGroups[0];
-    cliGroup.disposition = 'authority-free';
-    cliGroup.capabilities = [];
-    const widenedGenerated = renderFrameworkExportPostureGenerated(widened, actual);
-    const widenedStart = widenedGenerated.indexOf('  ["@kovojs/cli",');
-    const widenedEnd = widenedGenerated.indexOf('\n  ["@kovojs/', widenedStart + 1);
-    const widenedCli = widenedGenerated.slice(widenedStart, widenedEnd);
-    expect(widenedCli).toContain('"exact-implementation"');
-    expect(widenedCli).toContain('kovo-source-tree-sha256:');
+    const whollyRequestClosed = clone(ledger);
+    const diagnosticGroup = packageRow(whollyRequestClosed, '@kovojs/cli').postureGroups.find(
+      (group) => group.members['.']?.includes('KOVO_DIAGNOSTIC_VERSION'),
+    );
+    diagnosticGroup.disposition = 'request-closed';
+    const closedGenerated = renderFrameworkExportPostureGenerated(whollyRequestClosed, actual);
+    const closedStart = closedGenerated.indexOf('  ["@kovojs/cli",');
+    const closedEnd = closedGenerated.indexOf('\n  ["@kovojs/', closedStart + 1);
+    const closedCli = closedGenerated.slice(closedStart, closedEnd);
+    expect(closedCli).toContain('"unconditional-request-closure"');
+    expect(closedCli).not.toContain('kovo-source-tree-sha256:');
+    expect(closedCli).not.toContain('kovo-packed-tree-sha256:');
   });
 });

@@ -25,6 +25,7 @@ describe('kovo explain --authorization', () => {
 
   it('parses the authorization audit as a standalone explain mode', () => {
     expect(parseExplainArgs(['--authorization', 'graph.json'])).toEqual({
+      format: 'human',
       inputPath: 'graph.json',
       ok: true,
       options: { authorization: true },
