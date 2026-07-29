@@ -163,13 +163,18 @@ const proof: string = 'ok';
 export const app = defineKovo({
   appId: '11111111-1111-4111-8111-111111111111',
 });
+${withAccess ? '' : '// @ts-expect-error -- compiler proof must independently reject missing access\\n'}
 export const currentSourceQuery = app.query({
 ${withAccess ? "  access: { kind: 'public', reason: 'current-source proof fixture' },\n" : ''}
   load: () => ({ proof }),
 });
 const currentSourceRoute = app.route('/', {
   access: app.publicAccess('current-source route fixture'),
-  page: () => trustedHtml('<main>Current source</main>'),
+  page: () =>
+    trustedHtml('<main>Current source</main>', {
+      reason: 'current-source CLI fixture',
+      source: 'src/app.tsx',
+    }),
 });
 
 export default app.assemble({

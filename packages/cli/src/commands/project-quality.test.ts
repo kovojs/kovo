@@ -46,8 +46,8 @@ describe('framework-owned project quality check', () => {
 
       expect(execute).toHaveBeenCalledTimes(2);
       expect(execute.mock.calls.map((call) => call[1]?.slice(1))).toEqual([
-        ['fmt', '--list-different', '--threads=2'],
-        ['lint', '--format=json', '--threads=2'],
+        ['fmt', '--list-different', '--threads=1'],
+        ['lint', '--format=json', '--threads=1'],
       ]);
       expect(result).toMatchObject({ exitCode: 1 });
       expect(result.diagnostics).toEqual([

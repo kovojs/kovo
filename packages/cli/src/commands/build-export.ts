@@ -677,11 +677,6 @@ export async function runSourceCheckCommand(
       assertReadableKovoInputFile(configPath, 'kovo check config');
     }
 
-    // SPEC §6.6 rule 6: source checking evaluates the same authored authority as build. Capture
-    // source/config authority before any authored module is evaluated, but do not interpret a
-    // deployment preset or manufacture a retention declaration merely to make local proof green.
-    const reachableSessionAuthorityFacts =
-      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
     if (configPath !== undefined) {
       runPreEvaluationBuildConfigTrustPreflight(
         configPath,
@@ -691,10 +686,10 @@ export async function runSourceCheckCommand(
       );
     }
 
-    // Keep the independent whole-project analyzers sequential. A copied catalog is deliberately
-    // outside the entry-reachable compiler closure, but TypeScript, formatting, and lint still
-    // inspect it. Overlapping all four processes made valid 44-component apps exceed 2 GiB even
-    // though each phase stayed comfortably below that ceiling on its own.
+    // Keep the independent whole-project analyzers sequential and run them before allocating the
+    // entry-reachable compiler graph. A copied catalog is deliberately outside that closure, but
+    // TypeScript, formatting, and lint still inspect it. Retaining both heaps made valid
+    // 44-component apps exceed 2 GiB even when the processes did not overlap.
     await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
@@ -715,6 +710,12 @@ export async function runSourceCheckCommand(
       );
       if (soundSubset.exitCode !== 0) return soundSubset;
     }
+
+    // SPEC §6.6 rule 6: source checking evaluates the same authored authority as build. Capture
+    // source/config authority before any authored module is evaluated, but only after independent
+    // process preflights have exited and released their bounded heaps.
+    const reachableSessionAuthorityFacts =
+      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
 
     return await deriveCurrentSourceCheck(
       resolvedAppModulePath,
@@ -842,10 +843,6 @@ export async function runBuildCommand(
     const artifactProvenance = resolveKovoArtifactProvenance({
       appModulePath: resolvedAppModulePath,
     });
-    // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
-    // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
-    const reachableSessionAuthorityFacts =
-      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
     const approvedConfig =
       configPath === undefined
         ? undefined
@@ -855,16 +852,11 @@ export async function runBuildCommand(
             security.paranoidStaticAdvisory,
             'build',
           );
-    const loadedConfig = await configurationBoundaryAsync(() =>
-      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
-    );
-    const selectedPreset = configurationBoundary(() =>
-      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
-    );
-    // Run independent whole-project analyzers before entry-reachable loading. Copy-in source still
-    // participates in TypeScript, formatting, lint, and sound-subset proof; overlapping those
-    // processes with Vite/security analysis made otherwise valid catalogs exceed the 2 GiB first-
-    // loop ceiling. TypeScript remains first so the established type-error-first contract holds.
+    // Run independent whole-project analyzers before allocating the entry-reachable compiler graph
+    // or evaluating approved config. Copy-in source still participates in TypeScript, formatting,
+    // lint, and sound-subset proof; retaining compiler/Vite state while the formatter ran made
+    // otherwise valid catalogs exceed the 2 GiB first-loop ceiling. TypeScript remains first so
+    // the established type-error-first contract holds.
     await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
@@ -884,6 +876,16 @@ export async function runBuildCommand(
       );
       if (soundSubset.exitCode !== 0) return soundSubset;
     }
+    // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
+    // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
+    const reachableSessionAuthorityFacts =
+      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    const loadedConfig = await configurationBoundaryAsync(() =>
+      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
+    );
+    const selectedPreset = configurationBoundary(() =>
+      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
+    );
     // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
     // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane

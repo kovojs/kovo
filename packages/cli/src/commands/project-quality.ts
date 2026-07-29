@@ -11,7 +11,7 @@ import type { CliCommandResult } from '../shared.js';
 import { resolveVitePlusBin } from './vite-plus-bin.js';
 
 const MAX_QUALITY_OUTPUT_BYTES = 16 * 1024 * 1024;
-const PROJECT_QUALITY_THREADS = 2;
+const PROJECT_QUALITY_THREADS = 1;
 
 /** @internal Boot-captured process seam for exact orchestration tests. */
 export const projectQualityCommandShell = { execFile };
@@ -42,9 +42,9 @@ export async function runProjectQualityCheck(
     return runnerFailure(protocol, error);
   }
 
-  // Both tools inspect the whole project. Keep their process trees disjoint so copy-in catalogs
-  // remain below the first-loop memory ceiling; concurrency here saved wall time by summing two
-  // independent formatter/linter heaps at the exact point larger apps need bounded behavior.
+  // Both tools inspect the whole project. Keep their process trees disjoint and single-threaded so
+  // copy-in catalogs remain below the first-loop memory ceiling. The formatter's worker heap is
+  // itself the dominant packed-catalog phase, so sequential tools alone are not a sufficient bound.
   const format = await execute(
     executable,
     ['fmt', '--list-different', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
