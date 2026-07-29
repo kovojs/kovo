@@ -711,7 +711,7 @@ export const status = query({
           'export const vault = sqliteTable("vault", {',
           '  id: text("id").primaryKey(),',
           '  secretValue: text("secret_value").notNull(),',
-          '}, kovo({ domain: "vault", key: "id", owner: "id", secret: ["secretValue"] }));',
+          '}, kovo((columns) => ({ domain: "vault", key: columns.id, owner: columns.id, secret: [columns.secretValue] })));',
         ].join('\n'),
         'utf8',
       );

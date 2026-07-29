@@ -2832,7 +2832,7 @@ import { kovo } from '@kovojs/drizzle';
 export const memberships = pgTable('memberships', {
   id: text('id').primaryKey(),
   principalId: text('principal_id').notNull(),
-}, kovo({ domain: 'membership', key: 'id', owner: 'principalId' }));
+}, kovo((columns) => ({ domain: 'membership', key: columns.id, owner: columns.principalId })));
 `,
         'utf8',
       );
@@ -5136,7 +5136,7 @@ function writeSecurityPreflightStaticSources(root: string): void {
       '  ownerId: text("owner_id").notNull(),',
       '  role: text("role").notNull(),',
       '  stock: integer("stock").notNull(),',
-      '}, kovo({ domain: "account", key: "id", owner: "ownerId", governed: ["role"], atomic: "stock" }));',
+      '}, kovo((columns) => ({ domain: "account", key: columns.id, owner: columns.ownerId, governed: [columns.role], atomic: columns.stock })));',
       '',
     ].join('\n'),
     'utf8',
@@ -5205,7 +5205,7 @@ function writeKv414PreflightStaticSources(root: string): void {
       'export const accounts = pgTable("accounts", {',
       '  id: text("id").primaryKey(),',
       '  ownerId: text("owner_id").notNull(),',
-      '}, kovo({ domain: "account", key: (table) => table.id, owner: (table) => table.ownerId }));',
+      '}, kovo((columns) => ({ domain: "account", key: columns.id, owner: columns.ownerId })));',
       '',
     ].join('\n'),
     'utf8',

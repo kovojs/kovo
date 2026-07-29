@@ -119,7 +119,12 @@ describe('Phase 3C semantic carrier integrity', () => {
           export const contacts = pgTable(
             'contacts',
             { classified: text('classified').notNull(), id: text('id').primaryKey() },
-            kovo({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] }),
+            kovo((columns) => ({
+              domain: 'contacts',
+              key: columns.id,
+              readOnly: true,
+              secret: [columns.classified],
+            })),
           );
         `,
       },

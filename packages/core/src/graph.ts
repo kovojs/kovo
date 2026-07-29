@@ -805,7 +805,8 @@ export interface ScopeAuditFact {
 /**
  * A write reaching a GOVERNED column with request-input provenance — the §11.1
  * mass-assignment finding (KV438). Governed columns are owner/principal columns,
- * the primary key, and columns marked `kovo({ governed: true })`. `escape` records
+ * the primary key, and columns marked
+ * `kovo((columns) => ({ governed: [columns.role] }))`. `escape` records
  * an audited author-assertion (`serverValue`/`trustedAssign`) when the write was
  * discharged; `kind: 'reject'` (no escape) is the blocking KV438 error.
  *

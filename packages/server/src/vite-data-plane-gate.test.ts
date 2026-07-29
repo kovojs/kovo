@@ -82,7 +82,7 @@ import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
 
 export const drafts = pgTable("drafts", {
   id: text("id").primaryKey(),
-}, kovo({ domain: "draft", key: "id" }));
+}, kovo((columns) => ({ domain: "draft", key: columns.id })));
 
 export const draftQuery = query("draft", {
   async load(_input: unknown, db: PgAsyncDatabase<any, any>) {
@@ -93,7 +93,7 @@ export const draftQuery = query("draft", {
 
 // KV410: opaque sql<number> projection in a query loader without a declared output schema.
 const KV410_OPAQUE = `
-export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));
+export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull() }, kovo((columns) => ({ domain: "cart", key: columns.cartId })));
 export const cartQuery = query("cart", {
   async load(input, db: PgAsyncDatabase<any, any>) {
     return db.select({ count: sql<number>\`count(*)\` }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
@@ -119,7 +119,7 @@ const KV429_SCHEMA = [
   '  id: text("id").primaryKey(),',
   '  stock: integer("stock").notNull(),',
   '  ver: integer("ver").notNull(),',
-  '}, kovo({ domain: "product", key: "id", atomic: "stock", version: "ver" }));',
+  '}, kovo((columns) => ({ domain: "product", key: columns.id, atomic: columns.stock, version: columns.ver })));',
 ].join('\n');
 
 const KV429_DOMAIN = [
@@ -152,7 +152,7 @@ const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
   '',
   'interface AppRequest { db: PgAsyncDatabase<any, any> }',
-  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id", authzPolicy: sql`TRUE` }));',
+  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo((columns) => ({ domain: "contact", key: columns.id, authzPolicy: sql`TRUE` })));',
   '',
   'export const contactsQuery = query("contacts", {',
   '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
@@ -188,11 +188,11 @@ const DRIZZLE_QUERY_SHAPE_SOURCE = [
   'export const products = pgTable("products", {',
   '  id: text("id").primaryKey(),',
   '  name: text("name").notNull(),',
-  '}, kovo({ domain: "product", key: "id" }));',
+  '}, kovo((columns) => ({ domain: "product", key: columns.id })));',
   'export const reviews = pgTable("reviews", {',
   '  productId: text("product_id"),',
   '  rating: integer("rating"),',
-  '}, kovo({ domain: "review", key: "productId" }));',
+  '}, kovo((columns) => ({ domain: "review", key: columns.productId })));',
   '',
   'export const productQuery = query("product", {',
   '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
@@ -239,7 +239,7 @@ const DRIZZLE_OUTPUT_MERGE_QUERY_SOURCE = [
   '',
   'export const contacts = pgTable("contacts", {',
   '  id: text("id").primaryKey(),',
-  '}, kovo({ domain: "contact", key: "id" }));',
+  '}, kovo((columns) => ({ domain: "contact", key: columns.id })));',
   '',
   'export const contactsQuery = query("contacts", {',
   '  output: s.object({ id: s.string(), total: s.number() }),',
@@ -271,7 +271,7 @@ const DRIZZLE_DERIVED_OUTPUT_QUERY_SOURCE = [
   'export const contacts = pgTable("contacts", {',
   '  id: text("id").primaryKey(),',
   '  status: text("status").notNull(),',
-  '}, kovo({ domain: "contact", key: "id" }));',
+  '}, kovo((columns) => ({ domain: "contact", key: columns.id })));',
   '',
   'export const contactStatsQuery = query({',
   '  output: s.object({',

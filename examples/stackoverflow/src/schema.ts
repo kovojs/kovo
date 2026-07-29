@@ -3,7 +3,7 @@ import { boolean, integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 
 import { answer, question, vote } from './model.js';
 
-// Drizzle tables for the Stack Overflow clone. The kovo({ domain, key })
+// Drizzle tables for the Stack Overflow clone. The kovo((columns) => ({ domain, key }))
 // annotations let the generated graph connect mutations to refreshed queries.
 // SPEC 10.2: the hosted Q&A demo intentionally serves public content; sessionId scopes
 // throwaway demo state, not an authorization boundary.

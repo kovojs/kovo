@@ -1006,7 +1006,8 @@ export const guards = witnessFreeze({
   },
   /**
    * Proof-bearing ownership guard (SPEC §10.3). The second argument is the exact single-column
-   * `kovo({ key })` identity from a compiler-generated direct-owner Postgres table. Kovo performs
+   * `kovo((columns) => ({ key: columns.id }))` identity from a compiler-generated direct-owner
+   * Postgres table. Kovo performs
    * one fixed key/owner lookup through the same principal-scoped managed request DB that the
    * handler receives. SQLite, ownerVia, composite/custom keys, and arbitrary callbacks belong on
    * {@link unprovenOwns} and remain visibly unproven in authorization explain.

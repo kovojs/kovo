@@ -41,7 +41,7 @@ const scopedTicketFiles: SourceFileInput[] = [
       '  tenantId: text("tenant_id").notNull(),',
       '  id: text("id").notNull(),',
       '  status: text("status").notNull(),',
-      '}, kovo({ domain: "ticket", key: "tenantId,id" }));',
+      '}, kovo((columns) => ({ domain: "ticket", key: [columns.tenantId, columns.id] })));',
       '',
       'function currentTenantId(context: { request?: { session?: { tenantId?: string } | null } }) {',
       '  if (!context.request?.session?.tenantId) throw new Error("tenant required");',

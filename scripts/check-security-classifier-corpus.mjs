@@ -677,7 +677,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/better-auth/src/index.schema-materialize.test.ts',
         snippets: [
           'keeps credential-table annotations after late schema-control poisoning',
-          "kovo({ domain: 'auth', key: 'userId', secret: ['token'] })",
+          "kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] }))",
           'Object.keys = (() => [])',
           'RegExp.prototype.exec = (() => null)',
         ],

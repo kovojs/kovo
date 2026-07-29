@@ -1,8 +1,9 @@
 /**
  * KV429 RUNTIME — Stale-version conflict signal for optimistic-concurrency mutations.
  *
- * SPEC §10.3/§11.1 (KV429): a mutation handler annotated with `kovo({ version })` or
- * `kovo({ atomic })` MUST fold check+act into one UPDATE…WHERE. When 0 rows are updated
+ * SPEC §10.3/§11.1 (KV429): a mutation handler whose table declares
+ * `kovo((columns) => ({ atomic: columns.stock, version: columns.lockVersion }))` MUST fold
+ * check+act into one UPDATE…WHERE. When 0 rows are updated
  * (i.e. the version predicate did not match — the row was concurrently modified since the
  * version was read), the handler throws a `StaleVersionError`. The `runMutation` lifecycle
  * catches this error and returns a typed HTTP 409 (`STALE_VERSION`) outcome distinct from

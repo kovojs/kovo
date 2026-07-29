@@ -956,7 +956,7 @@ export const diagnosticDefinitions = {
     help: [
       'Would lower to: an explicit DB-engine fan-out edge that unions trigger-written domains into the mutation touch graph.',
       'Blocked reason: a detected database trigger can mutate data outside the static Drizzle write chain, so invalidation would miss the affected domain.',
-      'Fixes: declare kovo({ fans: [{ via, domain, when }] }) for the trigger fan-out, move the side-effect into a modeled domain write, or mark the table exempt only when no UI reads it.',
+      "Fixes: declare kovo((columns) => ({ fans: [{ via: columns.parentId, domain: 'parent', when: 'update' }] })) for the trigger fan-out, move the side-effect into a modeled domain write, or mark the table exempt only when no UI reads it.",
       'SPEC §10.1 and §11.1 require DB-engine side effects that cannot be derived statically to be declared and checked.',
     ].join('\n'),
     severity: 'error',
@@ -1143,7 +1143,7 @@ export const diagnosticDefinitions = {
   KV429: {
     code: 'KV429',
     help: [
-      'Would lower to: a compare-and-set (UPDATE ... WHERE) or kovo({ version }) optimistic-concurrency guard folding the check and the act into one statement.',
+      'Would lower to: a compare-and-set (UPDATE ... WHERE) or kovo((columns) => ({ version: columns.lockVersion })) optimistic-concurrency guard folding the check and the act into one statement.',
       'Blocked reason: a read-then-write on a declared atomic/version column without a CAS/version guard is a lost-update race — two concurrent read-decide-write requests survive auth and validation and overwrite each other (oversell, double-spend, coupon reuse).',
       'Fixes: use the typed compare-and-set helper or carry the row version and reject a stale write with the typed 409/422 path; add a DB CHECK/unique constraint as the fail-closed backstop.',
       'SPEC §6.6/§10.3 and secure-framework Phase 6: the mutation transaction (READ COMMITTED) alone does not prevent lost-update; multi-row invariants need forUpdate/SERIALIZABLE and are not by-construction.',
@@ -1220,7 +1220,7 @@ export const diagnosticDefinitions = {
   KV438: {
     code: 'KV438',
     help: [
-      'Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.',
+      'Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo((columns) => ({ governed: [columns.role] }))) receive only server-derived, literal, or explicitly-asserted values — never raw request input.',
       'Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).',
       "Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, { invariant: 'governed-write.authorized-principal', why: ..., evidence: ... }) with the exact inline structured obligation (surfaced in kovo explain --capabilities and emitted for detached review). App analyzer summaries cannot declare server provenance.",
       'SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).',
@@ -1265,7 +1265,7 @@ export const diagnosticDefinitions = {
     code: 'KV447',
     help: [
       'Would lower to: a SQLite owner-annotated table whose owner metadata is available to static audits but is not backed by database roles or RLS at runtime.',
-      "Blocked reason: SQLite has no engine role/RLS layer, so kovo({ owner }) and ownerVia annotations cannot provide Kovo's multi-principal authorization guarantee in the experimental SQLite starter.",
+      "Blocked reason: SQLite has no engine role/RLS layer, so kovo((columns) => ({ owner: columns.ownerId })) and ownerVia annotations cannot provide Kovo's multi-principal authorization guarantee in the experimental SQLite starter.",
       'Fixes: use the default PGlite/Postgres runtime for multi-tenant authorization, or treat the SQLite starter as single-principal/local-only and do not rely on owner scoping for confidentiality or integrity.',
       'SPEC §10.3 and fundamental-fixes-followup-6 DEC-A: SQLite is explicitly experimental and non-guaranteeing for owner-scoped runtime authorization.',
     ].join('\n'),

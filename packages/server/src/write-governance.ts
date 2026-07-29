@@ -1,7 +1,8 @@
 // SPEC §10.3/§11.1 — the §11.1 mass-assignment write-provenance gate's runtime escapes.
 //
 // The KV438 gate is a static, by-construction check: a governed column (owner/principal
-// columns, the primary key, and `kovo({ governed: true })` columns) may only receive a
+// columns, the primary key, and
+// `kovo((columns) => ({ governed: [columns.role] }))` columns) may only receive a
 // server-derived, literal, or explicitly-asserted value — never raw request input.
 //
 // These two helpers are the author-assertion escapes (SPEC §6.6: audit-grade, NOT a
