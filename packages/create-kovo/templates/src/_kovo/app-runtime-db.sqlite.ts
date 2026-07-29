@@ -17,7 +17,6 @@ import {
   user,
   verification,
 } from '../schema.js';
-import type { AppReadonlyDb } from '../db.js';
 import type { AppSession } from '../auth.js';
 
 // SPEC §6.6/§10.3: generated source carries only declarative Drizzle tables, structured seed
@@ -96,8 +95,6 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
   });
 }
 
-/** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
-export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;
 export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
 
 /** Framework construction token; it is not callable and has no raw/native database properties. */

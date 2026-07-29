@@ -1,5 +1,5 @@
-import type { Guard } from './guards.js';
 import { snapshotAuditReason } from './audit-justification.js';
+import type { GuardResult } from './guards.js';
 import {
   createWitnessWeakMap,
   createWitnessWeakSet,
@@ -32,7 +32,9 @@ export interface VerifiedMachineAccess {
  * `publicAccess(reason)` and `verifiedAccess` are the explicit no-guard sentinels.
  */
 export type AccessDecision =
-  | readonly Guard<never, never>[]
+  | readonly {
+      (...args: never[]): GuardResult | Promise<GuardResult>;
+    }[]
   | PublicAccess
   | VerifiedMachineAccess;
 
@@ -50,9 +52,9 @@ const invalidAccessDecision = witnessFreeze([undefined]) as unknown as AccessDec
 witnessWeakSetAdd(snapshottedGuardAccessDecisions, invalidAccessDecision as object);
 
 /** @internal Test whether an access decision is an executable guard array. */
-export function isGuardAccessDecision(
-  access: AccessDecision | undefined,
-): access is readonly Guard<never, never>[] {
+export function isGuardAccessDecision(access: AccessDecision | undefined): access is readonly {
+  (...args: never[]): GuardResult | Promise<GuardResult>;
+}[] {
   return nativeArrayIsArray(access);
 }
 
@@ -64,7 +66,9 @@ export function isGuardAccessDecision(
  */
 export function isExecutableGuardAccessDecision(
   access: AccessDecision | undefined,
-): access is readonly Guard<never, never>[] {
+): access is readonly {
+  (...args: never[]): GuardResult | Promise<GuardResult>;
+}[] {
   return executableGuardAccessDecision(access) !== undefined;
 }
 
@@ -75,9 +79,11 @@ export function isExecutableGuardAccessDecision(
  * caller-owned value. A Proxy can make `getOwnPropertyDescriptor(0)` expose a guard while `get(0)`
  * returns `undefined`; reconstructing once closes that validation/use gap (SPEC §6.6 C9/§10.2).
  */
-export function executableGuardAccessDecision(
-  access: AccessDecision | undefined,
-): readonly Guard<never, never>[] | undefined {
+export function executableGuardAccessDecision(access: AccessDecision | undefined):
+  | readonly {
+      (...args: never[]): GuardResult | Promise<GuardResult>;
+    }[]
+  | undefined {
   if (!nativeArrayIsArray(access)) return undefined;
   const snapshot = snapshotAccessDecision(access);
   if (!nativeArrayIsArray(snapshot) || snapshot.length === 0) return undefined;
@@ -93,7 +99,9 @@ export function executableGuardAccessDecision(
     }
   }
 
-  return snapshot as readonly Guard<never, never>[];
+  return snapshot as readonly {
+    (...args: never[]): GuardResult | Promise<GuardResult>;
+  }[];
 }
 
 /**

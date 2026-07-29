@@ -389,8 +389,8 @@ export interface AppEndpointFactory<Db, Owner extends string | undefined> {
   >(
     path: Path,
     definition: {
-      access?: AccessDecision;
-      auth?: EndpointAuthDeclaration;
+      access: AccessDecision;
+      auth: EndpointAuthDeclaration;
       handler:
         | ((request: EndpointRequest) => Promise<Response> | Response)
         | ((

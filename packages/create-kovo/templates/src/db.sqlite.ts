@@ -1,7 +1,4 @@
-import type { Reader } from '@kovojs/server';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-
-import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
 
 // App-facing database surface. SPEC §9.4 and §10.3 make endpoint/query reads the
 // safe public shape; raw creation and the write-capable provider live under
@@ -9,7 +6,3 @@ import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
 
 /** The app runtime database. */
 export type AppDb = BetterSQLite3Database;
-export type AppReadonlyDb = Reader<AppDb>;
-
-/** The running app read surface. Endpoint/user-authored reads should import this value. */
-export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb;

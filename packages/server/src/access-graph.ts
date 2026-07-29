@@ -223,11 +223,18 @@ function missingAccessFact(kind: AccessExplainFact['kind'], name: string): Acces
   };
 }
 
-function accessGuardNames(access: readonly import('./guards.js').Guard<any, any>[]): string[] {
+function accessGuardNames(
+  access: readonly {
+    (
+      ...args: never[]
+    ): import('./guards.js').GuardResult | Promise<import('./guards.js').GuardResult>;
+  }[],
+): string[] {
   const names: string[] = [];
   denseOwnArrayForEach(
     access,
-    (guard) => appendDenseOwnArrayValue(names, guardAuditName(guard)),
+    (guard) =>
+      appendDenseOwnArrayValue(names, guardAuditName(guard as import('./guards.js').Guard<never>)),
     'Access guard audit ledger',
   );
   return names;

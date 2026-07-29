@@ -1,5 +1,10 @@
 import { createHmac } from 'node:crypto';
-import { hmacSignature, type HmacSignatureOptions, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
+import { inspectFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import {
+  hmacSignature,
+  type HmacSignatureOptions,
+  type HmacSignatureVerifier,
+} from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -580,10 +585,11 @@ describe('structured access metadata', () => {
       secret: authoredSecret,
     };
     const verifier = hmacSignature(options);
+    const inspection = inspectFrameworkHmacSignatureVerifier(verifier);
     // Public inspection metadata never contains provider signing material; the private verify
     // authority owns its construction-time snapshot.
-    expect(verifier.config).not.toHaveProperty('secret');
-    expect(verifier.resolved).not.toHaveProperty('secret');
+    expect(inspection.config).not.toHaveProperty('secret');
+    expect(inspection.resolved).not.toHaveProperty('secret');
     const declared = webhook('/hmac-verifier-snapshot', {
       handler: () => {
         handlerCalls += 1;
@@ -612,7 +618,7 @@ describe('structured access metadata', () => {
     expect((await handle(request())).status).toBe(401);
     expect(handlerCalls).toBe(0);
     expect(Object.isFrozen(verifier)).toBe(true);
-    expect(Object.isFrozen(verifier.config)).toBe(true);
+    expect(Object.isFrozen(inspection.config)).toBe(true);
   });
 
   it('rejects a structural object that forges HMAC verifier audit metadata', () => {
@@ -947,7 +953,7 @@ describe('structured access metadata', () => {
     });
     const guardedEndpoint = endpoint('/machine/access', {
       access: publicAccess('audit metadata only'),
-      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      auth: { kind: 'verifier', name: verifier.scheme, verify: verifier },
       csrf: false,
       csrfJustification: 'machine auth test',
       handler: () => new Response('ok'),

@@ -1443,7 +1443,7 @@ export async function runGuardChain<Request>(
     };
   }
   for (let index = 0; index < executable.length; index += 1) {
-    const item = executable[index]!;
+    const item = executable[index]! as Guard<Request>;
     const failure = await runGuard(item, request);
     if (failure) return failure;
   }

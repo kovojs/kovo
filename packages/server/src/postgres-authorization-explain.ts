@@ -293,7 +293,7 @@ function guardFactsForDeclaration(
   const guards = executableGuardAccessDecision(access);
   if (guards === undefined) return [];
   const facts: GuardAuditFact[] = [];
-  for (const guard of guards) facts.push(...explainGuard(guard));
+  for (const guard of guards) facts.push(...explainGuard(guard as Guard<never>));
   return facts;
 }
 

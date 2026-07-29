@@ -1,4 +1,5 @@
-import { s, type JsonValue } from '@kovojs/server';
+import type { JsonValue } from '@kovojs/core';
+import { s } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
 import { app } from './kovo.js';

@@ -1,4 +1,5 @@
-import { createMemoryVersionedClientModuleRegistry, defineKovo, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 
 import { createCrmDb, FALLBACK_CRM_DEMO_SESSION_ID, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';

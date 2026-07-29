@@ -61,10 +61,7 @@ describe('defineKovo provider-typed authoring context', () => {
       env: s.object({ STORE_NAME: s.string() }),
       envSource: { STORE_NAME: 'Kovo Shop' },
     });
-    const authenticatedAdmin = contract.all(
-      contract.authenticated,
-      contract.role('admin'),
-    );
+    const authenticatedAdmin = contract.all(contract.authenticated, contract.role('admin'));
 
     const add = assignDerivedMutationKey(
       contract.mutation({
@@ -104,8 +101,7 @@ describe('defineKovo provider-typed authoring context', () => {
           void failure.payload.remaining;
           void available;
         }
-        const submittedProductId: string | undefined =
-          forms.add.submitted?.productId;
+        const submittedProductId: string | undefined = forms.add.submitted?.productId;
         // @ts-expect-error submitted fields come from the mutation input schema.
         void forms.add.submitted?.renamedProductId;
         // @ts-expect-error form error codes follow the mutation declaration.
@@ -154,9 +150,7 @@ describe('defineKovo provider-typed authoring context', () => {
         // @ts-expect-error layouts receive the read-only DB projection.
         request.db.insert('p1');
         const stock: number = request.db.select();
-        return renderedHtml(
-          `${String(children)}:${userId}:${stock}:${request.env.STORE_NAME}`,
-        );
+        return renderedHtml(`${String(children)}:${userId}:${stock}:${request.env.STORE_NAME}`);
       },
     });
     const cartRoute = contract.route('/cart', {
@@ -247,5 +241,63 @@ describe('defineKovo provider-typed authoring context', () => {
       'app-authoring transaction test',
     );
     expect(app.mutations.map((candidate) => candidate.key)).toEqual(['cart/add-tx-typed']);
+  });
+
+  it('infers endpoint DB posture and task input while requiring the complete endpoint posture', () => {
+    const proveEndpointAndTaskTypes = () => {
+      const contract = defineKovo({
+        appId: '7233b25b-c60d-413d-96ee-56ceea53c379',
+        db: () => ({
+          select() {
+            return ['healthy'];
+          },
+        }),
+        egress: { enabled: false, justification: 'isolated endpoint/task typing test' },
+      });
+
+      const health = contract.endpoint('/api/health', {
+        access: contract.publicAccess('public health probe'),
+        auth: { justification: 'public health probe', kind: 'none' },
+        csrf: false,
+        csrfJustification: 'safe-method health probe',
+        db: true,
+        async handler(_request, context) {
+          const scope = await context.actAs('health-probe');
+          const rows: string[] = scope.db.read.select();
+          // @ts-expect-error safe-method endpoints never receive a write capability.
+          void scope.db.write;
+          return Response.json({ rows });
+        },
+        method: 'GET',
+        reason: 'read-only machine health probe',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+
+      const refresh = contract.task({
+        input: s.object({ contactId: s.string() }),
+        run(input) {
+          const contactId: string = input.contactId;
+          // @ts-expect-error task input follows the declared schema.
+          const invalidContactId: number = input.contactId;
+          return { contactId, invalidContactId };
+        },
+      });
+
+      const assertMissingEndpointPosture = () => {
+        // @ts-expect-error app.endpoint requires explicit access and auth decisions.
+        contract.endpoint('/api/unsafe-defaults', {
+          csrf: false,
+          csrfJustification: 'negative typing fixture',
+          handler: () => new Response('unreachable'),
+          method: 'GET',
+          reason: 'negative typing fixture',
+          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        });
+      };
+
+      return { assertMissingEndpointPosture, health, refresh };
+    };
+
+    expect(proveEndpointAndTaskTypes).toBeTypeOf('function');
   });
 });
