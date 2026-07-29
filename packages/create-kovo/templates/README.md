@@ -52,11 +52,6 @@ they have a framework-owned audit path.
 successful `pnpm run build:prod`. The generated CI workflow keeps that deployment-backed probe
 separate from the source-only quick loop.
 
-Install note: Better Auth currently marks `drizzle-orm@^0.45.2` as an optional
-peer while this starter uses Drizzle `1.0.0-rc.4`. The resulting pnpm peer warning
-is expected; Kovo's Better Auth adapter and starter tests cover this Drizzle 1.0
-shape.
-
 ## Dependency install scripts
 
 Dependency lifecycle scripts are denied by default. The only reviewed build exception is the exact

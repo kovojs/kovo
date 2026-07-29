@@ -188,10 +188,10 @@ describe('create-kovo starter (metadata)', () => {
         '@kovojs/style': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@kovojs/ui': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@node-rs/argon2': '2.0.2',
-        'better-auth': expect.any(String),
         'drizzle-orm': expect.any(String),
         pg: expect.any(String),
       });
+      expect(packageJson.dependencies).not.toHaveProperty('better-auth');
       expect(Object.values(packageJson.dependencies ?? {})).not.toContain('workspace:*');
       expect(Object.values(packageJson.devDependencies ?? {})).not.toContain('workspace:*');
       for (const [name, version] of Object.entries({
@@ -258,9 +258,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(ciWorkflow).not.toContain('run: kovo build');
 
       const readme = readFileSync(join(root, 'README.md'), 'utf8');
-      expect(readme).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
-      expect(readme).toContain('peer warning');
-      expect(readme).toContain('is expected');
+      expect(readme).not.toContain('peer warning');
       expect(readme).toContain('keep that posture in your process');
       expect(readme).toContain('blocks private-network egress by default');
       expect(readme).toContain('KOVO_DATA_DIR');
@@ -337,7 +335,7 @@ describe('create-kovo starter (metadata)', () => {
       'const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const authSystemDb = appDatabase.systemDb({',
+      'const authSystemDb = postgresSystemDbForGeneratedIntegration(appDatabase, {',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('function lazyAppDatabaseValue');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
@@ -1124,7 +1122,7 @@ describe('create-kovo starter (metadata)', () => {
       'const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const authSystemDb = appDatabase.systemDb({',
+      'const authSystemDb = sqliteSystemDbForGeneratedIntegration(appDatabase, {',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('better-sqlite3');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('drizzleAdapter');
@@ -1173,10 +1171,8 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
     expect(files.get('README.md')).toContain('single-principal local-development');
     expect(files.get('README.md')).toContain('Kovo authorization/confidentiality guarantees');
-    expect(files.get('README.md')).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
-    expect(files.get('README.md')).toContain('peer warning');
+    expect(files.get('README.md')).not.toContain('peer warning');
     expect(files.get('README.md')).toContain('BETTER_AUTH_URL');
-    expect(files.get('README.md')).toContain('is expected');
   });
 
   it('rejects scaffolding through a symlinked app-root parent', () => {

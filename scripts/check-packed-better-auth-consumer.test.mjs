@@ -15,7 +15,7 @@ describe('packed Better Auth consumer proof', () => {
   it('accepts only the reviewed human/generated topology', () => {
     expect(() =>
       assertPackedBetterAuthManifest({
-        dependencies: { '@kovojs/server': '0.2.0' },
+        dependencies: { '@kovojs/server': '0.2.0', 'better-auth': '1.6.17' },
         exports: {
           '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
           './generated': {
@@ -32,7 +32,6 @@ describe('packed Better Auth consumer proof', () => {
           },
         },
         name: '@kovojs/better-auth',
-        peerDependencies: { 'better-auth': '1.6.17' },
         version: '0.2.0',
       }),
     ).not.toThrow();
@@ -80,11 +79,11 @@ describe('packed Better Auth consumer proof', () => {
     ).toThrow('human root');
   });
 
-  it('pins all packed Kovo packages while installing the reviewed direct peer', () => {
+  it('pins all packed Kovo packages without duplicating the adapter-owned provider', () => {
     const result = packedBetterAuthConsumerManifest(
       [
         {
-          manifest: { peerDependencies: { 'better-auth': '1.6.17' } },
+          manifest: { dependencies: { 'better-auth': '1.6.17' } },
           name: '@kovojs/better-auth',
           tarball: '.release/better-auth.tgz',
         },
@@ -117,10 +116,10 @@ describe('packed Better Auth consumer proof', () => {
       '@types/node': '25.9.2',
       '@types/better-sqlite3': '^7.6.13',
       '@types/pg': '^8.15.6',
-      'better-auth': '1.6.17',
       'better-sqlite3': '12.11.1',
       pg: '8.18.0',
     });
+    expect(result.dependencies).not.toHaveProperty('better-auth');
     expect(result.dependencies).not.toHaveProperty('optional');
     expect(result.pnpm.onlyBuiltDependencies).toEqual(['better-sqlite3']);
   });

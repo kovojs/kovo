@@ -20,11 +20,10 @@ function rootPackage({ check = true, command = true } = {}) {
   });
 }
 
-function providerPackage({ development = '1.6.17', optional = false, peer = '1.6.17' } = {}) {
+function providerPackage({ implementation = '1.6.17', peer } = {}) {
   return JSON.stringify({
-    devDependencies: { 'better-auth': development },
-    peerDependencies: { 'better-auth': peer },
-    ...(optional ? { peerDependenciesMeta: { 'better-auth': { optional: true } } } : {}),
+    dependencies: { 'better-auth': implementation },
+    ...(peer === undefined ? {} : { peerDependencies: { 'better-auth': peer } }),
   });
 }
 
@@ -90,7 +89,7 @@ function run(overrides = {}) {
 }
 
 describe('Better Auth provider pin gate (C13 anchor)', () => {
-  it('accepts one exact provider version across peer, development, TCB, and lockfile', () => {
+  it('accepts one exact provider version across the adapter dependency, TCB, and lockfile', () => {
     expect(run()).toEqual({
       findings: [],
       ok: true,
@@ -98,18 +97,22 @@ describe('Better Auth provider pin gate (C13 anchor)', () => {
     });
   });
 
-  it('kills widened, optional, and independently drifted peer declarations', () => {
-    expect(
-      run({ 'packages/better-auth/package.json': providerPackage({ peer: '^1.6.0' }) }).findings,
-    ).toEqual(expect.arrayContaining([expect.stringContaining('peerDependencies.better-auth')]));
-    expect(
-      run({ 'packages/better-auth/package.json': providerPackage({ optional: true }) }).findings,
-    ).toEqual(expect.arrayContaining([expect.stringContaining('must remain a required peer')]));
+  it('kills widened, missing, and peer-owned provider declarations', () => {
     expect(
       run({
-        'packages/better-auth/package.json': providerPackage({ development: '1.6.18' }),
+        'packages/better-auth/package.json': providerPackage({ implementation: '^1.6.0' }),
       }).findings,
-    ).toEqual(expect.arrayContaining([expect.stringContaining('devDependencies.better-auth')]));
+    ).toEqual(expect.arrayContaining([expect.stringContaining('dependencies.better-auth')]));
+    expect(
+      run({
+        'packages/better-auth/package.json': JSON.stringify({ dependencies: {} }),
+      }).findings,
+    ).toEqual(expect.arrayContaining([expect.stringContaining('dependencies.better-auth')]));
+    expect(
+      run({
+        'packages/better-auth/package.json': providerPackage({ peer: '1.6.17' }),
+      }).findings,
+    ).toEqual(expect.arrayContaining([expect.stringContaining('peerDependencies.better-auth')]));
   });
 
   it('kills TCB disagreement and a lockfile that lacks the exact subject', () => {

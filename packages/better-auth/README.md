@@ -5,7 +5,7 @@ sanitized session provider, CSRF-protected sign-in/sign-out mutations, auth guar
 and an opaque redirect-protocol mount.
 
 ```sh
-pnpm add @kovojs/better-auth better-auth
+pnpm add @kovojs/better-auth
 ```
 
 Kovo-generated server assembly imports

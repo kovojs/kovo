@@ -21,9 +21,11 @@ export const providerGateCommand =
   'node scripts/security-cost-budget-runner.mjs --gate auth-provider-pin';
 
 /**
- * Bind the public Better Auth peer to the exact implementation whose lifecycle behavior Kovo
- * characterizes. The general TCB gate owns dependency integrity; this narrower gate closes the
- * peer-dependency hole and makes its own root-check enrollment non-optional (SPEC §6.6).
+ * Bind the Better Auth adapter to the exact implementation whose lifecycle behavior Kovo
+ * characterizes. The adapter owns this implementation dependency so consumers do not have to
+ * reconcile Better Auth's optional Drizzle peer with Kovo's reviewed Drizzle version. The general
+ * TCB gate owns dependency integrity; this narrower gate keeps the provider pin and its own
+ * root-check enrollment non-optional (SPEC §6.6).
  */
 export function checkAuthProviderPin(options = {}) {
   const root = options.repoRoot ?? repoRoot;
@@ -77,21 +79,14 @@ export function checkAuthProviderPin(options = {}) {
   if (pinnedVersion !== undefined && providerManifest !== undefined) {
     requireExactSpecifier(
       providerManifest,
-      'devDependencies',
+      'dependencies',
       providerDependency,
       pinnedVersion,
       findings,
     );
-    requireExactSpecifier(
-      providerManifest,
-      'peerDependencies',
-      providerDependency,
-      pinnedVersion,
-      findings,
-    );
-    if (providerManifest.peerDependenciesMeta?.[providerDependency]?.optional === true) {
+    if (providerManifest.peerDependencies?.[providerDependency] !== undefined) {
       findings.push(
-        `${providerPackageJsonPath}: peerDependencies.${providerDependency} must remain a required peer`,
+        `${providerPackageJsonPath}: peerDependencies.${providerDependency} must be absent because the adapter owns the pinned implementation`,
       );
     }
   }

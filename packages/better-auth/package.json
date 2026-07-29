@@ -51,14 +51,11 @@
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",
-    "@kovojs/server": "workspace:*"
+    "@kovojs/server": "workspace:*",
+    "better-auth": "1.6.17"
   },
   "devDependencies": {
-    "better-auth": "1.6.17",
     "vitest": "4.1.8"
-  },
-  "peerDependencies": {
-    "better-auth": "1.6.17"
   },
   "kovoPublish": {
     "extraEntries": [

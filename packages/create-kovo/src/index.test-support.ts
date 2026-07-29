@@ -305,7 +305,6 @@ export function linkStarterBuildDependencies(root: string): void {
   );
   symlinkSync(resolveDependencyRoot('@node-rs/argon2'), join(nodeModules, '@node-rs/argon2'));
   for (const pkg of [
-    'better-auth',
     'better-sqlite3',
     'drizzle-orm',
     'kovo',

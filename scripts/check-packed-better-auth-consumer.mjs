@@ -103,7 +103,8 @@ export function assertPackedBetterAuthManifest(manifest) {
     }
   }
   if (
-    manifest.peerDependencies?.['better-auth'] !== '1.6.17' ||
+    manifest.dependencies?.['better-auth'] !== '1.6.17' ||
+    manifest.peerDependencies?.['better-auth'] !== undefined ||
     manifest.dependencies?.[SERVER_PACKAGE] === undefined
   ) {
     throw new Error('Packed Better Auth dependencies drifted from the reviewed adapter boundary');
@@ -201,7 +202,6 @@ export function packedBetterAuthConsumerManifest(packedPackages, packageManager,
       ...serverTypeDependencies,
       ...sqliteRuntimeDependencies,
       ...requiredServerPeers,
-      ...betterAuth.manifest.peerDependencies,
     },
     name: 'kovo-packed-better-auth-consumer',
     packageManager,
@@ -242,7 +242,7 @@ export function checkPackedBetterAuthConsumer() {
     );
     runCommand(
       'pnpm',
-      ['install', '--ignore-scripts', '--no-frozen-lockfile', '--strict-peer-dependencies=false'],
+      ['install', '--ignore-scripts', '--no-frozen-lockfile', '--strict-peer-dependencies'],
       consumerRoot,
       'install',
     );
