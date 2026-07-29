@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.9",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.10",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -10204,7 +10204,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "21c547ac1df06818a982f705cc1c639419df8a160c1fe33aaf29640d64a0e96b"
+      "sourceTreeSha256": "491852bcf01cab9a42d746b793b1c40e8d14307c58ca0402664ca0ca2821a907"
     },
     {
       "manifestVariants": [

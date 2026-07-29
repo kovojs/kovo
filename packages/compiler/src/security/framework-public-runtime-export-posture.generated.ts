@@ -32,7 +32,7 @@ export type FrameworkExportPostureGroup = readonly [
 ];
 
 export const frameworkExportPostureSummaryVersion =
-  'kovo-framework-public-runtime-export-posture/2026-07-28.9' as const;
+  'kovo-framework-public-runtime-export-posture/2026-07-28.10' as const;
 
 // Exact package-name closures for first-party packages with no app-public runtime surface.
 // The analyzer executable is authenticated by the release/install channel, not by itself.
@@ -5439,7 +5439,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:dd2cd54c5d4c33ea278c0578c94fee9c549fd760bd38a1cd684e7517e779d29c"]],
+    ], ["kovo-packed-tree-sha256:beb3bc011d435b435725b7338014fa8856944d5484f582ff7134554be2679c40"]],
     ["sha256:59194e9f5c31a6176a92a8d37a9728860479a4ba55e1dd8b4570b8c0ed4977ea", [
       [".",["default","types"]],
       ["./build",["default","types"]],
@@ -5447,7 +5447,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default","types"]],
       ["./testing",["default","types"]],
       ["./vite",["default","types"]],
-    ], ["kovo-packed-tree-sha256:dd2cd54c5d4c33ea278c0578c94fee9c549fd760bd38a1cd684e7517e779d29c"]],
+    ], ["kovo-packed-tree-sha256:beb3bc011d435b435725b7338014fa8856944d5484f582ff7134554be2679c40"]],
     ["sha256:a924be77487f1241978f78c7214ecb5db96225a2ae60c3c0172ca4c90170055b", [
       [".",["default"]],
       ["./build",["default"]],
@@ -5455,7 +5455,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./sqlite",["default"]],
       ["./testing",["default"]],
       ["./vite",["default"]],
-    ], ["kovo-source-tree-sha256:21c547ac1df06818a982f705cc1c639419df8a160c1fe33aaf29640d64a0e96b"]],
+    ], ["kovo-source-tree-sha256:491852bcf01cab9a42d746b793b1c40e8d14307c58ca0402664ca0ca2821a907"]],
   ], "exact-implementation"],
   ["@kovojs/style", "0.2.0", [
     ["sha256:2e071714c73748fd43018c9c06e8bab0b41326ee0d43c1b3af862f6a125778b0", [
