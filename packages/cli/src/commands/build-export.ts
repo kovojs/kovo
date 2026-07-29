@@ -814,18 +814,14 @@ export function abortKovoBuildOutputTransaction(transaction: KovoBuildOutputTran
   rmSync(transaction.stagedOutDir, { force: true, recursive: true });
 }
 
-function writeKovoBuildDebugEvidence(
+/** @internal Persist only framework-owned, non-secret facts for an explicitly requested failure. */
+export function writeKovoBuildDebugEvidence(
   transaction: KovoBuildOutputTransaction,
   error: unknown,
   security: KovoCommandSecurityDisposition,
 ): void {
   if (kovoInvocationEnvironmentValue(security.invocationEnv, 'KOVO_BUILD_DEBUG') !== '1') return;
   const debugDir = join(security.invocationCwd, '.kovo', 'debug', transaction.buildId);
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  const redactedMessage = rawMessage
-    .replaceAll(security.invocationCwd, '<project>')
-    .replaceAll(transaction.stagedOutDir, '<staging>')
-    .slice(0, 2_000);
   mkdirSync(debugDir, { recursive: true });
   writeFileSync(
     join(debugDir, 'build.json'),
@@ -833,7 +829,8 @@ function writeKovoBuildDebugEvidence(
       {
         buildId: transaction.buildId,
         errorClass: error instanceof KovoCommandConfigurationError ? 'configuration' : 'finding',
-        message: redactedMessage,
+        message:
+          'Kovo build failed before output promotion; rerun the same command for the producer-owned diagnostic.',
         schema: 'kovo.build-debug/v1',
         status: 'failed',
       },

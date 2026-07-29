@@ -82,7 +82,13 @@ describe('graph input reading', () => {
           (value.proof as Record<string, unknown>).sourceSetDigest = `sha256:${'0'.repeat(64)}`;
         },
         (value: Record<string, unknown>) => {
+          (value.proof as Record<string, unknown>).configDigest = `sha256:${'0'.repeat(64)}`;
+        },
+        (value: Record<string, unknown>) => {
           (value.analysisInputs as Record<string, unknown>).runtimeTarget = 'vercel';
+        },
+        (value: Record<string, unknown>) => {
+          (value.proof as Record<string, unknown>).compilerVersion = 'stale';
         },
         (value: Record<string, unknown>) => {
           (

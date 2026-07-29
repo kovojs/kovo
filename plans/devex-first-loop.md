@@ -39,15 +39,25 @@ proof; shared root verification belongs in the latest-verification block.
 - [x] Separate source/check proof from deployment-only preset, retention, and skew proof.
   - Evidence: both starter source-check fixtures pass without deployment posture while the same
     focused CLI suite proves `kovo build` still rejects missing SPEC §14 retention.
-- [ ] Stamp graph/cache facts with source-set, compiler, config, app-build, completion, and posture
+- [x] Stamp graph/cache facts with source-set, compiler, config, app-build, completion, and posture
       identities.
-- [ ] Require explicit `--artifact <path>` plus matching identities for built-graph inspection.
-- [ ] Stage builds outside `dist`, atomically promote a complete build, and preserve the last
+  - Evidence: `packages/cli/src/graph-input.test.ts` recomputes and adversarially mutates every
+    `kovo.graph.proof/v1` identity before artifact admission.
+- [x] Require explicit `--artifact <path>` plus matching identities for built-graph inspection.
+  - Evidence: the graph-input suite rejects a proved build graph in review mode and admits it only
+    through explicit artifact mode with an intact proof and runtime-posture subject.
+- [x] Stage builds outside `dist`, atomically promote a complete build, and preserve the last
       known-good `dist` after failure.
-- [ ] Keep failed-build debug facts redacted under `.kovo/debug/<build-id>` and out of deploy
+  - Evidence: the transactional-output suite proves complete promotion, rollback, and abort preserve
+    last-good output from a unique sibling staging tree.
+- [x] Keep failed-build debug facts redacted under `.kovo/debug/<build-id>` and out of deploy
       output.
-- [ ] Add stale, partial, wrong-app, wrong-compiler, wrong-config, and failed-build adversarial
+  - Evidence: the transactional-output suite proves opt-in evidence contains only framework-owned
+    safe fields, copies no exception/environment secret or local path, and never enters `dist`.
+- [x] Add stale, partial, wrong-app, wrong-compiler, wrong-config, and failed-build adversarial
       fixtures.
+  - Evidence: the 7-test graph/transaction suite mutates missing/failed completion, source/config,
+    compiler, app-token, and posture identities and rejects every inconsistent artifact.
 
 ## Ready loop and starter
 
