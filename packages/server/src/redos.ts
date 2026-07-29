@@ -9,7 +9,7 @@
  *  - `s.string().pattern(literal)` — compiled to Kovo's bounded Thompson-NFA/Pike VM subset, so
  *    matching is linear in `program size × input length`. Unsupported regex features are rejected
  *    with KV434 and routed to the audited escape.
- *  - `unsafeRegex(re, justification)` — the audited escape, surfaced in `kovo explain --capabilities`.
+ *  - `unsafeRegex(re, justification)` — the audited escape, surfaced in `kovo explain capabilities`.
  *
  * Honesty (SPEC §6.6): blessed formats and `pattern()` subset matching are by-construction at their
  * sinks; `unsafeRegex(re, justification)` is the explicit audited JS RegExp escape.
@@ -242,7 +242,7 @@ export function testLinearPattern(program: LinearRegexProgram, input: string): b
  */
 export const PATTERN_MAX_INPUT_LENGTH = 4096;
 
-/** A recorded `unsafeRegex()` capability fact for `kovo explain --capabilities`. */
+/** A recorded `unsafeRegex()` capability fact for `kovo explain capabilities`. */
 export interface UnsafeRegexFact {
   readonly justification: string;
   readonly source: string;
@@ -281,7 +281,7 @@ export function unsafeRegexPatternSnapshot(brand: UnsafeRegexBrand): UnsafeRegex
 
 /**
  * The audited escape (SPEC §6.6/§9.5): accept the ReDoS risk of an arbitrary `RegExp` explicitly.
- * Records a capability fact surfaced in `kovo explain --capabilities` so a reviewer sees every place
+ * Records a capability fact surfaced in `kovo explain capabilities` so a reviewer sees every place
  * a potentially-catastrophic pattern is trusted. Use only when a blessed format and a linear-safe
  * `pattern()` literal cannot express the need.
  *
@@ -313,7 +313,7 @@ export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexBr
 /**
  * Drain the recorded `unsafeRegex()` capability facts (SPEC §6.6/§9.5).
  *
- * `kovo explain --capabilities` surfaces every `unsafeRegex(...)` escape STATICALLY: the build-time
+ * `kovo explain capabilities` surfaces every `unsafeRegex(...)` escape STATICALLY: the build-time
  * producer `collectCapabilityEscapesFromProject` (packages/drizzle/src/trust-escapes-static.ts,
  * threat-matrix-plan.md M3) detects each call SITE and emits a `CapabilityExplain{ kind:'unsafeRegex' }`
  * into `graph.capabilities`, so a merely-built (not run) app already lists every audited ReDoS-risk

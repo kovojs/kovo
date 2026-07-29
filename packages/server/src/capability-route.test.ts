@@ -780,7 +780,7 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(second.status).toBe(404);
   });
 
-  it('records a capability-mint fact per signUrl call (drained for kovo explain --capabilities)', async () => {
+  it('records a capability-mint fact per signUrl call (drained for kovo explain capabilities)', async () => {
     drainCapabilityMintFacts();
     const ctx = createSignUrl({ secret: SECRET, oneTimeReplayStore: true });
     await ctx.signUrl({ key: 'a.pdf', scope: 't1', expiresIn: 1234, oneTime: true });

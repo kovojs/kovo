@@ -701,7 +701,7 @@ export interface FileSchema extends Schema<FileLike> {
    * Restrict accepted uploads to an allowlist of content types. Pass `accept([...types])` from
    * `@kovojs/server` to check against the SERVER-SNIFFED bytes (server truth), or
    * `accept.unverified([...types], justification)` to trust the client-declared MIME (the audited
-   * escape, surfaced in `kovo explain --capabilities`). KV428 (SPEC §6.6/§9.1).
+   * escape, surfaced in `kovo explain capabilities`). KV428 (SPEC §6.6/§9.1).
    */
   accept(acceptance: UnverifiedAcceptance | readonly string[]): FileSchema;
   /**
@@ -761,7 +761,7 @@ export interface StoredFileSchemaOptions {
  *
  * KV434: blessed formats are backtracking-free BY-CONSTRUCTION; `.pattern(literal)` compiles to
  * Kovo's bounded Thompson-NFA/Pike VM subset; unsupported syntax must use
- * `unsafeRegex(re, justification)`, the audited escape surfaced in `kovo explain --capabilities`.
+ * `unsafeRegex(re, justification)`, the audited escape surfaced in `kovo explain capabilities`.
  */
 export interface StringSchema extends Schema<string> {
   default(value: string): StringSchema;
@@ -1350,7 +1350,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
 
     // KV428: mint the stored contentType from the SNIFFED bytes (server truth overrides the client
     // lie). The audited `accept.unverified(...)` escape trusts the client-declared `file.type`
-    // instead (recorded for `kovo explain --capabilities`). The bytes are already buffered, so the
+    // instead (recorded for `kovo explain capabilities`). The bytes are already buffered, so the
     // deep sniff is free.
     const contentType = isUnverifiedAcceptance(this.#fileOptions.accept)
       ? type

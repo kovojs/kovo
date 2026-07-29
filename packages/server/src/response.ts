@@ -282,7 +282,7 @@ const unsafeInlineFacts = createBoundedRuntimeAuditCollector<UnsafeInlineFact>()
 /**
  * Accept the risk of bypassing Kovo's inline-body byte sniffer for bytes independently re-encoded
  * or rasterized by the application (SPEC §6.6/§9.1). The required printable justification is
- * surfaced by `kovo explain --capabilities`; the returned receipt is opaque and runtime-authenticated.
+ * surfaced by `kovo explain capabilities`; the returned receipt is opaque and runtime-authenticated.
  */
 export function unsafeInline(justification: string): UnsafeInlineAcceptance {
   const closedJustification = snapshotAuditJustification(justification, 'unsafeInline()');

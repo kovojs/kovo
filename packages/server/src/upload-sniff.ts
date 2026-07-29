@@ -270,7 +270,7 @@ export function mintStorageKey(prefix?: string): string {
 /**
  * The audited escape (SPEC §6.6/§9.1): opt OUT of byte-sniffing and trust the client-declared MIME.
  * This is the ONLY verbatim-client-MIME path that survives the `.mime()` removal. It records a
- * capability fact surfaced in `kovo explain --capabilities` so a reviewer sees every place the
+ * capability fact surfaced in `kovo explain capabilities` so a reviewer sees every place the
  * server trusts the client's content-type claim.
  *
  * The unverified type is STILL forced to attachment (it is by definition not inline-safe); the
@@ -283,7 +283,7 @@ export interface UnverifiedAcceptance {
   readonly unverified: true;
 }
 
-/** A recorded `accept.unverified()` capability fact for `kovo explain --capabilities`. */
+/** A recorded `accept.unverified()` capability fact for `kovo explain capabilities`. */
 export interface UnverifiedMimeFact {
   readonly justification: string;
   readonly types: readonly string[];
@@ -298,7 +298,7 @@ const unverifiedAcceptanceSnapshots = createWitnessWeakMap<object, UnverifiedAcc
  * - `accept([...types])` — the bytes are sniffed and the sniffed type must be one of `types`
  *   (server truth must agree with the app's allowlist). By-construction-ish.
  * - `accept.unverified([...types], justification)` — the audited escape: trust the client MIME,
- *   recorded for `kovo explain --capabilities`. Still attachment-forced.
+ *   recorded for `kovo explain capabilities`. Still attachment-forced.
  */
 export function accept(types: readonly string[]): readonly string[] {
   return snapshotUploadMimeTypes(types);

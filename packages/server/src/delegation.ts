@@ -89,7 +89,7 @@ const delegationRightPattern =
  *
  * This constructor never grants database authority: it records the exact right set a caller says
  * its existing policy established. Widening grant-table writes remain named, budgeted escapes in
- * `kovo explain --grants`; downstream engine policy remains the enforcement boundary.
+ * `kovo explain grants`; downstream engine policy remains the enforcement boundary.
  */
 export async function createDelegationAuthority<const Rights extends readonly DelegationRight[]>(
   options: CreateDelegationAuthorityOptions<Rights>,

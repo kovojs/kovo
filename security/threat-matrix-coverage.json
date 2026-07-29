@@ -22,12 +22,12 @@
     },
     "trust-escape-audit": {
       "disposition": "audited-escape",
-      "control": "The static trust collector emits every registered kind to kovo explain --trust with its source root and justification posture, and the metric-E gate fails on unsupported kinds or producer gaps.",
+      "control": "The static trust collector emits every registered kind to kovo explain trust with its source root and justification posture, and the metric-E gate fails on unsupported kinds or producer gaps.",
       "evidence": ["pnpm run check:escape-census"]
     },
     "capability-escape-audit": {
       "disposition": "audited-escape",
-      "control": "The static capability collector emits every app-authored registered kind to kovo explain --capabilities with its source site and justification posture.",
+      "control": "The static capability collector emits every app-authored registered kind to kovo explain capabilities with its source site and justification posture.",
       "evidence": ["packages/drizzle/src/capability-escapes-static.test.ts"]
     },
     "fixed-capability-control": {

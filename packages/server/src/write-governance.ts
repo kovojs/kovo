@@ -13,7 +13,7 @@
 //                                 analyzer rejects input and opaque/unknown values.
 //   trustedAssign(value, obligation) — the louder, audited path for a deliberate privileged
 //                                      write of a request value to a governed column. Recorded
-//                                      for `kovo explain --capabilities`.
+//                                      for `kovo explain capabilities`.
 
 import { createBoundedRuntimeAuditCollector } from '@kovojs/core/internal/security-markers';
 
@@ -32,7 +32,7 @@ export type {
   TrustedAssignWhy,
 } from './audit-justification.js';
 
-/** A recorded `trustedAssign` audit fact for `kovo explain --capabilities` (audit-grade). */
+/** A recorded `trustedAssign` audit fact for `kovo explain capabilities` (audit-grade). */
 export interface TrustedAssignFact {
   obligation: Readonly<TrustedAssignObligation>;
 }
@@ -69,7 +69,7 @@ export function serverValue<T>(value: T, reason: string): T {
  * The audited privileged-write escape (SPEC §11.1, KV438): deliberately write a value —
  * even a request-input value — to a governed column (e.g. an admin setting another user's
  * role). Runtime-transparent: returns `value` unchanged, and records an audit fact for
- * `kovo explain --capabilities`. Louder than {@link serverValue} because it admits input.
+ * `kovo explain capabilities`. Louder than {@link serverValue} because it admits input.
  *
  * @param value - The value being written to the governed column.
  * @param obligation - A required structured invariant/basis/evidence record, recorded for audit.
@@ -104,7 +104,7 @@ export function trustedAssign<T>(value: T, obligation: TrustedAssignObligation):
 
 /**
  * Drain the recorded {@link trustedAssign} audit facts (SPEC §6.6, audit-grade), for
- * `kovo explain --capabilities`. Returns and clears the retained bounded window.
+ * `kovo explain capabilities`. Returns and clears the retained bounded window.
  *
  * @returns The newest 256 retained observations since the last drain. Static trustedAssign
  * call-site facts remain the authoritative audit inventory.

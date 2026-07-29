@@ -57,7 +57,7 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  *   - **publishToClient(value, { reason })** — an audited escape only for a compiler-proven,
  *     pristine same-file `const` primitive. Lowering snapshots the literal source; it never emits
  *     an imported module merely because one of its exports was wrapped. The site+reason are
- *     recorded for `kovo explain --capabilities`.
+ *     recorded for `kovo explain capabilities`.
  *
  * Every other value-position capture (call argument, bare operand, member object, spread, …) is a
  * potential serialized-secret channel and is refused: KV437 at the capture site, and the import

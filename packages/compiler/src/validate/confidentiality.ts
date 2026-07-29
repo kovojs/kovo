@@ -109,7 +109,7 @@ const secretQueryShapePaths = securityClassifier(
 
     if (isQueryShapeWrapper(shape)) {
       // SPEC §1.1/§2: a reveal is an explicit audited escape hatch. The shape fact
-      // records that decision for `kovo explain --revealed`; KV435 remains the
+      // records that decision for `kovo explain revealed`; KV435 remains the
       // default for un-revealed secret fields.
       if (shape.kind === 'revealed') return [];
       if (shape.kind === 'secret') return [copyShapePath(path)];

@@ -130,12 +130,12 @@ export interface SignUrlContext {
    * Mint a signed, short-lived, scope-bound capability URL for a stored object, pointing at the
    * framework download route. Canonicalize-before-sign: the signed key is the normalized key the
    * route re-derives, so the URL is not dereferenceable for any other object. Records a capability
-   * fact for `kovo explain --capabilities`.
+   * fact for `kovo explain capabilities`.
    */
   signUrl(options: SignUrlOptions): Promise<SignedUrl>;
 }
 
-/** A recorded `ctx.signUrl(...)` mint, surfaced (audit-only) by `kovo explain --capabilities`. */
+/** A recorded `ctx.signUrl(...)` mint, surfaced (audit-only) by `kovo explain capabilities`. */
 export interface CapabilityMintFact {
   /** The canonicalized storage key the minted URL authorizes. */
   readonly key: string;

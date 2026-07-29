@@ -976,7 +976,7 @@ export const RealKv437 = component({
       KV437 src/real-kv437.tsx:6:47 Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named
         help: Would lower to: a client handler module whose captured imports and same-file module constants are explicitly proven client-safe before emission.
         help: Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, any cross-module import not provably client-safe, or a same-file literal not explicitly public) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
-        help: Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+        help: Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain capabilities.
         help: SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
       ]
     `);

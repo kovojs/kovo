@@ -63,7 +63,7 @@ export type CookieClass = 'app-data' | 'auth' | 'session';
 /**
  * The audited escape for an intentional insecure downgrade of a `session`/`auth`-class cookie
  * (SPEC §6.6/§9.1). Produced by {@link unsafeCookie}; recorded as a downgrade fact for
- * `kovo explain --cookies` instead of being rejected with KV432.
+ * `kovo explain cookies` instead of being rejected with KV432.
  */
 export interface UnsafeCookieDowngradeInput {
   /** Which floor attribute(s) the author is intentionally weakening. */
@@ -72,7 +72,7 @@ export interface UnsafeCookieDowngradeInput {
     sameSite?: 'lax' | 'none' | 'strict';
     secure?: boolean;
   };
-  /** A required human justification, surfaced in `kovo explain --cookies`. */
+  /** A required human justification, surfaced in `kovo explain cookies`. */
   justification: string;
 }
 
@@ -269,7 +269,7 @@ function assertOptionalCookieString(value: unknown, label: string): asserts valu
  * Construct the audited `unsafe` escape for an intentional insecure cookie downgrade
  * (SPEC §6.6/§9.1). Without this escape, downgrading a `session`/`auth`-class cookie's floor
  * (`HttpOnly`/`Secure` false, or `SameSite=None`) is rejected with KV432. With it, the downgrade is
- * allowed and recorded for `kovo explain --cookies`.
+ * allowed and recorded for `kovo explain cookies`.
  *
  * @example
  * import { unsafeCookie, type CookieOptions } from '@kovojs/server/security';
@@ -288,7 +288,7 @@ export function unsafeCookie(downgrade: UnsafeCookieDowngradeInput): UnsafeCooki
 }
 
 /**
- * A recorded insecure-cookie downgrade fact for `kovo explain --cookies` (SPEC §6.6/§9.1). One is
+ * A recorded insecure-cookie downgrade fact for `kovo explain cookies` (SPEC §6.6/§9.1). One is
  * produced for every `serializeCookie` call that intentionally weakens a credential cookie's floor
  * through {@link unsafeCookie}. Collected by {@link drainCookieDowngradeFacts}.
  */
@@ -320,7 +320,7 @@ function recordCookieDowngradeFact(fact: CookieDowngradeFact): void {
 /**
  * Drain and return the recorded cookie-downgrade facts (SPEC §6.6/§9.1, audit-only).
  *
- * The `kovo explain --cookies` renderer (packages/cli/src/graph-output.ts, the `'cookies' in options`
+ * The `kovo explain cookies` renderer (packages/cli/src/graph-output.ts, the `'cookies' in options`
  * branch) consumes the typed `graph.cookieDowngrades` field (`CookieDowngradeExplain`, the
  * core-graph mirror of {@link CookieDowngradeFact}). This defense-in-depth runtime drain returns the
  * newest 256 observations; static unsafeCookie call-site facts remain the authoritative build/

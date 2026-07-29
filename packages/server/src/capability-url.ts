@@ -18,7 +18,7 @@
  *
  * The framework route is shipped in `capability-route.ts`: `createStorageDownloadEndpoint` mounts
  * the verify-before-read sink, `ctx.signUrl` mints URLs pointing at that route, and mint facts are
- * drained for `kovo explain --capabilities`.
+ * drained for `kovo explain capabilities`.
  */
 
 import {

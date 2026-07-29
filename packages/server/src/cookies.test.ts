@@ -358,7 +358,7 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
   });
 
   // M1: a `productionSecure:false` downgrade is expressible ONLY through the audited unsafeCookie
-  // escape, which records a downgrade fact for `kovo explain --cookies` (no silent suppression).
+  // escape, which records a downgrade fact for `kovo explain cookies` (no silent suppression).
   it('records an audited fact for a justified productionSecure:false downgrade (M1)', () => {
     process.env.NODE_ENV = 'production';
     drainCookieDowngradeFacts();

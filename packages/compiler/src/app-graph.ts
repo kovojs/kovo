@@ -220,7 +220,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(graphInput?.sqlSafetyDiagnostics === undefined
       ? {}
       : { sqlSafetyDiagnostics: graphInput.sqlSafetyDiagnostics }),
-    // SPEC §6.6: preserve KV426 trust escapes (`kovo explain --trust`, audit-only) and KV424
+    // SPEC §6.6: preserve KV426 trust escapes (`kovo explain trust`, audit-only) and KV424
     // app dangerous-sink facts (`kovo check` error gate) from `compile drizzle-static` so the
     // build→graph.json carries the trust surface and the imperative-DOM sink findings.
     ...(graphInput?.trustEscapes === undefined ? {} : { trustEscapes: graphInput.trustEscapes }),

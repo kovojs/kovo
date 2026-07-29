@@ -11,7 +11,7 @@ import {
 import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
 
 // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: these drive the REAL static producer that
-// `kovo explain --capabilities` reads — the collector detects each app-authored escape at its CALL
+// `kovo explain capabilities` reads — the collector detects each app-authored escape at its CALL
 // SITE from source, so a merely-built app surfaces its whole escape-hatch surface without a live run.
 
 function capabilitiesFor(source: string, fileName = 'app.tsx') {

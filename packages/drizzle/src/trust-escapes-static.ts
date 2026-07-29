@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/unbound-method -- Buffer.from is a static intrinsic and does not use this. */
 // SPEC.md §6.6 (trust surface, AUDIT-ONLY): static collectors that surface every
-// app-authored trust escape and unsupported request/process authority for `kovo explain --trust`
+// app-authored trust escape and unsupported request/process authority for `kovo explain trust`
 // (KV426) and `kovo check` (KV424). These passes ENFORCE NOTHING by themselves — they
 // produce facts (TrustEscapeExplain / UnregisteredSinkFact) that the CLI renderer in
 // packages/cli/src/graph-output.ts surfaces. The trust pass is purely audit-only: it
@@ -323,7 +323,7 @@ const TRUSTED_CALL_OWNER: Readonly<Record<string, string>> = {
 
 /**
  * Collect every app-authored trust escape as a `TrustEscapeExplain` (SPEC §6.6,
- * AUDIT-ONLY for `kovo explain --trust`, KV426). One row is emitted per:
+ * AUDIT-ONLY for `kovo explain trust`, KV426). One row is emitted per:
  *
  *  - `trustedHtml(...)`  call site → kind `trustedHtml`
  *  - `trustedUrl(...)`   call site → kind `trustedUrl`
@@ -38089,7 +38089,7 @@ function appendRequestTaskBRouteFailure(
   }
   context.facts.push({
     safePath:
-      'keep the exact authored root in the compiler capability census and finite semantic graph; inspect kovo explain --capabilities for the closed provenance path',
+      'keep the exact authored root in the compiler capability census and finite semantic graph; inspect kovo explain capabilities for the closed provenance path',
     sink: 'request-handler.opaque-source',
     site,
     source: trace,
@@ -41161,7 +41161,7 @@ function identifierTextEquals(identifier: Node & { getText(): string }, expected
 // =====================================================================================
 //
 // The static producer that surfaces every APP-AUTHORED escape hatch as a `CapabilityExplain`
-// so `kovo explain --capabilities` (packages/cli/src/graph-output.ts) enumerates the whole
+// so `kovo explain capabilities` (packages/cli/src/graph-output.ts) enumerates the whole
 // intentional-security-hole surface from one place (threat-matrix-plan.md M3). This mirrors the
 // `publishToClient` call-site pattern (packages/compiler/src/app-graph.ts): detect the escape at
 // its CALL SITE during graph construction and emit a fact — it does NOT depend on the runtime
@@ -41244,7 +41244,7 @@ function methodCapabilityKind(name: string): CapabilityExplain['kind'] | undefin
 
 /**
  * Collect every app-authored escape-hatch call site as a `CapabilityExplain` (SPEC §6.6,
- * AUDIT-ONLY for `kovo explain --capabilities`, threat-matrix M3). One row per escape call; the
+ * AUDIT-ONLY for `kovo explain capabilities`, threat-matrix M3). One row per escape call; the
  * Legacy doors retain their recorded `justification`. `trustedAssign` instead carries an exact
  * structured obligation plus scanner-owned call identity; artifact emission refuses an incomplete
  * row before any deployable output is written.
@@ -41319,7 +41319,7 @@ export function collectRuntimeRevealAuditFromProject(
 
 /**
  * Compatibility fact-only view. An imported call whose audit fields cannot be recorded throws an
- * explicit KV426 diagnostic rather than silently disappearing from `kovo explain --revealed`.
+ * explicit KV426 diagnostic rather than silently disappearing from `kovo explain revealed`.
  *
  * @internal
  */
@@ -41395,7 +41395,7 @@ function runtimeRevealAuditDiagnostic(
     'KV426',
     { site: siteFor(file, call) },
     {
-      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.${door === 'trustedReveal' ? 'forTrustedReveal' : 'forRevealSecret'}({ ownerScope${door === 'trustedReveal' ? '' : ', purpose'} }) policy for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain --revealed (SPEC §6.6).`,
+      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.${door === 'trustedReveal' ? 'forTrustedReveal' : 'forRevealSecret'}({ ownerScope${door === 'trustedReveal' ? '' : ', purpose'} }) policy for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain revealed (SPEC §6.6).`,
     },
   );
 }
@@ -41613,7 +41613,7 @@ function egressAllowInternalEscapes(
 }
 
 // =====================================================================================
-// TASK D — cookie-downgrade collector (SPEC §6.6/§9.1, AUDIT-ONLY, `kovo explain --cookies`)
+// TASK D — cookie-downgrade collector (SPEC §6.6/§9.1, AUDIT-ONLY, `kovo explain cookies`)
 // =====================================================================================
 //
 // The static producer for `graph.cookieDowngrades` (`CookieDowngradeExplain`), previously

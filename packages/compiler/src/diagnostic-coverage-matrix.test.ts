@@ -1423,10 +1423,10 @@ describe('compiler diagnostic coverage matrix', () => {
           "code": "KV426",
           "fileName": "trusted-html-provenance-bad.tsx",
           "help": "Blocked reason: trustedHtml() is a pure raw HTML escape that performs NO sanitization (SPEC §4.8); sending request/query-derived or unprovable data to it can emit attacker-controlled bytes verbatim.
-      Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedHtml(value, "<justification>") so it is surfaced in kovo explain --trust.
+      Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedHtml(value, "<justification>") so it is surfaced in kovo explain trust.
       SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (trustedHtml); KV236/KV426 family. Provenance is decided by AST symbol-identity over the request/query source set, modeled on KV438 (SPEC §11.1).
       Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
-      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
+      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain trust.
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
       SPEC §4.8/§9.1 and fundamental-fixes-followup-3 DEC-D/DEC-F: KV426 is an auditable static provenance signal; contextual renderer/header/URL runtime chokes and unforgeable trusted constructors remain the security boundary when static provenance is incomplete.",
           "length": 9,
@@ -1442,7 +1442,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "fileName": "client-capture-bad.tsx",
           "help": "Would lower to: a client handler module whose captured imports and same-file module constants are explicitly proven client-safe before emission.
       Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, any cross-module import not provably client-safe, or a same-file literal not explicitly public) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
-      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain capabilities.
       SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
           "length": 17,
           "message": "Server-only value captured into a client handler reaches the client bundle. import="STRIPE_SECRET_KEY" from="./secrets" form=named",

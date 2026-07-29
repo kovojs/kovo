@@ -66,7 +66,7 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * Non-literal namespace calls through Kovo trust modules (`browser[key](value)`) are also treated
  * as unproven trust sinks when the member cannot be resolved to a safe non-sink export.
  *
- * Author escapes (audit-visible in `kovo explain --trust`, consistent with KV438's
+ * Author escapes (audit-visible in `kovo explain trust`, consistent with KV438's
  * serverValue/trustedAssign):
  *   - render user/CMS content through `safeRichHtml(value)` — the sanitizing rich-HTML floor; it is
  *     a different callee, so it is never flagged here;
@@ -2064,7 +2064,7 @@ function rawTrustProvenanceDiagnostic(
     `${sinkLabel} sends ${source} to a ${sink.rawSink} sink without sanitization or an audited ` +
     'justification.';
   const publicFix = sink.auditedReasonAllowed
-    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain --trust.`
+    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain trust.`
     : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
   return contextualizeCompilerDiagnostic(
     diagnosticAt(

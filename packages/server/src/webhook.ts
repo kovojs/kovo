@@ -334,7 +334,7 @@ export type WebhookDeclaredWriteKey<Writes extends WebhookDeclaredWrites | undef
 
 /**
  * Domain accepted by `WebhookHandlerContext.recordChange`. SPEC §9.1 requires
- * webhook writes to be declared so `kovo explain --endpoints` cannot under-report
+ * webhook writes to be declared so `kovo explain endpoints` cannot under-report
  * machine-ingress invalidation.
  */
 export type WebhookDeclaredWriteDomain<Writes extends WebhookDeclaredWrites | undefined> = Domain<
@@ -435,7 +435,7 @@ interface WebhookDefinitionBase<
   /**
    * Static write domains this webhook may emit through `context.recordChange(...)`.
    * Runtime `recordChange` still emits the exact `{ domain, keys, input }` records; this
-   * declaration lets `kovo explain --endpoints` print the webhook write chain without executing
+   * declaration lets `kovo explain endpoints` print the webhook write chain without executing
    * provider traffic (SPEC §11.4).
    */
   writes?: Writes;
@@ -2081,7 +2081,7 @@ function declaredWebhookChangeDomainKey(
   const declared = declaredKeys.length === 0 ? 'none' : securityArrayJoin(declaredKeys, ', ');
   throw new Error(
     `Webhook recordChange("${domainKey}") is outside declared writes (${declared}). ` +
-      `SPEC §9.1 requires webhook changes to be declared so kovo explain --endpoints ` +
+      `SPEC §9.1 requires webhook changes to be declared so kovo explain endpoints ` +
       `cannot under-report machine-ingress writes.`,
   );
 }

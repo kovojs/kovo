@@ -1372,7 +1372,7 @@ interface PostgresPostureCheckOptOut {
   site?: string;
 }
 
-/** Internal audit fact for `kovo explain --capabilities` posture-check opt-outs. */
+/** Internal audit fact for `kovo explain capabilities` posture-check opt-outs. */
 export interface PostgresPostureCheckOptOutFact {
   readonly driver: KovoPostgresResolvedRuntimeDriver;
   readonly justification: string;
@@ -1455,7 +1455,7 @@ export interface KovoPostgresAppRuntimeOptions {
    *
    * Disabling the boot check is an audited capability escape: use
    * `postureCheck: { onBoot: false, justification: '...' }`, which is recorded for
-   * `kovo explain --capabilities`. Bare booleans are intentionally not accepted.
+   * `kovo explain capabilities`. Bare booleans are intentionally not accepted.
    */
   postureCheck?:
     | { readonly onBoot?: true }
@@ -6597,7 +6597,7 @@ function resolvePostgresPostureCheck(
 
   const justification = snapshotAuditJustification(
     postureCheck.justification,
-    'KV433 postureCheck: { onBoot: false } for kovo explain --capabilities (SPEC §10.3)',
+    'KV433 postureCheck: { onBoot: false } for kovo explain capabilities (SPEC §10.3)',
   );
   const site = postureCheck.site;
   return {
