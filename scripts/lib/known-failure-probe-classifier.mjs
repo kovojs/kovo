@@ -2,7 +2,7 @@ const RUNTIME_FAILURE =
   /(?:ERR_MODULE_NOT_FOUND|Cannot find package|node:internal\/|SyntaxError:|ReferenceError:)/u;
 const USAGE_FAILURE = /(?:usage:|unknown command)/iu;
 const MISSING_GRAPH_DIAGNOSTIC =
-  /(?:ERROR KV\d{3}[^\n]*(?:source graph|graph input|explicit artifact)|kovo:[^\n]*(?:source graph|graph input|explicit artifact)[^\n]*(?:required|missing|not found))/iu;
+  /(?:ERROR KV\d{3}[^\n]*(?:source graph|graph input|explicit artifact)|kovo(?:-check\/v1\r?\nERROR|:)[^\n]*(?:(?:source graph|graph input|explicit artifact)[^\n]*(?:required|missing|not found)|app module is missing or unreadable))/iu;
 const TRUSTED_BOUNDARY_FAILURE =
   /Better Auth (?:session|credential) provider failed inside the trusted plaintext boundary/iu;
 const KOVO_READY_REPORT =
@@ -49,7 +49,7 @@ export function packedCliContractOutcome(mode, result) {
 
   if (mode === 'empty-check') {
     if (
-      result.status === 1 &&
+      (result.status === 1 || result.status === 2) &&
       MISSING_GRAPH_DIAGNOSTIC.test(combined) &&
       !USAGE_FAILURE.test(combined)
     ) {
@@ -136,12 +136,32 @@ export function packedFirstLoopContractOutcome(mode, observation) {
   }
 
   if (mode === 'fresh-check') {
-    if (!Number.isInteger(observation.exit) || typeof observation.output !== 'string') return null;
-    const output = observation.output;
-    if (observation.exit === 0 && /check passed/iu.test(output) && !/\bKV417\b/u.test(output)) {
+    if (
+      !Array.isArray(observation.variants) ||
+      observation.variants.length !== 2 ||
+      observation.variants[0]?.dialect !== 'postgres' ||
+      observation.variants[1]?.dialect !== 'sqlite' ||
+      observation.variants.some(
+        (variant) => !Number.isInteger(variant?.exit) || typeof variant?.output !== 'string',
+      )
+    ) {
+      return null;
+    }
+    if (
+      observation.variants.every(
+        (variant) =>
+          variant.exit === 0 &&
+          /check passed/iu.test(variant.output) &&
+          !/\bKV417\b/u.test(variant.output),
+      )
+    ) {
       return 'desired-behavior';
     }
-    if (observation.exit === 1 && KV417_DEPLOYMENT_PROOF.test(output)) {
+    if (
+      observation.variants.some(
+        (variant) => variant.exit === 1 && KV417_DEPLOYMENT_PROOF.test(variant.output),
+      )
+    ) {
       return 'defect-reproduced';
     }
     return null;

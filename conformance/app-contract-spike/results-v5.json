@@ -41,9 +41,7 @@
           "pass": true
         },
         "compilerAndGraph": {
-          "details": [
-            "existing free-function identity did not recognize generated binding"
-          ],
+          "details": ["existing free-function identity did not recognize generated binding"],
           "pass": false
         },
         "diagnostics": {

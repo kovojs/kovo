@@ -33,8 +33,12 @@ proof; shared root verification belongs in the latest-verification block.
 
 ## Source truth and transactional output
 
-- [ ] Make source-backed `kovo check` reject missing graph input rather than return vacuous `OK`.
-- [ ] Separate source/check proof from deployment-only preset, retention, and skew proof.
+- [x] Make source-backed `kovo check` reject missing graph input rather than return vacuous `OK`.
+  - Evidence: `packages/cli/src/index.source-check.test.ts` proves a focused missing graph is an
+    error and bare `kovo check` re-derives current type/compiler facts.
+- [x] Separate source/check proof from deployment-only preset, retention, and skew proof.
+  - Evidence: both starter source-check fixtures pass without deployment posture while the same
+    focused CLI suite proves `kovo build` still rejects missing SPEC §14 retention.
 - [ ] Stamp graph/cache facts with source-set, compiler, config, app-build, completion, and posture
       identities.
 - [ ] Require explicit `--artifact <path>` plus matching identities for built-graph inspection.
@@ -47,13 +51,18 @@ proof; shared root verification belongs in the latest-verification block.
 
 ## Ready loop and starter
 
-- [ ] Print bound local/network URL, mode, app entry, DB posture, devtool URL, and readiness
+- [x] Print bound local/network URL, mode, app entry, DB posture, devtool URL, and readiness
       duration from framework-owned `kovo dev` output.
-- [ ] Auto-mount `/__kovo` in development without app Vite configuration.
-- [ ] Prove the devtool route and implementation are absent from Node production and static-export
+  - Evidence: `packages/cli/src/index.kovo-dev.test.ts` proves the complete post-listen report.
+- [x] Auto-mount `/__kovo` in development without app Vite configuration.
+  - Evidence: the dev-server route fixtures prove the framework-owned mount and ready-line link.
+- [x] Prove the devtool route and implementation are absent from Node production and static-export
       artifacts.
-- [ ] Derive a complete loopback development origin from the bound URL while keeping non-loopback
+  - Evidence: the production/static-export artifact census in `pnpm run check:publish` passes.
+- [x] Derive a complete loopback development origin from the bound URL while keeping non-loopback
       and production origins explicit, fixed, and HTTPS-validated.
+  - Evidence: Better Auth environment/runtime-authority tests plus KF-DEVEX-001 prove the
+    post-listen loopback handoff and fail-closed deployment boundary.
 - [ ] Move lifecycle, sound-subset, endpoint-posture, and parallel scheduling algorithms from the
       starter scripts into versioned Kovo commands.
 - [ ] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
@@ -104,6 +113,8 @@ proof; shared root verification belongs in the latest-verification block.
   35 skipped).
 - **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
   (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
+- **First-loop proof:** `pnpm run test:devex-known-failures-available` passes all ten registered
+  probes with eight retired behaviors and two explicit expected failures; no reproducer is pending.
 - `pnpm run check:publish` packed and attested all 14 public packages; the packed CLI consumer
   installed with 265 production dependencies and zero advisories.
 - `pnpm run check:spec-conformance-closure` passed (92 codes, 72 error classes, 201 throw sites;

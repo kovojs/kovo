@@ -19,10 +19,9 @@ export async function runtimeEvidence(
   arm: AppContractArm,
 ): Promise<RuntimeArmEvidence> {
   const providerRuntimeFile = join(fixture.app, 'src/provider.js');
-  const providerRuntimeSource = (await readFile(join(fixture.app, 'src/provider.ts'), 'utf8')).replace(
-    /\s+as const/gu,
-    '',
-  );
+  const providerRuntimeSource = (
+    await readFile(join(fixture.app, 'src/provider.ts'), 'utf8')
+  ).replace(/\s+as const/gu, '');
   await writeFile(providerRuntimeFile, providerRuntimeSource);
   const appRuntimeFile = join(fixture.app, 'src/kovo.js');
   const appRuntimeSource = ts.transpileModule(await readFile(fixture.providerFile, 'utf8'), {

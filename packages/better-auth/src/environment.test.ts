@@ -15,6 +15,9 @@ const serverExecutionUrl = pathToFileURL(
 const serverEnvironmentAuthorityUrl = pathToFileURL(
   fileURLToPath(new URL('../../server/src/runtime-environment-authority.ts', import.meta.url)),
 ).href;
+const serverBuildContextUrl = pathToFileURL(
+  fileURLToPath(new URL('../../server/src/internal/build-context.ts', import.meta.url)),
+).href;
 
 describe('Better Auth boot-pinned environment boundary', () => {
   it('loads local .env before a bootstrap-first Better Auth import and ignores late app mutation', () => {
@@ -477,6 +480,96 @@ process.stdout.write(JSON.stringify({
       ).toEqual({ error: expect.stringMatching(/canonical absolute HTTP\(S\) origin/u) });
     }
   }, 180_000);
+
+  it('keeps deployment origin and signing material unavailable during build graph derivation', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-better-auth-build-environment-'));
+    try {
+      writeFileSync(
+        join(root, '.env'),
+        [
+          'BETTER_AUTH_URL=javascript:must-not-be-read',
+          'BETTER_AUTH_SECRET=operator-secret-must-not-enter-build-0123456789',
+          'KOVO_DEMO_PASSWORD=operator-password-must-not-enter-build',
+          'NODE_ENV=production',
+          '',
+        ].join('\n'),
+      );
+      const environmentUrl = pathToFileURL(
+        fileURLToPath(new URL('./environment.ts', import.meta.url)),
+      ).href;
+      const indexUrl = pathToFileURL(fileURLToPath(new URL('./index.ts', import.meta.url))).href;
+      const source = `
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (existsSync(candidate)) return nextResolve(candidate.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await import(${JSON.stringify(runtimeBootstrapUrl)});
+const api = await import(${JSON.stringify(indexUrl)});
+const internal = await import(${JSON.stringify(environmentUrl)});
+const buildContext = await import(${JSON.stringify(serverBuildContextUrl)});
+const result = buildContext.withKovoBuildContext(
+  { appEnvironment: 'unavailable', graphDerivation: true },
+  () => {
+    const resolved = internal.resolveBetterAuthEnvironment();
+    const csrf = api.betterAuthCsrfFromEnvironment({ field: 'csrf' });
+    return {
+      baseURL: resolved.baseURL,
+      developmentSeed: resolved.developmentSeed !== undefined,
+      production: resolved.production,
+      secretIsOperator: resolved.secret.includes('operator-secret'),
+      sessionBinding: csrf.sessionId({ session: { id: 'build-session' } }),
+    };
+  },
+);
+let runtimeError = '';
+try {
+  internal.resolveBetterAuthEnvironment();
+} catch (error) {
+  runtimeError = String(error?.message ?? error);
+}
+process.stdout.write(JSON.stringify({ ...result, runtimeError }));
+`;
+      const environment = { ...process.env };
+      for (const name of [
+        'BETTER_AUTH_SECRET',
+        'BETTER_AUTH_URL',
+        'KOVO_CSRF_SECRET',
+        'KOVO_DEMO_PASSWORD',
+        'NODE_ENV',
+      ]) {
+        delete environment[name];
+      }
+      const result = spawnSync(
+        process.execPath,
+        [
+          '--disable-warning=ExperimentalWarning',
+          '--experimental-transform-types',
+          '--input-type=module',
+          '--eval',
+          source,
+        ],
+        { cwd: root, encoding: 'utf8', env: environment },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({
+        baseURL: 'http://127.0.0.1',
+        developmentSeed: false,
+        production: false,
+        runtimeError: expect.stringMatching(/BETTER_AUTH_URL must be a canonical/u),
+        secretIsOperator: false,
+        sessionBinding: 'build-session',
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 
   it('rejects upstream Better Auth secret and trusted-origin environment authorities', () => {
     expect(resolveEnvironmentInChild(['BETTER_AUTH_SECRETS=0:attacker-controlled-secret'])).toEqual(

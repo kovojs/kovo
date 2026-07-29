@@ -10,7 +10,7 @@ export const agentDocsSnapshotFileName = 'kovo-docs.snapshot.json.gz' as const;
 
 const MAX_COMPRESSED_BYTES = 8 * 1024 * 1024;
 const MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_FILES = 2_048;
 const MAX_AGGREGATE_FILE_BYTES = 24 * 1024 * 1024;
 const REQUIRED_FILES = Object.freeze([

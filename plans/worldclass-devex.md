@@ -99,7 +99,7 @@ generated icon glyph paths. Those are different units and are now reported indep
 same unit discipline applies to `@kovojs/server`: 524 root export names vs 554 exported declarations
 across all public subpaths — both correct, different units.) The consumer scan excludes nested
 dependencies and generated/dist/cache/packed/throwaway trees, then reports 90 authored-example,
-127 authored-doc, 153 package-internal, 18 generated-emit, 3 conformance, and 456 test files as
+128 authored-doc, 154 package-internal, 18 generated-emit, 4 conformance, and 456 test files as
 separate classes. The earlier 1,212 zero-consumer and 583 example-consumer figures remain excluded
 because they came from the contaminated scanner.
 
@@ -398,14 +398,15 @@ and generated examples.
     `*Move*`/`*Typeahead*` option/result types rather than 44; removal remains gated on mechanical
     value/signature/generated-facade reachability. The manifest inventory reports 524 server-root
     names and 554 server declarations across all public subpaths.
-- [ ] Create the known-failure register: one ID per confirmed baseline defect (auth-origin fix
+- [x] Create the known-failure register: one ID per confirmed baseline defect (auth-origin fix
       required, silent 75s dev start, help exit 1, vacuous check `OK`, `dist/.kovo` stale graph,
       KV417 coupling in fresh-app check, 4.4-4.8 GiB catalog OOM, internal classifier mock in
       starter tests, placeholder `update-docs` success, opaque trusted-boundary 500s) mapped to a
       failing packed test. "Known failures are represented by failing tests" gates against this
       register, not an open-ended set.
-  - Partial evidence: the versioned ten-ID register and its retirement/integrity gate pass; six
-    entries still lack executable reproducers, so the parent remains open.
+  - Evidence: `pnpm run test:devex-known-failures-available` exercises all ten authenticated
+    packed/artifact probes: eight retired behaviors pass and KF-DEVEX-005/007 remain explicit
+    expected failures; schema validation reports `pending-repro=0`.
 
 ### Track 1 — First ten minutes and a trustworthy loop (starts immediately)
 
@@ -455,16 +456,22 @@ granularity).
   - Evidence: the dev/export/runtime fixtures and `pnpm run check:publish` prove the automatic
     development mount and ready-line link while rejecting the route and implementation from
     production, static-export, and packed runtime artifacts.
-- [ ] (M) Generate a complete loopback development origin or derive it from the actual bound URL;
+- [x] (M) Generate a complete loopback development origin or derive it from the actual bound URL;
       make Better Auth work at the printed local URL without hand-editing `BETTER_AUTH_URL`.
       Non-loopback and production origins remain explicit, fixed, HTTPS-validated configuration.
-- [ ] (M) Separate source proof from deployment proof (single owner of the vacuity fix):
+  - Evidence: the Better Auth environment/runtime-authority suites and KF-DEVEX-001 packed probe
+    prove the post-listen origin handoff, while build derivation cannot read deployment authority
+    and non-loopback/production origins still fail closed.
+- [x] (M) Separate source proof from deployment proof (single owner of the vacuity fix):
   - `kovo check` runs all source/type/compiler/security/freshness checks and cannot pass
     vacuously; missing graph input is an error, never `OK` (G7).
   - `kovo build` additionally enforces preset, artifact, least-privilege, retention, and
     deploy-skew requirements including KV417 (`SPEC.md` §14).
   - The starter's documented quick check must pass before deployment is configured; CI/deploy docs
     must still run the full build with an explicit posture.
+  - Evidence: `packages/cli/src/index.source-check.test.ts`, both packed starter source-check
+    fixtures, and KF-DEVEX-004/006 prove current-source re-derivation, non-vacuous missing input,
+    deployment-only KV417 enforcement, and both generated quick-check paths.
 - [ ] (M) Adversarial graph-truth and transactional-build suite (G7, G8): checks and explanations
       derive from source or a verified content-addressed cache; stamp every graph with source-set
       digest, compiler version, config digest, app build token, completion state, and posture
@@ -593,13 +600,16 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
     if an exclusion regresses.
   - Report public manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
     generated-family members as separate units.
-  - Evidence: the 43-test foundation gate and hostile fixtures pass; the current clean census is
-    1,839 manifest subpaths, 102 TypeScript entrypoints, 1,842 exported declarations, and 1,737
-    generated-family members across the six separately reported consumer classes.
-- [ ] (S) Add the packed full-catalog reproducer: copy all 44 UI components into a fresh app, then
+  - Evidence: `pnpm run test:devex-foundation-schema` passes 51 tests; the current clean census is
+    1,839 manifest subpaths, 102 TypeScript entrypoints, 1,849 exported declarations, and 1,737
+    generated-family members across 90/128/154/18/4/456 files in the six consumer classes.
+- [x] (S) Add the packed full-catalog reproducer: copy all 44 UI components into a fresh app, then
       typecheck, check, and build while unimported copied files are present; register the current
       4.4-4.8 GiB OOM as an expected-failing entry with its budget in `devex-budgets.json` (the
       fix itself is Track 1's `kovo add` item).
+  - Evidence: `pnpm run test:devex-known-failures-available` executes KF-DEVEX-007 from attested
+    tarballs and keeps the reproduced full-catalog memory failure explicitly expected until its
+    Track 1 fix lands.
 - [ ] (S) CI meta-budget: total added per-PR minutes for all DevEx gates, with an explicit per-PR
       vs nightly split.
 - [ ] (S) Wire the PR-visible reports: public-surface counts, docs freshness, and speed deltas
@@ -928,10 +938,13 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       site content build consumes the matching digest. Keep `site/gen` ignored unless a separate
       repository policy decision chooses to commit it; stale ignored local files are not release
       evidence.
-- [ ] (M) Compile every JSDoc, generated API, package README, and authored guide code sample
+- [x] (M) Compile every JSDoc, generated API, package README, and authored guide code sample
       against packed `dist` exports; parse every documented CLI invocation against the command
       schema. Mark samples as `executable`, `type-error`, `output`, or `illustrative`; every skip
       has a reviewed reason so pseudocode/transcripts do not weaken the gate (G13).
+  - Evidence: `pnpm run check:publish` classifies all 3,096 samples, compiles 1,139 executable
+    samples and 920 JSDoc examples against packed exports, validates 93 CLI invocations through
+    the command schema, and admits only reviewed output/illustrative exclusions.
 - [ ] (M) Regenerate API references by task: values and copyable examples first, named supporting
       types second, implementation/protocol types absent from human pages.
 - [ ] (M) Publish one canonical, compiled recipe for each golden task: component, route, query,

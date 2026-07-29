@@ -52,6 +52,7 @@ import {
   securityStringTrim,
   securityUrlSnapshot,
 } from './response-security-intrinsics.js';
+import { stylesheetCallerFile } from './stylesheet-provenance.js';
 
 const stylesheetSourceProvenance = createWitnessWeakMap<
   StylesheetAsset,
@@ -647,25 +648,6 @@ function localStylesheetSourceFile(cleanSource: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function stylesheetCallerFile(stack: string | undefined): string | undefined {
-  if (stack === undefined) return undefined;
-
-  const lines = securityStringSplit(stack, '\n');
-  for (let index = 1; index < lines.length; index += 1) {
-    const line = lines[index]!;
-    if (securityStringIncludes(line, '/hints.') || securityStringIncludes(line, '\\hints.')) {
-      continue;
-    }
-
-    const fileUrl = securityRegExpExec(/file:\/\/[^):\s]+/u, line)?.[0];
-    if (fileUrl !== undefined) return fileUrl;
-
-    const pathMatch = securityRegExpExec(/(?:(?:at\s+.*\()?)(\/[^():]+):\d+:\d+\)?/u, line)?.[1];
-    if (pathMatch !== undefined) return `file://${pathMatch}`;
-  }
-  return undefined;
 }
 
 function resolveStylesheetCriticalCss(options: StylesheetDeclarationOptions): string | undefined {

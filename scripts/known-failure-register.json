@@ -50,7 +50,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G2"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -66,7 +66,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens."
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
+      "retirement": {
+        "evidence": "The authenticated packed dev-ready probe observed the listener and the structured loopback URL, mode, app, database, and devtool report within the five-second readiness budget.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-003",
@@ -116,7 +120,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G7"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-cli-contract.mjs",
         "command": [
@@ -132,7 +136,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "The packed kovo check command fails closed when an empty consumer has no source graph or explicit artifact."
+      "desiredBehavior": "The packed kovo check command fails closed when an empty consumer has no source graph or explicit artifact.",
+      "retirement": {
+        "evidence": "The authenticated packed empty-consumer probe exits nonzero with the exact source-backed missing-app diagnostic and never reports a false OK.",
+        "verification": "node scripts/known-failure-probes/packed-cli-contract.mjs empty-check --id KF-DEVEX-004 --packed-manifest .release/packed-packages.json"
+      }
     },
     {
       "id": "KF-DEVEX-005",
@@ -178,7 +186,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G1", "G7"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -190,11 +198,15 @@
           "--packed-manifest",
           "{packedManifest}"
         ],
-        "timeoutMs": 240000,
+        "timeoutMs": 600000,
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup."
+      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup.",
+      "retirement": {
+        "evidence": "The strengthened authenticated packed probe scaffolds both Postgres/PGlite and SQLite variants and requires both full starter check scripts to pass without KV417.",
+        "verification": "node scripts/known-failure-probes/packed-first-loop-contract.mjs fresh-check --id KF-DEVEX-006 --packed-manifest .release/packed-packages.json"
+      }
     },
     {
       "id": "KF-DEVEX-007",
@@ -310,7 +322,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G9"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -326,7 +338,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500."
+      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500.",
+      "retirement": {
+        "evidence": "The authenticated packed opaque-boundary probe reaches a healthy API and rendered login response instead of the former unexplained internal 500.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     }
   ]
 }

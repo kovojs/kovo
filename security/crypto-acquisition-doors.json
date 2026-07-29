@@ -76,6 +76,22 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-cli-docs-snapshot",
+      "file": "packages/cli/src/docs-snapshot.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests verify bounded documentation snapshot bytes and metadata; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-cli-docs-store",
+      "file": "packages/cli/src/docs-store.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind the installed documentation snapshot and version pointer; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-012",
       "file": "packages/cli/src/artifact-provenance.ts",
       "kind": "digest",
@@ -114,6 +130,14 @@
       "operations": ["createHash", "createHmac", "randomUUID"],
       "tier": "build-tooling",
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
+    },
+    {
+      "id": "crypto-door-compiler-app-contract-project",
+      "file": "packages/compiler/src/app-contract-project.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind compiler-generated app-contract project inputs and outputs; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-016",
@@ -344,6 +368,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-agent-docs-snapshot",
+      "file": "scripts/agent-docs-snapshot.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind bounded documentation files, metadata, and the deterministic snapshot payload; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-043",
       "file": "scripts/check-protocol-alphabet.mjs",
       "kind": "digest",
@@ -408,12 +440,60 @@
       "review": "Temporary direct authority acquisition; migration target is a purpose-minimal authority handle."
     },
     {
+      "id": "crypto-door-devex-benchmark",
+      "file": "scripts/devex-benchmark.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind benchmark fixtures, profiles, and measured artifact subjects; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-devex-packed-profile",
+      "file": "scripts/devex-workloads/kovo-packed-check/package/dev-profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests identify bounded packed-check workload bytes for deterministic measurement; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-devex-packed-workload",
+      "file": "scripts/devex-workloads/kovo-packed-check/package/workload.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests identify bounded packed-check workload inputs for deterministic measurement; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-048",
       "file": "scripts/framework-export-posture-gate.mjs",
       "kind": "digest",
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+    },
+    {
+      "id": "crypto-door-fcp-harness",
+      "file": "scripts/fcp-harness.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind first-contentful-paint harness inputs and outputs; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-devex-fixture-profile",
+      "file": "scripts/fixtures/devex-benchmark/package/profile.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests identify bounded benchmark fixture bytes; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-golden-journey-offline-agent",
+      "file": "scripts/golden-journey/offline-agent.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests verify packed documentation and generated-app evidence during the offline agent journey; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-049",
@@ -448,6 +528,14 @@
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
     },
     {
+      "id": "crypto-door-known-failure-packed-first-loop",
+      "file": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests compare bounded build directories and graph artifacts in an isolated packed-app reproducer; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-kovo-certificate",
       "file": "scripts/kovo-certificate.mjs",
       "kind": "digest",
@@ -470,6 +558,14 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact named non-keyed digest acquisition; migration target is the reviewed digest door."
+    },
+    {
+      "id": "crypto-door-packed-doc-samples",
+      "file": "scripts/packed-doc-samples.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind packed documentation sample inputs and generated consumer fixtures; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-reproducible-pack",

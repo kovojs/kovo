@@ -334,7 +334,8 @@ export function semanticCollisionEvidence(): Readonly<
       'export const text = `first\\ngeneratedQuery({ load() {} })\\nlast`;\n',
     'authored-span-shaped-object':
       'export const authored = { end: 41, sourceSpan: { start: 7 }, start: 3 };\n',
-    'comment-callee-text': '// app.query({}) generatedQuery({}) directQuery({})\nexport const ok = true;\n',
+    'comment-callee-text':
+      '// app.query({}) generatedQuery({}) directQuery({})\nexport const ok = true;\n',
     'repeated-callee-text': [
       'const generatedQuery = (value: unknown) => value;',
       'export const first = generatedQuery({ value: 1 });',
@@ -530,9 +531,7 @@ const spanCoordinateKeys = new Set(['end', 'length', 'start']);
 
 function canonicalize(value: unknown, key?: string): unknown {
   if (typeof value === 'string') {
-    return key === 'source' || key === 'loweredSource'
-      ? canonicalizeFactorySource(value)
-      : value;
+    return key === 'source' || key === 'loweredSource' ? canonicalizeFactorySource(value) : value;
   }
   if (Array.isArray(value)) {
     const entryKey = key === 'argumentSpans' ? 'argumentSpan' : undefined;
@@ -819,9 +818,7 @@ function canonicalSourceTypeChecker(sourceFile: ts.SourceFile): ts.TypeChecker {
     useCaseSensitiveFileNames: () => true,
     writeFile: () => {},
   };
-  return ts
-    .createProgram({ host, options, rootNames: [sourceFile.fileName] })
-    .getTypeChecker();
+  return ts.createProgram({ host, options, rootNames: [sourceFile.fileName] }).getTypeChecker();
 }
 
 function exactNumericAstSpan(object: ts.ObjectLiteralExpression): boolean {
@@ -850,19 +847,14 @@ function numericLiteralValue(expression: ts.Expression): number | undefined {
   return undefined;
 }
 
-function isGeneratedSecurityManifest(
-  statement: ts.Statement,
-): statement is ts.VariableStatement & {
+function isGeneratedSecurityManifest(statement: ts.Statement): statement is ts.VariableStatement & {
   readonly declarationList: ts.VariableDeclarationList & {
     readonly declarations: readonly [
       ts.VariableDeclaration & { readonly initializer: ts.CallExpression },
     ];
   };
 } {
-  if (
-    !ts.isVariableStatement(statement) ||
-    statement.declarationList.declarations.length !== 1
-  ) {
+  if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) {
     return false;
   }
   const declaration = statement.declarationList.declarations[0]!;

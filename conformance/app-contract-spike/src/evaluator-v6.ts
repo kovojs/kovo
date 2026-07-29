@@ -37,12 +37,11 @@ const sealedArtifactNames = [
   'generated-app.ts',
 ] as const;
 const sealedArtifactSha256 = {
-  'compiler-packed.tgz': '4bdbe854e72cc9dab51375c6ef5f3333d7975ff0c9e82cac39ecf28057638687',
+  'compiler-packed.tgz': '29a113d516bf0a8b589abecd0f60cae76dd5ff17ae12cb1b3bd72852389cb412',
   'config.ts': 'ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761',
-  'generated-app.ts': '8362b6812088600716cc2416607061668a42f2633dad70b6e82c6946f9db80ae',
+  'generated-app.ts': '29b78fc38f76016f1e335c81f132cf3bdc6125cd0e364a54395d39654c17cdb6',
   'provider.ts': '7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d',
-  'server-overlay-packed.tgz':
-    'a8a46d32eb323721f087d6ff5a0bb58a4aab7080663ab6c6f240db0694205928',
+  'server-overlay-packed.tgz': '585f06c00cdfd0dfd77f755becf4574b7f4afc634d88d132fbac48c03ab8b49a',
 } as const satisfies Readonly<Record<(typeof sealedArtifactNames)[number], string>>;
 const resolverMutationCodes = {
   'blank-owner-key': 'D1A105',
@@ -67,9 +66,7 @@ const evidenceBindingMutationCodes = {
   'server-copy-digest': 'D1E203',
 } as const;
 type SealedArtifactName = (typeof sealedArtifactNames)[number];
-export type D1V6SealedAuthority = Partial<
-  Readonly<Record<SealedArtifactName, string | Buffer>>
->;
+export type D1V6SealedAuthority = Partial<Readonly<Record<SealedArtifactName, string | Buffer>>>;
 const exactRawKeys = [
   'compiler',
   'diagnostics',
@@ -333,16 +330,10 @@ async function artifactGate(
   );
   const overlayPaths = new Set(overlayFiles.map((file) => file.path));
   const packedBaseFiles =
-    serverArtifact?.packedContents.files.filter(
-      (file) => !overlayPaths.has(file.path),
-    ) ?? [];
-  const postWriteBaseFiles = postWriteFiles.filter(
-    (file) => !overlayPaths.has(file.path),
-  );
+    serverArtifact?.packedContents.files.filter((file) => !overlayPaths.has(file.path)) ?? [];
+  const postWriteBaseFiles = postWriteFiles.filter((file) => !overlayPaths.has(file.path));
   if (!equalJson(packedBaseFiles, postWriteBaseFiles)) {
-    failures.push(
-      'sealed post-write server bytes do not authenticate the claimed packed base',
-    );
+    failures.push('sealed post-write server bytes do not authenticate the claimed packed base');
   }
   const sealedClaims = {
     'config.ts': evidence.sealedArtifacts.configSha256,
@@ -448,13 +439,8 @@ function compilerGate(
     criteria.semanticEquivalenceContract.collisionFixtures,
     'semantic collision fixtures',
   );
-  for (const [name, collision] of Object.entries(
-    evidence.semanticEquivalence.collisionSubjects,
-  )) {
-    if (
-      !collision.byteExact ||
-      collision.originalSha256 !== collision.canonicalSha256
-    ) {
+  for (const [name, collision] of Object.entries(evidence.semanticEquivalence.collisionSubjects)) {
+    if (!collision.byteExact || collision.originalSha256 !== collision.canonicalSha256) {
       failures.push(`${name} was changed outside an exact factory-callee AST node`);
     }
   }
@@ -477,10 +463,7 @@ function ownershipGate(
   ) {
     failures.push('sealed config/provider/generated owner identity differs');
   }
-  if (
-    sealed['config.ts'].includes('d1v6:') ||
-    sealed['provider.ts'].includes('d1v6:')
-  ) {
+  if (sealed['config.ts'].includes('d1v6:') || sealed['provider.ts'].includes('d1v6:')) {
     failures.push('authored source contains a forbidden owner literal');
   }
   validateWorkloadSubjects(criteria, evidence, failures);
@@ -504,7 +487,12 @@ function ownershipGate(
   for (const family of declarationFamilies) {
     for (const arm of arms) {
       const entry = evidence.compiler.families[family][arm];
-      validateFileBinding(entry.sourceSha256, entry.sourceSubject, failures, `${family}/${arm} source`);
+      validateFileBinding(
+        entry.sourceSha256,
+        entry.sourceSubject,
+        failures,
+        `${family}/${arm} source`,
+      );
       if (entry.compiledOwnerKey !== evidence.runtime[arm].ownerKey) {
         failures.push(`${family}/${arm} compiled owner differs from runtime owner`);
       }
@@ -553,8 +541,7 @@ function ownershipGate(
   if (
     sealedIdentity &&
     (sealedIdentity.compilerSourceSha256 !== compilerArtifact?.sourceSha256 ||
-      sealedIdentity.serverPackedContentsSha256 !==
-        serverArtifact?.packedContents.digest)
+      sealedIdentity.serverPackedContentsSha256 !== serverArtifact?.packedContents.digest)
   ) {
     failures.push(
       'sealed generated AST compiler/server digests differ from authenticated package subjects',
@@ -619,8 +606,7 @@ function ownershipGate(
     primaryContract.generatedModuleSubject.sha256 !== sha256(sealed['generated-app.ts']) ||
     primaryContract.configSource !== sealed['config.ts'].toString('utf8') ||
     primaryContract.providerSource !== sealed['provider.ts'].toString('utf8') ||
-    primaryContract.generatedModuleSource !==
-      sealed['generated-app.ts'].toString('utf8')
+    primaryContract.generatedModuleSource !== sealed['generated-app.ts'].toString('utf8')
   ) {
     failures.push('primary generated contract is not bound to sealed source bytes');
   }
@@ -647,13 +633,14 @@ function ownershipGate(
     Object.keys(criteria.receiverFlowContract.unsupported),
     'unsupported receiver flows',
   );
-  for (const [name, expectedCode] of Object.entries(
-    criteria.receiverFlowContract.unsupported,
-  )) {
+  for (const [name, expectedCode] of Object.entries(criteria.receiverFlowContract.unsupported)) {
     const observed = evidence.receiverFlow.unsupported[name];
     if (
       !observed ||
-      !equalJson(observed.diagnostics.map((entry) => entry.code), [expectedCode]) ||
+      !equalJson(
+        observed.diagnostics.map((entry) => entry.code),
+        [expectedCode],
+      ) ||
       observed.recognizedFactoryCount !== 0 ||
       observed.ownerKey !== null
     ) {
@@ -683,30 +670,25 @@ function validateWorkloadSubjects(
   evidence: D1RawEvidenceV6,
   failures: string[],
 ): void {
-  validateSourceSnapshot(evidence.workloadSubjects.appSourcesBefore, failures, 'app sources before');
+  validateSourceSnapshot(
+    evidence.workloadSubjects.appSourcesBefore,
+    failures,
+    'app sources before',
+  );
   validateSourceSnapshot(evidence.workloadSubjects.appSourcesAfter, failures, 'app sources after');
 
   const before = new Map(
-    evidence.workloadSubjects.appSourcesBefore.inputs.map((entry) => [
-      entry.subject.path,
-      entry,
-    ]),
+    evidence.workloadSubjects.appSourcesBefore.inputs.map((entry) => [entry.subject.path, entry]),
   );
   const after = new Map(
-    evidence.workloadSubjects.appSourcesAfter.inputs.map((entry) => [
-      entry.subject.path,
-      entry,
-    ]),
+    evidence.workloadSubjects.appSourcesAfter.inputs.map((entry) => [entry.subject.path, entry]),
   );
   const sourcePaths = new Set([...before.keys(), ...after.keys()]);
   const appSourceRewriteCount = [...sourcePaths].filter((path) => {
     const left = before.get(path);
     const right = after.get(path);
     return (
-      !left ||
-      !right ||
-      left.source !== right.source ||
-      !equalJson(left.subject, right.subject)
+      !left || !right || left.source !== right.source || !equalJson(left.subject, right.subject)
     );
   }).length;
 
@@ -734,10 +716,7 @@ function validateWorkloadSubjects(
     generatedTypeDeclarationFiles += inputs.length;
     for (const [index, input] of inputs.entries()) {
       validateSourceInput(input, failures, `${variant} declaration input ${index}`);
-      if (
-        input.subject.path !==
-        `app/d1-measure/${variant}/declarations-${index}.ts`
-      ) {
+      if (input.subject.path !== `app/d1-measure/${variant}/declarations-${index}.ts`) {
         failures.push(`${variant} declaration input ${index} path/order differs`);
       }
       const declarationCount = countGeneratedTypeDeclarations(
@@ -769,21 +748,15 @@ function validateWorkloadSubjects(
     evidence.generation.armB.contracts.map((contract) => contract.providerSubject.path),
   ).size;
   const generatedBoundModules = new Set(
-    evidence.generation.armB.contracts.map(
-      (contract) => contract.generatedModuleSubject.path,
-    ),
+    evidence.generation.armB.contracts.map((contract) => contract.generatedModuleSubject.path),
   ).size;
   const recomputedCounts = {
     matrixCases: Object.keys(evidence.matrix).length,
-    matrixArms: new Set(
-      Object.values(evidence.matrix).flatMap((entry) => Object.keys(entry)),
-    ).size,
+    matrixArms: new Set(Object.values(evidence.matrix).flatMap((entry) => Object.keys(entry))).size,
     generatedMatrixFiles: matrixEntries.length,
     declarationFamilies: Object.keys(evidence.compiler.families).length,
     familyVariants: new Set(
-      Object.values(evidence.compiler.families).flatMap((entry) =>
-        Object.keys(entry),
-      ),
+      Object.values(evidence.compiler.families).flatMap((entry) => Object.keys(entry)),
     ).size,
     generatedFamilyFiles: familyEntries.length,
     generatedRuntimeFiles: Object.keys(evidence.runtime).length,
@@ -791,14 +764,11 @@ function validateWorkloadSubjects(
     generatedBoundModules,
     unsupportedReceiverFiles: Object.keys(evidence.receiverFlow.unsupported).length,
     negativeControlFiles: Object.keys(evidence.receiverFlow.controls).length,
-    typeMeasurementVariants: Object.keys(
-      evidence.workloadSubjects.declarationInputs,
-    ).length,
+    typeMeasurementVariants: Object.keys(evidence.workloadSubjects.declarationInputs).length,
     declarationFilesPerVariant:
       new Set(
         declarationVariants.map(
-          (variant) =>
-            evidence.workloadSubjects.declarationInputs[variant].length,
+          (variant) => evidence.workloadSubjects.declarationInputs[variant].length,
         ),
       ).size === 1
         ? evidence.workloadSubjects.declarationInputs.baseline.length
@@ -807,16 +777,14 @@ function validateWorkloadSubjects(
     generatedTypeDeclarationFiles,
     generatedTypeDeclarations,
     appSourceRewriteCount,
-    serverOverlayFileCount:
-      evidence.fixture.serverCopies[0]?.overlayFiles.length ?? 0,
+    serverOverlayFileCount: evidence.fixture.serverCopies[0]?.overlayFiles.length ?? 0,
     sealedArtifactCount: Object.keys(evidence.sealedArtifacts).length,
     buildCommandCount: evidence.provenance.buildCommands.length,
     providerDefinitionCount: generatedProviderFiles,
   };
   const preregisteredCounts = {
     ...criteria.workload,
-    providerDefinitionCount:
-      criteria.semanticThresholds.providerDefinitionCountExact,
+    providerDefinitionCount: criteria.semanticThresholds.providerDefinitionCountExact,
   };
   if (
     !equalJson(recomputedCounts, preregisteredCounts) ||
@@ -862,11 +830,7 @@ function validateSourceInput(
   }
 }
 
-function countGeneratedTypeDeclarations(
-  source: string,
-  failures: string[],
-  label: string,
-): number {
+function countGeneratedTypeDeclarations(source: string, failures: string[], label: string): number {
   const sourceFile = ts.createSourceFile(
     `${label}.ts`,
     source,
@@ -878,9 +842,7 @@ function countGeneratedTypeDeclarations(
   for (const statement of sourceFile.statements) {
     if (
       !ts.isVariableStatement(statement) ||
-      !statement.modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      )
+      !statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
     ) {
       continue;
     }
@@ -909,12 +871,8 @@ function validateGeneratedContractSet(
   failures: string[],
 ): void {
   const contracts = evidence.generation.armB.contracts;
-  const generatedPaths = new Set(
-    contracts.map((contract) => contract.generatedModuleSubject.path),
-  );
-  const providerPaths = new Set(
-    contracts.map((contract) => contract.providerSubject.path),
-  );
+  const generatedPaths = new Set(contracts.map((contract) => contract.generatedModuleSubject.path));
+  const providerPaths = new Set(contracts.map((contract) => contract.providerSubject.path));
   if (
     contracts.length !== criteria.workload.generatedBoundModules ||
     generatedPaths.size !== criteria.workload.generatedBoundModules ||
@@ -947,8 +905,7 @@ function validateGeneratedContractSet(
     if (
       contract.manifest.configSha256 !== contract.configSubject.sha256 ||
       contract.manifest.providerSourceSha256 !== contract.providerSubject.sha256 ||
-      contract.manifest.generatedModuleSha256 !==
-        contract.generatedModuleSubject.sha256
+      contract.manifest.generatedModuleSha256 !== contract.generatedModuleSubject.sha256
     ) {
       failures.push(`generated contract ${index} manifest is not bound to captured bytes`);
     }
@@ -962,16 +919,12 @@ function validateGeneratedContractSet(
       !identity ||
       identity.appId !== contract.manifest.appId ||
       identity.providerKey !== contract.manifest.providerKey ||
-      identity.providerExportBinding !==
-        contract.manifest.providerExportBinding ||
-      identity.providerImportSpecifier !==
-        contract.manifest.providerImportSpecifier ||
+      identity.providerExportBinding !== contract.manifest.providerExportBinding ||
+      identity.providerImportSpecifier !== contract.manifest.providerImportSpecifier ||
       identity.ownerKey !== contract.manifest.ownerKey ||
       identity.generatedOwnerKey !== contract.manifest.ownerKey ||
-      identity.compilerSourceSha256 !==
-        contract.manifest.compilerSourceSha256 ||
-      identity.serverPackedContentsSha256 !==
-        contract.manifest.serverPackedContentsSha256
+      identity.compilerSourceSha256 !== contract.manifest.compilerSourceSha256 ||
+      identity.serverPackedContentsSha256 !== contract.manifest.serverPackedContentsSha256
     ) {
       failures.push(
         `generated contract ${index} identity does not derive from its config/provider/generated AST`,
@@ -1071,12 +1024,7 @@ function recomputeTypescriptDiagnostic(criteria: D1CriteriaV6): {
     getSourceFile: (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
       candidate === fileName
         ? sourceFile
-        : base.getSourceFile(
-            candidate,
-            languageVersion,
-            onError,
-            shouldCreateNewSourceFile,
-          ),
+        : base.getSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile),
     readFile: (candidate) => (candidate === fileName ? source : base.readFile(candidate)),
   };
   const diagnostic = ts
@@ -1165,11 +1113,7 @@ function performanceGates(
       failures.push('warm tsc delta exceeds threshold');
     }
     if (
-      pairedDeltaPercent(
-        candidate.coldCompletionSamples,
-        baseline.coldCompletionSamples,
-        0.5,
-      ) >
+      pairedDeltaPercent(candidate.coldCompletionSamples, baseline.coldCompletionSamples, 0.5) >
       criteria.performanceThresholds.coldCompletionPairedP50DeltaPercentMaximum
     ) {
       failures.push('cold completion delta exceeds threshold');
@@ -1177,11 +1121,7 @@ function performanceGates(
     if (
       candidate.warmCompletionP95Ms >
         criteria.performanceThresholds.warmCompletionP95MillisecondsMaximum ||
-      pairedDeltaPercent(
-        candidate.warmCompletionSamples,
-        baseline.warmCompletionSamples,
-        0.95,
-      ) >
+      pairedDeltaPercent(candidate.warmCompletionSamples, baseline.warmCompletionSamples, 0.95) >
         criteria.performanceThresholds.warmCompletionPairedP95DeltaPercentMaximum
     ) {
       failures.push('warm completion p95 exceeds threshold');
@@ -1248,12 +1188,8 @@ function validateMeasurementSummary(
 ): void {
   const coldTscMs = measurement.coldTscSamples.map((sample) => sample.milliseconds);
   const warmTscMs = measurement.warmTscSamples.map((sample) => sample.milliseconds);
-  const coldCompletionMs = measurement.coldCompletionSamples.map(
-    (sample) => sample.milliseconds,
-  );
-  const warmCompletionMs = measurement.warmCompletionSamples.map(
-    (sample) => sample.milliseconds,
-  );
+  const coldCompletionMs = measurement.coldCompletionSamples.map((sample) => sample.milliseconds);
+  const warmCompletionMs = measurement.warmCompletionSamples.map((sample) => sample.milliseconds);
   if (
     coldTscMs.length !== thresholds.coldTscRepeats ||
     warmTscMs.length !== thresholds.warmTscRepeats ||
@@ -1495,16 +1431,12 @@ function tarEntries(
 
 function tarText(bytes: Buffer, start: number, end: number): string {
   const zero = bytes.indexOf(0, start);
-  return bytes
-    .subarray(start, zero >= start && zero < end ? zero : end)
-    .toString('utf8');
+  return bytes.subarray(start, zero >= start && zero < end ? zero : end).toString('utf8');
 }
 
 function tarOctal(bytes: Buffer, start: number, end: number): number {
   const value = tarText(bytes, start, end).trim();
-  return value.length === 0 || !/^[0-7]+$/u.test(value)
-    ? 0
-    : Number.parseInt(value, 8);
+  return value.length === 0 || !/^[0-7]+$/u.test(value) ? 0 : Number.parseInt(value, 8);
 }
 
 function deriveSealedOwnerIdentity(
@@ -1563,14 +1495,8 @@ function deriveOwnerIdentityFromSources(
     return undefined;
   }
   const appId = evaluatorStringProperty(configObject, 'appId');
-  const providerExportBinding = evaluatorStringProperty(
-    configObject,
-    'providerExportBinding',
-  );
-  const providerImportSpecifier = evaluatorStringProperty(
-    configObject,
-    'providerImportSpecifier',
-  );
+  const providerExportBinding = evaluatorStringProperty(configObject, 'providerExportBinding');
+  const providerImportSpecifier = evaluatorStringProperty(configObject, 'providerImportSpecifier');
   const providerKey = evaluatorStringProperty(configObject, 'providerKey');
   const providerReference = evaluatorIdentifierProperty(configObject, 'provider');
   if (
@@ -1593,8 +1519,8 @@ function deriveOwnerIdentityFromSources(
         ts.isNamedImports(statement.importClause.namedBindings) &&
         statement.importClause.namedBindings.elements.some(
           (specifier) =>
-            (specifier.propertyName?.text ?? specifier.name.text) ===
-              providerExportBinding && specifier.name.text === providerExportBinding,
+            (specifier.propertyName?.text ?? specifier.name.text) === providerExportBinding &&
+            specifier.name.text === providerExportBinding,
         ),
     );
   const providerFile = ts.createSourceFile(
@@ -1609,8 +1535,7 @@ function deriveOwnerIdentityFromSources(
     .flatMap((statement) => [...statement.declarationList.declarations])
     .find(
       (declaration) =>
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === providerExportBinding,
+        ts.isIdentifier(declaration.name) && declaration.name.text === providerExportBinding,
     );
   const providerObject = providerDeclaration?.initializer
     ? evaluatorUnwrap(providerDeclaration.initializer)
@@ -1636,8 +1561,7 @@ function deriveOwnerIdentityFromSources(
     .flatMap((statement) => [...statement.declarationList.declarations])
     .find(
       (declaration) =>
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === '__kovoGeneratedContract',
+        ts.isIdentifier(declaration.name) && declaration.name.text === '__kovoGeneratedContract',
     );
   const generatedObject = generatedDeclaration?.initializer
     ? evaluatorObjectLiteral(generatedDeclaration.initializer, 'Object', 'freeze')
@@ -1654,8 +1578,7 @@ function deriveOwnerIdentityFromSources(
   if (
     !generatedObject ||
     evaluatorStringProperty(generatedObject, 'appId') !== appId ||
-    evaluatorStringProperty(generatedObject, 'providerExportBinding') !==
-      providerExportBinding ||
+    evaluatorStringProperty(generatedObject, 'providerExportBinding') !== providerExportBinding ||
     evaluatorStringProperty(generatedObject, 'providerImportSpecifier') !==
       providerImportSpecifier ||
     evaluatorStringProperty(generatedObject, 'providerKey') !== providerKey ||
@@ -1773,13 +1696,7 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
   for (const [index, artifact] of evidence.provenance.packages.entries()) {
     assertExactKeys(
       artifact,
-      [
-        'name',
-        'packedContents',
-        'sourceContents',
-        'sourceSha256',
-        'tarballSha256',
-      ],
+      ['name', 'packedContents', 'sourceContents', 'sourceSha256', 'tarballSha256'],
       `package[${index}]`,
     );
     assertContentSubjectShape(artifact.packedContents, `package[${index}].packedContents`);
@@ -1833,9 +1750,7 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
     ['arm-a', 'arm-b', 'baseline'],
     'workloadSubjects.declarationInputs',
   );
-  for (const [variant, inputs] of Object.entries(
-    evidence.workloadSubjects.declarationInputs,
-  )) {
+  for (const [variant, inputs] of Object.entries(evidence.workloadSubjects.declarationInputs)) {
     for (const input of inputs) {
       assertExactKeys(input, ['source', 'subject'], `${variant} declaration input`);
       assertFileSubjectShape(input.subject, `${variant} declaration input subject`);
@@ -1886,11 +1801,7 @@ function assertRawEvidenceShape(criteria: D1CriteriaV6, evidence: D1RawEvidenceV
     }
   }
 
-  assertExactKeys(
-    evidence.receiverFlow,
-    ['controls', 'unsupported'],
-    'receiverFlow',
-  );
+  assertExactKeys(evidence.receiverFlow, ['controls', 'unsupported'], 'receiverFlow');
   assertExactKeys(
     evidence.receiverFlow.unsupported,
     Object.keys(criteria.receiverFlowContract.unsupported),
@@ -2169,7 +2080,8 @@ function assertMatrixEvidenceShape(
     ],
     label,
   );
-  for (const diagnostic of value.diagnostics) assertDiagnosticShape(diagnostic, `${label}.diagnostic`);
+  for (const diagnostic of value.diagnostics)
+    assertDiagnosticShape(diagnostic, `${label}.diagnostic`);
   assertFileSubjectShape(value.sourceSubject, `${label}.source`);
 }
 
@@ -2193,10 +2105,7 @@ function assertDiagnosticShape(value: PrototypeDiagnostic, label: string): void 
   assertExactKeys(value, ['code', 'fileName', 'length', 'message', 'start'], label);
 }
 
-function assertTimedSampleShape(
-  sample: object,
-  completion: boolean,
-): void {
+function assertTimedSampleShape(sample: object, completion: boolean): void {
   assertExactKeys(
     sample,
     completion
@@ -2304,7 +2213,9 @@ function pairedDeltaPercent(
   );
   const deltas = candidate.map((sample) => {
     const paired = baselineByIteration.get(sample.iteration);
-    return paired === undefined ? Number.POSITIVE_INFINITY : deltaPercent(sample.milliseconds, paired);
+    return paired === undefined
+      ? Number.POSITIVE_INFINITY
+      : deltaPercent(sample.milliseconds, paired);
   });
   return percentile(deltas, fraction);
 }

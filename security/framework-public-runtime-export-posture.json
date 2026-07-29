@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.5",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.9",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "2f101e085212dd537257445bd020bbae43c38264519e85f680af7d5658eb632b",
+      "sourceTreeSha256": "fd8f48daf2a289f4c02aa4dd6daa890bff6e1b7f22cc471a34490d0fc94316f2",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -443,7 +443,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "703992c8f8c84b070a6304af82639e7ec6e476e6a3de3ea3cbb916769265b012"
+      "sourceTreeSha256": "c3d44c0d6d564431e72897d35cec4e91ac46d4cd442feca61e55c54459aa95ef"
     },
     {
       "manifestVariants": [
@@ -773,7 +773,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "4061e28e3f03926e401831ee2df9d5a7cb57af8df50f3d3025ce1a53c7ff8899"
+      "sourceTreeSha256": "3670f4d67a830526fbc8e1a136489abfbf7fd5b3b2f2221c3a2c56a3569b37fd"
     },
     {
       "manifestVariants": [
@@ -873,7 +873,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "15426084c5243ac22f172544375963167edf0c66db87dec58b36220f25b14b10"
+      "sourceTreeSha256": "745dec888e1f27f04a484451df30fa1ee94abe9cbc0825c4e5a696f7577a9149"
     },
     {
       "manifestVariants": [
@@ -1714,7 +1714,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "48883c56cc7a27b33f2b536564e9e288b6f15fec7bebb8cdd9028f72862fc3e2"
+      "sourceTreeSha256": "4eec992d77454083336f33deefec0d36c401c80d258d07f46d858eba70685417"
     },
     {
       "manifestVariants": [
@@ -2007,7 +2007,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "c5b506d7f386fb757fbad278daaff4a8364eb71290849ef5c4521b467a896464"
+      "sourceTreeSha256": "316cb8d45d3cca5e10c5ee644fb21380f1cf47bdd05a049a44d85a0874864d28"
     },
     {
       "manifestVariants": [
@@ -2696,7 +2696,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "a3b65f0fbfff6bbce20395f5e42b3b4fb4f08ed7a8720a24cbfc206d294fd929"
+      "sourceTreeSha256": "1556744ef6c7679756dae366cc3f15e4a5ccf2514be1a16f12457fa8766c1a0a"
     },
     {
       "manifestVariants": [
@@ -10204,7 +10204,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "47d9acb405df6a6dddb8d1b5a816d31d493cfcfb41c69eb3871bc5a396938f0c"
+      "sourceTreeSha256": "21c547ac1df06818a982f705cc1c639419df8a160c1fe33aaf29640d64a0e96b"
     },
     {
       "manifestVariants": [
@@ -11350,7 +11350,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "f21fb0995980e79b84513d40bd9622175e075072aac498ed0f37e2ce6a6c3d78"
+      "sourceTreeSha256": "239093b0e1f52a684e3e33f5caeeed3781993525037c95a16f67cd5e40badf7d"
     },
     {
       "manifestVariants": [

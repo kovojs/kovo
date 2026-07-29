@@ -29,10 +29,15 @@ compiler/runtime facts; none may become a second analyzer.
 
 - [ ] Add source/package/public-manifest digests and a file manifest to API-reference output.
 - [ ] Prove deterministic clean generation and matching site-consumed digests.
-- [ ] Compile every JSDoc, generated API, package README, and authored guide sample against packed
+- [x] Compile every JSDoc, generated API, package README, and authored guide sample against packed
       exports.
-- [ ] Parse every documented CLI invocation through the semantic command schema.
-- [ ] Require reviewed `executable`, `type-error`, `output`, or `illustrative` classifications.
+  - Evidence: `pnpm run check:publish` compiles 1,139 executable samples and 920 JSDoc examples
+    from the 3,096-sample corpus against attested package tarballs.
+- [x] Parse every documented CLI invocation through the semantic command schema.
+  - Evidence: the same packed gate validates all 93 discovered CLI invocations.
+- [x] Require reviewed `executable`, `type-error`, `output`, or `illustrative` classifications.
+  - Evidence: `scripts/packed-doc-samples.test.mjs` and the packed gate reject unclassified code
+    and illustrative skips without a reviewed reason.
 - [ ] Generate task-first API pages with values/examples before named supporting types and no
       implementation/protocol types.
 - [ ] Publish and pack-test one canonical recipe for every golden task named in the charter.
@@ -49,4 +54,5 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+- `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
+  1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.

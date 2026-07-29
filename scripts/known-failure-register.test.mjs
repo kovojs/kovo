@@ -52,9 +52,9 @@ describe('known-failure register', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 6,
+      executable: 2,
       'pending-repro': 0,
-      retired: 4,
+      retired: 8,
     });
     expect(
       register.entries.every(
@@ -305,23 +305,15 @@ describe('known-failure register', () => {
     expect(xfail.availablePass).toBe(true);
     expect(xfail.pass).toBe(true);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
-      expect.objectContaining({ id: 'KF-DEVEX-002' }),
-      expect.objectContaining({ id: 'KF-DEVEX-004' }),
       expect.objectContaining({ id: 'KF-DEVEX-005' }),
-      expect.objectContaining({ id: 'KF-DEVEX-006' }),
       expect.objectContaining({ id: 'KF-DEVEX-007' }),
-      expect.objectContaining({ id: 'KF-DEVEX-010' }),
     ]);
     expect(xpass.executableClosureComplete).toBe(true);
     expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
-      expect.objectContaining({ id: 'KF-DEVEX-002' }),
-      expect.objectContaining({ id: 'KF-DEVEX-004' }),
       expect.objectContaining({ id: 'KF-DEVEX-005' }),
-      expect.objectContaining({ id: 'KF-DEVEX-006' }),
       expect.objectContaining({ id: 'KF-DEVEX-007' }),
-      expect.objectContaining({ id: 'KF-DEVEX-010' }),
     ]);
   });
 
@@ -389,9 +381,13 @@ describe('known-failure register', () => {
     expect(executed).toContain('KF-DEVEX-003');
     expect(passing.results.filter((result) => result.status === 'retired-pass')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-pass' },
+      { id: 'KF-DEVEX-002', status: 'retired-pass' },
       { id: 'KF-DEVEX-003', status: 'retired-pass' },
+      { id: 'KF-DEVEX-004', status: 'retired-pass' },
+      { id: 'KF-DEVEX-006', status: 'retired-pass' },
       { id: 'KF-DEVEX-008', status: 'retired-pass' },
       { id: 'KF-DEVEX-009', status: 'retired-pass' },
+      { id: 'KF-DEVEX-010', status: 'retired-pass' },
     ]);
     expect(passing.availablePass).toBe(true);
     expect(passing.pass).toBe(true);
@@ -406,9 +402,13 @@ describe('known-failure register', () => {
     expect(regression.pass).toBe(false);
     expect(regression.results.filter((result) => result.status === 'retired-regression')).toEqual([
       { id: 'KF-DEVEX-001', status: 'retired-regression' },
+      { id: 'KF-DEVEX-002', status: 'retired-regression' },
       { id: 'KF-DEVEX-003', status: 'retired-regression' },
+      { id: 'KF-DEVEX-004', status: 'retired-regression' },
+      { id: 'KF-DEVEX-006', status: 'retired-regression' },
       { id: 'KF-DEVEX-008', status: 'retired-regression' },
       { id: 'KF-DEVEX-009', status: 'retired-regression' },
+      { id: 'KF-DEVEX-010', status: 'retired-regression' },
     ]);
   });
 
@@ -420,6 +420,22 @@ describe('known-failure register', () => {
         error: null,
         stdout: '',
         stderr: 'kovo: graph input is required when no explicit artifact exists',
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedCliContractOutcome('empty-check', {
+        status: 2,
+        stdout: '',
+        stderr:
+          'kovo-check/v1\nERROR kovo check app module is missing or unreadable: "/tmp/app/src/app.tsx".\n',
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedCliContractOutcome('empty-check', {
+        status: 1,
+        stdout:
+          'kovo-check/v1\nERROR kovo check app module is missing or unreadable: "/tmp/app/src/app.tsx".\n',
+        stderr: '',
       }),
     ).toBe('desired-behavior');
     for (const stderr of [
@@ -552,20 +568,26 @@ describe('known-failure register', () => {
 
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
-        exit: 0,
-        output: 'check summary\ncheck passed\n',
+        variants: [
+          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'sqlite', exit: 0, output: 'check summary\ncheck passed\n' },
+        ],
       }),
     ).toBe('desired-behavior');
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
-        exit: 1,
-        output: failedOutput,
+        variants: [
+          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'sqlite', exit: 1, output: failedOutput },
+        ],
       }),
     ).toBe('defect-reproduced');
     expect(
       packedFirstLoopContractOutcome('fresh-check', {
-        exit: 1,
-        output: 'permission denied',
+        variants: [
+          { dialect: 'postgres', exit: 0, output: 'check summary\ncheck passed\n' },
+          { dialect: 'sqlite', exit: 1, output: 'permission denied' },
+        ],
       }),
     ).toBeNull();
   });

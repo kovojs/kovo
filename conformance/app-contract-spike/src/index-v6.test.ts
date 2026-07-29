@@ -101,9 +101,7 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
   });
 
   it('rejects subject/count, contract-cardinality, packed-base, forbidden-diagnostic, and performance bypasses', async () => {
-    const mutations: Array<
-      readonly [string, (value: Mutable<D1RawEvidenceV6>) => void]
-    > = [
+    const mutations: Array<readonly [string, (value: Mutable<D1RawEvidenceV6>) => void]> = [
       [
         'generated contract truncation',
         (value) => {
@@ -114,11 +112,7 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
         'generated contract cloning',
         (value) => {
           const primary = clone(value.generation.armB.contracts[0]!);
-          value.generation.armB.contracts = [
-            primary,
-            clone(primary),
-            clone(primary),
-          ];
+          value.generation.armB.contracts = [primary, clone(primary), clone(primary)];
         },
       ],
       [
@@ -136,11 +130,9 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
       [
         'declaration subject without count claim',
         (value) => {
-          const inputs =
-            value.workloadSubjects.declarationInputs.baseline;
+          const inputs = value.workloadSubjects.declarationInputs.baseline;
           const duplicate = clone(inputs[0]!);
-          duplicate.subject.path =
-            `app/d1-measure/baseline/declarations-${inputs.length}.ts`;
+          duplicate.subject.path = `app/d1-measure/baseline/declarations-${inputs.length}.ts`;
           inputs.push(duplicate);
         },
       ],
@@ -157,8 +149,7 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
             copy.basePackedContentsSha256 = server.packedContents.digest;
           }
           for (const contract of value.generation.armB.contracts) {
-            contract.manifest.serverPackedContentsSha256 =
-              server.packedContents.digest;
+            contract.manifest.serverPackedContentsSha256 = server.packedContents.digest;
           }
         },
       ],
@@ -203,10 +194,9 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
       const value = clone(evidence);
       mutate(value);
       const evaluated = await evaluateD1V6(criteria, value);
-      expect(
-        evaluated.arms['arm-a'].eligible && evaluated.arms['arm-b'].eligible,
-        name,
-      ).toBe(false);
+      expect(evaluated.arms['arm-a'].eligible && evaluated.arms['arm-b'].eligible, name).toBe(
+        false,
+      );
     }
   });
 
@@ -285,9 +275,7 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
     expect(canonical.source).toContain(
       'generatedQuery({ load() { return "authored-template"; } });`;',
     );
-    expect(canonical.source).not.toContain(
-      'query({ load() { return "authored-template"; } });`;',
-    );
+    expect(canonical.source).not.toContain('query({ load() { return "authored-template"; } });`;');
 
     const nearMissEnvelope = [
       '// @kovojs-ir',
@@ -349,10 +337,9 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
     for (const [name, mutate] of surplusRawMutations()) {
       const mutated = clone(evidence);
       mutate(mutated);
-      await expect(
-        evaluateD1V6(criteria, mutated),
-        `surplus schema node ${name}`,
-      ).rejects.toThrow('keys differ');
+      await expect(evaluateD1V6(criteria, mutated), `surplus schema node ${name}`).rejects.toThrow(
+        'keys differ',
+      );
     }
   });
 
@@ -387,12 +374,9 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
 
   it('contains no synthetic D1B201 path and records exact mutation coverage', async () => {
     const sources = await Promise.all(
-      [
-        './evaluator-v6.ts',
-        './experiment-v6.ts',
-        './fixture-v6.ts',
-        './project-v6.ts',
-      ].map((name) => readFile(new URL(name, import.meta.url), 'utf8')),
+      ['./evaluator-v6.ts', './experiment-v6.ts', './fixture-v6.ts', './project-v6.ts'].map(
+        (name) => readFile(new URL(name, import.meta.url), 'utf8'),
+      ),
     );
     expect(sources.join('\n')).not.toContain('D1B201');
     expect(Object.keys(evidence.mutationCoverage.oneSided).sort()).toEqual(
@@ -412,9 +396,7 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
   ): Promise<void> {
     try {
       const evaluated = await evaluateD1V6(criteria, mutated, authority);
-      expect(
-        evaluated.arms['arm-a'].eligible && evaluated.arms['arm-b'].eligible,
-      ).toBe(false);
+      expect(evaluated.arms['arm-a'].eligible && evaluated.arms['arm-b'].eligible).toBe(false);
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
     }
@@ -422,18 +404,12 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
 });
 
 function oneSidedMutations(): Array<
-  readonly [
-    string,
-    (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void,
-  ]
+  readonly [string, (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void]
 > {
   return [
     ['config-bytes', (_evidence, authority) => append(authority, 'config.ts')],
     ['provider-bytes', (_evidence, authority) => append(authority, 'provider.ts')],
-    [
-      'generated-module-bytes',
-      (_evidence, authority) => append(authority, 'generated-app.ts'),
-    ],
+    ['generated-module-bytes', (_evidence, authority) => append(authority, 'generated-app.ts')],
     [
       'compiler-entrypoint-bytes',
       (_evidence, authority) => flipByte(authority, 'compiler-packed.tgz'),
@@ -489,8 +465,7 @@ function oneSidedMutations(): Array<
     [
       'count',
       (evidence) => {
-        evidence.fixture.counts.matrixCases =
-          (evidence.fixture.counts.matrixCases ?? 0) + 1;
+        evidence.fixture.counts.matrixCases = (evidence.fixture.counts.matrixCases ?? 0) + 1;
       },
     ],
     [
@@ -509,10 +484,7 @@ function oneSidedMutations(): Array<
 }
 
 function correlatedMutations(): Array<
-  readonly [
-    string,
-    (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void,
-  ]
+  readonly [string, (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void]
 > {
   return [
     [
@@ -570,10 +542,7 @@ function correlatedMutations(): Array<
         }
       },
     ],
-    [
-      'canonical-ir-and-digest',
-      (evidence) => mutateSemantic(evidence, 'arm-a', 'canonicalIr'),
-    ],
+    ['canonical-ir-and-digest', (evidence) => mutateSemantic(evidence, 'arm-a', 'canonicalIr')],
     [
       'canonical-graph-and-digest',
       (evidence) => mutateSemantic(evidence, 'arm-a', 'canonicalGraph'),
@@ -600,8 +569,7 @@ function correlatedMutations(): Array<
         for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
           const inputs = evidence.workloadSubjects.declarationInputs[variant];
           const duplicate = clone(inputs[0]!);
-          duplicate.subject.path =
-            `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
+          duplicate.subject.path = `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
           inputs.push(duplicate);
         }
         evidence.fixture.counts.declarationFilesPerVariant = 13;
@@ -624,10 +592,7 @@ function correlatedMutations(): Array<
 }
 
 function ownerCorrelatedMutations(): Array<
-  readonly [
-    string,
-    (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void,
-  ]
+  readonly [string, (evidence: Mutable<D1RawEvidenceV6>, authority: MutableAuthority) => void]
 > {
   return [
     [
@@ -713,38 +678,18 @@ function mutateOwnerAuthority(
     replaceAuthority(authority, 'config.ts', previousAppId, appId);
   }
   if (options.configProviderKey) {
-    replaceAuthority(
-      authority,
-      'config.ts',
-      previousProviderKey,
-      providerKey,
-    );
+    replaceAuthority(authority, 'config.ts', previousProviderKey, providerKey);
   }
   if (options.providerSourceKey) {
-    replaceAuthority(
-      authority,
-      'provider.ts',
-      previousProviderKey,
-      providerKey,
-    );
+    replaceAuthority(authority, 'provider.ts', previousProviderKey, providerKey);
   }
   if (options.generatedAppId) {
     replaceAuthority(authority, 'generated-app.ts', previousAppId, appId);
   }
   if (options.generatedProviderKey) {
-    replaceAuthority(
-      authority,
-      'generated-app.ts',
-      previousProviderKey,
-      providerKey,
-    );
+    replaceAuthority(authority, 'generated-app.ts', previousProviderKey, providerKey);
   }
-  replaceAuthority(
-    authority,
-    'generated-app.ts',
-    evidence.fixture.ownerKey,
-    owner,
-  );
+  replaceAuthority(authority, 'generated-app.ts', evidence.fixture.ownerKey, owner);
 
   evidence.fixture.ownerKey = owner;
   for (const runtime of Object.values(evidence.runtime)) runtime.ownerKey = owner;
@@ -767,9 +712,7 @@ function replaceAuthority(
   before: string,
   after: string,
 ): void {
-  authority[name] = Buffer.from(
-    authority[name].toString('utf8').replaceAll(before, after),
-  );
+  authority[name] = Buffer.from(authority[name].toString('utf8').replaceAll(before, after));
 }
 
 function synchronizePrimaryAuthorityClaims(
@@ -799,25 +742,19 @@ function synchronizePrimaryAuthorityClaims(
       evidence.workloadSubjects.appSourcesBefore,
       evidence.workloadSubjects.appSourcesAfter,
     ]) {
-      const input = snapshot.inputs.find(
-        (candidate) => candidate.subject.path === subject.path,
-      );
+      const input = snapshot.inputs.find((candidate) => candidate.subject.path === subject.path);
       if (input) {
         input.source = source;
         input.subject.bytes = subject.bytes;
         input.subject.sha256 = digest;
       }
-      snapshot.content.files = snapshot.inputs.map((entry) =>
-        clone(entry.subject),
-      );
+      snapshot.content.files = snapshot.inputs.map((entry) => clone(entry.subject));
       snapshot.content.digest = contentSubjectDigest(snapshot.content.files);
     }
   }
   evidence.sealedArtifacts.configSha256 = sha256(authority['config.ts']);
   evidence.sealedArtifacts.providerSha256 = sha256(authority['provider.ts']);
-  evidence.sealedArtifacts.generatedAppSha256 = sha256(
-    authority['generated-app.ts'],
-  );
+  evidence.sealedArtifacts.generatedAppSha256 = sha256(authority['generated-app.ts']);
 }
 
 function surplusRawMutations(): Array<
@@ -835,28 +772,15 @@ function surplusRawMutations(): Array<
     ['counts', (value) => addSurplus(value.fixture.counts)],
     ['server-copy', (value) => addSurplus(value.fixture.serverCopies[0]!)],
     ['workload-subjects', (value) => addSurplus(value.workloadSubjects)],
-    [
-      'source-snapshot',
-      (value) => addSurplus(value.workloadSubjects.appSourcesBefore),
-    ],
-    [
-      'source-input',
-      (value) => addSurplus(value.workloadSubjects.appSourcesBefore.inputs[0]!),
-    ],
-    [
-      'declaration-inputs',
-      (value) => addSurplus(value.workloadSubjects.declarationInputs),
-    ],
+    ['source-snapshot', (value) => addSurplus(value.workloadSubjects.appSourcesBefore)],
+    ['source-input', (value) => addSurplus(value.workloadSubjects.appSourcesBefore.inputs[0]!)],
+    ['declaration-inputs', (value) => addSurplus(value.workloadSubjects.declarationInputs)],
     [
       'declaration-input',
-      (value) =>
-        addSurplus(value.workloadSubjects.declarationInputs.baseline[0]!),
+      (value) => addSurplus(value.workloadSubjects.declarationInputs.baseline[0]!),
     ],
     ['matrix-case', (value) => addSurplus(value.matrix['ordinary-local-import'])],
-    [
-      'matrix-evidence',
-      (value) => addSurplus(value.matrix['ordinary-local-import']['arm-a']),
-    ],
+    ['matrix-evidence', (value) => addSurplus(value.matrix['ordinary-local-import']['arm-a'])],
     [
       'diagnostic',
       (value) => addSurplus(value.matrix['destructured-factory']['arm-a'].diagnostics[0]!),
@@ -915,9 +839,7 @@ function surplusRawMutations(): Array<
     [
       'selection-entry',
       (value) =>
-        addSurplus(
-          value.mutationCoverage.selectionBranches['arm-a-selected-when-both-pass']!,
-        ),
+        addSurplus(value.mutationCoverage.selectionBranches['arm-a-selected-when-both-pass']!),
     ],
   ];
 }

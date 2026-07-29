@@ -2,6 +2,7 @@ import {
   runtimeEnvironmentValue,
   runtimeLoopbackDevelopmentOrigin,
 } from '@kovojs/server/internal/runtime-environment';
+import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { createSigningKeyRing, type CsrfOptions } from '@kovojs/server';
 import { frameworkCsrfRequestSnapshot } from '@kovojs/server/internal/csrf';
 import { createFrameworkCsrfSigningSecret } from '@kovojs/server/internal/keyring';
@@ -21,6 +22,8 @@ const BETTER_AUTH_SECRET_MINIMUM_LENGTH = 32;
 const REPLACEMENT_SECRET = 'replace-with-a-deployed-secret';
 const REPLACEMENT_DEMO_PASSWORD = 'replace-with-a-local-demo-password';
 const BETTER_AUTH_CSRF_BINDING_MAXIMUM_LENGTH = 1_024;
+const UNAVAILABLE_BUILD_BASE_URL = 'http://127.0.0.1';
+const UNAVAILABLE_BUILD_SIGNING_SECRET = 'kovo-build-environment-unavailable-not-a-runtime-secret';
 
 /** Request fields the framework-owned Better Auth CSRF binding is permitted to inspect. */
 export interface BetterAuthCsrfRequestLike {
@@ -138,6 +141,19 @@ export interface BetterAuthResolvedEnvironment {
 
 /** Resolve auth values at constructor call time, after server bootstrap loaded and pinned `.env`. */
 export function resolveBetterAuthEnvironment(): BetterAuthResolvedEnvironment {
+  if (betterAuthBuildEnvironmentIsUnavailable()) {
+    // SPEC §6.6/§9.5: graph derivation must not consume or retain deployment authority. The
+    // emitted server re-evaluates the app outside this scoped context and therefore still requires
+    // the operator-pinned canonical origin and signing material at runtime.
+    return betterAuthFreezeOwn(
+      {
+        baseURL: UNAVAILABLE_BUILD_BASE_URL,
+        production: false,
+        secret: UNAVAILABLE_BUILD_SIGNING_SECRET,
+      },
+      'Better Auth unavailable build environment',
+    );
+  }
   const production = runtimeEnvironmentValue('NODE_ENV') === 'production';
   assertNoUpstreamBetterAuthEnvironmentOverrides();
   const configuredBaseURL = runtimeEnvironmentValue('BETTER_AUTH_URL');
@@ -179,10 +195,16 @@ export function resolveBetterAuthEnvironment(): BetterAuthResolvedEnvironment {
 
 /** Whether fixed development principals are forbidden by the boot-pinned production posture. */
 export function betterAuthEnvironmentIsProduction(): boolean {
-  return runtimeEnvironmentValue('NODE_ENV') === 'production';
+  return (
+    !betterAuthBuildEnvironmentIsUnavailable() &&
+    runtimeEnvironmentValue('NODE_ENV') === 'production'
+  );
 }
 
 function requiredBetterAuthEnvironmentSecret(): string {
+  if (betterAuthBuildEnvironmentIsUnavailable()) {
+    return UNAVAILABLE_BUILD_SIGNING_SECRET;
+  }
   const secret =
     runtimeEnvironmentValue('BETTER_AUTH_SECRET') ?? runtimeEnvironmentValue('KOVO_CSRF_SECRET');
   if (
@@ -195,6 +217,10 @@ function requiredBetterAuthEnvironmentSecret(): string {
     );
   }
   return secret;
+}
+
+function betterAuthBuildEnvironmentIsUnavailable(): boolean {
+  return currentKovoBuildContext()?.appEnvironment === 'unavailable';
 }
 
 function assertNoUpstreamBetterAuthEnvironmentOverrides(): void {

@@ -138,11 +138,7 @@ export async function packSealedOverlay(
 ): Promise<{ readonly sha256: string; readonly tarball: string }> {
   await mkdir(destination, { recursive: true });
   const before = new Set((await readdir(destination)).filter((entry) => entry.endsWith('.tgz')));
-  run(
-    'npm',
-    ['pack', '--ignore-scripts', '--pack-destination', destination],
-    packageRoot,
-  );
+  run('npm', ['pack', '--ignore-scripts', '--pack-destination', destination], packageRoot);
   const created = (await readdir(destination)).filter(
     (entry) => entry.endsWith('.tgz') && !before.has(entry),
   );

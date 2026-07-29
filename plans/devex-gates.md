@@ -27,15 +27,19 @@ reproducer, while the named implementation work item owns retirement.
 - [x] Add a versioned machine-readable register for each confirmed baseline defect.
   - Evidence: `scripts/known-failure-register.json` contains the closed ten-ID baseline under
     `known-failures/v1`.
-- [ ] Give every entry a stable ID, owner, observed layer, expected-failure probe, retirement
+- [x] Give every entry a stable ID, owner, observed layer, expected-failure probe, retirement
       condition, and scorecard/track owner.
+  - Evidence: `pnpm run test:devex-foundation-schema` validates all ten rows and reports no
+    pending reproducer.
 - [x] Make the register gate fail for missing probes, duplicate IDs, stale paths, or an
       unexpectedly passing probe that was not retired.
   - Evidence: `scripts/known-failure-register.test.mjs` passes its schema, path, classifier, and
     retirement mutation cases.
-- [ ] Reproduce the auth-origin, silent-ready, help-exit, vacuous-check, stale-graph, KV417
+- [x] Reproduce the auth-origin, silent-ready, help-exit, vacuous-check, stale-graph, KV417
       coupling, full-catalog OOM, starter internal mock, placeholder-doc success, and opaque-500
       defects through packed or artifact-level probes.
+  - Evidence: `pnpm run test:devex-known-failures-available` returns retired-pass for
+    KF-DEVEX-001/002/003/004/006/008/009/010 and expected-fail for KF-DEVEX-005/007.
 
 ## Packed journeys
 
@@ -69,11 +73,11 @@ reproducer, while the named implementation work item owns retirement.
 
 - [x] Exclude nested dependencies, generated/dist/cache trees, packed fixtures, and throwaway apps
       from authored-consumer evidence.
-  - Evidence: the foundation inventory reports 45 excluded directories and passes the reviewed
+  - Evidence: the foundation inventory reports 47 excluded directories and passes the reviewed
     exclusion policy.
 - [x] Report authored examples, docs, package internals, generated emit, conformance, and tests as
       separate consumer classes.
-  - Evidence: the inventory reports 90/127/153/18/3/456 files across the six classes.
+  - Evidence: the inventory reports 90/128/154/18/4/456 files across the six classes.
 - [x] Report manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
       generated-family members as distinct units.
   - Evidence: the current census separates 1,839 manifest subpaths, 102 TypeScript entrypoints,
@@ -81,7 +85,9 @@ reproducer, while the named implementation work item owns retirement.
 - [x] Add hostile fixtures proving excluded files cannot create false consumers.
   - Evidence: `scripts/public-api-inventory.test.mjs` passes nested dependency, generated/cache,
     packed-app, and throwaway-app hostile cases.
-- [ ] Add the packed all-44-component reproducer while unimported copied files remain on disk.
+- [x] Add the packed all-44-component reproducer while unimported copied files remain on disk.
+  - Evidence: executable KF-DEVEX-007 materializes the attested packed release, copies all 44
+    components, retains unimported files, and reproduces the bounded memory failure.
 
 ## CI posture
 
@@ -94,15 +100,16 @@ reproducer, while the named implementation work item owns retirement.
 
 ## Latest verification
 
-- `pnpm run test:devex-foundation-schema` passed (4 files, 48 tests); register status is 3 retired,
-  1 executable, and 6 pending reproducers.
-- `pnpm run test:devex-known-failures-available` passed: KF-003/008/009 retired-pass, KF-004
-  expected-fail, and the six missing reproducers remain `pending-repro`.
+- `pnpm run test:devex-foundation-schema` passed (4 files, 51 tests), reporting 1,839 public
+  subpaths, 1,849 exported declarations, 47 excluded directories, and a complete ten-ID register.
+- `pnpm run test:devex-known-failures-available` passed: eight retired behaviors pass,
+  KF-DEVEX-005/007 remain expected failures, and executable closure is complete.
 - `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
 - `node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1`
   authenticated commit `f65c080ac`: cold 10,069.35 ms / 2,173,337,600 bytes; warm 9,548.86 ms /
   2,282,389,504 bytes; incremental 9,809.03 ms / 2,275,278,848 bytes; ready
   6,528.73/6,608.75 ms cold/warm; edit-to-diagnostic 1,063.01 ms; edit-to-served-result 1,032.01
   ms; bootstrap 2,173 bytes. This proves the drivers only and is not ratification evidence.
-- `pnpm run check:publish` rebuilt, packed, inspected, and attested all 14 public packages; the
-  packed CLI consumer installed with 265 production dependencies and zero advisories.
+- `pnpm run check:publish` rebuilt, packed, inspected, and attested all 14 public packages; it
+  validated 3,096 classified documentation samples and the packed CLI consumer installed with 265
+  production dependencies and zero advisories.

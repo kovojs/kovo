@@ -132,10 +132,7 @@ export async function createPrototypeFixture(
       fileSubject(serverA, fileName),
     ),
   );
-  const serverOverlay = await packSealedOverlay(
-    serverA,
-    join(root, 'sealed-packs/server-overlay'),
-  );
+  const serverOverlay = await packSealedOverlay(serverA, join(root, 'sealed-packs/server-overlay'));
 
   const app = join(root, 'app');
   const shared = join(root, 'packages/shared');
@@ -326,9 +323,7 @@ export function stableFixturePath(fixture: PrototypeFixture, fileName: string): 
   return `<fixture>/${relative(fixture.root, fileName).replaceAll('\\', '/')}`;
 }
 
-async function installSyntheticRuntimeOverlay(
-  packageRoot: string,
-): Promise<void> {
+async function installSyntheticRuntimeOverlay(packageRoot: string): Promise<void> {
   const manifestFile = join(packageRoot, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8')) as {
     exports?: Record<string, unknown>;
@@ -644,7 +639,9 @@ function providerContext(options: {
           .filter(ts.isVariableStatement)
           .flatMap((statement) =>
             statement.declarationList.declarations.map((declaration) =>
-              ts.isIdentifier(declaration.name) ? declaration.name.text : declaration.name.getText(),
+              ts.isIdentifier(declaration.name)
+                ? declaration.name.text
+                : declaration.name.getText(),
             ),
           ),
         provider:
@@ -679,8 +676,7 @@ function providerContext(options: {
     .flatMap((statement) => [...statement.declarationList.declarations])
     .find(
       (declaration) =>
-        ts.isIdentifier(declaration.name) &&
-        declaration.name.text === config.providerExportBinding,
+        ts.isIdentifier(declaration.name) && declaration.name.text === config.providerExportBinding,
     );
   const providerObject = providerDeclaration?.initializer
     ? objectLiteralFromExpression(providerDeclaration.initializer)
@@ -698,7 +694,9 @@ function providerContext(options: {
   };
 }
 
-function objectLiteralFromExpression(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
+function objectLiteralFromExpression(
+  expression: ts.Expression,
+): ts.ObjectLiteralExpression | undefined {
   const unwrapped = unwrapTsExpression(expression);
   if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped;
   if (
@@ -730,10 +728,7 @@ function stringLiteralProperty(
   return value && ts.isStringLiteralLike(value) ? value.text : undefined;
 }
 
-function identifierProperty(
-  object: ts.ObjectLiteralExpression,
-  name: string,
-): string | undefined {
+function identifierProperty(object: ts.ObjectLiteralExpression, name: string): string | undefined {
   const property = object.properties.find(
     (candidate): candidate is ts.PropertyAssignment =>
       ts.isPropertyAssignment(candidate) &&
@@ -992,10 +987,7 @@ async function writeReceiverFlowFixtures(app: string): Promise<{
     'export const app = { query(definition: unknown) { return definition; } };\n',
   );
   const controls = {
-    'unrelated-defineKovo-named-function': join(
-      app,
-      'src/probes/control-unrelated-define-kovo.ts',
-    ),
+    'unrelated-defineKovo-named-function': join(app, 'src/probes/control-unrelated-define-kovo.ts'),
     'unrelated-imported-app-query-member': join(app, 'src/probes/control-unrelated-imported.ts'),
     'unrelated-local-app-query-member': join(app, 'src/probes/control-unrelated-local.ts'),
   };
@@ -1033,11 +1025,7 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
   const directFactory = family;
   const generatedFactory = `generated${family[0]!.toUpperCase()}${family.slice(1)}`;
   const factory =
-    variant === 'arm-a'
-      ? `app.${family}`
-      : variant === 'arm-b'
-        ? generatedFactory
-        : directFactory;
+    variant === 'arm-a' ? `app.${family}` : variant === 'arm-b' ? generatedFactory : directFactory;
   const sharedServerImports = family === 'endpoint' ? ['publicAccess'] : [];
   const variantImports =
     variant === 'arm-a'
@@ -1059,11 +1047,7 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
   ].join('\n');
   if (family === 'layout') {
     const routeFactory =
-      variant === 'arm-a'
-        ? 'app.route'
-        : variant === 'arm-b'
-          ? 'generatedRoute'
-          : 'route';
+      variant === 'arm-a' ? 'app.route' : variant === 'arm-b' ? 'generatedRoute' : 'route';
     return [
       '/** @jsxImportSource @kovojs/server */',
       imports,
@@ -1189,8 +1173,8 @@ function ownerKeyFor(
   return `d1v6:${sha256(
     JSON.stringify({
       appId: observedAppId,
-        providerExportBinding: observedProviderExportBinding,
-        providerImportSpecifier: observedProviderImportSpecifier,
+      providerExportBinding: observedProviderExportBinding,
+      providerImportSpecifier: observedProviderImportSpecifier,
       providerKey: observedProviderKey,
     }),
   )}`;

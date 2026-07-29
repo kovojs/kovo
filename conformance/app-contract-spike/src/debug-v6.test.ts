@@ -44,12 +44,7 @@ function firstDifference(
   path = '$',
 ): { readonly left: unknown; readonly path: string; readonly right: unknown } | undefined {
   if (JSON.stringify(left) === JSON.stringify(right)) return undefined;
-  if (
-    typeof left !== 'object' ||
-    left === null ||
-    typeof right !== 'object' ||
-    right === null
-  ) {
+  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
     return { left, path, right };
   }
   if (Array.isArray(left) || Array.isArray(right)) {

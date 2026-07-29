@@ -34,7 +34,7 @@
       }
     },
     "arm-b": {
-      "eligible": true,
+      "eligible": false,
       "gates": {
         "artifacts": {
           "details": [],
@@ -57,8 +57,10 @@
           "pass": true
         },
         "performance": {
-          "details": [],
-          "pass": true
+          "details": [
+            "warm completion p95 exceeds threshold"
+          ],
+          "pass": false
         },
         "publicForgery": {
           "details": [],

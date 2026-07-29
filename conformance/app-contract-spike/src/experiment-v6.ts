@@ -8,10 +8,7 @@ import {
   sha256,
   type PackedCompilerEntrypoint,
 } from './artifacts-v6.ts';
-import {
-  evaluateD1V6,
-  type D1V6SealedAuthority,
-} from './evaluator-v6.ts';
+import { evaluateD1V6, type D1V6SealedAuthority } from './evaluator-v6.ts';
 import {
   createPrototypeFixture,
   declarationFamilies,
@@ -130,22 +127,18 @@ export async function runD1V6Experiment(
     const receiverFlow = {
       controls: Object.fromEntries(
         await Promise.all(
-          Object.entries(fixture.receiverFlowEntries.controls).map(
-            async ([name, fileName]) => [
-              name,
-              await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
-            ],
-          ),
+          Object.entries(fixture.receiverFlowEntries.controls).map(async ([name, fileName]) => [
+            name,
+            await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
+          ]),
         ),
       ),
       unsupported: Object.fromEntries(
         await Promise.all(
-          Object.entries(fixture.receiverFlowEntries.unsupported).map(
-            async ([name, fileName]) => [
-              name,
-              await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
-            ],
-          ),
+          Object.entries(fixture.receiverFlowEntries.unsupported).map(async ([name, fileName]) => [
+            name,
+            await matrixEvidenceForEntry(fixture, project, 'arm-a', fileName),
+          ]),
         ),
       ),
     };
@@ -308,23 +301,13 @@ export async function runD1V6Experiment(
         declarationInputs: typeEvidence.declarationInputs,
       },
     };
-    const mutationCoverage = await executeMutationCoverage(
-      criteria,
-      provisionalEvidence,
-      {
-        'compiler-packed.tgz': await readFile(
-          artifacts.packages.compiler.tarball,
-        ),
-        'config.ts': await readFile(fixture.generatedApp.configFile),
-        'generated-app.ts': await readFile(fixture.generatedApp.generatedFile),
-        'provider.ts': await readFile(
-          fixture.generatedApp.providerDefinitionFile,
-        ),
-        'server-overlay-packed.tgz': await readFile(
-          fixture.serverOverlayTarball,
-        ),
-      },
-    );
+    const mutationCoverage = await executeMutationCoverage(criteria, provisionalEvidence, {
+      'compiler-packed.tgz': await readFile(artifacts.packages.compiler.tarball),
+      'config.ts': await readFile(fixture.generatedApp.configFile),
+      'generated-app.ts': await readFile(fixture.generatedApp.generatedFile),
+      'provider.ts': await readFile(fixture.generatedApp.providerDefinitionFile),
+      'server-overlay-packed.tgz': await readFile(fixture.serverOverlayTarball),
+    });
     const evidence: D1RawEvidenceV6 = {
       ...provisionalEvidence,
       mutationCoverage,
@@ -388,9 +371,7 @@ function observedFixtureCounts(values: {
     (['arm-a', 'arm-b'] as const).map((arm) => values.matrix[name][arm]),
   );
   const familyEntries = declarationFamilies.flatMap((family) =>
-    (['baseline', 'arm-a', 'arm-b'] as const).map(
-      (variant) => values.families[family][variant],
-    ),
+    (['baseline', 'arm-a', 'arm-b'] as const).map((variant) => values.families[family][variant]),
   );
   const declarationVariants = ['baseline', 'arm-a', 'arm-b'] as const;
   const declarationFiles = declarationVariants.flatMap(
@@ -400,63 +381,44 @@ function observedFixtureCounts(values: {
     (input) => input.source.match(/\bexport const query\d+\s*=/gu)?.length ?? 0,
   );
   const before = new Map(
-    values.appSourcesBefore.inputs.map((input) => [
-      input.subject.path,
-      input.source,
-    ]),
+    values.appSourcesBefore.inputs.map((input) => [input.subject.path, input.source]),
   );
   const after = new Map(
-    values.appSourcesAfter.inputs.map((input) => [
-      input.subject.path,
-      input.source,
-    ]),
+    values.appSourcesAfter.inputs.map((input) => [input.subject.path, input.source]),
   );
-  const appSourceRewriteCount = [
-    ...new Set([...before.keys(), ...after.keys()]),
-  ].filter((path) => before.get(path) !== after.get(path)).length;
+  const appSourceRewriteCount = [...new Set([...before.keys(), ...after.keys()])].filter(
+    (path) => before.get(path) !== after.get(path),
+  ).length;
   const generatedProviderFiles = new Set(
     values.contracts.map((contract) => contract.providerSubject.path),
   ).size;
   return {
     matrixCases: Object.keys(values.matrix).length,
-    matrixArms: new Set(
-      Object.values(values.matrix).flatMap((entry) => Object.keys(entry)),
-    ).size,
+    matrixArms: new Set(Object.values(values.matrix).flatMap((entry) => Object.keys(entry))).size,
     generatedMatrixFiles: matrixEntries.length,
     declarationFamilies: Object.keys(values.families).length,
-    familyVariants: new Set(
-      Object.values(values.families).flatMap((entry) => Object.keys(entry)),
-    ).size,
+    familyVariants: new Set(Object.values(values.families).flatMap((entry) => Object.keys(entry)))
+      .size,
     generatedFamilyFiles: familyEntries.length,
     generatedRuntimeFiles: Object.keys(values.runtime).length,
     generatedProviderFiles,
     generatedBoundModules: new Set(
-      values.contracts.map(
-        (contract) => contract.generatedModuleSubject.path,
-      ),
+      values.contracts.map((contract) => contract.generatedModuleSubject.path),
     ).size,
-    unsupportedReceiverFiles: Object.keys(values.receiverFlow.unsupported)
-      .length,
+    unsupportedReceiverFiles: Object.keys(values.receiverFlow.unsupported).length,
     negativeControlFiles: Object.keys(values.receiverFlow.controls).length,
     typeMeasurementVariants: Object.keys(values.declarationInputs).length,
     declarationFilesPerVariant:
-      new Set(
-        declarationVariants.map(
-          (variant) => values.declarationInputs[variant].length,
-        ),
-      ).size === 1
+      new Set(declarationVariants.map((variant) => values.declarationInputs[variant].length))
+        .size === 1
         ? values.declarationInputs.baseline.length
         : -1,
     declarationsPerFile:
-      declarationsPerFile.length > 0 &&
-      new Set(declarationsPerFile).size === 1
+      declarationsPerFile.length > 0 && new Set(declarationsPerFile).size === 1
         ? declarationsPerFile[0]!
         : -1,
     generatedTypeDeclarationFiles: declarationFiles.length,
-    generatedTypeDeclarations: declarationsPerFile.reduce(
-      (sum, count) => sum + count,
-      0,
-    ),
+    generatedTypeDeclarations: declarationsPerFile.reduce((sum, count) => sum + count, 0),
     appSourceRewriteCount,
     serverOverlayFileCount: values.serverOverlayFiles.length,
     sealedArtifactCount: Object.keys(values.sealedArtifacts).length,
@@ -470,38 +432,29 @@ async function executeMutationCoverage(
   evidence: D1RawEvidenceV6,
   authority: Readonly<Record<SealedArtifactName, Buffer>>,
 ): Promise<D1RawEvidenceV6['mutationCoverage']> {
-  type Mutation = (
-    value: Mutable<D1RawEvidenceV6>,
-    sealed: MutableSealedAuthority,
-  ) => void;
+  type Mutation = (value: Mutable<D1RawEvidenceV6>, sealed: MutableSealedAuthority) => void;
   const oneSided: Readonly<Record<string, Mutation>> = {
     'config-bytes': (_value, sealed) => appendSealed(sealed, 'config.ts'),
     'provider-bytes': (_value, sealed) => appendSealed(sealed, 'provider.ts'),
-    'generated-module-bytes': (_value, sealed) =>
-      appendSealed(sealed, 'generated-app.ts'),
-    'compiler-entrypoint-bytes': (_value, sealed) =>
-      flipSealedByte(sealed, 'compiler-packed.tgz'),
+    'generated-module-bytes': (_value, sealed) => appendSealed(sealed, 'generated-app.ts'),
+    'compiler-entrypoint-bytes': (_value, sealed) => flipSealedByte(sealed, 'compiler-packed.tgz'),
     'server-artifact-bytes': (value) => {
       value.provenance.packages.find(
         (entry) => entry.name === '@kovojs/server',
       )!.packedContents.files[0]!.sha256 = '0'.repeat(64);
     },
-    'server-overlay-bytes': (_value, sealed) =>
-      flipSealedByte(sealed, 'server-overlay-packed.tgz'),
+    'server-overlay-bytes': (_value, sealed) => flipSealedByte(sealed, 'server-overlay-packed.tgz'),
     'matrix-source-bytes': (value) => {
-      value.matrix['ordinary-local-import']['arm-a'].sourceSha256 =
-        '0'.repeat(64);
+      value.matrix['ordinary-local-import']['arm-a'].sourceSha256 = '0'.repeat(64);
     },
     'runtime-owner': (value) => {
       value.runtime['arm-a'].ownerKey += ':forged';
     },
     'compiled-owner': (value) => {
-      value.compiler.families.query['arm-a'].compiledOwnerKey =
-        'd1v6:forged';
+      value.compiler.families.query['arm-a'].compiledOwnerKey = 'd1v6:forged';
     },
     'generated-owner': (value) => {
-      value.generation.armB.contracts[0]!.manifest.ownerKey =
-        'd1v6:forged';
+      value.generation.armB.contracts[0]!.manifest.ownerKey = 'd1v6:forged';
     },
     'build-command': (value) => {
       value.provenance.buildCommands[0] += ' --forged';
@@ -510,15 +463,13 @@ async function executeMutationCoverage(
       value.provenance.frameworkSourceCommit = '0'.repeat(40);
     },
     count: (value) => {
-      value.fixture.counts.matrixCases =
-        (value.fixture.counts.matrixCases ?? 0) + 1;
+      value.fixture.counts.matrixCases = (value.fixture.counts.matrixCases ?? 0) + 1;
     },
     'typescript-diagnostic': (value) => {
       value.diagnostics['arm-a'].code = 9999;
     },
     'completion-sample-identity': (value) => {
-      value.measurements['arm-a'].warmCompletionSamples[0]!.sampleId +=
-        ':forged';
+      value.measurements['arm-a'].warmCompletionSamples[0]!.sampleId += ':forged';
     },
   };
   const correlated: Readonly<Record<string, Mutation>> = {
@@ -534,43 +485,33 @@ async function executeMutationCoverage(
       const digest = sha256(sealed['provider.ts']);
       value.sealedArtifacts.providerSha256 = digest;
       value.generation.armB.contracts[0]!.providerSubject.sha256 = digest;
-      value.generation.armB.contracts[0]!.manifest.providerSourceSha256 =
-        digest;
+      value.generation.armB.contracts[0]!.manifest.providerSourceSha256 = digest;
     },
     'generated-bytes-manifest-and-claimed-digest': (value, sealed) => {
       appendSealed(sealed, 'generated-app.ts');
       const digest = sha256(sealed['generated-app.ts']);
       value.sealedArtifacts.generatedAppSha256 = digest;
-      value.generation.armB.contracts[0]!.generatedModuleSubject.sha256 =
-        digest;
-      value.generation.armB.contracts[0]!.manifest.generatedModuleSha256 =
-        digest;
+      value.generation.armB.contracts[0]!.generatedModuleSubject.sha256 = digest;
+      value.generation.armB.contracts[0]!.manifest.generatedModuleSha256 = digest;
     },
     'compiler-bytes-and-entrypoint-claims': (value, sealed) => {
       flipSealedByte(sealed, 'compiler-packed.tgz');
       const digest = sha256(sealed['compiler-packed.tgz']);
       value.sealedArtifacts.compilerPackedSha256 = digest;
-      value.provenance.packages.find(
-        (entry) => entry.name === '@kovojs/compiler',
-      )!.tarballSha256 = digest;
-      value.provenance.packedCompiler.entrypoints[0]!.resolvedSha256 =
+      value.provenance.packages.find((entry) => entry.name === '@kovojs/compiler')!.tarballSha256 =
         digest;
-      value.provenance.packedCompiler.entrypoints[0]!.packedFile.sha256 =
-        digest;
+      value.provenance.packedCompiler.entrypoints[0]!.resolvedSha256 = digest;
+      value.provenance.packedCompiler.entrypoints[0]!.packedFile.sha256 = digest;
     },
     'server-bytes-copy-and-packed-claims': (value, sealed) => {
       flipSealedByte(sealed, 'server-overlay-packed.tgz');
-      value.sealedArtifacts.serverOverlayPackedSha256 = sha256(
-        sealed['server-overlay-packed.tgz'],
-      );
+      value.sealedArtifacts.serverOverlayPackedSha256 = sha256(sealed['server-overlay-packed.tgz']);
       for (const copy of value.fixture.serverCopies) {
         copy.postWriteContents.digest = 'f'.repeat(64);
       }
     },
-    'canonical-ir-and-digest': (value) =>
-      mutateCanonicalSubject(value, 'canonicalIr'),
-    'canonical-graph-and-digest': (value) =>
-      mutateCanonicalSubject(value, 'canonicalGraph'),
+    'canonical-ir-and-digest': (value) => mutateCanonicalSubject(value, 'canonicalIr'),
+    'canonical-graph-and-digest': (value) => mutateCanonicalSubject(value, 'canonicalGraph'),
     'owner-config-provider-generated-runtime-claims': (value) => {
       const owner = 'd1v6:correlated-forgery';
       value.fixture.ownerKey = owner;
@@ -590,8 +531,7 @@ async function executeMutationCoverage(
       for (const variant of ['baseline', 'arm-a', 'arm-b'] as const) {
         const inputs = value.workloadSubjects.declarationInputs[variant];
         const duplicate = structuredClone(inputs[0]!);
-        duplicate.subject.path =
-          `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
+        duplicate.subject.path = `app/d1-measure/${variant}/declarations-${inputs.length}.ts`;
         inputs.push(duplicate);
       }
       value.fixture.counts.declarationFilesPerVariant = 13;
@@ -617,15 +557,8 @@ async function executeMutationCoverage(
     const mutableAuthority = cloneSealedAuthority(authority);
     mutation(mutated, mutableAuthority);
     try {
-      const evaluation = await evaluateD1V6(
-        criteria,
-        mutated,
-        mutableAuthority,
-      );
-      return !(
-        evaluation.arms['arm-a'].eligible &&
-        evaluation.arms['arm-b'].eligible
-      );
+      const evaluation = await evaluateD1V6(criteria, mutated, mutableAuthority);
+      return !(evaluation.arms['arm-a'].eligible && evaluation.arms['arm-b'].eligible);
     } catch {
       return true;
     }
@@ -643,22 +576,16 @@ async function executeMutationCoverage(
       criteria.mutationContract.correlated.map(async (name) => [
         name,
         {
-          detected: correlated[name]
-            ? await execute(correlated[name])
-            : false,
+          detected: correlated[name] ? await execute(correlated[name]) : false,
         },
       ]),
     ),
   );
-  const selection = async (
-    mutate: (value: Mutable<D1RawEvidenceV6>) => void,
-  ): Promise<string> => {
+  const selection = async (mutate: (value: Mutable<D1RawEvidenceV6>) => void): Promise<string> => {
     const value = structuredClone(evidence) as Mutable<D1RawEvidenceV6>;
     stabilizePerformanceForMutationEvaluation(value);
     mutate(value);
-    return (
-      await evaluateD1V6(criteria, value, cloneSealedAuthority(authority))
-    ).decision;
+    return (await evaluateD1V6(criteria, value, cloneSealedAuthority(authority))).decision;
   };
   return {
     correlated: correlatedResults,
@@ -668,14 +595,10 @@ async function executeMutationCoverage(
         decision: await selection(() => {}),
       },
       'arm-a-selected-when-arm-b-fails': {
-        decision: await selection((value) =>
-          mutateCanonicalSubject(value, 'canonicalIr', 'arm-b'),
-        ),
+        decision: await selection((value) => mutateCanonicalSubject(value, 'canonicalIr', 'arm-b')),
       },
       'arm-b-selected-when-arm-a-fails': {
-        decision: await selection((value) =>
-          mutateCanonicalSubject(value, 'canonicalIr', 'arm-a'),
-        ),
+        decision: await selection((value) => mutateCanonicalSubject(value, 'canonicalIr', 'arm-a')),
       },
       'fallback-when-both-fail': {
         decision: await selection((value) => {
@@ -687,9 +610,7 @@ async function executeMutationCoverage(
   };
 }
 
-function stabilizePerformanceForMutationEvaluation(
-  evidence: Mutable<D1RawEvidenceV6>,
-): void {
+function stabilizePerformanceForMutationEvaluation(evidence: Mutable<D1RawEvidenceV6>): void {
   const declarationBytes = evidence.measurements.baseline.declarationBytes;
   for (const measurement of Object.values(evidence.measurements)) {
     for (const sample of [
@@ -718,20 +639,11 @@ function mutateCanonicalSubject(
   subject.digest = sha256(JSON.stringify(subject.canonical));
 }
 
-function appendSealed(
-  authority: MutableSealedAuthority,
-  name: SealedArtifactName,
-): void {
-  authority[name] = Buffer.concat([
-    authority[name],
-    Buffer.from('\n// forged\n'),
-  ]);
+function appendSealed(authority: MutableSealedAuthority, name: SealedArtifactName): void {
+  authority[name] = Buffer.concat([authority[name], Buffer.from('\n// forged\n')]);
 }
 
-function flipSealedByte(
-  authority: MutableSealedAuthority,
-  name: SealedArtifactName,
-): void {
+function flipSealedByte(authority: MutableSealedAuthority, name: SealedArtifactName): void {
   const bytes = Buffer.from(authority[name]);
   bytes[Math.min(32, bytes.length - 1)]! ^= 1;
   authority[name] = bytes;
@@ -741,17 +653,11 @@ function cloneSealedAuthority(
   authority: Readonly<Record<SealedArtifactName, Buffer>>,
 ): MutableSealedAuthority {
   return Object.fromEntries(
-    Object.entries(authority).map(([name, bytes]) => [
-      name,
-      Buffer.from(bytes),
-    ]),
+    Object.entries(authority).map(([name, bytes]) => [name, Buffer.from(bytes)]),
   ) as MutableSealedAuthority;
 }
 
-function percentileMeasurement(
-  values: readonly number[],
-  fraction: number,
-): number {
+function percentileMeasurement(values: readonly number[], fraction: number): number {
   const sorted = [...values].sort((left, right) => left - right);
   return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? 0;
 }
@@ -766,8 +672,7 @@ type SealedArtifactName =
   | 'generated-app.ts'
   | 'provider.ts'
   | 'server-overlay-packed.tgz';
-type MutableSealedAuthority = Record<SealedArtifactName, Buffer> &
-  D1V6SealedAuthority;
+type MutableSealedAuthority = Record<SealedArtifactName, Buffer> & D1V6SealedAuthority;
 type Mutable<Value> = Value extends readonly (infer Entry)[]
   ? Mutable<Entry>[]
   : Value extends object

@@ -133,15 +133,9 @@ export async function measureTypeContracts(
     variants[variant] = directory;
     await writeMeasurementFixture(directory, variant, criteria);
   }
-  const declarationInputs = {} as Record<
-    MeasuredVariant,
-    readonly DeclarationInputEvidence[]
-  >;
+  const declarationInputs = {} as Record<MeasuredVariant, readonly DeclarationInputEvidence[]>;
   for (const variant of measuredVariants) {
-    declarationInputs[variant] = await declarationInputEvidence(
-      fixture,
-      variants[variant],
-    );
+    declarationInputs[variant] = await declarationInputEvidence(fixture, variants[variant]);
   }
   const measured = await measureSuccessfulVariants(variants, criteria);
   const diagnostics = {} as Record<MeasuredVariant, TypeDiagnosticEvidence>;
@@ -211,10 +205,7 @@ async function declarationInputEvidence(
       const fileName = join(directory, entry);
       return {
         source: await readFile(fileName, 'utf8'),
-        subject: await fileSubject(
-          fixture.root,
-          relative(fixture.root, fileName),
-        ),
+        subject: await fileSubject(fixture.root, relative(fixture.root, fileName)),
       };
     }),
   );

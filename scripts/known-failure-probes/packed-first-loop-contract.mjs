@@ -190,24 +190,32 @@ function transactionalBuildObservation(packedRelease) {
 }
 
 function freshCheckObservation(packedRelease) {
-  const appRoot = createKnownFailurePackedScaffold(packedRelease, {
-    dialect: 'sqlite',
-    directory: 'fresh-check-app',
-    name: 'known-failure-fresh-check',
-  });
-  prepareInstalledScaffoldFixture(appRoot);
-  const result = runCommand(
-    process.execPath,
-    ['scripts/check-parallel.mjs'],
-    appRoot,
-    knownFailurePackedEnvironment(packedRelease, {
-      BETTER_AUTH_URL: null,
-      NODE_ENV: 'development',
-    }),
-    240_000,
-  );
-  requireOrdinaryExit(result, 'fresh packed scaffold check');
-  return { exit: result.status, output: combinedOutput(result) };
+  const variants = [];
+  for (const dialect of ['postgres', 'sqlite']) {
+    const appRoot = createKnownFailurePackedScaffold(packedRelease, {
+      dialect,
+      directory: `fresh-check-${dialect}-app`,
+      name: `known-failure-fresh-check-${dialect}`,
+    });
+    prepareInstalledScaffoldFixture(appRoot);
+    const result = runCommand(
+      process.execPath,
+      ['scripts/check-parallel.mjs'],
+      appRoot,
+      knownFailurePackedEnvironment(packedRelease, {
+        BETTER_AUTH_URL: null,
+        NODE_ENV: 'development',
+      }),
+      240_000,
+    );
+    requireOrdinaryExit(result, `fresh packed ${dialect} scaffold check`);
+    variants.push({
+      dialect,
+      exit: result.status,
+      output: combinedOutput(result),
+    });
+  }
+  return { variants };
 }
 
 async function fullCatalogObservation(packedRelease) {

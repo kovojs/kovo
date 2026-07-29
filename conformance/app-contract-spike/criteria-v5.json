@@ -10,14 +10,7 @@
     "v3": "Caller-supplied structural source spans could claim arbitrary framework exports through compiler entrypoints.",
     "v4": "The matrix executed workspace compiler source instead of the authenticated packed compiler, duplicate-copy discovery missed re-export chains, unsupported app-derived receivers could fail open without diagnostics, and the evaluator did not require exact IR/graph or owner/source/package bindings."
   },
-  "declarationFamilies": [
-    "endpoint",
-    "layout",
-    "mutation",
-    "query",
-    "route",
-    "task"
-  ],
+  "declarationFamilies": ["endpoint", "layout", "mutation", "query", "route", "task"],
   "immutableReceiverContract": {
     "bindingKind": "const",
     "initializer": "one direct defineKovo object-literal call resolved to one physical @kovojs/server package",
@@ -131,20 +124,14 @@
   },
   "publicForgeryNegatives": {
     "fakeAccessAsPublicAccess": {
-      "entrypoints": [
-        "compileComponentModule",
-        "compileRouteModule"
-      ],
+      "entrypoints": ["compileComponentModule", "compileRouteModule"],
       "expectedIdentity": "unrecognized",
       "expectedPublicAccess": false
     },
     "fakeHtmlAsTrustedHtml": {
       "entrypoint": "compileComponentModule",
       "expectedIdentity": "unrecognized",
-      "requiredDiagnosticCodes": [
-        "KV236",
-        "KV426"
-      ]
+      "requiredDiagnosticCodes": ["KV236", "KV426"]
     },
     "forbiddenOptionNames": [
       "frameworkIdentityOverrides",
@@ -153,10 +140,7 @@
     ]
   },
   "packedCompilerContract": {
-    "entrypoints": [
-      "@kovojs/compiler",
-      "@kovojs/compiler/internal"
-    ],
+    "entrypoints": ["@kovojs/compiler", "@kovojs/compiler/internal"],
     "resolvedRealpathsMustBeUnderExtractedPackage": true,
     "resolvedFilesMustMatchPackedSubjects": true,
     "workspaceSourceResolutionForbidden": true,
@@ -165,10 +149,7 @@
   "semanticEquivalenceContract": {
     "baselineAndArmACanonicalIrMustMatchExactly": true,
     "baselineAndArmACanonicalGraphMustMatchExactly": true,
-    "canonicalizationMayRemoveOnly": [
-      "callee syntax",
-      "source spans"
-    ],
+    "canonicalizationMayRemoveOnly": ["callee syntax", "source spans"],
     "mutations": {
       "ir-add": "D1E101",
       "ir-delete": "D1E102",
@@ -272,12 +253,7 @@
     "duplicatePackageDiagnosticCode": "D1X001"
   },
   "artifactThresholds": {
-    "exactPackageNames": [
-      "@kovojs/browser",
-      "@kovojs/compiler",
-      "@kovojs/core",
-      "@kovojs/server"
-    ],
+    "exactPackageNames": ["@kovojs/browser", "@kovojs/compiler", "@kovojs/core", "@kovojs/server"],
     "freshBuildRequired": true,
     "frameworkHeadCommitRequired": true,
     "frameworkSourceTreeCleanRequired": true,

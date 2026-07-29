@@ -55,10 +55,7 @@
                     "role": "shared-cache-closed"
                   }
                 ],
-                "closedReasons": [
-                  "unclassified-influence",
-                  "authored-non-public"
-                ],
+                "closedReasons": ["unclassified-influence", "authored-non-public"],
                 "root": "endpoint:/probe",
                 "surface": "endpoint",
                 "vary": [],
@@ -78,9 +75,7 @@
                     "role": "cache-key"
                   }
                 ],
-                "closedReasons": [
-                  "authored-non-public"
-                ],
+                "closedReasons": ["authored-non-public"],
                 "root": "query:families/arm-a/query/declaration",
                 "surface": "query",
                 "vary": [],
@@ -110,10 +105,7 @@
                       "role": "shared-cache-closed"
                     }
                   ],
-                  "closedReasons": [
-                    "unclassified-influence",
-                    "authored-non-public"
-                  ],
+                  "closedReasons": ["unclassified-influence", "authored-non-public"],
                   "root": "endpoint:/probe",
                   "surface": "endpoint",
                   "vary": [],
@@ -230,9 +222,7 @@
                       "role": "cache-key"
                     }
                   ],
-                  "closedReasons": [
-                    "authored-non-public"
-                  ],
+                  "closedReasons": ["authored-non-public"],
                   "root": "query:families/arm-a/query/declaration",
                   "surface": "query",
                   "vary": [],
@@ -445,10 +435,7 @@
                     "role": "shared-cache-closed"
                   }
                 ],
-                "closedReasons": [
-                  "unclassified-influence",
-                  "authored-non-public"
-                ],
+                "closedReasons": ["unclassified-influence", "authored-non-public"],
                 "root": "endpoint:/probe",
                 "surface": "endpoint",
                 "vary": [],
@@ -468,9 +455,7 @@
                     "role": "cache-key"
                   }
                 ],
-                "closedReasons": [
-                  "authored-non-public"
-                ],
+                "closedReasons": ["authored-non-public"],
                 "root": "query:families/arm-a/query/declaration",
                 "surface": "query",
                 "vary": [],
@@ -500,10 +485,7 @@
                       "role": "shared-cache-closed"
                     }
                   ],
-                  "closedReasons": [
-                    "unclassified-influence",
-                    "authored-non-public"
-                  ],
+                  "closedReasons": ["unclassified-influence", "authored-non-public"],
                   "root": "endpoint:/probe",
                   "surface": "endpoint",
                   "vary": [],
@@ -620,9 +602,7 @@
                       "role": "cache-key"
                     }
                   ],
-                  "closedReasons": [
-                    "authored-non-public"
-                  ],
+                  "closedReasons": ["authored-non-public"],
                   "root": "query:families/arm-a/query/declaration",
                   "surface": "query",
                   "vary": [],
@@ -776,10 +756,7 @@
                         "role": "shared-cache-closed"
                       }
                     ],
-                    "closedReasons": [
-                      "unclassified-influence",
-                      "authored-non-public"
-                    ],
+                    "closedReasons": ["unclassified-influence", "authored-non-public"],
                     "root": "endpoint:/probe",
                     "surface": "endpoint",
                     "vary": [],
@@ -809,10 +786,7 @@
                           "role": "shared-cache-closed"
                         }
                       ],
-                      "closedReasons": [
-                        "unclassified-influence",
-                        "authored-non-public"
-                      ],
+                      "closedReasons": ["unclassified-influence", "authored-non-public"],
                       "root": "endpoint:/probe",
                       "surface": "endpoint",
                       "vary": [],
@@ -912,10 +886,7 @@
                             "role": "shared-cache-closed"
                           }
                         ],
-                        "closedReasons": [
-                          "unclassified-influence",
-                          "authored-non-public"
-                        ],
+                        "closedReasons": ["unclassified-influence", "authored-non-public"],
                         "root": "endpoint:/probe",
                         "surface": "endpoint",
                         "vary": [],
@@ -1051,9 +1022,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "endpoint",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "85c6b46f6f342b9fe470acf05dd09e77a2d5fcbe6c374ea0f4a55507340c62b0",
           "sourceSubject": {
             "bytes": 225,
@@ -1087,10 +1056,7 @@
                         "role": "shared-cache-closed"
                       }
                     ],
-                    "closedReasons": [
-                      "unclassified-influence",
-                      "authored-non-public"
-                    ],
+                    "closedReasons": ["unclassified-influence", "authored-non-public"],
                     "root": "endpoint:/probe",
                     "surface": "endpoint",
                     "vary": [],
@@ -1120,10 +1086,7 @@
                           "role": "shared-cache-closed"
                         }
                       ],
-                      "closedReasons": [
-                        "unclassified-influence",
-                        "authored-non-public"
-                      ],
+                      "closedReasons": ["unclassified-influence", "authored-non-public"],
                       "root": "endpoint:/probe",
                       "surface": "endpoint",
                       "vary": [],
@@ -1223,10 +1186,7 @@
                             "role": "shared-cache-closed"
                           }
                         ],
-                        "closedReasons": [
-                          "unclassified-influence",
-                          "authored-non-public"
-                        ],
+                        "closedReasons": ["unclassified-influence", "authored-non-public"],
                         "root": "endpoint:/probe",
                         "surface": "endpoint",
                         "vary": [],
@@ -1362,9 +1322,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "endpoint",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "4fb30237f7352da6852481d77e3cff618b63e3a8fdd30f44c37b6af1e1621485",
           "sourceSubject": {
             "bytes": 229,
@@ -1674,9 +1632,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "layout",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "a9dd9f2d04dadf998860de213d8ba66300ea7d0515269d4b86099265eaa810e8",
           "sourceSubject": {
             "bytes": 344,
@@ -1867,9 +1823,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "layout",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "724c4d50aa1d5d59508e014be1895a3412a475c826a8494eb6a540da5327a52f",
           "sourceSubject": {
             "bytes": 352,
@@ -2169,9 +2123,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "mutation",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "288b64ad08c356a170cd27207074ebfd3ef71297baa410846801ea419ed19339",
           "sourceSubject": {
             "bytes": 218,
@@ -2352,9 +2304,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "mutation",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "f9f7f5cded6c46c91718fb6593e313b2e5247d942b711b409bdae24d32fde62c",
           "sourceSubject": {
             "bytes": 222,
@@ -2503,9 +2453,7 @@
                         "role": "cache-key"
                       }
                     ],
-                    "closedReasons": [
-                      "authored-non-public"
-                    ],
+                    "closedReasons": ["authored-non-public"],
                     "root": "query:families/arm-a/query/declaration",
                     "surface": "query",
                     "vary": [],
@@ -2531,9 +2479,7 @@
                           "role": "cache-key"
                         }
                       ],
-                      "closedReasons": [
-                        "authored-non-public"
-                      ],
+                      "closedReasons": ["authored-non-public"],
                       "root": "query:families/arm-a/query/declaration",
                       "surface": "query",
                       "vary": [],
@@ -2610,9 +2556,7 @@
                             "role": "cache-key"
                           }
                         ],
-                        "closedReasons": [
-                          "authored-non-public"
-                        ],
+                        "closedReasons": ["authored-non-public"],
                         "root": "query:families/arm-a/query/declaration",
                         "surface": "query",
                         "vary": [],
@@ -2729,9 +2673,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "query",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "c05825e53c44dcd39f79a1ee983c581999485be41933825339198da0cadbb751",
           "sourceSubject": {
             "bytes": 213,
@@ -2761,9 +2703,7 @@
                         "role": "cache-key"
                       }
                     ],
-                    "closedReasons": [
-                      "authored-non-public"
-                    ],
+                    "closedReasons": ["authored-non-public"],
                     "root": "query:families/arm-a/query/declaration",
                     "surface": "query",
                     "vary": [],
@@ -2789,9 +2729,7 @@
                           "role": "cache-key"
                         }
                       ],
-                      "closedReasons": [
-                        "authored-non-public"
-                      ],
+                      "closedReasons": ["authored-non-public"],
                       "root": "query:families/arm-a/query/declaration",
                       "surface": "query",
                       "vary": [],
@@ -2868,9 +2806,7 @@
                             "role": "cache-key"
                           }
                         ],
-                        "closedReasons": [
-                          "authored-non-public"
-                        ],
+                        "closedReasons": ["authored-non-public"],
                         "root": "query:families/arm-a/query/declaration",
                         "surface": "query",
                         "vary": [],
@@ -2987,9 +2923,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "query",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "cb93be05d75dd0e59bb1346cac6b9121c01ec34d29f5f3b320f39352d5097fc0",
           "sourceSubject": {
             "bytes": 217,
@@ -3276,9 +3210,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "route",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "078bc1972e7e183f3d5b3ac5b10c5ce3065a1839f8494af2213c0cf58ae9013d",
           "sourceSubject": {
             "bytes": 211,
@@ -3446,9 +3378,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "route",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "97a8176d3603e0286d77444aa3579bcc306a8f97f3643eddcedce31296d30f56",
           "sourceSubject": {
             "bytes": 215,
@@ -3757,9 +3687,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "task",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "78a3c2c1fc4512e0ae7074406300c1d7081d99dd3af01aebb865b60ae6c77145",
           "sourceSubject": {
             "bytes": 175,
@@ -3949,9 +3877,7 @@
           "compiledOwnerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
           "family": "task",
           "recognized": true,
-          "serverPackageRoots": [
-            "<fixture>/store/server-a"
-          ],
+          "serverPackageRoots": ["<fixture>/store/server-a"],
           "sourceSha256": "7706a699e04a77a79af3b8b74f7dd7f9ee629a9dd6a9d25644f38ea41a14bcd7",
           "sourceSubject": {
             "bytes": 179,
@@ -4357,9 +4283,7 @@
         "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
         "recognizedFactoryCount": 2,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "97a6c399dbedca9d8f61e4bb818255cb1e798ef4b74641778535a22e7f4c3209",
         "sourceSubject": {
           "bytes": 115,
@@ -4383,9 +4307,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4403,9 +4325,7 @@
         "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
         "recognizedFactoryCount": 2,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "06ee8a4a9434e4f5ab335725cb6139356c4205553cb1ee965a53fdebd92dc23d",
         "sourceSubject": {
           "bytes": 116,
@@ -4429,9 +4349,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4449,9 +4367,7 @@
         "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
         "recognizedFactoryCount": 2,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "6c6adb2444b07d1b224ad0bc1ba497ee5ce9b2616214a504f5a474516b5f3876",
         "sourceSubject": {
           "bytes": 115,
@@ -4475,9 +4391,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4495,9 +4409,7 @@
         "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
         "recognizedFactoryCount": 2,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "33e8470d39b185ca4574ad9901adba8059410bbfcfc981cac0abd44ea2e5b0f6",
         "sourceSubject": {
           "bytes": 132,
@@ -4521,9 +4433,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4549,9 +4459,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "cf001caca9fb2a0a9fafb20a53709f07a96e5e0e231988279c4725e0a0bb5879",
         "sourceSubject": {
           "bytes": 134,
@@ -4575,9 +4483,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4603,9 +4509,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "758df9b20c835babaa2cc4be113cef45fae8c718fc1cc26f5b70cfa550d7b094",
         "sourceSubject": {
           "bytes": 191,
@@ -4614,9 +4518,7 @@
           "schema": "kovo.app-contract-d1-file-subject/v1",
           "sha256": "758df9b20c835babaa2cc4be113cef45fae8c718fc1cc26f5b70cfa550d7b094"
         },
-        "typescriptDiagnosticCodes": [
-          2353
-        ]
+        "typescriptDiagnosticCodes": [2353]
       },
       "arm-b": {
         "diagnostics": [
@@ -4631,9 +4533,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4659,9 +4559,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "a173d5d3142003defc62c7eb996aaacf2dada550e74dbff74b5427be534a109c",
         "sourceSubject": {
           "bytes": 192,
@@ -4685,9 +4583,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4713,9 +4609,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "f413283a1d6f3909b0c391fc363dd3a091b3716caf8126f9e2a6cee5ac271a5b",
         "sourceSubject": {
           "bytes": 157,
@@ -4739,9 +4633,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4767,9 +4659,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "dee0d47d58c94463889066af8144ad62f72a0650cde94deb5de691185ff08116",
         "sourceSubject": {
           "bytes": 144,
@@ -4793,9 +4683,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4821,9 +4709,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "5d4d95e83575abec1c0adb0c38169ededd2ead3238be9c5f3b297014a6744a53",
         "sourceSubject": {
           "bytes": 146,
@@ -4847,9 +4733,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4875,9 +4759,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "990efbd118331f4b86a9fba514d8e0ac1b0358b21982bbdf9a3f2fe923dfaa76",
         "sourceSubject": {
           "bytes": 118,
@@ -4901,9 +4783,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4921,9 +4801,7 @@
         "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
         "recognizedFactoryCount": 2,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "b841a94653230d7b7215393b94e7d095003bb0a0f199f9121b109ff4d653e86a",
         "sourceSubject": {
           "bytes": 126,
@@ -4947,9 +4825,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -4975,9 +4851,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "dae1e99e8c7a49d340b180b6de520b35d8c8ac0446ee4401a246597d1a732283",
         "sourceSubject": {
           "bytes": 136,
@@ -5001,9 +4875,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -5029,9 +4901,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "37c3599f89867a22fcdeee609ab3559bc45e02fb91ff41508521e69f1f271e56",
         "sourceSubject": {
           "bytes": 181,
@@ -5055,9 +4925,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -5083,9 +4951,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "9d49c3356aac0204f2b7d8a81063b0f9b67fe44b17bf7aeb75fe3667c44135a5",
         "sourceSubject": {
           "bytes": 184,
@@ -5109,9 +4975,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a"],
         "sourceSha256": "7d22ac1d543beb253d9b5968b603b17fead60d77ea1ee2349f76949e002d20fb",
         "sourceSubject": {
           "bytes": 108,
@@ -5137,10 +5001,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "d11c33f370bf6a47e68abe5ccd9406d9a6c19ff6bffae83c2902827cef25be3c",
         "sourceSubject": {
           "bytes": 295,
@@ -5164,10 +5025,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "d11c33f370bf6a47e68abe5ccd9406d9a6c19ff6bffae83c2902827cef25be3c",
         "sourceSubject": {
           "bytes": 295,
@@ -5193,10 +5051,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "0abc38a96a5362dc0b77e77f4af952b38e3548aa537364498d0873e11a221505",
         "sourceSubject": {
           "bytes": 289,
@@ -5220,10 +5075,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "0abc38a96a5362dc0b77e77f4af952b38e3548aa537364498d0873e11a221505",
         "sourceSubject": {
           "bytes": 289,
@@ -5249,10 +5101,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "196414b573bc825e4fdf3e174a81c3c712f41d0fa16329473ef1efd3350a21b0",
         "sourceSubject": {
           "bytes": 287,
@@ -5276,10 +5125,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "196414b573bc825e4fdf3e174a81c3c712f41d0fa16329473ef1efd3350a21b0",
         "sourceSubject": {
           "bytes": 287,
@@ -5305,10 +5151,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "535508111d0492074156ff66cb2bf72e2456a8f2f607ac0a5712cd7b5459b05a",
         "sourceSubject": {
           "bytes": 304,
@@ -5332,10 +5175,7 @@
         "ownerKey": null,
         "recognizedFactoryCount": 0,
         "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-        "serverPackageRoots": [
-          "<fixture>/store/server-a",
-          "<fixture>/store/server-b"
-        ],
+        "serverPackageRoots": ["<fixture>/store/server-a", "<fixture>/store/server-b"],
         "sourceSha256": "535508111d0492074156ff66cb2bf72e2456a8f2f607ac0a5712cd7b5459b05a",
         "sourceSubject": {
           "bytes": 304,
@@ -5350,23 +5190,9 @@
   },
   "measurements": {
     "baseline": {
-      "coldCompletionMs": [
-        131.04,
-        97.63,
-        101.31,
-        90,
-        86.84,
-        86.89
-      ],
+      "coldCompletionMs": [131.04, 97.63, 101.31, 90, 86.84, 86.89],
       "coldCompletionP50Ms": 90,
-      "coldTscMs": [
-        253.98,
-        255.28,
-        253.12,
-        256.39,
-        253.67,
-        253.53
-      ],
+      "coldTscMs": [253.98, 255.28, 253.12, 256.39, 253.67, 253.53],
       "coldTscP50Ms": 253.67,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
@@ -5386,66 +5212,17 @@
       "declarationBytes": 12604,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.2,
-        0.13,
-        0.13,
-        0.12,
-        0.11,
-        0.11,
-        0.11,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.09,
-        0.1,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.1,
-        0.1,
-        0.09,
-        0.09
+        0.2, 0.13, 0.13, 0.12, 0.11, 0.11, 0.11, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.09,
+        0.1, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09, 0.1, 0.1, 0.09, 0.09
       ],
       "warmCompletionP95Ms": 0.13,
-      "warmTscMs": [
-        191.74,
-        186.69,
-        187.24,
-        186.72,
-        193.04,
-        195.73
-      ],
+      "warmTscMs": [191.74, 186.69, 187.24, 186.72, 193.04, 195.73],
       "warmTscP50Ms": 187.24
     },
     "arm-a": {
-      "coldCompletionMs": [
-        103.16,
-        94.43,
-        95.25,
-        95.39,
-        95.32,
-        89.83
-      ],
+      "coldCompletionMs": [103.16, 94.43, 95.25, 95.39, 95.32, 89.83],
       "coldCompletionP50Ms": 95.25,
-      "coldTscMs": [
-        262.18,
-        263.46,
-        262.6,
-        262.73,
-        262.56,
-        263.93
-      ],
+      "coldTscMs": [262.18, 263.46, 262.6, 262.73, 262.56, 263.93],
       "coldTscP50Ms": 262.6,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
@@ -5465,66 +5242,17 @@
       "declarationBytes": 12702,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.17,
-        0.14,
-        0.13,
-        0.13,
-        0.13,
-        0.12,
-        0.11,
-        0.11,
-        0.1,
-        0.11,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.09,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.09
+        0.17, 0.14, 0.13, 0.13, 0.13, 0.12, 0.11, 0.11, 0.1, 0.11, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+        0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.09, 0.1, 0.1, 0.1, 0.1, 0.09
       ],
       "warmCompletionP95Ms": 0.14,
-      "warmTscMs": [
-        190.56,
-        198.41,
-        190.34,
-        192.33,
-        190.02,
-        188.38
-      ],
+      "warmTscMs": [190.56, 198.41, 190.34, 192.33, 190.02, 188.38],
       "warmTscP50Ms": 190.34
     },
     "arm-b": {
-      "coldCompletionMs": [
-        96.01,
-        102.97,
-        101.93,
-        115,
-        93.31,
-        95.94
-      ],
+      "coldCompletionMs": [96.01, 102.97, 101.93, 115, 93.31, 95.94],
       "coldCompletionP50Ms": 96.01,
-      "coldTscMs": [
-        265.88,
-        267.14,
-        264.91,
-        271.12,
-        273.55,
-        274.43
-      ],
+      "coldTscMs": [265.88, 267.14, 264.91, 271.12, 273.55, 274.43],
       "coldTscP50Ms": 267.14,
       "completionCandidateCount": 11,
       "completionCandidateDigest": "6fd4a0ac4c6060d7dfa030472fbfebe9088799e38522b57bc601577660ffa4b5",
@@ -5544,46 +5272,11 @@
       "declarationBytes": 13418,
       "typecheckDiagnosticCodes": [],
       "warmCompletionMs": [
-        0.15,
-        0.13,
-        0.13,
-        0.12,
-        0.12,
-        0.12,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.1,
-        0.09,
-        0.1,
-        0.1,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.09,
-        0.1,
-        0.09,
-        0.09,
-        0.09
+        0.15, 0.13, 0.13, 0.12, 0.12, 0.12, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.09,
+        0.1, 0.1, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09, 0.09, 0.1, 0.09, 0.09, 0.09
       ],
       "warmCompletionP95Ms": 0.13,
-      "warmTscMs": [
-        194.54,
-        192.35,
-        187.63,
-        188.89,
-        190.24,
-        189.42
-      ],
+      "warmTscMs": [194.54, 192.35, 187.63, 188.89, 190.24, 189.42],
       "warmTscP50Ms": 189.42
     }
   },
@@ -25297,10 +24990,7 @@
       "routePublicAccess": false
     },
     "fakeHtmlAsTrustedHtml": {
-      "diagnosticCodes": [
-        "KV236",
-        "KV426"
-      ],
+      "diagnosticCodes": ["KV236", "KV426"],
       "recognizedTrustedHtml": false
     },
     "forbiddenOptionNamesPresent": []
@@ -25319,9 +25009,7 @@
       "ownerKey": null,
       "recognizedFactoryCount": 0,
       "resolverSchema": "kovo.app-contract-d1-compiler-resolver/v2",
-      "serverPackageRoots": [
-        "<fixture>/store/server-a"
-      ],
+      "serverPackageRoots": ["<fixture>/store/server-a"],
       "sourceSha256": "e557798f38ba76c8be0f4b944d5b17fee3b9b49145a9d845e45445ca6b9282fe",
       "sourceSubject": {
         "bytes": 191,
@@ -25417,248 +25105,66 @@
     "arm-a": {
       "assembledHandleCount": 6,
       "crossAppError": "D1OWN001 mixed app or Kovo package handle refused before assembly.",
-      "ownedFamilies": [
-        "endpoint",
-        "layout",
-        "mutation",
-        "query",
-        "route",
-        "task"
-      ],
+      "ownedFamilies": ["endpoint", "layout", "mutation", "query", "route", "task"],
       "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
       "providerEvaluationCount": 0
     },
     "arm-b": {
       "assembledHandleCount": 6,
       "crossAppError": "D1OWN001 mixed app or Kovo package handle refused before assembly.",
-      "ownedFamilies": [
-        "endpoint",
-        "layout",
-        "mutation",
-        "query",
-        "route",
-        "task"
-      ],
+      "ownedFamilies": ["endpoint", "layout", "mutation", "query", "route", "task"],
       "ownerKey": "00000000-0000-4000-8000-000000000001:contacts-provider",
       "providerEvaluationCount": 0
     }
   },
   "schedules": {
     "coldCompletion": [
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ]
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"]
     ],
     "tsc": [
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ]
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"]
     ],
     "warmCompletion": [
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ],
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ],
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ],
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ],
-      [
-        "baseline",
-        "arm-a",
-        "arm-b"
-      ],
-      [
-        "baseline",
-        "arm-b",
-        "arm-a"
-      ],
-      [
-        "arm-a",
-        "baseline",
-        "arm-b"
-      ],
-      [
-        "arm-a",
-        "arm-b",
-        "baseline"
-      ],
-      [
-        "arm-b",
-        "baseline",
-        "arm-a"
-      ],
-      [
-        "arm-b",
-        "arm-a",
-        "baseline"
-      ]
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"],
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"],
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"],
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"],
+      ["baseline", "arm-a", "arm-b"],
+      ["baseline", "arm-b", "arm-a"],
+      ["arm-a", "baseline", "arm-b"],
+      ["arm-a", "arm-b", "baseline"],
+      ["arm-b", "baseline", "arm-a"],
+      ["arm-b", "arm-a", "baseline"]
     ]
   },
   "schema": "kovo.app-contract-d1-raw-evidence/v5",

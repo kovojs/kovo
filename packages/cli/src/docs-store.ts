@@ -13,6 +13,7 @@ const installedAgentDocsManifestSchema = 'kovo.installed-agent-docs/v1' as const
 const installedAgentDocsPointerSchema = 'kovo.installed-agent-docs-current/v1' as const;
 const POINTER_MAX_BYTES = 16 * 1024;
 const MANIFEST_MAX_BYTES = 1024 * 1024;
+const SNAPSHOT_FILE_MAX_BYTES = 4 * 1024 * 1024;
 
 interface InstalledAgentDocsManifest {
   readonly files: readonly Omit<InstalledAgentDocsFile, 'content'>[];
@@ -254,7 +255,7 @@ async function readExpectedFile(
   boundary: FrameworkFileSystemBoundary,
   relativePath: string,
   expectedBytes: number,
-  maximumBytes = 2 * 1024 * 1024,
+  maximumBytes = SNAPSHOT_FILE_MAX_BYTES,
 ): Promise<Uint8Array> {
   if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0 || expectedBytes > maximumBytes) {
     throw new TypeError(`${relativePath}: expected byte length exceeds its limit`);
@@ -328,7 +329,7 @@ function parseManifest(bytes: Uint8Array): InstalledAgentDocsManifest {
     if (
       !Number.isSafeInteger(rawFile.bytes) ||
       (rawFile.bytes as number) < 0 ||
-      (rawFile.bytes as number) > 2 * 1024 * 1024
+      (rawFile.bytes as number) > SNAPSHOT_FILE_MAX_BYTES
     ) {
       throw new TypeError(`${rawFile.path}: installed docs byte length is invalid`);
     }
