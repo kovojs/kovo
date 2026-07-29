@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budgets/v5",
+  "schema": "kovo-devex-budgets/v6",
   "runner": {
     "status": "unratified",
     "fingerprint": null
@@ -10,7 +10,7 @@
   },
   "procedure": {
     "minimumStatisticalSamples": 5,
-    "statistic": "median",
+    "statistic": "metric-specific",
     "noiseStatistic": "median-absolute-deviation",
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
@@ -19,6 +19,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": 30000,
       "ratification": null
     },
@@ -26,6 +27,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -33,6 +35,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": 10000,
       "ratification": null
     },
@@ -40,6 +43,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -47,6 +51,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": 2000,
       "ratification": null
     },
@@ -54,6 +59,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -61,6 +67,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -68,6 +75,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "statistic": "median",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -75,6 +83,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": 1000,
       "ratification": null
     },
@@ -82,6 +91,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": 500,
       "ratification": null
     },
@@ -89,6 +99,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": 15000,
       "ratification": null
     },
@@ -96,6 +107,7 @@
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "median",
       "provisionalTarget": 5000,
       "ratification": null
     },
@@ -103,6 +115,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "statistic": "median",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -110,6 +123,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "statistic": "median",
       "binding": "packed-artifact",
       "provisionalTarget": null,
       "ratification": {
@@ -123,12 +137,10 @@
           "scenarioDigest": "sha256:54cab990c79210f6ecb074561a3a5aa6f61ce4f924e267f58a62590204ef80bc"
         },
         "binding": {
-          "schema": "kovo-devex-packed-artifact-binding/v1",
+          "schema": "kovo-devex-packed-artifact-binding/v2",
           "kind": "packed-artifact",
-          "evidenceSha256": "sha256:7d1417f235c473e46fe51321b8185300d92f9574a340e71c6f46d2447dbb0aa8",
-          "packedArtifactSha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
-          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
-          "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+          "evidenceSchema": "kovo-devex-packed-docs-evidence/v1",
+          "packageName": "@kovojs/cli"
         },
         "sampleCount": 1,
         "statistic": "median",
@@ -145,6 +157,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "statistic": "median",
       "binding": "packed-artifact",
       "provisionalTarget": null,
       "ratification": {
@@ -158,12 +171,10 @@
           "scenarioDigest": "sha256:54cab990c79210f6ecb074561a3a5aa6f61ce4f924e267f58a62590204ef80bc"
         },
         "binding": {
-          "schema": "kovo-devex-packed-artifact-binding/v1",
+          "schema": "kovo-devex-packed-artifact-binding/v2",
           "kind": "packed-artifact",
-          "evidenceSha256": "sha256:7d1417f235c473e46fe51321b8185300d92f9574a340e71c6f46d2447dbb0aa8",
-          "packedArtifactSha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
-          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
-          "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+          "evidenceSchema": "kovo-devex-packed-docs-evidence/v1",
+          "packageName": "@kovojs/cli"
         },
         "sampleCount": 1,
         "statistic": "median",
@@ -180,6 +191,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
+      "statistic": "p95",
       "provisionalTarget": 2147483648,
       "ratification": null,
       "knownFailure": "KF-DEVEX-007"

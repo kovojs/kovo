@@ -163,8 +163,15 @@ describe('release workflow authority', () => {
     expect(releaseWorkflow).toContain('.head_branch == "main"');
     expect(releaseWorkflow).toContain('.path == ".github/workflows/ci.yml"');
     expect(releaseWorkflow).toContain('.check_suite_id == $suite');
+    expect(releaseWorkflow).toContain('/actions/workflows/322844190/runs?');
+    expect(releaseWorkflow).toContain('.workflow_id == 322844190');
+    expect(releaseWorkflow).toContain('(.event == "workflow_dispatch" or .event == "schedule")');
+    expect(releaseWorkflow).toContain('.path == ".github/workflows/devex-nightly.yml"');
     expect(releaseWorkflow).toContain(
       'ci-run-id: ${{ steps.authorize-release.outputs.ci-run-id }}',
+    );
+    expect(releaseWorkflow).toContain(
+      'devex-run-id: ${{ steps.authorize-release.outputs.devex-run-id }}',
     );
     expect(releaseWorkflow).toContain('id: authorize-release');
     expect(releaseWorkflow).toContain(
@@ -172,6 +179,9 @@ describe('release workflow authority', () => {
     );
     expect(releaseWorkflow).toContain(
       'printf \'ci-run-id=%s\\n\' "$(jq -er \'.id\' <<<"$workflow_run")" >> "$GITHUB_OUTPUT"',
+    );
+    expect(releaseWorkflow).toContain(
+      'printf \'devex-run-id=%s\\n\' "$(jq -er \'.id\' <<<"$devex_workflow_run")" >> "$GITHUB_OUTPUT"',
     );
     expect(releaseWorkflow).not.toContain('skip_verify_release_input');
     expect(releaseWorkflow).not.toContain('SKIP_RELEASE_CHECKS');

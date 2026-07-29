@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budget-proposal/v5",
+  "schema": "kovo-devex-budget-proposal/v6",
   "runnerFingerprint": null,
   "metrics": {
     "docs.snapshot.compressedBytes": {

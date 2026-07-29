@@ -12,7 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { decodeAgentDocsSnapshot, writeAgentDocsSnapshot } from './agent-docs-snapshot.mjs';
-import { DEVEX_BENCHMARK_REPORT_SCHEMA, median } from './devex-benchmark.mjs';
+import {
+  DEVEX_BENCHMARK_REPORT_SCHEMA,
+  benchmarkWorkloadContractIdentity,
+  statisticValue,
+} from './devex-benchmark.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { buildPublicApiInventory } from './public-api-inventory.mjs';
 import { repoRoot } from './release-packages.mjs';
@@ -110,23 +114,30 @@ export function speedDeltas(current, baseline, budgets) {
     budgets?.runner?.status === 'ratified' &&
     budgets?.workload?.status === 'ratified' &&
     sameJson(baseline.runner, budgets.runner.fingerprint) &&
-    sameJson(benchmarkWorkloadIdentity(baseline), budgets.workload.identity);
+    sameJson(benchmarkWorkloadContractIdentity(baseline), budgets.workload.identity) &&
+    sameJson(current.runner, budgets.runner.fingerprint) &&
+    sameJson(benchmarkWorkloadContractIdentity(current), budgets.workload.identity);
   const baselineKind = ratifiedBaseline ? 'ratified-baseline' : 'nightly-candidate';
   const metrics = [];
   for (const metricId of SPEED_METRICS) {
     const samples = current.metrics?.[metricId]?.samples;
     if (!validSamples(samples)) continue;
-    const currentValue = median(samples);
+    const statistic =
+      budgets?.metrics?.[metricId]?.ratification?.statistic ??
+      budgets?.metrics?.[metricId]?.statistic ??
+      'median';
+    const currentValue = statisticValue(samples, statistic);
     const baselineSamples = statisticalBaseline ? baseline.metrics?.[metricId]?.samples : null;
     const provisionalTarget = budgets?.metrics?.[metricId]?.provisionalTarget;
     const reference = validSamples(baselineSamples)
-      ? { kind: baselineKind, value: median(baselineSamples) }
+      ? { kind: baselineKind, value: statisticValue(baselineSamples, statistic) }
       : Number.isFinite(provisionalTarget)
         ? { kind: 'provisional-target', value: provisionalTarget }
         : null;
     metrics.push({
       metric: metricId,
       current: currentValue,
+      statistic,
       unit: 'ms',
       ...(reference === null
         ? { reference: null, delta: null, deltaPercent: null }
@@ -194,7 +205,7 @@ export function renderDevexPrReport(report) {
     );
     for (const metric of report.speed.metrics) {
       lines.push(
-        `| \`${metric.metric}\` | ${formatMs(metric.current)} | ${
+        `| \`${metric.metric}\` (${metric.statistic}) | ${formatMs(metric.current)} | ${
           metric.reference === null
             ? '—'
             : `${formatMs(metric.reference.value)} (${metric.reference.kind})`
@@ -221,7 +232,7 @@ async function runDevexPrReport(argv = process.argv.slice(2)) {
       snapshot: decodeAgentDocsSnapshot(compressed),
     };
     let installedDocs = null;
-    if (options.installedDocs) {
+    if (options.installedDocs && existsSync(options.installedDocs)) {
       installedDocs = decodeAgentDocsSnapshot(readFileSync(options.installedDocs));
     }
     const report = buildDevexPrReport({
@@ -277,16 +288,6 @@ function parseArgs(argv) {
     }
   }
   return options;
-}
-
-function benchmarkWorkloadIdentity(report) {
-  return {
-    scenario: {
-      name: report?.scenario?.name,
-      digest: report?.scenario?.digest,
-    },
-    provenance: report?.provenance,
-  };
 }
 
 function sameJson(left, right) {

@@ -154,6 +154,7 @@ jobs:
         run: vp run compiler-perf
 
   publish-readiness:
+    # devex-gate: pr-known-failures
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -163,7 +164,7 @@ jobs:
       - name: Packed app-public declaration contract
         run: vp exec pnpm run check:api-surface:packed
       - name: Gate available DevEx known-failure probes
-        run: vp exec pnpm run test:devex-known-failures-available
+        run: timeout 5m vp exec pnpm run test:devex-known-failures-available
       - name: Enforce packed security evidence budgets
         run: |
           vp exec pnpm run check:pack-security
@@ -570,6 +571,7 @@ jobs:
 
   devex-scorecard:
     # devex-gate: pr-scorecard
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs:
@@ -579,13 +581,16 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - id: packed-docs
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: kovo-package-dist
           path: ${{ runner.temp }}/kovo-package-dist
       - name: Restore packed docs snapshot
+        if: steps.packed-docs.outcome == 'success'
         run: tar -xzf "$RUNNER_TEMP/kovo-package-dist/kovo-package-dist.tgz" -C .
-      - name: Identify the observational hosted runner
+      - name: Identify the accepted hosted runner
         run: |
           runner_digest="$(
             {
@@ -594,7 +599,7 @@ jobs:
             } | sha256sum | cut -d' ' -f1
           )"
           echo "KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:$runner_digest" >> "$GITHUB_ENV"
-          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-observational" >> "$GITHUB_ENV"
+          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted" >> "$GITHUB_ENV"
       - name: Recover the latest accepted nightly baseline when available
         env:
           GH_TOKEN: ${{ github.token }}
@@ -632,7 +637,6 @@ jobs:
         run: |
           report_args=(
             --benchmark "$RUNNER_TEMP/kovo-devex-pr/benchmark.json"
-            --installed-docs packages/cli/dist/kovo-docs.snapshot.json.gz
             --json "$RUNNER_TEMP/kovo-devex-pr/report.json"
             --markdown "$RUNNER_TEMP/kovo-devex-pr/report.md"
             --github-summary "$GITHUB_STEP_SUMMARY"
@@ -642,7 +646,27 @@ jobs:
           if [ -f "$RUNNER_TEMP/kovo-devex-pr/prior/benchmark.json" ]; then
             report_args+=(--baseline "$RUNNER_TEMP/kovo-devex-pr/prior/benchmark.json")
           fi
+          if [ -f packages/cli/dist/kovo-docs.snapshot.json.gz ]; then
+            report_args+=(--installed-docs packages/cli/dist/kovo-docs.snapshot.json.gz)
+          fi
+          set +e
           vp exec node scripts/devex-pr-report.mjs "${report_args[@]}"
+          report_status="$?"
+          set -e
+          if [ ! -s "$RUNNER_TEMP/kovo-devex-pr/report.md" ]; then
+            printf '%s\n' \
+              '## Kovo DevEx scorecard' \
+              '' \
+              'Overall: **FAIL**' \
+              '' \
+              'The bounded reporter could not produce evidence; inspect this check log.' \
+              > "$RUNNER_TEMP/kovo-devex-pr/report.md"
+            printf '%s\n' \
+              '{"schema":"kovo-devex-pr-report/v1","pass":false,"error":"report-unavailable"}' \
+              > "$RUNNER_TEMP/kovo-devex-pr/report.json"
+            cat "$RUNNER_TEMP/kovo-devex-pr/report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$report_status"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

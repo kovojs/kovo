@@ -19,21 +19,22 @@ const workflowSources = policyWorkflowSources(ci);
 describe('DevEx CI and baseline policy', () => {
   it('keeps every gate mapped and below the explicit per-PR/nightly runner-minute caps', () => {
     expect(validateDevexCiPolicy(ci, { workflowSources })).toEqual([]);
-    expect(runnerMinutes(ci.gates, 'per-pr')).toBe(60);
+    expect(runnerMinutes(ci.gates, 'per-pr')).toBe(65);
     expect(runnerMinutes(ci.gates, 'nightly')).toBe(290);
   });
 
   it('rejects unbudgeted jobs, drifted commands, and browser use before installation', () => {
     const overspent = structuredClone(ci);
-    overspent.gates[0].runnerCount = 2;
+    overspent.gates.find((gate) => gate.id === 'pr-scorecard').runnerCount = 2;
     expect(validateDevexCiPolicy(overspent, { workflowSources })).toContain(
-      'per-PR DevEx gates cost 120 runner-minutes, above budget 60',
+      'per-PR DevEx gates cost 125 runner-minutes, above budget 65',
     );
 
     const drifted = structuredClone(ci);
-    drifted.gates[0].commands[0] = 'vp exec node scripts/invented-benchmark.mjs';
+    drifted.gates.find((gate) => gate.id === 'pr-scorecard').commands[0] =
+      'vp exec node scripts/invented-benchmark.mjs';
     expect(validateDevexCiPolicy(drifted, { workflowSources })).toContain(
-      'gates[0] workflow is missing command "vp exec node scripts/invented-benchmark.mjs"',
+      'gates[1] workflow is missing command "vp exec node scripts/invented-benchmark.mjs"',
     );
 
     const browserAfterJourney = new Map(workflowSources);
@@ -46,11 +47,37 @@ describe('DevEx CI and baseline policy', () => {
       ),
     );
     expect(validateDevexCiPolicy(ci, { workflowSources: browserAfterJourney })).toContain(
-      'gates[3] must install the declared browser before its journey command',
+      'gates[4] must install the declared browser before its journey command',
+    );
+
+    const unnamedRunner = new Map(workflowSources);
+    unnamedRunner.set(
+      '.github/workflows/devex-nightly.yml',
+      unnamedRunner
+        .get('.github/workflows/devex-nightly.yml')
+        .replace(
+          'KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted',
+          'KOVO_DEVEX_RUNNER_NAME=unreviewed-runner',
+        ),
+    );
+    expect(validateDevexCiPolicy(ci, { workflowSources: unnamedRunner })).toContain(
+      'gates[3] must identify the exact accepted hosted-runner fingerprint',
+    );
+
+    const deleted = structuredClone(ci);
+    deleted.gates = deleted.gates.filter((gate) => gate.id !== 'nightly-full-catalog');
+    expect(validateDevexCiPolicy(deleted, { workflowSources })).toContain(
+      'gates must retain required DevEx gate nightly-full-catalog',
+    );
+
+    const releaseBypass = structuredClone(ci);
+    delete releaseBypass.gates.find((gate) => gate.id === 'nightly-benchmark').releaseRequired;
+    expect(validateDevexCiPolicy(releaseBypass, { workflowSources })).toContain(
+      'releaseAuthority must cover every nightly DevEx gate',
     );
   });
 
-  it('requires N>=5, exact statistics, reviewed targets, and no binding from the observational runner', () => {
+  it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
     expect(validateDevexBaselinePolicy(baseline, budgets, ci)).toEqual([]);
 
     const tooSmall = structuredClone(baseline);
@@ -66,7 +93,14 @@ describe('DevEx CI and baseline policy', () => {
     const prematurelyRatified = structuredClone(budgets);
     prematurelyRatified.metrics['check.cold.durationMs'].ratification = {};
     expect(validateDevexBaselinePolicy(baseline, prematurelyRatified, ci)).toContain(
-      'an observational runner cannot produce runner-bound metric ratifications',
+      'an unratified baseline policy cannot contain runner-bound metric ratifications',
+    );
+
+    const driftedRunner = structuredClone(baseline);
+    driftedRunner.referenceRunner.fingerprintInputs =
+      driftedRunner.referenceRunner.fingerprintInputs.slice(1);
+    expect(validateDevexBaselinePolicy(driftedRunner, budgets, ci)).toContain(
+      'accepted GitHub-hosted runner must bind the exact ubuntu-24.04 fingerprint and fail closed on drift',
     );
   });
 });
@@ -78,21 +112,44 @@ function readJson(relative) {
 function policyWorkflowSources(policy) {
   const byWorkflow = new Map();
   for (const gate of policy.gates) {
-    const existing = byWorkflow.get(gate.workflow) ?? 'on:\n  pull_request:\njobs:\n';
+    const triggers =
+      gate.cadence === 'nightly'
+        ? 'name: DevEx Nightly\non:\n  schedule:\n    - cron: "0 0 * * *"\n  workflow_dispatch:\n'
+        : 'name: CI\non:\n  pull_request:\n';
+    const existing = byWorkflow.get(gate.workflow) ?? `${triggers}jobs:\n`;
     const lines = [
       `  ${gate.job}:`,
       `    # devex-gate: ${gate.id}`,
+      ...(gate.runWhenDependenciesFail ? ['    if: ${{ always() }}'] : []),
       '    runs-on: ubuntu-24.04',
-      `    timeout-minutes: ${String(gate.timeoutMinutes)}`,
+      ...(gate.scope === 'job' ? [`    timeout-minutes: ${String(gate.timeoutMinutes)}`] : []),
       '    steps:',
     ];
     if (gate.requiresBrowser) {
       lines.push('      - uses: ./.github/actions/playwright-install');
     }
+    if (['nightly-benchmark', 'pr-scorecard'].includes(gate.id)) {
+      lines.push(
+        '      - run: |',
+        '          printf \'%s\\n\' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"',
+        '          cat /etc/os-release',
+        '          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted"',
+      );
+    }
     for (const command of gate.commands) lines.push(`      - run: ${command}`);
+    if (gate.preserveReportOnFailure) {
+      lines.push('      - if: always()', '        with:', '          name: kovo-devex-baseline');
+    }
     if (gate.prVisible) {
       lines.push(
         '      - run: vp exec node scripts/report.mjs --github-summary "$GITHUB_STEP_SUMMARY"',
+        '      - run: |',
+        `          printf '%s\\n' '${JSON.stringify({
+          schema: 'kovo-devex-pr-report/v1',
+          pass: false,
+          error: 'report-unavailable',
+        })}'`,
+        '          cat "$RUNNER_TEMP/kovo-devex-pr/report.md" >> "$GITHUB_STEP_SUMMARY"',
       );
     }
     byWorkflow.set(gate.workflow, `${existing}${lines.join('\n')}\n`);

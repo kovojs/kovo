@@ -18,6 +18,7 @@ import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
   DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
   DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+  benchmarkWorkloadContractIdentity,
   benchmarkScenarioDigest,
   browserBootstrapBytes,
   createRunnerFingerprint,
@@ -538,7 +539,7 @@ describe('DevEx benchmark foundation', () => {
   });
 
   it('closes the v5 metric vocabulary against invented and deleted gates', () => {
-    expect(budgets.schema).toBe('kovo-devex-budgets/v5');
+    expect(budgets.schema).toBe('kovo-devex-budgets/v6');
     expect(budgets.metrics).toMatchObject({
       'create.install.cold.durationMs': {
         unit: 'ms',
@@ -580,13 +581,13 @@ describe('DevEx benchmark foundation', () => {
       ratification: null,
     };
     expect(validateBudgets(invented)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v5 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v6 vocabulary'),
     );
 
     const deleted = structuredClone(budgets);
     delete deleted.metrics['check.cold.durationMs'];
     expect(validateBudgets(deleted)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v5 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v6 vocabulary'),
     );
   });
 
@@ -642,7 +643,7 @@ describe('DevEx benchmark foundation', () => {
         budgets,
         forged,
         {
-          schema: 'kovo-devex-budget-proposal/v5',
+          schema: 'kovo-devex-budget-proposal/v6',
           runnerFingerprint: forged.runner,
           metrics: {
             'check.cold.durationMs': {
@@ -685,7 +686,7 @@ describe('DevEx benchmark foundation', () => {
           },
           binding: {
             kind: 'packed-artifact',
-            schema: 'kovo-devex-packed-artifact-binding/v1',
+            schema: 'kovo-devex-packed-artifact-binding/v2',
           },
         },
       });
@@ -807,7 +808,7 @@ describe('DevEx benchmark foundation', () => {
       evaluateBudgets(artifactBudgets, anotherRunnerReport, source.validationOptions).results.find(
         (result) => result.metric === 'docs.snapshot.compressedBytes',
       ),
-    ).toMatchObject({ status: 'artifact-mismatch' });
+    ).toMatchObject({ status: 'pass' });
   });
 
   it('reserves deterministic artifact reports for packed-artifact metrics', () => {
@@ -936,6 +937,72 @@ describe('DevEx benchmark foundation', () => {
     expect(validateBudgets(ratified, validationOptions)).toEqual([]);
   });
 
+  it('binds edit latency to p95 rather than a median that can hide tail regressions', () => {
+    const report = benchmarkReport({
+      'dev.editToDiagnostic.durationMs': [3, 4, 5, 6, 7],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(report, {
+      'dev.editToDiagnostic.durationMs': {
+        budget: 5,
+        noiseMultiplier: 1,
+        targetRationale: 'Keep the edit-to-diagnostic p95 inside the daily-loop target.',
+      },
+    });
+
+    expect(ratified.metrics['dev.editToDiagnostic.durationMs'].ratification).toMatchObject({
+      baseline: 7,
+      statistic: 'p95',
+    });
+    const weakened = structuredClone(ratified);
+    weakened.metrics['dev.editToDiagnostic.durationMs'].ratification.statistic = 'median';
+    expect(validateBudgets(weakened, validationOptions)).toContain(
+      'dev.editToDiagnostic.durationMs.ratification.statistic must match the metric contract',
+    );
+  });
+
+  it('compares later authenticated revisions under the same benchmark contract', () => {
+    const baseline = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified, validationOptions } = ratifyFixtureBudgets(baseline, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
+      },
+    });
+    const laterRevision = structuredClone(scenario);
+    laterRevision.provenance.sourceCommit = 'b'.repeat(40);
+    laterRevision.provenance.workloadManifest.sha256 = `sha256:${'c'.repeat(64)}`;
+    laterRevision.provenance.packedArtifacts[0].sha256 = `sha256:${'d'.repeat(64)}`;
+    const evaluation = evaluateBudgets(
+      ratified,
+      benchmarkReport(
+        { 'check.cold.durationMs': [99, 100, 101, 102, 103] },
+        { definition: laterRevision },
+      ),
+      validationOptions,
+    );
+
+    expect(evaluation.pass).toBe(true);
+    expect(
+      evaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({ observed: 101, status: 'pass' });
+
+    laterRevision.provenance.supportFiles[0].sha256 = `sha256:${'e'.repeat(64)}`;
+    const changedContract = evaluateBudgets(
+      ratified,
+      benchmarkReport(
+        { 'check.cold.durationMs': [99, 100, 101, 102, 103] },
+        { definition: laterRevision },
+      ),
+      validationOptions,
+    );
+    expect(
+      changedContract.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({ status: 'scenario-mismatch' });
+  });
+
   it('rejects ratification records that are not bound to the recorded baseline bytes', () => {
     const report = benchmarkReport({
       'check.cold.durationMs': [100, 101, 102, 103, 104],
@@ -979,12 +1046,12 @@ describe('DevEx benchmark foundation', () => {
     ).toThrow('has 1 baseline samples; 5 required');
   });
 
-  it('refuses to ratify or evaluate a differently pinned runner/scenario identity', () => {
+  it('refuses to ratify or evaluate a differently pinned runner identity', () => {
     const defaultReport = benchmarkReport({
       'check.cold.durationMs': [100, 101, 102, 103, 104],
     });
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v5',
+      schema: 'kovo-devex-budget-proposal/v6',
       runnerFingerprint: defaultReport.runner,
       metrics: {
         'check.cold.durationMs': {
@@ -1023,13 +1090,8 @@ describe('DevEx benchmark foundation', () => {
     expect(
       evaluation.results.find((result) => result.metric === 'check.cold.durationMs'),
     ).toMatchObject({
-      status: 'scenario-mismatch',
-      expectedWorkload: expect.objectContaining({
-        scenario: expect.objectContaining({ digest: defaultReport.scenario.digest }),
-      }),
-      actualWorkload: expect.objectContaining({
-        scenario: expect.objectContaining({ digest: benchmarkScenarioDigest(anotherNodeScenario) }),
-      }),
+      status: 'runner-mismatch',
+      expectedRunner: defaultReport.runner,
     });
   });
 
@@ -1369,13 +1431,7 @@ function baselineOptions(report) {
 function ratifyFixtureBudgets(report, metrics) {
   const source = baselineOptions(report);
   const ratified = unratifiedBudgetFixture();
-  const workloadIdentity = {
-    scenario: {
-      name: report.scenario.name,
-      digest: report.scenario.digest,
-    },
-    provenance: structuredClone(report.provenance),
-  };
+  const workloadIdentity = benchmarkWorkloadContractIdentity(report);
   ratified.runner = {
     status: 'ratified',
     fingerprint: structuredClone(report.runner),
@@ -1394,7 +1450,7 @@ function ratifyFixtureBudgets(report, metrics) {
         `${metricId} has ${samples?.length ?? 0} baseline samples; ${requiredSamples} required`,
       );
     }
-    const statistic = proposal.statistic ?? ratified.procedure.statistic;
+    const statistic = proposal.statistic ?? metric.statistic;
     const baseline = statistic === 'p95' ? percentile(samples, 0.95) : median(samples);
     const noise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
     metric.ratification = {

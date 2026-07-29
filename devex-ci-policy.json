@@ -1,15 +1,41 @@
 {
-  "schema": "kovo-devex-ci-policy/v1",
+  "schema": "kovo-devex-ci-policy/v2",
   "budgets": {
-    "perPullRequestRunnerMinutes": 60,
+    "perPullRequestRunnerMinutes": 65,
     "nightlyRunnerMinutes": 300
+  },
+  "pullRequestDelivery": {
+    "workflow": ".github/workflows/ci.yml",
+    "transport": "github-check-step-summary",
+    "writePermissions": false,
+    "requiredSignals": ["public-surface", "docs-freshness", "speed-deltas"]
+  },
+  "releaseAuthority": {
+    "workflow": ".github/workflows/release.yml",
+    "requiredWorkflowId": 322844190,
+    "requiredWorkflowName": "DevEx Nightly",
+    "requiredWorkflowPath": ".github/workflows/devex-nightly.yml",
+    "requiredBranch": "main"
   },
   "gates": [
     {
+      "id": "pr-known-failures",
+      "cadence": "per-pr",
+      "scope": "step",
+      "workflow": ".github/workflows/ci.yml",
+      "job": "publish-readiness",
+      "budgetMinutes": 5,
+      "runnerCount": 1,
+      "commands": ["timeout 5m vp exec pnpm run test:devex-known-failures-available"],
+      "prVisible": false
+    },
+    {
       "id": "pr-scorecard",
       "cadence": "per-pr",
+      "scope": "job",
       "workflow": ".github/workflows/ci.yml",
       "job": "devex-scorecard",
+      "budgetMinutes": 60,
       "timeoutMinutes": 60,
       "runnerCount": 1,
       "commands": [
@@ -17,51 +43,65 @@
         "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1 --output \"$RUNNER_TEMP/kovo-devex-pr/benchmark.json\"",
         "vp exec node scripts/devex-pr-report.mjs"
       ],
-      "prVisible": true
+      "prVisible": true,
+      "runWhenDependenciesFail": true
     },
     {
       "id": "nightly-package-producer",
       "cadence": "nightly",
+      "scope": "job",
       "workflow": ".github/workflows/devex-nightly.yml",
       "job": "package-producer",
+      "budgetMinutes": 40,
       "timeoutMinutes": 40,
       "runnerCount": 1,
       "commands": ["vp exec pnpm run check:publish"],
-      "prVisible": false
+      "prVisible": false,
+      "releaseRequired": true
     },
     {
       "id": "nightly-benchmark",
       "cadence": "nightly",
+      "scope": "job",
       "workflow": ".github/workflows/devex-nightly.yml",
       "job": "benchmark",
+      "budgetMinutes": 100,
       "timeoutMinutes": 100,
       "runnerCount": 1,
       "commands": [
         "vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario",
-        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5"
+        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate"
       ],
-      "prVisible": false
+      "prVisible": false,
+      "preserveReportOnFailure": true,
+      "releaseRequired": true
     },
     {
       "id": "nightly-packed-journeys",
       "cadence": "nightly",
+      "scope": "job",
       "workflow": ".github/workflows/devex-nightly.yml",
       "job": "packed-journeys",
+      "budgetMinutes": 90,
       "timeoutMinutes": 90,
       "runnerCount": 1,
       "commands": ["vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1"],
       "prVisible": false,
-      "requiresBrowser": true
+      "requiresBrowser": true,
+      "releaseRequired": true
     },
     {
       "id": "nightly-full-catalog",
       "cadence": "nightly",
+      "scope": "job",
       "workflow": ".github/workflows/devex-nightly.yml",
       "job": "full-catalog",
+      "budgetMinutes": 60,
       "timeoutMinutes": 60,
       "runnerCount": 1,
       "commands": ["vp exec pnpm run test:devex-known-failures-nightly"],
-      "prVisible": false
+      "prVisible": false,
+      "releaseRequired": true
     }
   ]
 }

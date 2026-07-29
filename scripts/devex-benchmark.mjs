@@ -43,12 +43,12 @@ import {
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 import { releasePackages } from './release-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v5';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v6';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v4';
 export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
 export const DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA =
   'kovo-devex-deterministic-artifact-report/v1';
-export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v5';
+export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v6';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v2';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
@@ -59,7 +59,8 @@ const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
 const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v3';
 const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
 const KOVO_PACKED_DOCS_EVIDENCE_SCHEMA = 'kovo-devex-packed-docs-evidence/v1';
-const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v1';
+const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v2';
+const KOVO_WORKLOAD_CONTRACT_SCHEMA = 'kovo-devex-workload-contract/v1';
 const KOVO_PACKED_DOCS_REPORT_SUBJECT = 'packed-docs-snapshot';
 const KOVO_PACKED_DOCS_METRIC_IDS = Object.freeze([
   'docs.snapshot.compressedBytes',
@@ -98,48 +99,88 @@ const DEV_PROFILE_METRICS = Object.freeze([
   'dev.editToServedResult.durationMs',
 ]);
 const DEVEX_METRIC_CONTRACT = Object.freeze({
-  'browser.bootstrapBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
-  'check.cold.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
-  'check.cold.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+  'browser.bootstrapBytes': Object.freeze({
+    sampling: 'deterministic',
+    statistic: 'median',
+    unit: 'bytes',
+  }),
+  'check.cold.durationMs': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'median',
+    unit: 'ms',
+  }),
+  'check.cold.peakRssBytes': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'p95',
+    unit: 'bytes',
+  }),
   'check.oneFileIncremental.durationMs': Object.freeze({
     sampling: 'statistical',
+    statistic: 'median',
     unit: 'ms',
   }),
   'check.oneFileIncremental.peakRssBytes': Object.freeze({
     sampling: 'statistical',
+    statistic: 'p95',
     unit: 'bytes',
   }),
-  'check.warm.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
-  'check.warm.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+  'check.warm.durationMs': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'median',
+    unit: 'ms',
+  }),
+  'check.warm.peakRssBytes': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'p95',
+    unit: 'bytes',
+  }),
   'create.install.cold.durationMs': Object.freeze({
     sampling: 'statistical',
+    statistic: 'median',
     unit: 'ms',
   }),
   'create.install.installedBytes': Object.freeze({
     sampling: 'deterministic',
+    statistic: 'median',
     unit: 'bytes',
   }),
   'dev.editToDiagnostic.durationMs': Object.freeze({
     sampling: 'statistical',
+    statistic: 'p95',
     unit: 'ms',
   }),
   'dev.editToServedResult.durationMs': Object.freeze({
     sampling: 'statistical',
+    statistic: 'p95',
     unit: 'ms',
   }),
-  'dev.ready.cold.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
-  'dev.ready.warm.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
+  'dev.ready.cold.durationMs': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'median',
+    unit: 'ms',
+  }),
+  'dev.ready.warm.durationMs': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'median',
+    unit: 'ms',
+  }),
   'docs.snapshot.compressedBytes': Object.freeze({
     binding: 'packed-artifact',
     sampling: 'deterministic',
+    statistic: 'median',
     unit: 'bytes',
   }),
   'docs.snapshot.installedBytes': Object.freeze({
     binding: 'packed-artifact',
     sampling: 'deterministic',
+    statistic: 'median',
     unit: 'bytes',
   }),
-  'ui.fullCatalog.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
+  'ui.fullCatalog.peakRssBytes': Object.freeze({
+    sampling: 'statistical',
+    statistic: 'p95',
+    unit: 'bytes',
+  }),
 });
 
 function metricBinding(metricId) {
@@ -201,10 +242,8 @@ export function packedArtifactBinding(evidence) {
   return {
     schema: KOVO_PACKED_ARTIFACT_BINDING_SCHEMA,
     kind: 'packed-artifact',
-    evidenceSha256: sha256(canonicalJson(evidence)),
-    packedArtifactSha256: evidence.package.sha256,
-    snapshotDigest: evidence.snapshot.snapshotDigest,
-    workloadManifestSha256: evidence.workloadManifestSha256,
+    evidenceSchema: evidence.schema,
+    packageName: evidence.package.name,
   };
 }
 
@@ -1991,66 +2030,69 @@ function validateRatificationReportIdentity(report, label, allowArtifactReport) 
   return validateBenchmarkReportIdentity(report, label);
 }
 
-function workloadIdentity(report) {
+/**
+ * Bind the benchmark contract, not the revision under measurement. Exact source, tarball, and
+ * manifest digests stay authenticated inside each report; carrying those volatile subjects into
+ * the budget identity would make every later commit a scenario mismatch instead of a measurement.
+ */
+export function benchmarkWorkloadContractIdentity(report) {
+  const definition = report?.scenario?.definition;
+  const attestation = definition?.provenance?.producerAttestation;
   return {
-    scenario: {
-      name: report.scenario.name,
-      digest: report.scenario.digest,
-    },
-    provenance: structuredClone(report.provenance),
+    schema: KOVO_WORKLOAD_CONTRACT_SCHEMA,
+    scenarioName: definition?.name,
+    profile: structuredClone(definition?.profile),
+    producer:
+      attestation === undefined
+        ? null
+        : {
+            schema: attestation.schema,
+            producer: attestation.producer,
+            consumer: attestation.consumer,
+            releasePackages: structuredClone(attestation.releasePackages),
+            profileCommandDigest: attestation.profileCommandDigest,
+            browserBuildCommandDigest: attestation.browserBuildCommandDigest,
+          },
+    supportFiles: structuredClone(definition?.provenance?.supportFiles),
   };
 }
 
 function validateWorkloadIdentity(identity, label) {
   const findings = [];
-  if (typeof identity?.scenario?.name !== 'string' || identity.scenario.name.trim().length === 0) {
-    findings.push(`${label}.scenario.name must be a non-empty string`);
+  if (
+    !exactOwnKeys(identity, ['producer', 'profile', 'scenarioName', 'schema', 'supportFiles']) ||
+    identity.schema !== KOVO_WORKLOAD_CONTRACT_SCHEMA
+  ) {
+    findings.push(`${label} must be an exact ${KOVO_WORKLOAD_CONTRACT_SCHEMA} record`);
+    return findings;
   }
-  if (!/^sha256:[0-9a-f]{64}$/u.test(identity?.scenario?.digest ?? '')) {
-    findings.push(`${label}.scenario.digest must be an exact SHA-256 digest`);
-  }
-  if (!validGitObjectId(identity?.provenance?.sourceCommit)) {
-    findings.push(`${label}.provenance.sourceCommit must be an exact Git object ID`);
-  }
-  if (identity?.provenance?.sourceTree !== 'clean') {
-    findings.push(`${label}.provenance.sourceTree must be clean`);
+  if (typeof identity.scenarioName !== 'string' || identity.scenarioName.trim().length === 0) {
+    findings.push(`${label}.scenarioName must be a non-empty string`);
   }
   if (
-    !/^[a-z0-9][a-z0-9._-]*@\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/u.test(
-      identity?.provenance?.packageManager ?? '',
-    )
+    !exactOwnKeys(identity.profile, ['commandDigest', 'id']) ||
+    identity.profile.id !== PACKED_PROFILE_ID ||
+    identity.profile.commandDigest !== DEVEX_PACKED_PROFILE_COMMAND_DIGEST
   ) {
-    findings.push(`${label}.provenance.packageManager must pin an exact semantic version`);
+    findings.push(`${label}.profile must bind the code-owned packed profile`);
   }
-  if (!/^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$/u.test(identity?.provenance?.osImage ?? '')) {
-    findings.push(`${label}.provenance.osImage must be an immutable image digest`);
-  }
+  const expectedProducer = {
+    schema: KOVO_PRODUCER_ATTESTATION_SCHEMA,
+    producer: KOVO_FRESH_PACK_PRODUCER_ID,
+    consumer: KOVO_BENCHMARK_CONSUMER,
+    releasePackages: expectedKovoReleasePackages(),
+    profileCommandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
+    browserBuildCommandDigest: sha256(Buffer.from(canonicalJson(BROWSER_BUILD_COMMAND))),
+  };
   if (
-    !safeRepositoryRelativePath(identity?.provenance?.workloadManifest?.path) ||
-    !/^sha256:[0-9a-f]{64}$/u.test(identity?.provenance?.workloadManifest?.sha256 ?? '')
+    identity.scenarioName === 'kovo-packed-check' &&
+    !sameJson(identity.producer, expectedProducer)
   ) {
-    findings.push(`${label}.provenance.workloadManifest must bind a relative path and SHA-256`);
+    findings.push(`${label}.producer must bind the exact code-owned package and command census`);
+  } else if (identity.scenarioName !== 'kovo-packed-check' && identity.producer !== null) {
+    findings.push(`${label}.producer is reserved for the authenticated Kovo production scenario`);
   }
-  if (identity?.provenance?.commandDigest !== DEVEX_PACKED_PROFILE_COMMAND_DIGEST) {
-    findings.push(`${label}.provenance.commandDigest must bind the code-owned packed profiles`);
-  }
-  findings.push(
-    ...validatePackedArtifacts(
-      identity?.provenance?.packedArtifacts,
-      `${label}.provenance.packedArtifacts`,
-    ),
-  );
-  findings.push(
-    ...validateWorkloadFiles(
-      identity?.provenance?.supportFiles,
-      `${label}.provenance.supportFiles`,
-    ),
-  );
-  if (identity?.scenario?.name === 'kovo-packed-check') {
-    findings.push(
-      ...validateKovoProductionScenario({ provenance: identity.provenance }, `${label}.scenario`),
-    );
-  }
+  findings.push(...validateWorkloadFiles(identity.supportFiles, `${label}.supportFiles`));
   return findings;
 }
 
@@ -2146,7 +2188,8 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   if (binding === 'runner' && !sameJson(report.runner, record.runnerFingerprint)) {
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
   }
-  const reportWorkloadIdentity = binding === 'runner' ? workloadIdentity(report) : null;
+  const reportWorkloadIdentity =
+    binding === 'runner' ? benchmarkWorkloadContractIdentity(report) : null;
   if (binding === 'runner' && !sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
     findings.push(`${metricId}.ratification workload does not match its baseline report`);
   }
@@ -2209,8 +2252,8 @@ export function validateBudgets(budgets, options = {}) {
   } else if (budgets.procedure.minimumStatisticalSamples < 5) {
     findings.push('procedure.minimumStatisticalSamples must be at least 5');
   }
-  if (!STATISTICS.has(budgets?.procedure?.statistic)) {
-    findings.push('procedure.statistic must be median or p95');
+  if (budgets?.procedure?.statistic !== 'metric-specific') {
+    findings.push('procedure.statistic must be metric-specific');
   }
   if (budgets?.procedure?.noiseStatistic !== 'median-absolute-deviation') {
     findings.push('procedure.noiseStatistic must be median-absolute-deviation');
@@ -2260,9 +2303,14 @@ export function validateBudgets(budgets, options = {}) {
   }
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
     const contract = DEVEX_METRIC_CONTRACT[metricId];
-    if (contract && (metric?.unit !== contract.unit || metric?.sampling !== contract.sampling)) {
+    if (
+      contract &&
+      (metric?.unit !== contract.unit ||
+        metric?.sampling !== contract.sampling ||
+        metric?.statistic !== contract.statistic)
+    ) {
       findings.push(
-        `${metricId} must retain unit=${contract.unit} and sampling=${contract.sampling}`,
+        `${metricId} must retain unit=${contract.unit}, sampling=${contract.sampling}, and statistic=${contract.statistic}`,
       );
     }
     const expectedBinding = metricBinding(metricId);
@@ -2277,6 +2325,9 @@ export function validateBudgets(budgets, options = {}) {
     if (metric?.direction !== 'max') findings.push(`${metricId}.direction must be max`);
     if (!['deterministic', 'statistical'].includes(metric?.sampling)) {
       findings.push(`${metricId}.sampling must be deterministic or statistical`);
+    }
+    if (!STATISTICS.has(metric?.statistic)) {
+      findings.push(`${metricId}.statistic must be median or p95`);
     }
     if (metric?.provisionalTarget !== null && !finiteNonNegative(metric?.provisionalTarget)) {
       findings.push(`${metricId}.provisionalTarget must be null or a non-negative number`);
@@ -2312,6 +2363,8 @@ export function validateBudgets(budgets, options = {}) {
     }
     if (!STATISTICS.has(record.statistic)) {
       findings.push(`${metricId}.ratification.statistic must be median or p95`);
+    } else if (record.statistic !== metric.statistic) {
+      findings.push(`${metricId}.ratification.statistic must match the metric contract`);
     }
     if (!finiteNonNegative(record.baseline)) {
       findings.push(`${metricId}.ratification.baseline invalid`);
@@ -2328,22 +2381,15 @@ export function validateBudgets(budgets, options = {}) {
         );
       }
       if (
-        !exactOwnKeys(record.binding, [
-          'evidenceSha256',
-          'kind',
-          'packedArtifactSha256',
-          'schema',
-          'snapshotDigest',
-          'workloadManifestSha256',
-        ]) ||
+        !exactOwnKeys(record.binding, ['evidenceSchema', 'kind', 'packageName', 'schema']) ||
         record.binding.schema !== KOVO_PACKED_ARTIFACT_BINDING_SCHEMA ||
         record.binding.kind !== 'packed-artifact' ||
-        !validDigest(record.binding.evidenceSha256) ||
-        !validDigest(record.binding.packedArtifactSha256) ||
-        !validDigest(record.binding.snapshotDigest) ||
-        !validDigest(record.binding.workloadManifestSha256)
+        record.binding.evidenceSchema !== KOVO_PACKED_DOCS_EVIDENCE_SCHEMA ||
+        record.binding.packageName !== '@kovojs/cli'
       ) {
-        findings.push(`${metricId}.ratification.binding must bind exact packed docs evidence`);
+        findings.push(
+          `${metricId}.ratification.binding must bind the authenticated packed docs contract`,
+        );
       }
     } else {
       if (record.binding !== undefined) {
@@ -2477,7 +2523,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   if (
     runnerBoundProposal &&
     budgets.workload.status === 'ratified' &&
-    !sameJson(budgets.workload.identity, workloadIdentity(baselineReport))
+    !sameJson(budgets.workload.identity, benchmarkWorkloadContractIdentity(baselineReport))
   ) {
     throw new Error('baseline workload identity does not match the existing ratified workload');
   }
@@ -2490,7 +2536,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     };
     updated.workload = {
       status: 'ratified',
-      identity: workloadIdentity(baselineReport),
+      identity: benchmarkWorkloadContractIdentity(baselineReport),
     };
   }
   const baselineReportSource = {
@@ -2544,8 +2590,10 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     ) {
       throw new Error(`${metricId} proposal targetRationale must be substantive`);
     }
-    const statistic = proposed.statistic ?? updated.procedure.statistic;
-    if (!STATISTICS.has(statistic)) throw new Error(`${metricId} statistic is unsupported`);
+    const statistic = proposed.statistic ?? metric.statistic;
+    if (statistic !== metric.statistic) {
+      throw new Error(`${metricId} statistic must remain ${metric.statistic}`);
+    }
     const noiseMultiplier = proposed.noiseMultiplier;
     if (!finiteNonNegative(noiseMultiplier)) {
       throw new Error(`${metricId} proposal noiseMultiplier must be non-negative`);
@@ -2555,7 +2603,8 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     metric.ratification = {
       runnerFingerprint:
         binding === 'packed-artifact' ? null : structuredClone(baselineReport.runner),
-      workloadIdentity: binding === 'packed-artifact' ? null : workloadIdentity(baselineReport),
+      workloadIdentity:
+        binding === 'packed-artifact' ? null : benchmarkWorkloadContractIdentity(baselineReport),
       baselineReport: structuredClone(baselineReportSource),
       ...(binding === 'packed-artifact'
         ? { binding: packedArtifactBinding(baselineMetric.evidence) }
@@ -2588,7 +2637,7 @@ export function evaluateBudgets(budgets, report, options = {}) {
   if (reportFindings.length > 0) {
     throw new Error(`Invalid benchmark report:\n- ${reportFindings.join('\n- ')}`);
   }
-  const reportWorkload = workloadIdentity(report);
+  const reportWorkload = benchmarkWorkloadContractIdentity(report);
   const results = [];
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
     if (metric.ratification === null) {

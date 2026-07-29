@@ -52,7 +52,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/kovo-setup
-      - name: Identify the observational hosted runner
+      - name: Identify the accepted hosted runner
         run: |
           runner_digest="$(
             {
@@ -61,13 +61,14 @@ jobs:
             } | sha256sum | cut -d' ' -f1
           )"
           echo "KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:$runner_digest" >> "$GITHUB_ENV"
-          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-observational" >> "$GITHUB_ENV"
-      - name: Collect five-sample authenticated baseline candidate
+          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted" >> "$GITHUB_ENV"
+      - name: Collect and evaluate the five-sample authenticated baseline
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-devex-baseline"
           vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
-          vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output "$RUNNER_TEMP/kovo-devex-baseline/benchmark.json"
+          vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output "$RUNNER_TEMP/kovo-devex-baseline/benchmark.json" --evaluate
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
           if-no-files-found: error
           name: kovo-devex-baseline

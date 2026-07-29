@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { benchmarkWorkloadContractIdentity } from './devex-benchmark.mjs';
 import {
   DEVEX_PR_REPORT_SCHEMA,
   buildDevexPrReport,
@@ -78,11 +79,45 @@ describe('DevEx PR report', () => {
     });
   });
 
+  it('uses the metric-owned statistic for PR deltas', () => {
+    const p95Budgets = structuredClone(budgets);
+    p95Budgets.metrics['check.cold.durationMs'].statistic = 'p95';
+    const speed = speedDeltas(
+      benchmark([110, 200]),
+      benchmark([100, 110, 120, 130, 140]),
+      p95Budgets,
+    );
+
+    expect(speed.metrics[0]).toMatchObject({
+      current: 200,
+      statistic: 'p95',
+      reference: { value: 140 },
+    });
+  });
+
   it('labels a baseline binding only for the exact ratified runner and workload identity', () => {
     const baseline = benchmark([100, 110, 120, 130, 140]);
     baseline.scenario = {
       name: 'kovo-packed-check',
       digest: `sha256:${'e'.repeat(64)}`,
+      definition: {
+        name: 'kovo-packed-check',
+        profile: {
+          id: 'kovo-packed-check/v3',
+          commandDigest: `sha256:${'1'.repeat(64)}`,
+        },
+        provenance: {
+          producerAttestation: {
+            schema: 'fixture',
+            producer: 'fixture',
+            consumer: 'fixture',
+            releasePackages: [],
+            profileCommandDigest: `sha256:${'1'.repeat(64)}`,
+            browserBuildCommandDigest: `sha256:${'2'.repeat(64)}`,
+          },
+          supportFiles: [],
+        },
+      },
     };
     baseline.provenance = { sourceCommit: 'f'.repeat(40) };
     const ratified = {
@@ -91,22 +126,19 @@ describe('DevEx PR report', () => {
       runner: { status: 'ratified', fingerprint: baseline.runner },
       workload: {
         status: 'ratified',
-        identity: {
-          scenario: {
-            name: baseline.scenario.name,
-            digest: baseline.scenario.digest,
-          },
-          provenance: baseline.provenance,
-        },
+        identity: benchmarkWorkloadContractIdentity(baseline),
       },
     };
+    const current = benchmark([105]);
+    current.scenario = structuredClone(baseline.scenario);
+    current.provenance = structuredClone(baseline.provenance);
 
-    expect(speedDeltas(benchmark([105]), baseline, ratified).comparison).toBe('ratified-baseline');
+    expect(speedDeltas(current, baseline, ratified).comparison).toBe('ratified-baseline');
     ratified.runner = {
       status: 'ratified',
       fingerprint: { id: `sha256:${'a'.repeat(64)}` },
     };
-    const mismatched = speedDeltas(benchmark([105]), baseline, ratified);
+    const mismatched = speedDeltas(current, baseline, ratified);
     expect(mismatched.comparison).toBe('nightly-candidate');
     expect(mismatched.reason).toContain('exact runner-and-workload');
   });

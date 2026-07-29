@@ -1,30 +1,44 @@
 {
-  "schema": "kovo-devex-baseline-policy/v1",
+  "schema": "kovo-devex-baseline-policy/v2",
   "status": "unratified",
   "referenceRunner": {
-    "kind": "github-hosted-observational",
+    "kind": "github-hosted-accepted",
     "label": "ubuntu-24.04",
-    "binding": false,
-    "rationale": "GitHub-hosted Ubuntu is accepted for candidate collection and measured noise, but CPU assignment and image identity are not stable enough to bind release budgets across runs."
+    "binding": true,
+    "runnerName": "github-hosted-ubuntu-24.04-accepted",
+    "fingerprintInputs": [
+      "ImageOS",
+      "ImageVersion",
+      "/etc/os-release",
+      "process.platform",
+      "process.arch",
+      "process.version",
+      "os.cpus()[0].model",
+      "packageManager"
+    ],
+    "mismatchPosture": "fail-closed",
+    "rationale": "Kovo explicitly accepts GitHub-hosted ubuntu-24.04 for release measurement only when the baseline and candidate have the same full runner fingerprint. Image-version or CPU drift is a runner mismatch, never a performance verdict; a new fingerprint requires a fresh reviewed N>=5 baseline."
   },
   "collection": {
     "workflow": ".github/workflows/devex-nightly.yml",
     "gateId": "nightly-benchmark",
     "sampleCount": 5,
-    "statistic": "median",
+    "statistic": "metric-specific",
     "noiseStatistic": "median-absolute-deviation",
-    "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5"
+    "sampleUnit": "fresh-process phase over an authenticated packed workload with restored source revisions",
+    "hostVariancePosture": "excluded by exact runner fingerprint; cross-fingerprint comparisons are report-only",
+    "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate"
   },
   "ratification": {
     "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
-    "proposalSchema": "kovo-devex-budget-proposal/v5",
+    "proposalSchema": "kovo-devex-budget-proposal/v6",
     "requiresExactRunnerFingerprint": true,
     "requiresHumanTargetRationale": true,
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
   "blockers": [
-    "Provision a stable named runner or record an explicit reviewed decision to accept one exact GitHub-hosted runner fingerprint for binding evaluation.",
-    "Record five or more samples for every statistical metric and review product targets before writing any ratification.",
+    "Run the accepted GitHub-hosted ubuntu-24.04 collector and commit its authenticated five-sample report before binding runner-scoped budgets.",
+    "Review product targets and noise multipliers against that measured baseline before writing any statistical ratification.",
     "Extend authenticated baseline provenance to the golden-journey install, docs snapshot, and full-catalog reports before those cross-report metrics can bind."
   ]
 }
