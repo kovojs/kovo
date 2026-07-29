@@ -639,7 +639,7 @@ void test('P4 commerce touch graph is an on-demand generated artifact', async ()
   });
   assert.deepEqual(
     kovoExplainQueryAssertionFact(
-      kovoExplain(commerceAcceptance.artifactGraph, { kind: 'query', target: 'cart' }),
+      kovoExplain(commerceAcceptance.artifactGraph, { target: 'cart', view: 'query' }),
     ).domainWrites,
     ['cart.addItem'],
   );

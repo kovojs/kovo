@@ -109,7 +109,9 @@ export function parseKovoExportOutput(output: string): KovoExportOutput {
   const lines = output.trimEnd().split('\n');
   const version = lines[0];
   if (version !== 'kovo-export/v1') {
-    throw new Error(`kovo export output starts with kovo-export/v1: ${version ?? ''}`);
+    throw new Error(
+      `kovo export output starts with kovo-export/v1: ${version ?? ''}\nReceived output:\n${output}`,
+    );
   }
 
   const errors: KovoExportError[] = [];
@@ -246,6 +248,7 @@ export default createApp({
   renderRoute: (value) => String(value ?? ''),
   routes: [
     serverRoute('/', {
+      access: { kind: 'public', reason: 'D10 static export conformance fixture' },
       page: () => '<main ${markerAttribute}="${cliMarker}"></main>',
     }),
   ],

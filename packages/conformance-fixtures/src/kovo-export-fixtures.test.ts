@@ -247,7 +247,12 @@ describe('@kovojs/test kovo export fixture seam', () => {
 
   it('rejects malformed kovo export output at the fixture seam', () => {
     expect(() => parseKovoExportOutput('kovo-check/v1\nOK')).toThrow(
-      'kovo export output starts with kovo-export/v1: kovo-check/v1',
+      [
+        'kovo export output starts with kovo-export/v1: kovo-check/v1',
+        'Received output:',
+        'kovo-check/v1',
+        'OK',
+      ].join('\n'),
     );
     expect(() => parseKovoExportOutput('kovo-export/v1\nHTML /index.html status=ok')).toThrow(
       'Malformed kovo export HTML line',

@@ -503,9 +503,9 @@ void test('post-parse compiler phases consume model facts, not source strings', 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {
   const commerceGraph = commerceGraphFixture();
   const cartAddExplain = kovoExplain(commerceGraph, {
-    kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
+    view: 'mutation',
   }).output;
 
   assert.deepEqual(graphMutationFact(commerceGraph, 'cart/add'), {
@@ -576,7 +576,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Registry atomicity',
     'TSX-only authoring',
     'Public imports in app source',
-    'Production build preflights',
+    'Source proof before deployment proof',
     'Post-parse decisions use typed facts, not source strings',
   ]);
   assert.deepEqual(fact.hardRuleTitlesCovered, [

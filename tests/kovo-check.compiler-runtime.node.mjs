@@ -764,6 +764,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     'check:endpoint-posture',
     'check:lifecycle-policy',
     'check:sound-subset',
+    'check:source',
     'dev',
     'serve',
     'start',
@@ -1138,7 +1139,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
 
   assert.deepEqual(
     kovoExplainComponentAssertionFact(
-      kovoExplain(graph, { kind: 'component', target: 'CartBadge' }),
+      kovoExplain(graph, { target: 'CartBadge', view: 'component' }),
     ),
     {
       derives: [
@@ -1191,7 +1192,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
       version: 'kovo-explain/v1',
     },
   );
-  assert.deepEqual(kovoExplainEndpointAssertionFact(kovoExplain(graph, { endpoints: true })), {
+  assert.deepEqual(kovoExplainEndpointAssertionFact(kovoExplain(graph, { view: 'endpoints' })), {
     endpoints: [
       {
         auth: '-',
@@ -1243,7 +1244,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
     summary: { total: '3' },
     version: 'kovo-explain/v1',
   });
-  assert.deepEqual(kovoExplainUnguardedAssertionFact(kovoExplain(graph, { unguarded: true })), {
+  assert.deepEqual(kovoExplainUnguardedAssertionFact(kovoExplain(graph, { view: 'unguarded' })), {
     exitCode: 0,
     records: [
       {
@@ -1277,7 +1278,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
     summary: { total: '4' },
     version: 'kovo-explain/v1',
   });
-  assert.deepEqual(kovoExplainScopeAuditAssertionFact(kovoExplain(graph, { unscoped: true })), {
+  assert.deepEqual(kovoExplainScopeAuditAssertionFact(kovoExplain(graph, { view: 'unscoped' })), {
     exitCode: 0,
     records: [
       {
