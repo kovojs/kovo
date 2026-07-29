@@ -49,15 +49,6 @@ const NEUTRAL_GENERATED_EXPORTS = Object.freeze([
   'BetterAuthGeneratedRequest',
   'BetterAuthGeneratedSignInMutation',
   'BetterAuthGeneratedSignOutMutation',
-  'BetterAuthPostgresBindings',
-  'BetterAuthPostgresBindingsOptions',
-  'BetterAuthPostgresEnvironmentBindingsOptions',
-  'BetterAuthPostgresSecret',
-  'BetterAuthSqliteBindings',
-  'BetterAuthSqliteBindingsOptions',
-  'BetterAuthSqliteDevelopmentSeed',
-  'BetterAuthSqliteEnvironmentBindingsOptions',
-  'BetterAuthSqliteSecret',
 ]);
 const POSTGRES_GENERATED_EXPORTS = Object.freeze([
   'BetterAuthPostgresBindings',
@@ -137,16 +128,13 @@ export function packedBetterAuthDeclarationExports(source, fileName = 'consumer.
 }
 
 export function assertPackedBetterAuthDeclarations({ neutral, postgres, root, sqlite }) {
+  const neutralExports = packedBetterAuthDeclarationExports(neutral, 'generated.d.mts');
   assertExactExports(
     packedBetterAuthDeclarationExports(root, 'index.d.mts'),
     ROOT_EXPORTS,
     'human root',
   );
-  assertExactExports(
-    packedBetterAuthDeclarationExports(neutral, 'generated.d.mts'),
-    NEUTRAL_GENERATED_EXPORTS,
-    'neutral generated contract',
-  );
+  assertExactExports(neutralExports, NEUTRAL_GENERATED_EXPORTS, 'neutral generated contract');
   assertExactExports(
     packedBetterAuthDeclarationExports(postgres, 'generated-postgres.d.mts'),
     POSTGRES_GENERATED_EXPORTS,
@@ -160,6 +148,9 @@ export function assertPackedBetterAuthDeclarations({ neutral, postgres, root, sq
   for (const moved of [...POSTGRES_GENERATED_EXPORTS, ...SQLITE_GENERATED_EXPORTS]) {
     if (ROOT_EXPORTS.includes(moved)) {
       throw new Error(`Packed Better Auth root duplicates generated export ${moved}`);
+    }
+    if (neutralExports.includes(moved)) {
+      throw new Error(`Packed Better Auth neutral ABI duplicates backend export ${moved}`);
     }
   }
 }
@@ -296,12 +287,16 @@ function assertPackedTypeConsumer(consumerRoot) {
   BetterAuthBindings,
   BetterAuthDevelopmentSeed,
   BetterAuthGeneratedRequest,
-  BetterAuthPostgresBindings,
-  BetterAuthSqliteBindings,
 } from '@kovojs/better-auth/generated';
+import type {
+  BetterAuthPostgresBindings,
+} from '@kovojs/better-auth/generated/postgres';
 import {
   createBetterAuthPostgresBindingsFromEnvironment,
 } from '@kovojs/better-auth/generated/postgres';
+import type {
+  BetterAuthSqliteBindings,
+} from '@kovojs/better-auth/generated/sqlite';
 import {
   createBetterAuthSqliteBindingsFromEnvironment,
 } from '@kovojs/better-auth/generated/sqlite';

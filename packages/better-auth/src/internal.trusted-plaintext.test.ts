@@ -129,7 +129,6 @@ function classifyGeneratedAuthExport(
 describe('Better Auth trusted plaintext zone', () => {
   it('proves every actual generated auth export is capability-clean in both dialects', () => {
     const expectedNames = [
-      'appAuthed',
       'appCsrf',
       'appSession',
       'appSessionProvider',

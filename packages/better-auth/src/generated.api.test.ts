@@ -13,14 +13,18 @@ import type {
   BetterAuthBindingsOptions,
   BetterAuthDevelopmentSeed,
   BetterAuthGeneratedRequest,
+} from './generated.js';
+import type {
   BetterAuthPostgresBindings,
   BetterAuthPostgresBindingsOptions,
   BetterAuthPostgresSecret,
+} from './generated-postgres.js';
+import type {
   BetterAuthSqliteBindings,
   BetterAuthSqliteBindingsOptions,
   BetterAuthSqliteDevelopmentSeed,
   BetterAuthSqliteSecret,
-} from './generated.js';
+} from './generated-sqlite.js';
 
 interface TestRequest extends BetterAuthGeneratedRequest {
   session?: { id: string } | null;
