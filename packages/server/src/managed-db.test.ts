@@ -8,7 +8,8 @@ import {
 import { PGlite } from '@electric-sql/pglite';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
+import { drainSecretRevealAuditFacts } from '@kovojs/core/internal/security';
 import { isManagedSqlStatement, stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
 import { StringChunk, and, asc, count, defineRelations, eq, sql as drizzleSql } from 'drizzle-orm';
@@ -440,7 +441,7 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
         join(root, 'reader-type-proof.ts'),
         `
 import { declarePublicRead, readonlyDb } from '@kovojs/server/data'
-import { type Reader } from '@kovojs/server';
+import { type Reader } from '@kovojs/server/data';
 
 type FakeDb = {
   $client: { execute(statement: unknown): Promise<unknown> };

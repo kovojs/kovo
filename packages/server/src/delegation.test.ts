@@ -1,14 +1,16 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
-  advancePrincipalEpoch,
   createDelegationAuthority,
+  onBehalfOf,
+  type DelegationAuthority,
+} from '@kovojs/server/delegation';
+import {
+  advancePrincipalEpoch,
   createMemoryPrincipalEpochStore,
   initializePrincipalEpoch,
-  onBehalfOf,
   PrincipalEpochStaleError,
-  type DelegationAuthority,
-} from './index.js';
+} from '@kovojs/server/principal-epochs';
 
 describe('attenuating onBehalfOf authority (Plan 3 §3.2 C13 anchor)', () => {
   it('yields only a typed and runtime-checked subset while carrying the principal epoch', async () => {

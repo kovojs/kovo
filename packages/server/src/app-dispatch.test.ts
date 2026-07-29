@@ -1082,7 +1082,7 @@ describe('server app matched dispatch boundary', () => {
     });
     let handlerCalls = 0;
     const signedEndpoint = endpoint('/machine/signed', {
-      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      auth: { kind: 'verifier', name: verifier.scheme, verify: verifier },
       handler() {
         handlerCalls += 1;
         return rawEndpointResponse('signed');
