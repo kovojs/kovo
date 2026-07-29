@@ -185,6 +185,28 @@ framework-owned generated boundary instead of rebuilding that configuration in t
 The instance pins nothing per-request: `sessionProvider` reads whatever your auth layer stored (a
 signed cookie, a session row), so any instance answers any request and you scale by adding instances.
 
+### Prove one public Cloud Run deploy
+
+Kovo's release journey uses Google Cloud Run as its named Node host. It creates the starter from
+authenticated packed packages, selects `--deployment node --retention retained-24h`, builds the
+generated Node output, and probes the public app and its stylesheet.
+
+Run it from `main` after the `g11-cloud-run` GitHub environment has its five Google Cloud variables:
+
+```sh
+gh workflow run g11-cloud-run.yml --ref main -f confirm=DEPLOY_G11
+gh run watch
+```
+
+Each run gets a new `kovo-g11-<run>-<attempt>` service URL. The workflow leaves that exact service
+untouched for 26 hours, probes it on an hourly schedule, and deletes it only after the 24-hour floor.
+That version-addressed URL keeps the document, `/c/__v/...` modules, and typed reads on one build.
+
+The catch is that this is a release probe, not a stable custom-domain topology. Updating one Cloud
+Run service in place does not route an old document's module and `Kovo-Build` requests back to its
+old revision. Use a build-token-aware ingress plus retained assets before making the same retention
+claim on a stable production origin.
+
 A minimal container, with `/c/*` artifacts baked into the image so they're served immutably:
 
 ```dockerfile

@@ -1,0 +1,319 @@
+name: G11 Cloud Run journey
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DEPLOY_G11 to create a version-addressed public Cloud Run service.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g11-cloud-run-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
+jobs:
+  contract:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24.18.0
+      - name: Verify the version-addressed Cloud Run contract
+        run: vp exec node --test scripts/g11-cloud-run-journey.test.mjs
+      - run: git diff --check
+
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.confirm == 'DEPLOY_G11' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'kovojs/kovo'
+    needs:
+      - contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: g11-cloud-run
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_ARTIFACT_REPOSITORY: ${{ vars.KOVO_G11_GCP_ARTIFACT_REPOSITORY }}
+      GCP_PROJECT: ${{ vars.KOVO_G11_GCP_PROJECT }}
+      GCP_REGION: ${{ vars.KOVO_G11_GCP_REGION }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Require the reviewed external deployment boundary
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ vars.KOVO_G11_GCP_SERVICE_ACCOUNT }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        run: |
+          set -euo pipefail
+          test -n "$GCP_PROJECT"
+          test -n "$GCP_REGION"
+          test -n "$GCP_ARTIFACT_REPOSITORY"
+          test -n "$GCP_SERVICE_ACCOUNT"
+          test -n "$GCP_WORKLOAD_IDENTITY_PROVIDER"
+          [[ "$GCP_PROJECT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]
+          [[ "$GCP_REGION" =~ ^[a-z]+-[a-z]+[0-9]$ ]]
+          [[ "$GCP_ARTIFACT_REPOSITORY" =~ ^[a-z][a-z0-9-]{0,62}$ ]]
+          [[ "$GCP_SERVICE_ACCOUNT" =~ ^[a-z0-9-]+@[a-z][a-z0-9-]+\.iam\.gserviceaccount\.com$ ]]
+          [[ "$GCP_WORKLOAD_IDENTITY_PROVIDER" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+$ ]]
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
+      - name: Build the authenticated packed release
+        run: vp exec pnpm run check:publish
+      - name: Create and build the packed Node scaffold
+        run: >-
+          vp exec node scripts/g11-cloud-run-journey.mjs prepare
+          --packed-manifest .release/packed-packages.json
+          --work-root "$RUNNER_TEMP/kovo-g11-work"
+          --context "$RUNNER_TEMP/kovo-g11-context"
+      - id: plan
+        name: Bind a unique service and retention deadline
+        run: |
+          set -euo pipefail
+          vp exec node scripts/g11-cloud-run-journey.mjs plan \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-sha "$GITHUB_SHA" \
+            --started-at "$(date +%s)" \
+            --output "$RUNNER_TEMP/kovo-g11-plan.json"
+          {
+            echo "service=$(jq -r .service "$RUNNER_TEMP/kovo-g11-plan.json")"
+            echo "retention_until=$(jq -r .retentionUntilEpochSeconds "$RUNNER_TEMP/kovo-g11-plan.json")"
+          } >> "$GITHUB_OUTPUT"
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          create_credentials_file: true
+          service_account: ${{ vars.KOVO_G11_GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          project_id: ${{ vars.KOVO_G11_GCP_PROJECT }}
+      - name: Authenticate Docker to the bounded Artifact Registry
+        run: gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+      - id: image
+        name: Build and push the packed Node image
+        env:
+          SERVICE: ${{ steps.plan.outputs.service }}
+        run: |
+          set -euo pipefail
+          image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$GCP_ARTIFACT_REPOSITORY/$SERVICE:$GITHUB_SHA"
+          docker build \
+            --file "$RUNNER_TEMP/kovo-g11-context/Dockerfile.g11" \
+            --platform linux/amd64 \
+            --tag "$image" \
+            "$RUNNER_TEMP/kovo-g11-context"
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      - name: Generate ephemeral runtime authorities
+        env:
+          SERVICE: ${{ steps.plan.outputs.service }}
+        run: |
+          set -euo pipefail
+          better_auth_secret="$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=')"
+          csrf_secret="$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=')"
+          attestation_secret="$(openssl rand -base64 48 | tr '+/' '-_' | tr -d '=')"
+          echo "::add-mask::$better_auth_secret"
+          echo "::add-mask::$csrf_secret"
+          echo "::add-mask::$attestation_secret"
+          {
+            echo "KOVO_G11_BETTER_AUTH_SECRET=$better_auth_secret"
+            echo "KOVO_G11_CSRF_SECRET=$csrf_secret"
+            echo "KOVO_G11_ATTESTATION_SECRET=$attestation_secret"
+            echo "KOVO_G11_ATTESTATION_DEPLOYMENT_ID=deployment:g11:$SERVICE"
+          } >> "$GITHUB_ENV"
+      - id: public
+        name: Deploy once, then pin the exact public origin
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          RETENTION_UNTIL: ${{ steps.plan.outputs.retention_until }}
+          SERVICE: ${{ steps.plan.outputs.service }}
+        run: |
+          set -euo pipefail
+          vp exec node scripts/g11-cloud-run-journey.mjs runtime-env \
+            --origin https://bootstrap.invalid \
+            --output "$RUNNER_TEMP/kovo-g11-bootstrap-env.yaml"
+          gcloud run deploy "$SERVICE" \
+            --project "$GCP_PROJECT" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --image "$IMAGE" \
+            --port 8080 \
+            --cpu 1 \
+            --memory 1Gi \
+            --min-instances 0 \
+            --max-instances 1 \
+            --concurrency 20 \
+            --env-vars-file "$RUNNER_TEMP/kovo-g11-bootstrap-env.yaml" \
+            --set-labels "kovo-g11-managed=true,kovo-g11-retain-until=$RETENTION_UNTIL,kovo-g11-source-sha=$GITHUB_SHA" \
+            --allow-unauthenticated \
+            --no-invoker-iam-check \
+            --no-traffic \
+            --quiet
+          url="$(
+            gcloud run services describe "$SERVICE" \
+              --project "$GCP_PROJECT" \
+              --region "$GCP_REGION" \
+              --format 'value(status.url)'
+          )"
+          vp exec node scripts/g11-cloud-run-journey.mjs runtime-env \
+            --origin "$url" \
+            --output "$RUNNER_TEMP/kovo-g11-live-env.yaml"
+          gcloud run deploy "$SERVICE" \
+            --project "$GCP_PROJECT" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --image "$IMAGE" \
+            --port 8080 \
+            --cpu 1 \
+            --memory 1Gi \
+            --min-instances 0 \
+            --max-instances 1 \
+            --concurrency 20 \
+            --env-vars-file "$RUNNER_TEMP/kovo-g11-live-env.yaml" \
+            --set-labels "kovo-g11-managed=true,kovo-g11-retain-until=$RETENTION_UNTIL,kovo-g11-source-sha=$GITHUB_SHA" \
+            --allow-unauthenticated \
+            --no-invoker-iam-check \
+            --no-traffic \
+            --quiet
+          gcloud run services update-traffic "$SERVICE" \
+            --project "$GCP_PROJECT" \
+            --region "$GCP_REGION" \
+            --to-latest \
+            --quiet
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Prove the public URL and full retention horizon
+        id: verify
+        env:
+          RETENTION_UNTIL: ${{ steps.plan.outputs.retention_until }}
+          SERVICE: ${{ steps.plan.outputs.service }}
+          URL: ${{ steps.public.outputs.url }}
+        run: >-
+          vp exec node scripts/g11-cloud-run-journey.mjs verify
+          --url "$URL"
+          --service "$SERVICE"
+          --retention-until "$RETENTION_UNTIL"
+          --source-sha "$GITHUB_SHA"
+          --output "$RUNNER_TEMP/kovo-g11-proof.json"
+      - name: Publish the public result
+        run: |
+          {
+            echo "## G11 Cloud Run proof"
+            echo
+            echo "- Public URL: $(jq -r '.probe.origin' "$RUNNER_TEMP/kovo-g11-proof.json")"
+            echo "- Retain-until epoch: $(jq -r '.retention.retainUntilEpochSeconds' "$RUNNER_TEMP/kovo-g11-proof.json")"
+            echo "- Build-token SHA-256: $(jq -r '.probe.buildTokenSha256' "$RUNNER_TEMP/kovo-g11-proof.json")"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-g11-cloud-run-${{ steps.plan.outputs.service }}
+          path: |
+            ${{ runner.temp }}/kovo-g11-plan.json
+            ${{ runner.temp }}/kovo-g11-proof.json
+          retention-days: 30
+      - name: Remove an unproved service
+        if: >-
+          failure() &&
+          steps.plan.outputs.service != '' &&
+          (steps.public.outcome == 'failure' || steps.verify.outcome == 'failure')
+        env:
+          SERVICE: ${{ steps.plan.outputs.service }}
+        run: >-
+          gcloud run services delete "$SERVICE"
+          --project "$GCP_PROJECT"
+          --region "$GCP_REGION"
+          --quiet
+
+  retention-sweep:
+    if: >-
+      github.event_name == 'schedule' &&
+      github.repository == 'kovojs/kovo' &&
+      vars.KOVO_G11_GCP_PROJECT != '' &&
+      vars.KOVO_G11_GCP_REGION != '' &&
+      vars.KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER != '' &&
+      vars.KOVO_G11_GCP_SERVICE_ACCOUNT != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: g11-cloud-run
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GCP_PROJECT: ${{ vars.KOVO_G11_GCP_PROJECT }}
+      GCP_REGION: ${{ vars.KOVO_G11_GCP_REGION }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-release-node
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          create_credentials_file: true
+          service_account: ${{ vars.KOVO_G11_GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.KOVO_G11_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          project_id: ${{ vars.KOVO_G11_GCP_PROJECT }}
+      - name: Classify only workflow-owned services
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/kovo-g11-retention-proofs"
+          gcloud run services list \
+            --project "$GCP_PROJECT" \
+            --region "$GCP_REGION" \
+            --filter 'metadata.labels.kovo-g11-managed=true' \
+            --format json > "$RUNNER_TEMP/kovo-g11-inventory.json"
+          node scripts/g11-cloud-run-journey.mjs sweep \
+            --inventory "$RUNNER_TEMP/kovo-g11-inventory.json" \
+            --now "$(date +%s)" \
+            --output "$RUNNER_TEMP/kovo-g11-retention-proofs/sweep.json"
+      - name: Probe retained URLs and delete only after the floor
+        run: |
+          set -euo pipefail
+          jq -r '.actions[] | [.action, .service, .origin] | @tsv' \
+            "$RUNNER_TEMP/kovo-g11-retention-proofs/sweep.json" |
+          while IFS=$'\t' read -r action service origin; do
+            [[ "$service" =~ ^kovo-g11-[0-9]+-[0-9]+$ ]]
+            node scripts/g11-cloud-run-journey.mjs probe \
+              --url "$origin" \
+              --output "$RUNNER_TEMP/kovo-g11-retention-proofs/$service.json"
+            if [[ "$action" == "probe-and-delete" ]]; then
+              gcloud run services delete "$service" \
+                --project "$GCP_PROJECT" \
+                --region "$GCP_REGION" \
+                --quiet
+            elif [[ "$action" != "probe" ]]; then
+              printf 'refusing unknown G11 retention action: %s\n' "$action" >&2
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-g11-cloud-run-retention-${{ github.run_id }}
+          path: ${{ runner.temp }}/kovo-g11-retention-proofs
+          retention-days: 30
