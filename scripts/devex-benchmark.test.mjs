@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
+  DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
   DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
   benchmarkScenarioDigest,
   browserBootstrapBytes,
@@ -28,6 +29,7 @@ import {
   ratifyBudgets,
   runBenchmarkScenario,
   validateBudgets,
+  validateDeterministicArtifactReportIdentity,
   validateKovoBrowserWorkload,
 } from './devex-benchmark.mjs';
 import { validatedPackageTarballEntries } from './lib/deterministic-tarball.mjs';
@@ -671,7 +673,7 @@ describe('DevEx benchmark foundation', () => {
     );
   });
 
-  it('binds docs bytes to packed evidence without ratifying a runner', () => {
+  it('binds docs bytes to a deterministic packed report without ratifying a runner', () => {
     const docsScenario = structuredClone(scenario);
     const cliSha = `sha256:${'c'.repeat(64)}`;
     docsScenario.provenance.packedArtifacts.push({
@@ -697,7 +699,7 @@ describe('DevEx benchmark foundation', () => {
         version: '0.2.0',
       },
     };
-    const report = benchmarkReport(
+    const report = deterministicArtifactReport(
       {
         'docs.snapshot.compressedBytes': [evidence.snapshot.compressedBytes],
         'docs.snapshot.installedBytes': [evidence.snapshot.installedBytes],
@@ -706,6 +708,7 @@ describe('DevEx benchmark foundation', () => {
     );
     report.metrics['docs.snapshot.compressedBytes'].evidence = structuredClone(evidence);
     report.metrics['docs.snapshot.installedBytes'].evidence = structuredClone(evidence);
+    expect(validateDeterministicArtifactReportIdentity(report)).toEqual([]);
     const source = baselineOptions(report);
     const artifactBudgets = unratifiedBudgetFixture();
     for (const [metricId, budget] of [
@@ -778,6 +781,43 @@ describe('DevEx benchmark foundation', () => {
         (result) => result.metric === 'docs.snapshot.compressedBytes',
       ),
     ).toMatchObject({ status: 'artifact-mismatch' });
+  });
+
+  it('reserves deterministic artifact reports for packed-artifact metrics', () => {
+    const report = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const { ratified } = ratifyFixtureBudgets(report, {
+      'check.cold.durationMs': {
+        budget: 100,
+        noiseMultiplier: 2,
+        targetRationale: 'Hold the packed cold check near the measured median.',
+      },
+    });
+    const artifactReport = deterministicArtifactReport(
+      {
+        'docs.snapshot.compressedBytes': [1_000],
+        'docs.snapshot.installedBytes': [4_000],
+      },
+      { definition: scenario },
+    );
+    const artifactBytes = Buffer.from(`${JSON.stringify(artifactReport, null, 2)}\n`);
+    const record = ratified.metrics['check.cold.durationMs'].ratification;
+    record.baselineReport = {
+      path: 'baselines/artifact-only.json',
+      sha256: digest(artifactBytes),
+      schema: artifactReport.schema,
+      scenarioName: artifactReport.scenario.name,
+      scenarioDigest: artifactReport.scenario.digest,
+    };
+
+    expect(
+      validateBudgets(ratified, {
+        baselineReports: new Map([[record.baselineReport.path, artifactBytes]]),
+      }),
+    ).toContain(
+      `check.cold.durationMs.ratification.baselineReport.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`,
+    );
   });
 
   it('rejects bootstrap traversal, direct symlinks, and symlink-parent escapes', () => {
@@ -1255,6 +1295,35 @@ function benchmarkReport(metricSamples, options = {}) {
         metric,
         { unit: metric.endsWith('Bytes') ? 'bytes' : 'ms', samples },
       ]),
+    ),
+  };
+}
+
+function deterministicArtifactReport(metricSamples, options = {}) {
+  const fullReport = benchmarkReport(metricSamples, options);
+  return {
+    schema: DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
+    subject: 'packed-docs-snapshot',
+    scenario: fullReport.scenario,
+    provenance: fullReport.provenance,
+    metrics: Object.fromEntries(
+      Object.entries(fullReport.metrics).map(([metricId, metric]) => {
+        const [value] = metric.samples;
+        return [
+          metricId,
+          {
+            ...metric,
+            summary: {
+              count: 1,
+              min: value,
+              median: value,
+              p95: value,
+              max: value,
+              medianAbsoluteDeviation: 0,
+            },
+          },
+        ];
+      }),
     ),
   };
 }

@@ -46,6 +46,8 @@ import { releasePackages } from './release-packages.mjs';
 export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v5';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v4';
 export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
+export const DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA =
+  'kovo-devex-deterministic-artifact-report/v1';
 export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v5';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v2';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
@@ -58,6 +60,11 @@ const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v3';
 const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
 const KOVO_PACKED_DOCS_EVIDENCE_SCHEMA = 'kovo-devex-packed-docs-evidence/v1';
 const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v1';
+const KOVO_PACKED_DOCS_REPORT_SUBJECT = 'packed-docs-snapshot';
+const KOVO_PACKED_DOCS_METRIC_IDS = Object.freeze([
+  'docs.snapshot.compressedBytes',
+  'docs.snapshot.installedBytes',
+]);
 const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const authenticatedProductionScenarios = new WeakSet();
@@ -1422,6 +1429,23 @@ function emitBrowserBundle(manifest, stageRoot, options = {}) {
   }
 }
 
+function packedDocsMetrics(evidence) {
+  return Object.fromEntries(
+    [
+      ['docs.snapshot.compressedBytes', evidence.snapshot.compressedBytes],
+      ['docs.snapshot.installedBytes', evidence.snapshot.installedBytes],
+    ].map(([metricId, value]) => [
+      metricId,
+      {
+        unit: 'bytes',
+        samples: [value],
+        summary: sampleSummary([value]),
+        evidence: structuredClone(evidence),
+      },
+    ]),
+  );
+}
+
 /**
  * Run all three scorecard timing profiles. Tests inject `measure` so statistical and schema
  * behavior are deterministic; production calls use the real monotonic/RSS measurement.
@@ -1631,17 +1655,7 @@ export function runBenchmarkScenario(scenario, options = {}) {
       throw new Error('production Kovo benchmark workload has no packed CLI docs snapshot');
     }
     if (docsEvidence !== null) {
-      for (const [metricId, value] of [
-        ['docs.snapshot.compressedBytes', docsEvidence.snapshot.compressedBytes],
-        ['docs.snapshot.installedBytes', docsEvidence.snapshot.installedBytes],
-      ]) {
-        metrics[metricId] = {
-          unit: 'bytes',
-          samples: [value],
-          summary: sampleSummary([value]),
-          evidence: structuredClone(docsEvidence),
-        };
-      }
+      Object.assign(metrics, packedDocsMetrics(docsEvidence));
     }
     const { manifest } = readPackedWorkloadManifest(executionScenario, executionRoot);
     const consumer = manifest.artifacts.find((artifact) => artifact.role === 'consumer');
@@ -1676,6 +1690,64 @@ export function runBenchmarkScenario(scenario, options = {}) {
     };
   } finally {
     if (acquired !== null) acquired.dispose();
+  }
+}
+
+/**
+ * Authenticate deterministic bytes directly from the clean-source packed CLI. This is a narrow
+ * artifact report: it deliberately contains no duration/RSS observations and cannot ratify a
+ * runner-bound metric. The packed digest remains the proof that the measured docs are the product
+ * users install (SPEC.md §1.3 and §11).
+ */
+export function runDeterministicArtifactScenario(scenario, options = {}) {
+  const findings = validateBenchmarkScenario(scenario);
+  if (findings.length > 0) {
+    throw new Error(`Invalid benchmark scenario:\n- ${findings.join('\n- ')}`);
+  }
+  if (scenario.name !== 'kovo-packed-check') {
+    throw new Error(
+      'deterministic artifact measurement accepts only the code-owned fresh Kovo scenario',
+    );
+  }
+  const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
+  const observedEnvironment = currentBenchmarkEnvironment(options);
+  const environmentFindings = observedEnvironmentFindings(scenario, observedEnvironment);
+  if (environmentFindings.length > 0) {
+    throw new Error(
+      `Benchmark environment does not match the pinned scenario:\n- ${environmentFindings.join('\n- ')}`,
+    );
+  }
+  const acquire = options.acquireFreshKovoScenario ?? acquireFreshKovoScenario;
+  const acquired = acquire(observedEnvironment, { repositoryRoot });
+  try {
+    validateFreshKovoScenario(acquired, observedEnvironment);
+    if (!sameJson(scenario, acquired.scenario)) {
+      throw new Error(
+        'Kovo benchmark scenario does not match artifacts freshly produced from the exact clean source revision',
+      );
+    }
+    const evidence =
+      authenticatedProductionDocsEvidence.get(acquired.scenario) ??
+      packedDocsSnapshotEvidence(acquired.scenario, {
+        repositoryRoot: acquired.repositoryRoot,
+        root: acquired.root,
+      });
+    if (evidence === null) {
+      throw new Error('production Kovo benchmark workload has no packed CLI docs snapshot');
+    }
+    return {
+      schema: DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
+      subject: KOVO_PACKED_DOCS_REPORT_SUBJECT,
+      scenario: {
+        name: acquired.scenario.name,
+        digest: benchmarkScenarioDigest(acquired.scenario),
+        definition: structuredClone(acquired.scenario),
+      },
+      provenance: expectedReportProvenance(acquired.scenario),
+      metrics: packedDocsMetrics(evidence),
+    };
+  } finally {
+    acquired.dispose();
   }
 }
 
@@ -1859,6 +1931,66 @@ function validateBenchmarkReportIdentity(report, label = 'report') {
   return findings;
 }
 
+export function validateDeterministicArtifactReportIdentity(report, label = 'artifactReport') {
+  const findings = [];
+  if (report?.schema !== DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA) {
+    findings.push(`${label}.schema must be ${DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA}`);
+  }
+  if (!exactOwnKeys(report, ['metrics', 'provenance', 'scenario', 'schema', 'subject'])) {
+    findings.push(`${label} must contain only deterministic artifact report fields`);
+  }
+  if (report?.subject !== KOVO_PACKED_DOCS_REPORT_SUBJECT) {
+    findings.push(`${label}.subject must be ${KOVO_PACKED_DOCS_REPORT_SUBJECT}`);
+  }
+  const definition = report?.scenario?.definition;
+  const scenarioFindings = validateBenchmarkScenario(definition);
+  findings.push(...scenarioFindings.map((finding) => `${label}.${finding}`));
+  if (scenarioFindings.length > 0) return findings;
+  if (
+    !exactOwnKeys(report.scenario, ['definition', 'digest', 'name']) ||
+    report.scenario.name !== definition.name
+  ) {
+    findings.push(`${label}.scenario.name does not match its definition`);
+  }
+  if (report.scenario.digest !== benchmarkScenarioDigest(definition)) {
+    findings.push(`${label}.scenario.digest does not match its full definition`);
+  }
+  if (!sameJson(report.provenance, expectedReportProvenance(definition))) {
+    findings.push(`${label}.provenance does not match its scenario definition`);
+  }
+  const metricIds =
+    report.metrics && typeof report.metrics === 'object' && !Array.isArray(report.metrics)
+      ? Object.keys(report.metrics).sort(compareStrings)
+      : [];
+  if (!sameJson(metricIds, [...KOVO_PACKED_DOCS_METRIC_IDS].sort(compareStrings))) {
+    findings.push(
+      `${label}.metrics must contain exactly the two packed docs snapshot byte metrics`,
+    );
+  }
+  findings.push(...reportMetricCensusFindings(report, label));
+  for (const metricId of KOVO_PACKED_DOCS_METRIC_IDS) {
+    const metric = report.metrics?.[metricId];
+    if (
+      metric !== undefined &&
+      (!exactOwnKeys(metric, ['evidence', 'samples', 'summary', 'unit']) ||
+        !sameJson(metric.summary, sampleSummary(metric.samples ?? [])))
+    ) {
+      findings.push(`${label}.metrics.${metricId}.summary must match its exact sample`);
+    }
+  }
+  return findings;
+}
+
+function validateRatificationReportIdentity(report, label, allowArtifactReport) {
+  if (report?.schema === DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA) {
+    if (!allowArtifactReport) {
+      return [`${label}.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`];
+    }
+    return validateDeterministicArtifactReportIdentity(report, label);
+  }
+  return validateBenchmarkReportIdentity(report, label);
+}
+
 function workloadIdentity(report) {
   return {
     scenario: {
@@ -1949,6 +2081,7 @@ function baselineSourceBytes(record, options) {
 
 function validateRatificationProvenance(metricId, metric, record, budgets, options) {
   const findings = [];
+  const binding = metricBinding(metricId);
   const source = record?.baselineReport;
   if (!safeRepositoryRelativePath(source?.path)) {
     findings.push(`${metricId}.ratification.baselineReport.path must be repository-relative`);
@@ -1956,9 +2089,17 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   if (!/^sha256:[0-9a-f]{64}$/u.test(source?.sha256 ?? '')) {
     findings.push(`${metricId}.ratification.baselineReport.sha256 is invalid`);
   }
-  if (source?.schema !== DEVEX_BENCHMARK_REPORT_SCHEMA) {
+  const allowedSchemas =
+    binding === 'packed-artifact'
+      ? new Set([DEVEX_BENCHMARK_REPORT_SCHEMA, DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA])
+      : new Set([DEVEX_BENCHMARK_REPORT_SCHEMA]);
+  if (!allowedSchemas.has(source?.schema)) {
     findings.push(
-      `${metricId}.ratification.baselineReport.schema must be ${DEVEX_BENCHMARK_REPORT_SCHEMA}`,
+      `${metricId}.ratification.baselineReport.schema must be ${
+        binding === 'packed-artifact'
+          ? `${DEVEX_BENCHMARK_REPORT_SCHEMA} or ${DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA}`
+          : DEVEX_BENCHMARK_REPORT_SCHEMA
+      }`,
     );
   }
   if (typeof source?.scenarioName !== 'string' || source.scenarioName.trim().length === 0) {
@@ -1988,9 +2129,10 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
     findings.push(`${metricId}.ratification baseline report is not valid JSON`);
     return findings;
   }
-  const reportIdentityFindings = validateBenchmarkReportIdentity(
+  const reportIdentityFindings = validateRatificationReportIdentity(
     report,
     `${metricId}.ratification.baselineReport`,
+    binding === 'packed-artifact',
   );
   findings.push(...reportIdentityFindings);
   if (reportIdentityFindings.length > 0) return findings;
@@ -2001,11 +2143,10 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   ) {
     findings.push(`${metricId}.ratification baseline report identity does not match provenance`);
   }
-  const binding = metricBinding(metricId);
   if (binding === 'runner' && !sameJson(report.runner, record.runnerFingerprint)) {
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
   }
-  const reportWorkloadIdentity = workloadIdentity(report);
+  const reportWorkloadIdentity = binding === 'runner' ? workloadIdentity(report) : null;
   if (binding === 'runner' && !sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
     findings.push(`${metricId}.ratification workload does not match its baseline report`);
   }
@@ -2252,16 +2393,20 @@ export function validateBudgets(budgets, options = {}) {
   return findings;
 }
 
-function validateProposal(proposal) {
+function validateProposal(proposal, options = {}) {
   const findings = [];
   if (proposal?.schema !== DEVEX_BUDGET_PROPOSAL_SCHEMA) {
     findings.push(`proposal.schema must be ${DEVEX_BUDGET_PROPOSAL_SCHEMA}`);
   }
-  findings.push(
-    ...validateRunnerFingerprint(proposal?.runnerFingerprint, 'proposal.runnerFingerprint', {
-      requireNamed: true,
-    }),
-  );
+  if (options.requiresRunner === true) {
+    findings.push(
+      ...validateRunnerFingerprint(proposal?.runnerFingerprint, 'proposal.runnerFingerprint', {
+        requireNamed: true,
+      }),
+    );
+  } else if (proposal?.runnerFingerprint !== null) {
+    findings.push('proposal.runnerFingerprint must be null for packed-artifact-only ratification');
+  }
   if (
     !proposal?.metrics ||
     typeof proposal.metrics !== 'object' ||
@@ -2288,14 +2433,21 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       'budget ratification requires the exact production scenario authenticated by the fresh code-owned pack producer',
     );
   }
+  const runnerBoundProposal =
+    proposal?.metrics !== null &&
+    typeof proposal?.metrics === 'object' &&
+    !Array.isArray(proposal.metrics) &&
+    Object.keys(proposal.metrics).some((metricId) => metricBinding(metricId) === 'runner');
   const findings = [
     ...validateBudgets(budgets, {
       baselineReports: options.baselineReports,
       repoRoot: options.repoRoot,
     }),
-    ...validateProposal(proposal),
+    ...validateProposal(proposal, { requiresRunner: runnerBoundProposal }),
   ];
-  findings.push(...validateBenchmarkReportIdentity(baselineReport, 'baselineReport'));
+  findings.push(
+    ...validateRatificationReportIdentity(baselineReport, 'baselineReport', !runnerBoundProposal),
+  );
   if (!safeRepositoryRelativePath(options.baselineReportPath)) {
     findings.push('baselineReportPath must be a repository-relative path');
   }
@@ -2312,12 +2464,9 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   }
   if (findings.length > 0)
     throw new Error(`Cannot ratify DevEx budgets:\n- ${findings.join('\n- ')}`);
-  if (!sameJson(baselineReport.runner, proposal.runnerFingerprint)) {
+  if (runnerBoundProposal && !sameJson(baselineReport.runner, proposal.runnerFingerprint)) {
     throw new Error('baseline runner fingerprint does not match proposal.runnerFingerprint');
   }
-  const runnerBoundProposal = Object.keys(proposal.metrics).some(
-    (metricId) => metricBinding(metricId) === 'runner',
-  );
   if (
     runnerBoundProposal &&
     budgets.runner.status === 'ratified' &&
@@ -3011,8 +3160,10 @@ function parseArgs(argv) {
     else if (arg === '--output') args.output = argv[++index];
     else if (arg === '--budgets') args.budgets = argv[++index];
     else if (arg === '--evaluate') args.evaluate = true;
+    else if (arg === '--deterministic-artifacts') args.deterministicArtifacts = true;
     else if (arg === '--ratify') args.ratify = true;
     else if (arg === '--baseline') args.baseline = argv[++index];
+    else if (arg === '--baseline-record-path') args.baselineRecordPath = argv[++index];
     else if (arg === '--proposal') args.proposal = argv[++index];
     else if (arg === '--write') args.write = true;
     else if (arg === '--check-budgets') args.checkBudgets = true;
@@ -3027,7 +3178,8 @@ function usage() {
   return [
     'Usage:',
     '  node scripts/devex-benchmark.mjs --scenario <file> [--samples N] [--output <file>] [--evaluate]',
-    '  node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <file> [--write]',
+    '  node scripts/devex-benchmark.mjs --scenario <file> --deterministic-artifacts [--output <file>]',
+    '  node scripts/devex-benchmark.mjs --ratify --baseline <report> [--baseline-record-path <path>] --proposal <file> [--write]',
     '  node scripts/devex-benchmark.mjs --check-budgets',
     '  node scripts/devex-benchmark.mjs --prepare-kovo-scenario',
     '',
@@ -3075,7 +3227,8 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     }
     const budgetsRoot = path.dirname(path.resolve(args.budgets));
     const baselinePath = path.resolve(args.baseline);
-    const relativeBaselinePath = path.relative(budgetsRoot, baselinePath);
+    const relativeBaselinePath =
+      args.baselineRecordPath ?? path.relative(budgetsRoot, baselinePath);
     const baselineBytes = readFileSync(baselinePath);
     const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
     const productionScenarioFindings =
@@ -3128,10 +3281,15 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
     return 2;
   }
   const scenarioPath = path.resolve(args.scenario);
-  const report = runBenchmarkScenario(readJson(scenarioPath), {
-    root: path.dirname(scenarioPath),
-    samples: args.samples,
-  });
+  if (args.deterministicArtifacts && args.evaluate) {
+    throw new Error('--deterministic-artifacts cannot be combined with --evaluate');
+  }
+  const report = args.deterministicArtifacts
+    ? runDeterministicArtifactScenario(readJson(scenarioPath))
+    : runBenchmarkScenario(readJson(scenarioPath), {
+        root: path.dirname(scenarioPath),
+        samples: args.samples,
+      });
   if (args.evaluate) {
     report.evaluation = evaluateBudgets(budgets, report, {
       repoRoot: path.dirname(path.resolve(args.budgets)),
