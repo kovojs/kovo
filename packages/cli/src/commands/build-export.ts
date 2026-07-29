@@ -2447,7 +2447,11 @@ async function staticBuildCheckGraph(
       query,
       drizzleFacts.queries,
       options.execution,
-      registryDeclarationSource(sourceGraphFacts.registryDeclarationAnchors, 'query', query.key),
+      requiredRegistryDeclarationSource(
+        sourceGraphFacts.registryDeclarationAnchors,
+        'query',
+        query.key,
+      ),
     ),
   );
   const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
@@ -2493,16 +2497,7 @@ async function staticBuildCheckGraph(
     endpointCheckFact(
       endpoint,
       options.execution,
-      registryDeclarationSource(
-        sourceGraphFacts.registryDeclarationAnchors,
-        'endpoint',
-        endpoint.path,
-      ) ??
-        registryDeclarationSource(
-          sourceGraphFacts.registryDeclarationAnchors,
-          'webhook',
-          endpoint.path,
-        ),
+      requiredEndpointDeclarationSource(sourceGraphFacts.registryDeclarationAnchors, endpoint.path),
     ),
   );
   for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
@@ -2517,7 +2512,7 @@ async function staticBuildCheckGraph(
       mutation,
       queryReadSets,
       options.execution,
-      registryDeclarationSource(
+      requiredRegistryDeclarationSource(
         sourceGraphFacts.registryDeclarationAnchors,
         'mutation',
         mutation.key,
@@ -2534,7 +2529,11 @@ async function staticBuildCheckGraph(
     routeCheckFact(
       route,
       options.execution,
-      registryDeclarationSource(sourceGraphFacts.registryDeclarationAnchors, 'page', route.path),
+      requiredRegistryDeclarationSource(
+        sourceGraphFacts.registryDeclarationAnchors,
+        'page',
+        route.path,
+      ),
     ),
   );
   const authorizationCorrespondence =
@@ -3272,8 +3271,8 @@ function collectRegistryDeclarationAnchor(
   source: KovoDiagnosticSourceAnchor,
 ): void {
   if (buildMapHas(target, key)) {
-    // Duplicate declarations are invalid at runtime. Do not guess which authored range owns a
-    // diagnostic if malformed source reaches this preflight; an unanchored finding is safer.
+    // Duplicate declarations are invalid at runtime. Preserve explicit ambiguity so every
+    // downstream association fails closed instead of guessing which authored range owns the fact.
     buildMapSet(target, key, null);
     return;
   }
@@ -3319,7 +3318,53 @@ function registryDeclarationSource(
   name: string,
 ): KovoDiagnosticSourceAnchor | undefined {
   const source = buildMapGet(anchors, `${kind}\0${name}`);
-  return source === null ? undefined : source;
+  if (source === null) {
+    throw new TypeError(
+      `Kovo build source provenance refused ambiguous ${kind} declaration ${name}.`,
+    );
+  }
+  return source;
+}
+
+function requiredRegistryDeclarationSource(
+  anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
+  kind:
+    | 'agent'
+    | 'domain'
+    | 'endpoint'
+    | 'mutation'
+    | 'page'
+    | 'query'
+    | 'task'
+    | 'tool'
+    | 'webhook',
+  name: string,
+): KovoDiagnosticSourceAnchor {
+  const source = registryDeclarationSource(anchors, kind, name);
+  if (source === undefined) {
+    throw new TypeError(
+      `Kovo build source provenance could not associate runtime ${kind} declaration ${name} with the immutable authored-source census.`,
+    );
+  }
+  return source;
+}
+
+function requiredEndpointDeclarationSource(
+  anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
+  path: string,
+): KovoDiagnosticSourceAnchor {
+  const endpoint = registryDeclarationSource(anchors, 'endpoint', path);
+  const webhook = registryDeclarationSource(anchors, 'webhook', path);
+  if (endpoint !== undefined && webhook !== undefined) {
+    throw new TypeError(
+      `Kovo build source provenance refused endpoint/webhook declaration collision ${path}.`,
+    );
+  }
+  if (endpoint !== undefined) return endpoint;
+  if (webhook !== undefined) return webhook;
+  throw new TypeError(
+    `Kovo build source provenance could not associate runtime endpoint declaration ${path} with the immutable authored-source census.`,
+  );
 }
 
 function queryDiagnosticSourceCatalog(
@@ -3435,7 +3480,10 @@ export function snapshotBuildCompilerSourceAnchorsForTests(
     declarations: buildMapDense(
       declarations,
       'Build compiler source-anchor declarations',
-      (declaration) => registryDeclarationSource(anchors, declaration.kind, declaration.name),
+      (declaration) =>
+        declaration.kind === 'endpoint'
+          ? requiredEndpointDeclarationSource(anchors, declaration.name)
+          : requiredRegistryDeclarationSource(anchors, declaration.kind, declaration.name),
     ),
     routes,
   };

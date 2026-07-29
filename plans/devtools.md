@@ -232,9 +232,13 @@ surface ships before the MCP tools, which then drop onto the same model.
   - Evidence: `packages/cli/src/source-anchors.test.ts`,
     `packages/devtool/src/graph-model.test.mjs`, and
     `packages/devtool/src/source-slice.security.test.mjs` pass in Latest verification.
-- [ ] Backfill compiler anchors for remaining domain, handler, derive, trigger, binding-position,
-      diagnostic-suppression, and runtime-registry facts, then remove their fallback symbol
-      heuristics; consider shiki for the highlighter.
+- [x] Backfill compiler anchors for domain, handler, derive, trigger, binding-position,
+      diagnostic-suppression, and runtime-registry facts, including imported/shared declaration
+      sites and fail-closed missing/ambiguous association.
+  - Evidence: `packages/compiler/src/feedback-source-anchors.test.ts` and
+    `packages/cli/src/source-anchors.test.ts` pass in Latest verification.
+- [ ] Prove and remove any remaining fallback symbol heuristics, then consider shiki for the
+      highlighter.
 
 ### Phase 2 — Visual graph UI (the lead surface) — shipped
 
@@ -274,9 +278,9 @@ surface ships before the MCP tools, which then drop onto the same model.
 
 ## Risks / open questions
 
-- **Span backfill cost**: declaration/form/style anchors survive emission, but some
-  binding/handler positions are not yet retained; finish those through parser spans or explicit
-  lowering offset maps, never re-analysis.
+- **Diagnostic-family completeness**: fine-grained graph positions now retain compiler anchors, but
+  each remaining diagnostic family still needs fixture-level projection proof before fallback
+  symbol heuristics can be declared absent.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
   the MCP side avoids this by being navigational (neighbors, not dumps).
 - **Live overlay & deploy skew**: frames carry the render-plan version token
@@ -293,8 +297,9 @@ browser-bound and get a small named browser suite.
 
 - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
 packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
+packages/compiler/src/feedback-source-anchors.test.ts
 packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
-packages/cli/src/source-anchors.test.ts --reporter=dot` passed (6 files, 120 tests).
+packages/cli/src/source-anchors.test.ts --reporter=dot` passed.
 - `pnpm exec vitest --run packages/compiler/src/registry.test.ts -t 'emits
 live-target|honors disableServerRefresh|threads compiler-derived route layout|derives app graph
 component facts|derives page query facts|emits mutation form error binding facts|lowers
