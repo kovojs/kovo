@@ -424,8 +424,9 @@ granularity).
   - Group the 14 current capabilities into daily/build, inspect/security, and agent/operator
     sections without removing advanced commands.
   - Partial evidence: the schema, generated argv/request union, help, completion, and command
-    reference pass the 67-test CLI semantic suite. The parent remains open because the existing
-    diagnostic projection is not yet authoritative for severity, help, and exact source ranges.
+    reference pass the 67-test CLI semantic suite. `kovo-diagnostic/v1` now authenticates compiler
+    facts and parser-owned KV436 ranges through a private source catalog, including MCP; the parent
+    remains open until the other diagnostic producers project equally authoritative records.
 - [x] (S) Make `kovo`, `kovo --help`, `kovo help`, `kovo <command> --help`, and `kovo --version`
       write to stdout and exit 0; usage/config mistakes exit 2 and proof/build findings exit 1
       (G5).
@@ -460,6 +461,9 @@ granularity).
       ranges. Preserve `kovo-explain/v1` and `kovo-check/v1` facts byte-for-byte or via an
       explicit versioned protocol migration, and update `rules/v1-acceptance.md` 16.3 in the same
       checkpoint.
+  - Partial evidence: check/build/explain accept the shared format enum; the exact KV436 packed
+    build and MCP fixtures prove prelude-free JSON plus authored range identity. Doctor/verify and
+    the non-KV436 producer census remain open.
 - [ ] (S) Normalize `kovo explain` on a subcommand/discriminant grammar such as
       `kovo explain access` and `{ view: 'access', ... }`; replace flag-shaped interface families
       with one exhaustive union.
