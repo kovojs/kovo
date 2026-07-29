@@ -30,10 +30,7 @@ const sha256Pattern = /^sha256:[0-9a-f]{64}$/u;
  * The record is deterministic and path-independent; `assertKovoArtifactGraphProof` independently
  * recomputes every derivable identity when an operator later selects the artifact (SPEC §5.2.4).
  */
-export function createKovoGraphProof(
-  graph: KovoCheckInput,
-  appBuildToken: string,
-): KovoGraphProof {
+export function createKovoGraphProof(graph: KovoCheckInput, appBuildToken: string): KovoGraphProof {
   const inputs = requiredAnalysisInputs(graph);
   const compilerVersion = requiredCompilerVersion(graph);
   const token: `sha256:${string}` = `sha256:${appBuildToken}`;
@@ -153,10 +150,7 @@ export function deriveKovoAppBuildToken(
   const hrefs = new Set<string>();
   for (const module of [...compiledModules, ...stableModules]) {
     hrefs.add(
-      versionedClientModuleHref(
-        module.path,
-        clientModuleRepresentationDigest(module.source),
-      ),
+      versionedClientModuleHref(module.path, clientModuleRepresentationDigest(module.source)),
     );
   }
   const hash = createHash('sha256');
@@ -188,7 +182,9 @@ function requiredAnalysisInputs(graph: KovoCheckInput) {
       source.path.length === 0 ||
       source.path.startsWith('/') ||
       source.path.includes('\\') ||
-      source.path.split('/').some((segment) => segment === '' || segment === '.' || segment === '..') ||
+      source.path
+        .split('/')
+        .some((segment) => segment === '' || segment === '.' || segment === '..') ||
       source.encoding !== 'utf16le' ||
       (source.role !== 'app' && source.role !== 'client-entry' && source.role !== 'config') ||
       typeof source.codeUnitLength !== 'number' ||

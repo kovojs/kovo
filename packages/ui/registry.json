@@ -11,46 +11,20 @@
   "components": [
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "header",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "header",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "orientation",
-          "type",
-          "value"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "item", "header", "trigger", "content"],
+        "slots": ["root", "item", "header", "trigger", "content"],
+        "stateInputs": ["disabled", "open", "orientation", "type", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles an item; Arrow keys, Home, and End move focus between triggers.",
-        "roles": [
-          "button",
-          "region"
-        ],
+        "roles": ["button", "region"],
         "tier": "scripted"
       },
       "name": "accordion",
       "title": "Accordion",
-      "files": [
-        "src/accordion.tsx"
-      ],
+      "files": ["src/accordion.tsx"],
       "exports": [
         "Accordion",
         "AccordionItem",
@@ -68,69 +42,38 @@
           "AccordionType",
           "AccordionValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "enhancement": {
         "accessibility": "The status message is exposed through the alert role without client code.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "alert"
-        ],
+        "roles": ["alert"],
         "tier": "none"
       },
       "name": "alert",
       "title": "Alert",
-      "files": [
-        "src/alert.tsx"
-      ],
-      "exports": [
-        "Alert"
-      ],
+      "files": ["src/alert.tsx"],
+      "exports": ["Alert"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -153,26 +96,17 @@
           "description",
           "footer"
         ],
-        "stateInputs": [
-          "actionIntent",
-          "disabled",
-          "open"
-        ]
+        "stateInputs": ["actionIntent", "disabled", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the alertdialog, button role contract.",
         "keyboard": "Enter or Space opens and activates controls; Tab stays in the modal and Escape cancels it.",
-        "roles": [
-          "alertdialog",
-          "button"
-        ],
+        "roles": ["alertdialog", "button"],
         "tier": "progressive"
       },
       "name": "alert-dialog",
       "title": "AlertDialog",
-      "files": [
-        "src/alert-dialog.tsx"
-      ],
+      "files": ["src/alert-dialog.tsx"],
       "exports": [
         "AlertDialog",
         "AlertDialogTrigger",
@@ -193,65 +127,28 @@
           "alertDialogRootAttributes",
           "alertDialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "inputId",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "list",
-          "option",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "list",
-          "option",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "ids": ["inputId", "listboxId"],
+        "parts": ["root", "input", "list", "option", "value"],
+        "slots": ["root", "input", "list", "option", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes suggestions.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "name": "autocomplete",
       "title": "Autocomplete",
-      "files": [
-        "src/autocomplete.tsx"
-      ],
+      "files": ["src/autocomplete.tsx"],
       "exports": [
         "Autocomplete",
         "AutocompleteInput",
@@ -269,54 +166,28 @@
           "autocompleteValueAttributes",
           "autocompleteValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "image",
-          "fallback"
-        ],
-        "slots": [
-          "root",
-          "image",
-          "fallback"
-        ],
-        "stateInputs": [
-          "status"
-        ]
+        "parts": ["root", "image", "fallback"],
+        "slots": ["root", "image", "fallback"],
+        "stateInputs": ["status"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the img role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "img"
-        ],
+        "roles": ["img"],
         "tier": "progressive"
       },
       "name": "avatar",
       "title": "Avatar",
-      "files": [
-        "src/avatar.tsx"
-      ],
-      "exports": [
-        "Avatar",
-        "AvatarImage",
-        "AvatarFallback"
-      ],
+      "files": ["src/avatar.tsx"],
+      "exports": ["Avatar", "AvatarImage", "AvatarFallback"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "avatarFallbackAttributes",
@@ -324,32 +195,17 @@
           "AvatarImageStatus",
           "avatarRootAttributes"
         ],
-        "@kovojs/style": [
-          "*",
-          "attrs"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/server": [
-          "trustedUrl"
-        ]
+        "@kovojs/style": ["*", "attrs"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/server": ["trustedUrl"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "enhancement": {
@@ -360,149 +216,68 @@
       },
       "name": "badge",
       "title": "Badge",
-      "files": [
-        "src/badge.tsx"
-      ],
-      "exports": [
-        "Badge"
-      ],
+      "files": ["src/badge.tsx"],
+      "exports": ["Badge"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "currentId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "link",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "link",
-          "separator"
-        ],
-        "stateInputs": [
-          "current"
-        ]
+        "ids": ["currentId"],
+        "parts": ["root", "item", "link", "separator"],
+        "slots": ["root", "item", "link", "separator"],
+        "stateInputs": ["current"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "navigation",
-          "list"
-        ],
+        "roles": ["navigation", "list"],
         "tier": "native"
       },
       "name": "breadcrumb",
       "title": "Breadcrumb",
-      "files": [
-        "src/breadcrumb.tsx"
-      ],
-      "exports": [
-        "Breadcrumb",
-        "BreadcrumbItem",
-        "BreadcrumbLink",
-        "BreadcrumbSeparator"
-      ],
+      "files": ["src/breadcrumb.tsx"],
+      "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["separatorRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "disabled",
-          "loading"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["disabled", "loading"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "native"
       },
       "name": "button",
       "title": "Button",
-      "files": [
-        "src/button.tsx"
-      ],
-      "exports": [
-        "Button"
-      ],
+      "files": ["src/button.tsx"],
+      "exports": ["Button"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "header",
-          "title",
-          "description",
-          "content",
-          "footer"
-        ],
-        "slots": [
-          "root",
-          "header",
-          "title",
-          "description",
-          "content",
-          "footer"
-        ],
+        "parts": ["root", "header", "title", "description", "content", "footer"],
+        "slots": ["root", "header", "title", "description", "content", "footer"],
         "stateInputs": []
       },
       "enhancement": {
@@ -513,9 +288,7 @@
       },
       "name": "card",
       "title": "Card",
-      "files": [
-        "src/card.tsx"
-      ],
+      "files": ["src/card.tsx"],
       "exports": [
         "Card",
         "CardHeader",
@@ -526,115 +299,51 @@
       ],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "checked",
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["checked", "disabled", "invalid", "required"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the checkbox role contract.",
         "keyboard": "Space toggles the checkbox while disabled controls remain inert.",
-        "roles": [
-          "checkbox"
-        ],
+        "roles": ["checkbox"],
         "tier": "scripted"
       },
       "name": "checkbox",
       "title": "Checkbox",
-      "files": [
-        "src/checkbox.tsx"
-      ],
-      "exports": [
-        "Checkbox"
-      ],
+      "files": ["src/checkbox.tsx"],
+      "exports": ["Checkbox"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "CheckboxCheckedState",
-          "checkboxRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "control",
-          "label"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "control",
-          "label"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "item", "control", "label"],
+        "slots": ["root", "item", "control", "label"],
+        "stateInputs": ["disabled", "items", "orientation", "required", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, checkbox role contract.",
         "keyboard": "Space toggles the focused item; Arrow keys can move roving focus when configured.",
-        "roles": [
-          "group",
-          "checkbox"
-        ],
+        "roles": ["group", "checkbox"],
         "tier": "scripted"
       },
       "name": "checkbox-group",
       "title": "CheckboxGroup",
-      "files": [
-        "src/checkbox-group.tsx"
-      ],
+      "files": ["src/checkbox-group.tsx"],
       "exports": [
         "CheckboxGroup",
         "CheckboxGroupItem",
@@ -649,121 +358,55 @@
           "checkboxGroupLabelAttributes",
           "checkboxGroupRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the native details disclosure.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "native"
       },
       "name": "collapsible",
       "title": "Collapsible",
-      "files": [
-        "src/collapsible.tsx"
-      ],
-      "exports": [
-        "Collapsible",
-        "CollapsibleTrigger",
-        "CollapsibleContent"
-      ],
+      "files": ["src/collapsible.tsx"],
+      "exports": ["Collapsible", "CollapsibleTrigger", "CollapsibleContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "collapsibleContentAttributes",
           "collapsibleRootAttributes",
           "collapsibleTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "inputId",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "listbox",
-          "option",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "listbox",
-          "option",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "ids": ["inputId", "listboxId"],
+        "parts": ["root", "input", "listbox", "option", "value"],
+        "slots": ["root", "input", "listbox", "option", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes the listbox.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "name": "combobox",
       "title": "Combobox",
-      "files": [
-        "src/combobox.tsx"
-      ],
+      "files": ["src/combobox.tsx"],
       "exports": [
         "Combobox",
         "ComboboxInput",
@@ -781,26 +424,14 @@
           "comboboxValueAttributes",
           "comboboxValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "dialogId",
-          "inputId",
-          "listboxId"
-        ],
+        "ids": ["dialogId", "inputId", "listboxId"],
         "parts": [
           "root",
           "trigger",
@@ -823,30 +454,17 @@
           "empty",
           "value"
         ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active command, Enter runs it, and Escape closes the palette.",
-        "roles": [
-          "dialog",
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["dialog", "combobox", "listbox", "option"],
         "tier": "progressive"
       },
       "name": "command",
       "title": "Command",
-      "files": [
-        "src/command.tsx"
-      ],
+      "files": ["src/command.tsx"],
       "exports": [
         "Command",
         "CommandTrigger",
@@ -871,68 +489,28 @@
           "commandTriggerAttributes",
           "commandValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "Search"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["Search"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "point"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content", "item", "group", "separator"],
+        "slots": ["root", "trigger", "content", "item", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "point"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Context Menu or Shift+F10 opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
-        "roles": [
-          "menu",
-          "menuitem",
-          "group",
-          "separator"
-        ],
+        "roles": ["menu", "menuitem", "group", "separator"],
         "tier": "scripted"
       },
       "name": "context-menu",
       "title": "ContextMenu",
-      "files": [
-        "src/context-menu.tsx"
-      ],
+      "files": ["src/context-menu.tsx"],
       "exports": [
         "ContextMenu",
         "ContextMenuTrigger",
@@ -952,27 +530,14 @@
           "contextMenuSeparatorAttributes",
           "contextMenuTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -993,25 +558,17 @@
           "title",
           "description"
         ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "stateInputs": ["disabled", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab stays inside the modal and Escape closes it.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "name": "dialog",
       "title": "Dialog",
-      "files": [
-        "src/dialog.tsx"
-      ],
+      "files": ["src/dialog.tsx"],
       "exports": [
         "Dialog",
         "DialogTrigger",
@@ -1029,86 +586,42 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles the controlled region.",
-        "roles": [
-          "button",
-          "region"
-        ],
+        "roles": ["button", "region"],
         "tier": "scripted"
       },
       "name": "disclosure",
       "title": "Disclosure",
-      "files": [
-        "src/disclosure.tsx"
-      ],
-      "exports": [
-        "Disclosure",
-        "DisclosureTrigger",
-        "DisclosureContent"
-      ],
+      "files": ["src/disclosure.tsx"],
+      "exports": ["Disclosure", "DisclosureTrigger", "DisclosureContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "disclosureContentAttributes",
           "disclosureRootAttributes",
           "disclosureTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -1129,26 +642,17 @@
           "description",
           "close"
         ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "side"
-        ]
+        "stateInputs": ["disabled", "open", "side"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "name": "drawer",
       "title": "Drawer",
-      "files": [
-        "src/drawer.tsx"
-      ],
+      "files": ["src/drawer.tsx"],
       "exports": [
         "Drawer",
         "DrawerRoot",
@@ -1167,64 +671,27 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content", "item", "group", "separator"],
+        "slots": ["root", "trigger", "content", "item", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Enter or Space opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
-        "roles": [
-          "menu",
-          "menuitem",
-          "group",
-          "separator"
-        ],
+        "roles": ["menu", "menuitem", "group", "separator"],
         "tier": "scripted"
       },
       "name": "dropdown-menu",
       "title": "DropdownMenu",
-      "files": [
-        "src/dropdown-menu.tsx"
-      ],
+      "files": ["src/dropdown-menu.tsx"],
       "exports": [
         "DropdownMenu",
         "DropdownMenuTrigger",
@@ -1243,27 +710,14 @@
           "dropdownMenuSeparatorAttributes",
           "dropdownMenuTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "controlId",
-          "descriptionId",
-          "errorId",
-          "labelId"
-        ],
+        "ids": ["controlId", "descriptionId", "errorId", "labelId"],
         "parts": [
           "root",
           "label",
@@ -1288,25 +742,17 @@
           "set",
           "setLegend"
         ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "stateInputs": ["disabled", "invalid", "required"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "group"
-        ],
+        "roles": ["group"],
         "tier": "native"
       },
       "name": "field",
       "title": "Field",
-      "files": [
-        "src/field.tsx"
-      ],
+      "files": ["src/field.tsx"],
       "exports": [
         "Field",
         "FieldLabel",
@@ -1329,86 +775,44 @@
           "fieldsetLegendAttributes",
           "fieldsetRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Focus or pointer entry opens the preview; Escape and focus or pointer exit close it.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "scripted"
       },
       "name": "hover-card",
       "title": "HoverCard",
-      "files": [
-        "src/hover-card.tsx"
-      ],
-      "exports": [
-        "HoverCard",
-        "HoverCardTrigger",
-        "HoverCardContent"
-      ],
+      "files": ["src/hover-card.tsx"],
+      "exports": ["HoverCard", "HoverCardTrigger", "HoverCardContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "hoverCardContentAttributes",
           "hoverCardRootAttributes",
           "hoverCardTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "enhancement": {
@@ -1419,77 +823,32 @@
       },
       "name": "kbd",
       "title": "Kbd",
-      "files": [
-        "src/kbd.tsx"
-      ],
-      "exports": [
-        "Kbd"
-      ],
+      "files": ["src/kbd.tsx"],
+      "exports": ["Kbd"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "submenu",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "submenu",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "openValue",
-          "orientation"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "item", "submenu", "group", "separator"],
+        "slots": ["root", "item", "submenu", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "openValue", "orientation"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menubar, menuitem, menu, separator role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape operate menus and submenus.",
-        "roles": [
-          "menubar",
-          "menuitem",
-          "menu",
-          "separator"
-        ],
+        "roles": ["menubar", "menuitem", "menu", "separator"],
         "tier": "scripted"
       },
       "name": "menubar",
       "title": "Menubar",
-      "files": [
-        "src/menubar.tsx"
-      ],
-      "exports": [
-        "Menubar",
-        "MenubarItem",
-        "MenubarSubmenu",
-        "MenubarGroup",
-        "MenubarSeparator"
-      ],
+      "files": ["src/menubar.tsx"],
+      "exports": ["Menubar", "MenubarItem", "MenubarSubmenu", "MenubarGroup", "MenubarSeparator"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "menubarGroupAttributes",
@@ -1499,124 +858,51 @@
           "menubarSeparatorAttributes",
           "menubarSubmenuAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "high",
-          "low",
-          "max",
-          "min",
-          "optimum",
-          "value"
-        ]
+        "ids": ["descriptionId", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["high", "low", "max", "min", "optimum", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the meter role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "meter"
-        ],
+        "roles": ["meter"],
         "tier": "native"
       },
       "name": "meter",
       "title": "Meter",
-      "files": [
-        "src/meter.tsx"
-      ],
-      "exports": [
-        "Meter"
-      ],
+      "files": ["src/meter.tsx"],
+      "exports": ["Meter"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "meterRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["meterRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId",
-          "viewportId"
-        ],
-        "parts": [
-          "root",
-          "list",
-          "item",
-          "trigger",
-          "content",
-          "link",
-          "viewport",
-          "indicator"
-        ],
-        "slots": [
-          "root",
-          "list",
-          "item",
-          "trigger",
-          "content",
-          "link",
-          "viewport",
-          "indicator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "openValue",
-          "orientation"
-        ]
+        "ids": ["contentId", "triggerId", "viewportId"],
+        "parts": ["root", "list", "item", "trigger", "content", "link", "viewport", "indicator"],
+        "slots": ["root", "list", "item", "trigger", "content", "link", "viewport", "indicator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "openValue", "orientation"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list, button role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape move through navigation items.",
-        "roles": [
-          "navigation",
-          "list",
-          "button"
-        ],
+        "roles": ["navigation", "list", "button"],
         "tier": "scripted"
       },
       "name": "navigation-menu",
       "title": "NavigationMenu",
-      "files": [
-        "src/navigation-menu.tsx"
-      ],
+      "files": ["src/navigation-menu.tsx"],
       "exports": [
         "NavigationMenu",
         "NavigationMenuList",
@@ -1639,68 +925,28 @@
           "navigationMenuTriggerAttributes",
           "navigationMenuViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "ChevronDown"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["ChevronDown"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "control",
-          "input",
-          "decrement",
-          "increment"
-        ],
-        "slots": [
-          "root",
-          "control",
-          "input",
-          "decrement",
-          "increment"
-        ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "max",
-          "min",
-          "step",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "control", "input", "decrement", "increment"],
+        "slots": ["root", "control", "input", "decrement", "increment"],
+        "stateInputs": ["disabled", "invalid", "max", "min", "step", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the spinbutton, button role contract.",
         "keyboard": "Arrow Up and Arrow Down step the value within its declared bounds.",
-        "roles": [
-          "spinbutton",
-          "button"
-        ],
+        "roles": ["spinbutton", "button"],
         "tier": "scripted"
       },
       "name": "number-field",
       "title": "NumberField",
-      "files": [
-        "src/number-field.tsx"
-      ],
+      "files": ["src/number-field.tsx"],
       "exports": [
         "NumberField",
         "NumberFieldControl",
@@ -1716,67 +962,28 @@
           "numberFieldRootAttributes",
           "NumberFieldValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "group",
-          "hiddenInput",
-          "input"
-        ],
-        "slots": [
-          "root",
-          "group",
-          "hiddenInput",
-          "input"
-        ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "length",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "group", "hiddenInput", "input"],
+        "slots": ["root", "group", "hiddenInput", "input"],
+        "stateInputs": ["disabled", "invalid", "length", "required", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, textbox role contract.",
         "keyboard": "Typing advances slots, Backspace moves backward, Arrow keys move focus, and paste fills available slots.",
-        "roles": [
-          "group",
-          "textbox"
-        ],
+        "roles": ["group", "textbox"],
         "tier": "scripted"
       },
       "name": "otp-field",
       "title": "OtpField",
-      "files": [
-        "src/otp-field.tsx"
-      ],
-      "exports": [
-        "OtpField",
-        "OtpFieldGroup",
-        "OtpFieldHiddenInput",
-        "OtpFieldInput"
-      ],
+      "files": ["src/otp-field.tsx"],
+      "exports": ["OtpField", "OtpFieldGroup", "OtpFieldHiddenInput", "OtpFieldInput"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "otpFieldHiddenInputAttributes",
@@ -1784,176 +991,80 @@
           "OtpFieldInputMode",
           "otpFieldRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space opens the popover and Escape closes it.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "progressive"
       },
       "name": "popover",
       "title": "Popover",
-      "files": [
-        "src/popover.tsx"
-      ],
-      "exports": [
-        "Popover",
-        "PopoverTrigger",
-        "PopoverContent"
-      ],
+      "files": ["src/popover.tsx"],
+      "exports": ["Popover", "PopoverTrigger", "PopoverContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "popoverContentAttributes",
           "popoverRootAttributes",
           "popoverTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "max",
-          "value"
-        ]
+        "ids": ["descriptionId", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["max", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the progressbar role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "progressbar"
-        ],
+        "roles": ["progressbar"],
         "tier": "native"
       },
       "name": "progress",
       "title": "Progress",
-      "files": [
-        "src/progress.tsx"
-      ],
-      "exports": [
-        "Progress"
-      ],
+      "files": ["src/progress.tsx"],
+      "exports": ["Progress"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "progressRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["progressRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "controlId",
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "radio",
-          "label"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "radio",
-          "label"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "required",
-          "value"
-        ]
+        "ids": ["controlId", "descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "item", "radio", "label"],
+        "slots": ["root", "item", "radio", "label"],
+        "stateInputs": ["disabled", "items", "orientation", "required", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the radiogroup, radio role contract.",
         "keyboard": "Arrow keys move selection and focus; Space selects the focused radio option.",
-        "roles": [
-          "radiogroup",
-          "radio"
-        ],
+        "roles": ["radiogroup", "radio"],
         "tier": "scripted"
       },
       "name": "radio-group",
       "title": "RadioGroup",
-      "files": [
-        "src/radio-group.tsx"
-      ],
-      "exports": [
-        "RadioGroup",
-        "RadioGroupItem",
-        "RadioGroupRadio",
-        "RadioGroupLabel"
-      ],
+      "files": ["src/radio-group.tsx"],
+      "exports": ["RadioGroup", "RadioGroupItem", "RadioGroupRadio", "RadioGroupLabel"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "RadioGroupItem",
@@ -1962,59 +1073,27 @@
           "radioGroupRadioAttributes",
           "radioGroupRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "scrollbarId",
-          "viewportId"
-        ],
-        "parts": [
-          "root",
-          "viewport",
-          "scrollbar",
-          "thumb",
-          "corner"
-        ],
-        "slots": [
-          "root",
-          "viewport",
-          "scrollbar",
-          "thumb",
-          "corner"
-        ],
-        "stateInputs": [
-          "orientation",
-          "scrollSize",
-          "viewportSize"
-        ]
+        "ids": ["scrollbarId", "viewportId"],
+        "parts": ["root", "viewport", "scrollbar", "thumb", "corner"],
+        "slots": ["root", "viewport", "scrollbar", "thumb", "corner"],
+        "stateInputs": ["orientation", "scrollSize", "viewportSize"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the scrollbar role contract.",
         "keyboard": "Native viewport scrolling remains available when custom dragging is absent.",
-        "roles": [
-          "scrollbar"
-        ],
+        "roles": ["scrollbar"],
         "tier": "scripted"
       },
       "name": "scroll-area",
       "title": "ScrollArea",
-      "files": [
-        "src/scroll-area.tsx"
-      ],
+      "files": ["src/scroll-area.tsx"],
       "exports": [
         "ScrollArea",
         "ScrollAreaViewport",
@@ -2033,69 +1112,27 @@
           "scrollAreaThumbAttributes",
           "scrollAreaViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "hiddenInput",
-          "content",
-          "item",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "hiddenInput",
-          "content",
-          "item",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy", "listboxId"],
+        "parts": ["root", "trigger", "hiddenInput", "content", "item", "value"],
+        "slots": ["root", "trigger", "hiddenInput", "content", "item", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "required", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter or Space selects, typeahead searches, and Escape closes.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "name": "select",
       "title": "Select",
-      "files": [
-        "src/select.tsx"
-      ],
+      "files": ["src/select.tsx"],
       "exports": [
         "Select",
         "SelectTrigger",
@@ -2115,112 +1152,51 @@
           "selectValueAttributes",
           "selectValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "decorative",
-          "orientation"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["decorative", "orientation"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the separator role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "separator"
-        ],
+        "roles": ["separator"],
         "tier": "native"
       },
       "name": "separator",
       "title": "Separator",
-      "files": [
-        "src/separator.tsx"
-      ],
-      "exports": [
-        "Separator"
-      ],
+      "files": ["src/separator.tsx"],
+      "exports": ["Separator"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "SeparatorOrientation",
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
+        "@kovojs/headless-ui": ["SeparatorOrientation", "separatorRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "header",
-          "title",
-          "description",
-          "close"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "header",
-          "title",
-          "description",
-          "close"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "side"
-        ]
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
+        "parts": ["root", "trigger", "content", "header", "title", "description", "close"],
+        "slots": ["root", "trigger", "content", "header", "title", "description", "close"],
+        "stateInputs": ["disabled", "open", "side"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "name": "sheet",
       "title": "Sheet",
-      "files": [
-        "src/sheet.tsx"
-      ],
+      "files": ["src/sheet.tsx"],
       "exports": [
         "Sheet",
         "SheetRoot",
@@ -2238,32 +1214,17 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild",
-          "ComponentRenderResult"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild", "ComponentRenderResult"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "enhancement": {
@@ -2274,76 +1235,32 @@
       },
       "name": "skeleton",
       "title": "Skeleton",
-      "files": [
-        "src/skeleton.tsx"
-      ],
-      "exports": [
-        "Skeleton"
-      ],
+      "files": ["src/skeleton.tsx"],
+      "exports": ["Skeleton"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "track",
-          "range",
-          "thumb"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "track",
-          "range",
-          "thumb"
-        ],
-        "stateInputs": [
-          "disabled",
-          "max",
-          "min",
-          "orientation",
-          "step",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "input", "track", "range", "thumb"],
+        "slots": ["root", "input", "track", "range", "thumb"],
+        "stateInputs": ["disabled", "max", "min", "orientation", "step", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the slider role contract.",
         "keyboard": "Arrow keys step the value; Home and End select bounds while pointer drag tracks continuously.",
-        "roles": [
-          "slider"
-        ],
+        "roles": ["slider"],
         "tier": "scripted"
       },
       "name": "slider",
       "title": "Slider",
-      "files": [
-        "src/slider.tsx"
-      ],
-      "exports": [
-        "Slider",
-        "SliderInput",
-        "SliderTrack",
-        "SliderRange",
-        "SliderThumb"
-      ],
+      "files": ["src/slider.tsx"],
+      "exports": ["Slider", "SliderInput", "SliderTrack", "SliderRange", "SliderThumb"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "sliderInputAttributes",
@@ -2353,183 +1270,77 @@
           "sliderThumbAttributes",
           "sliderTrackAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "checked",
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["checked", "disabled", "invalid", "required"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the switch role contract.",
         "keyboard": "Space toggles the switch while disabled controls remain inert.",
-        "roles": [
-          "switch"
-        ],
+        "roles": ["switch"],
         "tier": "scripted"
       },
       "name": "switch",
       "title": "Switch",
-      "files": [
-        "src/switch.tsx"
-      ],
-      "exports": [
-        "Switch"
-      ],
+      "files": ["src/switch.tsx"],
+      "exports": ["Switch"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "switchRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["switchRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "head",
-          "body",
-          "row",
-          "headerCell",
-          "cell"
-        ],
-        "slots": [
-          "root",
-          "head",
-          "body",
-          "row",
-          "headerCell",
-          "cell"
-        ],
+        "parts": ["root", "head", "body", "row", "headerCell", "cell"],
+        "slots": ["root", "head", "body", "row", "headerCell", "cell"],
         "stateInputs": []
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the table, row, columnheader, cell role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "table",
-          "row",
-          "columnheader",
-          "cell"
-        ],
+        "roles": ["table", "row", "columnheader", "cell"],
         "tier": "native"
       },
       "name": "table",
       "title": "Table",
-      "files": [
-        "src/table.tsx"
-      ],
-      "exports": [
-        "Table",
-        "TableHead",
-        "TableBody",
-        "TableRow",
-        "TableHeaderCell",
-        "TableCell"
-      ],
+      "files": ["src/table.tsx"],
+      "exports": ["Table", "TableHead", "TableBody", "TableRow", "TableHeaderCell", "TableCell"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/server": [
-          "renderRouteHtml",
-          "trustedHtml"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/server": ["renderRouteHtml", "trustedHtml"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "panelId",
-          "tabId"
-        ],
-        "parts": [
-          "root",
-          "list",
-          "trigger",
-          "panel"
-        ],
-        "slots": [
-          "root",
-          "list",
-          "trigger",
-          "panel"
-        ],
-        "stateInputs": [
-          "activationMode",
-          "disabled",
-          "items",
-          "orientation",
-          "value"
-        ]
+        "ids": ["panelId", "tabId"],
+        "parts": ["root", "list", "trigger", "panel"],
+        "slots": ["root", "list", "trigger", "panel"],
+        "stateInputs": ["activationMode", "disabled", "items", "orientation", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tablist, tab, tabpanel role contract.",
         "keyboard": "Arrow keys move between tabs; Home and End jump to bounds; Enter or Space activates in manual mode.",
-        "roles": [
-          "tablist",
-          "tab",
-          "tabpanel"
-        ],
+        "roles": ["tablist", "tab", "tabpanel"],
         "tier": "scripted"
       },
       "name": "tabs",
       "title": "Tabs",
-      "files": [
-        "src/tabs.tsx"
-      ],
-      "exports": [
-        "Tabs",
-        "TabsList",
-        "TabsTrigger",
-        "TabsPanel"
-      ],
+      "files": ["src/tabs.tsx"],
+      "exports": ["Tabs", "TabsList", "TabsTrigger", "TabsPanel"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "TabsActivationMode",
@@ -2539,64 +1350,27 @@
           "tabsRootAttributes",
           "tabsTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "titleId",
-          "toastId",
-          "viewportId"
-        ],
-        "parts": [
-          "viewport",
-          "root",
-          "title",
-          "description",
-          "action",
-          "close"
-        ],
-        "slots": [
-          "viewport",
-          "root",
-          "title",
-          "description",
-          "action",
-          "close"
-        ],
-        "stateInputs": [
-          "duration",
-          "open",
-          "type"
-        ]
+        "ids": ["descriptionId", "titleId", "toastId", "viewportId"],
+        "parts": ["viewport", "root", "title", "description", "action", "close"],
+        "slots": ["viewport", "root", "title", "description", "action", "close"],
+        "stateInputs": ["duration", "open", "type"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the region, status role contract.",
         "keyboard": "Escape dismisses the newest toast; native buttons activate actions and close.",
-        "roles": [
-          "region",
-          "status"
-        ],
+        "roles": ["region", "status"],
         "tier": "scripted"
       },
       "name": "toast",
       "title": "ToastViewport",
-      "files": [
-        "src/toast.tsx"
-      ],
+      "files": ["src/toast.tsx"],
       "exports": [
         "ToastViewport",
         "Toast",
@@ -2617,109 +1391,53 @@
           "ToastVariant",
           "toastViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "disabled",
-          "pressed"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["disabled", "pressed"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the pressed state.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "scripted"
       },
       "name": "toggle",
       "title": "Toggle",
-      "files": [
-        "src/toggle.tsx"
-      ],
-      "exports": [
-        "Toggle"
-      ],
+      "files": ["src/toggle.tsx"],
+      "exports": ["Toggle"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "toggleRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["toggleRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "item",
-          "button"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "button"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "type",
-          "value"
-        ]
+        "parts": ["root", "item", "button"],
+        "slots": ["root", "item", "button"],
+        "stateInputs": ["disabled", "items", "orientation", "type", "value"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, button role contract.",
         "keyboard": "Arrow keys move roving focus and Enter or Space toggles the focused item.",
-        "roles": [
-          "group",
-          "button"
-        ],
+        "roles": ["group", "button"],
         "tier": "scripted"
       },
       "name": "toggle-group",
       "title": "ToggleGroup",
-      "files": [
-        "src/toggle-group.tsx"
-      ],
-      "exports": [
-        "ToggleGroup",
-        "ToggleGroupItem",
-        "ToggleGroupButton"
-      ],
+      "files": ["src/toggle-group.tsx"],
+      "exports": ["ToggleGroup", "ToggleGroupItem", "ToggleGroupButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "toggleGroupButtonAttributes",
@@ -2729,58 +1447,28 @@
           "ToggleGroupType",
           "ToggleGroupValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "item",
-          "button"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "button"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation"
-        ]
+        "parts": ["root", "item", "button"],
+        "slots": ["root", "item", "button"],
+        "stateInputs": ["disabled", "items", "orientation"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the toolbar, button role contract.",
         "keyboard": "Arrow keys, Home, and End move roving focus through toolbar items.",
-        "roles": [
-          "toolbar",
-          "button"
-        ],
+        "roles": ["toolbar", "button"],
         "tier": "scripted"
       },
       "name": "toolbar",
       "title": "Toolbar",
-      "files": [
-        "src/toolbar.tsx"
-      ],
-      "exports": [
-        "Toolbar",
-        "ToolbarItem",
-        "ToolbarButton"
-      ],
+      "files": ["src/toolbar.tsx"],
+      "exports": ["Toolbar", "ToolbarItem", "ToolbarButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "toolbarButtonAttributes",
@@ -2789,76 +1477,38 @@
           "ToolbarOrientation",
           "toolbarRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["open"]
       },
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tooltip role contract.",
         "keyboard": "Focus or pointer entry opens the tooltip and Escape closes it.",
-        "roles": [
-          "tooltip"
-        ],
+        "roles": ["tooltip"],
         "tier": "scripted"
       },
       "name": "tooltip",
       "title": "Tooltip",
-      "files": [
-        "src/tooltip.tsx"
-      ],
-      "exports": [
-        "Tooltip",
-        "TooltipTrigger",
-        "TooltipContent"
-      ],
+      "files": ["src/tooltip.tsx"],
+      "exports": ["Tooltip", "TooltipTrigger", "TooltipContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "tooltipContentAttributes",
           "tooltipRootAttributes",
           "tooltipTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     }
   ]
 }

@@ -4,40 +4,16 @@
   "entries": [
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "header",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "header",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "orientation",
-          "type",
-          "value"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "item", "header", "trigger", "content"],
+        "slots": ["root", "item", "header", "trigger", "content"],
+        "stateInputs": ["disabled", "open", "orientation", "type", "value"]
       },
       "copyCommand": "kovo add accordion",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles an item; Arrow keys, Home, and End move focus between triggers.",
-        "roles": [
-          "button",
-          "region"
-        ],
+        "roles": ["button", "region"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/accordion",
@@ -52,21 +28,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "copyCommand": "kovo add alert",
       "enhancement": {
         "accessibility": "The status message is exposed through the alert role without client code.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "alert"
-        ],
+        "roles": ["alert"],
         "tier": "none"
       },
       "headlessImport": null,
@@ -80,12 +50,7 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -108,20 +73,13 @@
           "description",
           "footer"
         ],
-        "stateInputs": [
-          "actionIntent",
-          "disabled",
-          "open"
-        ]
+        "stateInputs": ["actionIntent", "disabled", "open"]
       },
       "copyCommand": "kovo add alert-dialog",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the alertdialog, button role contract.",
         "keyboard": "Enter or Space opens and activates controls; Tab stays in the modal and Escape cancels it.",
-        "roles": [
-          "alertdialog",
-          "button"
-        ],
+        "roles": ["alertdialog", "button"],
         "tier": "progressive"
       },
       "headlessImport": "@kovojs/headless-ui/alert-dialog",
@@ -135,41 +93,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "inputId",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "list",
-          "option",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "list",
-          "option",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "ids": ["inputId", "listboxId"],
+        "parts": ["root", "input", "list", "option", "value"],
+        "slots": ["root", "input", "list", "option", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "copyCommand": "kovo add autocomplete",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes suggestions.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/autocomplete",
@@ -184,27 +117,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "image",
-          "fallback"
-        ],
-        "slots": [
-          "root",
-          "image",
-          "fallback"
-        ],
-        "stateInputs": [
-          "status"
-        ]
+        "parts": ["root", "image", "fallback"],
+        "slots": ["root", "image", "fallback"],
+        "stateInputs": ["status"]
       },
       "copyCommand": "kovo add avatar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the img role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "img"
-        ],
+        "roles": ["img"],
         "tier": "progressive"
       },
       "headlessImport": "@kovojs/headless-ui/avatar",
@@ -219,12 +140,8 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "copyCommand": "kovo add badge",
@@ -245,33 +162,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "currentId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "link",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "link",
-          "separator"
-        ],
-        "stateInputs": [
-          "current"
-        ]
+        "ids": ["currentId"],
+        "parts": ["root", "item", "link", "separator"],
+        "slots": ["root", "item", "link", "separator"],
+        "stateInputs": ["current"]
       },
       "copyCommand": "kovo add breadcrumb",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "navigation",
-          "list"
-        ],
+        "roles": ["navigation", "list"],
         "tier": "native"
       },
       "headlessImport": null,
@@ -286,24 +186,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "disabled",
-          "loading"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["disabled", "loading"]
       },
       "copyCommand": "kovo add button",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "native"
       },
       "headlessImport": null,
@@ -318,22 +209,8 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "header",
-          "title",
-          "description",
-          "content",
-          "footer"
-        ],
-        "slots": [
-          "root",
-          "header",
-          "title",
-          "description",
-          "content",
-          "footer"
-        ],
+        "parts": ["root", "header", "title", "description", "content", "footer"],
+        "slots": ["root", "header", "title", "description", "content", "footer"],
         "stateInputs": []
       },
       "copyCommand": "kovo add card",
@@ -354,32 +231,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "checked",
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["checked", "disabled", "invalid", "required"]
       },
       "copyCommand": "kovo add checkbox",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the checkbox role contract.",
         "keyboard": "Space toggles the checkbox while disabled controls remain inert.",
-        "roles": [
-          "checkbox"
-        ],
+        "roles": ["checkbox"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/checkbox",
@@ -393,40 +254,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "control",
-          "label"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "control",
-          "label"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "item", "control", "label"],
+        "slots": ["root", "item", "control", "label"],
+        "stateInputs": ["disabled", "items", "orientation", "required", "value"]
       },
       "copyCommand": "kovo add checkbox-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, checkbox role contract.",
         "keyboard": "Space toggles the focused item; Arrow keys can move roving focus when configured.",
-        "roles": [
-          "group",
-          "checkbox"
-        ],
+        "roles": ["group", "checkbox"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/checkbox-group",
@@ -440,32 +277,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "copyCommand": "kovo add collapsible",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the native details disclosure.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "native"
       },
       "headlessImport": "@kovojs/headless-ui/collapsible",
@@ -479,41 +300,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "inputId",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "listbox",
-          "option",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "listbox",
-          "option",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "ids": ["inputId", "listboxId"],
+        "parts": ["root", "input", "listbox", "option", "value"],
+        "slots": ["root", "input", "listbox", "option", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "copyCommand": "kovo add combobox",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes the listbox.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/combobox",
@@ -527,11 +323,7 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "dialogId",
-          "inputId",
-          "listboxId"
-        ],
+        "ids": ["dialogId", "inputId", "listboxId"],
         "parts": [
           "root",
           "trigger",
@@ -554,24 +346,13 @@
           "empty",
           "value"
         ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "value"
-        ]
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "value"]
       },
       "copyCommand": "kovo add command",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active command, Enter runs it, and Escape closes the palette.",
-        "roles": [
-          "dialog",
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["dialog", "combobox", "listbox", "option"],
         "tier": "progressive"
       },
       "headlessImport": "@kovojs/headless-ui/command",
@@ -585,44 +366,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "point"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content", "item", "group", "separator"],
+        "slots": ["root", "trigger", "content", "item", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "point"]
       },
       "copyCommand": "kovo add context-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Context Menu or Shift+F10 opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
-        "roles": [
-          "menu",
-          "menuitem",
-          "group",
-          "separator"
-        ],
+        "roles": ["menu", "menuitem", "group", "separator"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/context-menu",
@@ -636,12 +389,7 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -662,19 +410,13 @@
           "title",
           "description"
         ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "stateInputs": ["disabled", "open"]
       },
       "copyCommand": "kovo add dialog",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab stays inside the modal and Escape closes it.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "headlessImport": "@kovojs/headless-ui/dialog",
@@ -688,33 +430,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "copyCommand": "kovo add disclosure",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles the controlled region.",
-        "roles": [
-          "button",
-          "region"
-        ],
+        "roles": ["button", "region"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/disclosure",
@@ -728,12 +453,7 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
         "parts": [
           "root",
           "trigger",
@@ -754,20 +474,13 @@
           "description",
           "close"
         ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "side"
-        ]
+        "stateInputs": ["disabled", "open", "side"]
       },
       "copyCommand": "kovo add drawer",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "headlessImport": null,
@@ -781,43 +494,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "item",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content", "item", "group", "separator"],
+        "slots": ["root", "trigger", "content", "item", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open"]
       },
       "copyCommand": "kovo add dropdown-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Enter or Space opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
-        "roles": [
-          "menu",
-          "menuitem",
-          "group",
-          "separator"
-        ],
+        "roles": ["menu", "menuitem", "group", "separator"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/dropdown-menu",
@@ -831,12 +517,7 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "controlId",
-          "descriptionId",
-          "errorId",
-          "labelId"
-        ],
+        "ids": ["controlId", "descriptionId", "errorId", "labelId"],
         "parts": [
           "root",
           "label",
@@ -861,19 +542,13 @@
           "set",
           "setLegend"
         ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "stateInputs": ["disabled", "invalid", "required"]
       },
       "copyCommand": "kovo add field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "group"
-        ],
+        "roles": ["group"],
         "tier": "native"
       },
       "headlessImport": "@kovojs/headless-ui/field",
@@ -887,31 +562,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["open"]
       },
       "copyCommand": "kovo add hover-card",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Focus or pointer entry opens the preview; Escape and focus or pointer exit close it.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/hover-card",
@@ -926,12 +586,8 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "copyCommand": "kovo add kbd",
@@ -952,42 +608,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "submenu",
-          "group",
-          "separator"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "submenu",
-          "group",
-          "separator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "openValue",
-          "orientation"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "item", "submenu", "group", "separator"],
+        "slots": ["root", "item", "submenu", "group", "separator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "openValue", "orientation"]
       },
       "copyCommand": "kovo add menubar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menubar, menuitem, menu, separator role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape operate menus and submenus.",
-        "roles": [
-          "menubar",
-          "menuitem",
-          "menu",
-          "separator"
-        ],
+        "roles": ["menubar", "menuitem", "menu", "separator"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/menubar",
@@ -1001,32 +631,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "high",
-          "low",
-          "max",
-          "min",
-          "optimum",
-          "value"
-        ]
+        "ids": ["descriptionId", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["high", "low", "max", "min", "optimum", "value"]
       },
       "copyCommand": "kovo add meter",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the meter role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "meter"
-        ],
+        "roles": ["meter"],
         "tier": "native"
       },
       "headlessImport": "@kovojs/headless-ui/meter",
@@ -1040,48 +654,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId",
-          "viewportId"
-        ],
-        "parts": [
-          "root",
-          "list",
-          "item",
-          "trigger",
-          "content",
-          "link",
-          "viewport",
-          "indicator"
-        ],
-        "slots": [
-          "root",
-          "list",
-          "item",
-          "trigger",
-          "content",
-          "link",
-          "viewport",
-          "indicator"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "openValue",
-          "orientation"
-        ]
+        "ids": ["contentId", "triggerId", "viewportId"],
+        "parts": ["root", "list", "item", "trigger", "content", "link", "viewport", "indicator"],
+        "slots": ["root", "list", "item", "trigger", "content", "link", "viewport", "indicator"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "openValue", "orientation"]
       },
       "copyCommand": "kovo add navigation-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list, button role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape move through navigation items.",
-        "roles": [
-          "navigation",
-          "list",
-          "button"
-        ],
+        "roles": ["navigation", "list", "button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/navigation-menu",
@@ -1095,43 +677,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "control",
-          "input",
-          "decrement",
-          "increment"
-        ],
-        "slots": [
-          "root",
-          "control",
-          "input",
-          "decrement",
-          "increment"
-        ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "max",
-          "min",
-          "step",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "control", "input", "decrement", "increment"],
+        "slots": ["root", "control", "input", "decrement", "increment"],
+        "stateInputs": ["disabled", "invalid", "max", "min", "step", "value"]
       },
       "copyCommand": "kovo add number-field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the spinbutton, button role contract.",
         "keyboard": "Arrow Up and Arrow Down step the value within its declared bounds.",
-        "roles": [
-          "spinbutton",
-          "button"
-        ],
+        "roles": ["spinbutton", "button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/number-field",
@@ -1145,40 +700,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "group",
-          "hiddenInput",
-          "input"
-        ],
-        "slots": [
-          "root",
-          "group",
-          "hiddenInput",
-          "input"
-        ],
-        "stateInputs": [
-          "disabled",
-          "invalid",
-          "length",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "group", "hiddenInput", "input"],
+        "slots": ["root", "group", "hiddenInput", "input"],
+        "stateInputs": ["disabled", "invalid", "length", "required", "value"]
       },
       "copyCommand": "kovo add otp-field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, textbox role contract.",
         "keyboard": "Typing advances slots, Backspace moves backward, Arrow keys move focus, and paste fills available slots.",
-        "roles": [
-          "group",
-          "textbox"
-        ],
+        "roles": ["group", "textbox"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/otp-field",
@@ -1192,32 +723,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["disabled", "open"]
       },
       "copyCommand": "kovo add popover",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space opens the popover and Escape closes it.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "progressive"
       },
       "headlessImport": "@kovojs/headless-ui/popover",
@@ -1231,28 +746,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "max",
-          "value"
-        ]
+        "ids": ["descriptionId", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["max", "value"]
       },
       "copyCommand": "kovo add progress",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the progressbar role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "progressbar"
-        ],
+        "roles": ["progressbar"],
         "tier": "native"
       },
       "headlessImport": "@kovojs/headless-ui/progress",
@@ -1266,41 +769,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "controlId",
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "item",
-          "radio",
-          "label"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "radio",
-          "label"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "required",
-          "value"
-        ]
+        "ids": ["controlId", "descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "item", "radio", "label"],
+        "slots": ["root", "item", "radio", "label"],
+        "stateInputs": ["disabled", "items", "orientation", "required", "value"]
       },
       "copyCommand": "kovo add radio-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the radiogroup, radio role contract.",
         "keyboard": "Arrow keys move selection and focus; Space selects the focused radio option.",
-        "roles": [
-          "radiogroup",
-          "radio"
-        ],
+        "roles": ["radiogroup", "radio"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/radio-group",
@@ -1314,37 +792,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "scrollbarId",
-          "viewportId"
-        ],
-        "parts": [
-          "root",
-          "viewport",
-          "scrollbar",
-          "thumb",
-          "corner"
-        ],
-        "slots": [
-          "root",
-          "viewport",
-          "scrollbar",
-          "thumb",
-          "corner"
-        ],
-        "stateInputs": [
-          "orientation",
-          "scrollSize",
-          "viewportSize"
-        ]
+        "ids": ["scrollbarId", "viewportId"],
+        "parts": ["root", "viewport", "scrollbar", "thumb", "corner"],
+        "slots": ["root", "viewport", "scrollbar", "thumb", "corner"],
+        "stateInputs": ["orientation", "scrollSize", "viewportSize"]
       },
       "copyCommand": "kovo add scroll-area",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the scrollbar role contract.",
         "keyboard": "Native viewport scrolling remains available when custom dragging is absent.",
-        "roles": [
-          "scrollbar"
-        ],
+        "roles": ["scrollbar"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/scroll-area",
@@ -1358,47 +815,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy",
-          "listboxId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "hiddenInput",
-          "content",
-          "item",
-          "value"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "hiddenInput",
-          "content",
-          "item",
-          "value"
-        ],
-        "stateInputs": [
-          "disabled",
-          "highlightedValue",
-          "items",
-          "open",
-          "required",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy", "listboxId"],
+        "parts": ["root", "trigger", "hiddenInput", "content", "item", "value"],
+        "slots": ["root", "trigger", "hiddenInput", "content", "item", "value"],
+        "stateInputs": ["disabled", "highlightedValue", "items", "open", "required", "value"]
       },
       "copyCommand": "kovo add select",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter or Space selects, typeahead searches, and Escape closes.",
-        "roles": [
-          "combobox",
-          "listbox",
-          "option"
-        ],
+        "roles": ["combobox", "listbox", "option"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/select",
@@ -1413,24 +839,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "decorative",
-          "orientation"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["decorative", "orientation"]
       },
       "copyCommand": "kovo add separator",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the separator role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "separator"
-        ],
+        "roles": ["separator"],
         "tier": "native"
       },
       "headlessImport": "@kovojs/headless-ui/separator",
@@ -1444,44 +861,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "descriptionId",
-          "titleId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content",
-          "header",
-          "title",
-          "description",
-          "close"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content",
-          "header",
-          "title",
-          "description",
-          "close"
-        ],
-        "stateInputs": [
-          "disabled",
-          "open",
-          "side"
-        ]
+        "ids": ["contentId", "descriptionId", "titleId", "triggerId"],
+        "parts": ["root", "trigger", "content", "header", "title", "description", "close"],
+        "slots": ["root", "trigger", "content", "header", "title", "description", "close"],
+        "stateInputs": ["disabled", "open", "side"]
       },
       "copyCommand": "kovo add sheet",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
-        "roles": [
-          "dialog",
-          "button"
-        ],
+        "roles": ["dialog", "button"],
         "tier": "progressive"
       },
       "headlessImport": null,
@@ -1496,12 +885,8 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
+        "parts": ["root"],
+        "slots": ["root"],
         "stateInputs": []
       },
       "copyCommand": "kovo add skeleton",
@@ -1522,42 +907,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root",
-          "input",
-          "track",
-          "range",
-          "thumb"
-        ],
-        "slots": [
-          "root",
-          "input",
-          "track",
-          "range",
-          "thumb"
-        ],
-        "stateInputs": [
-          "disabled",
-          "max",
-          "min",
-          "orientation",
-          "step",
-          "value"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root", "input", "track", "range", "thumb"],
+        "slots": ["root", "input", "track", "range", "thumb"],
+        "stateInputs": ["disabled", "max", "min", "orientation", "step", "value"]
       },
       "copyCommand": "kovo add slider",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the slider role contract.",
         "keyboard": "Arrow keys step the value; Home and End select bounds while pointer drag tracks continuously.",
-        "roles": [
-          "slider"
-        ],
+        "roles": ["slider"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/slider",
@@ -1571,32 +930,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "checked",
-          "disabled",
-          "invalid",
-          "required"
-        ]
+        "ids": ["descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["checked", "disabled", "invalid", "required"]
       },
       "copyCommand": "kovo add switch",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the switch role contract.",
         "keyboard": "Space toggles the switch while disabled controls remain inert.",
-        "roles": [
-          "switch"
-        ],
+        "roles": ["switch"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/switch",
@@ -1611,34 +954,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "head",
-          "body",
-          "row",
-          "headerCell",
-          "cell"
-        ],
-        "slots": [
-          "root",
-          "head",
-          "body",
-          "row",
-          "headerCell",
-          "cell"
-        ],
+        "parts": ["root", "head", "body", "row", "headerCell", "cell"],
+        "slots": ["root", "head", "body", "row", "headerCell", "cell"],
         "stateInputs": []
       },
       "copyCommand": "kovo add table",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the table, row, columnheader, cell role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
-        "roles": [
-          "table",
-          "row",
-          "columnheader",
-          "cell"
-        ],
+        "roles": ["table", "row", "columnheader", "cell"],
         "tier": "native"
       },
       "headlessImport": null,
@@ -1652,39 +976,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "panelId",
-          "tabId"
-        ],
-        "parts": [
-          "root",
-          "list",
-          "trigger",
-          "panel"
-        ],
-        "slots": [
-          "root",
-          "list",
-          "trigger",
-          "panel"
-        ],
-        "stateInputs": [
-          "activationMode",
-          "disabled",
-          "items",
-          "orientation",
-          "value"
-        ]
+        "ids": ["panelId", "tabId"],
+        "parts": ["root", "list", "trigger", "panel"],
+        "slots": ["root", "list", "trigger", "panel"],
+        "stateInputs": ["activationMode", "disabled", "items", "orientation", "value"]
       },
       "copyCommand": "kovo add tabs",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tablist, tab, tabpanel role contract.",
         "keyboard": "Arrow keys move between tabs; Home and End jump to bounds; Enter or Space activates in manual mode.",
-        "roles": [
-          "tablist",
-          "tab",
-          "tabpanel"
-        ],
+        "roles": ["tablist", "tab", "tabpanel"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/tabs",
@@ -1698,42 +999,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "descriptionId",
-          "titleId",
-          "toastId",
-          "viewportId"
-        ],
-        "parts": [
-          "viewport",
-          "root",
-          "title",
-          "description",
-          "action",
-          "close"
-        ],
-        "slots": [
-          "viewport",
-          "root",
-          "title",
-          "description",
-          "action",
-          "close"
-        ],
-        "stateInputs": [
-          "duration",
-          "open",
-          "type"
-        ]
+        "ids": ["descriptionId", "titleId", "toastId", "viewportId"],
+        "parts": ["viewport", "root", "title", "description", "action", "close"],
+        "slots": ["viewport", "root", "title", "description", "action", "close"],
+        "stateInputs": ["duration", "open", "type"]
       },
       "copyCommand": "kovo add toast",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the region, status role contract.",
         "keyboard": "Escape dismisses the newest toast; native buttons activate actions and close.",
-        "roles": [
-          "region",
-          "status"
-        ],
+        "roles": ["region", "status"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/toast",
@@ -1748,24 +1023,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root"
-        ],
-        "slots": [
-          "root"
-        ],
-        "stateInputs": [
-          "disabled",
-          "pressed"
-        ]
+        "parts": ["root"],
+        "slots": ["root"],
+        "stateInputs": ["disabled", "pressed"]
       },
       "copyCommand": "kovo add toggle",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the pressed state.",
-        "roles": [
-          "button"
-        ],
+        "roles": ["button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/toggle",
@@ -1780,32 +1046,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "item",
-          "button"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "button"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation",
-          "type",
-          "value"
-        ]
+        "parts": ["root", "item", "button"],
+        "slots": ["root", "item", "button"],
+        "stateInputs": ["disabled", "items", "orientation", "type", "value"]
       },
       "copyCommand": "kovo add toggle-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, button role contract.",
         "keyboard": "Arrow keys move roving focus and Enter or Space toggles the focused item.",
-        "roles": [
-          "group",
-          "button"
-        ],
+        "roles": ["group", "button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/toggle-group",
@@ -1820,30 +1069,15 @@
     {
       "anatomy": {
         "ids": [],
-        "parts": [
-          "root",
-          "item",
-          "button"
-        ],
-        "slots": [
-          "root",
-          "item",
-          "button"
-        ],
-        "stateInputs": [
-          "disabled",
-          "items",
-          "orientation"
-        ]
+        "parts": ["root", "item", "button"],
+        "slots": ["root", "item", "button"],
+        "stateInputs": ["disabled", "items", "orientation"]
       },
       "copyCommand": "kovo add toolbar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the toolbar, button role contract.",
         "keyboard": "Arrow keys, Home, and End move roving focus through toolbar items.",
-        "roles": [
-          "toolbar",
-          "button"
-        ],
+        "roles": ["toolbar", "button"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/toolbar",
@@ -1857,31 +1091,16 @@
     },
     {
       "anatomy": {
-        "ids": [
-          "contentId",
-          "triggerId"
-        ],
-        "parts": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "slots": [
-          "root",
-          "trigger",
-          "content"
-        ],
-        "stateInputs": [
-          "open"
-        ]
+        "ids": ["contentId", "triggerId"],
+        "parts": ["root", "trigger", "content"],
+        "slots": ["root", "trigger", "content"],
+        "stateInputs": ["open"]
       },
       "copyCommand": "kovo add tooltip",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tooltip role contract.",
         "keyboard": "Focus or pointer entry opens the tooltip and Escape closes it.",
-        "roles": [
-          "tooltip"
-        ],
+        "roles": ["tooltip"],
         "tier": "scripted"
       },
       "headlessImport": "@kovojs/headless-ui/tooltip",

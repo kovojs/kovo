@@ -207,8 +207,7 @@ async function loadKovoDevtoolApp(
     throw new TypeError('@kovojs/server must export isKovoApp.');
   }
   const appShellModule = await server.ssrLoadModule(options.appShellModuleId);
-  const runWithGeneratedLiveTargetRegistry =
-    appShellModule.runWithGeneratedLiveTargetRegistry;
+  const runWithGeneratedLiveTargetRegistry = appShellModule.runWithGeneratedLiveTargetRegistry;
   if (typeof runWithGeneratedLiveTargetRegistry !== 'function') {
     throw new TypeError(
       '@kovojs/server/internal/app-shell-vite must export runWithGeneratedLiveTargetRegistry.',
@@ -218,14 +217,11 @@ async function loadKovoDevtoolApp(
   // must own the same compiler-emitted renderer registration scope as request dispatch; otherwise
   // Vite caches an app aggregate with no live-target inventory and every enhanced mutation falls
   // back to an empty fragment response (SPEC §9.1/§9.5).
-  const appModule = await nativeReflectApply(
-    runWithGeneratedLiveTargetRegistry,
-    undefined,
-    [() => server.ssrLoadModule(options.appModuleId)],
-  );
+  const appModule = await nativeReflectApply(runWithGeneratedLiveTargetRegistry, undefined, [
+    () => server.ssrLoadModule(options.appModuleId),
+  ]);
   if (
-    ((typeof appModule !== 'object' || appModule === null) &&
-      typeof appModule !== 'function') ||
+    ((typeof appModule !== 'object' || appModule === null) && typeof appModule !== 'function') ||
     buildArrayIsArray(appModule)
   ) {
     throw new TypeError('Kovo devtool app module must be an object.');

@@ -1,10 +1,7 @@
 {
   "schema": "kovo-api-migration-ledger/v1",
   "resultSchema": "kovo-api-migration-result/v1",
-  "modes": [
-    "check",
-    "write"
-  ],
+  "modes": ["check", "write"],
   "refusalCategories": [
     "ambiguous-binding",
     "app-context",
@@ -47,12 +44,8 @@
       "tool": {
         "path": "scripts/migrate-style-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/style-api-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
@@ -281,12 +274,8 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"
-        ],
-        "refusals": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"
-        ]
+        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -342,12 +331,8 @@
       "tool": {
         "path": "scripts/migrate-ui-headless-icons-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "rules": [
         {

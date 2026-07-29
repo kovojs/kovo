@@ -18,14 +18,7 @@
     "planConsequence": "Selecting Arm B requires updating the active D1 wording before D1 can close; v6 must not claim that Arm B used zero new identity classes.",
     "forbiddenSyntheticDiagnostic": "D1B201"
   },
-  "declarationFamilies": [
-    "endpoint",
-    "layout",
-    "mutation",
-    "query",
-    "route",
-    "task"
-  ],
+  "declarationFamilies": ["endpoint", "layout", "mutation", "query", "route", "task"],
   "matrix": {
     "ordinary-local-import": {
       "arm-a": "accept",
@@ -129,16 +122,8 @@
     "diagnosticCountPerUnsupportedFixtureExact": 1
   },
   "artifactContract": {
-    "exactPackageNames": [
-      "@kovojs/browser",
-      "@kovojs/compiler",
-      "@kovojs/core",
-      "@kovojs/server"
-    ],
-    "packedCompilerEntrypoints": [
-      "@kovojs/compiler",
-      "@kovojs/compiler/internal"
-    ],
+    "exactPackageNames": ["@kovojs/browser", "@kovojs/compiler", "@kovojs/core", "@kovojs/server"],
+    "packedCompilerEntrypoints": ["@kovojs/compiler", "@kovojs/compiler/internal"],
     "sealedArtifactNames": [
       "compiler-packed.tgz",
       "server-overlay-packed.tgz",

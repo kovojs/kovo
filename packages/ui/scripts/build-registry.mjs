@@ -165,7 +165,7 @@ const generatedTargets = [
     source: generateGalleryComponentManifestTs(),
   },
   {
-    compare: 'text',
+    compare: 'typescript',
     label: 'examples/gallery/src/component-catalog.ts',
     path: paths.galleryComponentCatalog,
     source: generateGalleryComponentCatalogTs(),
@@ -1589,8 +1589,51 @@ function targetMatchesFile(target) {
       return false;
     }
   }
+  if (target.compare === 'typescript') {
+    return canonicalTypeScriptAst(current) === canonicalTypeScriptAst(target.source);
+  }
 
   return current === target.source;
+}
+
+function canonicalTypeScriptAst(source) {
+  const sourceFile = ts.createSourceFile(
+    'generated.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  if (sourceFile.parseDiagnostics.length > 0) return undefined;
+  return JSON.stringify(canonicalTypeScriptNode(sourceFile));
+}
+
+function canonicalTypeScriptNode(node) {
+  if (ts.isIdentifier(node)) return ['identifier', node.text];
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return ['string', node.text];
+  }
+  if (ts.isNumericLiteral(node)) return ['number', node.text];
+  if (ts.isPropertyAssignment(node)) {
+    return ['property', propertyNameText(node.name), canonicalTypeScriptNode(node.initializer)];
+  }
+  const children = [];
+  node.forEachChild((child) => {
+    children.push(canonicalTypeScriptNode(child));
+  });
+  return [node.kind, children];
+}
+
+function propertyNameText(name) {
+  if (
+    ts.isIdentifier(name) ||
+    ts.isStringLiteral(name) ||
+    ts.isNumericLiteral(name) ||
+    ts.isNoSubstitutionTemplateLiteral(name)
+  ) {
+    return name.text;
+  }
+  return canonicalTypeScriptNode(name);
 }
 
 function formatNamedExport(names, moduleSpecifier, options = {}) {

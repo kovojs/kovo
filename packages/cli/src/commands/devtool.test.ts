@@ -1,10 +1,7 @@
 import type { ViteDevServer } from 'vite-plus';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  inspectKovoDevDatabasePosture,
-  type KovoDevtoolPluginOptions,
-} from './devtool.js';
+import { inspectKovoDevDatabasePosture, type KovoDevtoolPluginOptions } from './devtool.js';
 
 const OPTIONS = Object.freeze<KovoDevtoolPluginOptions>({
   appModuleId: 'app',
@@ -50,17 +47,14 @@ describe('inspectKovoDevDatabasePosture', () => {
         }
         if (id === OPTIONS.securityProfileModuleId) {
           return {
-            kovoDevDatabasePosture: (value: unknown) =>
-              value === app ? 'none configured' : '',
+            kovoDevDatabasePosture: (value: unknown) => (value === app ? 'none configured' : ''),
           };
         }
         throw new Error(`unexpected SSR module ${id}`);
       }),
     } satisfies Pick<ViteDevServer, 'ssrLoadModule'>;
 
-    await expect(inspectKovoDevDatabasePosture(server, OPTIONS)).resolves.toBe(
-      'none configured',
-    );
+    await expect(inspectKovoDevDatabasePosture(server, OPTIONS)).resolves.toBe('none configured');
     expect(loads).toEqual(['server-root', 'app-shell', 'app', 'profile']);
   });
 

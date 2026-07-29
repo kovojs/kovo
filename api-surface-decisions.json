@@ -5,117 +5,79 @@
   "evidence": {
     "better-auth-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/better-auth/src/index.session.test.ts"
-      ]
+      "contractTests": ["packages/better-auth/src/index.session.test.ts"]
     },
     "browser-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/browser/src/index.test.ts"
-      ]
+      "contractTests": ["packages/browser/src/index.test.ts"]
     },
     "cli-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/cli/src/api.test.ts"
-      ]
+      "contractTests": ["packages/cli/src/api.test.ts"]
     },
     "core-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/index.test.ts"
-      ]
+      "contractTests": ["packages/core/src/index.test.ts"]
     },
     "core-diagnostics-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/diagnostics.test.ts"
-      ]
+      "contractTests": ["packages/core/src/diagnostics.test.ts"]
     },
     "core-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/secret.test.ts"
-      ]
+      "contractTests": ["packages/core/src/secret.test.ts"]
     },
     "core-storage-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/storage.test.ts"
-      ]
+      "contractTests": ["packages/core/src/storage.test.ts"]
     },
     "core-webhook-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/verifier.test.ts"
-      ]
+      "contractTests": ["packages/core/src/verifier.test.ts"]
     },
     "drizzle-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/drizzle/src/runtime-surface.test.ts"
-      ]
+      "contractTests": ["packages/drizzle/src/runtime-surface.test.ts"]
     },
     "headless-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/headless-ui/src/tooling/lint-primitives.test.ts"
-      ]
+      "contractTests": ["packages/headless-ui/src/tooling/lint-primitives.test.ts"]
     },
     "icons-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/icons/src/icons.test.ts"
-      ]
+      "contractTests": ["packages/icons/src/icons.test.ts"]
     },
     "server-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/app.test.ts"
-      ]
+      "contractTests": ["packages/server/src/app.test.ts"]
     },
     "server-build-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/build.test.ts"
-      ]
+      "contractTests": ["packages/server/src/build.test.ts"]
     },
     "server-data-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"
-      ]
+      "contractTests": ["packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"]
     },
     "server-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/access.test.ts"
-      ]
+      "contractTests": ["packages/server/src/access.test.ts"]
     },
     "style-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/style/src/index.test.ts"
-      ]
+      "contractTests": ["packages/style/src/index.test.ts"]
     },
     "test-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/test/src/harness.test.ts"
-      ]
+      "contractTests": ["packages/test/src/harness.test.ts"]
     },
     "ui-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/ui/src/manifest-generation.test.ts"
-      ]
+      "contractTests": ["packages/ui/src/manifest-generation.test.ts"]
     },
     "verify-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/verify/src/index.test.ts"
-      ]
+      "contractTests": ["packages/verify/src/index.test.ts"]
     }
   },
   "stories": {

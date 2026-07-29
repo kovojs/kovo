@@ -31,13 +31,21 @@ function generatedCatalog() {
   return document;
 }
 
-const expected = `${JSON.stringify(generatedCatalog(), null, 2)}\n`;
+const document = generatedCatalog();
+const expected = `${JSON.stringify(document, null, 2)}\n`;
 if (process.argv.includes('--write')) {
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, expected, 'utf8');
   process.stdout.write('Wrote catalog/component-icon-catalog.json (44 components, 1737 icons).\n');
 } else {
-  if (!existsSync(outputPath) || readFileSync(outputPath, 'utf8') !== expected) {
+  let current;
+  try {
+    current = readJson(outputPath);
+  } catch {
+    current = undefined;
+  }
+  // The manifest owns values and ordering; the repository formatter owns whitespace.
+  if (!existsSync(outputPath) || JSON.stringify(current) !== JSON.stringify(document)) {
     throw new Error(
       'catalog/component-icon-catalog.json is stale; run `node scripts/build-component-catalog.mjs --write`',
     );

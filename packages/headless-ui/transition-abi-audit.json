@@ -56,9 +56,7 @@
     },
     {
       "primitive": "avatar",
-      "transitionTypes": [
-        "AvatarImageEvent"
-      ],
+      "transitionTypes": ["AvatarImageEvent"],
       "publicReachable": []
     },
     {
@@ -414,9 +412,7 @@
     },
     {
       "primitive": "toolbar",
-      "transitionTypes": [
-        "ToolbarKeyboardEvent"
-      ],
+      "transitionTypes": ["ToolbarKeyboardEvent"],
       "publicReachable": []
     },
     {

@@ -31,8 +31,7 @@ import {
 export const packedAppsScenario = 'packed-apps';
 export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
 export const PACKED_APPS_VARIANT_SCHEMA = 'kovo.golden-journey/packed-app/v1';
-export const PACKED_APPS_BUILD_POSTURE_SCHEMA =
-  'kovo.golden-journey/build-posture/v1';
+export const PACKED_APPS_BUILD_POSTURE_SCHEMA = 'kovo.golden-journey/build-posture/v1';
 export const AXE_WCAG_22_AA_TAGS = Object.freeze([
   'wcag2a',
   'wcag2aa',
