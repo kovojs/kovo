@@ -953,7 +953,7 @@ export default createApp({ queries: [contacts] });
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).not.toContain('[kovo egress]');
       expect(stderr).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(errorOutput)).toEqual({
+      expect(JSON.parse(errorOutput)).toMatchObject({
         diagnostics: [
           {
             category: 'proof',
@@ -969,6 +969,12 @@ export default createApp({ queries: [contacts] });
             version: 'kovo-diagnostic/v1',
           },
         ],
+        result: {
+          command: 'build',
+          exitCode: 1,
+          protocol: 'kovo-build/v1',
+          text: expect.stringMatching(/^kovo-build\/v1\n/u),
+        },
         version: 'kovo-diagnostic/v1',
       });
       expect(existsSync(outDir)).toBe(false);

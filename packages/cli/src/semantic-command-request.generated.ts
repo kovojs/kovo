@@ -10,6 +10,14 @@
  */
 export type KovoSemanticCommandRequest =
   | {
+      readonly arguments: { readonly [key: PropertyKey]: never };
+      readonly command: 'add';
+      readonly form: 'list';
+      readonly options: {
+        readonly list: true;
+      };
+    }
+  | {
       readonly arguments: {
         readonly components: readonly [
           (
@@ -110,6 +118,8 @@ export type KovoSemanticCommandRequest =
       readonly form: 'components';
       readonly options?: {
         readonly out?: string;
+        readonly dryRun?: boolean;
+        readonly install?: 'auto' | 'never';
       };
     }
   | {
@@ -120,6 +130,17 @@ export type KovoSemanticCommandRequest =
       readonly form: 'audit';
       readonly options?: {
         readonly failOnFindings?: boolean;
+      };
+    }
+  | {
+      readonly arguments: {
+        readonly root?: string;
+      };
+      readonly command: 'doctor';
+      readonly form: 'doctor';
+      readonly options?: {
+        readonly fix?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
@@ -650,6 +671,20 @@ export type KovoSemanticCommandRequest =
       readonly form: 'scope';
       readonly options: {
         readonly events: string;
+      };
+    }
+  | {
+      readonly arguments: {
+        readonly files?: readonly string[];
+      };
+      readonly command: 'test';
+      readonly form: 'test';
+      readonly options?: {
+        readonly coverage?: boolean;
+        readonly update?: boolean;
+        readonly passWithNoTests?: boolean;
+        readonly reporter?: 'default' | 'basic' | 'dot' | 'json' | 'junit' | 'verbose';
+        readonly testNamePattern?: string;
       };
     }
   | {

@@ -23,7 +23,7 @@ import { KOVO_DIAGNOSTIC_VERSION, type KovoDiagnosticEnvelope } from './diagnost
 import { main, mainAsync, runKovoCommand } from './index.js';
 
 describe('semantic CLI contract', () => {
-  it('keeps all 14 capability commands in one categorized, versioned schema', () => {
+  it('keeps every capability command in one categorized, versioned schema', () => {
     expect(
       KOVO_COMMAND_SCHEMA.map(
         (entry) => `${entry.category}:${entry.name}:${entry.resultProtocol ?? 'none'}`,
@@ -32,6 +32,7 @@ describe('semantic CLI contract', () => {
       [
         "daily-build:add:kovo-add/v1",
         "inspect-security:audit:kovo-audit/v1",
+        "daily-build:doctor:kovo-doctor/v1",
         "daily-build:build:kovo-build/v1",
         "inspect-security:check:kovo-check/v1",
         "agent-operator:compile:kovo-compile/v1",
@@ -43,11 +44,12 @@ describe('semantic CLI contract', () => {
         "agent-operator:fix:none",
         "inspect-security:incident:kovo-incident-scope/v1",
         "agent-operator:mcp:kovo-mcp/v1",
+        "daily-build:test:kovo-test/v1",
         "agent-operator:update-docs:kovo-update-docs/v1",
       ]
     `);
 
-    expect(new Set(KOVO_COMMAND_SCHEMA.map((entry) => entry.name)).size).toBe(14);
+    expect(new Set(KOVO_COMMAND_SCHEMA.map((entry) => entry.name)).size).toBe(16);
     for (const entry of KOVO_COMMAND_SCHEMA) {
       expect(entry.aliases).toEqual([...new Set(entry.aliases)]);
       expect(entry.examples.length).toBeGreaterThan(0);
@@ -426,6 +428,12 @@ describe('semantic CLI contract', () => {
       stderr: '',
       stdout: `${JSON.stringify({
         diagnostics: [],
+        result: {
+          command: 'explain',
+          exitCode: 0,
+          protocol: 'kovo-explain/v1',
+          text: implicitHuman.stdout,
+        },
         version: KOVO_DIAGNOSTIC_VERSION,
       })}\n`,
     });
@@ -443,6 +451,12 @@ describe('semantic CLI contract', () => {
           version: KOVO_DIAGNOSTIC_VERSION,
         }),
       ],
+      result: {
+        command: 'check',
+        exitCode: 1,
+        protocol: 'kovo-check/v1',
+        text: `kovo: input file not found: ${missingGraph}\n`,
+      },
       version: KOVO_DIAGNOSTIC_VERSION,
     });
     expect(checkEnvelope.diagnostics[0]?.message).not.toContain(missingGraph);

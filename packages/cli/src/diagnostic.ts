@@ -20,6 +20,61 @@ export interface KovoDiagnosticSourceAnchor {
 export type KovoDiagnosticCategory = 'build' | 'config' | 'proof' | 'runtime' | 'usage';
 
 const CLI_DIAGNOSTIC_DEFINITIONS = {
+  KOVO_DOCTOR_CACHE: {
+    category: 'config',
+    help: 'Run `kovo doctor --fix` to remove only the stale derived cache, then rerun `kovo check`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_CONFIG: {
+    category: 'config',
+    help: 'Create or correct `kovo.config.ts`, select one supported preset, then rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_DATABASE: {
+    category: 'config',
+    help: 'Configure the named database roles and run `kovo db check` before starting the app.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_DUPLICATE_PACKAGE: {
+    category: 'config',
+    help: 'Run `pnpm dedupe`, reinstall from the lockfile, and rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_MIGRATIONS: {
+    category: 'config',
+    help: 'Run `kovo db generate` and `kovo db migrate`, then rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_NODE: {
+    category: 'config',
+    help: 'Install the Node version required by package.json and rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_ORIGIN: {
+    category: 'config',
+    help: 'Use automatic loopback development origin, or set one fixed HTTPS deployment origin.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_PACKAGE_MANAGER: {
+    category: 'config',
+    help: 'Install and use the exact pnpm version declared by package.json, then rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_PEER: {
+    category: 'config',
+    help: 'Align the declared peer and installed package versions, reinstall, then rerun `kovo doctor`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_RETENTION: {
+    category: 'config',
+    help: 'Declare the preset retention proof in `kovo.config.ts`, then run `kovo build`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_WRITABLE: {
+    category: 'config',
+    help: 'Restore write access to the project and `.kovo` paths, then rerun `kovo doctor`.',
+    severity: 'error',
+  },
   KOVO_BUILD_FINDING: {
     category: 'build',
     help: 'Resolve the reported build finding and rerun the command.',
@@ -64,6 +119,9 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
 /** Finite framework-owned code vocabulary for CLI/process facts. */
 export type KovoCliDiagnosticCode = keyof typeof CLI_DIAGNOSTIC_DEFINITIONS;
 
+/** @internal Doctor-owned subset of the finite CLI diagnostic registry. */
+export type KovoDoctorDiagnosticCode = Extract<KovoCliDiagnosticCode, `KOVO_DOCTOR_${string}`>;
+
 /**
  * One registry-authenticated, transport-neutral diagnostic record.
  *
@@ -84,7 +142,17 @@ export interface KovoDiagnosticRecord {
 /** Serialized `kovo-diagnostic/v1` envelope emitted by machine-readable adapters. */
 export interface KovoDiagnosticEnvelope {
   readonly diagnostics: readonly KovoDiagnosticRecord[];
+  /** Present when a command adapter also preserves its existing fact protocol. */
+  readonly result?: KovoDiagnosticCommandResult;
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
+}
+
+/** Existing command result carried intact beside the shared diagnostics. */
+export interface KovoDiagnosticCommandResult {
+  readonly command: string;
+  readonly exitCode: 0 | 1 | 2;
+  readonly protocol: string;
+  readonly text: string;
 }
 
 /** Presentation adapters supported by {@link formatKovoDiagnostics}. */
@@ -193,6 +261,36 @@ export function formatKovoDiagnostics(
   return envelope.diagnostics.map(formatHumanDiagnostic).join('');
 }
 
+/**
+ * @internal Render one command's authenticated diagnostics and exact versioned result facts.
+ *
+ * JSON and GitHub are adapters over the same records. GitHub annotations are followed by the
+ * unchanged command fact text so CI logs do not lose a successful or failed proof protocol.
+ */
+export function formatKovoDiagnosticCommandResult(
+  diagnostics: readonly KovoDiagnosticRecord[],
+  result: KovoDiagnosticCommandResult,
+  format: Exclude<KovoDiagnosticFormat, 'human'>,
+): string {
+  const envelope = createKovoDiagnosticEnvelope(diagnostics);
+  if (
+    result.command.length === 0 ||
+    result.protocol.length === 0 ||
+    (result.exitCode !== 0 && result.exitCode !== 1 && result.exitCode !== 2) ||
+    result.text.length === 0
+  ) {
+    throw new TypeError('Kovo diagnostic command result facts are invalid.');
+  }
+  if (format === 'github') {
+    return `${formatKovoDiagnostics(envelope.diagnostics, 'github')}${result.text}`;
+  }
+  return `${JSON.stringify({
+    diagnostics: envelope.diagnostics,
+    result: Object.freeze({ ...result }),
+    version: envelope.version,
+  })}\n`;
+}
+
 /** @internal Snapshot one exact source anchor before enrolling it in a trusted producer catalog. */
 export function snapshotKovoDiagnosticSourceAnchor(
   value: unknown,
@@ -220,6 +318,15 @@ export function commandFindingDiagnostic(
           ? 'KOVO_RUNTIME_FINDING'
           : 'KOVO_PROOF_FINDING';
   return createCliDiagnostic(code, message);
+}
+
+/** @internal Mint one doctor finding from the finite doctor registry. */
+export function doctorFindingDiagnostic(
+  code: KovoDoctorDiagnosticCode,
+  message: string,
+  source?: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic(code, message, source);
 }
 
 /**

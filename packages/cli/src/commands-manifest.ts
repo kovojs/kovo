@@ -1181,13 +1181,16 @@ function formValueFailure(
   usage: string,
   score: number,
 ): EntryInvocationParseResult {
+  const invalidValueMessage = token.invalidValueMessage
+    ?.replaceAll('{value}', stableValue(rawValue))
+    .replaceAll('{suggestion}', semanticValueSuggestion(rawValue, token.value));
   return {
     error: 'usage',
     message:
-      token.invalidValueMessage !== undefined && token.invalidValueUsage === 'omit'
-        ? token.invalidValueMessage.replaceAll('{value}', stableValue(rawValue))
+      invalidValueMessage !== undefined && token.invalidValueUsage === 'omit'
+        ? invalidValueMessage
         : appendUsage(
-            token.invalidValueMessage?.replaceAll('{value}', stableValue(rawValue)) ??
+            invalidValueMessage ??
               `kovo: ${entry.name} requires ${valueSchemaExpectation(token.value)}; received ${stableValue(rawValue)}.\n`,
             usage,
           ),
@@ -1195,6 +1198,42 @@ function formValueFailure(
     priority: token.invalidValueMessage === undefined ? 20 : 35,
     score,
   };
+}
+
+function semanticValueSuggestion(rawValue: string, schema: KovoCommandValueSchema): string {
+  if (schema.suggestValues !== true || schema.values === undefined) return '';
+  const normalized = rawValue.toLocaleLowerCase('en-US');
+  const candidates = schema.values
+    .map((candidate) => ({
+      candidate,
+      distance: editDistance(normalized, candidate.toLocaleLowerCase('en-US')),
+    }))
+    .sort(
+      (left, right) =>
+        left.distance - right.distance || left.candidate.localeCompare(right.candidate),
+    );
+  const nearest = candidates[0];
+  const limit = Math.max(1, Math.min(3, Math.floor(normalized.length / 3)));
+  return nearest !== undefined && nearest.distance <= limit
+    ? ` Did you mean ${stableValue(nearest.candidate)}?`
+    : '';
+}
+
+function editDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        (current[rightIndex - 1] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[rightIndex] ?? Number.POSITIVE_INFINITY) + 1,
+        (previous[rightIndex - 1] ?? Number.POSITIVE_INFINITY) +
+          (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    for (let index = 0; index < current.length; index += 1) previous[index] = current[index]!;
+  }
+  return previous[right.length] ?? right.length;
 }
 
 function requiredOptionFailure(

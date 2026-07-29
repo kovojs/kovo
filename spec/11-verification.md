@@ -250,6 +250,26 @@ policies. Deployment endpoint probes run through `kovo verify --artifact <dist>`
 build. App package scripts name Kovo, Vitest, and the package manager only; Vite Plus may remain a
 framework/CI implementation tool but is not app-facing vocabulary.
 
+**Daily coherence and copy-in commands (normative).** `kovo doctor [root]` reads bounded local
+configuration and package facts without evaluating authored modules or contacting the network. It
+checks the required Node and pnpm versions, duplicate Kovo installations, Kovo peer ranges,
+config/preset selection, origin posture, database-role posture, migrations, deploy-skew retention,
+writable framework paths, and cache freshness. Findings are finite producer-owned
+`kovo-diagnostic/v1` records. `--fix` is restricted to framework-classified derived state: it may
+create the project-owned `.kovo` directory or remove a stale real `.kovo/cache` directory after
+containment and non-symlink checks; it does not rewrite security posture, credentials, package
+versions, migrations, or authored source.
+
+`kovo add --list` is the exact copy-in registry. A component typo suggestion is derived from that
+same registry rather than a second alias table. `kovo add ... --dry-run` performs no filesystem or
+process writes. `--install=never` copies source and reports the dependency follow-up without
+editing the manifest; `--install=auto` stages component files, atomically updates the captured
+manifest, runs the declared package manager, and promotes source only after install succeeds. An
+install or promotion failure restores staged manifest/source edits and reports completed, planned,
+and rolled-back work distinctly. `kovo test` is the app-facing, schema-owned one-shot Vitest
+command; the CLI may delegate to its pinned Vite Plus implementation dependency, but generated
+app scripts and help do not expose that implementation command.
+
 **Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
 app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,
 and `node_modules` trees. It MUST NOT synthesize a trust wrapper, justification, allowlist entry, or

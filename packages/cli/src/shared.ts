@@ -7,6 +7,7 @@ import {
 } from './command-schema.js';
 import {
   diagnosticContractDiagnostic,
+  formatKovoDiagnosticCommandResult,
   formatKovoDiagnostics,
   usageDiagnostic,
   type KovoDiagnosticCategory,
@@ -98,7 +99,20 @@ export function writeFormattedCommandResult(
     return writeCommandResult(result, category, command, exitTwoClass);
   }
   const normalized = normalizeCommandResultDiagnostics(result, category);
-  const output = formatKovoDiagnostics(normalized.diagnostics ?? [], format);
+  if (command === undefined) {
+    throw new TypeError('Formatted Kovo command results require a semantic command identity.');
+  }
+  const text = 'error' in normalized ? normalized.error : normalized.output;
+  const output = formatKovoDiagnosticCommandResult(
+    normalized.diagnostics ?? [],
+    {
+      command,
+      exitCode: normalized.exitCode,
+      protocol: requireKovoCommandResultProtocol(command),
+      text,
+    },
+    format,
+  );
   const stream = normalized.exitCode === 0 ? process.stdout : process.stderr;
   stream.write(output);
   return validatedCommandExitCode(normalized.exitCode, command, exitTwoClass);

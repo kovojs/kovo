@@ -43,6 +43,8 @@ export interface KovoCommandValueSchema {
   readonly label: string;
   readonly maximum?: number;
   readonly minimum?: number;
+  /** Ask the argv adapter to derive one edit-distance suggestion from enum values. */
+  readonly suggestValues?: boolean;
   readonly usage?: 'label';
   readonly values?: readonly string[];
 }
@@ -177,6 +179,7 @@ function value<
     readonly default?: number | string;
     readonly maximum?: number;
     readonly minimum?: number;
+    readonly suggestValues?: boolean;
     readonly usage?: 'label';
     readonly values?: readonly string[];
   } = {},
@@ -444,7 +447,7 @@ const compileOptions = [
 ] as const;
 
 /**
- * @internal Complete semantic command AST. Its 14 capability commands are
+ * @internal Complete semantic command AST. Capability commands are
  * intentionally grouped into daily/build, inspect/security, and agent/operator.
  */
 export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
@@ -462,6 +465,21 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         missingValueMessage: 'kovo: add --out requires a directory.\n',
         value: value('path', 'dir', { default: 'src/components/ui' }),
       }),
+      flag('list', ['--list'], 'List the exact copy-in component registry.', {
+        category: 'selection',
+      }),
+      flag('dryRun', ['--dry-run'], 'Plan without filesystem or process writes.', {
+        category: 'posture',
+      }),
+      flag('install', ['--install'], 'Choose automatic dependency installation or no install.', {
+        category: 'posture',
+        invalidValueMessage: 'kovo: --install requires auto or never.\n',
+        missingValueMessage: 'kovo: --install requires auto or never.\n',
+        value: value('enum', 'auto|never', {
+          default: 'auto',
+          values: ['auto', 'never'],
+        }),
+      }),
     ],
     order: 10,
     processLifecycle: 'one-shot',
@@ -470,22 +488,29 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     summary: 'Copy public @kovojs/ui component source into an application.',
     usage: [
       {
+        id: 'list',
+        tokens: [option('list', true)],
+      },
+      {
         id: 'components',
         tokens: [
           argument(
             'components',
             value('enum', 'component', {
+              suggestValues: true,
               usage: 'label',
               values: KOVO_ADD_COMPONENT_NAMES,
             }),
             {
               description: 'One or more component catalog names.',
-              invalidValueMessage: `kovo: unknown component {value}. available: ${KOVO_ADD_COMPONENT_NAMES.join(', ')}.\n`,
+              invalidValueMessage: `kovo: unknown component {value}.{suggestion} available: ${KOVO_ADD_COMPONENT_NAMES.join(', ')}.\n`,
               invalidValueUsage: 'omit',
               repeatable: true,
             },
           ),
           option('out'),
+          option('dryRun'),
+          option('install'),
         ],
       },
     ],
@@ -516,6 +541,36 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
             required: false,
             usageErrorPrefix: 'kovo',
           }),
+        ],
+      },
+    ],
+  },
+  {
+    aliases: [],
+    async: true,
+    category: 'daily-build',
+    compilerRealm: 'unlocked',
+    examples: ['kovo doctor', 'kovo doctor --format json', 'kovo doctor --fix'],
+    exits,
+    name: 'doctor',
+    options: [
+      flag('fix', ['--fix'], 'Apply only framework-classified safe repairs.', {
+        category: 'posture',
+      }),
+      diagnosticFormatOption,
+    ],
+    order: 75,
+    processLifecycle: 'one-shot',
+    referenceUsage: 'inline',
+    resultProtocol: 'kovo-doctor/v1',
+    summary: 'Check local toolchain, package, config, database, and cache coherence.',
+    usage: [
+      {
+        id: 'doctor',
+        tokens: [
+          argument('root', value('path', 'root'), { required: false }),
+          option('fix'),
+          option('format'),
         ],
       },
     ],
@@ -1332,6 +1387,67 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     resultProtocol: 'kovo-mcp/v1',
     summary: 'Serve the finite Kovo MCP protocol over stdio.',
     usage: [{ id: 'mcp', tokens: [] }],
+  },
+  {
+    aliases: [],
+    async: true,
+    category: 'daily-build',
+    compilerRealm: 'locked-before-dispatch',
+    examples: ['kovo test', 'kovo test src/app.test.ts', 'kovo test --coverage'],
+    exits,
+    name: 'test',
+    options: [
+      flag('coverage', ['--coverage'], 'Collect test coverage.', {
+        category: 'selection',
+      }),
+      flag('update', ['--update'], 'Update accepted test snapshots.', {
+        category: 'posture',
+      }),
+      flag('passWithNoTests', ['--pass-with-no-tests'], 'Succeed when no tests are selected.', {
+        category: 'posture',
+      }),
+      flag('reporter', ['--reporter'], 'Select a supported test reporter.', {
+        category: 'output',
+        invalidValueMessage:
+          'kovo: --reporter requires default, basic, dot, json, junit, or verbose.\n',
+        missingValueMessage:
+          'kovo: --reporter requires default, basic, dot, json, junit, or verbose.\n',
+        value: value('enum', 'reporter', {
+          values: ['default', 'basic', 'dot', 'json', 'junit', 'verbose'],
+        }),
+      }),
+      flag(
+        'testNamePattern',
+        ['--test-name-pattern', '-t'],
+        'Run tests matching one name pattern.',
+        {
+          category: 'selection',
+          missingValueMessage: 'kovo: --test-name-pattern requires a pattern.\n',
+          value: value('string', 'pattern'),
+        },
+      ),
+    ],
+    order: 125,
+    processLifecycle: 'one-shot',
+    referenceUsage: 'inline',
+    resultProtocol: 'kovo-test/v1',
+    summary: 'Run app tests with Kovo runtime ordering established first.',
+    usage: [
+      {
+        id: 'test',
+        tokens: [
+          argument('files', value('path', 'file'), {
+            repeatable: true,
+            required: false,
+          }),
+          option('coverage'),
+          option('update'),
+          option('passWithNoTests'),
+          option('reporter'),
+          option('testNamePattern'),
+        ],
+      },
+    ],
   },
   {
     aliases: [],

@@ -11,6 +11,7 @@ export { KOVO_DIAGNOSTIC_VERSION } from './diagnostic.js';
 export type {
   KovoCliDiagnosticCode,
   KovoDiagnosticCategory,
+  KovoDiagnosticCommandResult,
   KovoDiagnosticEnvelope,
   KovoDiagnosticFormat,
   KovoDiagnosticRecord,

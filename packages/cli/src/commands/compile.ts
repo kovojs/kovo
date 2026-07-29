@@ -24,7 +24,10 @@ import type {
 } from '@kovojs/compiler';
 import type { DiagnosticCode } from '@kovojs/core';
 import { assertRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
-import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
+import {
+  createFrameworkFileSystemBoundary,
+  createFrameworkOutputFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 
 import {
   availableAddComponents,
@@ -70,10 +73,17 @@ export const addCommandShell = {
   execFileSync,
 };
 
-interface AddComponentOptions {
-  components: readonly AddComponentName[];
-  outDir: string;
-}
+type AddComponentOptions =
+  | {
+      readonly kind: 'list';
+    }
+  | {
+      readonly components: readonly AddComponentName[];
+      readonly dryRun: boolean;
+      readonly install: 'auto' | 'never';
+      readonly kind: 'components';
+      readonly outDir: string;
+    };
 
 type AddArgParseResult =
   | { ok: true; options: AddComponentOptions }
@@ -160,6 +170,9 @@ type CompileArgParseResult =
 export function parseAddArgs(args: readonly string[]): AddArgParseResult {
   const parsed = parseKovoCommandInvocation('add', args);
   if (!parsed.ok) return { message: parsed.message, ok: false };
+  if (parsed.value.form === 'list') {
+    return { ok: true, options: { kind: 'list' } };
+  }
 
   const components: AddComponentName[] = [];
   for (const component of parsed.value.arguments.components) {
@@ -170,6 +183,9 @@ export function parseAddArgs(args: readonly string[]): AddArgParseResult {
     ok: true,
     options: {
       components,
+      dryRun: parsed.value.options.dryRun,
+      install: parsed.value.options.install,
+      kind: 'components',
       outDir: parsed.value.options.out,
     },
   };
@@ -180,6 +196,12 @@ export function addUsage(): string {
 }
 
 export async function runAddCommand(options: AddComponentOptions): Promise<CliCommandResult> {
+  if (options.kind === 'list') {
+    return {
+      exitCode: 0,
+      output: `${addOutputVersion}\nCATALOG ${availableAddComponents()}\nSUMMARY total=${Object.keys(vendoredUiComponents).length}\n`,
+    };
+  }
   try {
     return await runAddCommandWithOutputBoundary(options);
   } catch (error) {
@@ -193,12 +215,11 @@ export async function runAddCommand(options: AddComponentOptions): Promise<CliCo
 }
 
 async function runAddCommandWithOutputBoundary(
-  options: AddComponentOptions,
+  options: Extract<AddComponentOptions, { readonly kind: 'components' }>,
 ): Promise<CliCommandResult> {
   const lines = [addOutputVersion];
   const resolvedOutDir = resolve(options.outDir);
   const output = createFrameworkOutputFileSystemBoundary(resolvedOutDir);
-  await output.ensureDirectory();
   const requiredPackageDependencies = new Set<string>();
   const plannedWrites: {
     component: AddComponentName;
@@ -219,6 +240,19 @@ async function runAddCommandWithOutputBoundary(
       requiredPackageDependencies.add(packageName);
     }
     for (const file of entry.files) {
+      const shared = plannedWrites.find((planned) => planned.relativePath === file.fileName);
+      if (shared !== undefined) {
+        if (
+          normalizedVendoredUiComponentSource(shared.file.source) !==
+          normalizedVendoredUiComponentSource(file.source)
+        ) {
+          return {
+            error: `${addOutputVersion}\nERROR ${component} path=${JSON.stringify(resolve(resolvedOutDir, file.fileName))} reason=catalog-conflict`,
+            exitCode: 1,
+          };
+        }
+        continue;
+      }
       plannedWrites.push({
         component,
         file,
@@ -228,9 +262,13 @@ async function runAddCommandWithOutputBoundary(
     }
   }
 
+  const pendingWrites: typeof plannedWrites = [];
   for (const planned of plannedWrites) {
     const currentBytes = await output.fileBytes(planned.relativePath);
-    if (currentBytes === undefined) continue;
+    if (currentBytes === undefined) {
+      pendingWrites.push(planned);
+      continue;
+    }
     const current = Buffer.from(currentBytes).toString('utf8');
     if (
       normalizedVendoredUiComponentSource(current) ===
@@ -248,31 +286,13 @@ async function runAddCommandWithOutputBoundary(
     const entry = vendoredUiComponents[component];
     if (!entry) continue;
     const componentTarget = resolve(resolvedOutDir, entry.fileName);
-    let allFilesAlreadyCurrent = true;
-    for (const file of entry.files) {
-      const current = await output.fileBytes(file.fileName);
-      if (
-        current === undefined ||
-        normalizedVendoredUiComponentSource(Buffer.from(current).toString('utf8')) !==
-          normalizedVendoredUiComponentSource(file.source)
-      ) {
-        allFilesAlreadyCurrent = false;
-        break;
-      }
-    }
-    if (allFilesAlreadyCurrent) {
-      lines.push(
-        `SKIP ${component} path=${JSON.stringify(componentTarget)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
-      );
-      continue;
-    }
-
-    for (const file of entry.files) {
-      if (await output.fileExists(file.fileName)) continue;
-      await output.writeFile(file.fileName, file.source);
-    }
+    const componentPending = entry.files.some((file) =>
+      pendingWrites.some((planned) => planned.relativePath === file.fileName),
+    );
     lines.push(
-      `ADD ${component} path=${JSON.stringify(componentTarget)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
+      componentPending
+        ? `${options.dryRun ? 'PLAN ' : ''}ADD ${component} path=${JSON.stringify(componentTarget)} source=tsx package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`
+        : `SKIP ${component} path=${JSON.stringify(componentTarget)} reason=already-current package=@kovojs/ui@${entry.packageVersion} sourceHash=${entry.sourceHash}`,
     );
   }
 
@@ -280,33 +300,83 @@ async function runAddCommandWithOutputBoundary(
     [...requiredPackageDependencies].sort(),
     resolvedOutDir,
   );
-  if (missingDependencies.length > 0) {
-    const ensuredDependencies = await ensureAddPackageDependencies(
-      missingDependencies,
-      resolvedOutDir,
+  if (missingDependencies.length > 0 && (options.dryRun || options.install === 'never')) {
+    lines.push(
+      `DEPENDENCIES status=${options.dryRun ? 'planned' : 'follow-up'} packages=${missingDependencies.join(',')}` +
+        ` install=${JSON.stringify(`pnpm add ${missingDependencies.join(' ')}`)}`,
     );
-    if (!ensuredDependencies.ok) {
-      return {
-        error:
-          `${addOutputVersion}\nERROR DEPENDENCIES reason=${ensuredDependencies.reason}` +
-          ` packages=${missingDependencies.join(',')}` +
+  }
+
+  if (options.dryRun) {
+    lines.push(
+      `SUMMARY total=${options.components.length} writes=0 planned=${pendingWrites.length} outDir=${JSON.stringify(resolvedOutDir)}`,
+    );
+    return { exitCode: 0, output: `${lines.join('\n')}\n` };
+  }
+
+  await output.ensureDirectory();
+  const stagingRoot = await output.createStagingRoot('.kovo-add-staging-');
+  const staging = createFrameworkOutputFileSystemBoundary(stagingRoot);
+  let dependencyTransaction:
+    | Extract<EnsureAddPackageDependenciesResult, { readonly ok: true }>
+    | undefined;
+  const promoted: string[] = [];
+  try {
+    for (const planned of pendingWrites) {
+      await staging.writeFile(planned.relativePath, planned.file.source);
+    }
+
+    if (missingDependencies.length > 0 && options.install === 'auto') {
+      const ensuredDependencies = await ensureAddPackageDependencies(
+        missingDependencies,
+        resolvedOutDir,
+      );
+      if (!ensuredDependencies.ok) {
+        return {
+          error:
+            `${addOutputVersion}\nERROR DEPENDENCIES reason=${ensuredDependencies.reason}` +
+            ` packages=${missingDependencies.join(',')}` +
+            ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
+            ' completed=none planned=component-files' +
+            (ensuredDependencies.rolledBack ? ' rolledBack=manifest' : '') +
+            (ensuredDependencies.packageJsonPath
+              ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
+              : ''),
+          exitCode: 1,
+        };
+      }
+      dependencyTransaction = ensuredDependencies;
+      lines.push(
+        `DEPENDENCIES status=${ensuredDependencies.status} packages=${missingDependencies.join(',')}` +
           ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
           (ensuredDependencies.packageJsonPath
             ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
             : ''),
-        exitCode: 1,
-      };
+      );
     }
-    lines.push(
-      `DEPENDENCIES status=${ensuredDependencies.status} packages=${missingDependencies.join(',')}` +
-        ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
-        (ensuredDependencies.packageJsonPath
-          ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
-          : ''),
-    );
+
+    for (const planned of pendingWrites) {
+      await output.renameFrom(resolve(stagingRoot, planned.relativePath), planned.relativePath);
+      promoted.push(planned.relativePath);
+    }
+  } catch (error) {
+    for (const relativePath of promoted.reverse()) await output.deleteFile(relativePath);
+    await dependencyTransaction?.rollback();
+    return {
+      error:
+        `${addOutputVersion}\nERROR TRANSACTION reason=${stableText(
+          error instanceof Error ? error.message : String(error),
+        )} completed=none planned=component-files` +
+        (dependencyTransaction === undefined ? '' : ' rolledBack=manifest'),
+      exitCode: 1,
+    };
+  } finally {
+    await staging.removeTree().catch(() => undefined);
   }
 
-  lines.push(`SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolvedOutDir)}`);
+  lines.push(
+    `SUMMARY total=${options.components.length} writes=${pendingWrites.length} planned=0 outDir=${JSON.stringify(resolvedOutDir)}`,
+  );
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
@@ -327,6 +397,7 @@ type EnsureAddPackageDependenciesResult =
       installCommand: string;
       ok: true;
       packageJsonPath?: string;
+      rollback(): Promise<void>;
       status: 'follow-up' | 'installed';
     }
   | {
@@ -334,6 +405,7 @@ type EnsureAddPackageDependenciesResult =
       ok: false;
       packageJsonPath?: string;
       reason: 'install-failed' | 'invalid-package-json';
+      rolledBack: boolean;
     };
 
 async function ensureAddPackageDependencies(
@@ -342,7 +414,12 @@ async function ensureAddPackageDependencies(
 ): Promise<EnsureAddPackageDependenciesResult> {
   const packageJsonPath = findNearestPackageJson(resolve(outDir));
   if (!packageJsonPath) {
-    return { installCommand: `pnpm add ${packageNames.join(' ')}`, ok: true, status: 'follow-up' };
+    return {
+      installCommand: `pnpm add ${packageNames.join(' ')}`,
+      ok: true,
+      rollback: async () => {},
+      status: 'follow-up',
+    };
   }
 
   const parsed = await readAddPackageJson(packageJsonPath);
@@ -352,6 +429,7 @@ async function ensureAddPackageDependencies(
       ok: false,
       packageJsonPath,
       reason: 'invalid-package-json',
+      rolledBack: false,
     };
   }
   const installCommand = `${packageManagerName(parsed)} install`;
@@ -360,7 +438,13 @@ async function ensureAddPackageDependencies(
     (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
   );
   if (missingByManifest.length === 0) {
-    return { installCommand, ok: true, packageJsonPath, status: 'installed' };
+    return {
+      installCommand,
+      ok: true,
+      packageJsonPath,
+      rollback: async () => {},
+      status: 'installed',
+    };
   }
 
   const dependencySpecs = Object.fromEntries(
@@ -370,10 +454,21 @@ async function ensureAddPackageDependencies(
     ]),
   );
   const nextManifest = addDependenciesToPackageJson(parsed, dependencySpecs);
-  const manifestOutput = createFrameworkOutputFileSystemBoundary(dirname(packageJsonPath));
-  await manifestOutput.ensureDirectory();
-  await manifestOutput.writeFile(
+  const manifestOutput = await createFrameworkFileSystemBoundary(dirname(packageJsonPath));
+  const originalManifest = await manifestOutput.captureFileForReplacement(
     basename(packageJsonPath),
+  );
+  if (originalManifest === undefined) {
+    return {
+      installCommand,
+      ok: false,
+      packageJsonPath,
+      reason: 'invalid-package-json',
+      rolledBack: false,
+    };
+  }
+  await manifestOutput.replaceCapturedFile(
+    originalManifest,
     `${JSON.stringify(nextManifest, null, 2)}\n`,
   );
 
@@ -384,15 +479,36 @@ async function ensureAddPackageDependencies(
       stdio: 'pipe',
     });
   } catch {
+    const installedManifest = await manifestOutput.captureFileForReplacement(
+      basename(packageJsonPath),
+    );
+    const rolledBack = installedManifest !== undefined;
+    if (installedManifest !== undefined) {
+      await manifestOutput.replaceCapturedFile(installedManifest, originalManifest.body);
+    }
     return {
       installCommand,
       ok: false,
       packageJsonPath,
       reason: 'install-failed',
+      rolledBack,
     };
   }
 
-  return { installCommand, ok: true, packageJsonPath, status: 'installed' };
+  return {
+    installCommand,
+    ok: true,
+    packageJsonPath,
+    rollback: async () => {
+      const installedManifest = await manifestOutput.captureFileForReplacement(
+        basename(packageJsonPath),
+      );
+      if (installedManifest !== undefined) {
+        await manifestOutput.replaceCapturedFile(installedManifest, originalManifest.body);
+      }
+    },
+    status: 'installed',
+  };
 }
 
 async function readAddPackageJson(path: string): Promise<Record<string, unknown> | undefined> {

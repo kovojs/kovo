@@ -85,11 +85,13 @@ describe('commands manifest', () => {
         'db',
         'dev',
         'docs',
+        'doctor',
         'explain',
         'export',
         'fix',
         'incident',
         'mcp',
+        'test',
         'update-docs',
       ].sort(),
     );
@@ -97,10 +99,10 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, check, compile, db, dev, docs, explain, export, fix, incident, mcp, update-docs\n',
+      'kovo: add, audit, build, check, compile, db, dev, docs, doctor, explain, export, fix, incident, mcp, test, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, audit, build, check, compile, db, dev, docs, explain, export, fix, incident, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, audit, build, check, compile, db, dev, docs, doctor, explain, export, fix, incident, mcp, test, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
@@ -136,9 +138,11 @@ describe('commands manifest', () => {
         'db',
         'dev',
         'docs',
+        'doctor',
         'export',
         'fix',
         'mcp',
+        'test',
         'update-docs',
       ].sort(),
     );
@@ -154,7 +158,9 @@ describe('commands manifest', () => {
       'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
-    expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
+    expect(ADD_USAGE).toBe(
+      'usage: kovo add --list | kovo add <component...> [--out <dir>] [--dry-run] [--install <auto|never>]',
+    );
     expect(BUILD_USAGE).toBe(
       'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache] [--format <human|json|github>]',
     );

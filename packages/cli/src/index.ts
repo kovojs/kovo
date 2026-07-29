@@ -16,6 +16,7 @@ import { parseIncidentArgs, runIncidentScopeCommand } from './commands/incident-
 import { parseAdvisoryArgs, runAdvisoryCheck } from './commands/advisories.js';
 import { parseFixArgs, runFixCommand } from './commands/fix.js';
 import { parseDevArgs, runDevCommand } from './commands/dev.js';
+import { parseDoctorArgs, runDoctorCommand } from './commands/doctor.js';
 import {
   parseAddArgs,
   parseCompileArgs,
@@ -43,6 +44,7 @@ import {
 } from './commands-manifest.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import { runDocsCommand } from './commands/docs.js';
+import { parseTestArgs, runTestCommand } from './commands/test.js';
 import {
   captureKovoCommandSecurityDisposition,
   type KovoCommandSecurityDisposition,
@@ -276,6 +278,16 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
       'docs',
     );
   },
+  async doctor(args, security) {
+    const parsed = parseDoctorArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'doctor');
+    return writeFormattedCommandResult(
+      await runDoctorCommand(parsed.options, security),
+      parsed.options.format,
+      'config',
+      'doctor',
+    );
+  },
   async compile(args) {
     const parsed = parseCompileArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message, 'compile');
@@ -297,6 +309,11 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
   },
   async mcp(args, security) {
     return runMcpCommand(args, security.invocationCwd);
+  },
+  async test(args, security) {
+    const parsed = parseTestArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message, 'test');
+    return writeCommandResult(await runTestCommand(parsed.options, security), 'runtime', 'test');
   },
   async 'update-docs'(args) {
     const parsed = parseKovoCommandInvocation('update-docs', args);

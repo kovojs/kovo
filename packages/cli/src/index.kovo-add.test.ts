@@ -834,6 +834,133 @@ describe('kovo add', () => {
     }
   });
 
+  it('lists the exact registry and derives typo suggestions from its enum values', async () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await expect(mainAsync(['add', '--list'])).resolves.toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const catalogOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(catalogOutput).toContain(`CATALOG ${availableAddComponents()}\n`);
+      expect(catalogOutput).toContain(
+        `SUMMARY total=${Object.keys(vendoredUiComponents).length}\n`,
+      );
+
+      stdout.mockClear();
+      await expect(mainAsync(['add', 'buton'])).resolves.toBe(2);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'unknown component "buton". Did you mean "button"?',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('keeps --dry-run free of filesystem and process writes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-dry-run-'));
+    const outDir = join(root, 'src/components/ui');
+    const manifest = `${JSON.stringify({
+      dependencies: {
+        '@kovojs/core': '0.2.0',
+        '@kovojs/style': '0.2.0',
+        '@kovojs/ui': '0.2.0',
+      },
+      packageManager: 'pnpm@10.12.1',
+    })}\n`;
+    writeFileSync(join(root, 'package.json'), manifest);
+    const install = vi.spyOn(addCommandShell, 'execFileSync');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir, '--dry-run'])).resolves.toBe(0);
+      expect(install).not.toHaveBeenCalled();
+      expect(existsSync(outDir)).toBe(false);
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(manifest);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('PLAN ADD toast');
+      expect(output).toContain('DEPENDENCIES status=planned');
+      expect(output).toContain('writes=0');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      install.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('honors --install=never without editing the manifest', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-never-install-'));
+    const outDir = join(root, 'src/components/ui');
+    const manifest = `${JSON.stringify({
+      dependencies: {
+        '@kovojs/core': '0.2.0',
+        '@kovojs/style': '0.2.0',
+        '@kovojs/ui': '0.2.0',
+      },
+      packageManager: 'pnpm@10.12.1',
+    })}\n`;
+    writeFileSync(join(root, 'package.json'), manifest);
+    const install = vi.spyOn(addCommandShell, 'execFileSync');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir, '--install=never'])).resolves.toBe(
+        0,
+      );
+      expect(install).not.toHaveBeenCalled();
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(manifest);
+      expect(readFileSync(join(outDir, 'toast.tsx'), 'utf8')).toContain(
+        "from '@kovojs/headless-ui/toast';",
+      );
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        'DEPENDENCIES status=follow-up',
+      );
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      install.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rolls back staged manifest and component edits when install fails', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-add-install-rollback-'));
+    const outDir = join(root, 'src/components/ui');
+    const manifest = `${JSON.stringify({
+      dependencies: {
+        '@kovojs/core': '0.2.0',
+        '@kovojs/style': '0.2.0',
+        '@kovojs/ui': '0.2.0',
+      },
+      packageManager: 'pnpm@10.12.1',
+    })}\n`;
+    writeFileSync(join(root, 'package.json'), manifest);
+    const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => {
+      throw new Error('offline install failure');
+    });
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(1);
+      expect(install).toHaveBeenCalledOnce();
+      expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(manifest);
+      expect(existsSync(join(outDir, 'toast.tsx'))).toBe(false);
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('reason=install-failed');
+      expect(output).toContain('completed=none planned=component-files rolledBack=manifest');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      install.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('refuses to overwrite app-owned component files', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
