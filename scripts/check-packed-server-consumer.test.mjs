@@ -109,8 +109,14 @@ describe('packed server consumer proof', () => {
     ];
     const declarations = {
       customAdapters: exportDeclaration(
-        ['AppMutationAdapter', 'KovoApp', 'RequestHandler', 'createRequestHandler'],
-        ['AppMutationAdapter', 'KovoApp', 'RequestHandler'],
+        [
+          'AppMutationAdapter',
+          'InferKovoAppTypes',
+          'KovoApp',
+          'RequestHandler',
+          'createRequestHandler',
+        ],
+        ['AppMutationAdapter', 'InferKovoAppTypes', 'KovoApp', 'RequestHandler'],
       ),
       node: exportDeclaration(
         ['NodeHandlerOptions', 'NodeRequestHandler', 'toNodeHandler'],

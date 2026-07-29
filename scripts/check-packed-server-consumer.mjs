@@ -69,6 +69,7 @@ const TASK_EXPORTS = Object.freeze([
 const NODE_EXPORTS = Object.freeze(['NodeHandlerOptions', 'NodeRequestHandler', 'toNodeHandler']);
 const CUSTOM_ADAPTER_EXPORTS = Object.freeze([
   'AppMutationAdapter',
+  'InferKovoAppTypes',
   'KovoApp',
   'RequestHandler',
   'createRequestHandler',
@@ -306,6 +307,7 @@ import {
 import {
   createRequestHandler,
   type AppMutationAdapter,
+  type InferKovoAppTypes,
   type KovoApp,
   type RequestHandler,
 } from '@kovojs/server/custom-adapters';
@@ -331,6 +333,7 @@ const background = task('packed/server-consumer', {
 const taskContract: TaskDefinition<'packed/server-consumer', typeof input, number> = background;
 const options: NodeHandlerOptions = { compression: false, origin: 'https://example.test' };
 declare const opaqueApp: KovoApp;
+declare const inferredAppTypes: InferKovoAppTypes<typeof opaqueApp>;
 const requestHandler: RequestHandler = createRequestHandler(opaqueApp);
 const nodeHandler: NodeRequestHandler = toNodeHandler(requestHandler, options);
 declare const adapter: AppMutationAdapter<{ key: 'packed/mutation' }>;
@@ -338,6 +341,7 @@ declare const adapter: AppMutationAdapter<{ key: 'packed/mutation' }>;
 void [
   adapter,
   app,
+  inferredAppTypes,
   nodeHandler,
   retiredRootNodeHandler,
   retiredRootRequestHandler,
