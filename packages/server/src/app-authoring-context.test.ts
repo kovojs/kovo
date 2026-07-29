@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { component, type FormFailure } from '@kovojs/core';
 
 import { publicAccess } from './access.js';
 import { defineKovo } from './app-contract.js';
@@ -93,6 +94,38 @@ describe('defineKovo provider-typed authoring context', () => {
       }),
       'cart/add',
     );
+    const AddToCartForm = component({
+      mutations: { add },
+      render(_queries, _state, { forms }) {
+        const failure = forms.add.failure;
+        if (failure?.code === 'OUT_OF_STOCK') {
+          const available: number = failure.payload.available;
+          // @ts-expect-error the declared payload field is `available`.
+          void failure.payload.remaining;
+          void available;
+        }
+        const submittedProductId: string | undefined =
+          forms.add.submitted?.productId;
+        // @ts-expect-error submitted fields come from the mutation input schema.
+        void forms.add.submitted?.renamedProductId;
+        // @ts-expect-error form error codes follow the mutation declaration.
+        if (failure?.code === 'RENAMED_ERROR') void failure;
+        return { failure, submittedProductId };
+      },
+    });
+    type AddFailure = FormFailure<typeof add>;
+    const typedFailure: AddFailure = {
+      code: 'OUT_OF_STOCK',
+      payload: { available: 0 },
+    };
+    const assertRenamedFailure = () => {
+      const invalid: AddFailure = {
+        // @ts-expect-error mutation error codes are declaration-derived.
+        code: 'RENAMED_ERROR',
+        payload: { available: 0 },
+      };
+      return invalid;
+    };
 
     const cartQuery = assignDerivedQueryKey(
       contract.query({
@@ -154,6 +187,9 @@ describe('defineKovo provider-typed authoring context', () => {
     expect(app.queries.map((candidate) => candidate.key)).toEqual(['cart']);
     expect(app.mutations.map((candidate) => candidate.key)).toEqual(['cart/add']);
     expect(app.routes.map((candidate) => candidate.path)).toEqual(['/cart']);
+    expect(AddToCartForm.definition.mutations?.add).toBe(add);
+    expect(typedFailure.payload).toEqual({ available: 0 });
+    expect(assertRenamedFailure).toBeTypeOf('function');
   });
 
   it('types mutation handler db as transaction-scoped without a transaction opener', () => {

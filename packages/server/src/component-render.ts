@@ -1,6 +1,5 @@
 import type {
   Component,
-  ComponentDefinitionInput,
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
@@ -57,11 +56,11 @@ export interface ComponentMutationFailureRenderOptions<
  * @internal
  */
 export function renderComponent<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Queries,
   State extends JsonValue = JsonValue,
 >(
-  component: Component<Definition>,
+  component: Component<Props>,
   queries: Queries,
   options: ComponentRenderOptions<State> = {},
 ): string {
@@ -95,11 +94,11 @@ function renderComponentValue(value: unknown): string {
  * @internal
  */
 export function renderComponentMutationFailure<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Queries,
   State extends JsonValue = JsonValue,
 >(
-  component: Component<Definition>,
+  component: Component<Props>,
   queries: Queries,
   failure: MutationFail,
   options: ComponentMutationFailureRenderOptions<State>,

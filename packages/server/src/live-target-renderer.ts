@@ -1,7 +1,6 @@
 import type {
   Component,
   ComponentErrorBoundary,
-  ComponentDefinitionInput,
   ComponentRenderResult,
   ComponentRenderSlots,
   JsonValue,
@@ -44,11 +43,11 @@ export interface ComponentLiveTargetQueryBinding<Request = unknown> {
 
 /** @internal Options for compiler-emitted component live-target renderers (SPEC §9.1). */
 export interface ComponentLiveTargetRendererOptions<
-  Definition extends ComponentDefinitionInput = ComponentDefinitionInput,
+  Props extends object = Record<string, never>,
   Request = unknown,
   State extends JsonValue = JsonValue,
 > {
-  component: Component<Definition>;
+  component: Component<Props>;
   componentId: string;
   queries?: readonly ComponentLiveTargetQueryBinding<Request>[];
   renderOptions?: (
@@ -69,13 +68,13 @@ export interface ComponentLiveTargetRendererOptions<
  * (SPEC §9.1).
  */
 export function componentLiveTargetRenderer<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Request = unknown,
   State extends JsonValue = JsonValue,
 >(
-  options: ComponentLiveTargetRendererOptions<Definition, Request, State>,
+  options: ComponentLiveTargetRendererOptions<Props, Request, State>,
 ): LiveTargetRenderer<Request> {
-  const component = requiredOwnRendererValue<Component<Definition>>(
+  const component = requiredOwnRendererValue<Component<Props>>(
     options,
     'component',
     'Live-target renderer options',
@@ -151,11 +150,11 @@ export function componentLiveTargetRenderer<
       const resolvedRenderOptions = await componentLiveTargetRenderOptions(
         mutationBindings,
         renderOptions as ComponentLiveTargetRendererOptions<
-          Definition,
+          Props,
           Request,
           State
         >['renderOptions'],
-        slots as ComponentLiveTargetRendererOptions<Definition, Request, State>['slots'],
+        slots as ComponentLiveTargetRendererOptions<Props, Request, State>['slots'],
         context,
       );
       const csrf = context.csrf === false ? undefined : context.csrf;
@@ -368,13 +367,13 @@ function revealLiveTargetValue(value: unknown): unknown {
 }
 
 async function componentLiveTargetRenderOptions<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Request,
   State extends JsonValue,
 >(
   mutationBindings: readonly ComponentLiveTargetMutationBinding[],
-  renderOptions: ComponentLiveTargetRendererOptions<Definition, Request, State>['renderOptions'],
-  slots: ComponentLiveTargetRendererOptions<Definition, Request, State>['slots'],
+  renderOptions: ComponentLiveTargetRendererOptions<Props, Request, State>['renderOptions'],
+  slots: ComponentLiveTargetRendererOptions<Props, Request, State>['slots'],
   context: LiveTargetRenderContext<Request>,
 ): Promise<ComponentRenderOptions<State>> {
   const resolvedRenderOptions = (await renderOptions?.(context)) ?? {};

@@ -16,7 +16,6 @@ import {
   redirect,
   routeRef,
   type Component as KovoComponent,
-  type ComponentDefinitionInput,
   type FormFailure,
   type FormInput,
   type FormValidationFailure,
@@ -102,7 +101,7 @@ declare module './generated.js' {
   }
 
   interface ComponentRegistry {
-    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
+    'components/cart/cart-badge/cart-badge': KovoComponent<Record<string, unknown>>;
   }
 }
 

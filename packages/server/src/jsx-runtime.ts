@@ -2,8 +2,6 @@ import './security-bootstrap.js';
 
 import type {
   Component,
-  ComponentDefinitionInput,
-  ComponentProps,
   ComponentRenderSlots,
   ErrorBoundaryProps,
   JsonValue,
@@ -148,9 +146,9 @@ type MaybePromise<Value> = Promise<Value> | Value;
 /** @generated JSX automatic-runtime ABI component type (compiler-emitted). */
 export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
-type KovoJsxComponent = Component<ComponentDefinitionInput>;
+type KovoJsxComponent = Component<any>;
 type KovoJsxComponentProps<Type> =
-  Type extends Component<infer Definition> ? ComponentProps<Definition> : never;
+  Type extends Component<infer Props> ? Props : never;
 
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
 export function Fragment(props: JsxProps): MaybePromise<RenderedHtml> {
@@ -1325,7 +1323,7 @@ export declare namespace JSX {
   type Element = any;
   type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
   type LibraryManagedAttributes<ComponentType, Props> =
-    ComponentType extends Component<ComponentDefinitionInput>
+    ComponentType extends Component<any>
       ? KovoJsxComponentProps<ComponentType>
       : Props;
   interface ElementChildrenAttribute {

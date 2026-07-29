@@ -55,8 +55,8 @@ describe('compiler registry and graph emission', () => {
   'components/cart/cart-badge/cart-badge': {};
   }`);
     expect(registry).toContain(`export interface ComponentRegistry {
-  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
-  'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<Record<string, unknown>>;
+  'components/products/product-grid/product-grid': import('@kovojs/core').Component<Record<string, unknown>>;
 }`);
     expect(registry).toContain(`export interface QueryRegistry {
   'cart': typeof cartQuery;
@@ -74,8 +74,8 @@ describe('compiler registry and graph emission', () => {
 }`);
     expect(registry).toContain(`declare module '@kovojs/core/generated' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
-  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
-  'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<Record<string, unknown>>;
+  'components/products/product-grid/product-grid': import('@kovojs/core').Component<Record<string, unknown>>;
   }`);
     expect(registry).toContain(`  interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
@@ -188,7 +188,7 @@ export const ContactStatsRegion = component({
       `'components/interaction-lab/contact-stats-region': { component: 'components/interaction-lab/contact-stats-region'; targetBase: 'contact-stats-region'; identityProps: readonly []; queries: readonly ['contacts']; queryBindings: readonly [{ name: 'contacts'; queryExpression: "contactsQuery" }]; props: {}; coverage: readonly [{ query: 'contacts.count'; position: "binding"; status: 'plan' }]; };`,
     );
     expect(registry).toContain(
-      `'components/interaction-lab/contact-stats-region': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;`,
+      `'components/interaction-lab/contact-stats-region': import('@kovojs/core').Component<Record<string, unknown>>;`,
     );
     expect(result.loweredSource).toContain(
       '<section kovo-c="contact-stats-region" kovo-deps="contacts" kovo-fragment-target="contact-stats-region" kovo-live-component="components/interaction-lab/contact-stats-region">',
