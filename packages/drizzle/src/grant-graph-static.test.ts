@@ -19,15 +19,15 @@ describe('compiler-derived grant graph (Plan 3 §3.2 C13 anchor)', () => {
             export const organizations = pgTable('organizations', {
               id: text('id').primaryKey(),
               ownerId: text('owner_id').notNull(),
-            }, kovo((columns) => ({ domain: 'organization', key: 'id', owner: 'ownerId' })));
+            }, kovo((columns) => ({ domain: 'organization', key: columns.id, owner: columns.ownerId })));
 
             export const memberships = pgTable('memberships', {
               id: text('id').primaryKey(),
               organizationId: text('organization_id').notNull(),
             }, kovo((columns) => ({
               domain: 'membership',
-              key: 'id',
-              ownerVia: { fk: 'organizationId', parent: organizations, parentKey: 'id' },
+              key: columns.id,
+              ownerVia: { fk: columns.organizationId, parent: organizations, parentKey: organizations.id },
             })));
 
             export const policyBindings = pgTable('policy_bindings', {
@@ -35,7 +35,7 @@ describe('compiler-derived grant graph (Plan 3 §3.2 C13 anchor)', () => {
             }, kovo((columns) => ({
               authzPolicy: sql\`principal_id = current_setting('kovo.principal', true)\`,
               domain: 'policy-binding',
-              key: 'id',
+              key: columns.id,
             })));
           `,
         },
@@ -94,7 +94,7 @@ describe('compiler-derived grant graph (Plan 3 §3.2 C13 anchor)', () => {
             export const memberships = pgTable('memberships', {
               id: text('id').primaryKey(),
               principalId: text('principal_id').notNull(),
-            }, kovo((columns) => ({ domain: 'membership', key: 'id', owner: 'principalId' })));
+            }, kovo((columns) => ({ domain: 'membership', key: columns.id, owner: columns.principalId })));
 
             export const revokeMembership = mutation('membership.revoke', {
               async handler(input: { id: string }, request: AppRequest) {
@@ -174,7 +174,7 @@ describe('compiler-derived grant graph (Plan 3 §3.2 C13 anchor)', () => {
             }, kovo((columns) => ({
               authzPolicy: sql\`NOT EXISTS (SELECT 1 FROM revoked WHERE id = principal_id)\`,
               domain: 'policy-binding',
-              key: 'id',
+              key: columns.id,
             })));
 
             export const deletePolicyBinding = mutation('policy-binding.delete', {
@@ -216,7 +216,7 @@ describe('compiler-derived grant graph (Plan 3 §3.2 C13 anchor)', () => {
             export const memberships = pgTable('memberships', {
               id: text('id').primaryKey(),
               principalId: text('principal_id').notNull(),
-            }, kovo((columns) => ({ domain: 'membership', key: 'id', owner: 'principalId' })));
+            }, kovo((columns) => ({ domain: 'membership', key: columns.id, owner: columns.principalId })));
 
             declare function opaque(db: PgAsyncDatabase<any, any>): Promise<void>;
             export const opaqueMembership = mutation('membership.opaque', {

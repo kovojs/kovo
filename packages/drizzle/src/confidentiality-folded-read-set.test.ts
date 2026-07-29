@@ -12,10 +12,10 @@ const TABLES = `
   export const users = pgTable("users", {
     id: text("id").primaryKey(),
     passwordHash: text("password_hash").notNull(),
-  }, kovo((columns) => ({ domain: "user", key: "id", secret: ["passwordHash"] })));
+  }, kovo((columns) => ({ domain: "user", key: columns.id, secret: [columns.passwordHash] })));
   export const sessions = pgTable("sessions", {
     id: text("id").primaryKey(),
-  }, kovo((columns) => ({ domain: "session", key: "id" })));
+  }, kovo((columns) => ({ domain: "session", key: columns.id })));
 `;
 
 function diagsFor(querySource: string) {

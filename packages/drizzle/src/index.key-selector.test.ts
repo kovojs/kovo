@@ -11,11 +11,9 @@ const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
-// SPEC §10.1: `kovo((columns) => ({ key }))` accepts a column name OR a `(t) => t.col` selector
-// (the Drizzle idiom). The compiler reads the selector statically, so a keyed
-// read must derive the same `instanceKey` from either form. The annotation key
-// drives instance-keying (matched against the read's `where` predicate), so a
-// broken selector extraction would change `instanceKey`.
+// SPEC §10.1: every column-bearing annotation field is a direct identity from the callback's
+// concrete column record. Dot and element access must therefore derive the same `instanceKey`.
+// Strings and nested selector callbacks are deliberately outside the authored grammar.
 const factsForCartKey = (cartKey: string) =>
   extractQueryFactsFromProject({
     files: [
@@ -28,7 +26,7 @@ const factsForCartKey = (cartKey: string) =>
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           `export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, kovo((columns) => ({ domain: "cart", key: ${cartKey} })));`,
-          'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo((columns) => ({ domain: "product", key: "id" })));',
+          'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo((columns) => ({ domain: "product", key: columns.id })));',
           '',
           'export const cartQuery = query("cart", {',
           '  output: s.object({ count: s.number() }),',
@@ -45,24 +43,27 @@ const factsForCartKey = (cartKey: string) =>
     ],
   });
 
-describe('@kovojs/drizzle kovo((columns) => ({ key })) column selector (SPEC §10.1)', () => {
-  it('derives the same instanceKey from a (t) => t.col selector as from a string key', () => {
-    const stringForm = factsForCartKey('"cartId"');
-    const selectorForm = factsForCartKey('(t) => t.cartId');
+describe('@kovojs/drizzle kovo((columns) => ({ key })) column identity (SPEC §10.1)', () => {
+  it('derives the same instanceKey from dot and element access identities', () => {
+    const dotAccess = factsForCartKey('columns.cartId');
+    const elementAccess = factsForCartKey('columns["cartId"]');
 
-    // The string form pins the expected instance key derived from the annotation.
-    expect(stringForm[0]?.instanceKey).toEqual({ domain: 'cart', key: 'arg:cartId' });
-    // The selector form must extract identically (full query-fact parity).
-    expect(selectorForm).toEqual(stringForm);
+    expect(dotAccess[0]?.instanceKey).toEqual({ domain: 'cart', key: 'arg:cartId' });
+    expect(elementAccess).toEqual(dotAccess);
   });
 
-  it('accepts block-body and bracket-access selectors', () => {
-    const stringForm = factsForCartKey('"cartId"');
-    expect(factsForCartKey('(t) => { return t.cartId; }')).toEqual(stringForm);
-    expect(factsForCartKey("(t) => t['cartId']")).toEqual(stringForm);
+  it('accepts a parenthesized direct column identity', () => {
+    expect(factsForCartKey('(columns.cartId)')).toEqual(factsForCartKey('columns.cartId'));
   });
 
-  it('extracts secret column annotations from strings and selectors', () => {
+  it.each(['"cartId"', '(table) => table.cartId', "(table) => table['cartId']"])(
+    'does not derive key authority from the retired %s form',
+    (legacyKey) => {
+      expect(factsForCartKey(legacyKey)[0]?.instanceKey).toBeUndefined();
+    },
+  );
+
+  it('extracts secret column annotations from concrete identities', () => {
     const extraction = createProjectExtraction(
       withPgDatabaseTypes({
         files: [
@@ -76,11 +77,11 @@ describe('@kovojs/drizzle kovo((columns) => ({ key })) column selector (SPEC §1
                 apiToken: text("api_token").notNull(),
                 id: text("id").primaryKey(),
                 passwordHash: text("password_hash").notNull(),
-              }, kovo((columns) => ({ domain: "user", key: "id", secret: ["passwordHash", (t) => t.apiToken] })));
+              }, kovo((columns) => ({ domain: "user", key: columns.id, secret: [columns.passwordHash, columns.apiToken] })));
               export const vault = pgTable("vault", {
                 id: text("id").primaryKey(),
                 payload: text("payload").notNull(),
-              }, kovo((columns) => ({ domain: "vault", key: "id", secret: true })));
+              }, kovo((columns) => ({ domain: "vault", key: columns.id, secret: true })));
             `,
           },
         ],

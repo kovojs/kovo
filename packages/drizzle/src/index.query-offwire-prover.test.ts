@@ -64,7 +64,7 @@ function sourceForQueries(loadBodies: readonly string[]): string {
     '  id: text("id").primaryKey(),',
     '  name: text("name").notNull(),',
     '  token: text("token").notNull(),',
-    '}, kovo((columns) => ({ domain: "user", key: "id", secret: ["token"] })));',
+    '}, kovo((columns) => ({ domain: "user", key: columns.id, secret: [columns.token] })));',
     '',
     ...loadBodies.map((body, index) =>
       [

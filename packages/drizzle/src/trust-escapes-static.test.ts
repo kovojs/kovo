@@ -8781,7 +8781,7 @@ export const report = query('report', {
           export const contacts = pgTable(
             'contacts',
             { classified: text('classified').notNull(), id: text('id').primaryKey() },
-            kovo((columns) => ({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] })),
+            kovo((columns) => ({ domain: 'contacts', key: columns.id, readOnly: true, secret: [columns.classified] })),
           );
         `,
       },
@@ -13083,7 +13083,7 @@ export const report = query('report', {
         kovo((columns) => ({
           ${policy},
           domain: 'auth-rate-limit',
-          key: 'id',
+          key: columns.id,
           secret: true,
         })),
       );

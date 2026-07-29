@@ -12,9 +12,9 @@ describe('runtime metadata security intrinsics', () => {
     try {
       annotation = kovo((columns) => ({
         domain: 'account',
-        key: 'id',
-        owner: 'ownerId',
-        secret: ['secret'],
+        key: columns.id,
+        owner: columns.ownerId,
+        secret: [columns.secret],
       }));
     } finally {
       Object.assign = originalAssign;
@@ -43,7 +43,7 @@ describe('runtime metadata security intrinsics', () => {
     const accounts = pgTable(
       'accounts_filter',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId' })),
+      kovo((columns) => ({ domain: 'account', key: columns.id, owner: columns.ownerId })),
     );
     const originalFilter = Array.prototype.filter;
     Array.prototype.filter = function () {
@@ -69,7 +69,12 @@ describe('runtime metadata security intrinsics', () => {
         passwordHash: text('password_hash').notNull(),
         secret: text('secret').notNull(),
       },
-      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId', secret: ['secret'] })),
+      kovo((columns) => ({
+        domain: 'account',
+        key: columns.id,
+        owner: columns.ownerId,
+        secret: [columns.secret],
+      })),
     );
     const originals = {
       arrayFilter: Array.prototype.filter,
@@ -149,7 +154,7 @@ describe('runtime metadata security intrinsics', () => {
     const accounts = pgTable(
       'accounts_frozen',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId' })),
+      kovo((columns) => ({ domain: 'account', key: columns.id, owner: columns.ownerId })),
     );
     const metadata = extractKovoRuntimeDbMetadata([accounts]);
 
@@ -183,14 +188,14 @@ describe('runtime metadata security intrinsics', () => {
       },
       kovo((columns) => ({
         domain: 'account',
-        key: 'id',
+        key: columns.id,
         owner(table) {
           // A selector is app code. It must not be able to rewrite the table object that later
           // secret/governed extraction reads in the same security decision.
           (table as typeof table & { secret: unknown }).secret = table.ownerId;
           return table.ownerId;
         },
-        secret: ['secret'],
+        secret: [columns.secret],
       })),
     );
 
@@ -210,7 +215,7 @@ describe('runtime metadata security intrinsics', () => {
           publicValue: text('public_value').notNull(),
           secret: text('secret').notNull(),
         },
-        kovo((columns) => ({ domain: 'vault', key: 'id', secret: ['secret'] })),
+        kovo((columns) => ({ domain: 'vault', key: columns.id, secret: [columns.secret] })),
       );
     let vault!: ReturnType<typeof createVault>;
     const trigger = pgTable(
@@ -218,7 +223,7 @@ describe('runtime metadata security intrinsics', () => {
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
       kovo((columns) => ({
         domain: 'trigger',
-        key: 'id',
+        key: columns.id,
         owner(table) {
           (vault.secret as typeof vault.secret & { name: string }).name = 'public_value';
           (vault as typeof vault & { secret: unknown }).secret = vault.publicValue;
@@ -241,19 +246,19 @@ describe('runtime metadata security intrinsics', () => {
     const parent = pgTable(
       'selector_parent',
       { id: text('id').primaryKey() },
-      kovo((columns) => ({ domain: 'parent', key: 'id', reference: true })),
+      kovo((columns) => ({ domain: 'parent', key: columns.id, reference: true })),
     );
     const foreign = pgTable(
       'selector_foreign',
       { id: text('id').primaryKey() },
-      kovo((columns) => ({ domain: 'foreign', key: 'id', reference: true })),
+      kovo((columns) => ({ domain: 'foreign', key: columns.id, reference: true })),
     );
     const child = pgTable(
       'selector_child',
       { id: text('id').primaryKey(), parentId: text('parent_id').notNull() },
       kovo((columns) => ({
         domain: 'child',
-        key: 'id',
+        key: columns.id,
         ownerVia: {
           fk: () => foreign.id,
           parent,

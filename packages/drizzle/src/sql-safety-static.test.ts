@@ -28,20 +28,20 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
       export const orders = sqliteTable("orders", {
         id: text("id").primaryKey(),
         userId: text("user_id").notNull(),
-      }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));
+      }, kovo((columns) => ({ domain: "order", key: columns.id, owner: columns.userId })));
 
       export const orderItems = sqliteTable("order_items", {
         id: text("id").primaryKey(),
         orderId: text("order_id").notNull().references(() => orders.id),
       }, kovo((columns) => ({
         domain: "orderItem",
-        key: "id",
-        ownerVia: { parent: orders, fk: "orderId", parentKey: "id" },
+        key: columns.id,
+        ownerVia: { parent: orders, fk: columns.orderId, parentKey: orders.id },
       })));
 
       export const statuses = sqliteTable("statuses", {
         id: text("id").primaryKey(),
-      }, kovo((columns) => ({ domain: "status", key: "id", reference: true })));
+      }, kovo((columns) => ({ domain: "status", key: columns.id, reference: true })));
     `);
 
     expect(diagnostics).toHaveLength(2);

@@ -49,6 +49,7 @@ import {
   type ArrowFunction,
   type FunctionDeclaration,
   type FunctionExpression,
+  type Identifier,
   type ImportDeclaration,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
@@ -4656,16 +4657,19 @@ function runtimeManifestOwnerVia(
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): RuntimeTableSecurityManifestOwnerVia | undefined {
   const annotationCall = draft.initializer.getArguments().find(isKovoAnnotationCall);
-  const annotationObject =
+  const annotation =
     annotationCall && Node.isCallExpression(annotationCall)
-      ? kovoAnnotationObject(annotationCall)
+      ? kovoAnnotationBinding(annotationCall)
       : undefined;
-  const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
+  const ownerVia = objectPropertyFromObject(annotation?.object, 'ownerVia');
   if (ownerVia === undefined) return undefined;
-  const fkRef = columnNamePropertyFromObject(ownerVia, 'fk');
-  const parentKeyRef = columnNamePropertyFromObject(ownerVia, 'parentKey');
+  const fkRef =
+    annotation === undefined
+      ? undefined
+      : columnNamePropertyFromObject(ownerVia, 'fk', annotation.columns);
   const parentExpression = objectPropertyInitializer(ownerVia, 'parent');
-  if (fkRef === undefined || parentKeyRef === undefined || parentExpression === undefined) {
+  const parentKey = directTableColumnRef(objectPropertyInitializer(ownerVia, 'parentKey'));
+  if (fkRef === undefined || parentKey === undefined || parentExpression === undefined) {
     return undefined;
   }
   const parentProjectName = projectTableNameForNode(
@@ -4673,7 +4677,18 @@ function runtimeManifestOwnerVia(
     tableNamesBySymbol,
     draft.namespaceTableNames,
   );
-  if (parentProjectName === undefined) return undefined;
+  const parentKeyProjectName = projectTableNameForNode(
+    parentKey.table,
+    tableNamesBySymbol,
+    draft.namespaceTableNames,
+  );
+  if (
+    parentProjectName === undefined ||
+    parentKeyProjectName === undefined ||
+    parentKeyProjectName !== parentProjectName
+  ) {
+    return undefined;
+  }
   const parentDraft = [...drafts.values()].find(
     (candidate) =>
       candidate.name === parentProjectName || candidate.syntheticName === parentProjectName,
@@ -4682,7 +4697,7 @@ function runtimeManifestOwnerVia(
   const parentKeyColumn =
     parentDraft === undefined
       ? undefined
-      : runtimeManifestColumnForRef(parentDraft.columns, parentKeyRef);
+      : runtimeManifestColumnForRef(parentDraft.columns, parentKey.column);
   if (parentDraft === undefined || fkColumn === undefined || parentKeyColumn === undefined) {
     return undefined;
   }
@@ -6525,9 +6540,14 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
  * accepting a bare object here would reopen the string/unknown annotation surface removed by
  * SPEC §10.1.
  */
-function kovoAnnotationObject(
+interface KovoAnnotationBinding {
+  readonly columns: Identifier;
+  readonly object: ObjectLiteralExpression;
+}
+
+function kovoAnnotationBinding(
   call: import('ts-morph').CallExpression,
-): ObjectLiteralExpression | undefined {
+): KovoAnnotationBinding | undefined {
   const [argument, ...extra] = call.getArguments();
   if (
     argument === undefined ||
@@ -6540,12 +6560,24 @@ function kovoAnnotationObject(
   if (parameters.length !== 1 || !Node.isIdentifier(parameters[0]?.getNameNode())) {
     return undefined;
   }
+  const columns = parameters[0].getNameNode();
+  if (!Node.isIdentifier(columns)) return undefined;
   const body = argument.getBody();
-  if (!Node.isBlock(body)) return staticObjectLiteralValue(body);
+  if (!Node.isBlock(body)) {
+    const object = staticObjectLiteralValue(body);
+    return object === undefined ? undefined : { columns, object };
+  }
   const statements = body.getStatements();
   if (statements.length !== 1 || !Node.isReturnStatement(statements[0])) return undefined;
   const expression = statements[0].getExpression();
-  return expression === undefined ? undefined : staticObjectLiteralValue(expression);
+  const object = expression === undefined ? undefined : staticObjectLiteralValue(expression);
+  return object === undefined ? undefined : { columns, object };
+}
+
+function kovoAnnotationObject(
+  call: import('ts-morph').CallExpression,
+): ObjectLiteralExpression | undefined {
+  return kovoAnnotationBinding(call)?.object;
 }
 
 /** @internal */ export function tableAnnotation(
@@ -6560,8 +6592,9 @@ function kovoAnnotationObject(
       : { name: UNRESOLVED_READ_SOURCE_EXPRESSION, unmapped: true };
   }
   if (!Node.isCallExpression(annotationCall)) return null;
-  const annotationObject = kovoAnnotationObject(annotationCall);
-  if (!annotationObject) return null;
+  const annotation = kovoAnnotationBinding(annotationCall);
+  if (!annotation) return null;
+  const annotationObject = annotation.object;
 
   const tableName = tableNameArgument(initializer) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
   if (booleanPropertyFromObject(annotationObject, 'exempt') === true) {
@@ -6569,16 +6602,27 @@ function kovoAnnotationObject(
   }
   const domain = domainPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
-  const key = columnNamePropertyFromObject(annotationObject, 'key');
-  const owner = columnNamePropertyFromObject(annotationObject, 'owner');
+  const key = columnNamePropertyFromObject(annotationObject, 'key', annotation.columns);
+  const owner = columnNamePropertyFromObject(annotationObject, 'owner', annotation.columns);
   const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
+  const ownerViaParent = objectPropertyInitializer(ownerVia, 'parent');
+  const ownerViaParentKey = directTableColumnRef(objectPropertyInitializer(ownerVia, 'parentKey'));
+  const ownerViaResolved =
+    ownerVia !== undefined &&
+    columnNamePropertyFromObject(ownerVia, 'fk', annotation.columns) !== undefined &&
+    ownerViaParent !== undefined &&
+    ownerViaParentKey !== undefined &&
+    directTableReferenceMatches(ownerViaParentKey.table, ownerViaParent);
   const authzPolicy = propertyExistsOnObject(annotationObject, 'authzPolicy');
-  const secret = secretPropertyFromObject(annotationObject);
-  const confidentialAtRest = confidentialAtRestPropertyFromObject(annotationObject);
-  const governed = governedPropertyFromObject(annotationObject);
-  const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic');
-  const version = concurrencyColumnsFromObject(annotationObject, 'version');
-  const fans = fanAnnotationsFromObject(annotationObject);
+  const secret = secretPropertyFromObject(annotationObject, annotation.columns);
+  const confidentialAtRest = confidentialAtRestPropertyFromObject(
+    annotationObject,
+    annotation.columns,
+  );
+  const governed = governedPropertyFromObject(annotationObject, annotation.columns);
+  const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic', annotation.columns);
+  const version = concurrencyColumnsFromObject(annotationObject, 'version', annotation.columns);
+  const fans = fanAnnotationsFromObject(annotationObject, annotation.columns);
   const publicTable = booleanPropertyFromObject(annotationObject, 'public');
   const reference = booleanPropertyFromObject(annotationObject, 'reference');
   const readOnly = booleanPropertyFromObject(annotationObject, 'readOnly');
@@ -6591,7 +6635,7 @@ function kovoAnnotationObject(
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
-    ...(ownerVia === undefined ? {} : { ownerVia: true as never }),
+    ...(ownerViaResolved ? { ownerVia: true as never } : {}),
     ...(publicTable === true ? { public: true as const } : {}),
     ...(readOnly === true ? { readOnly } : {}),
     ...(reference === true ? { reference: true as const } : {}),
@@ -6717,49 +6761,79 @@ function domainPropertyFromObject(object: Node, name: string): string | undefine
   return [];
 }
 
-/**
- * Resolve a Kovo column reference (SPEC §10.1) from a property initializer: a
- * string-literal column name, or a `(table) => table.column` selector (the
- * Drizzle idiom — read statically here, never called at runtime). Returns the
- * referenced column name in both forms.
- */
-function columnRefName(initializer: Node | undefined): string | undefined {
+/** Resolve one direct identity from the exact callback column parameter (SPEC §10.1). */
+function columnRefName(initializer: Node | undefined, columns: Identifier): string | undefined {
   if (!initializer) return undefined;
-  if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
   const direct = unwrappedStaticExpressionNode(initializer);
-  if (Node.isPropertyAccessExpression(direct)) return direct.getName();
+  if (
+    Node.isPropertyAccessExpression(direct) &&
+    annotationColumnReceiverMatches(direct.getExpression(), columns)
+  ) {
+    return direct.getName();
+  }
   if (Node.isElementAccessExpression(direct)) {
     const argument = direct.getArgumentExpression();
-    if (argument && Node.isStringLiteral(argument)) return argument.getLiteralText();
-  }
-  if (
-    !Node.isArrowFunction(initializer) &&
-    !Node.isFunctionExpression(initializer) &&
-    !Node.isFunctionDeclaration(initializer)
-  ) {
-    return undefined;
-  }
-  let body: Node | undefined = initializer.getBody();
-  if (body && Node.isBlock(body)) {
-    const returnStatement = body
-      .getStatements()
-      .find((statement) => Node.isReturnStatement(statement));
-    body =
-      returnStatement && Node.isReturnStatement(returnStatement)
-        ? returnStatement.getExpression()
-        : undefined;
-  }
-  while (body && Node.isParenthesizedExpression(body)) body = body.getExpression();
-  if (body && Node.isPropertyAccessExpression(body)) return body.getName();
-  if (body && Node.isElementAccessExpression(body)) {
-    const argument = body.getArgumentExpression();
-    if (argument && Node.isStringLiteral(argument)) return argument.getLiteralText();
+    if (
+      argument &&
+      Node.isStringLiteral(argument) &&
+      annotationColumnReceiverMatches(direct.getExpression(), columns)
+    ) {
+      return argument.getLiteralText();
+    }
   }
   return undefined;
 }
 
-/** Like `stringPropertyFromObject` but also accepts a `(t) => t.col` column selector (SPEC §10.1). */
-function columnNamePropertyFromObject(object: Node, name: string): string | undefined {
+function annotationColumnReceiverMatches(receiver: Node, columns: Identifier): boolean {
+  const direct = unwrappedStaticExpressionNode(receiver);
+  if (!Node.isIdentifier(direct)) return false;
+  const expected = resolvedSymbolKey(columns.getSymbol());
+  const actual = resolvedSymbolKey(symbolForIdentifierReference(direct) ?? direct.getSymbol());
+  return expected !== undefined && actual === expected;
+}
+
+interface DirectTableColumnRef {
+  readonly column: string;
+  readonly table: Node;
+}
+
+function directTableColumnRef(initializer: Node | undefined): DirectTableColumnRef | undefined {
+  if (!initializer) return undefined;
+  const direct = unwrappedStaticExpressionNode(initializer);
+  if (Node.isPropertyAccessExpression(direct)) {
+    return { column: direct.getName(), table: direct.getExpression() };
+  }
+  if (Node.isElementAccessExpression(direct)) {
+    const argument = direct.getArgumentExpression();
+    if (argument && Node.isStringLiteral(argument)) {
+      return { column: argument.getLiteralText(), table: direct.getExpression() };
+    }
+  }
+  return undefined;
+}
+
+function directTableReferenceMatches(left: Node, right: Node): boolean {
+  const directLeft = unwrappedStaticExpressionNode(left);
+  const directRight = unwrappedStaticExpressionNode(right);
+  const leftKey = directReferenceSymbolKey(directLeft);
+  const rightKey = directReferenceSymbolKey(directRight);
+  if (leftKey !== undefined && rightKey !== undefined) return leftKey === rightKey;
+  return directLeft.getText() === directRight.getText();
+}
+
+function directReferenceSymbolKey(node: Node): string | undefined {
+  return resolvedSymbolKey(
+    Node.isIdentifier(node)
+      ? (symbolForIdentifierReference(node) ?? node.getSymbol())
+      : node.getSymbol(),
+  );
+}
+
+function columnNamePropertyFromObject(
+  object: Node,
+  name: string,
+  columnsParameter: Identifier,
+): string | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -6768,17 +6842,20 @@ function columnNamePropertyFromObject(object: Node, name: string): string | unde
     if (name === 'key' && initializer && Node.isArrayLiteralExpression(initializer)) {
       const elements = initializer.getElements();
       if (elements.length === 0 || elements.some(Node.isSpreadElement)) return undefined;
-      const columns = elements.map((element) => columnRefName(element));
+      const columns = elements.map((element) => columnRefName(element, columnsParameter));
       return columns.every((column): column is string => column !== undefined)
         ? columns.join(',')
         : undefined;
     }
-    return columnRefName(initializer);
+    return columnRefName(initializer, columnsParameter);
   }
   return undefined;
 }
 
-function secretPropertyFromObject(object: Node): true | string[] | undefined {
+function secretPropertyFromObject(
+  object: Node,
+  columnsParameter: Identifier,
+): true | string[] | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -6788,16 +6865,21 @@ function secretPropertyFromObject(object: Node): true | string[] | undefined {
     if (!initializer) return undefined;
     if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
     if (Node.isArrayLiteralExpression(initializer)) {
-      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      const columns = initializer
+        .getElements()
+        .flatMap((element) => columnRefName(element, columnsParameter) ?? []);
       return columns.length > 0 ? columns : undefined;
     }
-    const column = columnRefName(initializer);
+    const column = columnRefName(initializer, columnsParameter);
     return column === undefined ? undefined : [column];
   }
   return undefined;
 }
 
-function confidentialAtRestPropertyFromObject(object: Node): true | string[] | undefined {
+function confidentialAtRestPropertyFromObject(
+  object: Node,
+  columnsParameter: Identifier,
+): true | string[] | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -6807,10 +6889,12 @@ function confidentialAtRestPropertyFromObject(object: Node): true | string[] | u
     if (!initializer) return undefined;
     if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
     if (Node.isArrayLiteralExpression(initializer)) {
-      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      const columns = initializer
+        .getElements()
+        .flatMap((element) => columnRefName(element, columnsParameter) ?? []);
       return columns.length > 0 ? columns : undefined;
     }
-    const column = columnRefName(initializer);
+    const column = columnRefName(initializer, columnsParameter);
     return column === undefined ? undefined : [column];
   }
   return undefined;
@@ -6822,7 +6906,10 @@ function confidentialAtRestPropertyFromObject(object: Node): true | string[] | u
  * named columns). Mirrors `secretPropertyFromObject`. The primary `key` and `owner`
  * columns are AUTO-governed elsewhere; this captures the explicit extra columns.
  */
-function governedPropertyFromObject(object: Node): true | string[] | undefined {
+function governedPropertyFromObject(
+  object: Node,
+  columnsParameter: Identifier,
+): true | string[] | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -6832,10 +6919,12 @@ function governedPropertyFromObject(object: Node): true | string[] | undefined {
     if (!initializer) return undefined;
     if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
     if (Node.isArrayLiteralExpression(initializer)) {
-      const columns = initializer.getElements().flatMap((element) => columnRefName(element) ?? []);
+      const columns = initializer
+        .getElements()
+        .flatMap((element) => columnRefName(element, columnsParameter) ?? []);
       return columns.length > 0 ? columns : undefined;
     }
-    const column = columnRefName(initializer);
+    const column = columnRefName(initializer, columnsParameter);
     return column === undefined ? undefined : [column];
   }
   return undefined;
@@ -6845,8 +6934,12 @@ function governedPropertyFromObject(object: Node): true | string[] | undefined {
  * Parse an `atomic:` / `version:` concurrency annotation (SPEC §10.3/§11.1, KV429) into
  * the resolved column-name list. A column ref or list of column refs; never `true`.
  */
-function concurrencyColumnsFromObject(object: Node, name: string): string[] | undefined {
-  const resolution = concurrencyColumnsResolutionFromObject(object, name);
+function concurrencyColumnsFromObject(
+  object: Node,
+  name: string,
+  columnsParameter: Identifier,
+): string[] | undefined {
+  const resolution = concurrencyColumnsResolutionFromObject(object, name, columnsParameter);
   return resolution.kind === 'resolved' ? resolution.columns : undefined;
 }
 
@@ -6863,10 +6956,11 @@ type ConcurrencyColumnsResolution =
 function concurrencyColumnsResolutionFromObject(
   object: Node,
   name: string,
+  columnsParameter: Identifier,
 ): ConcurrencyColumnsResolution {
   const property = staticObjectPropertyResolution(object, name);
   if (property.kind !== 'resolved') return property;
-  const columns = staticConcurrencyColumns(property.value);
+  const columns = staticConcurrencyColumns(property.value, columnsParameter);
   return columns === undefined
     ? { kind: 'unresolved', node: property.node }
     : { columns, kind: 'resolved', node: property.node };
@@ -6951,6 +7045,7 @@ function staticObjectLiteralValue(
 
 function staticConcurrencyColumns(
   value: Node,
+  columnsParameter: Identifier,
   seen = new Set<string>(),
   depth = 0,
 ): string[] | undefined {
@@ -6958,20 +7053,22 @@ function staticConcurrencyColumns(
   const node = unwrappedStaticExpressionNode(value);
   if (Node.isIdentifier(node)) {
     const initializer = staticConstBindingInitializer(node, seen, depth + 1, true);
-    return initializer ? staticConcurrencyColumns(initializer, seen, depth + 1) : undefined;
+    return initializer
+      ? staticConcurrencyColumns(initializer, columnsParameter, seen, depth + 1)
+      : undefined;
   }
   if (Node.isArrayLiteralExpression(node)) {
     const columns: string[] = [];
     for (const element of node.getElements()) {
       if (Node.isOmittedExpression(element)) return undefined;
       const item = Node.isSpreadElement(element) ? element.getExpression() : element;
-      const resolved = staticConcurrencyColumns(item, new Set(seen), depth + 1);
+      const resolved = staticConcurrencyColumns(item, columnsParameter, new Set(seen), depth + 1);
       if (resolved === undefined) return undefined;
       columns.push(...resolved);
     }
     return [...new Set(columns)];
   }
-  const column = columnRefName(node);
+  const column = columnRefName(node, columnsParameter);
   return column === undefined ? undefined : [column];
 }
 
@@ -7294,11 +7391,12 @@ function unresolvedConcurrencyAnnotationDiagnostics(
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isKovoAnnotationCall(call)) continue;
     const annotation = kovoAnnotationObject(call);
-    if (!annotation) continue;
+    const binding = kovoAnnotationBinding(call);
+    if (!annotation || !binding) continue;
     const unresolved = ['atomic', 'version']
       .map((name) => ({
         name,
-        resolution: concurrencyColumnsResolutionFromObject(annotation, name),
+        resolution: concurrencyColumnsResolutionFromObject(annotation, name, binding.columns),
       }))
       .filter(({ resolution }) => resolution.kind === 'unresolved');
     if (unresolved.length === 0) continue;
@@ -7306,7 +7404,7 @@ function unresolvedConcurrencyAnnotationDiagnostics(
     diagnostics.push(
       drizzleDiagnostic({
         code: 'KV429',
-        detail: `The ${unresolved.map(({ name }) => name).join('/')} concurrency annotation is dynamic or statically unresolved. Use const shorthand, statically composed object spreads, and literal column selectors so the lost-update gate cannot be erased.`,
+        detail: `The ${unresolved.map(({ name }) => name).join('/')} concurrency annotation is dynamic or statically unresolved. Use direct identities from the kovo() callback column record so the lost-update gate cannot be erased.`,
         node: firstResolution?.kind === 'unresolved' ? firstResolution.node : annotation,
       }),
     );
@@ -7357,7 +7455,10 @@ function objectPropertyFromObject(
   return undefined;
 }
 
-function fanAnnotationsFromObject(object: Node): ExtractedFanAnnotation[] {
+function fanAnnotationsFromObject(
+  object: Node,
+  columnsParameter: Identifier,
+): ExtractedFanAnnotation[] {
   if (!Node.isObjectLiteralExpression(object)) return [];
 
   const fansProperty = object
@@ -7373,7 +7474,7 @@ function fanAnnotationsFromObject(object: Node): ExtractedFanAnnotation[] {
     if (!Node.isObjectLiteralExpression(element)) return [];
 
     const domain = domainPropertyFromObject(element, 'domain');
-    const via = columnNamePropertyFromObject(element, 'via');
+    const via = columnNamePropertyFromObject(element, 'via', columnsParameter);
     if (!domain || !via) return [];
 
     const when = stringPropertyFromObject(element, 'when');

@@ -42,7 +42,7 @@ function schemaFile(kovoImport: string, kovoCall: string): SourceFileInput {
       '  id: text("id").primaryKey(),',
       '  ownerId: text("owner_id").notNull(),',
       '  role: text("role").notNull(),',
-      `}, ${kovoCall}({ domain: "account", key: "id", owner: "ownerId", governed: ["role"] }));`,
+      `}, ${kovoCall}((columns) => ({ domain: "account", key: columns.id, owner: columns.ownerId, governed: [columns.role] })));`,
     ].join('\n'),
   };
 }

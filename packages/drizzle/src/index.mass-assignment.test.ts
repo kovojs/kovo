@@ -30,7 +30,7 @@ function facts(domainSource: string) {
           '  role: text("role").notNull(),',
           '  balance: integer("balance").notNull(),',
           '  name: text("name").notNull(),',
-          '}, kovo((columns) => ({ domain: "account", key: "id", owner: "ownerId", governed: ["role", "balance"] })));',
+          '}, kovo((columns) => ({ domain: "account", key: columns.id, owner: columns.ownerId, governed: [columns.role, columns.balance] })));',
         ].join('\n'),
       },
       { fileName: 'account.domain.ts', source: domainSource },
@@ -57,7 +57,7 @@ function passwordFacts(domainSource: string) {
   });
 }
 
-function confidentialFacts(domainSource: string, annotation = 'confidentialAtRest: ["ssn"]') {
+function confidentialFacts(domainSource: string, annotation = 'confidentialAtRest: [columns.ssn]') {
   return extractMassAssignmentFromProject({
     files: [
       dbTypes,
@@ -68,7 +68,7 @@ function confidentialFacts(domainSource: string, annotation = 'confidentialAtRes
           '  id: text("id").primaryKey(),',
           '  ssn: text("ssn").notNull(),',
           '  nickname: text("nickname").notNull(),',
-          `}, kovo((columns) => ({ domain: "profile", key: "id", ${annotation} })));`,
+          `}, kovo((columns) => ({ domain: "profile", key: columns.id, ${annotation} })));`,
         ].join('\n'),
       },
       { fileName: 'profile.domain.ts', source: domainSource },
@@ -395,7 +395,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         domain: 'account',
         name: 'updateAccount',
         provenance: 'input',
-        site: 'account.domain.ts:8',
+        site: 'account.domain.ts:9',
         via: 'values',
       },
     ]);
@@ -416,7 +416,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         domain: 'account',
         name: 'updateAccount',
         provenance: 'input',
-        site: 'account.domain.ts:8',
+        site: 'account.domain.ts:9',
         via: 'values',
       },
     ]);
@@ -438,7 +438,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         domain: 'account',
         name: 'updateAccount',
         provenance: 'input',
-        site: 'account.domain.ts:9',
+        site: 'account.domain.ts:10',
         via: 'values',
       },
     ]);
@@ -849,8 +849,8 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
-  it('accepts selector and true confidential-at-rest annotations as destination gates', () => {
-    const selector = confidentialFacts(
+  it('accepts direct identity and true confidential-at-rest annotations as destination gates', () => {
+    const identity = confidentialFacts(
       [
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
         'import { profiles } from "./schema";',
@@ -858,9 +858,9 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         '  await db.update(profiles).set({ ssn: input.ssn }).where(eq(profiles.id, input.id));',
         '};',
       ].join('\n'),
-      'confidentialAtRest: [(t) => t.ssn]',
+      'confidentialAtRest: [columns.ssn]',
     );
-    expect(selector).toMatchObject([{ column: 'ssn', domain: 'profile' }]);
+    expect(identity).toMatchObject([{ column: 'ssn', domain: 'profile' }]);
 
     const all = confidentialFacts(
       [

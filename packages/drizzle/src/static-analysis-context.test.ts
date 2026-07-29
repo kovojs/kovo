@@ -127,7 +127,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             'export const users = pgTable("user", {',
             '  id: text("user_id").primaryKey(),',
             '  passwordHash: text("password_hash").notNull(),',
-            '}, kovo((columns) => ({ domain: "user", key: (t) => t.id, owner: (t) => t.id, secret: [(t) => t.passwordHash] })));',
+            '}, kovo((columns) => ({ domain: "user", key: columns.id, owner: columns.id, secret: [columns.passwordHash] })));',
             '',
             'export const sessions = pgTable("session", {',
             '  id: text("session_id").primaryKey(),',
@@ -135,9 +135,9 @@ describe('@kovojs/drizzle static analysis context', () => {
             '  token: text("session_token").notNull(),',
             '}, kovo((columns) => ({',
             '  domain: "session",',
-            '  key: (t) => t.id,',
-            '  ownerVia: { fk: (t) => t.userId, parent: users, parentKey: (t) => t.id },',
-            '  governed: [(t) => t.token],',
+            '  key: columns.id,',
+            '  ownerVia: { fk: columns.userId, parent: users, parentKey: users.id },',
+            '  governed: [columns.token],',
             '  secret: true,',
             '})));',
           ].join('\n'),
@@ -188,6 +188,49 @@ describe('@kovojs/drizzle static analysis context', () => {
     });
   });
 
+  it('rejects ownerVia authority when parentKey belongs to a different parent table', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes([]),
+        {
+          fileName: 'src/schema.mjs',
+          source: [
+            'import { kovo } from "@kovojs/drizzle";',
+            'import { pgTable, text } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("user", {',
+            '  id: text("user_id").primaryKey(),',
+            '}, kovo((columns) => ({ domain: "user", key: columns.id, owner: columns.id })));',
+            '',
+            'export const teams = pgTable("team", {',
+            '  id: text("team_id").primaryKey(),',
+            '}, kovo((columns) => ({ domain: "team", key: columns.id, owner: columns.id })));',
+            '',
+            'export const sessions = pgTable("session", {',
+            '  id: text("session_id").primaryKey(),',
+            '  userId: text("user_id").notNull(),',
+            '}, kovo((columns) => ({',
+            '  domain: "session",',
+            '  key: columns.id,',
+            '  ownerVia: { fk: columns.userId, parent: users, parentKey: teams.id },',
+            '})));',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    const session = facts.runtimeTableSecurityManifest.tables.find(
+      (table) => table.name === 'session',
+    );
+    expect(session).toEqual(
+      expect.objectContaining({
+        authorizationClassifications: [],
+        name: 'session',
+      }),
+    );
+    expect(session).not.toHaveProperty('ownerVia');
+  });
+
   it('binds exact no-substitution SQL authorization policy into the runtime manifest', () => {
     const facts = extractStaticBuildAnalysisFactsFromProject({
       files: [
@@ -205,7 +248,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             '}, kovo((columns) => ({',
             "  authzPolicy: sql`owner_id = current_setting('kovo.principal', true)`,",
             '  domain: "share",',
-            '  key: "id",',
+            '  key: columns.id,',
             '})));',
           ].join('\n'),
         },
@@ -246,13 +289,13 @@ describe('@kovojs/drizzle static analysis context', () => {
             '',
             'export const primaryRows = pgTable("primary_rows", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo((columns) => ({ domain: "primary", key: "id", public: true })));',
+            '}, kovo((columns) => ({ domain: "primary", key: columns.id, public: true })));',
             'export const uniqueRows = pgTable("unique_rows", {',
             '  id: text("row_id").notNull().unique(),',
-            '}, kovo((columns) => ({ domain: "unique", key: "id", public: true })));',
+            '}, kovo((columns) => ({ domain: "unique", key: columns.id, public: true })));',
             'export const nonuniqueRows = pgTable("nonunique_rows", {',
             '  id: text("id").notNull(),',
-            '}, kovo((columns) => ({ domain: "nonunique", key: "id", public: true })));',
+            '}, kovo((columns) => ({ domain: "nonunique", key: columns.id, public: true })));',
           ].join('\n'),
         },
       ],
@@ -282,7 +325,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             'export const shares = pgTable("shares", {',
             '  id: text("id").primaryKey(),',
             '  ownerId: text("owner_id").notNull(),',
-            '}, kovo((columns) => ({ authzPolicy: restrictivePolicy, domain: "share", key: "id" })));',
+            '}, kovo((columns) => ({ authzPolicy: restrictivePolicy, domain: "share", key: columns.id })));',
           ].join('\n'),
         },
       ],
@@ -310,7 +353,7 @@ describe('@kovojs/drizzle static analysis context', () => {
               'export const shares = pgTable("shares", { id: text("id").primaryKey() }, kovo((columns) => ({',
               '  authzPolicy: sql`owner_id = ${principal}`,',
               '  domain: "share",',
-              '  key: "id",',
+              '  key: columns.id,',
               '})));',
             ].join('\n'),
           },
@@ -350,7 +393,7 @@ describe('@kovojs/drizzle static analysis context', () => {
                 `export const shares = ${fixture.factory}("shares", { id: ${fixture.column}("id").primaryKey() }, kovo((columns) => ({`,
                 '  authzPolicy: "the query guard checks membership",',
                 '  domain: "share",',
-                '  key: "id",',
+                '  key: columns.id,',
                 '})));',
               ].join('\n'),
             },
@@ -372,7 +415,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             'export const labels = sqliteTable("labels", { id: text("id").primaryKey() }, kovo((columns) => ({',
             '  authzPolicy: "the query guard checks membership",',
             '  domain: "label",',
-            '  key: "id",',
+            '  key: columns.id,',
             '})));',
           ].join('\n'),
         },
@@ -598,7 +641,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             '  id: text("id").primaryKey(),',
             '  name: text("name").notNull(),',
             '  token: text("token").notNull(),',
-            '}, kovo((columns) => ({ domain: "session", key: "id", secret: ["token"] })));',
+            '}, kovo((columns) => ({ domain: "session", key: columns.id, secret: [columns.token] })));',
             '',
             'export const leakSession = mutation("session/leak", {',
             '  async handler(_input, request) {',
@@ -652,7 +695,7 @@ function fixtureProject(): TouchGraphProjectOptions {
           'import { sql } from "@kovojs/drizzle";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
-          'export const carts = pgTable("carts", {}, kovo((columns) => ({ domain: "cart", key: "id", reference: true })));',
+          'export const carts = pgTable("carts", {}, kovo((columns) => ({ domain: "cart", key: columns.id, reference: true })));',
           '',
           'export const cartQuery = query("cart", {',
           '  output: s.object({ rows: s.array(s.string()) }),',

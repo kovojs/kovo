@@ -28,7 +28,7 @@ const ATOMIC_SCHEMA = [
   '  id: text("id").primaryKey(),',
   '  stock: integer("stock").notNull(),',
   '  ver: integer("ver").notNull(),',
-  '}, kovo((columns) => ({ domain: "product", key: "id", atomic: "stock", version: "ver" })));',
+  '}, kovo((columns) => ({ domain: "product", key: columns.id, atomic: columns.stock, version: columns.ver })));',
 ].join('\n');
 
 const HEAD = [
@@ -129,7 +129,7 @@ describe('KV429 TOCTOU lost-update gate', () => {
 
   it('does not flag tables without an atomic/version annotation', () => {
     const result = toctou(
-      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock") }, kovo((columns) => ({ domain: "product", key: "id" })));',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock") }, kovo((columns) => ({ domain: "product", key: columns.id })));',
       buy(
         '  await db.update(products).set({ stock: sql`${products.stock} - ${input.qty}` }).where(eq(products.id, input.id));',
       ),
@@ -148,36 +148,23 @@ describe('KV429 TOCTOU lost-update gate', () => {
   });
 });
 
-describe('KV429 concurrency annotation composition corpus', () => {
+describe('KV429 concurrency annotation identity corpus', () => {
   const unsafeWrite = buy(
     '  await db.update(products).set({ stock: sql`${products.stock} - ${input.qty}` }).where(eq(products.id, input.id));',
   );
 
   it.each([
     [
-      'shorthand selectors',
-      [
-        'const atomic = (table: any) => table.stock;',
-        'const version = (table: any) => table.ver;',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", atomic, version })));',
-      ].join('\n'),
+      'direct properties',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, atomic: columns.stock, version: columns.ver })));',
     ],
     [
-      'static object spread',
-      [
-        'const concurrency = { atomic: (table: any) => table.stock, version: (table: any) => table.ver } as const;',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
-      ].join('\n'),
+      'direct element access',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, atomic: columns["stock"], version: columns["ver"] })));',
     ],
     [
-      'transitive aliases and spreads',
-      [
-        'const atomicColumns = [(table: any) => table.stock] as const;',
-        'const base = { atomic: atomicColumns, version: (table: any) => table.ver } as const;',
-        'const alias = base;',
-        'const concurrency = { ...alias } as const;',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
-      ].join('\n'),
+      'direct identity arrays',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, atomic: [columns.stock], version: [columns.ver] })));',
     ],
   ])('retains declared atomic/version facts through %s', (_label, schema) => {
     expect(toctou(schema, unsafeWrite)).toMatchObject([
@@ -188,7 +175,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
   it('fails closed when a concurrency spread cannot be statically resolved', () => {
     const schema = [
       'declare const runtimeConcurrency: Record<string, unknown>;',
-      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...runtimeConcurrency })));',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...runtimeConcurrency })));',
     ].join('\n');
     const diagnostics = analyzeSqlSafetyFromProject({
       files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
@@ -206,7 +193,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
   it('fails closed on an explicitly dynamic atomic selector instead of erasing it', () => {
     const schema = [
       'declare function chooseAtomic(): (table: any) => unknown;',
-      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", atomic: chooseAtomic() })));',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, atomic: chooseAtomic() })));',
     ].join('\n');
     const diagnostics = analyzeSqlSafetyFromProject({
       files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
@@ -220,7 +207,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
       [
         "const concurrency: { atomic: 'stock' | 'price'; version: 'ver' } = { atomic: 'stock', version: 'ver' };",
         "concurrency.atomic = 'price';",
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -229,7 +216,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
         "const atomic: ('stock' | 'price')[] = ['stock'];",
         "atomic[0] = 'price';",
         'const concurrency = { atomic, version: "ver" };',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -238,7 +225,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
         "const atomic: ('stock' | 'price')[] = ['stock'];",
         "atomic.push('price');",
         'const concurrency = { atomic, version: "ver" };',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -246,7 +233,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
       [
         "const concurrency: { atomic: 'stock' | 'price'; version: 'ver' } = { atomic: 'stock', version: 'ver' };",
         "Object.assign(concurrency, { atomic: 'price' });",
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -255,14 +242,14 @@ describe('KV429 concurrency annotation composition corpus', () => {
         'declare function mutate(value: object): void;',
         'const concurrency = { atomic: "stock", version: "ver" } as const;',
         'mutate(concurrency);',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
       'exported mutable carrier',
       [
         'export const concurrency = { atomic: "stock", version: "ver" } as const;',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -270,7 +257,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
       [
         'const concurrency = { atomic: "stock", version: "ver" } as const;',
         'export { concurrency };',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
     [
@@ -278,7 +265,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
       [
         'const first = second;',
         'const second = first;',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...first })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...first })));',
       ].join('\n'),
     ],
     [
@@ -286,7 +273,7 @@ describe('KV429 concurrency annotation composition corpus', () => {
       [
         'const Object = { freeze(value: { atomic: string; version: string }) { value.atomic = "price"; return value; } };',
         'const concurrency = Object.freeze({ atomic: "stock", version: "ver" });',
-        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+        'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), price: integer("price"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
       ].join('\n'),
     ],
   ])('fails closed when a concurrency carrier has a %s', (_label, schema) => {
@@ -305,14 +292,23 @@ describe('KV429 concurrency annotation composition corpus', () => {
     );
   });
 
-  it('retains a deeply static Object.freeze carrier', () => {
+  it('fails closed on a deeply static Object.freeze carrier outside the callback identity scope', () => {
     const schema = [
       'const concurrency = Object.freeze({ atomic: "stock", version: "ver" } as const);',
-      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: "id", ...concurrency })));',
+      'export const products = pgTable("products", { id: text("id").primaryKey(), stock: integer("stock"), ver: integer("ver") }, kovo((columns) => ({ domain: "product", key: columns.id, ...concurrency })));',
     ].join('\n');
-    expect(toctou(schema, unsafeWrite)).toMatchObject([
-      { column: 'stock', name: 'buy', table: 'products' },
-    ]);
+    expect(
+      analyzeSqlSafetyFromProject({
+        files: [writeDbTypes, { fileName: 'schema.ts', source: schema }],
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV429',
+          message: expect.stringContaining('direct identities'),
+        }),
+      ]),
+    );
   });
 });
 
