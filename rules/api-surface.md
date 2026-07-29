@@ -63,6 +63,84 @@ public package, every `package.json` export subpath is classified by
 files may still contain generated/internal declarations for their non-public
 subpaths; docs and the gate define whether an entry is human-public.
 
+## Every public concept has a checked decision
+
+`api-surface-decisions.json` is the symbol-level review ledger for the
+manifest-declared app-public surface. Each declaration is either covered by an
+exact row or, for the generated UI and icon families only, one constrained
+family rule. A row records:
+
+- `keep`, `move`, `internalize`, or `remove`;
+- its one canonical home;
+- the concrete app-author story and owner;
+- a precise `SPEC.md` or normative `spec/` section;
+- a packed compilation marker and an existing behavioral contract test.
+
+Every public subpath likewise has an owned, documented task. Wildcard decisions
+are not allowed for ordinary packages, and `/types` or package-wide catch-all
+barrels do not count as task homes.
+
+The ledger baseline is a no-growth boundary, not a permanent compatibility
+promise. A new declaration needs an exact public `keep` row. A new public value
+also needs a release note, a non-test authored example that imports it, and a
+contract test that imports it. A new subpath needs its own reviewed task row.
+Exporting a previously internal helper to make a recursive leak disappear is
+therefore public-surface growth and fails the gate.
+
+Root declaration targets in the ledger are health metrics for the Track 5 cuts.
+They do not authorize moving names to arbitrary subpaths; the story, canonical
+home, example, and ownership requirements remain binding.
+
+## Recursive signatures only descend
+
+`api-surface-baseline.json` schema v2 records the exact identity of every
+existing recursive-publicness leak and a maximum for each owning package.
+CI rejects:
+
+- a new leak identity, even if another leak was removed in the same package;
+- moving debt to another package;
+- any package exceeding its committed maximum;
+- a stale baseline after a repair.
+
+After a real repair, run `node scripts/api-surface-gate.mjs --write`. Write mode
+accepts removals only and lowers the relevant package maximum. It refuses
+additions. Making the leaked helper public is not a repair; the decision-ledger
+growth gate independently rejects that anti-pattern unless the helper earns a
+complete public API review.
+
+## Packed declarations may not hide `any`
+
+`scripts/packed-public-any-gate.mjs` compiles a generated consumer against the
+canonical package tarballs, verifies the packed export names against the
+decision ledger, and walks app-public declaration ASTs. The walk starts at
+public exports and recursively resolves first-party aliases and referenced
+types, so renaming an `any` or placing it behind a conditional/type alias does
+not hide it. Text in comments is irrelevant, and third-party declaration
+internals remain the dependency owner's responsibility.
+
+Existing debt is listed in `api-public-any-exceptions.json`. An exception must
+name one exact package, a declaration/symbol/member scope, a stable owner, a
+concrete reason, an expiry date, and an exact match maximum. Expired, unused,
+overlapping, over-budget, and stale-under-budget exceptions fail. Broad
+declaration wildcards must narrow the symbol or member (the generated UI
+`render` family is the intended example).
+
+## Breaking batches require migration evidence first
+
+`api-migrations.json` and `docs/api-migration-protocol.md` define the migration
+contract. Before an old export disappears, its batch must:
+
+1. expose exact `--check` and `--write` modes;
+2. ship mechanical rewrite rules plus fail-closed refusal rules and fixtures;
+3. emit the versioned structured result with source-anchored refusals;
+4. record an exercised check run, a release note, and concrete rollback;
+5. reach `removed` state and cover the exact decision row.
+
+The public decision stays `state: "public"` while the batch is `preparing` or
+`ready`. Marking it removed earlier fails CI. Migration tools must never guess
+app context, authentication/CSRF/deployment posture, dynamic bindings, SQL
+semantics, or trust decisions.
+
 ## No `export *` on a public barrel
 
 `export * from './x.js'` auto-publishes every current and future symbol of `x`,
@@ -101,9 +179,19 @@ every published target resolves to a built file.
 - api-surface CI gate (`scripts/api-surface-gate.mjs`) — fails when
   `@internal`/`@generated` declarations are reachable from a public subpath, when
   generated/internal subpaths export declarations outside their allowed tier, or
-  when a new untagged undocumented public export appears (a ratchet against
-  `api-surface-baseline.json`).
+  when a new untagged undocumented public export appears; recursive leaks are an
+  exact-identity, descending per-package ratchet in `api-surface-baseline.json`.
+- checked API ledger (`scripts/api-decision-ledger.mjs`) — requires a complete
+  decision, story, canonical home, SPEC citation, packed marker, contract test,
+  and task-level subpath review; rejects unreviewed declaration/subpath growth.
+- migration protocol (`scripts/api-migration-protocol.mjs`) — prevents an old
+  public export from disappearing before its checked rewrite/refusal batch is
+  exercised and marked removed.
 - `scripts/build-publish.mjs` (CI gate `pnpm run check:publish`) — builds each public
   package and asserts every `publishConfig` target file exists under `dist/` (publish-readiness).
+- packed app-public gate (`scripts/packed-public-any-gate.mjs`, after
+  `check:publish`) — compiles every public tarball entry, compares packed exports
+  with the ledger, recursively unwraps first-party declaration aliases, and
+  enforces the expiring exact-count `any` exception ratchet.
 - `site/scripts/api-ref.test.mjs` — the reference is generated from real sources for the
   documented set; undocumented public exports are flagged, never silently omitted.

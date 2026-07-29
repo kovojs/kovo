@@ -15,11 +15,11 @@ import { normalizePackageExports, resolveSourceExportTarget } from './package-ex
  * symbols and documented public types. Untagged, undocumented public exports remain
  * ratcheted separately.
  *
- * The repo starts with a large pre-existing violation set (the audit found 70+
- * undocumented exports on @kovojs/core alone), so the gate runs as a RATCHET: a
- * committed baseline (`api-surface-baseline.json`) records the known violations and
- * the gate fails only on NEW ones. Phases 4–8 curate the surface and shrink the
- * baseline; `--write` regenerates it. See rules/api-surface.md.
+ * The repo starts with a large pre-existing violation set, so the gate runs as a
+ * RATCHET. The committed baseline records exact recursive-publicness identities and
+ * per-package maxima. A repair must lower the matching package maximum in the same
+ * change; replacing one leak with a different leak is still an addition. See
+ * rules/api-surface.md and plans/api-surface-foundations.md (G17).
  */
 
 const baselinePath = path.join(repoRoot, 'api-surface-baseline.json');
@@ -271,6 +271,7 @@ export function computeSurfaceReport() {
     undocumentedPublic: [],
     boundaryViolations: [],
     recursivePublicnessViolations: [],
+    recursivePublicnessDetails: [],
   };
 
   for (const entry of entries) {
@@ -299,13 +300,24 @@ export function computeSurfaceReport() {
           publicnessContext,
           checker,
         )) {
-          report.recursivePublicnessViolations.push(
-            `${id} -> ${recursiveViolation.path} (${recursiveViolation.label})`,
-          );
+          const violationId = `${id} -> ${recursiveViolation.path} (${recursiveViolation.label})`;
+          report.recursivePublicnessViolations.push(violationId);
+          report.recursivePublicnessDetails.push({
+            id: violationId,
+            package: entry.pkg,
+            publicExport: id,
+            path: recursiveViolation.path,
+            label: recursiveViolation.label,
+            leakedSymbol: recursiveViolation.symbol.name,
+            leakedDeclaration: declarationPath(recursiveViolation.symbol, checker),
+          });
         }
       }
     }
   }
+  const recursivePublicnessDetails = [
+    ...new Map(report.recursivePublicnessDetails.map((detail) => [detail.id, detail])).values(),
+  ].sort((left, right) => left.id.localeCompare(right.id));
   return {
     undocumentedPublic: [...new Set(report.undocumentedPublic)].sort((left, right) =>
       left.localeCompare(right),
@@ -316,6 +328,7 @@ export function computeSurfaceReport() {
     recursivePublicnessViolations: [...new Set(report.recursivePublicnessViolations)].sort(
       (left, right) => left.localeCompare(right),
     ),
+    recursivePublicnessDetails,
   };
 }
 
@@ -328,8 +341,58 @@ function baselineToDocument(baseline) {
   return baseline.toDocument ?? baseline.violations ?? [];
 }
 
-function baselineToRemove(baseline) {
+export function baselineToRemove(baseline) {
+  if (baseline.recursivePublicness?.packages) {
+    return Object.values(baseline.recursivePublicness.packages)
+      .flatMap((entry) => entry.violations ?? [])
+      .sort((left, right) => left.localeCompare(right));
+  }
   return baseline.toRemove ?? baseline.recursivePublicnessViolations ?? [];
+}
+
+function recursivePackageCounts(details) {
+  const counts = new Map();
+  for (const detail of details) {
+    counts.set(detail.package, (counts.get(detail.package) ?? 0) + 1);
+  }
+  return Object.fromEntries(
+    [...counts.entries()].sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function recursiveBaselinePackages(baseline) {
+  return baseline.recursivePublicness?.packages ?? {};
+}
+
+export function recursiveRatchetComparison(baseline, currentDetails) {
+  const current = currentDetails.map((detail) => detail.id);
+  const baselineIds = baselineToRemove(baseline);
+  const { added, removed } = compareViolations(baselineIds, current);
+  const counts = recursivePackageCounts(currentDetails);
+  const packages = recursiveBaselinePackages(baseline);
+  const overBudget = [];
+  for (const [packageName, count] of Object.entries(counts)) {
+    const maximum = packages[packageName]?.maximum ?? 0;
+    if (count > maximum) overBudget.push({ package: packageName, count, maximum });
+  }
+  return { added, removed, counts, overBudget };
+}
+
+function recursiveBaselineDocument(details) {
+  const byPackage = new Map();
+  for (const detail of details) {
+    const ids = byPackage.get(detail.package) ?? [];
+    ids.push(detail.id);
+    byPackage.set(detail.package, ids);
+  }
+  const packages = {};
+  for (const [packageName, ids] of [...byPackage.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    ids.sort((left, right) => left.localeCompare(right));
+    packages[packageName] = { maximum: ids.length, violations: ids };
+  }
+  return { total: details.length, packages };
 }
 
 /** Pure ratchet comparison: which current violations are new vs the baseline, and which baselined ones are now fixed. */
@@ -346,16 +409,29 @@ export function runGate({ write = false } = {}) {
   const report = computeSurfaceReport();
   const violations = report.undocumentedPublic;
   const recursivePublicnessViolations = report.recursivePublicnessViolations;
+  const existingBaseline = loadBaseline();
 
   if (write) {
+    if (existingBaseline?.schema === 'kovo-api-surface-baseline/v2') {
+      const comparison = recursiveRatchetComparison(
+        existingBaseline,
+        report.recursivePublicnessDetails,
+      );
+      if (comparison.added.length > 0 || comparison.overBudget.length > 0) {
+        throw new Error(
+          'api-surface: refusing to widen the recursive-publicness ratchet; repair the new leak instead',
+        );
+      }
+    }
     writeFileSync(
       baselinePath,
       `${JSON.stringify(
         {
+          schema: 'kovo-api-surface-baseline/v2',
           $comment:
-            'api-surface gate ratchet baseline. toDocument = known undocumented public exports. toRemove = recursive public signatures that still name internal/generated/non-public helper types. Shrinks under plans/api-surface-foundations.md. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+            'G17 ratchet. toDocument tracks documentation debt. recursivePublicness stores exact leak identities plus descending per-package maxima. `--write` accepts removals only and refuses additions.',
           toDocument: violations,
-          toRemove: recursivePublicnessViolations,
+          recursivePublicness: recursiveBaselineDocument(report.recursivePublicnessDetails),
         },
         null,
         2,
@@ -367,15 +443,23 @@ export function runGate({ write = false } = {}) {
     return { ok: true, violations, recursivePublicnessViolations, added: [], removed: [] };
   }
 
-  const baseline = loadBaseline();
+  const baseline = existingBaseline;
   if (baseline === null) {
     throw new Error('api-surface: no baseline; run `node scripts/api-surface-gate.mjs --write`');
   }
   const documentBaseline = baselineToDocument(baseline);
   const recursiveBaseline = baselineToRemove(baseline);
   const { added, removed } = compareViolations(documentBaseline, violations);
-  const { added: addedRecursivePublicness, removed: removedRecursivePublicness } =
-    compareViolations(recursiveBaseline, recursivePublicnessViolations);
+  const recursiveComparison = recursiveRatchetComparison(
+    baseline,
+    report.recursivePublicnessDetails,
+  );
+  const {
+    added: addedRecursivePublicness,
+    removed: removedRecursivePublicness,
+    counts: recursivePackageCountsReport,
+    overBudget: recursivePackagesOverBudget,
+  } = recursiveComparison;
 
   if (report.boundaryViolations.length > 0) {
     process.stderr.write(
@@ -395,10 +479,18 @@ export function runGate({ write = false } = {}) {
     };
   }
 
-  if (addedRecursivePublicness.length > 0) {
+  if (addedRecursivePublicness.length > 0 || recursivePackagesOverBudget.length > 0) {
     process.stderr.write(
       `api-surface: ${String(addedRecursivePublicness.length)} NEW recursive publicness violation(s):\n` +
         addedRecursivePublicness.map((v) => `  + ${v}`).join('\n') +
+        (recursivePackagesOverBudget.length > 0
+          ? `\nPer-package ratchet overflow:\n${recursivePackagesOverBudget
+              .map(
+                (entry) =>
+                  `  + ${entry.package}: ${String(entry.count)} > ${String(entry.maximum)}`,
+              )
+              .join('\n')}`
+          : '') +
         `\nPublic signatures must not require internal/generated/non-public helper types recursively. See rules/api-surface.md.\n`,
     );
     return {
@@ -410,6 +502,28 @@ export function runGate({ write = false } = {}) {
       removed,
       addedRecursivePublicness,
       removedRecursivePublicness,
+      recursivePackageCounts: recursivePackageCountsReport,
+      recursivePackagesOverBudget,
+    };
+  }
+
+  if (removedRecursivePublicness.length > 0) {
+    process.stderr.write(
+      `api-surface: ${String(removedRecursivePublicness.length)} recursive leak(s) were fixed, but the per-package ratchet is stale:\n` +
+        removedRecursivePublicness.map((v) => `  - ${v}`).join('\n') +
+        '\nRun `node scripts/api-surface-gate.mjs --write` to commit the descending maxima.\n',
+    );
+    return {
+      ok: false,
+      violations,
+      recursivePublicnessViolations,
+      boundaryViolations: [],
+      added,
+      removed,
+      addedRecursivePublicness,
+      removedRecursivePublicness,
+      recursivePackageCounts: recursivePackageCountsReport,
+      recursivePackagesOverBudget: [],
     };
   }
 
@@ -424,6 +538,13 @@ export function runGate({ write = false } = {}) {
   process.stdout.write(
     `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(documentBaseline.length)}, fixed-this-run=${String(removed.length)}), recursive-publicness-needing-attention=${String(recursivePublicnessViolations.length)} (baseline=${String(recursiveBaseline.length)}, fixed-this-run=${String(removedRecursivePublicness.length)})\n`,
   );
+  process.stdout.write(
+    `api-surface/recursive-publicness-v2 total=${String(recursivePublicnessViolations.length)} ${Object.entries(
+      recursivePackageCountsReport,
+    )
+      .map(([packageName, count]) => `${packageName}=${String(count)}`)
+      .join(' ')}\n`,
+  );
   return {
     ok: true,
     violations,
@@ -433,6 +554,8 @@ export function runGate({ write = false } = {}) {
     removed,
     addedRecursivePublicness,
     removedRecursivePublicness,
+    recursivePackageCounts: recursivePackageCountsReport,
+    recursivePackagesOverBudget: [],
   };
 }
 

@@ -1,0 +1,127 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { validateApiDecisionLedger } from './api-decision-ledger.mjs';
+import { buildPublicApiInventory } from './public-api-inventory.mjs';
+import { repoRoot } from './public-packages.mjs';
+
+function clone(value) {
+  return structuredClone(value);
+}
+
+describe('public API decision ledger', () => {
+  let inventory;
+  let ledger;
+
+  beforeAll(() => {
+    inventory = buildPublicApiInventory({ repoRoot });
+    ledger = JSON.parse(readFileSync(path.join(repoRoot, 'api-surface-decisions.json'), 'utf8'));
+  });
+
+  it('covers the complete manifest-declared public surface', () => {
+    const result = validateApiDecisionLedger({ inventory, ledger, repoRoot });
+    expect(result.findings).toEqual([]);
+    expect(result.report.declarations).toBe(inventory.exportedDeclarations.length);
+    expect(result.report.subpaths).toBe(inventory.manifestPublicSubpaths.length);
+  });
+
+  it('fails when a non-generated declaration loses its symbol-level decision', () => {
+    const candidate = ledger.symbols.find((row) => row.state === 'public');
+    const mutated = clone(ledger);
+    mutated.symbols = mutated.symbols.filter((row) => row.id !== candidate.id);
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(result.findings).toContain(
+      `${candidate.id}: expected one exact decision row or reviewed generated-family rule, found 0`,
+    );
+  });
+
+  it('limits wildcard decisions to the reviewed UI and icon generators', () => {
+    const mutated = clone(ledger);
+    mutated.generatedFamilies[0].package = '@kovojs/core';
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(result.findings).toContain(
+      'generatedFamilies[0]: family rules are limited to reviewed UI/icon generators',
+    );
+  });
+
+  it('rejects publicizing an internal helper as a recursive-leak workaround', () => {
+    const declaration = {
+      ...clone(inventory.exportedDeclarations[0]),
+      package: '@kovojs/core',
+      subpath: '.',
+      specifier: '@kovojs/core',
+      symbol: 'PreviouslyInternalLeak',
+      kind: 'type',
+    };
+    const mutatedInventory = clone(inventory);
+    mutatedInventory.exportedDeclarations.push(declaration);
+    const mutated = clone(ledger);
+    mutated.symbols.push({
+      id: '@kovojs/core#PreviouslyInternalLeak',
+      package: '@kovojs/core',
+      specifier: '@kovojs/core',
+      symbol: 'PreviouslyInternalLeak',
+      state: 'public',
+      decision: 'keep',
+      canonicalHome: '@kovojs/core',
+      story: mutated.symbols[0].story,
+      evidence: mutated.symbols[0].evidence,
+    });
+
+    const result = validateApiDecisionLedger({
+      inventory: mutatedInventory,
+      ledger: mutated,
+      repoRoot,
+    });
+    expect(result.findings).toContain(
+      '@kovojs/core#PreviouslyInternalLeak: a declaration outside the frozen baseline needs introduced evidence',
+    );
+  });
+
+  it('requires explicit reviewed evidence for declaration growth', () => {
+    const row = ledger.symbols.find((candidate) => candidate.decision !== 'keep');
+    const mutated = clone(ledger);
+    mutated.baseline.declarations = mutated.baseline.declarations.filter((id) => id !== row.id);
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(result.findings).toContain(
+      `${row.id}: declaration growth requires an exact public keep row`,
+    );
+  });
+
+  it('requires a documented task row for every new subpath', () => {
+    const row = ledger.subpaths[0];
+    const mutated = clone(ledger);
+    mutated.baseline.subpaths = mutated.baseline.subpaths.filter(
+      (specifier) => specifier !== row.specifier,
+    );
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(result.findings).toContain(
+      `${row.specifier}: new public subpath requires an exact reviewed task row`,
+    );
+  });
+
+  it('binds each row to its story evidence and keeps root health targets visible', () => {
+    const mutated = clone(ledger);
+    mutated.symbols[0].evidence =
+      mutated.symbols[0].evidence === 'core-authoring-contract'
+        ? 'browser-contract'
+        : 'core-authoring-contract';
+    delete mutated.healthTargets.rootDeclarations['@kovojs/core'];
+
+    const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
+    expect(
+      result.findings.some((finding) =>
+        finding.includes('.evidence must match the selected story'),
+      ),
+    ).toBe(true);
+    expect(result.findings).toContain(
+      'healthTargets.rootDeclarations.@kovojs/core must be a positive integer',
+    );
+  });
+});

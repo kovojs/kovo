@@ -1,0 +1,127 @@
+{
+  "schema": "kovo-app-public-any-exceptions/v1",
+  "$comment": "Temporary exact-count debt only. AST reachability unwraps first-party aliases; expiry and descending match counts are binding.",
+  "exceptions": [
+    {
+      "id": "browser-derived-values",
+      "package": "@kovojs/browser",
+      "declarationPattern": "@kovojs/browser/dist/derive-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 1,
+      "owner": "browser-runtime",
+      "reason": "The current variadic derived-value adapter still erases heterogeneous callback input tuples.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "browser-optimism-generics",
+      "package": "@kovojs/browser",
+      "declarationPattern": "@kovojs/browser/dist/optimism-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 4,
+      "owner": "browser-runtime",
+      "reason": "The existing optimism inference graph uses any as a conditional-type wildcard while the public contract is redesigned.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "core-form-helper-generics",
+      "package": "@kovojs/core",
+      "declarationPattern": "@kovojs/core/dist/forms-types-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 3,
+      "owner": "core-authoring",
+      "reason": "Legacy form failure and mutation helper aliases retain unconstrained generic sentinels pending the inferred app contract.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "core-root-generics",
+      "package": "@kovojs/core",
+      "declarationPattern": "@kovojs/core/dist/index-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 17,
+      "owner": "core-authoring",
+      "reason": "The current component, serialization, and form root contracts retain broad generic placeholders scheduled for the core surface batch.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "drizzle-sql-wrapper",
+      "package": "@kovojs/drizzle",
+      "declarationPattern": "@kovojs/drizzle/dist/runtime.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "getSQL",
+      "maximumMatches": 3,
+      "owner": "data-plane",
+      "reason": "Three public SQL wrappers mirror Drizzle's unparameterized getSQL return until concrete private-witness handles replace them.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-app-contract-generics",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/app-types-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 61,
+      "owner": "server-runtime",
+      "reason": "The pre-facade app, route, query, mutation, and task inference graph contains the largest remaining generic any debt.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-access-decision-generics",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/capability-route-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 2,
+      "owner": "server-security",
+      "reason": "The legacy access-decision union still accepts unbound guard generic parameters before the policy-constructor batch.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-root-meta-query",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/index.d.mts",
+      "symbolPattern": "metaFromQuery",
+      "memberPattern": "*",
+      "maximumMatches": 2,
+      "owner": "server-runtime",
+      "reason": "The metaFromQuery root helper currently matches unconstrained query result and metadata parameters during route inference.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-managed-reader",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/managed-db-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 2,
+      "owner": "data-plane",
+      "reason": "The managed database reader callback preserves a variadic compatibility shape until adapter contracts are made concrete.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "server-webhook-mutations",
+      "package": "@kovojs/server",
+      "declarationPattern": "@kovojs/server/dist/webhook-<chunk>.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "*",
+      "maximumMatches": 2,
+      "owner": "server-security",
+      "reason": "Webhook mutation scopes still use an unconstrained mutation wildcard while retaining runtime and compiler provenance checks.",
+      "expires": "2026-10-31"
+    },
+    {
+      "id": "ui-component-render-result",
+      "package": "@kovojs/ui",
+      "declarationPattern": "@kovojs/ui/dist/*.d.mts",
+      "symbolPattern": "*",
+      "memberPattern": "render",
+      "maximumMatches": 175,
+      "owner": "ui-platform",
+      "reason": "Generated UI component values share the legacy untyped render result until the canonical JSX render result lands.",
+      "expires": "2026-10-31"
+    }
+  ]
+}

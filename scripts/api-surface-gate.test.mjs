@@ -3,7 +3,13 @@ import path from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { classifyExport, compareViolations, computeSurfaceReport } from './api-surface-gate.mjs';
+import {
+  baselineToRemove,
+  classifyExport,
+  compareViolations,
+  computeSurfaceReport,
+  recursiveRatchetComparison,
+} from './api-surface-gate.mjs';
 import { repoRoot } from './public-packages.mjs';
 
 /**
@@ -35,12 +41,17 @@ describe('api-surface gate', () => {
       readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
     );
     const current = surfaceReport.recursivePublicnessViolations;
-    const { added, removed } = compareViolations(baseline.toRemove, current);
+    const { added, removed, overBudget } = recursiveRatchetComparison(
+      baseline,
+      surfaceReport.recursivePublicnessDetails,
+    );
     expect(added, `new recursive publicness violations: ${added.join(', ')}`).toEqual([]);
     expect(
       removed,
       `recursive baseline lists fixed exports — regenerate: ${removed.join(', ')}`,
     ).toEqual([]);
+    expect(overBudget).toEqual([]);
+    expect(baseline.recursivePublicness.total).toBe(current.length);
   });
 
   it('does not expose style compiler/provenance helper types through the public style surface', () => {
@@ -54,14 +65,75 @@ describe('api-surface gate', () => {
     ).toEqual([]);
   });
 
-  it('uses explicit toDocument/toRemove baseline buckets', () => {
+  it('uses the v2 exact-identity and per-package recursive baseline', () => {
     const baseline = JSON.parse(
       readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
     );
+    expect(baseline.schema).toBe('kovo-api-surface-baseline/v2');
     expect(Array.isArray(baseline.toDocument)).toBe(true);
-    expect(Array.isArray(baseline.toRemove)).toBe(true);
+    expect(baselineToRemove(baseline)).toHaveLength(baseline.recursivePublicness.total);
+    for (const packageBaseline of Object.values(baseline.recursivePublicness.packages)) {
+      expect(packageBaseline.maximum).toBe(packageBaseline.violations.length);
+      expect(packageBaseline.violations).toEqual(
+        [...packageBaseline.violations].sort((left, right) => left.localeCompare(right)),
+      );
+    }
+    expect(baseline).not.toHaveProperty('toRemove');
     expect(baseline).not.toHaveProperty('violations');
     expect(baseline).not.toHaveProperty('recursivePublicnessViolations');
+  });
+
+  it('rejects identity swaps even when a package remains under its numeric budget', () => {
+    const baseline = {
+      schema: 'kovo-api-surface-baseline/v2',
+      recursivePublicness: {
+        total: 1,
+        packages: {
+          '@kovojs/core': { maximum: 1, violations: ['old leak'] },
+        },
+      },
+    };
+    const comparison = recursiveRatchetComparison(baseline, [
+      { id: 'different leak', package: '@kovojs/core' },
+    ]);
+    expect(comparison.added).toEqual(['different leak']);
+    expect(comparison.removed).toEqual(['old leak']);
+    expect(comparison.overBudget).toEqual([]);
+  });
+
+  it('rejects moving recursive debt into a package with no budget', () => {
+    const baseline = {
+      schema: 'kovo-api-surface-baseline/v2',
+      recursivePublicness: {
+        total: 1,
+        packages: {
+          '@kovojs/core': { maximum: 1, violations: ['old leak'] },
+        },
+      },
+    };
+    const comparison = recursiveRatchetComparison(baseline, [
+      { id: 'new leak', package: '@kovojs/server' },
+    ]);
+    expect(comparison.overBudget).toEqual([{ package: '@kovojs/server', count: 1, maximum: 0 }]);
+  });
+
+  it('accepts only a descending recursive-publicness repair', () => {
+    const baseline = {
+      schema: 'kovo-api-surface-baseline/v2',
+      recursivePublicness: {
+        total: 2,
+        packages: {
+          '@kovojs/core': { maximum: 2, violations: ['fixed leak', 'remaining leak'] },
+        },
+      },
+    };
+    const comparison = recursiveRatchetComparison(baseline, [
+      { id: 'remaining leak', package: '@kovojs/core' },
+    ]);
+    expect(comparison.added).toEqual([]);
+    expect(comparison.removed).toEqual(['fixed leak']);
+    expect(comparison.overBudget).toEqual([]);
+    expect(comparison.counts).toEqual({ '@kovojs/core': 1 });
   });
 
   it('does not expose harness verifier internals through public harness options', () => {

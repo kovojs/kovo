@@ -1,0 +1,16 @@
+{
+  "schema": "kovo-api-migration-ledger/v1",
+  "resultSchema": "kovo-api-migration-result/v1",
+  "modes": ["check", "write"],
+  "refusalCategories": [
+    "ambiguous-binding",
+    "app-context",
+    "auth-posture",
+    "csrf-posture",
+    "deployment-posture",
+    "dynamic-import",
+    "sql-semantics",
+    "trust-decision"
+  ],
+  "batches": []
+}
