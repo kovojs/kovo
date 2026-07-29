@@ -49,7 +49,10 @@
     },
     "drizzle-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/drizzle/src/runtime-surface.test.ts"]
+      "contractTests": [
+        "packages/drizzle/src/runtime-surface.test.ts",
+        "scripts/check-packed-drizzle-consumer.test.mjs"
+      ]
     },
     "headless-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",

@@ -2225,7 +2225,7 @@
       "apiRef": {
         "order": 5,
         "slug": "drizzle",
-        "description": "Drizzle adapter: table annotations, runtime database metadata extraction, managed SQL helpers, and invalidation registry derivation."
+        "description": "Concrete Drizzle table annotations, managed SQL constructors, and compare-and-set helpers."
       }
     },
     {

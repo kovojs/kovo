@@ -26,7 +26,8 @@ export const entries = pgTable(
 Strings and selector callbacks are no longer column references. The callback's private type
 witness rejects typos and columns from another table during ordinary TypeScript authoring.
 `ownerVia.parentKey` is tied to the declared parent table, and fan-out `via` values are tied to the
-annotated table. Ordered arrays preserve composite row keys.
+annotated table. Ordered arrays preserve composite row keys. Runtime extraction independently
+requires the exact Drizzle column objects; matching `{ table, name }` lookalikes fail closed.
 
 Kovo SQL handles now extend Drizzle's typed `SQL<T>` bridge with private constructor witnesses.
 Structural `getSQL()` lookalikes are rejected, and the public declarations no longer expose
@@ -35,6 +36,10 @@ unparameterized `any` returns.
 The runtime metadata extractor and its seven supporting types moved from the package root to
 framework-internal assembly. Application code should declare schema intent through `kovo`; it
 should not consume or construct runtime security metadata.
+
+The supported Drizzle peer range is `>=1.0.0-rc.4 <2`; the executable minimum/development fixture
+is `1.0.0-rc.4`. Release validation installs the canonical `@kovojs/drizzle` tarball and compiles
+both Postgres and SQLite consumers with `pnpm run check:packed-drizzle-consumer`.
 
 Before upgrading, run:
 
