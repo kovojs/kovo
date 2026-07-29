@@ -411,7 +411,13 @@ function copiedChildrenSlotRenderHeader(header: string): string {
   const suffix = ') ';
   if (!header.startsWith(prefix) || !header.endsWith(suffix)) return header;
   const propsType = header.slice(prefix.length, -suffix.length);
-  return `render(props: ${propsType}, _state, { children }: { children?: ComponentChild } = { children: props.children })`;
+  return [
+    'render(',
+    `    props: ${propsType},`,
+    '    _state,',
+    '    { children }: { children?: ComponentChild } = { children: props.children },',
+    '  )',
+  ].join('\n');
 }
 
 function renderBodyStart(source: string, start: number): number {

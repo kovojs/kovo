@@ -343,6 +343,9 @@ describe('kovo add', () => {
       expect(source, componentName).toMatch(
         /render\([^)]*,\s*[^)]*,\s*\{\s*children\s*\}:\s*\{\s*children\?:\s*ComponentChild\s*\}/,
       );
+      expect(source, componentName).toContain(
+        '\n    { children }: { children?: ComponentChild } = { children: props.children },\n  ) {',
+      );
     }
   });
 
