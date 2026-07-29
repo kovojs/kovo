@@ -535,20 +535,20 @@ describe('create-kovo starter (metadata)', () => {
 
     const postgresSchema = defaultFiles.get('src/schema.ts');
     expect(postgresSchema).toContain("domain: 'auth'");
-    expect(postgresSchema).toContain("key: 'userId'");
-    expect(postgresSchema).toContain("owner: 'userId'");
-    expect(postgresSchema).toContain("secret: ['token']");
+    expect(postgresSchema).toContain('key: columns.userId');
+    expect(postgresSchema).toContain('owner: columns.userId');
+    expect(postgresSchema).toContain('secret: [columns.token]');
     expect(postgresSchema).toContain(
-      "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+      'secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken]',
     );
 
     const sqliteSchema = sqliteFiles.get('src/schema.ts');
     expect(sqliteSchema).toContain("domain: 'auth'");
-    expect(sqliteSchema).toContain("key: 'userId'");
-    expect(sqliteSchema).toContain("owner: 'userId'");
-    expect(sqliteSchema).toContain("secret: ['token']");
+    expect(sqliteSchema).toContain('key: columns.userId');
+    expect(sqliteSchema).toContain('owner: columns.userId');
+    expect(sqliteSchema).toContain('secret: [columns.token]');
     expect(sqliteSchema).toContain(
-      "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+      'secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken]',
     );
 
     for (const schemaSource of [postgresSchema, sqliteSchema]) {
@@ -556,11 +556,11 @@ describe('create-kovo starter (metadata)', () => {
       // compiler reads, not by TypeScript-only branding. KV435 rejects projections from
       // these columns once the build graph ingests this starter schema.
       expect(schemaSource).toContain("domain: 'auth'");
-      expect(schemaSource).toContain("key: 'userId'");
-      expect(schemaSource).toContain("owner: 'userId'");
-      expect(schemaSource).toContain("secret: ['token']");
+      expect(schemaSource).toContain('key: columns.userId');
+      expect(schemaSource).toContain('owner: columns.userId');
+      expect(schemaSource).toContain('secret: [columns.token]');
       expect(schemaSource).toContain(
-        "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+        'secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken]',
       );
       expect(schemaSource).toContain("password: text('password'),");
       expect(schemaSource).toContain("accessToken: text('accessToken'),");

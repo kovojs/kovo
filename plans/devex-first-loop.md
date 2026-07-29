@@ -75,11 +75,17 @@ proof; shared root verification belongs in the latest-verification block.
   - Evidence: the starter scaffold census proves the generated test owns a bootstrap-first public
     HTTP journey with no setup mock/internal import; the DDL proof locks the runtime before loading
     authored modules.
-- [ ] Drive creator prompts and non-interactive flags from one schema.
-- [ ] Record the supported v1 host-OS posture and add the chosen smoke journey or explicit
+- [x] Drive creator prompts and non-interactive flags from one schema.
+  - Evidence: the 46-test creator contract suite proves prompt choices, deterministic flags,
+    help/defaults, and interactive answers all project through `CREATE_KOVO_CREATOR_SCHEMA`.
+- [x] Record the supported v1 host-OS posture and add the chosen smoke journey or explicit
       non-support statement.
-- [ ] Make creator success instructions conditional on install state and exact for the selected
+  - Evidence: the creator contract suite pins Linux/macOS support and the explicit technical-preview
+    non-support statement for native Windows and WSL in generated help/reference facts.
+- [x] Make creator success instructions conditional on install state and exact for the selected
       scaffold.
+  - Evidence: the creator contract suite proves installed, skipped-install, and partial-install
+    output, including exact lifecycle, dev, and check commands without a false success claim.
 - [ ] Refuse unacknowledged experimental SQLite with zero filesystem writes and show the
       single-principal/KV447 posture on accepted SQLite journeys.
 - [ ] Render the packed starter through public UI/style APIs and pass the named WCAG check.
@@ -114,6 +120,9 @@ proof; shared root verification belongs in the latest-verification block.
   behavior passed (3 files, 34 tests).
 - **Starter scaffold census:** focused `packages/create-kovo/src/index.test.ts` passed (1 test,
   35 skipped).
+- **Creator contract:** `packages/create-kovo/src/{cli-schema,index}.test.ts` passed (2 files,
+  46 tests), including schema-derived prompts/flags, host posture, SQLite pre-write refusal, and
+  install-aware handoff.
 - **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
   (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
 - **First-loop proof:** `pnpm run test:devex-known-failures-available` passes all ten registered

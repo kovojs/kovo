@@ -520,7 +520,7 @@ granularity).
   - Evidence: focused scaffold/DDL tests and the packed starter runtime journey prove
     bootstrap-before-authored-module ordering, no setup mock/internal import/`isKovoApp`, and
     public HTTP assertions (`SPEC.md` §6.6/§12).
-- [ ] (S) Make `create-kovo` offer a small interactive choice set derived from one schema: app
+- [x] (S) Make `create-kovo` offer a small interactive choice set derived from one schema: app
       name, supported dialect, install choice, Git choice, and deployment target/retention posture.
   - Maintain one excellent secure-data starter for v1, with Postgres/PGlite-dev and explicitly
     experimental SQLite variants; do not advertise `--template` until a genuinely distinct second
@@ -532,6 +532,9 @@ granularity).
   - Record the v1 host-OS posture explicitly: name the supported development platforms and either
     add a Windows/WSL smoke journey to the Track 2 runner or document non-support as a deliberate
     v1 decision — an omission is not a decision.
+  - Evidence: the 46-test creator contract suite proves one schema owns prompts, flags, choices,
+    defaults, help, and interactive projection; it also pins pnpm-only technical-preview policy,
+    Linux/macOS support, and explicit native Windows/WSL non-support.
 - [ ] (S) Make creator success output conditional and exact: enter directory, install if
       `--no-install` was used, run dev, run check.
   - Include the experimental SQLite single-principal/no-authorization disclaimer and surface KV447
