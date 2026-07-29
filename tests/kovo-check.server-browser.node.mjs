@@ -662,6 +662,15 @@ void test('Conformance suites are an explicit gate', async () => {
   const packageJson = await projectJsonFile(projectRootPath, 'package.json');
   const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
   const ciWorkflowSource = await readProjectFile('.github/workflows/ci.yml');
+  const conformanceJobSource = ciWorkflowSource.slice(
+    ciWorkflowSource.indexOf('  conformance:'),
+    ciWorkflowSource.indexOf('  kovo-check:'),
+  );
+  assert.match(
+    conformanceJobSource,
+    /uses: actions\/checkout@[^\n]+\n\s+with:\n\s+fetch-depth: 0/u,
+    'authenticated conformance evidence requires complete git ancestry',
+  );
   const conformanceFacts = conformanceGateFacts({
     expectedPackages: expectedConformancePackages,
     packageJson,

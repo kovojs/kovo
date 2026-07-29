@@ -520,6 +520,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/kovo-setup
       - name: App contract spike conformance
         run: vp exec pnpm --filter @kovojs/conformance-app-contract-spike test
