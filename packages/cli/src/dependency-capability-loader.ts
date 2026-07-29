@@ -122,6 +122,41 @@ interface ReviewedThirdPartyModule {
 }
 
 /**
+ * Return the exact external module entries selected by a client HTML document.
+ *
+ * The caller still owns descriptor-bound reads and the transitive source closure. This helper
+ * deliberately shares the pinned HTML parser and URL grammar with the build-client admission
+ * gate, so pre-evaluation discovery cannot approve a broader path spelling than Vite later
+ * accepts (SPEC §5.2 rule 6 / §6.6).
+ *
+ * @internal
+ */
+export function htmlModuleSourcePaths(
+  source: string,
+  htmlPath: string,
+  root: string,
+): readonly string[] {
+  const paths = new Set<string>();
+  // Match assertHtmlExecutableSources(): both tokenizer states contribute to the executable
+  // closure, including browser-significant <noscript> differences.
+  for (const scriptingEnabled of [false, true]) {
+    const document = parse(source, { scriptingEnabled });
+    for (const element of htmlElements(document)) {
+      if (element.tagName !== 'script' || element.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
+        continue;
+      }
+      const rawType = htmlAttribute(element, 'type');
+      if (rawType?.trim().toLowerCase() !== 'module') continue;
+      const src = htmlAttribute(element, 'src');
+      if (src === undefined) continue;
+      const target = htmlApprovedModuleTarget(src, htmlPath, root);
+      if (target !== undefined) paths.add(target);
+    }
+  }
+  return Object.freeze([...paths]);
+}
+
+/**
  * Bind package imports from the exact preflight-owned app graph to its derived manifest.
  *
  * App-source byte ownership is shared with the adjacent approved-source plugin. This hook closes

@@ -69,6 +69,7 @@ import {
   createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
   dedupeCss,
+  deriveBrowserPostureManifestFromSourceFiles,
   deriveRegistryIdentity,
   lowerStandaloneSourceDerivedRegistryDeclarations,
   mutationHandlerFingerprintFromRuntimeSource,
@@ -111,8 +112,6 @@ import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/a
 import {
   buildCheckSourceGraphFiles,
   buildCompilerQueryShapeFacts,
-  collectRuntimeRegistryFacts,
-  dataPlaneSourceFiles,
   type DataPlaneSourceFile as BuildCheckSourceFile,
   type QueryReadFactLike,
   staticDataPlaneBuildFacts,
@@ -146,7 +145,10 @@ import {
   readCapabilityPackageSummaries,
   resolveCapabilityPackages,
 } from '../capability-closure-packages.js';
-import { dependencyCapabilityLoaderVitePlugin } from '../dependency-capability-loader.js';
+import {
+  dependencyCapabilityLoaderVitePlugin,
+  htmlModuleSourcePaths,
+} from '../dependency-capability-loader.js';
 import {
   buildOutputVersion,
   type CliCommandResult,
@@ -1005,10 +1007,12 @@ export async function runBuildCommand(
       invocationRoot,
       approvedSourceFiles,
     );
-    const staticRuntimeRegistry = await collectRuntimeRegistryFacts({
-      appSourceDir: dirname(resolvedAppModulePath),
-      root: invocationRoot,
-    });
+    // Reuse the exact entry-reachable source proof. Re-censusing dirname(app) here used to admit
+    // and repeatedly analyze every unimported copied UI module, making the documented full-catalog
+    // workflow exceed 6 GiB process-tree RSS. The preflight-derived registry is both narrower and
+    // stronger: Vite below rejects any later module load outside the same immutable snapshot
+    // (SPEC §5.2 rules 6/9; §11.4).
+    const staticRuntimeRegistry = loadAndCheck.value.runtimeRegistry;
     if (app.document.csp !== undefined) {
       assertDocumentCspConfigMatchesBrowserPosture(
         app.document.csp,
@@ -1276,6 +1280,7 @@ async function loadAndCheckBuildApp(
     deriveClosedKovoApp,
     node,
     queryShapeFacts: buildCheck.queryShapeFacts,
+    runtimeRegistry: buildCheck.runtimeRegistry,
     resolveKovoBuildPreset,
     vercel,
     writeKovoNeutralBuild,
@@ -1390,13 +1395,13 @@ function runPreEvaluationStaticTrustPreflight(
   root: string,
   paranoidStaticAdvisory: boolean,
 ): PreEvaluationStaticTrust {
-  // SPEC §5.2 rule 9 / §6.6: the pre-evaluation authority gate owns the selected app entry and
-  // its exact relative-import closure, plus the conventional src/ client tree that the disabled-
-  // config Vite build can transform. A project-root census would incorrectly promote unrelated
-  // authored tooling such as vite.config.ts into app runtime authority.
-  const files = preEvaluationAppSourceFiles(appModulePath, root);
-  const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, files);
   const clientEntry = preEvaluationClientEntryFile(appModulePath, root);
+  // SPEC §5.2 rules 6/9 / §6.6: the pre-evaluation authority gate owns only the selected app
+  // entry, HTML-selected client module entries, and their exact relative-import closures. A
+  // conventional src/ census incorrectly promotes unimported copy-in catalogs and authored
+  // tooling into app runtime authority, and multiplies every whole-project analyzer pass.
+  const files = preEvaluationAppSourceFiles(appModulePath, root, clientEntry);
+  const approvedSourceFiles = preEvaluationApprovedBuildFiles(appModulePath, root, files);
   // Parse and lower this exact snapshot before deriving the loader manifest. Private ABI rows are
   // admitted only when the reviewed compiler added their exact names; authored spellings remain
   // ordinary closed package edges (SPEC §5.2 rule 10 / §6.6).
@@ -1549,42 +1554,62 @@ function preEvaluationClientEntryFile(
   return { fileName: slashPath(relative(root, entryPath)), source };
 }
 
-function preEvaluationAppSourceFiles(appModulePath: string, root: string): BuildCheckSourceFile[] {
-  const sourceRoot = dirname(appModulePath);
-  const graphFiles = buildCheckSourceGraphFiles(appModulePath, root);
-  const files = buildMapDense(
-    graphFiles,
-    'Project-root-relative pre-evaluation app sources',
-    (file) => ({
-      fileName: slashPath(relative(root, resolve(sourceRoot, file.fileName))),
-      source: file.source,
-    }),
-  );
-  const clientRoot = kovoClientBuildRoot(appModulePath, root);
-  const clientFiles = dataPlaneSourceFiles(resolve(clientRoot, 'src'), root);
-  for (let index = 0; index < clientFiles.length; index += 1) {
-    const clientFile = clientFiles[index]!;
-    const fileName = slashPath(relative(root, resolve(root, clientFile.fileName)));
-    let existing: BuildCheckSourceFile | undefined;
-    for (let candidateIndex = 0; candidateIndex < files.length; candidateIndex += 1) {
-      if (files[candidateIndex]!.fileName === fileName) {
-        existing = files[candidateIndex];
-        break;
-      }
+function preEvaluationAppSourceFiles(
+  appModulePath: string,
+  root: string,
+  clientEntry?: BuildCheckSourceFile,
+): BuildCheckSourceFile[] {
+  const entries = [resolve(appModulePath)];
+  if (clientEntry !== undefined) {
+    const clientEntryPath = resolve(root, clientEntry.fileName);
+    const clientEntries = htmlModuleSourcePaths(clientEntry.source, clientEntryPath, root);
+    for (let index = 0; index < clientEntries.length; index += 1) {
+      buildSecurityArrayAppend(
+        entries,
+        clientEntries[index]!,
+        'Pre-evaluation HTML module source entries',
+      );
     }
-    if (existing !== undefined) {
-      if (existing.source !== clientFile.source) {
-        throw new TypeError(`Kovo app source snapshot conflicts for ${fileName}.`);
+  }
+
+  const files: BuildCheckSourceFile[] = [];
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    const entryPath = entries[entryIndex]!;
+    const sourceRoot = dirname(entryPath);
+    const graphFiles = buildCheckSourceGraphFiles(entryPath, root);
+    for (let fileIndex = 0; fileIndex < graphFiles.length; fileIndex += 1) {
+      const graphFile = graphFiles[fileIndex]!;
+      const fileName = slashPath(relative(root, resolve(sourceRoot, graphFile.fileName)));
+      let existing: BuildCheckSourceFile | undefined;
+      for (let candidateIndex = 0; candidateIndex < files.length; candidateIndex += 1) {
+        if (files[candidateIndex]!.fileName === fileName) {
+          existing = files[candidateIndex];
+          break;
+        }
       }
-      continue;
+      if (existing !== undefined) {
+        if (existing.source !== graphFile.source) {
+          throw new TypeError(`Kovo app source snapshot conflicts for ${fileName}.`);
+        }
+        continue;
+      }
+      buildSecurityArrayAppend(
+        files,
+        { fileName, source: graphFile.source },
+        'Pre-evaluation app and client source closure',
+      );
     }
-    buildSecurityArrayAppend(
-      files,
-      { fileName, source: clientFile.source },
-      'Pre-evaluation app and client source snapshot',
-    );
   }
   return files;
+}
+
+/** @internal Regression seam for the exact pre-evaluation app/client source closure. */
+export function preEvaluationAppSourceFilesForTesting(
+  appModulePath: string,
+  root: string,
+  clientEntry?: BuildCheckSourceFile,
+): readonly BuildCheckSourceFile[] {
+  return preEvaluationAppSourceFiles(appModulePath, root, clientEntry);
 }
 
 function preEvaluationApprovedBuildFiles(
@@ -1802,6 +1827,7 @@ interface KovoBuildCheckArtifacts {
   diagnosticSourceCatalog: KovoCheckDiagnosticSourceCatalog;
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
+  runtimeRegistry: RuntimeRegistryWireFacts;
   routePages?: readonly SourceRoutePageFacts[];
   sourceFiles: readonly BuildCheckSourceFile[];
 }
@@ -2077,6 +2103,15 @@ async function buildCheckGraph(
       'CLI packages/cli/src/commands/build-export.ts collection',
     );
   }
+  const runtimeRegistry: RuntimeRegistryWireFacts = {
+    ...runtimeRegistryWireFactsFromGraph(result.graph),
+    ...(staticArtifacts.runtimeRegistry.browserPosture === undefined
+      ? {}
+      : { browserPosture: staticArtifacts.runtimeRegistry.browserPosture }),
+    ...(staticArtifacts.runtimeRegistry.tableSecurity === undefined
+      ? {}
+      : { tableSecurity: staticArtifacts.runtimeRegistry.tableSecurity }),
+  };
   if (diagnostics.length > 0) {
     return {
       diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
@@ -2085,6 +2120,7 @@ async function buildCheckGraph(
         diagnostics,
       },
       queryShapeFacts: staticArtifacts.queryShapeFacts,
+      runtimeRegistry,
       sourceFiles: staticArtifacts.sourceFiles,
     };
   }
@@ -2092,6 +2128,7 @@ async function buildCheckGraph(
     diagnosticSourceCatalog: staticArtifacts.diagnosticSourceCatalog,
     graph: result.graph,
     queryShapeFacts: staticArtifacts.queryShapeFacts,
+    runtimeRegistry,
     sourceFiles: staticArtifacts.sourceFiles,
   };
 }
@@ -2593,6 +2630,14 @@ async function staticBuildCheckGraph(
       ...(updateCoverage.length === 0 ? {} : { updateCoverage }),
     },
     queryShapeFacts,
+    runtimeRegistry: {
+      browserPosture: deriveBrowserPostureManifestFromSourceFiles(files),
+      mutationTouches: {},
+      queryReads: [],
+      ...(drizzleFacts.runtimeTableSecurityManifest === undefined
+        ? {}
+        : { tableSecurity: drizzleFacts.runtimeTableSecurityManifest }),
+    },
     routePages: sourceGraphFacts.routePages,
     sourceFiles: files,
   };
