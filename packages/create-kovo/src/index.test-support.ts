@@ -106,6 +106,7 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
         disableGit: true,
         example: options.example,
         name: options.name,
+        ...(options.retention === undefined ? {} : { retention: options.retention }),
       });
     } else {
       writeKovoProject(root, {

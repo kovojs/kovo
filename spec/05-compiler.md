@@ -68,15 +68,18 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
     spread/computed, imported, aliased, reassigned, or otherwise unresolved callback root is KV449;
     it cannot disappear by producing no manifest row.
 13. **Authored-source provenance stays compiler-owned.** Compiler/build graph facts for component,
-    query, mutation, route/page, and endpoint declarations carry
+    query, mutation, route/page, endpoint, agent, tool, and durable-task declarations carry
     `SourceAnchor { file, start, end }`, where offsets are zero-based UTF-16 code-unit positions,
     `end` is exclusive, and `file` names the exact analyzed source input. Compiler-generated form
     transport and atomic-style facts additionally carry `generatedFrom` pointing to the authored
-    form or style declaration that owns them. These anchors come from the pinned parser snapshot or
-    an explicit lowering offset map; a post-parse consumer MUST NOT rediscover them with symbol or
-    text matching. An invalid or unresolvable compiler anchor fails closed instead of falling back
-    to a heuristic source match. Source provenance belongs to graph, diagnostic, and development
-    artifacts; it does not enlarge an executable route or browser/server helper ABI.
+    form or style declaration that owns them. Agent-to-tool bindings, tool-to-mutation bindings,
+    and task-to-query/mutation/task composition edges carry their own exact authored identifier
+    anchor rather than borrowing a declaration anchor. These anchors come from the pinned parser
+    snapshot or an explicit lowering offset map; a post-parse consumer MUST NOT rediscover them
+    with symbol or text matching. An invalid, conflicting, summary-inconsistent, or unresolvable
+    compiler anchor fails closed instead of falling back to a heuristic source match. Source
+    provenance belongs to graph, diagnostic, and development artifacts; it does not enlarge an
+    executable route or browser/server helper ABI.
 
 #### 5.2.1 Client representation, render-plan, and app-build identities (normative)
 

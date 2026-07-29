@@ -17,8 +17,12 @@ compiler/runtime facts; none may become a second analyzer.
       fail-closed runtime-declaration association.
   - Evidence: the focused compiler and CLI source-anchor suites in Latest verification assert exact
     authored slices and reject missing, duplicate, and endpoint/webhook-ambiguous associations.
-- [ ] Prove exact source/config anchors across every remaining diagnostic family,
+- [x] Prove exact source/config anchors across every remaining diagnostic family,
       agent/task/tool graph carrier, and presentation adapter.
+  - Evidence: the five-family parity corpus and focused compiler/devtool suites in Latest
+    verification carry exact UTF-16 anchors through access, Drizzle/data, forms/CSRF, optimism,
+    trusted output, agent declarations/tool bindings/mutation bindings, and task declarations/
+    composition edges. Missing, decoy, invalid, ambiguous, and out-of-root anchors fail closed.
 - [x] Add safe trusted-boundary cause taxonomy, correlation ID, remediation, and source/config
       anchors while retaining secret-redacted raw causes server-side.
   - Evidence: the focused runtime-failure suites in Latest verification prove the finite KTB001–008
@@ -51,8 +55,11 @@ compiler/runtime facts; none may become a second analyzer.
   - Evidence: the same 28-test suite proves the code action contains no `WorkspaceEdit`, invokes
     the authoritative `kovo fix <relative TSX/JSX>` process with `shell: false`, and refuses dirty,
     untrusted, non-authored, symlink, and out-of-workspace inputs.
-- [ ] Assert human, JSON, GitHub, editor, MCP, and devtool projections agree on code, severity,
+- [x] Assert human, JSON, GitHub, editor, MCP, and devtool projections agree on code, severity,
       help, and source span for each diagnostic family.
+  - Evidence: `packages/vscode/src/diagnostic-adapter.test.mjs` projects one registry-owned fixture
+    each for access, Drizzle/data, forms/CSRF, optimism, and trusted output through all six
+    surfaces and compares every named field, including GitHub escaping and exact UTF-16 spans.
 
 ## Provenance and executable teaching
 
@@ -87,46 +94,41 @@ compiler/runtime facts; none may become a second analyzer.
 - [x] Require a valid README/reference or generated-family landing page for every public package.
   - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages and the
     focused mutation tests reject missing, stale, or repository-internal front doors.
-- [ ] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
-  - Implemented: one semantic schema accepts only `crm`/`commerce`; the packed asset builder
-    accounts for every tracked source, excludes repo-only/secret-shaped material, and binds copied
-    bytes to SHA-256. Packed creation, install, typecheck, and standalone smoke tests pass for both.
-  - Closure gap: both packed `kovo build` commands must pass on the integrated app-contract source.
-- [ ] Keep authored task docs progressively disclosed and proof-backed.
+- [x] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
+  - Evidence: the packed consumer test creates both exact release catalogs, installs only tarball
+    dependencies, typechecks, tests, and production-builds each typed mutation/form scaffold. CRM
+    additionally proves default `node()` remains KV417-closed; passing builds select and emit the
+    explicit `retained-24h` deployment assertion. The catalog accounts for every copied/excluded
+    repo source, and strict scaffolds fail closed on a missing or malformed source inventory.
+- [x] Keep authored task docs progressively disclosed and proof-backed.
+  - Evidence: `node site/scripts/code-snippets-check.mjs` passed all 203 authored snippets and the
+    15-test style suite rejects front-loaded SPEC/KV detail, oversized first examples,
+    framework-first openers, and task samples without a runnable/inspectable proof step.
 
 ## Exit
 
-- [ ] Track 6 exit: equivalent facts/digests across every surface, actionable redacted failures,
+- [x] Track 6 exit: equivalent facts/digests across every surface, actionable redacted failures,
       production devtool absence, and all teaching artifacts passing from packed distributions.
+  - Evidence: current focused parity/devtool/editor, packed-example, docs-style, API-reference
+    digest, catalog/front-door, and API-surface gates in Latest verification pass. The existing
+    packed-publication gate below compiles the classified docs/recipes from all 14 tarballs.
 
 ## Latest verification
 
-- `pnpm exec vitest --run site/scripts/api-ref.test.mjs site/src/content-api-manifest.test.ts
---reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
-- `node scripts/build-component-catalog.mjs && node scripts/package-front-door.mjs` plus the
-  focused catalog/front-door suites passed (44 components, 1,737 icons, 14 package front doors).
+- The focused compiler/devtool/CLI/editor/catalog run passed 12 files and 229 tests; all devtool
+  unit tests passed (10 files, 57 tests), and `pnpm run test:devex-editor` passed 29 tests plus the
+  deterministic six-entry VSIX package check.
+- `pnpm exec vitest --run packages/create-kovo/src/index.example.packed.test.ts
+--reporter=verbose` passed both packed CRM/commerce consumers, including install, typecheck,
+  tests, default KV417 proof, and retained production builds. The focused creator/catalog/
+  security-surface run passed 55 tests.
+- `node site/scripts/code-snippets-check.mjs` passed 203 snippets; its 15-test policy suite passed.
+  The API-reference/catalog/front-door suite passed 31 tests and documented all 1,674 current
+  exports with deterministic digest checks.
 - `pnpm run check:docs-samples:packed -- --packed-manifest
-.release/packed-recipes-temp.json` passed (14 packages; 2,941 samples; 5 intended type errors;
-  16 compiled and executed golden recipes).
-- `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
-  1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.
-- `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
-packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
-packages/compiler/src/feedback-source-anchors.test.ts
-packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
-packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tests); the focused
-  registry subset passed (8 tests).
-- `pnpm exec vitest --run packages/server/src/diagnostics.test.ts
-packages/cli/src/trusted-boundary-failure.test.ts packages/cli/src/diagnostic-empathy.test.ts
-packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5 files, 24 tests);
-  `node scripts/api-surface-gate.mjs` passed with zero publicness violations.
-- Devtool unit/parity verification passed 11 files and 53 tests; direct conformance proved UI
-  edges ≡ MCP cards ≡ CLI text across three committed apps; the Chromium browser suite passed 3
-  interaction/replay tests and is registered for Chromium, Firefox, and WebKit in CI.
-- `pnpm run test:devex-editor` passed (2 files, 28 tests) and built/verified a deterministic
-  six-entry `kovojs.kovo-diagnostics` VSIX; `pnpm run check:api-surface` stayed at zero public and
-  recursive-publicness findings.
-- `pnpm exec vitest --run packages/create-kovo/src/cli-schema.test.ts
-packages/create-kovo/src/example-assets.test.ts packages/create-kovo/src/index.test.ts
-packages/create-kovo/src/index.example.packed.test.ts --no-file-parallelism --reporter=dot` passed
-  (4 files, 56 tests); both packed examples install, typecheck, and pass their standalone tests.
+.release/packed-recipes-temp.json` passed in the preceding teaching checkpoint (14 packages;
+  2,941 samples; five intended type errors; 16 compiled/executed golden recipes).
+- `pnpm run check:publish` passed in the same preceding checkpoint (14 packages; 3,096 classified
+  samples; 1,139 executable; 920 JSDoc examples; 93 CLI invocations; zero unexpected type errors).
+- `pnpm --filter @kovojs/compiler run build:dist`, `pnpm --filter create-kovo run build:dist`,
+  `node scripts/api-surface-gate.mjs`, and `git diff --check` passed.

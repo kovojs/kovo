@@ -48,6 +48,22 @@
     }
   },
   "kovo": {
-    "lifecyclePolicy": "strict-v1"
+    "lifecyclePolicy": "strict-v1",
+    "soundSubset": {
+      "securitySurface": [
+        "src/app.test.ts",
+        "src/app.tsx",
+        "src/auth.ts",
+        "src/components/auth-forms.tsx",
+        "src/components/contacts.tsx",
+        "src/db.ts",
+        "src/endpoint-posture.test.ts",
+        "src/kovo.ts",
+        "src/model.ts",
+        "src/mutations.ts",
+        "src/queries.ts",
+        "src/schema.ts"
+      ]
+    }
   }
 }

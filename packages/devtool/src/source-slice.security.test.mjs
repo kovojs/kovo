@@ -14,6 +14,66 @@ function pageGraph(...routes) {
 }
 
 describe('devtool source-root confinement', () => {
+  it('accepts only bounded producer-owned diagnostic fields and never carries raw causes', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-diagnostics-'));
+    const root = join(fixture, 'src');
+    mkdirSync(root);
+    const source = 'export const app = true;\n';
+    writeFileSync(join(root, 'app.tsx'), source);
+    const diagnostic = {
+      category: 'proof',
+      code: 'KV436',
+      help: 'Declare one access posture.',
+      message: 'Access posture is missing.',
+      severity: 'error',
+      source: { end: 16, file: 'src/app.tsx', start: 13 },
+      version: 'kovo-diagnostic/v1',
+    };
+
+    try {
+      const bundle = buildBundle({
+        app: 'fixture',
+        diagnostics: [diagnostic],
+        graph: {},
+        srcRoot: fixture,
+      });
+      expect(bundle.nodes[0]).toMatchObject({
+        data: diagnostic,
+        kind: 'diagnostic',
+        source: { file: 'src/app.tsx', start: 13, end: 16 },
+      });
+      expect(() =>
+        buildBundle({
+          app: 'fixture',
+          diagnostics: [{ ...diagnostic, rawCause: 'SECRET_SENTINEL' }],
+          graph: {},
+          srcRoot: fixture,
+        }),
+      ).toThrow(/rawCause is not supported/u);
+
+      let helpReads = 0;
+      const accessor = { ...diagnostic };
+      Object.defineProperty(accessor, 'help', {
+        enumerable: true,
+        get() {
+          helpReads += 1;
+          return 'forged';
+        },
+      });
+      expect(() =>
+        buildBundle({
+          app: 'fixture',
+          diagnostics: [accessor],
+          graph: {},
+          srcRoot: fixture,
+        }),
+      ).toThrow(/help (?:changed|must be an enumerable own data property)/u);
+      expect(helpReads).toBe(0);
+    } finally {
+      rmSync(fixture, { force: true, recursive: true });
+    }
+  });
+
   it('uses exact compiler offsets even when a decoy declaration appears first', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-source-anchor-'));
     const root = join(fixture, 'src');
@@ -99,7 +159,8 @@ describe('devtool source-root confinement', () => {
     mkdirSync(outside);
     const safeFile = join(root, 'routes.tsx');
     const privateFile = join(outside, 'private.tsx');
-    writeFileSync(safeFile, "export const safe = route('/safe', { page() { return ''; } });\n");
+    const safeSource = "export const safe = route('/safe', { page() { return ''; } });\n";
+    writeFileSync(safeFile, safeSource);
     writeFileSync(
       privateFile,
       "export const secret = route('/private', { page() { return 'SECRET'; } });\n",
@@ -109,7 +170,16 @@ describe('devtool source-root confinement', () => {
     try {
       const bundle = buildBundle({
         app: 'fixture',
-        graph: pageGraph('/safe', '/private'),
+        graph: {
+          pages: [
+            {
+              navigationSegments: [],
+              route: '/safe',
+              source: { end: safeSource.length, file: 'routes.tsx', start: 0 },
+            },
+            { navigationSegments: [], route: '/private' },
+          ],
+        },
         srcRoot: root,
       });
       const safe = bundle.nodes.find((node) => node.name === '/safe');
@@ -117,12 +187,7 @@ describe('devtool source-root confinement', () => {
 
       expect(safe?.source).toMatchObject({ file: 'routes.tsx' });
       expect(privateNode?.source).toBeNull();
-      expect(
-        resolveSource({ data: {}, kind: 'page', name: '/private' }, root, [
-          privateFile,
-          join(root, 'linked-outside', 'private.tsx'),
-        ]),
-      ).toBeNull();
+      expect(resolveSource({ data: {}, kind: 'page', name: '/private' }, root)).toBeNull();
 
       const originalFind = Array.prototype.find;
       const originalIterator = Array.prototype[Symbol.iterator];
@@ -139,9 +204,7 @@ describe('devtool source-root confinement', () => {
         String.prototype.endsWith = () => true;
         String.prototype.includes = () => true;
         String.prototype.startsWith = () => false;
-        poisonedPage = resolveSource({ data: {}, kind: 'page', name: '/private' }, root, [
-          safeFile,
-        ]);
+        poisonedPage = resolveSource({ data: {}, kind: 'page', name: '/private' }, root);
         poisonedComponent = resolveSource(
           {
             data: { domName: 'missing', exportName: 'Missing' },
@@ -149,7 +212,6 @@ describe('devtool source-root confinement', () => {
             name: 'missing',
           },
           root,
-          [safeFile],
         );
       } finally {
         Array.prototype.find = originalFind;
@@ -165,7 +227,7 @@ describe('devtool source-root confinement', () => {
     }
   });
 
-  it('skips symlink cycles while walking the selected source root', () => {
+  it('does not walk the selected source root when no compiler anchor exists', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-source-cycle-'));
     const root = join(fixture, 'root');
     mkdirSync(root);

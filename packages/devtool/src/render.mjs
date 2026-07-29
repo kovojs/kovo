@@ -480,6 +480,12 @@ function runtimeFrameSummary(frame) {
 }
 
 function nodeSub(n) {
+  if (n.kind === 'diagnostic') return `${n.data.severity} · ${n.data.category}`;
+  if (n.kind === 'agent')
+    return `${arrayLength(n.data.modelOperations, 'devtool agent model operations')} model effects`;
+  if (n.kind === 'tool')
+    return `${n.data.minimumIntegrity || 'unknown'} → ${n.data.mutation || 'unresolved'}`;
+  if (n.kind === 'task') return n.data.cron ? `cron ${n.data.cron}` : 'durable work';
   if (n.kind === 'mutation') return joinStrings(n.data.writes, ' · ', 'devtool writes');
   if (n.kind === 'query')
     return 'reads ' + joinStrings(n.data.domains, ', ', 'devtool query domains');
@@ -557,7 +563,104 @@ function renderInspector(bundle, byId, sel) {
     arrayFind(m.data.optimistic, (o) => o.query === queryName, 'devtool optimistic facts') ?? null;
 
   let body = '';
-  if (sel.kind === 'component') {
+  if (sel.kind === 'diagnostic') {
+    const source = sel.data.sourceAnchor;
+    body += section(
+      'Message',
+      0,
+      `<div style="font-size:13px;line-height:1.6;color:var(--ink)">${esc(sel.data.message)}</div>`,
+    );
+    if (sel.data.help) {
+      body += section(
+        'Next step',
+        0,
+        `<div style="font-size:13px;line-height:1.6;color:var(--dim)">${esc(sel.data.help)}</div>`,
+      );
+    }
+    body += section(
+      'Producer facts',
+      0,
+      `<div class="kv"><span class="chip">${esc(sel.data.code)}</span><span class="chip">${esc(sel.data.severity)}</span><span class="chip">${esc(sel.data.category)}</span>${
+        source
+          ? `<span class="chip">${esc(source.file)}:${esc(source.start)}-${esc(source.end)}</span>`
+          : ''
+      }</div>`,
+    );
+  } else if (sel.kind === 'agent' || sel.kind === 'tool' || sel.kind === 'task') {
+    const outgoing = arrayMap(
+      out,
+      (edge) => ({ edge, node: mapGet(byId, edge.to) }),
+      'devtool authored graph outgoing edges',
+    );
+    const incoming = arrayMap(
+      inc,
+      (edge) => ({ edge, node: mapGet(byId, edge.from) }),
+      'devtool authored graph incoming edges',
+    );
+    body += section(
+      'Outgoing graph facts',
+      arrayLength(outgoing, 'devtool authored graph outgoing edges'),
+      joinStrings(
+        arrayMap(
+          outgoing,
+          (fact) => flowrow(app, fact.node, `<span class="chip">${esc(fact.edge.kind)}</span>`),
+          'devtool authored graph outgoing edges',
+        ),
+        '',
+        'devtool authored graph outgoing rows',
+      ) || muted('No outgoing graph facts.'),
+    );
+    if (arrayLength(incoming, 'devtool authored graph incoming edges') > 0) {
+      body += section(
+        'Incoming graph facts',
+        arrayLength(incoming, 'devtool authored graph incoming edges'),
+        joinStrings(
+          arrayMap(
+            incoming,
+            (fact) => flowrow(app, fact.node, `<span class="chip">${esc(fact.edge.kind)}</span>`),
+            'devtool authored graph incoming edges',
+          ),
+          '',
+          'devtool authored graph incoming rows',
+        ),
+      );
+    }
+    const operations =
+      sel.kind === 'agent'
+        ? sel.data.modelOperations
+        : sel.kind === 'tool'
+          ? sel.data.operations
+          : [];
+    if (arrayLength(operations, 'devtool security operations') > 0) {
+      body += section(
+        sel.kind === 'agent' ? 'Model effects' : 'Tool effects',
+        arrayLength(operations, 'devtool security operations'),
+        `<div class="kv">${joinStrings(
+          arrayMap(
+            operations,
+            (operation) => `<span class="chip">${esc(operation.kind)}</span>`,
+            'devtool security operations',
+          ),
+          '',
+          'devtool operation chips',
+        )}</div>`,
+      );
+    }
+    if (sel.kind === 'tool') {
+      body += section(
+        'Integrity contract',
+        0,
+        `<div class="kv"><span class="chip">minimum ${esc(sel.data.minimumIntegrity || 'unknown')}</span><span class="chip">result ${esc(sel.data.resultIntegrity || 'unknown')}</span></div>`,
+      );
+    }
+    if (sel.kind === 'task' && sel.data.cron) {
+      body += section(
+        'Schedule',
+        0,
+        `<div class="kv"><span class="chip">${esc(sel.data.cron)}</span></div>`,
+      );
+    }
+  } else if (sel.kind === 'component') {
     const queries = arrayMap(
       arrayFilter(inc, (e) => e.kind === 'feeds', 'devtool incoming edges'),
       (e) => mapGet(byId, e.from),
@@ -860,13 +963,25 @@ function renderInspector(bundle, byId, sel) {
   if (sel.source?.code) body += section('Source', 0, renderCode(sel.source));
 
   const meta =
-    sel.kind === 'component'
-      ? `${sel.data.domName} · fragment ${arrayLength(sel.data.fragments, 'devtool fragments') ? arrayValue(sel.data.fragments, 0, 'devtool fragments') : '—'}`
-      : sel.kind === 'mutation'
-        ? `POST /_m/${sel.name}`
-        : sel.kind === 'query'
-          ? `GET /_q/${sel.name}`
-          : sel.kind;
+    sel.kind === 'diagnostic'
+      ? sel.data.sourceAnchor
+        ? `${sel.data.severity} · ${sel.data.sourceAnchor.file}:${sel.data.sourceAnchor.start}-${sel.data.sourceAnchor.end}`
+        : `${sel.data.severity} · source-less`
+      : sel.kind === 'agent'
+        ? 'capability-bounded model'
+        : sel.kind === 'tool'
+          ? `invokes ${sel.data.mutation || 'unresolved mutation'}`
+          : sel.kind === 'task'
+            ? sel.data.cron
+              ? `cron ${sel.data.cron}`
+              : 'durable task'
+            : sel.kind === 'component'
+              ? `${sel.data.domName} · fragment ${arrayLength(sel.data.fragments, 'devtool fragments') ? arrayValue(sel.data.fragments, 0, 'devtool fragments') : '—'}`
+              : sel.kind === 'mutation'
+                ? `POST /_m/${sel.name}`
+                : sel.kind === 'query'
+                  ? `GET /_q/${sel.name}`
+                  : sel.kind;
   const guards = sel.data.guards;
   return (
     `<div class="insp-head node--${escAttr(sel.kind)}"><span class="insp-kind" style="color:${escAttr(accent(sel.kind))}">${esc(glyph(sel.kind))} ${esc(sel.kind)}</span>` +
@@ -887,7 +1002,7 @@ function renderInspector(bundle, byId, sel) {
 }
 
 function overviewInspector(bundle) {
-  const order = ['mutation', 'domain', 'query', 'component', 'page'];
+  const order = LANES;
   const counts = joinStrings(
     arrayMap(
       arrayFilter(order, (k) => bundle.counts[k] > 0, 'devtool overview order'),
@@ -960,7 +1075,7 @@ function overviewInspector(bundle) {
     section(
       'How to read this',
       0,
-      `<div style="font-size:13px;line-height:1.6;color:var(--dim)">Data flows left → right: a <b style="color:var(--mutation)">mutation</b> writes <b style="color:var(--domain)">domains</b>, which back <b style="color:var(--query)">queries</b>, which feed <b style="color:var(--component)">components</b>. The under-arc is a component <b>emitting</b> a mutation — the feedback loop. Click any node to trace it. ${parity}</div>`,
+      `<div style="font-size:13px;line-height:1.6;color:var(--dim)">Data flows left → right from capability-bounded agents, tools, and durable tasks through mutations and domains into queries, components, and pages. Producer-owned diagnostics retain their exact severity, help, and source span in a final presentation lane. Click any node to trace it. ${parity}</div>`,
     ) +
     `</div>`
   );

@@ -56,6 +56,76 @@ describe('devtool renderPage', () => {
     expect(renderPage(baseRenderOptions())).toContain('This is the same graph the MCP');
   });
 
+  it.each([
+    ['agent:assistant', 'Model effects', 'server.egress.request'],
+    ['tool:assistant:save', 'Integrity contract', 'minimum principal'],
+    ['task:reconcile', 'Outgoing graph facts', 'dispatches'],
+  ])('renders compiler-owned agent/tool/task carrier %s', (sel, section, fact) => {
+    const options = baseRenderOptions();
+    options.bundle.counts = { agent: 1, mutation: 1, task: 1, tool: 1 };
+    options.bundle.nodes = [
+      {
+        data: { modelOperations: [{ kind: 'server.egress.request' }] },
+        id: 'agent:assistant',
+        kind: 'agent',
+        label: 'assistant',
+        name: 'assistant',
+      },
+      {
+        data: {
+          agent: 'assistant',
+          minimumIntegrity: 'principal',
+          mutation: 'save',
+          operations: [{ kind: 'server.state.write' }],
+          resultIntegrity: 'principal',
+        },
+        id: 'tool:assistant:save',
+        kind: 'tool',
+        label: 'save',
+        name: 'assistant:save',
+      },
+      {
+        data: { cron: '0 2 * * *' },
+        id: 'task:reconcile',
+        kind: 'task',
+        label: 'reconcile',
+        name: 'reconcile',
+      },
+      {
+        data: { inputFields: [], optimistic: [], writes: [] },
+        id: 'mutation:save',
+        kind: 'mutation',
+        label: 'save',
+        name: 'save',
+      },
+    ];
+    options.bundle.edges = [
+      {
+        from: 'agent:assistant',
+        id: 'agent:assistant->tool:assistant:save:uses',
+        kind: 'uses',
+        to: 'tool:assistant:save',
+      },
+      {
+        from: 'tool:assistant:save',
+        id: 'tool:assistant:save->mutation:save:invokes',
+        kind: 'invokes',
+        to: 'mutation:save',
+      },
+      {
+        from: 'task:reconcile',
+        id: 'task:reconcile->mutation:save:dispatches',
+        kind: 'dispatches',
+        to: 'mutation:save',
+      },
+    ];
+    options.sel = sel;
+
+    const html = renderPage(options);
+    expect(html).toContain(section);
+    expect(html).toContain(fact);
+  });
+
   it('escapes hostile input at HTML attribute sinks', () => {
     const hostile = `x" autofocus onfocus="alert(1)`;
     const html = renderPage({

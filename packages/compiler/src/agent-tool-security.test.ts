@@ -46,6 +46,18 @@ describe('agent tool compiler effect door', () => {
         ],
       }),
     ]);
+    const [agentFact] = result.agentGraphFacts;
+    const [toolFact] = agentFact?.tools ?? [];
+    expect(source.slice(agentFact?.source.start, agentFact?.source.end)).toContain(
+      "agent('documents'",
+    );
+    expect(source.slice(toolFact?.source.start, toolFact?.source.end)).toContain(
+      "tool('save-document'",
+    );
+    expect(source.slice(toolFact?.bindingSource.start, toolFact?.bindingSource.end)).toBe(
+      'saveTool',
+    );
+    expect(source.slice(toolFact?.mutationSource.start, toolFact?.mutationSource.end)).toBe('save');
 
     const lowered = lowerStandaloneServerSource(source, 'src/agents.ts');
     expect(lowered).toContain('__kovoAssignDerivedAgentToolOperations(tool(');

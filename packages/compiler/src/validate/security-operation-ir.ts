@@ -364,22 +364,23 @@ export const validateFiniteServerSecurityOperations = securityClassifier(
           definition.toolBindings,
           bindingIndex,
           'Agent tool bindings',
-        ) as string;
-        if (compilerSetHas(agentToolBindings, binding)) {
+        ) as AgentDefinitionModel['toolBindings'][number];
+        const bindingName = binding.binding;
+        if (compilerSetHas(agentToolBindings, bindingName)) {
           appendFiniteIrDiagnostic(
             found,
             diagnostics,
-            { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
-            `agent tool binding ${binding} is duplicated.`,
+            binding.span,
+            `agent tool binding ${bindingName} is duplicated.`,
           );
         }
-        compilerSetAdd(agentToolBindings, binding);
-        if (!compilerSetHas(toolBindings, binding)) {
+        compilerSetAdd(agentToolBindings, bindingName);
+        if (!compilerSetHas(toolBindings, bindingName)) {
           appendFiniteIrDiagnostic(
             found,
             diagnostics,
-            { end: definition.modelHandler.bodyEnd, start: definition.modelHandler.bodyStart },
-            `agent tool ${binding} is not an exact same-file tool declaration.`,
+            binding.span,
+            `agent tool ${bindingName} is not an exact same-file tool declaration.`,
           );
           continue;
         }
@@ -390,7 +391,7 @@ export const validateFiniteServerSecurityOperations = securityClassifier(
             toolIndex,
             'Agent tool declarations',
           ) as AgentToolModel;
-          if (tool.binding === binding) {
+          if (tool.binding === bindingName) {
             toolName = tool.name;
             break;
           }

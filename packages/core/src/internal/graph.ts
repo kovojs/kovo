@@ -88,6 +88,7 @@ export type {
   StructuredAuditObligationFact,
   StyleRuleExplain,
   TaskExplain,
+  TaskCompositionExplain,
   ToctouFact,
   TouchGraph,
   TouchGraphEntry,

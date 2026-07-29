@@ -1,4 +1,8 @@
-import type { AgentExplainFact, AgentToolExplainFact } from '@kovojs/core/internal/graph';
+import type {
+  AgentExplainFact,
+  AgentToolExplainFact,
+  SourceAnchor,
+} from '@kovojs/core/internal/graph';
 import {
   agentMinimumIntegrityForOperations,
   isServerSecurityOperationKind,
@@ -17,7 +21,10 @@ import {
 import type { ComponentModuleModel, MutationHandlerModel } from './scan/model.js';
 
 /** Build exact per-agent/per-tool closures from the same finite L2 operation facts as HTTP roots. */
-export function agentGraphFactsFromModel(model: ComponentModuleModel): AgentExplainFact[] {
+export function agentGraphFactsFromModel(
+  model: ComponentModuleModel,
+  fileName: string,
+): AgentExplainFact[] {
   const facts: AgentExplainFact[] = [];
   const definitions = compilerSnapshotDenseArray(model.agentDefinitions, 'Agent definitions');
   const tools = compilerSnapshotDenseArray(model.agentTools, 'Agent tools');
@@ -26,8 +33,14 @@ export function agentGraphFactsFromModel(model: ComponentModuleModel): AgentExpl
     const toolFacts: AgentToolExplainFact[] = [];
     const bindings = compilerSnapshotDenseArray(definition.toolBindings, 'Agent tool bindings');
     for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
-      const binding = bindings[bindingIndex]!;
-      const toolFact = agentToolFactForBinding(model, binding, tools);
+      const reference = bindings[bindingIndex]!;
+      const toolFact = agentToolFactForBinding(
+        model,
+        reference.binding,
+        tools,
+        fileName,
+        reference.span,
+      );
       if (toolFact !== undefined)
         compilerArrayAppend(toolFacts, toolFact, 'Agent tool graph facts');
     }
@@ -36,6 +49,7 @@ export function agentGraphFactsFromModel(model: ComponentModuleModel): AgentExpl
       {
         modelOperations: terminalOperationFacts(definition.modelHandler),
         name: definition.name,
+        source: sourceAnchor(fileName, definition.callSpan),
         tools: toolFacts,
       },
       'Agent graph facts',
@@ -63,28 +77,32 @@ export function agentToolOperationsForBinding(
   model: ComponentModuleModel,
   binding: string,
 ): readonly ServerSecurityOperationFact[] | undefined {
-  return agentToolFactForBinding(
-    model,
+  const toolModel = agentToolModelForBinding(
     binding,
     compilerSnapshotDenseArray(model.agentTools, 'Agent tools'),
-  )?.operations;
+  );
+  if (toolModel?.mutationBinding === undefined || (toolModel.violations?.length ?? 0) > 0) {
+    return undefined;
+  }
+  const mutationHandler = handlerForMutationBinding(model, toolModel.mutationBinding);
+  const mutationKey = mutationHandler?.mutationOwner?.value;
+  return mutationHandler === undefined || mutationKey === undefined || mutationKey === 'UNRESOLVED'
+    ? undefined
+    : terminalOperationFacts(mutationHandler);
 }
 
 function agentToolFactForBinding(
   model: ComponentModuleModel,
   binding: string,
   tools: readonly ComponentModuleModel['agentTools'][number][],
+  fileName: string,
+  bindingSpan: { readonly end: number; readonly start: number },
 ): AgentToolExplainFact | undefined {
-  let toolModel: ComponentModuleModel['agentTools'][number] | undefined;
-  for (let toolIndex = 0; toolIndex < tools.length; toolIndex += 1) {
-    if (tools[toolIndex]!.binding === binding) {
-      toolModel = tools[toolIndex]!;
-      break;
-    }
-  }
+  const toolModel = agentToolModelForBinding(binding, tools);
   if (
     toolModel?.name === undefined ||
     toolModel.mutationBinding === undefined ||
+    toolModel.mutationBindingSpan === undefined ||
     (toolModel.violations?.length ?? 0) > 0
   ) {
     return undefined;
@@ -96,12 +114,32 @@ function agentToolFactForBinding(
   }
   const operations = terminalOperationFacts(mutationHandler);
   return {
+    bindingSource: sourceAnchor(fileName, bindingSpan),
     minimumIntegrity: agentMinimumIntegrityForOperations(operations),
     mutation: mutationKey,
+    mutationSource: sourceAnchor(fileName, toolModel.mutationBindingSpan),
     name: toolModel.name,
     operations,
     resultIntegrity: toolModel.resultIntegrity,
+    source: sourceAnchor(fileName, toolModel.callSpan),
   };
+}
+
+function agentToolModelForBinding(
+  binding: string,
+  tools: readonly ComponentModuleModel['agentTools'][number][],
+): ComponentModuleModel['agentTools'][number] | undefined {
+  for (let toolIndex = 0; toolIndex < tools.length; toolIndex += 1) {
+    if (tools[toolIndex]!.binding === binding) return tools[toolIndex]!;
+  }
+  return undefined;
+}
+
+function sourceAnchor(
+  file: string,
+  span: { readonly end: number; readonly start: number },
+): SourceAnchor {
+  return { end: span.end, file, start: span.start };
 }
 
 function handlerForMutationBinding(

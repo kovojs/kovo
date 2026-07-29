@@ -24,6 +24,10 @@
   --purple: #c792ea;
 
   /* node-kind accents mapped onto kovo's palette */
+  --agent: #fb7185;
+  --tool: #f472b6;
+  --task: var(--amber);
+  --diagnostic: var(--red);
   --mutation: var(--amber);
   --domain: var(--green);
   --query: var(--sky);
@@ -432,6 +436,18 @@ body {
     0 0 8px rgb(251 191 36 / 0.22);
 }
 
+.node--agent {
+  --accent: var(--agent);
+}
+.node--tool {
+  --accent: var(--tool);
+}
+.node--task {
+  --accent: var(--task);
+}
+.node--diagnostic {
+  --accent: var(--diagnostic);
+}
 .node--mutation {
   --accent: var(--mutation);
 }

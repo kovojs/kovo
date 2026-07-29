@@ -98,6 +98,45 @@ export function buildCard(node, bundle) {
     S.writtenBy = bundle.nodes
       .filter((n) => n.kind === 'mutation' && (n.data.writes ?? []).includes(node.name))
       .map(ref);
+  } else if (node.kind === 'agent') {
+    S.tools = edges
+      .filter((edge) => edge.kind === 'uses' && edge.from === node.id)
+      .map((edge) => {
+        const tool = byId.get(edge.to);
+        return {
+          ...ref(tool),
+          minimumIntegrity: tool.data.minimumIntegrity,
+          mutation: tool.data.mutation,
+          resultIntegrity: tool.data.resultIntegrity,
+        };
+      });
+    S.modelOperations = node.data.modelOperations ?? [];
+  } else if (node.kind === 'tool') {
+    S.invokes = edges
+      .filter((edge) => edge.kind === 'invokes' && edge.from === node.id)
+      .map((edge) => ref(byId.get(edge.to)));
+    S.operations = node.data.operations ?? [];
+    card.minimumIntegrity = node.data.minimumIntegrity;
+    card.resultIntegrity = node.data.resultIntegrity;
+  } else if (node.kind === 'task') {
+    S.composition = edges
+      .filter(
+        (edge) =>
+          edge.from === node.id &&
+          (edge.kind === 'dispatches' || edge.kind === 'reads' || edge.kind === 'schedules'),
+      )
+      .map((edge) => ({ edge: edge.kind, ...ref(byId.get(edge.to)) }));
+    card.cron = node.data.cron;
+  } else if (node.kind === 'diagnostic') {
+    card.diagnostic = {
+      category: node.data.category,
+      code: node.data.code,
+      help: node.data.help,
+      message: node.data.message,
+      severity: node.data.severity,
+      source: node.data.source,
+      version: node.data.version,
+    };
   } else if (node.kind === 'page') {
     card.meta = node.data.meta ?? {};
     S.renders = edges
@@ -118,6 +157,19 @@ export function cardToText(card) {
   if (card.domName) L.push(`dom-name: ${card.domName}`);
   if (card.fragments?.length) L.push(`fragment-targets: ${card.fragments.join(', ')}`);
   if (card.guards?.length) L.push(`guards: ${card.guards.join(', ')}`);
+  if (card.diagnostic) {
+    const diagnostic = card.diagnostic;
+    L.push(`code: ${diagnostic.code}`);
+    L.push(`severity: ${diagnostic.severity}`);
+    L.push(`category: ${diagnostic.category}`);
+    L.push(`message: ${diagnostic.message}`);
+    if (diagnostic.help) L.push(`help: ${diagnostic.help}`);
+    if (diagnostic.source) {
+      L.push(
+        `source-span: ${diagnostic.source.file}:${diagnostic.source.start}-${diagnostic.source.end}`,
+      );
+    }
+  }
   const S = card.sections;
   if (S.queriesIn) {
     L.push(`\nQUERIES IN (${S.queriesIn.length})`);
@@ -176,6 +228,33 @@ export function cardToText(card) {
   if (S.renders) {
     L.push(`\nRENDERS (${S.renders.length})`);
     L.push(list(S.renders, (c) => `  ${c.label}`));
+  }
+  if (S.tools) {
+    L.push(`\nTOOLS (${S.tools.length})`);
+    L.push(
+      list(
+        S.tools,
+        (tool) =>
+          `  ${tool.label}  mutation=${tool.mutation} minimum-integrity=${tool.minimumIntegrity} result-integrity=${tool.resultIntegrity}`,
+      ),
+    );
+  }
+  if (S.modelOperations) {
+    L.push(
+      `\nMODEL EFFECTS: ${S.modelOperations.map((operation) => operation.kind).join(', ') || '—'}`,
+    );
+  }
+  if (S.invokes) {
+    L.push(`\nINVOKES MUTATIONS (${S.invokes.length})`);
+    L.push(list(S.invokes, (mutation) => `  ${mutation.label}`));
+  }
+  if (S.operations) {
+    L.push(`\nTOOL EFFECTS: ${S.operations.map((operation) => operation.kind).join(', ') || '—'}`);
+  }
+  if (S.composition) {
+    if (card.cron) L.push(`cron: ${card.cron}`);
+    L.push(`\nTASK EDGES (${S.composition.length})`);
+    L.push(list(S.composition, (edge) => `  ${edge.edge} → ${edge.label}`));
   }
   if (card.source) {
     L.push(`\nSOURCE  ${card.source.file}:${card.source.startLine}-${card.source.endLine}`);

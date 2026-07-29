@@ -115,6 +115,7 @@ import {
   type ComponentModel,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
+  type TaskCompositionEdgeModel,
 } from './scan/parse.js';
 import {
   applyTerminalEmitPatches,
@@ -1575,6 +1576,7 @@ function assembleCompileResult(
     registryCss,
     server,
     parsed.originalModel,
+    parsed.options.fileName,
   );
   const confidentialityClosed = registryCss.confidentialityClosed;
   const files: CompileResult['files'] = [
@@ -1606,7 +1608,7 @@ function assembleCompileResult(
   assertEmittedTranslation(client, registryCss, files, confidentialityClosed, parsed.originalModel);
 
   return {
-    agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel),
+    agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel, parsed.options.fileName),
     browserPostureManifest: compileBrowserPostureManifest(lowered, validated.handlers),
     clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,
@@ -1806,6 +1808,7 @@ function componentCompileFactSnapshot(
   registryCss: EmitRegistryCssPhaseResult,
   server: EmitServerPhaseResult,
   originalModel: ComponentModuleModel,
+  fileName: string,
 ): CompileFactSnapshot {
   const ledger = createCompileFactLedger();
   // Validation owns the final source-anchored coverage. Append it first so the lower pipeline's
@@ -1834,7 +1837,7 @@ function componentCompileFactSnapshot(
     ...webhookEndpointGraphFactsFromModel(originalModel),
   ]);
   ledger.append('taskGraphFacts', { phase: 'graph', pass: 'task-graph' }, [
-    ...taskGraphFactsFromModel(originalModel),
+    ...taskGraphFactsFromModel(originalModel, fileName),
   ]);
   ledger.append('handlerWriteSinkFacts', { phase: 'graph', pass: 'handler-write-sinks' }, [
     ...handlerWriteSinkFactsFromModel(originalModel),
@@ -1870,14 +1873,48 @@ function componentCompileFactSnapshot(
   return ledger.snapshot();
 }
 
-function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
-  return compilerMapDense(model.taskRunHandlers, 'Task graph handlers', (handler) => ({
-    ...(handler.cron === undefined ? {} : { cron: handler.cron }),
-    key: handler.key,
-    ...(handler.runMutationEdges.length === 0 ? {} : { runMutations: handler.runMutationEdges }),
-    ...(handler.runQueryEdges.length === 0 ? {} : { runQueries: handler.runQueryEdges }),
-    ...(handler.scheduleEdges.length === 0 ? {} : { schedules: handler.scheduleEdges }),
+function taskGraphFactsFromModel(model: ComponentModuleModel, fileName: string): TaskGraphFact[] {
+  return compilerMapDense(model.taskRunHandlers, 'Task graph handlers', (handler) => {
+    const runMutations = taskCompositionTargets(handler.runMutationEdges);
+    const runQueries = taskCompositionTargets(handler.runQueryEdges);
+    const schedules = taskCompositionTargets(handler.scheduleEdges);
+    return {
+      composition: [
+        ...taskCompositionFacts(fileName, 'run-mutation', handler.runMutationEdges),
+        ...taskCompositionFacts(fileName, 'run-query', handler.runQueryEdges),
+        ...taskCompositionFacts(fileName, 'schedule', handler.scheduleEdges),
+      ],
+      ...(handler.cron === undefined ? {} : { cron: handler.cron }),
+      key: handler.key,
+      ...(runMutations.length === 0 ? {} : { runMutations }),
+      ...(runQueries.length === 0 ? {} : { runQueries }),
+      ...(schedules.length === 0 ? {} : { schedules }),
+      source: { end: handler.callSpan.end, file: fileName, start: handler.callSpan.start },
+    };
+  });
+}
+
+function taskCompositionFacts(
+  fileName: string,
+  kind: CoreGraph.TaskCompositionExplain['kind'],
+  edges: readonly TaskCompositionEdgeModel[],
+): CoreGraph.TaskCompositionExplain[] {
+  return compilerMapDense(edges, `Task ${kind} composition edges`, (edge) => ({
+    kind,
+    source: { end: edge.span.end, file: fileName, start: edge.span.start },
+    target: edge.target,
   }));
+}
+
+function taskCompositionTargets(edges: readonly TaskCompositionEdgeModel[]): string[] {
+  const targets = compilerCreateSet<string>();
+  const snapshot = compilerSnapshotDenseArray(edges, 'Task composition targets');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerSetAdd(targets, snapshot[index]!.target);
+  }
+  const result: string[] = [];
+  compilerSetForEachSorted(targets, result);
+  return result;
 }
 
 function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): EndpointGraphFact[] {

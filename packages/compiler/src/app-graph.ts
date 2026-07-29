@@ -459,17 +459,27 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
 
   for (let index = 0; index < snapshot.length; index += 1) {
     const task = snapshot[index]!;
+    assertTaskCompositionSummary(task);
     const previous = compilerMapGet(byKey, task.key);
+    if (
+      previous !== undefined &&
+      compilerJsonStringify(previous.source) !== compilerJsonStringify(task.source)
+    ) {
+      throw new TypeError(`Conflicting task source anchors for ${task.key}.`);
+    }
     const cron = previous?.cron ?? task.cron;
+    const composition = mergeTaskComposition(previous?.composition ?? [], task.composition);
     const runMutations = mergeSortedStrings(previous?.runMutations, task.runMutations);
     const runQueries = mergeSortedStrings(previous?.runQueries, task.runQueries);
     const schedules = mergeSortedStrings(previous?.schedules, task.schedules);
     compilerMapSet(byKey, task.key, {
+      composition,
       ...(cron === undefined ? {} : { cron }),
       key: task.key,
       ...(runMutations.length === 0 ? {} : { runMutations }),
       ...(runQueries.length === 0 ? {} : { runQueries }),
       ...(schedules.length === 0 ? {} : { schedules }),
+      source: previous?.source ?? task.source,
     });
   }
 
@@ -480,6 +490,7 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
     compilerArrayAppend(
       normalized,
       {
+        composition: task.composition,
         ...(task.cron === undefined ? {} : { cron: task.cron }),
         key: task.key,
         ...(task.runMutations === undefined || task.runMutations.length === 0
@@ -491,6 +502,7 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
         ...(task.schedules === undefined || task.schedules.length === 0
           ? {}
           : { schedules: task.schedules }),
+        source: task.source,
       },
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
@@ -499,6 +511,59 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
     normalized,
     (left, right) => compilerStringLocaleCompare(left.key, right.key),
     'task facts',
+  );
+}
+
+function assertTaskCompositionSummary(task: CoreGraph.TaskExplain): void {
+  const expectedRunMutations = taskCompositionTargets(task.composition, 'run-mutation');
+  const expectedRunQueries = taskCompositionTargets(task.composition, 'run-query');
+  const expectedSchedules = taskCompositionTargets(task.composition, 'schedule');
+  if (
+    compilerJsonStringify(expectedRunMutations) !==
+      compilerJsonStringify(uniqueSorted(task.runMutations ?? [])) ||
+    compilerJsonStringify(expectedRunQueries) !==
+      compilerJsonStringify(uniqueSorted(task.runQueries ?? [])) ||
+    compilerJsonStringify(expectedSchedules) !==
+      compilerJsonStringify(uniqueSorted(task.schedules ?? []))
+  ) {
+    throw new TypeError(`Task ${task.key} composition summary drifted from its anchored edges.`);
+  }
+}
+
+function taskCompositionTargets(
+  composition: readonly CoreGraph.TaskCompositionExplain[],
+  kind: CoreGraph.TaskCompositionExplain['kind'],
+): string[] {
+  const targets: string[] = [];
+  const snapshot = compilerSnapshotDenseArray(composition, 'Task composition facts');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    if (snapshot[index]!.kind === kind) {
+      compilerArrayAppend(targets, snapshot[index]!.target, 'Task composition targets');
+    }
+  }
+  return uniqueSorted(targets);
+}
+
+function mergeTaskComposition(
+  left: readonly CoreGraph.TaskCompositionExplain[],
+  right: readonly CoreGraph.TaskCompositionExplain[],
+): CoreGraph.TaskCompositionExplain[] {
+  const byIdentity = compilerCreateMap<string, CoreGraph.TaskCompositionExplain>();
+  const values = concatDense(left, right);
+  for (let index = 0; index < values.length; index += 1) {
+    const fact = values[index]!;
+    const key = `${fact.kind}\0${fact.target}\0${fact.source.file}\0${fact.source.start}\0${fact.source.end}`;
+    compilerMapSet(byIdentity, key, fact);
+  }
+  return stableSortedCopy(
+    mapValues(byIdentity),
+    (a, b) =>
+      compilerStringLocaleCompare(a.kind, b.kind) ||
+      compilerStringLocaleCompare(a.target, b.target) ||
+      compilerStringLocaleCompare(a.source.file, b.source.file) ||
+      a.source.start - b.source.start ||
+      a.source.end - b.source.end,
+    'task composition facts',
   );
 }
 

@@ -241,15 +241,20 @@ surface ships before the MCP tools, which then drop onto the same model.
       imported/shared declaration sites and fail-closed missing/ambiguous association.
   - Evidence: `packages/compiler/src/feedback-source-anchors.test.ts` and
     `packages/cli/src/source-anchors.test.ts` pass in Latest verification.
-- [ ] Backfill agent/task/tool graph carriers, prove and remove any remaining fallback symbol
-      heuristics, then consider shiki for the highlighter.
+- [x] Backfill agent/task/tool graph carriers and remove the remaining fallback symbol heuristics.
+  - Evidence: the focused compiler/devtool suites in Latest verification prove exact declaration,
+    binding, mutation, and composition anchors for agents, tools, and tasks. Source preview now
+    resolves only those producer-owned anchors and returns no slice when an anchor is absent,
+    invalid, ambiguous, or outside the selected root.
 
 ### Phase 2 — Visual graph UI (the lead surface) — shipped
 
 - [x] Devtool stood up as a Kovo app (`examples/devtool/`); runs on its own `vp dev`.
 - [x] Mountable at `/__kovo`: base-path-aware app-shell (`KOVO_DEVTOOL_BASE`) + a prefix-stripping `devtoolMountPlugin` (`vite.config.ts`) dispatching to an exported `nodeHandler`. `dev:mounted` serves under the prefix; copy the plugin into a host app's config to embed. Verified in-browser (page + island + selection all work under `/__kovo`; styles via inlined criticalCss).
 - [x] Layered swimlane render (barycenter ordering, SVG edges + HTML node cards) over the static graph (`src/render.ts`).
-- [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6 status (`derived`/`hand-written`/`await-fragment`/`punted`). **Open:** KV311 update-coverage gaps inline (those facts are absent from current `graph.json` exports).
+- [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6
+      status (`derived`/`hand-written`/`await-fragment`/`punted`), and compiler-owned KV311
+      update-coverage facts render as exact binding-position nodes when present.
 - [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).
 - [x] Browser suite for JS-off navigation, pan/zoom/hover, live replay, safe DOM rendering, and
       lifecycle cleanup.
@@ -294,11 +299,12 @@ surface ships before the MCP tools, which then drop onto the same model.
 - **Static-graph MVP**: Phases 0–2 need no running app; live overlay (Phase 4) is
   a later additive transport, mirroring how SSE is additive in §9.3.
 
-## Risks / open questions
+## Risks
 
-- **Diagnostic-family completeness**: fine-grained graph positions now retain compiler anchors, but
-  agent/task/tool carriers and each remaining diagnostic family still need fixture-level
-  projection proof before fallback symbol heuristics can be declared absent.
+- **Source-position drift (closed by construction)**: fine-grained graph positions, agent/tool
+  bindings, task composition, and diagnostic cards now retain compiler/producer anchors.
+  `resolveSource` does not crawl or rediscover symbols, and the fixture suite uses decoy
+  declarations plus missing/out-of-root anchors to prove fail-closed behavior.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
   the MCP side avoids this by being navigational (neighbors, not dumps).
 - **Live overlay & deploy skew**: current capture is deliberately same-process and development-only.
@@ -313,22 +319,17 @@ named browser suite covers the remaining render and interaction contract.
 
 ## Latest verification
 
-- `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
-packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
+- `pnpm exec vitest --run packages/compiler/src/agent-tool-security.test.ts
+packages/compiler/src/registry.test.ts packages/compiler/src/scan/parse.test.ts
 packages/compiler/src/feedback-source-anchors.test.ts
 packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
-packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tests).
-- `pnpm exec vitest --run packages/compiler/src/registry.test.ts -t 'emits
-live-target|honors disableServerRefresh|threads compiler-derived route layout|derives app graph
-component facts|derives page query facts|emits mutation form error binding facts|lowers
-object-form mutation values' --reporter=dot` passed (8 tests).
-- `pnpm exec vp check packages/devtool examples/devtool plans/devtools.md
-plans/devex-feel-and-teach.md tests/browser-acceptance.mjs
-tests/kovo-check.server-browser.node.mjs vite.config.ts` passed (54 formatted files, 37
-  lint/typechecked files).
-- The focused devtool/parity run passed 11 files and 53 tests; direct same-artifact conformance
-  passed across three apps.
-- `pnpm exec vitest --config vitest.browser.config.ts --run
-packages/devtool/src/devtool-render.browser.test.ts --browser.name chromium --reporter=dot`
-  passed (3 tests). Firefox/WebKit remain CI-covered but were unavailable in the local Playwright
-  cache.
+packages/devtool/src/render.test.mjs packages/devtool/src/mcp.test.mjs
+packages/vscode/src/diagnostic-adapter.test.mjs packages/cli/src/commands/sound-subset.test.ts
+  packages/create-kovo/src/index.test.ts packages/create-kovo/src/example-assets.test.ts
+  --reporter=dot` passed (12 files, 229 tests).
+- `pnpm exec vitest --run packages/devtool/src/*.test.mjs --reporter=dot` passed (10 files,
+  57 tests), including exact source, card/MCP/UI parity, bounded live-frame redaction, and
+  production absence.
+- `pnpm --filter @kovojs/compiler run build:dist`, `pnpm run test:devex-editor`, and
+  `node scripts/api-surface-gate.mjs` passed; the editor gate passed 29 tests and produced a
+  deterministic six-entry VSIX, while API publicness remained at zero findings.

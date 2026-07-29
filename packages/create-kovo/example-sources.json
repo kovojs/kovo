@@ -2,27 +2,15 @@
   "schema": "create-kovo-example-sources/v1",
   "examples": {
     "crm": {
-      "description": "Multi-page sales CRM with typed queries and mixed optimistic updates.",
-      "entry": "src/app-shell.ts",
+      "description": "Production-buildable sales pipeline with a typed deal-stage mutation.",
+      "entry": "src/scaffold-app.tsx",
       "label": "CRM",
       "sources": [
-        "src/app-shell.ts",
-        "src/components/chrome.tsx",
-        "src/components/contacts.tsx",
-        "src/components/deal-detail.tsx",
-        "src/components/pipeline.tsx",
-        "src/db.ts",
-        "src/demo-data.ts",
-        "src/index.ts",
-        "src/interactive-app.tsx",
-        "src/kovo.ts",
-        "src/model.ts",
-        "src/mutations.ts",
-        "src/queries.ts",
-        "src/schema.ts",
-        "src/styles.css",
-        "src/testing.ts",
-        "src/theme.ts"
+        "src/scaffold-app.test.ts",
+        "src/scaffold-app.tsx",
+        "src/scaffold-kovo.ts",
+        "src/scaffold-mutations.ts",
+        "src/styles.css"
       ],
       "excluded": [
         {
@@ -46,12 +34,76 @@
           "reason": "Imports the repository security-locked Vite runtime."
         },
         {
+          "path": "src/app-shell.ts",
+          "reason": "Non-shipped architecture demo reaches the repository-only PGlite host adapter."
+        },
+        {
+          "path": "src/components/chrome.tsx",
+          "reason": "Non-shipped architecture demo depends on the repository-only PGlite app graph."
+        },
+        {
+          "path": "src/components/contacts.tsx",
+          "reason": "Non-shipped architecture demo depends on the repository-only PGlite app graph."
+        },
+        {
+          "path": "src/components/deal-detail.tsx",
+          "reason": "Non-shipped architecture demo depends on the repository-only PGlite app graph."
+        },
+        {
+          "path": "src/components/pipeline.tsx",
+          "reason": "Non-shipped architecture demo depends on the repository-only PGlite app graph."
+        },
+        {
+          "path": "src/db.ts",
+          "reason": "Repository-only architecture demo acquires raw PGlite database authority."
+        },
+        {
+          "path": "src/demo-data.ts",
+          "reason": "Repository-only architecture demo seeds its raw PGlite database."
+        },
+        {
+          "path": "src/index.ts",
+          "reason": "Repository-only architecture barrel includes the raw PGlite demo."
+        },
+        {
           "path": "src/interactive-app.test.ts",
           "reason": "Imports repository-only generated-graph and raw-handler test seams."
         },
         {
+          "path": "src/interactive-app.tsx",
+          "reason": "Non-shipped architecture demo assembles the repository-only PGlite app graph."
+        },
+        {
+          "path": "src/kovo.ts",
+          "reason": "Repository-only architecture demo owns raw database and process configuration."
+        },
+        {
+          "path": "src/model.ts",
+          "reason": "Non-shipped architecture demo model belongs to the PGlite reference graph."
+        },
+        {
+          "path": "src/mutations.ts",
+          "reason": "Non-shipped architecture demo mutations require the PGlite reference graph."
+        },
+        {
           "path": "src/optimistic.test.ts",
           "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/queries.ts",
+          "reason": "Non-shipped architecture demo queries require the PGlite reference graph."
+        },
+        {
+          "path": "src/schema.ts",
+          "reason": "Non-shipped architecture demo schema belongs to the PGlite reference graph."
+        },
+        {
+          "path": "src/testing.ts",
+          "reason": "Repository-only database test runtime."
+        },
+        {
+          "path": "src/theme.ts",
+          "reason": "Repository-demo theme is replaced by the scaffold's Kovo style tokens."
         },
         {
           "path": "tsconfig.json",
@@ -64,28 +116,15 @@
       ]
     },
     "commerce": {
-      "description": "Storefront with typed data, local auth, transactions, and derived optimism.",
-      "entry": "src/app.tsx",
+      "description": "Production-buildable storefront with a typed product-reservation mutation.",
+      "entry": "src/scaffold-app.tsx",
       "label": "Commerce",
       "sources": [
-        "src/app.tsx",
-        "src/auth.ts",
-        "src/authored-output.test.ts",
-        "src/commerce-context.ts",
-        "src/components/auth-forms.tsx",
-        "src/components/cart-badge.tsx",
-        "src/components/order-history-view.tsx",
-        "src/components/order-history.tsx",
-        "src/components/product-grid.tsx",
-        "src/db.ts",
-        "src/domain.ts",
-        "src/graph.ts",
-        "src/kovo.ts",
-        "src/model.ts",
-        "src/queries.ts",
-        "src/schema.ts",
-        "src/styles.css",
-        "src/theme.ts"
+        "src/scaffold-app.test.ts",
+        "src/scaffold-app.tsx",
+        "src/scaffold-kovo.ts",
+        "src/scaffold-mutations.ts",
+        "src/styles.css"
       ],
       "excluded": [
         {
@@ -141,12 +180,80 @@
           "reason": "Imports the repository-only generated-graph test seam."
         },
         {
+          "path": "src/app.tsx",
+          "reason": "Non-shipped architecture demo reaches raw PGlite and local-auth fixtures."
+        },
+        {
+          "path": "src/auth.ts",
+          "reason": "Repository-only architecture demo owns local crypto and process-based auth."
+        },
+        {
+          "path": "src/authored-output.test.ts",
+          "reason": "Tests the non-shipped repository architecture demo."
+        },
+        {
+          "path": "src/commerce-context.ts",
+          "reason": "Repository-only architecture demo owns a local application-context registry."
+        },
+        {
+          "path": "src/components/auth-forms.tsx",
+          "reason": "Non-shipped architecture UI depends on the local-auth fixture."
+        },
+        {
+          "path": "src/components/cart-badge.tsx",
+          "reason": "Non-shipped architecture UI depends on the PGlite app graph."
+        },
+        {
+          "path": "src/components/order-history-view.tsx",
+          "reason": "Non-shipped architecture UI depends on the PGlite app graph."
+        },
+        {
+          "path": "src/components/order-history.tsx",
+          "reason": "Non-shipped architecture UI depends on the PGlite app graph."
+        },
+        {
+          "path": "src/components/product-grid.tsx",
+          "reason": "Non-shipped architecture UI depends on the PGlite app graph."
+        },
+        {
+          "path": "src/db.ts",
+          "reason": "Repository-only architecture demo acquires raw PGlite database authority."
+        },
+        {
+          "path": "src/domain.ts",
+          "reason": "Repository-only architecture barrel includes raw PGlite authority."
+        },
+        {
           "path": "src/enhanced-navigation.test.ts",
           "reason": "Imports repository-only graph setup and browser test dependencies."
         },
         {
+          "path": "src/graph.ts",
+          "reason": "Repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/kovo.ts",
+          "reason": "Repository-only architecture demo owns local auth and database providers."
+        },
+        {
+          "path": "src/model.ts",
+          "reason": "Non-shipped architecture demo model belongs to the PGlite reference graph."
+        },
+        {
           "path": "src/pagination.test.ts",
           "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/queries.ts",
+          "reason": "Non-shipped architecture demo queries require the PGlite reference graph."
+        },
+        {
+          "path": "src/schema.ts",
+          "reason": "Non-shipped architecture demo schema belongs to the PGlite reference graph."
+        },
+        {
+          "path": "src/theme.ts",
+          "reason": "Repository-demo theme is replaced by the scaffold's Kovo style tokens."
         },
         {
           "path": "tsconfig.json",

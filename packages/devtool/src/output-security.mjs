@@ -20,6 +20,7 @@ const nativeFreeze = NativeObject.freeze;
 const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeGetPrototypeOf = NativeObject.getPrototypeOf;
 const nativeObjectIsFrozen = NativeObject.isFrozen;
+const nativeObjectKeys = NativeObject.keys;
 const nativeObjectPrototype = NativeObject.prototype;
 const nativeMapGet = NativeMap.prototype.get;
 const nativeMapHas = NativeMap.prototype.has;
@@ -83,11 +84,13 @@ const controlsSound = (() => {
     apply(nativeSetAdd, set, ['value']);
     const frozen = apply(nativeFreeze, NativeObject, [defined]);
     const split = apply(nativeStringSplit, 'safe output', [' ']);
+    const keys = apply(nativeObjectKeys, NativeObject, [defined]);
     return (
       apply(nativeArrayIsArray, NativeArray, [list]) === true &&
       apply(nativeArrayIsArray, NativeArray, [{}]) === false &&
       ownDescriptor(list, 0)?.value === 'safe' &&
       ownDescriptor(defined, 'safe')?.value === 'defined' &&
+      ownDescriptor(keys, 0)?.value === 'safe' &&
       frozen === defined &&
       apply(nativeObjectIsFrozen, NativeObject, [defined]) === true &&
       apply(nativeGetPrototypeOf, NativeObject, [defined]) === nativeObjectPrototype &&
@@ -346,6 +349,29 @@ export function stableOwnData(record, key, label) {
     );
   }
   return { found: true, value: before.value };
+}
+
+export function objectKeys(record, label) {
+  if (typeof record !== 'object' || record === null) {
+    throw new NativeTypeError(`${label} must be an object.`);
+  }
+  const before = apply(nativeObjectKeys, NativeObject, [record]);
+  const after = apply(nativeObjectKeys, NativeObject, [record]);
+  const length = arrayLength(before, `${label} keys`);
+  if (arrayLength(after, `${label} confirmed keys`) !== length) {
+    throw new NativeTypeError(`${label} keys changed while they were inspected.`);
+  }
+  for (let index = 0; index < length; index += 1) {
+    if (
+      !apply(nativeObjectIs, NativeObject, [
+        arrayValue(before, index, `${label} keys`),
+        arrayValue(after, index, `${label} confirmed keys`),
+      ])
+    ) {
+      throw new NativeTypeError(`${label} keys changed while they were inspected.`);
+    }
+  }
+  return before;
 }
 
 export function assertPlainCarrier(value, label) {

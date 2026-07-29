@@ -14,7 +14,7 @@ const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set([
   'src/_kovo/app-runtime-db-options.ts',
   'src/_kovo/app-runtime-db.ts',
 ]);
-const SECURITY_SURFACE_FILES = new Set([
+const DEFAULT_SECURITY_SURFACE_FILES = new Set([
   'src/app.test.ts',
   'src/app.tsx',
   'src/auth.ts',
@@ -29,7 +29,7 @@ const SECURITY_SURFACE_FILES = new Set([
   'src/schema.ts',
 ]);
 const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
-  'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
+  'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole declared project security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
   [
     'src/kovo.ts',
@@ -68,6 +68,7 @@ const SQL_EXPORTS = new Map([
 ]);
 const SQL_METHODS = new Set(['allow', 'identifier', 'join', 'raw']);
 
+const SECURITY_SURFACE_FILES = configuredSecuritySurfaceFiles();
 const enrolledSourceFiles = sourceFiles(join(root, 'src'));
 reportMissingSecuritySurfaceFiles(enrolledSourceFiles);
 
@@ -105,9 +106,89 @@ function sourceFiles(dir) {
       const path = join(dir, entry);
       const stats = statSync(path);
       if (stats.isDirectory()) return sourceFiles(path);
-      return /\.[cm]?tsx?$/.test(entry) ? [path] : [];
+      return /\.[cm]?[jt]sx?$/.test(entry) ? [path] : [];
     })
     .sort((left, right) => left.localeCompare(right));
+}
+
+function configuredSecuritySurfaceFiles() {
+  const manifestPath = join(root, 'package.json');
+  let source;
+  let manifest;
+  try {
+    source = readFileSync(manifestPath, 'utf8');
+    manifest = JSON.parse(source);
+  } catch {
+    appendManifestFinding(
+      source ?? '',
+      'package.json must be readable JSON before the sound-subset source inventory can be trusted',
+      '"kovo"',
+    );
+    return new Set();
+  }
+
+  const kovo = plainRecord(manifest?.kovo) ? manifest.kovo : undefined;
+  const soundSubset = plainRecord(kovo?.soundSubset) ? kovo.soundSubset : undefined;
+  const configured = soundSubset?.securitySurface;
+  if (configured === undefined) {
+    if (kovo?.lifecyclePolicy === 'strict-v1') {
+      appendManifestFinding(
+        source,
+        'create-kovo projects require kovo.soundSubset.securitySurface in package.json',
+        '"lifecyclePolicy"',
+      );
+      return new Set();
+    }
+    // Non-scaffold consumers that predate the manifest retain the prior finite starter inventory.
+    // A create-kovo project is distinguishable by strict-v1 and may never take this fallback.
+    return new Set(DEFAULT_SECURITY_SURFACE_FILES);
+  }
+  if (!Array.isArray(configured) || configured.length === 0 || configured.length > 4_096) {
+    appendManifestFinding(
+      source,
+      'kovo.soundSubset.securitySurface must be a non-empty array with at most 4096 source paths',
+      '"securitySurface"',
+    );
+    return new Set();
+  }
+
+  const files = new Set();
+  for (const value of configured) {
+    const segments = typeof value === 'string' ? value.split('/') : [];
+    const valid =
+      typeof value === 'string' &&
+      value.length > 0 &&
+      value.length <= 4_096 &&
+      value.startsWith('src/') &&
+      toPosixPath(normalize(value)) === value &&
+      segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..') &&
+      /\.[cm]?[jt]sx?$/.test(value);
+    if (!valid || files.has(value)) {
+      appendManifestFinding(
+        source,
+        'kovo.soundSubset.securitySurface requires unique normalized src/ JavaScript or TypeScript paths',
+        '"securitySurface"',
+      );
+      return new Set();
+    }
+    files.add(value);
+  }
+  return files;
+}
+
+function appendManifestFinding(source, message, needle) {
+  const start = source.indexOf(needle);
+  appendFinding(
+    'package.json',
+    start < 0 ? 1 : lineNumberAt(source, start),
+    `${SECURITY_SURFACE_ENROLLMENT_MESSAGE}; ${message}`,
+    start < 0 ? undefined : start,
+    start < 0 ? undefined : start + needle.length,
+  );
+}
+
+function plainRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 async function loadTypeScript() {

@@ -13,7 +13,20 @@ export interface SourceAnchor {
 export interface DataflowNode {
   anchor?: SourceAnchor;
   id: string;
-  kind: 'mutation' | 'domain' | 'query' | 'component' | 'page';
+  kind:
+    | 'agent'
+    | 'tool'
+    | 'task'
+    | 'mutation'
+    | 'domain'
+    | 'query'
+    | 'component'
+    | 'handler'
+    | 'trigger'
+    | 'derive'
+    | 'binding-position'
+    | 'page'
+    | 'diagnostic';
   name: string;
   label: string;
   data: Record<string, unknown>;
@@ -27,7 +40,22 @@ export interface DataflowEdge {
   id: string;
   from: string;
   to: string;
-  kind: 'writes' | 'backs' | 'feeds' | 'emits' | 'renders';
+  kind:
+    | 'uses'
+    | 'invokes'
+    | 'dispatches'
+    | 'reads'
+    | 'schedules'
+    | 'writes'
+    | 'backs'
+    | 'feeds'
+    | 'emits'
+    | 'renders'
+    | 'handles'
+    | 'triggers'
+    | 'derives'
+    | 'owns'
+    | 'updates';
   data: Record<string, unknown>;
 }
 export interface SourceSlice {
@@ -55,6 +83,15 @@ export interface DataflowBundle {
   nodes: DataflowNode[];
   edges: DataflowEdge[];
   counts: Record<string, number>;
+}
+export interface KovoDiagnosticRecord {
+  category: 'build' | 'config' | 'proof' | 'runtime' | 'usage';
+  code: string;
+  help?: string;
+  message: string;
+  severity: 'error' | 'warn' | 'lint' | 'notice';
+  source?: SourceAnchor;
+  version: 'kovo-diagnostic/v1';
 }
 export interface DataflowGraph {
   nodes: DataflowNode[];
@@ -134,17 +171,14 @@ export function buildBundle(opts: {
   app: string;
   label?: string;
   blurb?: string;
+  diagnostics?: readonly KovoDiagnosticRecord[];
   graph: GraphJson;
   limitations?: string[];
   provenance?: string;
   srcRoot: string;
   view?: 'source-graph' | 'runtime-registry';
 }): DataflowBundle;
-export function resolveSource(
-  node: DataflowNode,
-  srcRoot: string,
-  files: string[],
-): SourceSlice | null;
+export function resolveSource(node: DataflowNode, srcRoot: string): SourceSlice | null;
 
 export function buildCard(node: DataflowNode, bundle: DataflowBundle): Record<string, unknown>;
 export function cardToText(card: Record<string, unknown>): string;

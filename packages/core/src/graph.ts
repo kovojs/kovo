@@ -358,20 +358,28 @@ export interface KovoExplainInput extends KovoCheckInput {
 
 /** @internal Compiler-owned exact tool closure consumed by `kovo explain agent`. */
 export interface AgentToolExplainFact {
+  /** Exact identifier range inside the owning agent's `tools` array. */
+  bindingSource: SourceAnchor;
   minimumIntegrity: import('./internal/security-operation-ir.js').AgentIntegrity;
   mutation: string;
+  /** Exact mutation identifier range inside the tool declaration. */
+  mutationSource: SourceAnchor;
   name: string;
   operations: readonly import('./internal/security-operation-ir.js').ServerSecurityOperationFact[];
   resultIntegrity: Extract<
     import('./internal/security-operation-ir.js').AgentIntegrity,
     'retrieved' | 'untrusted'
   >;
+  /** Exact authored `tool(...)` declaration range. */
+  source: SourceAnchor;
 }
 
 /** @internal One capability-bounded model root and its compiler-derived finite tools. */
 export interface AgentExplainFact {
   modelOperations: readonly import('./internal/security-operation-ir.js').ServerSecurityOperationFact[];
   name: string;
+  /** Exact authored `agent(...)` declaration range. */
+  source: SourceAnchor;
   tools: readonly AgentToolExplainFact[];
 }
 
@@ -432,11 +440,21 @@ export type GrantExplainFact =
 
 /** @internal */
 export interface TaskExplain {
+  composition: readonly TaskCompositionExplain[];
   cron?: string;
   key: string;
   runMutations?: readonly string[];
   runQueries?: readonly string[];
   schedules?: readonly string[];
+  /** Exact authored `task(...)` declaration range. */
+  source: SourceAnchor;
+}
+
+/** @internal One exact authored task-to-query/mutation/task composition edge. */
+export interface TaskCompositionExplain {
+  kind: 'run-mutation' | 'run-query' | 'schedule';
+  source: SourceAnchor;
+  target: string;
 }
 
 /** @internal */

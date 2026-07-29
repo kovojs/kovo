@@ -129,6 +129,7 @@ import type {
   StaticJsxWireAttributeEntry,
   StaticJsxWireAttributeValue,
   StringRenderModel,
+  TaskCompositionEdgeModel,
   TaskRunHandlerModel,
   TemporalReadModel,
   UnsupportedHandlerBodyTypeScriptKind,
@@ -2936,6 +2937,7 @@ function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): Age
   const optionsArgument = callArgument(call, 1);
   const options = optionsArgument && unwrapExpression(optionsArgument);
   let mutationBinding: string | undefined;
+  let mutationBindingSpan: SourceSpan | undefined;
   let resultIntegrity: AgentToolModel['resultIntegrity'] = 'untrusted';
   if (!options || !ts.isObjectLiteralExpression(options)) {
     compilerArrayAppend(
@@ -2976,8 +2978,13 @@ function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): Age
           : ts.isShorthandPropertyAssignment(property)
             ? property.name
             : undefined;
-        if (initializer && ts.isIdentifier(initializer)) mutationBinding = initializer.text;
-        else {
+        if (initializer && ts.isIdentifier(initializer)) {
+          mutationBinding = initializer.text;
+          mutationBindingSpan = {
+            end: initializer.getEnd(),
+            start: initializer.getStart(sourceFile),
+          };
+        } else {
           compilerArrayAppend(
             violations,
             agentConfigurationViolation(
@@ -3040,6 +3047,7 @@ function agentToolModel(sourceFile: ts.SourceFile, call: ts.CallExpression): Age
     binding,
     callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
     ...(mutationBinding === undefined ? {} : { mutationBinding }),
+    ...(mutationBindingSpan === undefined ? {} : { mutationBindingSpan }),
     ...(name === undefined ? {} : { name }),
     resultIntegrity,
     ...(violations.length === 0 ? {} : { violations }),
@@ -3072,7 +3080,7 @@ function agentDefinitionModel(
   const optionsArgument = callArgument(call, 1);
   const options = optionsArgument && unwrapExpression(optionsArgument);
   let model: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration | undefined;
-  const toolBindings: string[] = [];
+  const toolBindings: AgentDefinitionModel['toolBindings'][number][] = [];
   if (!options || !ts.isObjectLiteralExpression(options)) {
     compilerArrayAppend(
       violations,
@@ -3161,7 +3169,14 @@ function agentDefinitionModel(
           for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
             const element = unwrapExpression(elements[elementIndex]! as ts.Expression);
             if (ts.isIdentifier(element)) {
-              compilerArrayAppend(toolBindings, element.text, 'Agent tool bindings');
+              compilerArrayAppend(
+                toolBindings,
+                {
+                  binding: element.text,
+                  span: { end: element.getEnd(), start: element.getStart(sourceFile) },
+                },
+                'Agent tool bindings',
+              );
             } else {
               compilerArrayAppend(
                 violations,
@@ -3232,6 +3247,7 @@ function agentDefinitionModel(
   }
   return {
     ...(binding === undefined ? {} : { binding }),
+    callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
     modelHandler,
     name,
     toolBindings,
@@ -5397,12 +5413,8 @@ function webhookHandlerModels(
         }),
         declaredWriteKeys,
         owner,
-        runMutationEdges: taskCompositionEdges(
-          sourceFile,
-          source,
-          entry.body,
-          contextParamName,
-          'runMutation',
+        runMutationEdges: taskCompositionTargets(
+          taskCompositionEdges(sourceFile, source, entry.body, contextParamName, 'runMutation'),
         ),
         ...serverSecurityOperationModel(
           sourceFile,
@@ -5470,6 +5482,7 @@ function taskRunHandlerModels(
       result,
       {
         ...handler.model,
+        callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
         ...(cron === undefined ? {} : { cron }),
         handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, handler.body, {
           owner: { kind: 'key', value: key },
@@ -5518,6 +5531,7 @@ function taskRunHandlerModels(
         result,
         {
           ...model,
+          callSpan: { end: call.getEnd(), start: call.getStart(sourceFile) },
           ...(cron === undefined ? {} : { cron }),
           key,
           runMutationEdges: [],
@@ -6631,8 +6645,8 @@ function taskCompositionEdges(
   body: ts.ConciseBody,
   ctxParam: string | undefined,
   method: 'runMutation' | 'runQuery' | 'schedule',
-): string[] {
-  const edges = compilerCreateSet<string>();
+): TaskCompositionEdgeModel[] {
+  const edges: TaskCompositionEdgeModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
@@ -6644,18 +6658,34 @@ function taskCompositionEdges(
         node.expression.name.text === method &&
         (ctxParam === undefined || receiverText === ctxParam)
       ) {
-        compilerSetAdd(
-          edges,
-          taskCompositionTarget(sourceFile, source, callArgument(node, 0)) ?? `${method}:?`,
-        );
+        const target =
+          taskCompositionTarget(sourceFile, source, callArgument(node, 0)) ?? `${method}:?`;
+        const targetExpression = callArgument(node, 0) ?? node;
+        const edge = {
+          span: {
+            end: targetExpression.getEnd(),
+            start: targetExpression.getStart(sourceFile),
+          },
+          target,
+        };
+        compilerArrayAppend(edges, edge, 'Task composition edges');
       }
     }
     ts.forEachChild(node, visit);
   };
 
   visit(body);
+  return edges;
+}
+
+function taskCompositionTargets(edges: readonly TaskCompositionEdgeModel[]): string[] {
+  const targets = compilerCreateSet<string>();
+  const snapshot = compilerSnapshotDenseArray(edges, 'Task composition target edges');
+  for (let index = 0; index < snapshot.length; index += 1) {
+    compilerSetAdd(targets, snapshot[index]!.target);
+  }
   const result: string[] = [];
-  compilerSetForEach(edges, (edge) => insertSortedString(result, edge));
+  compilerSetForEach(targets, (target) => insertSortedString(result, target));
   return result;
 }
 

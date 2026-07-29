@@ -66,16 +66,23 @@ export interface AgentToolModel {
   binding: string;
   callSpan: SourceSpan;
   mutationBinding?: string;
+  mutationBindingSpan?: SourceSpan;
   name?: string;
   resultIntegrity: 'retrieved' | 'untrusted';
   violations?: readonly SecurityOperationViolationModel[];
 }
 
+export interface AgentToolReferenceModel {
+  binding: string;
+  span: SourceSpan;
+}
+
 export interface AgentDefinitionModel {
   binding?: string;
+  callSpan: SourceSpan;
   modelHandler: MutationHandlerModel;
   name: string;
-  toolBindings: readonly string[];
+  toolBindings: readonly AgentToolReferenceModel[];
 }
 
 export type HandlerWriteSinkOperationKind =
@@ -176,17 +183,23 @@ export interface SecurityOperationViolationModel {
 }
 
 export interface TaskRunHandlerModel extends MutationHandlerModel {
+  callSpan: SourceSpan;
   cron?: string;
   key: string;
-  runMutationEdges: readonly string[];
-  runQueryEdges: readonly string[];
-  scheduleEdges: readonly string[];
+  runMutationEdges: readonly TaskCompositionEdgeModel[];
+  runQueryEdges: readonly TaskCompositionEdgeModel[];
+  scheduleEdges: readonly TaskCompositionEdgeModel[];
 }
 
 export interface WebhookHandlerModel extends MutationHandlerModel {
   declaredWriteKeys: readonly string[];
   owner: HandlerWriteSinkOwner;
   runMutationEdges: readonly string[];
+}
+
+export interface TaskCompositionEdgeModel {
+  span: SourceSpan;
+  target: string;
 }
 
 export interface PropertyAccessPathModel {

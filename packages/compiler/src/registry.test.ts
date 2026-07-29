@@ -1526,11 +1526,29 @@ export const ProductGrid = component({
       graph: {
         tasks: [
           {
+            composition: [
+              {
+                kind: 'run-mutation',
+                source: { end: 31, file: 'src/tasks.ts', start: 16 },
+                target: 'order/mark-sent',
+              },
+              {
+                kind: 'run-query',
+                source: { end: 52, file: 'src/tasks.ts', start: 40 },
+                target: 'order/by-id',
+              },
+              {
+                kind: 'schedule',
+                source: { end: 78, file: 'src/tasks.ts', start: 60 },
+                target: 'email/send-receipt',
+              },
+            ],
             cron: '0 2 * * *',
             key: 'email/send-receipt',
             runMutations: ['order/mark-sent'],
             runQueries: ['order/by-id'],
             schedules: ['email/send-receipt'],
+            source: { end: 90, file: 'src/tasks.ts', start: 0 },
           },
         ],
       },
@@ -1538,19 +1556,69 @@ export const ProductGrid = component({
 
     expect(derived.graph.tasks).toEqual([
       {
+        composition: [
+          {
+            kind: 'run-mutation',
+            source: { end: 31, file: 'src/tasks.ts', start: 16 },
+            target: 'order/mark-sent',
+          },
+          {
+            kind: 'run-query',
+            source: { end: 52, file: 'src/tasks.ts', start: 40 },
+            target: 'order/by-id',
+          },
+          {
+            kind: 'schedule',
+            source: { end: 78, file: 'src/tasks.ts', start: 60 },
+            target: 'email/send-receipt',
+          },
+        ],
         cron: '0 2 * * *',
         key: 'email/send-receipt',
         runMutations: ['order/mark-sent'],
         runQueries: ['order/by-id'],
         schedules: ['email/send-receipt'],
+        source: { end: 90, file: 'src/tasks.ts', start: 0 },
       },
     ]);
   });
 
+  it('rejects task summaries or duplicate declarations that drift from anchored task facts', () => {
+    const task = {
+      composition: [
+        {
+          kind: 'run-query' as const,
+          source: { end: 31, file: 'src/tasks.ts', start: 20 },
+          target: 'order/by-id',
+        },
+      ],
+      key: 'email/send-receipt',
+      runQueries: ['order/by-id'],
+      source: { end: 40, file: 'src/tasks.ts', start: 0 },
+    };
+
+    expect(() =>
+      deriveAppGraph({
+        graph: { tasks: [{ ...task, runQueries: ['order/by-status'] }] },
+      }),
+    ).toThrow('composition summary drifted from its anchored edges');
+    expect(() =>
+      deriveAppGraph({
+        graph: {
+          tasks: [
+            task,
+            {
+              ...task,
+              source: { end: 60, file: 'src/duplicate.ts', start: 10 },
+            },
+          ],
+        },
+      }),
+    ).toThrow('Conflicting task source anchors for email/send-receipt');
+  });
+
   it('derives durable task facts from compiled task source', () => {
-    const result = compileComponentModule({
-      fileName: 'src/durable-task-proofs.ts',
-      source: `
+    const source = `
 export const recordDurableTask = task('durable-task-proofs/record', {
   cron: '0 2 * * *',
   input: s.object({ proofId: s.string() }),
@@ -1560,7 +1628,10 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     await context.schedule(recordDurableTask, input);
   },
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'src/durable-task-proofs.ts',
+      source,
     });
     const derived = deriveAppGraph({
       components: [
@@ -1572,14 +1643,29 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     });
 
     expect(result.taskGraphFacts).toEqual([
-      {
+      expect.objectContaining({
         cron: '0 2 * * *',
         key: 'durable-task-proofs/record',
         runMutations: ['recordTaskEffect'],
         runQueries: ['taskProofQuery'],
         schedules: ['recordDurableTask'],
-      },
+      }),
     ]);
+    expect(result.taskGraphFacts[0]?.composition).toEqual([
+      expect.objectContaining({ kind: 'run-mutation', target: 'recordTaskEffect' }),
+      expect.objectContaining({ kind: 'run-query', target: 'taskProofQuery' }),
+      expect.objectContaining({ kind: 'schedule', target: 'recordDurableTask' }),
+    ]);
+    expect(result.taskGraphFacts[0]?.source).toEqual(
+      expect.objectContaining({ file: 'src/durable-task-proofs.ts' }),
+    );
+    const task = result.taskGraphFacts[0]!;
+    expect(source.slice(task.source.start, task.source.end)).toContain(
+      "task('durable-task-proofs/record'",
+    );
+    expect(
+      task.composition.map((edge) => source.slice(edge.source.start, edge.source.end)),
+    ).toEqual(['recordTaskEffect', 'taskProofQuery', 'recordDurableTask']);
     expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
   });
 
@@ -1598,11 +1684,11 @@ export const recordDurableTask = task({
     });
 
     expect(result.taskGraphFacts).toEqual([
-      {
+      expect.objectContaining({
         key: 'durable-task-proofs/record-durable-task',
         runQueries: ['taskProofQuery'],
         schedules: ['recordDurableTask'],
-      },
+      }),
     ]);
   });
 
@@ -1632,12 +1718,12 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     });
 
     expect(result.taskGraphFacts).toEqual([
-      {
+      expect.objectContaining({
         key: 'durable-task-proofs/record',
         runMutations: ['recordTaskEffect'],
         runQueries: ['taskProofQuery'],
         schedules: ['recordDurableTask'],
-      },
+      }),
     ]);
     expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
     expect(derived.graph.handlerWriteSinks).toEqual([

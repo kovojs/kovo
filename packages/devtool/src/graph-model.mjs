@@ -31,14 +31,42 @@ import {
 } from './output-security.mjs';
 
 /**
- * @typedef {'mutation'|'domain'|'query'|'component'|'handler'|'trigger'|'derive'|'binding-position'|'page'} NodeKind
- * @typedef {'writes'|'backs'|'feeds'|'emits'|'renders'|'handles'|'triggers'|'derives'|'owns'|'updates'} EdgeKind
+ * @typedef {'agent'|'tool'|'task'|'mutation'|'domain'|'query'|'component'|'handler'|'trigger'|'derive'|'binding-position'|'page'|'diagnostic'} NodeKind
+ * @typedef {'uses'|'invokes'|'dispatches'|'reads'|'schedules'|'writes'|'backs'|'feeds'|'emits'|'renders'|'handles'|'triggers'|'derives'|'owns'|'updates'} EdgeKind
  */
 
 /** Left→right dataflow lanes. A write propagates rightward to the UI. */
-export const LANES = freeze(['mutation', 'domain', 'query', 'component', 'page']);
+export const LANES = freeze([
+  'agent',
+  'tool',
+  'task',
+  'mutation',
+  'domain',
+  'query',
+  'component',
+  'page',
+  'diagnostic',
+]);
 
 export const KIND_META = freeze({
+  agent: freeze({
+    accent: '#fb7185',
+    blurb: 'model mediation',
+    glyph: '◉',
+    label: 'Agents',
+  }),
+  tool: freeze({
+    accent: '#f472b6',
+    blurb: 'bounded actions',
+    glyph: '⌁',
+    label: 'Tools',
+  }),
+  task: freeze({
+    accent: '#fbbf24',
+    blurb: 'durable work',
+    glyph: '◴',
+    label: 'Tasks',
+  }),
   mutation: freeze({
     accent: '#f5a623',
     blurb: 'typed writes',
@@ -83,6 +111,12 @@ export const KIND_META = freeze({
     label: 'Bindings',
   }),
   page: freeze({ accent: '#94a3b8', blurb: 'routes', glyph: '◧', label: 'Pages' }),
+  diagnostic: freeze({
+    accent: '#ff6b6b',
+    blurb: 'actionable findings',
+    glyph: '!',
+    label: 'Diagnostics',
+  }),
 });
 
 const id = (kind, name) => `${kind}:${name}`;
@@ -129,8 +163,17 @@ export function buildDataflowGraph(raw) {
 
   const link = (from, to, kind, data = {}, anchor) => {
     if (!from || !to) return;
+    const occurrenceIdentity =
+      anchor !== undefined &&
+      (kind === 'uses' ||
+        kind === 'invokes' ||
+        kind === 'dispatches' ||
+        kind === 'reads' ||
+        kind === 'schedules')
+        ? `@${anchor.file}:${anchor.start}:${anchor.end}`
+        : '';
     edges.push({
-      id: `${from.id}->${to.id}:${kind}`,
+      id: `${from.id}->${to.id}:${kind}${occurrenceIdentity}`,
       from: from.id,
       to: to.id,
       kind,
@@ -275,6 +318,87 @@ export function buildDataflowGraph(raw) {
       );
     }
     coverageIndex += 1;
+  }
+
+  // --- capability-bounded agents and their exact tool/mutation bindings ---
+  for (const agent of raw.agents ?? []) {
+    const agentNode = ensure(
+      'agent',
+      agent.name,
+      agent.name,
+      { modelOperations: agent.modelOperations ?? [] },
+      agent.source,
+    );
+    for (const tool of agent.tools ?? []) {
+      const toolNode = ensure(
+        'tool',
+        `${agent.name}:${tool.name}`,
+        tool.name,
+        {
+          agent: agent.name,
+          minimumIntegrity: tool.minimumIntegrity,
+          mutation: tool.mutation,
+          operations: tool.operations ?? [],
+          resultIntegrity: tool.resultIntegrity,
+        },
+        tool.source,
+      );
+      link(agentNode, toolNode, 'uses', {}, tool.bindingSource);
+      link(
+        toolNode,
+        nodes.get(id('mutation', tool.mutation)),
+        'invokes',
+        { mutation: tool.mutation },
+        tool.mutationSource,
+      );
+    }
+  }
+
+  // --- durable tasks and exact task/query/mutation composition edges ---
+  for (const task of raw.tasks ?? []) {
+    ensure(
+      'task',
+      task.key,
+      task.key,
+      {
+        composition: task.composition ?? [],
+        cron: task.cron,
+        runMutations: task.runMutations ?? [],
+        runQueries: task.runQueries ?? [],
+        schedules: task.schedules ?? [],
+      },
+      task.source,
+    );
+  }
+  for (const task of raw.tasks ?? []) {
+    const taskNode = nodes.get(id('task', task.key));
+    for (const edge of task.composition ?? []) {
+      if (edge.kind === 'run-mutation') {
+        link(
+          taskNode,
+          nodes.get(id('mutation', edge.target)),
+          'dispatches',
+          { target: edge.target },
+          edge.source,
+        );
+      } else if (edge.kind === 'run-query') {
+        link(
+          taskNode,
+          nodes.get(id('query', edge.target)),
+          'reads',
+          { target: edge.target },
+          edge.source,
+        );
+      } else if (edge.kind === 'schedule') {
+        link(
+          taskNode,
+          nodes.get(id('task', edge.target)),
+          'schedules',
+          { target: edge.target },
+          edge.source,
+        );
+      }
+    }
   }
 
   // --- pages (renders components, loads queries) ---
@@ -567,6 +691,37 @@ function cardText(n) {
     }
   } else if (n.kind === 'domain') {
     arrayAppend(parts, 'domain', 'devtool card parts');
+  } else if (n.kind === 'agent') {
+    appendCardParts(parts, ['agent', 'model']);
+    const operations = d.modelOperations ?? [];
+    for (let index = 0; index < arrayLength(operations, 'devtool agent operations'); index += 1) {
+      appendCardParts(parts, [
+        arrayValue(operations, index, 'devtool agent operations').kind ?? '',
+      ]);
+    }
+  } else if (n.kind === 'tool') {
+    appendCardParts(parts, [
+      'tool',
+      d.agent ?? '',
+      d.mutation ?? '',
+      d.minimumIntegrity ?? '',
+      d.resultIntegrity ?? '',
+    ]);
+  } else if (n.kind === 'task') {
+    appendCardParts(parts, ['task', d.cron ?? '']);
+    appendCardParts(parts, d.runMutations ?? []);
+    appendCardParts(parts, d.runQueries ?? []);
+    appendCardParts(parts, d.schedules ?? []);
+  } else if (n.kind === 'diagnostic') {
+    appendCardParts(parts, [
+      'diagnostic',
+      d.code ?? '',
+      d.category ?? '',
+      d.severity ?? '',
+      d.message ?? '',
+      d.help ?? '',
+      d.source?.file ?? '',
+    ]);
   } else if (n.kind === 'page') {
     appendCardParts(parts, ['page', 'route', d.meta?.title ?? '']);
   }

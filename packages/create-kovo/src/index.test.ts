@@ -103,7 +103,12 @@ describe('create-kovo starter (metadata)', () => {
         const manifestSource = readFileSync(join(root, 'package.json'), 'utf8');
         expect(manifestSource).not.toContain('workspace:');
         expect(manifestSource).not.toContain('../../');
-        expect(JSON.parse(manifestSource)).toMatchObject({
+        const manifest = JSON.parse(manifestSource);
+        expect(manifest).toMatchObject({
+          kovo: {
+            lifecyclePolicy: 'strict-v1',
+            soundSubset: { securitySurface: expect.any(Array) },
+          },
           name: `my-${example}`,
           scripts: {
             build: expect.stringContaining('kovo build'),
@@ -111,13 +116,18 @@ describe('create-kovo starter (metadata)', () => {
             typecheck: 'tsc --noEmit',
           },
         });
+        expect(manifest.kovo.soundSubset.securitySurface).toEqual(
+          project.files
+            .map((file) => file.path)
+            .filter((path) => path.startsWith('src/') && /\.[cm]?[jt]sx?$/u.test(path)),
+        );
         expect(existsSync(join(root, 'scripts'))).toBe(false);
         expect(existsSync(join(root, 'scratch'))).toBe(false);
         expect(existsSync(join(root, 'vite.config.ts'))).toBe(true);
         expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain(
           'copied byte-for-byte from the tracked Kovo example',
         );
-        const sourcePath = example === 'crm' ? 'src/interactive-app.tsx' : 'src/app.tsx';
+        const sourcePath = 'src/scaffold-app.tsx';
         expect(readFileSync(join(root, sourcePath), 'utf8')).toBe(
           readFileSync(join(process.cwd(), 'examples', example, sourcePath), 'utf8'),
         );
@@ -626,7 +636,19 @@ describe('create-kovo starter (metadata)', () => {
       "['src/auth.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])]",
     );
     expect(soundSubsetSource).toContain('SECURITY_SURFACE_FILES');
-    expect(soundSubsetSource).toContain('must enroll the whole starter security surface');
+    expect(soundSubsetSource).toContain('must enroll the whole declared project security surface');
+    expect(JSON.parse(files.get('package.json') ?? '{}')).toMatchObject({
+      kovo: {
+        lifecyclePolicy: 'strict-v1',
+        soundSubset: {
+          securitySurface: expect.arrayContaining([
+            'src/app.tsx',
+            'src/auth.ts',
+            'src/endpoint-posture.test.ts',
+          ]),
+        },
+      },
+    });
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain("field: 'csrf',");
     expect(files.get('src/auth.ts')).not.toContain('sessionId(');
@@ -1090,7 +1112,7 @@ describe('create-kovo starter (metadata)', () => {
           }),
         ).toThrowError(
           new RegExp(
-            `${removedFile.replaceAll('.', '\\.').replaceAll('/', '\\/')}:1: SPEC\\.md §6\\.6\\/§10\\.2\\/§10\\.3 sound subset must enroll the whole starter security surface`,
+            `${removedFile.replaceAll('.', '\\.').replaceAll('/', '\\/')}:1: SPEC\\.md §6\\.6\\/§10\\.2\\/§10\\.3 sound subset must enroll the whole declared project security surface`,
           ),
         );
       } finally {
@@ -1098,6 +1120,58 @@ describe('create-kovo starter (metadata)', () => {
       }
     },
   );
+
+  it.each([
+    ['missing declaration', undefined],
+    ['traversal path', ['src/app.tsx', '../outside.ts']],
+    ['duplicate path', ['src/app.tsx', 'src/app.tsx']],
+  ])('fails closed when a strict scaffold has a %s sound-subset manifest', (_label, surface) => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-manifest-'));
+
+    try {
+      writeKovoProject(root, { name: 'Security Surface Manifest Proof' });
+      linkStarterBuildDependencies(root);
+      const manifestPath = join(root, 'package.json');
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      if (surface === undefined) {
+        delete manifest.kovo.soundSubset;
+      } else {
+        manifest.kovo.soundSubset.securitySurface = surface;
+      }
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+      expect(() =>
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrow(/declared project security surface/u);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('retains the finite default inventory only for non-scaffold consumers', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-non-scaffold-'));
+
+    try {
+      writeKovoProject(root, { name: 'Non Scaffold Sound Subset Proof' });
+      linkStarterBuildDependencies(root);
+      const manifestPath = join(root, 'package.json');
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      delete manifest.kovo;
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+      expect(() =>
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
@@ -1403,7 +1477,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo example created'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Example     crm'));
-      expect(existsSync(join(root, 'src/interactive-app.tsx'))).toBe(true);
+      expect(existsSync(join(root, 'src/scaffold-app.tsx'))).toBe(true);
       expect(existsSync(join(root, '.git'))).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1412,14 +1486,50 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 
-  it('rejects starter-only flags with --example before writing', () => {
+  it('creates an example with an explicit retained deployment posture', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-example-retention-'));
+    const root = join(parent, 'Commerce Release');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(
+        main([
+          root,
+          '--example',
+          'commerce',
+          '--retention',
+          'retained-24h',
+          '--yes',
+          '--no-git',
+          '--no-install',
+        ]),
+      ).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Retention   retained-24h'));
+      expect(readFileSync(join(root, 'kovo.config.ts'), 'utf8')).toContain(`preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  })`);
+      expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain(
+        'explicit `retained-24h` deployment posture',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects incompatible starter-only flags with --example before writing', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-example-conflict-'));
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       for (const args of [
         ['--sqlite', '--experimental-sqlite'],
         ['--deployment', 'vercel'],
-        ['--retention', 'retained-24h'],
       ]) {
         const root = join(parent, args[0]!.slice(2));
         expect(main([root, '--example', 'commerce', ...args])).toBe(1);

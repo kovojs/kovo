@@ -13,8 +13,12 @@ import {
   regexpTest,
   stableOwnData,
 } from './output-security.mjs';
+import { snapshotDiagnostic } from './diagnostics.mjs';
 
 const NODE_KINDS = freeze([
+  'agent',
+  'tool',
+  'task',
   'mutation',
   'domain',
   'query',
@@ -24,8 +28,14 @@ const NODE_KINDS = freeze([
   'derive',
   'binding-position',
   'page',
+  'diagnostic',
 ]);
 const EDGE_KINDS = freeze([
+  'uses',
+  'invokes',
+  'dispatches',
+  'reads',
+  'schedules',
   'writes',
   'backs',
   'feeds',
@@ -163,23 +173,77 @@ function snapshotOptimistic(value, label) {
   });
 }
 
+function snapshotOperation(value, label) {
+  const record = assertPlainCarrier(value, label);
+  return freeze({
+    kind: text(required(record, 'kind', label), `${label}.kind`),
+  });
+}
+
 function snapshotData(value, kind, label) {
   const record = assertPlainCarrier(value, label);
   const empty = freeze([]);
   const data = {
+    agent: '',
+    category: '',
+    code: '',
+    cron: '',
     domName: '',
     domains: empty,
     fragments: empty,
     guards: empty,
+    help: '',
     inputFields: empty,
     meta: freeze({ description: '', title: '' }),
     mutationForms: empty,
+    minimumIntegrity: '',
+    message: '',
+    modelOperations: empty,
+    mutation: '',
+    operations: empty,
     optimistic: empty,
     queries: empty,
+    resultIntegrity: '',
+    severity: '',
+    sourceAnchor: undefined,
+    version: '',
     writes: empty,
   };
   data.guards = stringList(optional(record, 'guards', label), `${label}.guards`, empty);
-  if (kind === 'component') {
+  if (kind === 'agent') {
+    const operations = optional(record, 'modelOperations', label);
+    data.modelOperations =
+      operations === undefined
+        ? empty
+        : list(operations, `${label}.modelOperations`, MAX_LIST_ENTRIES, snapshotOperation);
+  } else if (kind === 'tool') {
+    data.agent = optionalText(optional(record, 'agent', label), `${label}.agent`);
+    data.minimumIntegrity = optionalText(
+      optional(record, 'minimumIntegrity', label),
+      `${label}.minimumIntegrity`,
+    );
+    data.mutation = optionalText(optional(record, 'mutation', label), `${label}.mutation`);
+    const operations = optional(record, 'operations', label);
+    data.operations =
+      operations === undefined
+        ? empty
+        : list(operations, `${label}.operations`, MAX_LIST_ENTRIES, snapshotOperation);
+    data.resultIntegrity = optionalText(
+      optional(record, 'resultIntegrity', label),
+      `${label}.resultIntegrity`,
+    );
+  } else if (kind === 'task') {
+    data.cron = optionalText(optional(record, 'cron', label), `${label}.cron`);
+  } else if (kind === 'diagnostic') {
+    const diagnostic = snapshotDiagnostic(record, label);
+    data.category = diagnostic.category;
+    data.code = diagnostic.code;
+    data.help = diagnostic.help ?? '';
+    data.message = diagnostic.message;
+    data.severity = diagnostic.severity;
+    data.sourceAnchor = diagnostic.source;
+    data.version = diagnostic.version;
+  } else if (kind === 'component') {
     data.domName = optionalText(optional(record, 'domName', label), `${label}.domName`);
     data.fragments = stringList(optional(record, 'fragments', label), `${label}.fragments`, empty);
     data.queries = stringList(optional(record, 'queries', label), `${label}.queries`, empty);

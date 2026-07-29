@@ -80,7 +80,7 @@ describe('create-kovo example assets', () => {
     try {
       cpSync(join(process.cwd(), 'examples'), join(root, 'examples'), { recursive: true });
       writeFileSync(
-        join(root, 'examples/crm/src/model.ts'),
+        join(root, 'examples/crm/src/scaffold-kovo.ts'),
         'KOVO_CSRF_SECRET=committed-secret-value\n',
         'utf8',
       );
@@ -93,7 +93,9 @@ describe('create-kovo example assets', () => {
             return [...definition.sources, ...definition.excluded.map((entry) => entry.path)];
           },
         }),
-      ).toThrow('create-kovo example crm source contains secret-shaped material: src/model.ts');
+      ).toThrow(
+        'create-kovo example crm source contains secret-shaped material: src/scaffold-kovo.ts',
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -103,9 +105,13 @@ describe('create-kovo example assets', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-example-tamper-'));
     try {
       buildExampleAssets({ outputRoot: root });
-      writeFileSync(join(root, 'crm/src/model.ts'), 'export const tampered = true;\n', 'utf8');
+      writeFileSync(
+        join(root, 'crm/src/scaffold-app.tsx'),
+        'export const tampered = true;\n',
+        'utf8',
+      );
       expect(() => readKovoExampleSourceFiles('crm', { assetRoot: root })).toThrow(
-        'Bundled create-kovo example source failed integrity: crm/src/model.ts',
+        'Bundled create-kovo example source failed integrity: crm/src/scaffold-app.tsx',
       );
     } finally {
       rmSync(root, { force: true, recursive: true });

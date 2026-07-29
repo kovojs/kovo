@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -6,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { compileComponentV1 } from '../../cli/src/commands/mcp.ts';
 import { formatKovoDiagnostics, projectKovoDiagnostic } from '../../cli/src/diagnostic.ts';
 import { createRegisteredDiagnostic } from '../../core/src/internal/diagnostics.ts';
+import { buildBundle, createMcpServer, renderPage } from '../../devtool/src/index.mjs';
 import adapter from './diagnostic-adapter.cjs';
 
 const {
@@ -20,6 +23,13 @@ const {
   safeFixInvocation,
 } = adapter;
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
+const AUTHORING_FAMILIES = [
+  { code: 'KV436', family: 'access', token: 'accessDecision' },
+  { code: 'KV302', family: 'drizzle-data', token: 'drizzleQuery' },
+  { code: 'KV242', family: 'forms-csrf', token: 'csrfForm' },
+  { code: 'KV310', family: 'optimism', token: 'optimisticUpdate' },
+  { code: 'KV236', family: 'trusted-output', token: 'trustedOutput' },
+];
 
 function record(overrides = {}) {
   return {
@@ -94,6 +104,111 @@ function vscodeApi() {
 }
 
 describe('kovo-diagnostic/v1 editor adapter', () => {
+  it('projects one producer-owned corpus identically across every authoring feedback surface', () => {
+    const fixture = mkdtempSync(path.join(tmpdir(), 'kovo-diagnostic-parity-'));
+    const sourceDirectory = path.join(fixture, 'src');
+    const sourceText = AUTHORING_FAMILIES.map(
+      ({ family, token }) => `const ${token} = '${family}';`,
+    ).join('\n');
+    mkdirSync(sourceDirectory);
+    writeFileSync(path.join(sourceDirectory, 'app.tsx'), `${sourceText}\n`);
+
+    try {
+      const diagnostics = AUTHORING_FAMILIES.map(({ code, token }) => {
+        const start = sourceText.indexOf(token);
+        return projectKovoDiagnostic(
+          createRegisteredDiagnostic(
+            code,
+            { source: { end: start + token.length, file: 'src/app.tsx', start } },
+            { includeHelp: true },
+          ),
+          'proof',
+        );
+      });
+      const bundle = buildBundle({
+        app: 'parity',
+        diagnostics,
+        graph: {},
+        srcRoot: fixture,
+      });
+      const mcp = createMcpServer({ bundles: [bundle] });
+
+      expect(new Set(AUTHORING_FAMILIES.map(({ family }) => family))).toEqual(
+        new Set(['access', 'drizzle-data', 'forms-csrf', 'optimism', 'trusted-output']),
+      );
+      for (let index = 0; index < diagnostics.length; index += 1) {
+        const diagnostic = diagnostics[index];
+        const node = bundle.nodes[index];
+        const editor = createEditorDiagnosticProjection(
+          diagnostic,
+          documentFor(sourceText),
+          'file:///workspace/src/app.tsx',
+        );
+        const json = JSON.parse(formatKovoDiagnostics([diagnostic], 'json'));
+        const human = formatKovoDiagnostics([diagnostic], 'human');
+        const github = formatKovoDiagnostics([diagnostic], 'github');
+        const githubLevel =
+          diagnostic.severity === 'error'
+            ? 'error'
+            : diagnostic.severity === 'warn'
+              ? 'warning'
+              : 'notice';
+        const explanation = mcp.explain({
+          app: 'parity',
+          limit: 1,
+          query: diagnostic.code,
+        });
+        const html = renderPage({
+          app: 'parity',
+          bundle,
+          manifest: [{ blurb: 'Parity corpus', id: 'parity', label: 'Parity' }],
+          pzHref: '/c/devtool.js',
+          sel: node.id,
+        });
+
+        expect(json.diagnostics).toEqual([diagnostic]);
+        expect(human).toContain(`${diagnostic.severity.toUpperCase()} ${diagnostic.code}`);
+        expect(human).toContain(
+          `${diagnostic.source.file}[${diagnostic.source.start}:${diagnostic.source.end}]`,
+        );
+        expect(human).toContain(`HELP ${diagnostic.help}`);
+        expect(github).toContain(`::${githubLevel} file=${diagnostic.source.file}`);
+        expect(github).toContain(
+          `title=${diagnostic.code} ${diagnostic.category} [${diagnostic.source.start}%3A${diagnostic.source.end}]`,
+        );
+        expect(github).toContain(
+          diagnostic.help.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A'),
+        );
+        expect(editor.facts).toEqual({
+          code: diagnostic.code,
+          help: diagnostic.help,
+          severity: diagnostic.severity,
+          source: diagnostic.source,
+        });
+        expect(explanation.results[0].card.diagnostic).toEqual(diagnostic);
+        expect(explanation.results[0].text).toContain(`code: ${diagnostic.code}`);
+        expect(explanation.results[0].text).toContain(`severity: ${diagnostic.severity}`);
+        expect(explanation.results[0].text).toContain(`help: ${diagnostic.help}`);
+        expect(explanation.results[0].text).toContain(
+          `source-span: ${diagnostic.source.file}:${diagnostic.source.start}-${diagnostic.source.end}`,
+        );
+        expect(html).toContain(diagnostic.code);
+        expect(html).toContain(diagnostic.severity);
+        expect(html).toContain(diagnostic.help);
+        expect(html).toContain(
+          `${diagnostic.source.file}:${diagnostic.source.start}-${diagnostic.source.end}`,
+        );
+        expect(node.source).toMatchObject({
+          end: diagnostic.source.end,
+          file: 'src/app.tsx',
+          start: diagnostic.source.start,
+        });
+      }
+    } finally {
+      rmSync(fixture, { force: true, recursive: true });
+    }
+  });
+
   it('snapshots the complete bounded envelope without deriving producer facts', () => {
     const parsed = parseDiagnosticEnvelopeText(envelope());
     expect(parsed).toEqual({

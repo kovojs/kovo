@@ -1038,9 +1038,9 @@ export const sendReceipt = task('email/send-receipt', {
       cron: '0 2 * * *',
       key: 'email/send-receipt',
       paramNames: ['args', 'ctx'],
-      runMutationEdges: ['markSent'],
-      runQueryEdges: ['orderQuery'],
-      scheduleEdges: ['sendReceipt'],
+      runMutationEdges: [expect.objectContaining({ target: 'markSent' })],
+      runQueryEdges: [expect.objectContaining({ target: 'orderQuery' })],
+      scheduleEdges: [expect.objectContaining({ target: 'sendReceipt' })],
     });
   });
 
@@ -1058,7 +1058,7 @@ export const sendReceipt = task({
     expect(handler).toMatchObject({
       key: 'tasks/send-receipt',
       paramNames: ['args', 'ctx'],
-      runQueryEdges: ['orderQuery'],
+      runQueryEdges: [expect.objectContaining({ target: 'orderQuery' })],
     });
   });
 
@@ -1076,7 +1076,7 @@ export const sendReceipt = task('email/send-receipt', {
 
     expect(handler).toMatchObject({
       key: 'email/send-receipt',
-      runMutationEdges: ['markSent'],
+      runMutationEdges: [expect.objectContaining({ target: 'markSent' })],
     });
     expect(handlerWriteSinks(model)).toEqual([
       {
@@ -1310,7 +1310,10 @@ export const sendReceipt = defineTask('email/send-receipt', {
 `;
 
     expect(taskRunHandlers(parseComponentModule('tasks.ts', source))).toEqual([
-      expect.objectContaining({ key: 'email/send-receipt', runMutationEdges: ['markSent'] }),
+      expect.objectContaining({
+        key: 'email/send-receipt',
+        runMutationEdges: [expect.objectContaining({ target: 'markSent' })],
+      }),
     ]);
   });
 

@@ -9,6 +9,7 @@ import {
   traceGraph,
 } from './graph-model.mjs';
 import { createMcpServer } from './mcp.mjs';
+import { buildCard, cardToText } from './cards.mjs';
 import { arraySort } from './output-security.mjs';
 
 function retrievalBundle() {
@@ -60,7 +61,34 @@ describe('devtool BM25 retrieval', () => {
     const deriveUseSource = { end: 126, file: 'src/card.tsx', start: 106 };
     const bindingSource = { end: 129, file: 'src/card.tsx', start: 118 };
     const pageSource = { end: 84, file: 'src/routes.tsx', start: 9 };
+    const agentSource = { end: 90, file: 'src/agents.ts', start: 44 };
+    const toolSource = { end: 41, file: 'src/agents.ts', start: 8 };
+    const toolBindingSource = { end: 76, file: 'src/agents.ts', start: 68 };
+    const toolMutationSource = { end: 38, file: 'src/agents.ts', start: 30 };
+    const taskSource = { end: 180, file: 'src/tasks.ts', start: 12 };
+    const taskMutationSource = { end: 92, file: 'src/tasks.ts', start: 81 };
+    const taskQuerySource = { end: 126, file: 'src/tasks.ts', start: 113 };
+    const taskScheduleSource = { end: 168, file: 'src/tasks.ts', start: 153 };
     const graph = buildDataflowGraph({
+      agents: [
+        {
+          modelOperations: [{ kind: 'server.egress.request' }],
+          name: 'cart-assistant',
+          source: agentSource,
+          tools: [
+            {
+              bindingSource: toolBindingSource,
+              minimumIntegrity: 'principal',
+              mutation: 'cart/add',
+              mutationSource: toolMutationSource,
+              name: 'add-item',
+              operations: [{ kind: 'server.state.write' }],
+              resultIntegrity: 'principal',
+              source: toolSource,
+            },
+          ],
+        },
+      ],
       components: [
         {
           derives: [
@@ -108,6 +136,20 @@ describe('devtool BM25 retrieval', () => {
         },
       ],
       queries: [{ domains: ['cart'], query: 'cart', source: querySource }],
+      tasks: [
+        {
+          composition: [
+            { kind: 'run-mutation', source: taskMutationSource, target: 'cart/add' },
+            { kind: 'run-query', source: taskQuerySource, target: 'cart' },
+            { kind: 'schedule', source: taskScheduleSource, target: 'cart/reconcile' },
+          ],
+          key: 'cart/reconcile',
+          runMutations: ['cart/add'],
+          runQueries: ['cart'],
+          schedules: ['cart/reconcile'],
+          source: taskSource,
+        },
+      ],
       updateCoverage: [
         {
           component: 'Card',
@@ -127,31 +169,77 @@ describe('devtool BM25 retrieval', () => {
       'component:components/card': componentSource,
       'derive:components/card:cartLabel:[data-derive="cart.cartLabel"]': deriveSource,
       'domain:cart': domainSource,
+      'agent:cart-assistant': agentSource,
       'handler:components/card:Card$click': handlerSource,
       'binding-position:components/card:src/card.tsx:118:0': bindingSource,
       'mutation:cart/add': mutationSource,
       'page:/': pageSource,
       'query:cart': querySource,
+      'task:cart/reconcile': taskSource,
+      'tool:cart-assistant:add-item': toolSource,
       'trigger:components/card:Card$visible': triggerSource,
     });
     expect(Object.fromEntries(graph.edges.map((edge) => [edge.kind, edge.anchor]))).toEqual({
       backs: querySource,
       derives: deriveUseSource,
+      dispatches: taskMutationSource,
       emits: formSource,
       feeds: componentSource,
       handles: handlerSource,
+      invokes: toolMutationSource,
       owns: bindingSource,
+      reads: taskQuerySource,
       renders: pageSource,
+      schedules: taskScheduleSource,
       triggers: triggerSource,
       updates: bindingSource,
+      uses: toolBindingSource,
       writes: mutationSource,
     });
     expect(graph.edges.find((edge) => edge.kind === 'updates')).toMatchObject({
       from: 'query:cart',
       to: 'binding-position:components/card:src/card.tsx:118:0',
     });
+    expect(buildCard(graph.byId['agent:cart-assistant'], graph).sections.tools).toEqual([
+      expect.objectContaining({
+        minimumIntegrity: 'principal',
+        mutation: 'cart/add',
+        resultIntegrity: 'principal',
+      }),
+    ]);
+    expect(cardToText(buildCard(graph.byId['tool:cart-assistant:add-item'], graph))).toContain(
+      'INVOKES MUTATIONS (1)',
+    );
+    expect(buildCard(graph.byId['task:cart/reconcile'], graph).sections.composition).toEqual([
+      expect.objectContaining({ edge: 'dispatches', name: 'cart/add' }),
+      expect.objectContaining({ edge: 'reads', name: 'cart' }),
+      expect.objectContaining({ edge: 'schedules', name: 'cart/reconcile' }),
+    ]);
     expect(laneForKind('handler')).toBe('component');
     expect(laneForKind('binding-position')).toBe('component');
+  });
+
+  it('keeps repeated exact task composition occurrences as distinct stable edges', () => {
+    const first = { end: 40, file: 'src/tasks.ts', start: 32 };
+    const second = { end: 72, file: 'src/tasks.ts', start: 64 };
+    const graph = buildDataflowGraph({
+      mutations: [{ key: 'refresh', source: first }],
+      tasks: [
+        {
+          composition: [
+            { kind: 'run-mutation', source: first, target: 'refresh' },
+            { kind: 'run-mutation', source: second, target: 'refresh' },
+          ],
+          key: 'twice',
+          runMutations: ['refresh'],
+          source: { end: 80, file: 'src/tasks.ts', start: 0 },
+        },
+      ],
+    });
+    const dispatches = graph.edges.filter((edge) => edge.kind === 'dispatches');
+
+    expect(dispatches.map((edge) => edge.anchor)).toEqual([first, second]);
+    expect(new Set(dispatches.map((edge) => edge.id)).size).toBe(2);
   });
 
   it('preserves camel-case token ranking for the shared UI and MCP search surface', () => {
@@ -191,7 +279,7 @@ describe('devtool BM25 retrieval', () => {
     }).toThrow(TypeError);
 
     expect(KIND_META.domain.accent).toBe('#34d399');
-    expect(LANES[0]).toBe('mutation');
+    expect(LANES[0]).toBe('agent');
   });
 
   it('keeps adversarial graph sorting subquadratic without using Array.prototype.sort', () => {
