@@ -22,6 +22,32 @@ afterEach(() => {
 });
 
 describe('server runtime operator-environment authority (SPEC §6.6 rule 6)', () => {
+  it('binds one exact post-listen loopback development origin without request authority', async () => {
+    vi.resetModules();
+    const authority = await import('./runtime-environment-authority.js');
+
+    expect(authority.runtimeLoopbackDevelopmentOrigin()).toBeUndefined();
+    for (const invalid of [
+      'https://127.0.0.1:4173',
+      'http://0.0.0.0:4173',
+      'http://127.0.0.1:4173/',
+      'http://127.0.0.1:4173/path',
+      'http://127.0.0.1:4173?port=attacker',
+      'http://user@127.0.0.1:4173',
+    ]) {
+      expect(() => authority.bindServerLoopbackDevelopmentOrigin(invalid)).toThrow(
+        /canonical loopback HTTP origin/u,
+      );
+    }
+
+    authority.bindServerLoopbackDevelopmentOrigin('http://127.255.255.254:4173');
+    authority.bindServerLoopbackDevelopmentOrigin('http://127.255.255.254:4173');
+    expect(authority.runtimeLoopbackDevelopmentOrigin()).toBe('http://127.255.255.254:4173');
+    expect(() => authority.bindServerLoopbackDevelopmentOrigin('http://localhost:4173')).toThrow(
+      /already bound/u,
+    );
+  });
+
   it('mirrors Windows case-insensitive operator lookup without rewriting app env keys', async () => {
     vi.resetModules();
     const authority = await import('./runtime-environment-authority.js');

@@ -23,6 +23,8 @@ npm start            # node dist/server/server.mjs
 
 For local development, sign in at `/login` with `demo@example.com` and the
 random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
+`kovo dev` gives Better Auth the exact loopback Local URL after the server binds, so local
+development does not need `BETTER_AUTH_URL`.
 
 ## What's here
 

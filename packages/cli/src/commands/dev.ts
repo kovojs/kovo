@@ -188,14 +188,38 @@ export async function startKovoDevServer(
     );
 
     liveServer = await createServer(liveConfig);
+    const activeLiveServer = liveServer;
     lockLiveDevEnvironmentPluginLists(liveServer.config);
+    const bindDevelopmentOrigin = await loadKovoDevLoopbackOriginBinder(liveServer, profile);
+    const liveHttpServer = liveServer.httpServer;
+    if (liveHttpServer === null) {
+      throw new TypeError('Kovo dev requires one owned HTTP server for its development origin.');
+    }
+    let localOrigin: string | undefined;
+    let originBindingError: unknown;
+    // Node emits `listening` before it can dispatch an accepted request. Prepending this synchronous
+    // binding closes the post-listen/pre-app race: even a local port probe cannot load the app graph
+    // before Better Auth can resolve the exact authority the socket actually owns (SPEC §9.5.1).
+    liveHttpServer.prependOnceListener('listening', () => {
+      try {
+        const origin = boundDevServerOrigin(activeLiveServer);
+        nativeApply(bindDevelopmentOrigin, undefined, [origin]);
+        localOrigin = origin;
+      } catch (error) {
+        originBindingError = error;
+      }
+    });
     await liveServer.listen();
+    if (originBindingError !== undefined) throw originBindingError;
+    if (localOrigin === undefined) {
+      throw new Error('kovo dev did not bind its loopback development origin before app loading.');
+    }
     if (options.debug === true) liveServer.printUrls();
     const readyReport = formatKovoDevReadyReport({
       appModulePath: options.appModulePath,
       database: await inspectKovoDevDatabasePosture(liveServer, devtoolOptions),
       durationMs: nativeApply<number>(nativeMathRound, NativeMath, [performance.now() - startedAt]),
-      localUrl: boundDevServerUrl(liveServer),
+      localUrl: `${localOrigin}/`,
       mode: options.mode,
       root,
     });
@@ -279,7 +303,7 @@ export function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): st
 
 const DEVTOOL_READY_PATH = '__kovo';
 
-function boundDevServerUrl(server: ViteDevServer): string {
+function boundDevServerOrigin(server: ViteDevServer): string {
   const address = server.httpServer?.address();
   if (address === null || address === undefined || typeof address === 'string') {
     throw new Error('kovo dev could not read the bound HTTP socket address.');
@@ -291,7 +315,7 @@ function boundDevServerUrl(server: ViteDevServer): string {
   // The host door authorizes this configured authority, not Node's resolved socket address.
   // Preserve `localhost` when it resolves to ::1 so every printed URL remains usable.
   const host = configuredHost === '::1' || configuredHost === '[::1]' ? '[::1]' : configuredHost;
-  return `http://${host}:${address.port}/`;
+  return address.port === 80 ? `http://${host}` : `http://${host}:${address.port}`;
 }
 
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
@@ -302,6 +326,22 @@ interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
     paranoidStaticAdvisory: boolean;
     responseSetCookieValues: typeof kovoDevResponseSetCookieValues;
   }): Exclude<PluginOption, false | null | undefined>;
+}
+
+async function loadKovoDevLoopbackOriginBinder(
+  server: Pick<ViteDevServer, 'ssrLoadModule'>,
+  profile: DevSecurityProfileModule,
+): Promise<(origin: string) => void> {
+  const module = await server.ssrLoadModule(profile.securityProfileModuleId);
+  const bind = module.bindKovoDevLoopbackOrigin;
+  if (typeof bind !== 'function') {
+    throw new TypeError(
+      '@kovojs/server/internal/vite-security-profile must export bindKovoDevLoopbackOrigin.',
+    );
+  }
+  return (origin: string): void => {
+    nativeApply(bind, undefined, [origin]);
+  };
 }
 
 interface CompilerSecurityBootstrapModule {

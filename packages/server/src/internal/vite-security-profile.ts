@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
 import type { KovoApp } from '../app-types.js';
 import { frameworkManagedDbProviderDevelopmentPosture } from '../guards.js';
+import { bindServerLoopbackDevelopmentOrigin } from '../runtime-environment-authority.js';
 import { kovo } from '../vite.js';
 import { createKovoAppShellViteDevIntegration } from '../vite-dev.js';
 export { nodeRequestPreloadIngressRejection, rejectNodeRequestPreloadIngress } from '../node.js';
@@ -16,6 +17,15 @@ import {
 interface TrustedKovoVitePluginOptions extends KovoVitePluginOptions {
   paranoidStaticAdvisory: boolean;
   responseSetCookieValues?(response: ServerResponse): readonly string[];
+}
+
+/**
+ * Bind the actual loopback origin after the supported development server owns its socket.
+ *
+ * @internal This entry is intentionally available only through the trusted live SSR profile.
+ */
+export function bindKovoDevLoopbackOrigin(origin: string): void {
+  bindServerLoopbackDevelopmentOrigin(origin);
 }
 
 /** @internal Stable readiness labels projected only from the active app's pinned DB provider. */

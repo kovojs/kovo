@@ -27,6 +27,10 @@ pnpm run dev
 Open `/`. The guarded route redirects to `/login`. Sign in as `demo@example.com` with the random
 `KOVO_DEMO_PASSWORD` written to the generated, gitignored `.env` file.
 
+You do not need `BETTER_AUTH_URL` for this local run. `kovo dev` waits for its loopback listener,
+then gives Better Auth the exact Local URL it prints, including an automatically selected port.
+Custom runners still need an explicit canonical origin.
+
 The app-authored part of `src/auth.ts` is deliberately small:
 
 ```ts

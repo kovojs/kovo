@@ -14,14 +14,15 @@ let appServerOutput = '';
 beforeAll(async () => {
   const port = await reservePort();
   appOrigin = `http://127.0.0.1:${port}`;
+  const environment: Record<string, string | undefined> = {
+    ...process.env,
+    HOST: '127.0.0.1',
+    NODE_ENV: 'development',
+    PORT: String(port),
+  };
+  delete environment.BETTER_AUTH_URL;
   appServer = spawn('kovo', ['dev', './src/app.tsx'], {
-    env: {
-      ...process.env,
-      BETTER_AUTH_URL: appOrigin,
-      HOST: '127.0.0.1',
-      NODE_ENV: 'development',
-      PORT: String(port),
-    },
+    env: environment,
   });
   appServer.stdout.on('data', (chunk: Buffer) => {
     appServerOutput += chunk.toString('utf8');

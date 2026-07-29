@@ -12,6 +12,9 @@ const runtimeBootstrapUrl = pathToFileURL(
 const serverExecutionUrl = pathToFileURL(
   fileURLToPath(new URL('../../server/src/internal/execution.ts', import.meta.url)),
 ).href;
+const serverEnvironmentAuthorityUrl = pathToFileURL(
+  fileURLToPath(new URL('../../server/src/runtime-environment-authority.ts', import.meta.url)),
+).href;
 
 describe('Better Auth boot-pinned environment boundary', () => {
   it('loads local .env before a bootstrap-first Better Auth import and ignores late app mutation', () => {
@@ -389,10 +392,20 @@ process.stdout.write(JSON.stringify({
 
   it('keeps the exact kovo dev loopback origin development-only and requires canonical production HTTPS', () => {
     expect(resolveEnvironmentInChild([])).toEqual({
-      baseURL: 'http://127.0.0.1:5173',
-      developmentSeed: false,
-      production: false,
+      error: expect.stringMatching(/required outside the supported kovo dev runner/u),
     });
+    for (const baseURL of [
+      'http://localhost:4173',
+      'http://127.0.0.1:4174',
+      'http://127.255.255.254:4175',
+      'http://[::1]:4176',
+    ]) {
+      expect(resolveEnvironmentInChild([], baseURL)).toEqual({
+        baseURL,
+        developmentSeed: false,
+        production: false,
+      });
+    }
     for (const baseURL of [
       'http://localhost:4173',
       'http://127.0.0.1:4173',
@@ -405,6 +418,16 @@ process.stdout.write(JSON.stringify({
         production: false,
       });
     }
+    expect(
+      resolveEnvironmentInChild(
+        ['BETTER_AUTH_URL=https://auth.operator.example'],
+        'http://127.0.0.1:4173',
+      ),
+    ).toEqual({
+      baseURL: 'https://auth.operator.example',
+      developmentSeed: false,
+      production: false,
+    });
     for (const baseURL of [
       'http://app.example.test',
       'http://localhost.example.test',
@@ -428,6 +451,9 @@ process.stdout.write(JSON.stringify({
     });
 
     expect(resolveEnvironmentInChild(['NODE_ENV=production'])).toEqual({
+      error: expect.stringMatching(/BETTER_AUTH_URL is required in production/u),
+    });
+    expect(resolveEnvironmentInChild(['NODE_ENV=production'], 'http://127.0.0.1:4173')).toEqual({
       error: expect.stringMatching(/BETTER_AUTH_URL is required in production/u),
     });
     expect(
@@ -532,7 +558,10 @@ try {
   });
 });
 
-function resolveEnvironmentInChild(lines: readonly string[]): {
+function resolveEnvironmentInChild(
+  lines: readonly string[],
+  runnerOrigin?: string,
+): {
   baseURL?: string;
   developmentSeed?: boolean;
   error?: unknown;
@@ -563,6 +592,12 @@ registerHooks({
 });
 await import(${JSON.stringify(runtimeBootstrapUrl)});
 try {
+  ${
+    runnerOrigin === undefined
+      ? ''
+      : `const originAuthority = await import(${JSON.stringify(serverEnvironmentAuthorityUrl)});
+  originAuthority.bindServerLoopbackDevelopmentOrigin(${JSON.stringify(runnerOrigin)});`
+  }
   const internal = await import(${JSON.stringify(environmentUrl)});
   const resolved = internal.resolveBetterAuthEnvironment();
   process.stdout.write(JSON.stringify({

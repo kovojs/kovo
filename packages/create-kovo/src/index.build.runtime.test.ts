@@ -369,6 +369,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       writeKovoProject(root, { name: 'Dev Proof' });
       linkStarterBuildDependencies(root);
       const origin = `http://127.0.0.1:${port}`;
+      const devEnvironment = withRepoBinOnPath();
+      delete devEnvironment.BETTER_AUTH_URL;
 
       devServer = spawn(
         join(root, 'node_modules/.bin/kovo'),
@@ -376,7 +378,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         {
           cwd: root,
           detached: process.platform !== 'win32',
-          env: { ...withRepoBinOnPath(), BETTER_AUTH_URL: origin },
+          env: devEnvironment,
         },
       );
       const output = collectOutput(devServer);

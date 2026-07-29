@@ -9,4 +9,5 @@ export {
   pinServerRuntimeEnvironment,
   runtimeEnvironmentSnapshot,
   runtimeEnvironmentValue,
+  runtimeLoopbackDevelopmentOrigin,
 } from '../runtime-environment-authority.js';

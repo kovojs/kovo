@@ -75,6 +75,9 @@ kovo dev ./src/app.tsx
 kovo dev ./src/app.tsx --host 127.0.0.1 --port 4173 --strict-port
 ```
 
+The runner prints the exact loopback URL after the socket binds. Generated Better Auth apps use
+that same origin when `BETTER_AUTH_URL` is unset, including when the selected port changes.
+
 Pass `--config ./vite.config.ts` only when dev needs an authored client transform. The secure config
 surface accepts `server.host`, `server.port`, `server.strictPort`, and client plugins limited to
 `resolveId`, `load`, and `transform`. Build, test, lint, format, and run sections are ignored. Other

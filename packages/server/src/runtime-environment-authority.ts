@@ -1,3 +1,5 @@
+/* oxlint-disable typescript/unbound-method -- URL accessors are invoked only through pinned Reflect.apply. */
+
 import {
   witnessCreateNullRecord,
   witnessDefineProperty,
@@ -6,6 +8,8 @@ import {
   witnessObjectIs,
   witnessObjectKeys,
   witnessReflectApply,
+  witnessReflectConstruct,
+  witnessRegExpExec,
   witnessStringToLowerCase,
 } from './security-witness-intrinsics.js';
 
@@ -32,6 +36,7 @@ interface RuntimeEnvironmentAuthority {
 }
 
 let pinnedRuntimeEnvironment: RuntimeEnvironmentAuthority | undefined;
+let boundLoopbackDevelopmentOrigin: string | undefined;
 
 const bootProcess =
   typeof process === 'undefined' || process === null || typeof process !== 'object'
@@ -39,6 +44,15 @@ const bootProcess =
     : process;
 const bootLoadEnvFile = bootProcessValue('loadEnvFile');
 const bootEnvironmentNamesAreCaseInsensitive = bootProcessValue('platform') === 'win32';
+const NativeURL = globalThis.URL;
+const nativeUrlHash = urlGetter('hash');
+const nativeUrlHostname = urlGetter('hostname');
+const nativeUrlOrigin = urlGetter('origin');
+const nativeUrlPassword = urlGetter('password');
+const nativeUrlPathname = urlGetter('pathname');
+const nativeUrlProtocol = urlGetter('protocol');
+const nativeUrlSearch = urlGetter('search');
+const nativeUrlUsername = urlGetter('username');
 
 /**
  * Load the conventional local `.env` file through the boot-captured Node host hook, then pin the
@@ -74,6 +88,41 @@ export function runtimeEnvironmentValue(name: string): string | undefined {
     pinnedRuntimeEnvironment ??
     createEnvironmentAuthority(liveProcessEnvironment(), bootEnvironmentNamesAreCaseInsensitive);
   return environmentAuthorityValue(authority, name);
+}
+
+/**
+ * Bind the canonical origin selected by the supported loopback-only development runner.
+ *
+ * The runner calls this only after its owned HTTP server has bound, so an ephemeral or
+ * conflict-shifted port cannot leave authentication pointed at a guessed default. The value is a
+ * one-shot framework fact: it is neither inferred from request/forwarded headers nor mutable app
+ * configuration (SPEC §9.5.1).
+ *
+ * @internal
+ */
+export function bindServerLoopbackDevelopmentOrigin(origin: string): void {
+  const canonicalOrigin = canonicalLoopbackDevelopmentOrigin(origin);
+  if (boundLoopbackDevelopmentOrigin === undefined) {
+    boundLoopbackDevelopmentOrigin = canonicalOrigin;
+    return;
+  }
+  if (boundLoopbackDevelopmentOrigin !== canonicalOrigin) {
+    throw new TypeError(
+      `Kovo development origin is already bound to ${boundLoopbackDevelopmentOrigin}.`,
+    );
+  }
+}
+
+/**
+ * Read the one-shot origin selected by the supported development runner.
+ *
+ * This is a framework-owned convenience fact, not deployment authority. Production and every
+ * non-loopback origin remain explicit operator configuration (SPEC §9.5.1).
+ *
+ * @internal
+ */
+export function runtimeLoopbackDevelopmentOrigin(): string | undefined {
+  return boundLoopbackDevelopmentOrigin;
 }
 
 /**
@@ -117,6 +166,55 @@ function bootProcessValue(property: PropertyKey): unknown {
     throw new TypeError(`Kovo process.${String(property)} changed during framework bootstrap.`);
   }
   return before === undefined || !('value' in before) ? undefined : before.value;
+}
+
+function canonicalLoopbackDevelopmentOrigin(value: string): string {
+  if (typeof value !== 'string') {
+    throw new TypeError('Kovo development origin must be a canonical loopback HTTP origin.');
+  }
+  let url: URL;
+  try {
+    url = witnessReflectConstruct<URL>(NativeURL, [value]);
+  } catch {
+    throw new TypeError('Kovo development origin must be a canonical loopback HTTP origin.');
+  }
+  const origin = readUrlPart(nativeUrlOrigin, url);
+  const hostname = readUrlPart(nativeUrlHostname, url);
+  if (
+    readUrlPart(nativeUrlProtocol, url) !== 'http:' ||
+    origin !== value ||
+    readUrlPart(nativeUrlUsername, url) !== '' ||
+    readUrlPart(nativeUrlPassword, url) !== '' ||
+    readUrlPart(nativeUrlPathname, url) !== '/' ||
+    readUrlPart(nativeUrlSearch, url) !== '' ||
+    readUrlPart(nativeUrlHash, url) !== '' ||
+    !runtimeHostnameIsExactLoopback(hostname)
+  ) {
+    throw new TypeError('Kovo development origin must be a canonical loopback HTTP origin.');
+  }
+  return origin;
+}
+
+function runtimeHostnameIsExactLoopback(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true;
+  return (
+    witnessRegExpExec(
+      /^127\.(?:0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])\.(?:0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])\.(?:0|[1-9]\d?|1\d{2}|2[0-4]\d|25[0-5])$/u,
+      hostname,
+    ) !== null
+  );
+}
+
+function urlGetter(name: string): Function {
+  const descriptor = witnessGetOwnPropertyDescriptor(NativeURL.prototype, name);
+  if (descriptor === undefined || typeof descriptor.get !== 'function') {
+    throw new TypeError(`Kovo URL.${name} getter is unavailable during framework bootstrap.`);
+  }
+  return descriptor.get;
+}
+
+function readUrlPart(getter: Function, url: URL): string {
+  return witnessReflectApply<string>(getter, url, []);
 }
 
 function isMissingEnvironmentFileError(error: unknown): boolean {

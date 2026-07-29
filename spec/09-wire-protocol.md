@@ -544,6 +544,16 @@ and refresh dispatch. The wrapper wires compiler diagnostics into the same dev d
 used by page, fragment, and mutation requests, so a failed hot update and a failed direct request
 render the same teaching document.
 
+The supported `kovo dev` runner MUST bind the exact canonical HTTP origin of its owned loopback
+listener after the socket is listening and before it loads the live app graph. A generated Better
+Auth constructor with no explicit `BETTER_AUTH_URL` uses that one-shot framework fact, so an
+ephemeral or conflict-shifted port remains identical to the Local URL printed by the runner. The
+fact accepts only `localhost`, IPv4 `127/8`, or `[::1]` with the listener's actual effective port.
+It MUST NOT be derived from `Host`, `Origin`, `Forwarded`, or `X-Forwarded-*` request fields, and app
+code cannot replace it after binding. Outside the supported runner, a Better Auth app MUST
+configure `BETTER_AUTH_URL` explicitly. An explicit development value remains fixed and validated;
+every non-loopback value and every production value remains an explicit canonical HTTPS origin.
+
 HMR impact classification is compiler-owned and fact-based. After parsing, impact decisions must use
 typed lowering facts (§5.2 rule 9), not source-string heuristics. The impact ladder is:
 server fragment/query refresh for a proven compatible live target; current-route document refresh
