@@ -23,7 +23,7 @@ export const questions = pgTable(
     tags: text('tags').notNull().default(''),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: question, key: 'sessionId,id', public: true }),
+  kovo((columns) => ({ domain: question, key: [columns.sessionId, columns.id], public: true })),
 );
 
 export const answers = pgTable(
@@ -39,7 +39,7 @@ export const answers = pgTable(
     authorName: text('author_name').notNull().default('Anonymous'),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: answer, key: 'sessionId,id', public: true }),
+  kovo((columns) => ({ domain: answer, key: [columns.sessionId, columns.id], public: true })),
 );
 
 export const votes = pgTable(
@@ -52,5 +52,5 @@ export const votes = pgTable(
     userId: text('user_id').notNull(),
     value: integer('value').notNull(),
   },
-  kovo({ domain: vote, key: 'sessionId,id', public: true }),
+  kovo((columns) => ({ domain: vote, key: [columns.sessionId, columns.id], public: true })),
 );

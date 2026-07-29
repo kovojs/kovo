@@ -461,15 +461,3 @@ function immutablePolicySet(values: readonly string[]): ReadonlySet<string> {
   }
   return runtimeSealSet(policy);
 }
-
-export function isDomainTableAnnotation(
-  annotation: KovoTableAnnotation<KovoDrizzleColumns> & { name?: string },
-): annotation is KovoDomainTableAnnotation<KovoDrizzleColumns> & { name: string } {
-  return 'domain' in annotation;
-}
-
-export function isExemptTableAnnotation(
-  annotation: KovoTableAnnotation<KovoDrizzleColumns> & { name?: string },
-): annotation is { exempt: true; name: string } {
-  return 'exempt' in annotation && annotation.exempt === true;
-}

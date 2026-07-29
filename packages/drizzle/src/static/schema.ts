@@ -8,15 +8,7 @@ import {
   type Symbol as MorphSymbol,
   type Type as MorphType,
 } from 'ts-morph';
-import {
-  isDrizzleDatabaseTypeName,
-  isDrizzleTableFactoryName,
-  type KovoDomainTableAnnotation,
-  type KovoFanAnnotation,
-  type KovoSecretColumnAnnotation,
-  type KovoTableAnnotation,
-  type KovoViewAnnotation,
-} from '../drizzle-surface.js';
+import { isDrizzleDatabaseTypeName, isDrizzleTableFactoryName } from '../drizzle-surface.js';
 import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
@@ -91,10 +83,7 @@ function secretAnnotatedShape(
   return secretQueryShape(shape);
 }
 
-function annotationSecretIncludesColumn(
-  secret: KovoSecretColumnAnnotation,
-  column: string,
-): boolean {
+function annotationSecretIncludesColumn(secret: true | readonly string[], column: string): boolean {
   if (secret === true) return true;
   const references = Array.isArray(secret) ? secret : [secret];
   return references.some((reference) => reference === column);

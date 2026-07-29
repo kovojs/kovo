@@ -7824,11 +7824,8 @@ function requestExactPristineDirectImport(
     Node.isIdentifier(callee) &&
     callee.getText() === exportName &&
     requestExpressionIsDirectImportedExport(callee, module, exportName);
-  const pristine =
-    direct && requestExactImportedCarrierIsPristine(callee, module, exportName);
-  return direct && pristine
-    ? callee
-    : undefined;
+  const pristine = direct && requestExactImportedCarrierIsPristine(callee, module, exportName);
+  return direct && pristine ? callee : undefined;
 }
 
 /** Exact generated CSRF environment derivation; raw secrets and binding stay first-party owned. */
@@ -14200,11 +14197,13 @@ function requestExactImportedCarrierIsPristine(
       for (const declaration of sourceFile.getExportDeclarations()) {
         if (declaration.isTypeOnly()) continue;
         const exported = declaration.getNamedExports();
-        if (requestModuleSpecifierExportsCanonicalMember(
-          declaration.getModuleSpecifierValue(),
-          module,
-          exportName,
-        )) {
+        if (
+          requestModuleSpecifierExportsCanonicalMember(
+            declaration.getModuleSpecifierValue(),
+            module,
+            exportName,
+          )
+        ) {
           if (
             exported.length === 0 ||
             exported.some(
@@ -32609,7 +32608,9 @@ function requestExactKovoCallForAnnotationObject(
     }
     break;
   }
-  if (!callback) return undefined;
+  if (!callback || (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))) {
+    return undefined;
+  }
   const [parameter, ...extraParameters] = callback.getParameters();
   const callable = requestCallableForFunctionNode(callback);
   const outputs = callable ? requestWireOutputExpressions(callable) : [];

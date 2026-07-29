@@ -1,8 +1,7 @@
-import { kovo } from '@kovojs/drizzle';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type { SourceFileInput, TouchGraphProjectOptions } from '@kovojs/drizzle/internal/static';
 
-export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
+export function annotatedTable(name: string, annotation: { domain: string; key?: string }) {
   return {
     domain: annotation.domain,
     ...(annotation.key ? { key: annotation.key } : {}),

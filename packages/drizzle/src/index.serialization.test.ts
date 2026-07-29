@@ -33,7 +33,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         metadata: jsonb('metadata'),
         stock: integer('stock').notNull(),
       },
-      kovo((columns) => ({ domain: 'product', key: 'id' })),
+      kovo((columns) => ({ domain: 'product', key: columns.id })),
     );
 
     expect(getTableName(products)).toBe('products');
@@ -237,18 +237,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
   });
 
   it('creates deterministic touch graph entries from annotated tables and read domains', () => {
-    const cartItems = annotatedTable(
-      'cart_items',
-      kovo((columns) => ({ domain: 'cart', key: 'cartId' })),
-    );
-    const products = annotatedTable(
-      'products',
-      kovo((columns) => ({ domain: 'product', key: 'id' })),
-    );
-    const priceRules = annotatedTable(
-      'price_rules',
-      kovo((columns) => ({ domain: 'pricing', key: 'id' })),
-    );
+    const cartItems = annotatedTable('cart_items', { domain: 'cart', key: 'cartId' });
+    const products = annotatedTable('products', { domain: 'product', key: 'id' });
+    const priceRules = annotatedTable('price_rules', { domain: 'pricing', key: 'id' });
 
     const entry = createTouchGraphEntry({
       reads: [
@@ -357,10 +348,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
               operation: 'update-from',
               scope: { kind: 'unscoped' },
               site: 'cart.domain.ts:11',
-              table: annotatedTable(
-                'prices',
-                kovo((columns) => ({ domain: 'price' })),
-              ),
+              table: annotatedTable('prices', { domain: 'price' }),
             },
           ],
           unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:20' }],
@@ -370,10 +358,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
               operation: 'update',
               predicate: 'non-eq',
               site: 'cart.domain.ts:12',
-              table: annotatedTable(
-                'products',
-                kovo((columns) => ({ domain: 'product', key: 'id' })),
-              ),
+              table: annotatedTable('products', { domain: 'product', key: 'id' }),
               writeKey: 'arg:productId',
             },
           ],
@@ -404,10 +389,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
               operation: 'insert-select',
               predicate: 'non-eq',
               site: 'cart.domain.ts:18',
-              table: annotatedTable(
-                'prices',
-                kovo((columns) => ({ domain: 'price', key: 'productId' })),
-              ),
+              table: annotatedTable('prices', { domain: 'price', key: 'productId' }),
             },
           ],
           unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
@@ -416,10 +398,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
               operation: 'update',
               predicate: 'non-eq',
               site: 'cart.domain.ts:12',
-              table: annotatedTable(
-                'products',
-                kovo((columns) => ({ domain: 'product', key: 'id' })),
-              ),
+              table: annotatedTable('products', { domain: 'product', key: 'id' }),
             },
           ],
         }),
@@ -447,14 +426,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
   });
 
   it('serializes deterministic domain registry output from table annotations', () => {
-    const cartItems = annotatedTable(
-      'cart_items',
-      kovo((columns) => ({ domain: 'cart', key: 'cartId' })),
-    );
-    const products = annotatedTable(
-      'products',
-      kovo((columns) => ({ domain: 'product', key: 'id' })),
-    );
+    const cartItems = annotatedTable('cart_items', { domain: 'cart', key: 'cartId' });
+    const products = annotatedTable('products', { domain: 'product', key: 'id' });
 
     expect(serializeDomainRegistry([{ table: products }, { table: cartItems }]))
       .toBe(`export type DomainKey = "cart" | "product";
@@ -493,26 +466,17 @@ export const tableDomains = {
             {
               operation: 'insert',
               site: 'cart.domain.ts:8',
-              table: annotatedTable(
-                'cart_items',
-                kovo((columns) => ({ domain: 'cart', key: 'cartId' })),
-              ),
+              table: annotatedTable('cart_items', { domain: 'cart', key: 'cartId' }),
             },
             {
               operation: 'insert',
               site: 'cart.domain.ts:12',
-              table: annotatedTable(
-                'orders',
-                kovo((columns) => ({ domain: 'order' })),
-              ),
+              table: annotatedTable('orders', { domain: 'order' }),
             },
             {
               operation: 'update',
               site: 'cart.domain.ts:16',
-              table: annotatedTable(
-                'products',
-                kovo((columns) => ({ domain: 'product', key: 'id' })),
-              ),
+              table: annotatedTable('products', { domain: 'product', key: 'id' }),
               writeKey: 'arg:productId',
             },
           ],
@@ -564,18 +528,12 @@ export interface CommerceInvalidationSets {
             {
               operation: 'insert',
               site: 'cart.domain.ts:8',
-              table: annotatedTable(
-                'cart_items',
-                kovo((columns) => ({ domain: 'cart', key: 'cartId' })),
-              ),
+              table: annotatedTable('cart_items', { domain: 'cart', key: 'cartId' }),
             },
             {
               operation: 'update',
               site: 'cart.domain.ts:16',
-              table: annotatedTable(
-                'products',
-                kovo((columns) => ({ domain: 'product', key: 'id' })),
-              ),
+              table: annotatedTable('products', { domain: 'product', key: 'id' }),
               writeKey: 'arg:productId',
             },
           ],

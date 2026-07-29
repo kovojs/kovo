@@ -1,4 +1,3 @@
-import type { KovoDomainTableAnnotation, KovoFanAnnotation } from '../drizzle-surface.js';
 import type {
   ReadSummaryInput,
   TouchGraphDiagnostic,
@@ -46,6 +45,8 @@ import {
   sessionProvenanceContextForNodes,
 } from './session-provenance.js';
 import {
+  type ExtractedDomainTableAnnotation,
+  type ExtractedFanAnnotation,
   type ExtractedForeignKey,
   type ExtractedFunction,
   type ExtractedPredicateFact,
@@ -2652,12 +2653,12 @@ function isGeneratedAppRuntimeFrameworkFunction(
   // not deleted, so it does not re-trigger its own ON DELETE cascades). `walked`
   // guards FK cycles (the parent is pre-seeded since its own touch is emitted by the
   // caller); `emitted` dedupes touches across diamond/cycle fan-out paths.
-  const walked = new Set<KovoDomainTableAnnotation & { name: string }>([parentTable]);
-  const emitted = new Set<KovoDomainTableAnnotation & { name: string }>([parentTable]);
-  let frontier: (KovoDomainTableAnnotation & { name: string })[] = [parentTable];
+  const walked = new Set<ExtractedDomainTableAnnotation & { name: string }>([parentTable]);
+  const emitted = new Set<ExtractedDomainTableAnnotation & { name: string }>([parentTable]);
+  let frontier: (ExtractedDomainTableAnnotation & { name: string })[] = [parentTable];
 
   while (frontier.length > 0) {
-    const next: (KovoDomainTableAnnotation & { name: string })[] = [];
+    const next: (ExtractedDomainTableAnnotation & { name: string })[] = [];
 
     for (const ancestor of frontier) {
       for (const entries of tables.values()) {
@@ -2702,7 +2703,7 @@ function isGeneratedAppRuntimeFrameworkFunction(
 
 /** @internal */ export function foreignKeyTargetsTable(
   foreignKey: ExtractedForeignKey,
-  parentTable: KovoDomainTableAnnotation & { name: string },
+  parentTable: ExtractedDomainTableAnnotation & { name: string },
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): boolean {
   return (tables.get(foreignKey.targetTableExpression) ?? []).some(
@@ -2752,9 +2753,9 @@ function isGeneratedAppRuntimeFrameworkFunction(
 }
 
 /** @internal */ export function fanAnnotationsForOperation(
-  table: KovoDomainTableAnnotation & { name: string },
+  table: ExtractedDomainTableAnnotation & { name: string },
   operation: string,
-): readonly KovoFanAnnotation[] {
+): readonly ExtractedFanAnnotation[] {
   if (operation !== 'delete' && operation !== 'insert' && operation !== 'update') return [];
   return (table.fans ?? []).filter((fan) => fan.when === undefined || fan.when === operation);
 }
@@ -2998,7 +2999,7 @@ function isGeneratedAppRuntimeFrameworkFunction(
 /** @internal */ export function predicateSummaryFromFacts(
   facts: readonly ExtractedPredicateFact[],
   tableIdentifier: string,
-  table: KovoDomainTableAnnotation,
+  table: ExtractedDomainTableAnnotation,
 ): ExtractedPredicateSummary {
   if (typeof table.key !== 'string') return {};
 

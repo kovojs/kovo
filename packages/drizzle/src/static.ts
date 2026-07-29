@@ -84,9 +84,6 @@ import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
   type KovoDomainRef,
-  type KovoDomainTableAnnotation,
-  type KovoFanAnnotation,
-  type KovoTableAnnotation,
   type KovoViewAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
@@ -832,13 +829,37 @@ function ownerDomainSetFromTables(
   files: readonly SourceFileInput[];
 }
 
-type ExtractedDomainTableAnnotation = Omit<KovoDomainTableAnnotation, 'domain'> & {
+/**
+ * Compiler-normalized fan-out fact. Public annotation types carry private Drizzle identity
+ * witnesses; the static analyzer records independently resolved column names instead.
+ *
+ * @internal
+ */
+export interface ExtractedFanAnnotation {
   domain: string;
-};
+  via: string;
+  when?: 'delete' | 'insert' | 'update';
+}
 
-type ExtractedKovoTableAnnotation =
-  | (Omit<KovoTableAnnotation, 'domain'> & { domain: string })
-  | Extract<KovoTableAnnotation, { exempt: true }>;
+/** Compiler-normalized table annotation facts. @internal */
+export interface ExtractedDomainTableAnnotation {
+  atomic?: readonly string[];
+  authzPolicy?: true;
+  confidentialAtRest?: true | readonly string[];
+  domain: string;
+  fans?: readonly ExtractedFanAnnotation[];
+  governed?: true | readonly string[];
+  key?: string;
+  owner?: string;
+  ownerVia?: true;
+  public?: true;
+  readOnly?: true;
+  reference?: true;
+  secret?: true | readonly string[];
+  version?: readonly string[];
+}
+
+type ExtractedKovoTableAnnotation = ExtractedDomainTableAnnotation | { exempt: true };
 
 function extractedDomainKey(domain: KovoDomainRef): string {
   return typeof domain === 'string' ? domain : domain.key;
@@ -4607,7 +4628,7 @@ function runtimeManifestDeclaredKeyUniqueness(
 
 function runtimeManifestAnnotatedColumnKeys(
   columns: readonly RuntimeTableSecurityManifestColumn[],
-  annotation: KovoDomainTableAnnotation['secret'] | KovoDomainTableAnnotation['governed'],
+  annotation: true | readonly string[] | undefined,
 ): string[] {
   if (annotation === undefined) return [];
   if (annotation === true) return columns.map((column) => column.key);
@@ -7336,7 +7357,7 @@ function objectPropertyFromObject(
   return undefined;
 }
 
-function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
+function fanAnnotationsFromObject(object: Node): ExtractedFanAnnotation[] {
   if (!Node.isObjectLiteralExpression(object)) return [];
 
   const fansProperty = object

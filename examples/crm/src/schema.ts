@@ -17,7 +17,7 @@ export const contacts = pgTable(
     title: text('title').notNull().default('Contact'),
   },
   // SPEC §10.1: contacts are owned by the CRM user (ownerId).
-  kovo({ domain: 'contact', key: (t) => t.id, owner: (t) => t.ownerId }),
+  kovo((columns) => ({ domain: 'contact', key: columns.id, owner: columns.ownerId })),
 );
 
 export const deals = pgTable(
@@ -32,7 +32,7 @@ export const deals = pgTable(
     title: text('title').notNull().default('New opportunity'),
   },
   // SPEC §10.1: deals are owned by the CRM user (ownerId).
-  kovo({ domain: 'deal', key: (t) => t.id, owner: (t) => t.ownerId }),
+  kovo((columns) => ({ domain: 'deal', key: columns.id, owner: columns.ownerId })),
 );
 
 export const activities = pgTable(
@@ -44,9 +44,9 @@ export const activities = pgTable(
     note: text('note').notNull(),
   },
   // SPEC 10.1: activities inherit ownership from their parent deal.
-  kovo({
+  kovo((columns) => ({
     domain: 'activity',
-    key: (t) => t.id,
-    ownerVia: { fk: (t) => t.dealId, parent: deals, parentKey: (t) => t.id },
-  }),
+    key: columns.id,
+    ownerVia: { fk: columns.dealId, parent: deals, parentKey: deals.id },
+  })),
 );

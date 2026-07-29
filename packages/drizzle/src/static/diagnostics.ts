@@ -1,9 +1,9 @@
-import type { DiagnosticCode } from '@kovojs/core';
 import {
   assertRegisteredDiagnostic,
   createRegisteredDiagnostic,
   deriveRegisteredDiagnostic,
   diagnosticDefinitionText,
+  type DiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import type { Node } from 'ts-morph';
 import type { TouchGraphDiagnostic } from '../graph.js';
