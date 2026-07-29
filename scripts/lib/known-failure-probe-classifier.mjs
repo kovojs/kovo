@@ -1,3 +1,5 @@
+import { DEV_READY_POST_BIND_BUDGET_MS } from './dev-ready-probe-contract.mjs';
+
 const RUNTIME_FAILURE =
   /(?:ERR_MODULE_NOT_FOUND|Cannot find package|node:internal\/|SyntaxError:|ReferenceError:)/u;
 const USAGE_FAILURE = /(?:usage:|unknown command)/iu;
@@ -101,7 +103,7 @@ export function packedFirstLoopContractOutcome(mode, observation) {
       observation.listened === true &&
       Number.isFinite(observation.readyDelayMs) &&
       observation.readyDelayMs >= 0 &&
-      observation.readyDelayMs <= 5_000 &&
+      observation.readyDelayMs <= DEV_READY_POST_BIND_BUDGET_MS &&
       typeof observation.stdout === 'string' &&
       KOVO_READY_REPORT.test(observation.stdout ?? '')
     ) {

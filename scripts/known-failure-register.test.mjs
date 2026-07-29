@@ -20,6 +20,11 @@ import {
   packedCliContractOutcome,
   packedFirstLoopContractOutcome,
 } from './lib/known-failure-probe-classifier.mjs';
+import {
+  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+  DEV_READY_POST_BIND_BUDGET_MS,
+  DEV_READY_PROBE_PROCESS_TIMEOUT_MS,
+} from './lib/dev-ready-probe-contract.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
@@ -110,6 +115,29 @@ describe('known-failure register', () => {
     );
     expect(ciWorkflowSource).toContain(
       'run: timeout 5m vp exec pnpm run test:devex-known-failures-available',
+    );
+  });
+
+  it('keeps dev-ready infrastructure ceilings separate from post-bind and G2 budgets', () => {
+    const devReady = register.entries.find((entry) => entry.id === 'KF-DEVEX-002');
+    const coldG2 = budgets.metrics['dev.ready.cold.durationMs'];
+    const warmG2 = budgets.metrics['dev.ready.warm.durationMs'];
+
+    expect(devReady.probe.timeoutMs).toBe(DEV_READY_PROBE_PROCESS_TIMEOUT_MS);
+    expect(DEV_READY_PROBE_PROCESS_TIMEOUT_MS).toBeGreaterThan(
+      DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+    );
+    expect(DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS).toBeGreaterThan(coldG2.provisionalTarget);
+    expect(coldG2).toMatchObject({ provisionalTarget: 15_000, ratification: null });
+    expect(warmG2).toMatchObject({ provisionalTarget: 5_000, ratification: null });
+    expect(devReady.retirementCondition).toBe(
+      'The packed dev journey emits the required structured ready report within five seconds after socket bind.',
+    );
+    expect(packedFirstLoopProbeSource).toContain(
+      'waitForTcpListener(port, dev, DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS)',
+    );
+    expect(packedFirstLoopProbeSource).toContain(
+      'Date.now() - listenedAt <= DEV_READY_POST_BIND_BUDGET_MS',
     );
   });
 
@@ -527,7 +555,7 @@ describe('known-failure register', () => {
       packedFirstLoopContractOutcome('dev-ready', {
         graceExpired: false,
         listened: true,
-        readyDelayMs: 12,
+        readyDelayMs: DEV_READY_POST_BIND_BUDGET_MS,
         stdout: report,
       }),
     ).toBe('desired-behavior');
@@ -545,6 +573,14 @@ describe('known-failure register', () => {
         listened: true,
         readyDelayMs: 12,
         stdout: 'Local: http://127.0.0.1:5173',
+      }),
+    ).toBeNull();
+    expect(
+      packedFirstLoopContractOutcome('dev-ready', {
+        graceExpired: false,
+        listened: true,
+        readyDelayMs: DEV_READY_POST_BIND_BUDGET_MS + 1,
+        stdout: report,
       }),
     ).toBeNull();
   });

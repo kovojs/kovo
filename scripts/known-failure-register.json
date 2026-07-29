@@ -43,7 +43,7 @@
       "owner": "Track 1 dev-reporter work item",
       "childLedger": "plans/devex-gates.md",
       "observedLayer": "packed dev-server readiness output",
-      "retirementCondition": "The packed dev journey emits the required ready line immediately after socket bind and passes the ratified G2 timing gate.",
+      "retirementCondition": "The packed dev journey emits the required structured ready report within five seconds after socket bind.",
       "planOwnership": {
         "registerTrack": "Track 0",
         "reproducerTrack": "Track 2",
@@ -62,7 +62,7 @@
           "--packed-manifest",
           "{packedManifest}"
         ],
-        "timeoutMs": 120000,
+        "timeoutMs": 180000,
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
