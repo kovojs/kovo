@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   AXE_WCAG_22_AA_TAGS,
+  PACKED_APPS_BUILD_POSTURE_SCHEMA,
   PACKED_APPS_REPORT_SCHEMA,
   PACKED_APPS_VARIANT_SCHEMA,
   PACKED_JOURNEY_PACKAGE_NAMES,
   collectInstalledDependencyMetrics,
   conceptCensus,
+  declareJourneyProductionRetention,
   requirePackedPhaseSuccess,
   rewriteScaffoldDependenciesToPackedTarballs,
   sanitizeCapturedMutationResponse,
@@ -161,6 +163,35 @@ describe('packed app golden journey', () => {
     ).toEqual([{ kind: 'content-changed', path: '.env' }]);
   });
 
+  it('records an explicit controlled retention posture only for the production build fixture', () => {
+    const root = temporaryRoot();
+    writeFileSync(
+      path.join(root, 'kovo.config.ts'),
+      [
+        "import { defineConfig, node } from '@kovojs/server/build';",
+        'export default defineConfig({',
+        '  preset: node(),',
+        '});',
+      ].join('\n'),
+    );
+
+    const posture = declareJourneyProductionRetention(root);
+
+    expect(posture).toEqual({
+      schema: PACKED_APPS_BUILD_POSTURE_SCHEMA,
+      configPath: 'kovo.config.ts',
+      kind: 'controlled-retained-local-fixture',
+      retention: {
+        hours: 24,
+        immutableClientModules: 'retained',
+        priorTokenQueryReads: 'retained',
+      },
+    });
+    expect(readFileSync(path.join(root, 'kovo.config.ts'), 'utf8')).toContain(
+      "priorTokenQueryReads: 'retained'",
+    );
+  });
+
   it('measures physical install bytes and unique production package identities', () => {
     const root = temporaryRoot();
     mkdirSync(path.join(root, 'node_modules', 'a'), { recursive: true });
@@ -281,6 +312,16 @@ function successfulReport() {
       ].map((name) => ({ durationMs: 1, name, status: 0 })),
       install: {},
       concepts: { counts: { environmentEdits: 0 } },
+      buildPosture: {
+        schema: PACKED_APPS_BUILD_POSTURE_SCHEMA,
+        configPath: 'kovo.config.ts',
+        kind: 'controlled-retained-local-fixture',
+        retention: {
+          hours: 24,
+          immutableClientModules: 'retained',
+          priorTokenQueryReads: 'retained',
+        },
+      },
       styledUi: {},
       accessibility: { violations: 0 },
       failure: null,

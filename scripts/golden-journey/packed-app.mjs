@@ -31,6 +31,8 @@ import {
 export const packedAppsScenario = 'packed-apps';
 export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
 export const PACKED_APPS_VARIANT_SCHEMA = 'kovo.golden-journey/packed-app/v1';
+export const PACKED_APPS_BUILD_POSTURE_SCHEMA =
+  'kovo.golden-journey/build-posture/v1';
 export const AXE_WCAG_22_AA_TAGS = Object.freeze([
   'wcag2a',
   'wcag2aa',
@@ -130,6 +132,7 @@ export async function runPackedAppVariant({
   let accessibility = null;
   let concepts = null;
   let install = null;
+  let buildPosture = null;
 
   try {
     mkdirSync(path.join(creatorRoot, 'node_modules', '@kovojs'), { recursive: true });
@@ -235,7 +238,6 @@ export async function runPackedAppVariant({
     for (const [name, command] of [
       ['test', ['pnpm', 'run', 'test']],
       ['check', ['pnpm', 'run', 'check']],
-      ['build', ['pnpm', 'run', 'build:prod']],
     ]) {
       const observation = commandRunner(command, {
         cwd: appRoot,
@@ -245,6 +247,14 @@ export async function runPackedAppVariant({
       transcripts.push(transcript(name, observation));
       phases.push(requirePackedPhaseSuccess(name, observation));
     }
+    buildPosture = declareJourneyProductionRetention(appRoot);
+    const build = commandRunner(['pnpm', 'run', 'build:prod'], {
+      cwd: appRoot,
+      phase: 'build',
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    });
+    transcripts.push(transcript('build', build));
+    phases.push(requirePackedPhaseSuccess('build', build));
 
     return Object.freeze({
       schema: PACKED_APPS_VARIANT_SCHEMA,
@@ -254,6 +264,7 @@ export async function runPackedAppVariant({
       phases,
       install,
       concepts,
+      buildPosture,
       styledUi: screenshot,
       accessibility,
       failure: null,
@@ -293,6 +304,7 @@ export async function runPackedAppVariant({
       phases,
       install,
       concepts,
+      buildPosture,
       styledUi: screenshot,
       accessibility,
       failure: {
@@ -333,6 +345,53 @@ export function rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPacka
   }
   manifest.pnpm = { ...manifest.pnpm, overrides };
   writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
+/**
+ * Configure the controlled production-artifact fixture, not the generated starter contract.
+ *
+ * `kovo check` above must pass without deployment authority. The subsequent build runs against a
+ * test-only serving layer that retains its one output directory for the fixture's lifetime, so it
+ * declares the exact SPEC §14 posture instead of weakening KV417 or pretending `node()` proves a
+ * real host's cross-redeploy retention.
+ */
+export function declareJourneyProductionRetention(appRoot) {
+  const configPath = path.join(appRoot, 'kovo.config.ts');
+  const source = readFileSync(configPath, 'utf8');
+  const defaultPreset = 'preset: node(),';
+  if (!source.includes(defaultPreset)) {
+    throw new JourneyPhaseError(
+      'build-posture',
+      'packed starter no longer exposes the reviewed node() deployment-posture anchor',
+    );
+  }
+  const retention = {
+    hours: 24,
+    immutableClientModules: 'retained',
+    priorTokenQueryReads: 'retained',
+  };
+  writeFileSync(
+    configPath,
+    source.replace(
+      defaultPreset,
+      [
+        'preset: node({',
+        '  retention: {',
+        `    hours: ${String(retention.hours)},`,
+        `    immutableClientModules: '${retention.immutableClientModules}',`,
+        `    priorTokenQueryReads: '${retention.priorTokenQueryReads}',`,
+        '  },',
+        '}),',
+      ].join('\n'),
+    ),
+    'utf8',
+  );
+  return Object.freeze({
+    schema: PACKED_APPS_BUILD_POSTURE_SCHEMA,
+    configPath: 'kovo.config.ts',
+    kind: 'controlled-retained-local-fixture',
+    retention: Object.freeze(retention),
+  });
 }
 
 export function conceptCensus(appRoot, snapshot) {
@@ -495,6 +554,15 @@ export function validatePackedAppsReport(report) {
       }
       if (variant.concepts?.counts?.environmentEdits !== 0) {
         findings.push(`${label} required an undocumented environment edit`);
+      }
+      if (
+        variant.buildPosture?.schema !== PACKED_APPS_BUILD_POSTURE_SCHEMA ||
+        variant.buildPosture?.kind !== 'controlled-retained-local-fixture' ||
+        variant.buildPosture?.retention?.hours < 24 ||
+        variant.buildPosture?.retention?.immutableClientModules !== 'retained' ||
+        variant.buildPosture?.retention?.priorTokenQueryReads !== 'retained'
+      ) {
+        findings.push(`${label} did not record the controlled SPEC §14 build posture`);
       }
     } else if (
       typeof variant?.failure?.phase !== 'string' ||
