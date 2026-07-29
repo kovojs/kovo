@@ -18,6 +18,12 @@ import { manifestPath, releasePackages, repoRoot } from './release-packages.mjs'
 const BETTER_AUTH_PACKAGE = '@kovojs/better-auth';
 const SERVER_PACKAGE = '@kovojs/server';
 const ROOT_EXPORTS = Object.freeze([
+  'BetterAuthAppBindings',
+  'BetterAuthAppBindingsOptions',
+  'BetterAuthAppCredentialResult',
+  'BetterAuthAppRequest',
+  'BetterAuthAppSignInMutation',
+  'BetterAuthAppSignOutMutation',
   'BetterAuthCsrfRequestLike',
   'BetterAuthEnvironmentCsrfOptions',
   'BetterAuthMountAdapter',
@@ -39,6 +45,8 @@ const ROOT_EXPORTS = Object.freeze([
   'mount',
   'role',
 ]);
+const POSTGRES_HUMAN_EXPORTS = Object.freeze(['createBetterAuthPostgresAppBindings']);
+const SQLITE_HUMAN_EXPORTS = Object.freeze(['createBetterAuthSqliteAppBindings']);
 const NEUTRAL_GENERATED_EXPORTS = Object.freeze([
   'BetterAuthBindings',
   'BetterAuthBindingsOptions',
@@ -78,6 +86,14 @@ const ROOT_RUNTIME_EXPORTS = Object.freeze([
 ]);
 const REQUIRED_EXPORT_TARGETS = Object.freeze({
   '.': Object.freeze({ default: './dist/index.mjs', types: './dist/index.d.mts' }),
+  './postgres': Object.freeze({
+    default: './dist/public-postgres.mjs',
+    types: './dist/public-postgres.d.mts',
+  }),
+  './sqlite': Object.freeze({
+    default: './dist/public-sqlite.mjs',
+    types: './dist/public-sqlite.d.mts',
+  }),
   './generated': Object.freeze({
     default: './dist/generated.mjs',
     types: './dist/generated.d.mts',
@@ -130,12 +146,29 @@ export function packedBetterAuthDeclarationExports(source, fileName = 'consumer.
   return [...new Set(names)].sort(compareStrings);
 }
 
-export function assertPackedBetterAuthDeclarations({ neutral, postgres, root, sqlite }) {
+export function assertPackedBetterAuthDeclarations({
+  humanPostgres,
+  humanSqlite,
+  neutral,
+  postgres,
+  root,
+  sqlite,
+}) {
   const neutralExports = packedBetterAuthDeclarationExports(neutral, 'generated.d.mts');
   assertExactExports(
     packedBetterAuthDeclarationExports(root, 'index.d.mts'),
     ROOT_EXPORTS,
     'human root',
+  );
+  assertExactExports(
+    packedBetterAuthDeclarationExports(humanPostgres, 'public-postgres.d.mts'),
+    POSTGRES_HUMAN_EXPORTS,
+    'human Postgres contract',
+  );
+  assertExactExports(
+    packedBetterAuthDeclarationExports(humanSqlite, 'public-sqlite.d.mts'),
+    SQLITE_HUMAN_EXPORTS,
+    'human SQLite contract',
   );
   assertExactExports(neutralExports, NEUTRAL_GENERATED_EXPORTS, 'neutral generated contract');
   assertExactExports(
@@ -180,9 +213,11 @@ export function packedBetterAuthConsumerManifest(packedPackages, packageManager,
       ([name]) => server.manifest.peerDependenciesMeta?.[name]?.optional !== true,
     ),
   );
+  const serverUsesPg =
+    typeof server.manifest.dependencies?.pg === 'string' ||
+    typeof server.manifest.peerDependencies?.pg === 'string';
   const serverTypeDependencies =
-    requiredServerPeers.pg === undefined ||
-    typeof server.manifest.devDependencies?.['@types/pg'] !== 'string'
+    !serverUsesPg || typeof server.manifest.devDependencies?.['@types/pg'] !== 'string'
       ? {}
       : { '@types/pg': server.manifest.devDependencies['@types/pg'] };
   const sqliteRuntimeDependencies =
@@ -256,6 +291,8 @@ export function checkPackedBetterAuthConsumer() {
     );
     assertPackedBetterAuthManifest(installedManifest);
     assertPackedBetterAuthDeclarations({
+      humanPostgres: readDeclaration(packageRoot, installedManifest, './postgres'),
+      humanSqlite: readDeclaration(packageRoot, installedManifest, './sqlite'),
       neutral: readDeclaration(packageRoot, installedManifest, './generated'),
       postgres: readDeclaration(packageRoot, installedManifest, './generated/postgres'),
       root: readDeclaration(packageRoot, installedManifest, '.'),
@@ -265,7 +302,7 @@ export function checkPackedBetterAuthConsumer() {
     assertPackedRuntimeConsumer(consumerRoot, 'postgres');
     assertPackedRuntimeConsumer(consumerRoot, 'sqlite');
     process.stdout.write(
-      'Packed Better Auth consumer passed (20 human declarations, neutral generated types, isolated backend runtimes).\n',
+      'Packed Better Auth consumer passed (28 human declarations, neutral generated types, isolated backend runtimes).\n',
     );
   } finally {
     rmSync(consumerRoot, { force: true, recursive: true });
@@ -296,16 +333,26 @@ import type {
 import {
   createBetterAuthPostgresBindingsFromEnvironment,
 } from '@kovojs/better-auth/generated/postgres';
+import {
+  createBetterAuthPostgresAppBindings,
+} from '@kovojs/better-auth/postgres';
 import type {
   BetterAuthSqliteBindings,
 } from '@kovojs/better-auth/generated/sqlite';
 import {
   createBetterAuthSqliteBindingsFromEnvironment,
 } from '@kovojs/better-auth/generated/sqlite';
+import {
+  createBetterAuthSqliteAppBindings,
+} from '@kovojs/better-auth/sqlite';
 import { authed, mount, role } from '@kovojs/better-auth';
 
 // @ts-expect-error generated backend construction is absent from the human root.
 import { createBetterAuthPostgresBindings } from '@kovojs/better-auth';
+// @ts-expect-error app-runtime binding is isolated on the Postgres human subpath.
+import { createBetterAuthPostgresAppBindings as leakedPostgresAppBindings } from '@kovojs/better-auth';
+// @ts-expect-error app-runtime binding is isolated on the SQLite human subpath.
+import { createBetterAuthSqliteAppBindings as leakedSqliteAppBindings } from '@kovojs/better-auth';
 // @ts-expect-error internal request carriers are absent from the human root.
 import type { BetterAuthBindingRequest } from '@kovojs/better-auth';
 
@@ -326,7 +373,11 @@ void [
   seed,
   createBetterAuthPostgresBindings,
   createBetterAuthPostgresBindingsFromEnvironment,
+  createBetterAuthPostgresAppBindings,
   createBetterAuthSqliteBindingsFromEnvironment,
+  createBetterAuthSqliteAppBindings,
+  leakedPostgresAppBindings,
+  leakedSqliteAppBindings,
 ];
 `,
     'utf8',
@@ -359,6 +410,9 @@ void [
 
 function assertPackedRuntimeConsumer(consumerRoot, backend) {
   const isPostgres = backend === 'postgres';
+  const humanExpected = [
+    isPostgres ? 'createBetterAuthPostgresAppBindings' : 'createBetterAuthSqliteAppBindings',
+  ];
   const expected = isPostgres
     ? [
         'betterAuthPostgresSecret',
@@ -374,11 +428,15 @@ function assertPackedRuntimeConsumer(consumerRoot, backend) {
   const source = `await import('@kovojs/server/${backend}');
 await import('@kovojs/server/runtime-bootstrap');
 const root = await import('@kovojs/better-auth');
+const humanBackend = await import('@kovojs/better-auth/${backend}');
 const neutral = await import('@kovojs/better-auth/generated');
 const backend = await import('@kovojs/better-auth/generated/${backend}');
 if (JSON.stringify(Object.keys(root).sort()) !== ${JSON.stringify(
     JSON.stringify([...ROOT_RUNTIME_EXPORTS]),
   )}) throw new Error('human root runtime drifted');
+if (JSON.stringify(Object.keys(humanBackend).sort()) !== ${JSON.stringify(
+    JSON.stringify(humanExpected),
+  )}) throw new Error('human ${backend} runtime drifted');
 if (Object.keys(neutral).length !== 0) throw new Error('neutral generated entry is not type-only');
 if (JSON.stringify(Object.keys(backend).sort()) !== ${JSON.stringify(
     JSON.stringify(expected),

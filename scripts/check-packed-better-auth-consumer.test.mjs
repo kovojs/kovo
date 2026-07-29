@@ -18,6 +18,14 @@ describe('packed Better Auth consumer proof', () => {
         dependencies: { 'better-auth': '1.6.17', 'drizzle-orm': '0.45.2' },
         exports: {
           '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
+          './postgres': {
+            default: './dist/public-postgres.mjs',
+            types: './dist/public-postgres.d.mts',
+          },
+          './sqlite': {
+            default: './dist/public-sqlite.mjs',
+            types: './dist/public-sqlite.d.mts',
+          },
           './generated': {
             default: './dist/generated.mjs',
             types: './dist/generated.d.mts',
@@ -45,6 +53,8 @@ describe('packed Better Auth consumer proof', () => {
   it('rejects a duplicate generated constructor on the human root', () => {
     expect(() =>
       assertPackedBetterAuthDeclarations({
+        humanPostgres: 'export { createBetterAuthPostgresAppBindings };\n',
+        humanSqlite: 'export { createBetterAuthSqliteAppBindings };\n',
         neutral: declaration([
           'BetterAuthBindings',
           'BetterAuthBindingsOptions',
