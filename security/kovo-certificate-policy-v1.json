@@ -1,16 +1,36 @@
 {
   "artifacts": [
     {
-      "path": "@kovojs/better-auth/dist/index.mjs",
-      "sha512": "sha512-47bmkDEB0KdY0V13frWz6irx7P6/8wE7psDykmlHjZQhErV9ppQHaHvby2TYYXC0h08T6zFR0E1/EBXwBuEBhw=="
+      "path": "@kovojs/better-auth/dist/app-bindings-options-D8UgaPED.mjs",
+      "sha512": "sha512-qI7ZqexItFS9R010pNl5Eb7CAOBbPJt6gs7U2MU37KSjgUt0f6RQGQXwoiPmP46VMg94n2ulE/rxNLnaKfzWLw=="
     },
     {
-      "path": "@kovojs/better-auth/dist/internal-c0Z5iiib.mjs",
-      "sha512": "sha512-dzHB1AfKCLviwdg9a8/QMMl7upOLaXQFofxPxIABx5HGu+QdU7G8D7AgUKOVeOThjgOeWTZt6oOPSrQuzzNw2A=="
+      "path": "@kovojs/better-auth/dist/environment-Fpb9KL9J.mjs",
+      "sha512": "sha512-XfBWAvk4bzAw4piiiGTYOoOQaqGI8nCB6kpmhSrb9Q16TpThdvuejfUetFYd3/ycBvEmfqRlvCj8pelgTa8/pw=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/generated-postgres.mjs",
+      "sha512": "sha512-KPeoGDR/npWTfA26PUEkPnJf35VMdiBxKSuh+HrHsqvky3qBds8egeO2XKY28mesLh5mlspkmL7S/bM02vHmDQ=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/generated-sqlite.mjs",
+      "sha512": "sha512-Tdzb4ckKxGpqNYa6zkexMxCMMyIR3JkY6azrtg293CvgllAqgcyOVTyudQGhr6eYNmATq6IuC2NUUjarlqVBSw=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/generated.mjs",
+      "sha512": "sha512-TuHIj4w/TkzTTLbAAzm/nW0Db/St469J6HHMiWa4THKdi3VJKsxkE8mmZKwApXlYIjrBPEIp2oxi6+alPk94Pw=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/index.mjs",
+      "sha512": "sha512-CV55EWoHS/zd+3knVzxBzZQAWQM6gjpXM+pN93jjbAGD6wPaAcPXFnLUktPVO/evZDAaYG3Bni2mUM2incgrYQ=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/internal-DPud9lha.mjs",
+      "sha512": "sha512-a+dOn7rkq5vN4cUCp4CR0cnJ4XlpJsd8C1RvzFYFizWfOmvuvEs7KtKcpEbFbHgiOt7gU1V1CPgjP6OFJiahJQ=="
     },
     {
       "path": "@kovojs/better-auth/dist/internal.mjs",
-      "sha512": "sha512-6Psqm5Alg6X4THpo00HDYjCS07mdspRcZh1cSjKbaeSS8c89BUQMDa7gXvezxmRkrUxWfwyW1bii6XmMWofwuQ=="
+      "sha512": "sha512-7YO1m/MRygGnqL93Ybl65dElGOY7NyTdKW5c7VP0LRQugICWidKJc29/O/EbM5X9Vs1n/8iGS+uO9jnzoZ63fA=="
     },
     {
       "path": "@kovojs/better-auth/dist/internal/runtime-lock.mjs",
@@ -18,39 +38,67 @@
     },
     {
       "path": "@kovojs/better-auth/dist/internal/server-mount-adapter.mjs",
-      "sha512": "sha512-DFuyN/j6PyQod2UwXOdIbCBY3eSkHPFOW6a5uwyWSu42Nk+w4RdVhzUMsGfn3Ck4x3oDajUxmD/4J9SnFZxowA=="
+      "sha512": "sha512-VtQ29CQ5dJ0eShrEVmlmABf2GyZNpsu8ss/+MZ/TAO1yLKChnJ0/4Vgk2Bnq5X9rduXWhWlkvydBWyRb0lf1VQ=="
     },
     {
-      "path": "@kovojs/better-auth/dist/mount-adapter-DH9Dr32-.mjs",
-      "sha512": "sha512-mUIqq+UEpgQt6B3QCY0O1ZOR9d5cDWXGVfqt0y/gCBCxCDSylsvIobZMU4uwst3bCwzJpuI9mQQgb7H8+AJd0w=="
+      "path": "@kovojs/better-auth/dist/mount-Cd3S2OD8.mjs",
+      "sha512": "sha512-/1rxIxqoxYM7VY48ed0PguQlW8/Dw6sdUp+edIVivXrvoMbi7EcRg5gNGmoWIS6ayOeScN/i51wz48+SC3YKng=="
     },
     {
-      "path": "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
-      "sha512": "sha512-7t3aC19910PsNLe3lZfvAJeWoAFDhCKRv8iMx6KoOYGowG4t9y90wsI3RpiQ3QO5YwZQXC4KABIzhu/h/BEBYA=="
+      "path": "@kovojs/better-auth/dist/mount-adapter-Cow19OPW.mjs",
+      "sha512": "sha512-3kakU+deBwk4p7oxSv+qmsBXLremW9hrZ6rFtBd43YEF095/H0X0l2d8D9oEkaL9A5rY0/vTkcaqUekGxMz/7Q=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/password-reset-mail-ggVjfNit.mjs",
+      "sha512": "sha512-7dCx77r0cNptD9bGROVaNQxbCjpeZ6YVnZL+aYyO/4Dk23zy9BWNkFHKhxfBa8OgtaHb4NJ7/O+Zy4YU4FntqQ=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/postgres-BUYFUvvU.mjs",
+      "sha512": "sha512-rbHdnrAq4QJJolhigHb/DbiJGNqxYm6SXBxAlnIZcVJ9FKGH7xT+++pVastrAnTY1rPzF8vr0mVTjImIHAg51Q=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/public-postgres.mjs",
+      "sha512": "sha512-JiPKbA0XkMmqq4cEDX+1z/vbTlGz4E30tQKrUrxxaAdPx2nxtLp2wTwf5+rqk2CuJ63B3p+MVwhoiArTc8bqcQ=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/public-sqlite.mjs",
+      "sha512": "sha512-mKWEgvHEC0j6q7z3Dj7J9z6xKOfxR4p3f40b8Fgt6LQvO+6bXQPx62ohWP0hy0Ym8EWNONFewNY+bkIlO+9xAA=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/session-CvysQ9tn.mjs",
+      "sha512": "sha512-RxcNN3SUrtxclbHHkm7feJqocNN/snE0FNRaRYulfPP6NOP3wIfgvYhRSYMvjHt8gdUAFRlRXYWgAdopJdIukA=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/sqlite-Bcpm6Pu5.mjs",
+      "sha512": "sha512-Xb7GYqMEvk1cG9HujUrULxgOjJvyDFtPNyGprsA2HFnWReCoxhH+Xy4sXFL1K1e9NoqDTykoEzNgS0+cMDdZNA=="
+    },
+    {
+      "path": "@kovojs/better-auth/dist/trusted-plaintext-m7E19dtM.mjs",
+      "sha512": "sha512-cHqQGDuMNlYH0SvjTyRvydLM3NdVb9doiP4TnYTf6a6eOAW3bZkKGBOWTgpFyxrYAelGyHWKutSV3t534IJszQ=="
     },
     {
       "path": "@kovojs/browser/dist/client.mjs",
-      "sha512": "sha512-1/9jrkS4beTaJ31Sjm6yj5DxUbASNFpJM69/zx0ogC7yP50qyp5tW1xwRMy7oDHaD4utrxma5c4+kc5C3+c7qQ=="
+      "sha512": "sha512-dhLhr+KcdtVNJD73RCV1etLeEoiDxviqR6BUFpIaso8V84gbRqq6zTse0O+md+PMHY5comIB6D5mA6ozCLZbWQ=="
     },
     {
-      "path": "@kovojs/browser/dist/derive-BorkxMAn.mjs",
-      "sha512": "sha512-SS5d/4ZnpvfjXH0JthpDTH4BsYxxxZo5bA0+bw0bgdncI6q24+5kjzQOWcNbhe7z9NZIQjUpUM+MNvTZ86MKwQ=="
+      "path": "@kovojs/browser/dist/derive-C7KCgbCY.mjs",
+      "sha512": "sha512-sP+8n4ZxDE08On39JKaNPS6nIDRKmjsNm5yXN/U8EZJhaK/LL6XEdrb6zSqBE8I70jxnZ6QQuRm235sO2ygFEQ=="
     },
     {
       "path": "@kovojs/browser/dist/generated.mjs",
-      "sha512": "sha512-HRqcF69kRziIaN83xGXrUhIGXBZ1f4Unj+WI2aAQVprZSZne+P4MAuyIxUqXeTZoaYW4KLTMq8V9d5mekzv0lw=="
+      "sha512": "sha512-j/IbbpJlz8dHy4ucho8moW9FVLrOnENIaxejccDOi7Jgl+6uwjEUtCi6KJCqAr1ktG1eupb1HLj0gRZccVa+qg=="
     },
     {
-      "path": "@kovojs/browser/dist/handlers-BsEYJaMg.mjs",
-      "sha512": "sha512-vQORJlYIGY8txvo2az94/qPM0JEOjzukT5Ov4IzBCf+wNos9RpdDQE+GRDbZtpcouWQp8bbcjCEccC73Hu37Dw=="
+      "path": "@kovojs/browser/dist/handlers-SiIQ-aBO.mjs",
+      "sha512": "sha512-cL5127lz4GhdxbDCXByt5HDqC2RQyuniOD3ygLpK8MUXRMFcrZYvqxEOkqnECj+vZkPMJZF0Zf86gUkxa0WFEw=="
     },
     {
       "path": "@kovojs/browser/dist/index.mjs",
-      "sha512": "sha512-4AtfnET99jWHdMJna9JVmVTBMs0uMC247IK11qmCdUoNCZL75uMIobMSiol9tQPZblccow8ui/rzlxk+LgUX+Q=="
+      "sha512": "sha512-vV7Q/apDdeQ5oPgV0WnNs75XinKiZE424fDOcLwtcyRlIUxeVLR36Y2+q7YFOEuzmGA3BelxVoU1iBPagiSiIw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/delegation.mjs",
-      "sha512": "sha512-xSCC3it6xmT0YaYKnDezI9OS/o+fdMibtqkkqYRTLeWl222WoskALOKmLe6HaZ8A7A7JaIXaKzpdLtO+D3UfnA=="
+      "sha512": "sha512-WfE+jZDzKHeel2RBAS7dpi93PEY2sdSVTXfxrTcG2+O/uTKz3QwMrQBv7ns2fuc5nO3YP8R8UxFhPMHMPD4kBw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/hmr-target-snapshot.mjs",
@@ -58,7 +106,7 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/inline-loader.mjs",
-      "sha512": "sha512-5O4/CvxfLbukXn8L0DjQ/DvtHN8lAV33FBkH+og5jKGQRJxUNxUfLCXSMTilnoysaNxsr7u14+fV6DC4CErkvw=="
+      "sha512": "sha512-LbuNze3Veu+2mYvjFNJtjCJf3CacZKygJYJimKLKxPN+83BDI3Z+yXazh19HPf+63gKUDPSYDiyHmTKm6+IA8A=="
     },
     {
       "path": "@kovojs/browser/dist/internal/morph.mjs",
@@ -66,55 +114,55 @@
     },
     {
       "path": "@kovojs/browser/dist/internal/mutation.mjs",
-      "sha512": "sha512-mUIgMUypPn3ZQLEWext9dB5JP5XNF1zQbSjCQVkKezFbiYcOl+I1zNDp/bqL87KgkIXONLTZ+TCT8UOC/MUeJA=="
+      "sha512": "sha512-3ee8b/jCSdJFpNJg2JAb23faPZ67KUB9Ii/0oLG9d77YklOTW9yS26DleoaPaCVxBiZ3NDyR/ovgz69qbRA5Rw=="
     },
     {
       "path": "@kovojs/browser/dist/internal/output.mjs",
-      "sha512": "sha512-C92fjE8fLkMVarfwfIb/AF706a29FUM8KCKN9XR3Ek2p6nSbTztUgET63O4UBIaQx6jR2Nohrg90wCH2ZKoRHw=="
+      "sha512": "sha512-zQqQhAJVMLyEsCn+NwVtaMunvaeOWUH161E6/5dIQ/5XmAC2U6rTSBGDLvRUBIE9QDOOHuUsNoCk3Jpbl49YSg=="
     },
     {
-      "path": "@kovojs/browser/dist/loader-BgQkzjpS.mjs",
-      "sha512": "sha512-dIVFgWxW4AAY4TjQM77repsvI/mTjdMls53H3cusxW57l36G8e89v06lVqiaaH1ofwqsmA4eQOW9dah0umyOPQ=="
+      "path": "@kovojs/browser/dist/loader-CF24z8RW.mjs",
+      "sha512": "sha512-xUpYzjGAPMx5l1Py2aZYka3kVnjLNf7Lz0LXNZhhLF9sSY97Q8BD8u47or1zQ1GQ2zg+i7fh4F8iDHleeDZQbg=="
     },
     {
       "path": "@kovojs/browser/dist/morph-DFOhlgH6.mjs",
       "sha512": "sha512-mYRXiUijT5j38ASuOFJQ/GJFGE2IofH6thhugh1IHeoyweA2sjw2xZS+NYPFDSnnZhTNz8CdcmGI20e+2XVeyw=="
     },
     {
-      "path": "@kovojs/browser/dist/optimism-DBgGST85.mjs",
-      "sha512": "sha512-QJunhz544/oUSLvM0fJYZBUPabE5b4M6qdL0lSBai8/kqyEBfsFYC61tlBUWzuV4hE9Sg+ti1uCcHWogPI74Qg=="
+      "path": "@kovojs/browser/dist/optimism-CGwbT_cS.mjs",
+      "sha512": "sha512-XXU9STIZufBGOPdneI5+5Rld8SssPLD5iAXWB0ulttdwLgFV9eYukCeZIq8JFi0+BcB5lDwCRISlQBFfRwmnMQ=="
     },
     {
-      "path": "@kovojs/browser/dist/query-bindings-B0Lk9NdC.mjs",
-      "sha512": "sha512-cG2l7+/X1dG3eNjc0fz1Gs4B3eN82Vgl7jRU10b21pkuv2blb/LAJwHxkuqAynMDz6NTefdqQi1EYsNqjv0Q5Q=="
+      "path": "@kovojs/browser/dist/query-bindings-DjwaRkKA.mjs",
+      "sha512": "sha512-iMkkZNRhB9CXp3c2DPS6yRq9c6NH6Af/EElMtK81yfzejC9XiHFASLNKUBuArHy+OwSNsSdJM7CrvuIfJNmJew=="
     },
     {
-      "path": "@kovojs/browser/dist/query-events-1-51MysL.mjs",
-      "sha512": "sha512-SZaO/4JygZliHdifzyzJ0WTwcxAD2eOeRYjXvbSZrkSxbPVrZ9kw+9W+rHvJm9PsCGix2+tv5QJHkEkTACvMkw=="
+      "path": "@kovojs/browser/dist/query-events-k_cFWbjy.mjs",
+      "sha512": "sha512-IgvCyTzdq0hdwsLJy5KToTpSNy6m/P8iHI7PxC2qbXKV/bQ/Xqbz70kFDKx9fJ773oSGmEz5HCdJaSQeixbg9g=="
     },
     {
-      "path": "@kovojs/browser/dist/query-refetch-ClH8V35K.mjs",
-      "sha512": "sha512-3V8Sbci3e3+k04XA+6s1TydbSRLatZunt1Yr1waE2trPl9hWk0c2FWoxMvkV1gIIzkH+k874sjmj5sPSl3FkOQ=="
+      "path": "@kovojs/browser/dist/query-refetch-C3RVoCVq.mjs",
+      "sha512": "sha512-JeKhAVP5AqBzWqyEIW9TUx30ZVCJP4Nl9fuOtCldiFPvl5gkWaELFbeffIwg/2O31JatW36o1fnMxt2EwU+OoA=="
     },
     {
-      "path": "@kovojs/browser/dist/security-output-Cjzqh7_N.mjs",
-      "sha512": "sha512-nMkz8Vd4FSe6sbcZCHqO8ef2d2vKDx2AA0hoH8isyhIDGgK8hHiMVkpyq0EmtrFqs89ujK0RxthAYvv2P1q9AQ=="
+      "path": "@kovojs/browser/dist/security-output-Dhq3kcsB.mjs",
+      "sha512": "sha512-NbAttak872B9CzqQX7D1sIsBx9cR/2Ox1WLgEkQTqOgECGf7kovQmOtdKmbi0HSnV7bAR1ZFUDXQ104cHACx5A=="
     },
     {
       "path": "@kovojs/browser/dist/trusted-types-DC9Dy6Pd.mjs",
       "sha512": "sha512-w4rYH4YbzDl2NJ8skmeN5KDEfBOGIPC98g9cL3QjpvVbtmFjYICvB4CONL/rBECluA4crZnrjxvPHga7FuV3zw=="
     },
     {
-      "path": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
-      "sha512": "sha512-ccNRHBQTRJ2cR41RFVNfWVndgLaF1Rkty8QVymT7p4+ayqxowL5V9q8c84/6L6jCHMMcGXszmzLr5EZ1/j4Jgg=="
+      "path": "@kovojs/compiler/dist/app-graph-DBxA0o2a.mjs",
+      "sha512": "sha512-Yd/GpSnTIMEMrR5HAXO9YNSjHKE/OIuW8b4d52/6nnEed8T3E+i+XQSe64KYd03FHaO4nwWha37S4M4xhp+XAQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/compile-CH_GGlTW.mjs",
-      "sha512": "sha512-UNLEveKuwVg32MEbpudSc3HXCxGbMKRmUTESgDXZ9dGlx14yCUjyS8tDPYpoHs8TdoQv2N3+Pnu8TNDzr+VG6Q=="
+      "path": "@kovojs/compiler/dist/compile-CicFwi9X.mjs",
+      "sha512": "sha512-jpgsRnlfhPmTayx17L84Oh1ZdI0e/7O9If32jvHnSNSVjO6t+OzRHZbQMm7PfVIJywzHlP0OJWc1QWuN0NOA6A=="
     },
     {
       "path": "@kovojs/compiler/dist/compile.mjs",
-      "sha512": "sha512-lGaCpMsR6Tv7aRjNcrOn0kF14bnV0Sh5/Nqk0c2YEEqyZAx96cAJ+a72etzKk+2ZFOV78KBJST70VEj8zVlJUw=="
+      "sha512": "sha512-W3kP9BVVurmX8sS7QXxWqGTWFU2aPuKNOeabZtZ4xTLXcsn+I4EJRwYnP5vflEFKYjAW4bxZ8j+KJ3i5W+g2Pw=="
     },
     {
       "path": "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
@@ -122,31 +170,31 @@
     },
     {
       "path": "@kovojs/compiler/dist/graph.mjs",
-      "sha512": "sha512-ijyKclqVv4yQlDZWjJcdaz+iELY8JMDZFV+M9PVvhs6jhQ+QXeUnfq0mZKcrywg4x7FHJKgZv2W7J2g+QCb0NQ=="
+      "sha512": "sha512-9N5v6iHIRvrz9bfmcr8ETgakAxOPwpNVS7y8Yt+UdgAs2iUN53Mi6JgdbN4c8xrFgLkeAvMSVU7H2LMu+63R1A=="
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-lPDeLrZWugvqr5z1Ml54nJU6G+mvaGOQMy4huZarvPjmn16x9IDetAHEgPPoJ/FnlEHtV9eiDsLBvOjiYLu13w=="
+      "sha512": "sha512-je1C6tmlq6aBB6zJRjV1R+nvmfbAvw8k0sp92FETfB/kShaB902v7vOTA6lJTj6vx8RQVw4e5xgzCtBlpA+gRg=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-jCBw3Ny9jzFb/dJtE6qhmA8uArcm/RHcbqybdaAtu6x2zpYh+7IufVPIftcv4enzQ1Ka/ldY9hYRcU+c2d8PBQ=="
+      "sha512": "sha512-4l2c6foi/9mPh596Gdjadoe5b4hEKamZqUy+hXWC/VOi03q+3kmrOfpdhJeIS8zJ0fipVd+x9FMFD9HEKH4F8w=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
-      "sha512": "sha512-l65hjAdeM0hDrwE2RO8nvDejzGwN37mECUP+I6j9RUBWAacdMC2jzydJXCesENAzxoMouKv6hzejPm3/Tw50sg=="
+      "sha512": "sha512-gX07uHp62HNhqmujz10+wguh5SCpasFJhkbdQ/p3rpZ6XNg3u1ia2r4AXMzynUvcrVhoHW3U55kXanAqog8VYg=="
     },
     {
-      "path": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
-      "sha512": "sha512-ZRlKbuU+IpadqIZjx55ft59gFQgoGj2RbIf+LQGdM6Jb5R3vSH1wSF40C1Gl3np74vm+5TSv5npjW5Y3R8OSMw=="
+      "path": "@kovojs/compiler/dist/package-prefixes-L4gEmps8.mjs",
+      "sha512": "sha512-IUYRH1qC35DYkKDGF7kWxCnJqXYyJvZOj80jXENCxIp7ZujkUg9oTLW1h/cKyj6L2IlB/BzulAyI56oYxccpSg=="
     },
     {
       "path": "@kovojs/compiler/dist/package-styles.mjs",
-      "sha512": "sha512-XUNzgPYdhQ02WWDg4qV0K9NbfIGobQTa2tGlPH5k0BL1+xZF9p1BR5PK18liAiO0K8+LlYqSzKMMbAHtRPeogw=="
+      "sha512": "sha512-j1f9oLWZBfWD2otlBFOaEdOnNdtcyrelAWTJT1rwYeFEPF8Lo70Si2bWrmZCqGZGvpUeIqwXWDdtUBj37WLmeQ=="
     },
     {
-      "path": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
-      "sha512": "sha512-6uFi+ddzrIUn3troI63FE+BF1nzgQs6ptwDLzJRveVVBKDkwx+YuOubXJqCE3RJ+7RgpsB0ggMuHqVRA8N1hDA=="
+      "path": "@kovojs/compiler/dist/route-pages-DAU9kiyX.mjs",
+      "sha512": "sha512-eioWAQpkq5YGi3kf8qIUoitnkREC0AyfxTV+eKrmTUJBTe7s/KfVQDW/OkZhC8hdaDupUzP3kyD0DCRDEOvEvw=="
     },
     {
       "path": "@kovojs/compiler/dist/security-bootstrap.mjs",
@@ -157,24 +205,28 @@
       "sha512": "sha512-BFX10CjIFBUkRVPDwsxYUYoJp7ZiPW9D2/APEW/Jv/a0S7RKh0lOw7Fdc0TR6Jm+xguzvQCIOVeReP13crHhFw=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
-      "sha512": "sha512-3AyEU0zgFMaHwWHZEs+QMFzFKEm0AareRls7Jl2UDjij5HNSMBxkJmKYLiULD87WJ+YgqlpClLlqRCdX3p3E1A=="
+      "path": "@kovojs/compiler/dist/vite-B62WG7P3.mjs",
+      "sha512": "sha512-h/u8GM6K8SG0h/oMFt666uAYmSNIqHdR3FZEqhPXXMMVNC0Njf2Qrm9+miMf68tJ3XwCqqsnnO8KG4bP+Mo6sQ=="
     },
     {
       "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-AZ+Nku9LH8aB7Oq3WcLV6PdbNdqmt5Gx3JLuui2/DkeF9Og5d5mUO0J9mOjHMFE6CkIQBPEG/kH6qqPG0dpJzg=="
+      "sha512": "sha512-8elVi9C4Db+KF2mZf8mwhO2J9wkIGj8DbFiPIHaKhMaNnxT5OQZUeswRjvjaJ7aDPPrmXBLu8JwYM73bbQUitw=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
       "sha512": "sha512-CDBrpQgxZQDFoWx4+mCXKxGyb+hBq0SOHbpGiKFeOhmuWA8et13/xrVDJeGih7s3JV2vx0GPOwk+2rWHOydSQQ=="
     },
     {
-      "path": "@kovojs/core/dist/diagnostics-Bn03luHl.mjs",
-      "sha512": "sha512-l11KtUA5kq+Hw9lpCEDQTqejbfF4nfpIBvHAzrMIJE4S02IhpjRXHvSFFwTK12JL6dx7hVHmy6mxjtpVBhZ++Q=="
+      "path": "@kovojs/core/dist/diagnostics-C41SD9e0.mjs",
+      "sha512": "sha512-BQbPV7qb8J0Mmqg0HBjuG0WC32Qu6nsMLGLH5DcZTUFe6yEPZNP67kt6uhhciPAwe2de144bCspyPDLobzAxDQ=="
     },
     {
-      "path": "@kovojs/core/dist/framework-identity-BcjbQgCQ.mjs",
-      "sha512": "sha512-OZTFoMAd2TKpqFVLo/VRdRHYWZoJYA181XPOhN2vQ83qtuZBM549BUqTBzRp7cpXiOS+H0kxRN8064MfTlWa7A=="
+      "path": "@kovojs/core/dist/diagnostics-public.mjs",
+      "sha512": "sha512-TuHIj4w/TkzTTLbAAzm/nW0Db/St469J6HHMiWa4THKdi3VJKsxkE8mmZKwApXlYIjrBPEIp2oxi6+alPk94Pw=="
+    },
+    {
+      "path": "@kovojs/core/dist/framework-identity-DzVT1AiY.mjs",
+      "sha512": "sha512-4muPtZryT7FdPDrYGcO47tTkBMwITn8vd+ZAo8+hKxiE/Srs4jNF30i5rioMBUt09xmedbdQfgHXiU1qSjgn+g=="
     },
     {
       "path": "@kovojs/core/dist/generated.mjs",
@@ -182,7 +234,7 @@
     },
     {
       "path": "@kovojs/core/dist/index.mjs",
-      "sha512": "sha512-+YnmxArLAVEGHsUnlB4Zainkt21APEFfBsX7TnYEnyyzgyr9iBBov1VZZdVgn65CZgO2hKL1ULTZB2F7FI0nXg=="
+      "sha512": "sha512-HGYMmtvDHOW5yQCbQQXqu8yPGJUd+5cBLwB5Wr/KvdOt0syMC/Nf+sdDWn+3FY8hoejESPcNAFlWl+51D+P++A=="
     },
     {
       "path": "@kovojs/core/dist/internal/agent-docs.mjs",
@@ -206,15 +258,15 @@
     },
     {
       "path": "@kovojs/core/dist/internal/component-render.mjs",
-      "sha512": "sha512-TuHIj4w/TkzTTLbAAzm/nW0Db/St469J6HHMiWa4THKdi3VJKsxkE8mmZKwApXlYIjrBPEIp2oxi6+alPk94Pw=="
+      "sha512": "sha512-+5I4Yzd67Lzf+ew8liiA8oOZPZV/JEZSLSA4vCUEUo23mpUjtOGpZzQ5STkhqG+/pBUNTMEu0qvqwE94gidfmw=="
     },
     {
       "path": "@kovojs/core/dist/internal/derivation.mjs",
-      "sha512": "sha512-a4lcUV4RKRfPyIxaHdT6Lkt3CwdfeL/r9bDZpDqi31mND1fZ22F+XH+kV9Y9Qr2Xiwix8Ax8Y9Afbx5IDmgDdA=="
+      "sha512": "sha512-glWMepZBU9CfeiwA3Q05PcKw/+Z4tE+JFZFOwRklfrZu9ncj7T/qFV4m+yJXl2IxHw8yxZ77aBEC2D9dVYt/Eg=="
     },
     {
       "path": "@kovojs/core/dist/internal/diagnostics.mjs",
-      "sha512": "sha512-OI0I8HMmbCUTAcwWEPW6rYsSapkRdVFoysFl88DZSKX859WUm4AO82oyykRYsSqxmzLTHWZIb4+oonzosAm33g=="
+      "sha512": "sha512-gcDcEvM6u+h0qqrVcXjLPTXbnqD3Ua3JIqJEwZEcgC9HZTTlOXtBX0pepa/4oZGJuDKqeNR0syMGSeFINLBgcA=="
     },
     {
       "path": "@kovojs/core/dist/internal/document-protocol.mjs",
@@ -242,11 +294,11 @@
     },
     {
       "path": "@kovojs/core/dist/internal/framework-identity.mjs",
-      "sha512": "sha512-sd5RM9M/i3gpBoUoNONdJ+DCUwEehSDmajZO+uWokSBsGCY3OARTldB5RnAR6/nL4YPYUQ4LLbGae30Z+Asgeg=="
+      "sha512": "sha512-gefV6zvvDT7DurIHQvs8u0RReYenQD+270seZ3/iARqZL1YZKjHiDnLDyy1NtmZlM12P0FxqT1WTO0B94FXohw=="
     },
     {
       "path": "@kovojs/core/dist/internal/graph.mjs",
-      "sha512": "sha512-nAdi2VRFIRjYYR199D2eXERLOZH2eFOjGhFM/kqv6EStKrlmYSdE6xVfVtKmAp/tdM+5En45D0yCVn19BZWd2A=="
+      "sha512": "sha512-0H7KRNWJEs2Ezv6XmSMWhbqjtY4pAVWyr0m2Udsy+nQapYaVSnDms74lQw1E2t0KnNXxdQqQsvrG/a3SmpbKhA=="
     },
     {
       "path": "@kovojs/core/dist/internal/json.mjs",
@@ -270,7 +322,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/query-shape-source.mjs",
-      "sha512": "sha512-3mrosDJHZYxzIFt9jKYIWrHE2q5X7vJS9p+aojBKAhBXHwsrl/9McHHzHuRz4sFz8nRaSn/OYLNtmdb080ccgQ=="
+      "sha512": "sha512-AJJ4Tsp955o8JQ37cJqtgCWjGIRivuijF6UGcuE8WmpcirHZ1AiI5fq3iLQDQAPEU1cyozkcCAjOXboz/3299A=="
     },
     {
       "path": "@kovojs/core/dist/internal/render-plan-token-intrinsics.mjs",
@@ -282,7 +334,7 @@
     },
     {
       "path": "@kovojs/core/dist/internal/route-pattern.mjs",
-      "sha512": "sha512-Z9p/+s90ZptSvHf6HNjBqYHzLFCqtSsPtYW3YsGIO947MC890qJdloa90SUGPG0uBjscFcz2LH5VwDTOSMpfVg=="
+      "sha512": "sha512-LMU8d47vqatmkzszQHBxMdltUkOvhHHf9g0LZHjLKuh/m8MoE7yyfB72phHkSZ2IgpTHn/gdOqQKpgmcaTuP/Q=="
     },
     {
       "path": "@kovojs/core/dist/internal/security-markers.mjs",
@@ -301,12 +353,16 @@
       "sha512": "sha512-os5IzSqgz336VJkh03s11ExqO7L5f5Mz/JV6H7b4MrCk6rllFsgSRrZ0RR6GZOX5MnCpgu3xDDSeVGiBQ4PqDw=="
     },
     {
+      "path": "@kovojs/core/dist/internal/security.mjs",
+      "sha512": "sha512-8vOTOSMy8Hh1Mq7bRGdUfCzI8+39TiStZnpoqsSFaM3KEk4JrQhHL/r22s04BJW/SrL9mk/oZPIhCHzpvJnslA=="
+    },
+    {
       "path": "@kovojs/core/dist/internal/semantic-attributes.mjs",
       "sha512": "sha512-yE0AxG1pJLVdedC5U02PcDUD4XYOxqIPrsemUvw+pitBH2Hz2YEW+F/1IvWTIEJgQoKCw4sZMRSraArhWUi1kQ=="
     },
     {
       "path": "@kovojs/core/dist/internal/sink-policy.mjs",
-      "sha512": "sha512-mDkv+gQeJyxLikfMUlfw2y0oGJOeGYzk3MmvyNS1HHYTzcMkepLAQf6a5ay3ovouRsQeHNDwERFCVt70s/MvHg=="
+      "sha512": "sha512-Te4aZRkgr61TrSP5ukj3E2wii2ar9qWYeAJHwvoWQrNqyClWw9GUezSK72rL52GdtEZVdp1eGNY+SN5Nb9gc2g=="
     },
     {
       "path": "@kovojs/core/dist/internal/source-sink-registry.mjs",
@@ -314,15 +370,15 @@
     },
     {
       "path": "@kovojs/core/dist/internal/sql-safety.mjs",
-      "sha512": "sha512-R51Y0L/lWzDFWihxWWccOaNDOMfMd7CCcjRwm0OsJk18NCxeP5VMh6k2kQsOzyjjFkcDJPiqRQXdlcbqMGrpOQ=="
+      "sha512": "sha512-TRsRLxG9w38P7GqjzqvVGYMk/+/WLJXFwH7z5gjrmibwjcCR45hzOohi7RWOP1kgLxbsYqnlpzH5HzSiSdzE9w=="
     },
     {
       "path": "@kovojs/core/dist/internal/storage.mjs",
-      "sha512": "sha512-oW3k6wG5PYbsOnU/7ZUG049ipr9309MWk3FbwEeNJOQrVk7h4ryweI4OFiQJIUatZhJ3IsFf0VkqveO3kainlg=="
+      "sha512": "sha512-Paz2qbiTagQ4O1j0fgw88mvdV7lvEyE4wHVBY3lvSxdPDWcLxY3kF7RirzK4fRj3lNL0XFK+YO/onRR05NHSxg=="
     },
     {
       "path": "@kovojs/core/dist/internal/verifier.mjs",
-      "sha512": "sha512-Yrt4CBEmzApuhQE8SUGMfh7/Hi4K+sZTKwI+4kvNxTX6haZbABSAIJqqo9b2J6J6p2NXBPGoReakeiLJ7C3AQg=="
+      "sha512": "sha512-ArsZ7ru735/YABZQV98yJNMPoGpQxSAyytUdwd/IWmwyeGG5oT+i/JqD6lK5BzzwJcq+f3YBi7NxZSqpFJQq2A=="
     },
     {
       "path": "@kovojs/core/dist/internal/wire-input-grammar.mjs",
@@ -330,51 +386,63 @@
     },
     {
       "path": "@kovojs/core/dist/internal/wire-json.mjs",
-      "sha512": "sha512-DNRo8qBtn/t3p9Ok0B9IMfKo4IDRpJMRa1aIVLuB9afsNZPJ1g7TNoZBsDhr9lOAu4h9NqnSvDD6xT64ZJXmyQ=="
+      "sha512": "sha512-yHtr/LZiAfNDIcTvnqKzbsHBuoxv/EIvPdnpBAmvq2jco8WddQSAVkrRE+6F3gSHZHcqR8QJthcuoDJJNW06Rw=="
     },
     {
       "path": "@kovojs/core/dist/json-clone-DyZpkX4r.mjs",
       "sha512": "sha512-gwYzSk3571RWIeKTA0AlvLxnth7r2PuqZafDZSTTNj4z+NfTzKSEOs/SkF6V8jUlRGNrElpbt/FOfSc2QRH2ig=="
     },
     {
-      "path": "@kovojs/core/dist/secret-BzCxLQUp.mjs",
-      "sha512": "sha512-K6tugXOz8chinkoLy5XgCGw7PGGIQGh6+m5mJhOrXtXc9mFBPJpd+ahdtfHIEUr7Ie52nM/uHUHy3fiNQh9hcQ=="
+      "path": "@kovojs/core/dist/scoped-key-YZj-euZq.mjs",
+      "sha512": "sha512-4mX1W5jX2BSGeFpyhEot0p4dGb6+0LUDfErw83rXrs7PjNBKYYQme5Zu26pe0ocOoyx0iXzjwkDKi+yR3792Yg=="
+    },
+    {
+      "path": "@kovojs/core/dist/secret-D1Np_2GU.mjs",
+      "sha512": "sha512-Yzp02dDn9cHS4OjpEWG9akm5zRSgBNxj6WnvVpVk+iwK6+CsDgjr/bSEgHJNcpyyrnYGARFq7mFhbF4M8mS3nA=="
     },
     {
       "path": "@kovojs/core/dist/security-decision-CSd_sj2A.mjs",
       "sha512": "sha512-mjrbbmhGdSofojHBlWX4DD7uxb9shzMbjP2YUxB6ocbQaby9Pmp8YrewOSMHktIMzRyk8VFpioTfIN1DJxZ/Mw=="
     },
     {
+      "path": "@kovojs/core/dist/security.mjs",
+      "sha512": "sha512-L3d996gcdIqXBXiFeJSEZYVegjzvuVmJlNp3hEHi9igGhjGL6eRIj+mHr+CeaKO4sMqwn4Tu90/94IpiuIdUyQ=="
+    },
+    {
       "path": "@kovojs/core/dist/semantic-attributes-BkNxTHqr.mjs",
       "sha512": "sha512-YXSR487VMIXPSVRwWxRX2ID2PwgOgsWlB9uD0YFvc2S0lBdza59F8xEMgRUn6YtMH9M41vugvWCgLPV71V5xQA=="
     },
     {
-      "path": "@kovojs/core/dist/storage-z2dLx4BL.mjs",
-      "sha512": "sha512-FX1+ryGObv+lh0rRymRV70Ah0S/AAP2t2dad+1GETcpP/4Uq8JEWWDvRMYPsDj4Xgasdy0BxtXgVlTVp4eI/IA=="
+      "path": "@kovojs/core/dist/storage-BWHQ82Yc.mjs",
+      "sha512": "sha512-FMLsQOBEqL/zHmYeEB7IsEfOSrCSIfkR6CKPhYHBC8XUpEyR5DIVspy/FcADp6MIBHR0aim+tuumR3dReXkBeA=="
     },
     {
-      "path": "@kovojs/core/dist/verifier-BQQp-_Ia.mjs",
-      "sha512": "sha512-3BjCCyN+uUAES55b0aIBSnDW/2Jl54nyWg3SpdgwoYNfdl0i++74FChFe/3TRTdn7q2upHOJAbJBBqRpcm9zQw=="
+      "path": "@kovojs/core/dist/storage-public.mjs",
+      "sha512": "sha512-jE9XJHqeLfHOPpgtdUtqhfrLCOVAGPNkAUo3SGFcPTYVCeTPB1z1jWTBJd/tcVmrGcNZqSlusC+Aml11uF231A=="
+    },
+    {
+      "path": "@kovojs/core/dist/verifier-Bc78QgC0.mjs",
+      "sha512": "sha512-yq7Y3fXYfwWvhvLS57V/3G4KXhEcWiFoLDio9tXY+6eyD/gyoJ4kq8PtqmtEer7XKJkbQXVYdykzIkfQLOY1CQ=="
+    },
+    {
+      "path": "@kovojs/core/dist/webhooks.mjs",
+      "sha512": "sha512-+hLRu9Hs1r70Nq6AdA2llh4whAwUcADMydwx/fsmB82C6csyhHQio2si4CkSWdgUrdvHqNHlW+MIvr4o14ruww=="
     },
     {
       "path": "@kovojs/drizzle/dist/derive-codegen.mjs",
-      "sha512": "sha512-mM7rEnjchwN/ukz+z3gfx9gPTNHWtwna5QfnQHWuZ7ogejitnW+LhcdQLhbSasuByc+8QwMTIBuH2W3EprrJHg=="
+      "sha512": "sha512-3ON3u90/gItrzBzDVedSjX4+bielY6bbI5nRWLdLlz+tvdyM60nm4VfNeiMsY211E69Qba6hrue0Wwq+XteRBQ=="
     },
     {
       "path": "@kovojs/drizzle/dist/derive.mjs",
       "sha512": "sha512-NdaNh7Uzy6qiLUIf2AvdBFC7tbeWGhIZVt1LKgQ35WO+KN8fstqjfAFFrccDWPMnVHbwx3CEK+vy7QHvyv1Qhw=="
     },
     {
-      "path": "@kovojs/drizzle/dist/drizzle-surface-BJGaU9oc.mjs",
-      "sha512": "sha512-GlZAq6hvzpU3D8Mju/2tgjIKz6w+ba8BGM//u0vnyxeVzZ4dPW8CA3FD0X5z4iiszcVbKDDGVVRA8iQnjaETyw=="
-    },
-    {
-      "path": "@kovojs/drizzle/dist/runtime-metadata-1Sku_ad9.mjs",
-      "sha512": "sha512-OfLE1mOADydUcD2WiaIP+3RtI2bvawVT3wlOjMiNT/3sFINnoyhcF5IMmzh8DIhFv1asgrhn8uLl9nnk0Us4tQ=="
+      "path": "@kovojs/drizzle/dist/drizzle-surface--n0mfe90.mjs",
+      "sha512": "sha512-QCHDiTGI85XHlDzl4eGyaIVG7vg2CRgjGeOniImvT/nSH8xvHVnXdvmIwFW3ONgVVeXoWXiumdGhoM7Yfchlgg=="
     },
     {
       "path": "@kovojs/drizzle/dist/runtime-metadata-internal.mjs",
-      "sha512": "sha512-m1fthFYANqyHRhLLzS1vZCPnFTfEofO4uSaguOLLGrw+VO0qLzUI0ZA45qO0Ittx/JLCGjdkOG6eqC+A2huvHw=="
+      "sha512": "sha512-CIaQgAWv8l0lf6nO/+Wh7xCOo+FaOXchMFcCGyzYEKl4o2oiv1xY/I71tCOQZWg55mcIFHBLHl5dUgUntec3eQ=="
     },
     {
       "path": "@kovojs/drizzle/dist/runtime-security-intrinsics-BI0-4xdr.mjs",
@@ -382,19 +450,31 @@
     },
     {
       "path": "@kovojs/drizzle/dist/runtime.mjs",
-      "sha512": "sha512-ZiGmMKfeYvENDD+FO881oEjjTXfOFUZo1Ml0w2erH+hN9MUTOKw3O0a//N9UpzhCu4oXCpUgXjRWa2R6o+Dt2w=="
+      "sha512": "sha512-lV2OXUpt4ogBv4w8YyncKi92AGb9J+e59rYsTmreI1/n67isFcS0kTDzv7KBUKLeu6OAuhNIVGuzvWZiTe/sFg=="
     },
     {
       "path": "@kovojs/drizzle/dist/static.mjs",
-      "sha512": "sha512-r/wEDV+YJp8I1403BTQ1eSf6AiwPSl8Kdz5Z5t7AdMpNxudcW1B3ShCw24HoaR/4OAumQp93A4Q9KZuYKbz6QA=="
+      "sha512": "sha512-zExnQtjAoi+BLWC+LZY2Go5V8yKz2/6lEoQWk9TkZnvBQm+T+SVX+WYnajYnxcd7ZZ3aieUl7sw7zY/GcCOC/w=="
     },
     {
-      "path": "@kovojs/server/dist/agent-DOlNzc58.mjs",
-      "sha512": "sha512-PhN3voEvtUGvNmABWGEaTOEolFJD28uwmmH67YK8sg3jWNLCbwZxnQ2CqXT8v1EAksTMMJFXq8FF2Ts4Rwt3Pg=="
+      "path": "@kovojs/server/dist/agent-Bm8dZC7V.mjs",
+      "sha512": "sha512-pRbjPByovK/QOSCB6ljouUr7JA9xeYKcn7O0PiZeZqb8humS9qGCze6p2rI3bb0euV0C4e1MvwQ+sbFwt0qzfg=="
     },
     {
-      "path": "@kovojs/server/dist/app-BBlQb5iH.mjs",
-      "sha512": "sha512-vq9aKGTTgTlJJj5t6I4eL+gB3pzCNT0RzNAvIB4i1oDje3yddnG5mxoX7kl4M9FvrD5sCLvuWoHCPQqyWECXoQ=="
+      "path": "@kovojs/server/dist/app-DhvRdk2F.mjs",
+      "sha512": "sha512-JK8LguJwl0utadBzMuPr0sVOV47Vaae9y6gxhn6oVipi6fSddZWBUn/tDTZlV6t96+0jfJ3JgLkkso6Bz300Bg=="
+    },
+    {
+      "path": "@kovojs/server/dist/app-declaration-owner-CoNBlH0x.mjs",
+      "sha512": "sha512-1VoCLbnp00JkTEU98bp4WCFYLhwF7Jyk7cawGhj1YtxEjaSwsOPecyf7PttjRPx8v4bqQCy+YKNDBWq4c2EX0w=="
+    },
+    {
+      "path": "@kovojs/server/dist/app-mutation-adapter-C2ozweqi.mjs",
+      "sha512": "sha512-5bVnoF/+ZD7hPe31hh6AtMozDIkgiwaC0edOsMG9RDb1bH0GSodp59tumfVgrjAF8dALFmQnUo0pd3aqy7AeuQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/app-token-DRuau1eg.mjs",
+      "sha512": "sha512-q1UaNDwF1J/VOgvQLsp0hbHtMj7co5+3NbIyxGIXG2E/MGp4m92pnEgPGWsUP2CouPB7VCp9K/h00EyfGvP3qw=="
     },
     {
       "path": "@kovojs/server/dist/async-context-BVk6EIZL.mjs",
@@ -403,6 +483,10 @@
     {
       "path": "@kovojs/server/dist/audit-justification-hhzWM6wS.mjs",
       "sha512": "sha512-nof5SrCXk+IWJXJy/gWzouR6rzBTZOof7SLAi46ty41klQEkACzBXcwsnqysaZVlqg72aJ0K9vs5bZRAe3Z/ow=="
+    },
+    {
+      "path": "@kovojs/server/dist/auth-principal-DedOCqHn.mjs",
+      "sha512": "sha512-2MsVwYcNlGqPSqsPqlgeOx/ONZoDV1b03Js1O+sFiLVf+Npm/zDmBZh552zuPboGuBJXyVdGyQ3lfk2eMBk0bQ=="
     },
     {
       "path": "@kovojs/server/dist/build-preset-internal.mjs",
@@ -414,7 +498,7 @@
     },
     {
       "path": "@kovojs/server/dist/build.mjs",
-      "sha512": "sha512-WQ4NHdx1b6KQbHmIPODyHHzdwA9BPiatJmNUxoIay+Hx3t95Ah8uJaA4lnJeWOun6ZM/SS6N7TgFHKteM9D8zQ=="
+      "sha512": "sha512-E2q2mYgoL+RPQcQSM3OIYP/ZgJSM742C+kNZTvN0cCGaIRC5wDK2sWJwraTTftz8ZpuB15T0Ra4UiRo+34C0gg=="
     },
     {
       "path": "@kovojs/server/dist/cache-influence-DHXYJzpr.mjs",
@@ -425,24 +509,24 @@
       "sha512": "sha512-1X5AkB05TODjJnLMmyV/U6zXv3UDJczk0iYEv7BuoIMb7Ap00mYTVL1OFA49r3pc7WFDSc0aw8aGRKl2LubnRw=="
     },
     {
-      "path": "@kovojs/server/dist/capability-route-B_zsRflh.mjs",
-      "sha512": "sha512-esQO8+/0ZtKIagtuy0S9pz2jRJrHJ56zM/WA7xKjehmYDMVtroM903tZWk/+FqRJ+/oTlvgaYfzR45mkMnCAvA=="
+      "path": "@kovojs/server/dist/capability-route-Cp5I290A.mjs",
+      "sha512": "sha512-GUtOxS+xSrm+V3rFMP1aq+gZfxxv0tcnNr0GfA2gBQdmJpuFa48BK5KZYqDyI8qw+H/P+Y9w9+iZDcunMR6s0g=="
     },
     {
       "path": "@kovojs/server/dist/client-module-registry-intrinsics-CmIRimmS.mjs",
       "sha512": "sha512-MEYEfGCbzo3z3+5DhWzb+7uYMVVufeqUOrmcpFWNAFbkEmA0sfCTXRuvsgRqqbzRDEaRSy2r7p2qSsK22O8dTA=="
     },
     {
-      "path": "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
-      "sha512": "sha512-0zeYmtyycBWKnBGAm8HbY2vRvAQN5DKS9kgNqlc3OSSPF21pt2QXhgX2tTQrxzUKcFSFW4rW0vSl2X5sBMgYDw=="
+      "path": "@kovojs/server/dist/client-modules-C6lLb03J.mjs",
+      "sha512": "sha512-rvAUNQbchmsNPEll9eNrkkMRkiY3zKQTdcoYhs2VkFOALS8ateuu+pNjzIx8I+G2SGLDGtyJuHcaQGw9qkrjVQ=="
     },
     {
-      "path": "@kovojs/server/dist/component-render-EZ8lOfYx.mjs",
-      "sha512": "sha512-v1qhv6Wki6Yt9C6JubcIEJ8YV2NQzWj9XsrlS59kbXEChK2gqBl/Q1ykBA3JLfuK8qDPq1bT/TPLPkLGfe48kA=="
+      "path": "@kovojs/server/dist/component-render-CGZa2Q0H.mjs",
+      "sha512": "sha512-ikOUYpDbxCf19B8Ln3pXMpmbYNKP+aNSk2X+6a1jzgrP5jkXDysSb/t76XsWfqg0amIh+TCiskDdMBvz1lTb3A=="
     },
     {
-      "path": "@kovojs/server/dist/component-root-stamps-CAsqTuQG.mjs",
-      "sha512": "sha512-wX0Q1s3hekYZ7A2ZRK9jTMUQnT8WX36WGeHpVdriYSRU7jmOJqtGBS6rQGeXZDYJMfW1zCz3MpV9ebLdNerGAw=="
+      "path": "@kovojs/server/dist/component-root-stamps-CcQ4iZIy.mjs",
+      "sha512": "sha512-FA5A50vepYcLeW8uQQSLJf7/756U5g0annqWeNtjhr6jfR1jYoDiMdHrpfiSZR/x4RVsiHCGDLufEnuBMhJ88A=="
     },
     {
       "path": "@kovojs/server/dist/crypto-authority-BoTfWXDn.mjs",
@@ -453,52 +537,56 @@
       "sha512": "sha512-0grh7PrR8OizR1NJZ+Pg4GA/fgKQdKmB3CqSZ7TD3X72cDCQwXhnK7UV74paBpMU/84UWqd+DGe/ugZ4AfnsGg=="
     },
     {
-      "path": "@kovojs/server/dist/csrf-DzVqg8GJ.mjs",
-      "sha512": "sha512-yhlZp3v9CotilTsuqF9MPcDhDnE+CNKgbmfZUeD9xwZhIektPNEP5GV3g4zHojQk4DHLAKRnlyrDcVaMn8nTFA=="
+      "path": "@kovojs/server/dist/csrf-tXHa_cRO.mjs",
+      "sha512": "sha512-2hIuVUiun8lbpNmI1F5NfIDVrOwcCW3b6a2WbtcMeEFG7oyIOXTdz46K90seIgeI13AZD1E5+bAHrrjN0EAEXw=="
     },
     {
-      "path": "@kovojs/server/dist/data-plane-static-analysis-Bl4wUGql.mjs",
-      "sha512": "sha512-v+SMBjeK1t0ZG5dc6/Irstw4nYY4kN1g8tqKw4zq2mQYs7Xa8e7crdaHFJipB8S0WnWPy7lgOTH+GpCWcTxDGA=="
+      "path": "@kovojs/server/dist/data-plane-static-analysis-8gLclmsx.mjs",
+      "sha512": "sha512-ewrwhrBYYJuzG4QxKeZLotueAEJN+ceyZQk15bw3VU3v8XjF123LikyjuGC54AoZqlnlKNK1/WpcYhqcQY/Z/A=="
     },
     {
-      "path": "@kovojs/server/dist/deferred-region-BFKPCWb2.mjs",
-      "sha512": "sha512-4CcdFC1O4VlifGXuClDOKwA3CxGdIYPjOz0O7nsZqIDykjhnzf5sThx79+u6Y5tF9UW8/ZXOb0hXYc9hm/TIAg=="
+      "path": "@kovojs/server/dist/deferred-region-D_C69Y-A.mjs",
+      "sha512": "sha512-odB75xMGoE7OawJ2Zs1Zg8U4W+k8c2L09drkLpVeU0Cnca/4Mg4B0X8fLUEkCZ7F2ahqGSheNMIOyK9tcfwOhQ=="
     },
     {
-      "path": "@kovojs/server/dist/definition-CN-c6zyd.mjs",
-      "sha512": "sha512-g/fRhFH/tEwwzqebq/P7a0Os4vBY9NQDHoAMakxEi7xlxrefXp6LSLQwxOqL3jt6/hfznu3EQYIOMgcaruGf8Q=="
+      "path": "@kovojs/server/dist/definition-zSHAzNQI.mjs",
+      "sha512": "sha512-wsepon52XVnGhJgachsALZBcT63PQA3XLcDVCERNHTe4R9SLTxQNA5N2cASbYSp2QxV6WPm1yAC6QwVEACwn+w=="
     },
     {
-      "path": "@kovojs/server/dist/diagnostics-BgA8OKmD.mjs",
-      "sha512": "sha512-TLEt1rWY+YYuZkGVTGKWidWqNCzS2PE6mYxT5A8WifEo9lGaU6mva+ZVWKIMfDcXtHUkSyevp417adLG9q0sEg=="
+      "path": "@kovojs/server/dist/diagnostics-Ce1sF9tp.mjs",
+      "sha512": "sha512-LKt+UXMcWu7/eC1E8HvdtCJR0ZgGmgV7tCfBSQ9UE1FE7kWgFeLgDWYNJx7FUwvELe/gItc3O+ETRM+N3sifgQ=="
     },
     {
-      "path": "@kovojs/server/dist/document-core-DTl7ZQm6.mjs",
-      "sha512": "sha512-WKUYE3GD7ESEwZBF/APWLMWW9w+9GgMTHWLA3Uxe4PIfbAWpyGRbhRG3refVG5MuZKnYuL6fz5st+SyNDtrqcA=="
+      "path": "@kovojs/server/dist/document-core-qwhSQ2bE.mjs",
+      "sha512": "sha512-54Z3qZWqkLIxxwE1sLF6T5n01KPI5JknkADuv9uPD/GFyyyM1fjg5dAXOQvdXkZXw74C8xngheOKA6hMSB+Zng=="
     },
     {
-      "path": "@kovojs/server/dist/document-diagnostics-CxeXn5fF.mjs",
-      "sha512": "sha512-NjOQwbzj+PN2dKoMEFQt+9LwzVqgri+pvcBm3rhDPfLmi0bAmcobAk3vIvZslzuZ3DJK1oF5lW2n6EfccR/9zA=="
+      "path": "@kovojs/server/dist/document-diagnostics-ETOMZ9Yd.mjs",
+      "sha512": "sha512-wD01BEf2IHEuE8VZib/SXe1Hwk/43ZI0ztJ1wewibyR5EdY/a5FS8qtv8je3aeFhesFcobQyatCgnryrORVf8g=="
     },
     {
-      "path": "@kovojs/server/dist/egress-Cqzhux6f.mjs",
-      "sha512": "sha512-e6RJXkhc9J2Vlktdj9p3qKZqeq0DAk8LOaSYLPDhsI/ASW3BXOeZ9lV7LN4NBciTR5GUfFP5gDP5X9mAwnJzgw=="
+      "path": "@kovojs/server/dist/egress-26KRNMNB.mjs",
+      "sha512": "sha512-J14Jwjq6VMF1+MZF7HHQHuwDab6FC8tJORFgm3cF7VL6dNhZmxw0Fe5V+MymV4sHJ3TMhtY+VvTX7XBhA0qWYg=="
     },
     {
-      "path": "@kovojs/server/dist/egress-bootstrap-D5a30SKU.mjs",
-      "sha512": "sha512-tpjr8pAPpC7VUKPv5/AhkhXTy+aLv5T5HsTUrgVRthwP0hbIKAklt8jNnSrQyWpWmP/5UYnRWyBHi7nMU85sww=="
+      "path": "@kovojs/server/dist/egress-bootstrap-CY92gFYz.mjs",
+      "sha512": "sha512-btiostdfGFYUCA46V5kAepyR0g8ljG1axCPi7GySSQ2xu6Sjpd0akFn2fgmwjk7UoO99vp0rjF/ZoBb5N1f47Q=="
     },
     {
       "path": "@kovojs/server/dist/egress-intrinsics-DgkYL5Fc.mjs",
       "sha512": "sha512-daDxhuW0NNv+4JmLnaFOHBmLzuFzK/LjYgoi/q2hH3zME1wOPmlDLa8+hcVIQA/ZbiMbkg8GTGxZVOn8Usobww=="
     },
     {
-      "path": "@kovojs/server/dist/endpoint-a54zyXMb.mjs",
-      "sha512": "sha512-sHRYjXOWDpYBb38j3UYLJ94xsfXDpSps3ZJlLveyY5lux/MUZcGWjG8NIy/iFjHr58RIynbVrfzHN6kAyWZ94A=="
+      "path": "@kovojs/server/dist/endpoint-X5AJ-fr_.mjs",
+      "sha512": "sha512-nTRWq0GZLCn5WckExVYbSKTpbARxG2ZGVBe8BLpQKYQZwMbwwj4P9fXCDCFYa+xuoHZkgs2OtXnQqB0htwy4CA=="
     },
     {
-      "path": "@kovojs/server/dist/env-CS1Rg6HI.mjs",
-      "sha512": "sha512-JOtaotAVYmdInd0XX+LPOQXHOuPDaFZFIE/lVegqjYs2yOIvqcAaRhVNefRjmzcaMDsDEQKesKJGQPCsBGQOrQ=="
+      "path": "@kovojs/server/dist/env-czJjSezq.mjs",
+      "sha512": "sha512-iqn5xNIyHNeWN0HH+GQi+wqfLOTcMT7QP18RxSJn4mTEcbHUAEA0qk35ej8RetyYDKWVs4VG52NZJ1AyqRg59Q=="
+    },
+    {
+      "path": "@kovojs/server/dist/generated-db-capabilities.mjs",
+      "sha512": "sha512-0ZFBKT001MdwZIz9JkG7yS9bJEGmYKn8lWdFZnU7JTcT4Vy3e8q5L5VCr83g2eG5zePtq06Pq5MxEG8aHfwdIQ=="
     },
     {
       "path": "@kovojs/server/dist/html-B8n1jHC5.mjs",
@@ -506,19 +594,19 @@
     },
     {
       "path": "@kovojs/server/dist/index.mjs",
-      "sha512": "sha512-CeQlN/xK5HEB5IDtuAQoQIi9ZEYKc5jQlWV0q5fScnVmYL2O/n/Y6NZ0DOpvjoHuTDY4iVdKOr3gf5M7AYkkBQ=="
+      "sha512": "sha512-PJaOzgNT0XDOUYZjNtRY0MSGdesZwC6XYR52x4V7Hjh4CBsJziVPbY6sIgqx2dIiGgz/b4Toz+mAmVTr1+URdA=="
     },
     {
       "path": "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "sha512": "sha512-ZRh2CiSkXcqfZKB3Be7Aztqss2hW8jj+WioiWEDfSRJXz51/pqa/dITp50DEeU63AUxmvAeHFmvxXNfiCoQXFw=="
+      "sha512": "sha512-iKQKQUj1Nnfztxhtxll4siKW1agc5/9PXIQr+uyM+CtPFxJNS46q1rfTPXOwq+nTjy/0xvO8Wm45QrdXUxogeA=="
     },
     {
       "path": "@kovojs/server/dist/internal/audit-facts.mjs",
-      "sha512": "sha512-rllcqRlk9wgjCZm3sPra+nKtu1umpF/VYJEOdblX1J+GNnrbEb8gWC2+VZMeyLfxayHTzh0tR7TPcaxbUEXtBg=="
+      "sha512": "sha512-6HCVh1L5bRUoeS3re3AcexKVljfQVHDCFiz7H5zBdN+ayf2kboifj3wC7Q1rIPE9W7pYNjvjmpqQjsW1vxhNPA=="
     },
     {
       "path": "@kovojs/server/dist/internal/better-auth.mjs",
-      "sha512": "sha512-tSZBFw0DJKfx5Bs1hq0+2+ep04IVmN64ULsqXKOQhHBI6qewnlJ4+/6ibq7GVcRYBX06SG0+43hiomqvWamliQ=="
+      "sha512": "sha512-40npcpl3sOx4fqnwD4crE2nga5XYqXrNsFt8M3rEoMmmNwSsXfUTm1yoCH++R6P4Ax6iVjpvPKc3gq6njvEcJA=="
     },
     {
       "path": "@kovojs/server/dist/internal/build-context.mjs",
@@ -526,15 +614,15 @@
     },
     {
       "path": "@kovojs/server/dist/internal/build.mjs",
-      "sha512": "sha512-NeDirh5rtLRHgMXPpYVzfWU5K5Jh86Z7VeVOufZ9laHvBukwnZ9Tz8fULftymsoseQpZgz3ZvWtjwLl+bogXHg=="
+      "sha512": "sha512-zw1FdhlYYCOONBDYrYDw6B9+Yh6x9D+/aZF4xgL8uzjYXlfxAd0DKY9EuSQWu9w6f9XDRrB8ILsHrcaPV9f4cQ=="
     },
     {
       "path": "@kovojs/server/dist/internal/capabilities.mjs",
-      "sha512": "sha512-/ZXdS06avjMhrTIFM5yK7n+6O/it7Qz0HZhfNOjkosKpwGXrKuQoIUIwFSGXtDJmGA0LuzAjkN16oDg4rVGHwg=="
+      "sha512": "sha512-drINj907S8c8IcPcQk18Lu9SSNIf6Qq3tNTIW63p+piadRDjbHp94thi1///I+PkxOJDiKg4Zw1BnajX4Kn6FQ=="
     },
     {
       "path": "@kovojs/server/dist/internal/client-modules.mjs",
-      "sha512": "sha512-UPkV42pOw788OqQSF5ReNdFhDBeCBABpAc7EfPvtwke79Io9bazvFiPwUxjCxAKxZydj+vs1XBbrn6iXzDhLWA=="
+      "sha512": "sha512-0f85TthqAr4pmRWq8IyMSvwUQ27zsxxn80g3nL4qjFxe1nGa2vf+C9B9Tev+9nPFpH/Ydbv66Y5so6ebSEKBPg=="
     },
     {
       "path": "@kovojs/server/dist/internal/csp.mjs",
@@ -542,15 +630,15 @@
     },
     {
       "path": "@kovojs/server/dist/internal/csrf.mjs",
-      "sha512": "sha512-8g7fch/TG16m04Tvu4nyGnDi15EN0FWPB/wesK8xk4MoNUaYslgjUglZ5hb46XC1cq4Bo05vC7+76T4knGLpaw=="
+      "sha512": "sha512-nzO/Rj+IFsbL998pcz7b+CIqsKRD1iPEaVzTbzpWZ8nu/bgf929A2WMQR02NfMJm+HcRumXaqqVpov+akrL4UQ=="
     },
     {
       "path": "@kovojs/server/dist/internal/data-plane-static-analysis.mjs",
-      "sha512": "sha512-rtMJEQMMRfaC1/sTV0zRp+6Jkp0oaH3mqOtJ7QQwB4rV5NNbZK9hueMAL4y9k42RztozWLr16JMa0Dx8wGQeBw=="
+      "sha512": "sha512-B8QsUiYMXLKJ/4PJS1nuzFJCyab+YvlB/pZbGPzH2uqB0+XHIhxNTJWjJ9LwvX1QelWpj4pxhcewk74Zwxwvbw=="
     },
     {
       "path": "@kovojs/server/dist/internal/egress.mjs",
-      "sha512": "sha512-HkOCgOxw4hiPHD7qOLy0ftLVnckspc421Sm8RsQa+qhVkiO3zGdAIqknGwpxCMsBkUq/a1saFGdP2HXKkVsIEQ=="
+      "sha512": "sha512-FGylbubb/vc29dTlUEfHxgzK7ClokmVPawZWJqb8KgWuVqPoWXA9JZCITawJygrtAdC8i0DCcQyYz79xt1Wwqg=="
     },
     {
       "path": "@kovojs/server/dist/internal/escape.mjs",
@@ -558,27 +646,31 @@
     },
     {
       "path": "@kovojs/server/dist/internal/execution.mjs",
-      "sha512": "sha512-y4q9XK0Trt9TsjVMYzLz0OW9Sj1swS8SC+OXP6ZxNpOoAQKKfmDXis1XOMgkhlTFg/3OJP2xAHhfjtsMaUOJzA=="
+      "sha512": "sha512-hi1nJkuqZg0WLfzSYsEgZo+n2g5yC51PvecePiSzu5O6ZULns3eEFa4gGQGDtfsYVedYyPNpnIrcUGw3OovgvQ=="
     },
     {
       "path": "@kovojs/server/dist/internal/html.mjs",
-      "sha512": "sha512-HpyS0pN6h/Ces/7TpNVw1fbaq780Yz4T2OhbweZhm5gXL5bK/lYNU735hngRev3RU4Pe3cyS66ii9WvtFOEh3A=="
+      "sha512": "sha512-OTRWpAxlHhBfKhPwydcH31g5hToMfrTPH1uH69ro2qKb6hObispWOKbfPs541+yorBEJ/dzmFwyJbCED8t6Kbg=="
     },
     {
       "path": "@kovojs/server/dist/internal/keyring.mjs",
       "sha512": "sha512-3hTeHgI0LbyJ1VF/W2OKUFpCkDnTe8IdEtZZ9pFYYrRbikiMtD4MgzD3Mzxt7km6k5JWUkCyVE6BhTqfK5JHCw=="
     },
     {
+      "path": "@kovojs/server/dist/internal/managed-db-capabilities.mjs",
+      "sha512": "sha512-p9MtGzoLZZS9lbuYaEfJ96n36pPAelkHVNR8GHnssIqhJZwn7aiI9iqL+VQ5+0nhwI0ASTRdFqx2ubVtMLthEA=="
+    },
+    {
       "path": "@kovojs/server/dist/internal/managed-db.mjs",
-      "sha512": "sha512-4cZZgK+Sso4BBm/pqjZsIXkV3x7+y4Be8g+AvX0KVocBXH7/JkW/SwCfUiwMBw9XfiJ3tp8Zp1Mz73CGgSY34Q=="
+      "sha512": "sha512-b0//1GqQZ4FQyxiPAVvaJA7t4gKtiBvIYyOQjQvNKI5INLemm1SdvGVh6cUCrHRbDHpecpHY6HZYzpe9/eSzZA=="
     },
     {
       "path": "@kovojs/server/dist/internal/postgres-capability.mjs",
-      "sha512": "sha512-02jR+tO9ysUdF0qbfEYhInKq9JqaTIVWi2jYTs/H374vyAshbvoW91cu9KUeJwMW+U2F0SCvfYRjvl/MpJ8Yqw=="
+      "sha512": "sha512-cYBoO4cjsThZ6L2fZN8adZIIPW7twAiF2plUM9u6vBfqQCmCCGpFpgxkTMZ78V6xLJeMlE05yyPDgIJzKchF+A=="
     },
     {
       "path": "@kovojs/server/dist/internal/route.mjs",
-      "sha512": "sha512-7sJ5As754EDwnPdRE5Gcpz07CzGbAV2+c60MjQJ5vFhzzokNJ9L8+r7rKD3goQYQn5bJP3nGUYQrC9mOpHaVgw=="
+      "sha512": "sha512-Y41feV5wD4ztA5gdzHI6LlBdHpMx3ms6gHkczHrL7P9SS9ngvWovRSz3yXu8b3oBgebaezn9LIxR/ZdwTa8Ing=="
     },
     {
       "path": "@kovojs/server/dist/internal/runtime-environment.mjs",
@@ -590,7 +682,7 @@
     },
     {
       "path": "@kovojs/server/dist/internal/sqlite-capability.mjs",
-      "sha512": "sha512-buFdEIu/XJ0mCzPtJ6kpjVgumRSwJvNNzucj8lsOXfJhXc+L9rwZa878k2OLzU8MMgjQRmY35Kk2cQd1xfRLoQ=="
+      "sha512": "sha512-Ak1OID54E/KVdEPg6BCQA+hPTnnMgtRL7I4/K02nlEnlFnm324VwOfPfsaQlR6r5+mqUuR+28z8AqAxqNMeoBg=="
     },
     {
       "path": "@kovojs/server/dist/internal/sqlite.mjs",
@@ -598,75 +690,219 @@
     },
     {
       "path": "@kovojs/server/dist/internal/static-export.mjs",
-      "sha512": "sha512-cfYbWkq8rFrTxIvevvTTpSCz1M1smIDUlQCICvWA130YO/gHDTJzJP3KwgoYfm0JdIs7cVJoCwLMTgD4q3dRAw=="
+      "sha512": "sha512-tWNHk63beOpVJIEC7xgdX0HCB4cUyntS47z7gpuCiZQDlPzkVYT24TxbY3KfZFF0V+kjIBKxW1hsSVOBxMKvwA=="
+    },
+    {
+      "path": "@kovojs/server/dist/internal/testing.mjs",
+      "sha512": "sha512-edNP+Cj6MClfE+oGuIJclno4yCMAFWj8/5ipSypcColbBClfP422FN3VtWgc11WwW3Hlqtl/a6Yc5t4xF50pNw=="
     },
     {
       "path": "@kovojs/server/dist/internal/vite-security-profile.mjs",
-      "sha512": "sha512-zxAm3ygIx5F7xTFRIhJbhbJCadJ0mRRQYXS9ni/lXwh4d+1+TBN4ic0hDK+/d++t4G4sV6Gou1K9yFiDk6QLxw=="
+      "sha512": "sha512-EPOvGEW0OYenb4bHynlBZ9RKi8JUoai746OSjwADovIwJPwpzh3+/GMCyfHWfA8R+THck9aLqcJv3pBq1IgWVA=="
     },
     {
       "path": "@kovojs/server/dist/internal/wire.mjs",
-      "sha512": "sha512-MwuB8LF7hCPZbSOs34U6U1XdhWrditl/5iB3qvdc5UnSXR2aIYUCSLABRf2Rf+uyD7eIjlmyFl+9orpeBftD6g=="
+      "sha512": "sha512-XcTvVH6Z2Py0Nw1McnAretgsflrlErzTifqr/40RcNdLUNwEOYajnBLzv9IiAn5VF9oRXuWEsQmK6dSgBA9XmA=="
     },
     {
       "path": "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs",
       "sha512": "sha512-2IdOLZdt97OHTONxas0YPbFoDAn4VDdRKf+FTgZprRgQYxFKa/T+9y2slKcVOaqLjLvsi3gGQ+tSZ6GQUt8Psw=="
     },
     {
-      "path": "@kovojs/server/dist/jsx-runtime-EORWJuuQ.mjs",
-      "sha512": "sha512-T1XaG9ujHPjxa0a3/01dqwgz/sZWI8IIMPY95ZD5TN5NCNI5trAKWGzxLcL8X5/1gmbCMNFDq42aNLoIBuaRNg=="
+      "path": "@kovojs/server/dist/jsx-runtime-D2G707fq.mjs",
+      "sha512": "sha512-Ook5/PpYmBnyI5aNwiZBeMfLzVDfjT4l9i4+ugq56p0m8rRnz/W7uQm9mGuIug3HKdHeett1cD9r4PkSAjom1g=="
     },
     {
       "path": "@kovojs/server/dist/jsx-runtime.mjs",
-      "sha512": "sha512-6diryuNn2nboWJOjRc5MvsJfh3KKhwpidV5PsxMfSXejgtsQC5DG2kaYRcVriibqhZZKMdVd8rIjrEtQeeU3gg=="
+      "sha512": "sha512-0QUyeGNF8AMvGGCiVZOaRd2kY2PyohHPRXrDojEWf/FO6q9Xys47Tp6sxzdcfca+vYe28ph3pg1Z2J9Zk7+Gdg=="
+    },
+    {
+      "path": "@kovojs/server/dist/live-target-registry-BoiKpUaq.mjs",
+      "sha512": "sha512-kdXII2ykUY/lFUSPp267gVRhWwFG+kOxdswlP8qgEDkP6/c3VqxJ8WovkJ0sPyKOBTJCSwxrWeMgPeBK4/NeEA=="
+    },
+    {
+      "path": "@kovojs/server/dist/logging-Dl2Ufypf.mjs",
+      "sha512": "sha512-TmG9OWMl61IwwIM2/DIiYxMgJZNo2Bl5gTW2Z6D2nGLyCbTxiXEPLYeLC7hp5mrugbwhsCSJ8rbED5yIQwu33A=="
     },
     {
       "path": "@kovojs/server/dist/logging-intrinsics-BIdUZ47w.mjs",
       "sha512": "sha512-ty0hTGil2TTWvGx2tGxGUWQMtqV25CR9Hanm1PrsSkXqcuycgdywX8H91T2bx3TYMLr7/iBb3fYksPrfNuq2mg=="
     },
     {
-      "path": "@kovojs/server/dist/managed-db-Dy6zwBrg.mjs",
-      "sha512": "sha512-cjxYIZDTCqs1ZOb1BJNrPKLcn3X8YMS8KoCD6omGpqyP6YMN52HqT1E7flQc5oHXPe7tIFZM9KVzKZYoo/4Qrw=="
+      "path": "@kovojs/server/dist/managed-db-oAUL5wzx.mjs",
+      "sha512": "sha512-Nn3KDgvedogxLtxobIMJ661QxVDlCHE/swKvlOd2ylBwGdwmj7Vjpl/0iDdUXKkNEMbRJ1s6QVN/xx68gMTEpw=="
+    },
+    {
+      "path": "@kovojs/server/dist/mutation-D-UONyDp.mjs",
+      "sha512": "sha512-mdtj+i3ViO203sQ8LfuqSBcU9+l/FP27EXefLeFqeRPB2nNgFuzNBbVE+aUweAROC5zHp/W0VteP+zBAWOVnLw=="
     },
     {
       "path": "@kovojs/server/dist/mutation-wire-intrinsics-BHoJ37PU.mjs",
       "sha512": "sha512-hpvkO+eKK+hcxOX8Ps2fMTR/2I+ZqdMkUpuejJkoBhfgPP8y4D56IH2EMhdkQ1hV7ZGEf/DTJ3XkO9mmreOtNQ=="
     },
     {
-      "path": "@kovojs/server/dist/node-DdJuqY_-.mjs",
-      "sha512": "sha512-LUJGXZ5LPC/seR+/mBR2hdysksL0La3qXSP8hSfdHDFLOZcGphlBOKXuTAi+3+nj+pGZl53x36/m48AZjQkN+w=="
+      "path": "@kovojs/server/dist/node-2Cm38JwI.mjs",
+      "sha512": "sha512-sUeUtkvVr+VcEjvQeeuykQqTI9+guB4frcRJWBRfk21JASwwjSiK+M+redMis64UJQgjBqv3oPVMq/rwQjTjDw=="
     },
     {
       "path": "@kovojs/server/dist/password-DWn0dx8N.mjs",
       "sha512": "sha512-smE5m4n4GG5m6Ots5Cfh5+ymC9d+6SqwJofe8jZ21l1RL0LSDBAdDc0GZhXufyPiB4/QCS3NA2Ijol4PkM1sGw=="
     },
     {
-      "path": "@kovojs/server/dist/postgres-runtime-BBJ92t4N.mjs",
-      "sha512": "sha512-fwmOfRPZajsPnxb5wGesg1/KQAwTj8QjtGj1XX+4Gg1i5W76Nb0Qi5TOJJ9ckzV9QZ5nBxUm9ReyVAt31xQMRA=="
+      "path": "@kovojs/server/dist/postgres-replay-CPBqPP2G.mjs",
+      "sha512": "sha512-Xa1qdxDC9t+biVFqKuB87n7rOVaai2RXy2azbKk+DUPv2yqdwCdhSNS+6mhPuXGxoDgXdx1IIdik8C/6DMVjJw=="
     },
     {
-      "path": "@kovojs/server/dist/principal-epoch-D_RlBKMa.mjs",
-      "sha512": "sha512-PwL2wjthC1gJTIP5NC5al3B6IeVicdwaMm9Ajeoqd8RMXe7FXfJkABJXSKxaSisjJV18inTxVJC974nNghNfZg=="
+      "path": "@kovojs/server/dist/postgres-runtime-B73JjLiQ.mjs",
+      "sha512": "sha512-oR36aZ8WQ0of6MmGHCJVDsUNcHOimpkJ1ywRGrkQAudgYyjkZmB50HAQK2W7Ha5jxf10k8hoOjgyhwcMU5iLSQ=="
     },
     {
-      "path": "@kovojs/server/dist/renderable-C_lz6SZ6.mjs",
-      "sha512": "sha512-Te9dvJf6DdnuHsqGgVWmP/blb4XLx+v/cub/qtAztasOXwSyS5HWsJq16bPTBtjptj9s0saso75kvUH7e+zIvQ=="
+      "path": "@kovojs/server/dist/principal-epoch-CYz751LK.mjs",
+      "sha512": "sha512-OIKuyEmsptCbCBzELQp05mEpjqChngQNVKJs/jjdsk+TcwsAcsSWmagTBbC0LcNwlLbNVBQQy35mG7TaAoW6Rg=="
     },
     {
-      "path": "@kovojs/server/dist/replay-BrGsjMUM.mjs",
-      "sha512": "sha512-rICom+pTJw3lepPuOviUsifALm9mMJsCahzpjn8FHoQ/TOs2plNXiYWngZnRl9vq6kYnKmLM2vz4Nvq7yc1gLg=="
+      "path": "@kovojs/server/dist/public-agent.mjs",
+      "sha512": "sha512-pTv9LDzT/WVHgg1mBzjS3WetYmKpMDCE0iJ+NOkng3npI1zCHUSjgU9Y3altLqMowbChsjyk6ogwTc0setjwRA=="
     },
     {
-      "path": "@kovojs/server/dist/request-carrier-BqiMItGw.mjs",
-      "sha512": "sha512-XV4vQ2ocLhk57Bu6NTzDxODG6/mEzSConwMeY0mMADUXrKEtFmVVVYljGkijEBUEH9Nqf1iOmjgGGCU1D/+DaQ=="
+      "path": "@kovojs/server/dist/public-client-modules.mjs",
+      "sha512": "sha512-0ySnTOou2KBPn0u3Aa/Ww1vuFgLBa6w+SSRPOA7ZrdbQtkgYgqNxbK8L0E+FBeum5sWFBDRth97fYK1CVe/uMA=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-command.mjs",
+      "sha512": "sha512-Zi6XfeWfLR3eeH4ZNbjd3kY2NM9vDFDFMg0UDekSKiTrCsqF0X7IObJ57lxM9KBWJRzNc4GPlOVLrp8aFrXAyQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-confidential.mjs",
+      "sha512": "sha512-ExtOgmBeVoV1CGA7ZiPtu++BKocmiZHWUhjrW+znhdNfQjtjfTSPxgyLsHFQUI0IYhGO0XhgjZBCOv1tHKKL9g=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "sha512": "sha512-klhr7dn5LDIvIiVf0kXQUaUIfY+USc3lQXF1Om5bxY9Vgn9PwzA3AyrYeUISDXJlrNBiwrQdViM3YlyAgqNpMg=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-data.mjs",
+      "sha512": "sha512-pECSp1a55zbc9GNkngeNbv3FQO4cJocOJqIJxzBK4/AZILK/UIF9PeNtIGVRHlxOR+PixPgluC7ahZyoQaLy6A=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-delegation.mjs",
+      "sha512": "sha512-J/CYWPp9J+ud8k3xJla+f6hA0yGM+cYAiBkB9VcvoG0E4Q3ad7C6vgjlmM2VvnZJjzEtFLNA3EKYliqUOT4dlQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-derived-data.mjs",
+      "sha512": "sha512-2PAtQjFexBTplYG+jE8V2QsY4PlQoN4l7W3QIzkw++hCc3wsuK5I9djrLyv/w6TscdvtS50L6uhHeVEx/bGoLg=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-diagnostics.mjs",
+      "sha512": "sha512-4YUhHiLpxQenARSEUVFknr0WWbRpmmWeqZUDdn5WsWeyZ05woJNWSS9HzmWnA6r+Nbbf52KGODJvYiCQmfhFrQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-egress.mjs",
+      "sha512": "sha512-+HefBbEcq0GS+Grlxf6IHusm5rnygLWY55D+r49kSkOqG66bB0Xx/l/WvdooffgulK391oDGGrrIdmTLSDP10Q=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-files.mjs",
+      "sha512": "sha512-r429w7pI9S3SGaMJf+8PSEqYapKoHY+bBJW/wLRdNzHwv6DPvrPeifSIAd+lkCciVDOaZGUCDHiTIKyIbqFttw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-node.mjs",
+      "sha512": "sha512-Ps3W3Dvwv7SmtGx1c9qgLNwfnwQhVLmXEtPJ5YiFsyky3hOzEYLxOzJ8fjtk/q577CibGGY/3z1FljQd9bz+Tw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-password.mjs",
+      "sha512": "sha512-JEaC+LxAZ9AtlX32PIYVMBNExDdkgN4g1HuOFejPxKTeEvxlCO3hVBbhF2DMaoZRggAG6HEOgEF5dQx5fD7I/A=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-postgres.mjs",
+      "sha512": "sha512-qXUz3RF8145iUsBlSaXihVD+BOdUqTgy1xRu6LWlUrK9cj6Hd0W3Mto1e+/VeAcWLY6HkKKFjhemZQfGR3uypw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-principal-epochs.mjs",
+      "sha512": "sha512-f5woyy99GZc00XaCdJqdCrafl5xvvPUv9QLEas0dFF+AcW/6WQMBLam41ldZdTbIGXjLmjdqBpSZUO31imiKNA=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "sha512": "sha512-DGGG2Eh/vdUtr0U7uFqfJxYtYvtfNx5PmpqXV7B1/32wmo28jGSrLsdNwuVweWHyMIZFvxxmktRuEiHwQpgnIQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-render-tree.mjs",
+      "sha512": "sha512-EBRImxFncLSKkPJWua61oslEpsOlvrPLPJ4p2tmquq35j4FHf4824cN5o0tIYO2HVsjYZhSq2wm0wVBzwMq9dg=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-rendering.mjs",
+      "sha512": "sha512-tXQocoYZIxMUyll3lMiO/Mc9drqAqKPWuVDBnRdkqMdiF2TJQI0yHikUEdBvNHJ8d6MHxpWGUYdrty/qQCHYpA=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-replay.mjs",
+      "sha512": "sha512-4rEL0L4aXqgH4TcEZvRvHiRIgPKA5qSocg1mWHncJn+6Y919cVfvrkY4EVZn60F/QPvcKnii+tpqNMKbiJOilA=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-routing.mjs",
+      "sha512": "sha512-4YUhHiLpxQenARSEUVFknr0WWbRpmmWeqZUDdn5WsWeyZ05woJNWSS9HzmWnA6r+Nbbf52KGODJvYiCQmfhFrQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-secret-reading.mjs",
+      "sha512": "sha512-XeMEOmDqYo/KJ7bzD1Plzm1zz1U3+kv2MY7L9wPXwF1MqV5nHNVfclLjBQimjMzuvb54cI/zirGwy57rDqptqw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-security.mjs",
+      "sha512": "sha512-KVxwQP74tW+48mtKaaLMXzhfq5txJP4CksOqV4ecC+7ZuBFFSIjBfv+gTsXtgycABtJuJ9JyzDpr6hfaJpGl/A=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-signing.mjs",
+      "sha512": "sha512-3HaieWSIbzQWu0RzeX1BZpuzRxiMqSLalgpPCQI4Z1TH1o3hNve8+riUhLcjkPKp6zhN2qK2YBDtDAO5D3IxmA=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-static-export.mjs",
+      "sha512": "sha512-Ab9Y9J5w+vBfyQhE4TZVSrWaxdpU3zl1z1YT/CDxXZQpveK0Qz7AirUbxG8KuE9oaTkmlbjQsLB/zEdvEqVnyw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "sha512": "sha512-/p0nr0L3zjO2X4aFeeFrpnH9GU6eRoQatvoRWcFejzuwsMZy+64A1Jzd9lCcgHWn+d7XMNDs6IYi8vTHS3BLmg=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-storage-keys.mjs",
+      "sha512": "sha512-hl13Do08GOEnF9jk2pcNBJFDGP7vJq/V25b57KNAk5ZIE59zpyT/ijKP/5ReGWFZblMgVHD5Z62dgvXNRXxnLQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-tasks.mjs",
+      "sha512": "sha512-6nld/asXl6adloCpi63YOGC14It5UsQOy+H/U9wq8U8LerndpeuD5dDrieLFb3S8cqiBJmr1ktAmz9wmhAxZvw=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-webhooks.mjs",
+      "sha512": "sha512-RvDsrdoyumZB+U6pKf2g7bcrpnFlvCEdF5zL4Ep78hf1o1bLde7BYKDPXsG5T0p3pQCsasaG3JJpKRixnbL++A=="
+    },
+    {
+      "path": "@kovojs/server/dist/public-write-safety.mjs",
+      "sha512": "sha512-1H+OB0KnaG+f6TrSA3E1rXWlKNcV2RJtygTzEamrue87WlMhcag+1n3MQSBz2tjGluRl73ldgp0HoG6y7FiA+A=="
+    },
+    {
+      "path": "@kovojs/server/dist/readonly-collection-snapshot-BrbFAiE9.mjs",
+      "sha512": "sha512-MleF2aSaw5vCPLHiT6jKi/DuhPIWdptbRXJov8BhBI0oxkBrztACg2WBeB4L9T/gdco4PPqXfWZpbGfPw/NKoA=="
+    },
+    {
+      "path": "@kovojs/server/dist/renderable-BaltS9Kj.mjs",
+      "sha512": "sha512-WjswcVmBi74N3XqYWB7ZHFYAa/REqAK/fUbVjMCBJuWeEZo9mIIAlk+IJyVV1h8b6m8+G4J/5+Pa1l/psY4N7w=="
+    },
+    {
+      "path": "@kovojs/server/dist/replay-zZlo_jjU.mjs",
+      "sha512": "sha512-HbTSsIPcjaricXyP0dufSwVQGtqv65rR23KX8/IWUWCp5C0j3N1xBSgiS5yDKwyBk0J+FuK356rq5e1ZmtyNUA=="
+    },
+    {
+      "path": "@kovojs/server/dist/request-carrier-HnS80ETy.mjs",
+      "sha512": "sha512-k2/sBCU6qRSFmbD5JEwtzvyfjZZGWtriph3DO1DgerUsChE/POinidDOPUbkzU7ddlpB3gdlvyQxMMni0qt4gQ=="
     },
     {
       "path": "@kovojs/server/dist/request-ingress-policy-BsG2ojwt.mjs",
       "sha512": "sha512-W+hc+YUlDVxA5BsnuDE7FIJwcdzUmcGG5DkO0kdeq+sr6ap4S+i+5X1Jh5fA0QrK5Cxks0uMHBmU491zzehm7A=="
     },
     {
-      "path": "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs",
-      "sha512": "sha512-es1mGmBQTCJJKfWl8SBEUlQ50votQZeSRiuT0XPXUGnAD/Nou2Hmj6mqrinsAzWLDV26vJGQ+rCoSplPWVys+Q=="
+      "path": "@kovojs/server/dist/request-input-provenance-a2d5lP_g.mjs",
+      "sha512": "sha512-dWVMt6TKJnenJhjzltPiRR4MyOCwYY5x6wH+DCv+zztr+tIqazqe+454tfCz4ukDND66J7uRHYttbIBFWEk4vQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/request-state-intrinsics-DbHXATJf.mjs",
+      "sha512": "sha512-C0lGL5XZygLwBMEgMLkoyeNUo4fG/XSZ0VUxIKduDDp98mrd7ZKB7eE7WINJr3U0KrUvW/YZVNFjSk0u57v6EA=="
     },
     {
       "path": "@kovojs/server/dist/response-security-intrinsics-BF637IpB.mjs",
@@ -677,20 +913,28 @@
       "sha512": "sha512-QW2npOvXVunWLS37yUfQKPUcaBVU84lonI3UzAC2u8iPpM8MBdQ+xpicQYVzudjmyCcNgM6vrSTzVGajz3kaCQ=="
     },
     {
-      "path": "@kovojs/server/dist/route-BYGZU-mq.mjs",
-      "sha512": "sha512-JB70L86HolhBmulXNVej0ksUtkTSGI8A8/YLCKf+6tjoFn3ufBGDVUXuZhQqZEa2bOBILen3/2i/rzFVptC5VA=="
+      "path": "@kovojs/server/dist/route-DEN_5aka.mjs",
+      "sha512": "sha512-fO//pSOYj7rkyiOuk90fLQh1UZo6dfUW4RXanEKIr+7qcBBwqvZ3TZKuX8I3VaDcMZhiFuGiVsr6NOY2Tl0qzQ=="
     },
     {
       "path": "@kovojs/server/dist/runtime-bootstrap.mjs",
-      "sha512": "sha512-NDjeaF69eOt8nUtmNb0Wpmw45Z8o6ZjXFbEKwLIPNPeTQZTZVwU4cdEELFh9FCuuRal4JtqjYsmycqTzt+QMUA=="
+      "sha512": "sha512-BJJ/CwNZ226Yspdiz9YDpGhC9W0Yzycp5u8FGXQz3XMWoLuBvpa7Ax1MewBa0rcvMjYXr/n86nIEcKO15PQuhg=="
     },
     {
       "path": "@kovojs/server/dist/runtime-environment-XvsZ-qaE.mjs",
       "sha512": "sha512-1nOq+5d4El5gcNWT6EuFQMEZO3g4kV1WLgxQsYJqus1HgVl9+Ub1+XwqXfBShRtiiT+WMvPFH6hZy4W7P6UbNQ=="
     },
     {
-      "path": "@kovojs/server/dist/security-bootstrap-Chzqoiqy.mjs",
-      "sha512": "sha512-8uyKPpeJTmjLNLQ+teB9kQW8ONpDNXNLA4F7/3MbmBwWsCw1DVCIGL6q1vYGY8IeJ0APPzwAvaNKtalbYRuERw=="
+      "path": "@kovojs/server/dist/schema-CYSImG_b.mjs",
+      "sha512": "sha512-4ClAqfn3Z5PH43Qkfumn6SUHLnaFu0AU6Vc54hERRQt5LMGU2b1uJ8xhhszXaW6NKCZzjRPAaRz0i2M0h/Jpyg=="
+    },
+    {
+      "path": "@kovojs/server/dist/secret-read-boundary-DjVsV3RT.mjs",
+      "sha512": "sha512-r1nQWAQSi9br5J2H7T6AzXoPqpNgnCESpIyTJdGb5Jfg1L5NznEctSC8Esk4zERWb05iSxF8SG1u/o3mJqLbgQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/security-bootstrap-fb32K-eM.mjs",
+      "sha512": "sha512-RC3MxF9iLSFdDzI2tyBzmnzU+x83DQB/3TLTd2C8JHTdaQX1ElW9Vz5BtjEPuemCXP6zUf2eaJL3PzhheYqpYQ=="
     },
     {
       "path": "@kovojs/server/dist/security-witness-intrinsics-bfbKQapp.mjs",
@@ -701,96 +945,104 @@
       "sha512": "sha512-08FmiyKXY5YwUjrWRaWM5D0eH1D+GUIQ+Gr2zd2/pYFWtXyQFeIksp85+UPA2bmCu0vDQE/ftumTmK53WqctZw=="
     },
     {
-      "path": "@kovojs/server/dist/shell-DL8GaAxx.mjs",
-      "sha512": "sha512-gXmDLynHr6bz3+1P2V+00INHNT5DXuIvwodGhfqP3uH64C/oKzOPh67wwKcmACLIDZPZ23sfeaj/8M2/XgSfQg=="
+      "path": "@kovojs/server/dist/shell-BQviNIs3.mjs",
+      "sha512": "sha512-aWO4B/YGX8CXu8M8B7QTwUqnMAZLnmCma2dNjJAWl9aaB1cCDDIAVUi9wCsHVWlVDqbuYLMh2JH1j92j/FtZGw=="
     },
     {
-      "path": "@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs",
-      "sha512": "sha512-dcEMS3Nx2NPqLQ2ejN52AeOldoiAIgZcRAsy5GFmkj82Xlqi/M91IsdmchK9+aUHEuySWCV6wAvtJ3tut9uwyw=="
+      "path": "@kovojs/server/dist/sql-parser-authority-bootstrap-BTyLXt0L.mjs",
+      "sha512": "sha512-Bl9u1hCbc9pHXX7OA2LJ5WzxhW36Uj9nDwQBGmplRQ5f4kqwJlrjLlqgO6MuIJGO6fTbBonauAd3cqR7gn1BaQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/sql-parser-authority-bootstrap.mjs",
+      "sha512": "sha512-042540xj1b5L5zMmnBlt8//CAWbXdGfbZSBjwinEiPzZyBB09KoFNOvCIHhVtwqyKv50CRaRv5I8ppRD7eTX5A=="
+    },
+    {
+      "path": "@kovojs/server/dist/sql-write-allowlist-D-ImLe-E.mjs",
+      "sha512": "sha512-lsj8wj295hLEEdbXsvpO6Rmb974D1pNRsteA3UKcP9+mQm/i5DQgaU+dNsoIJGcTMnW+E3VuHnuBCXKNOcXaNw=="
     },
     {
       "path": "@kovojs/server/dist/sqlite.mjs",
-      "sha512": "sha512-vXI6+Cxo8eSc823YN5ECWed3TFa8tWhq2kPzUS9mhJ4Ws2O5PMz5e/k+dPTQweXDQ4Ai4SJuTvtVOnnc2gn6yA=="
+      "sha512": "sha512-8vcdfvEFKckog5Aj/EofIYqvuEDmNjfIjG3TNo0FcvorwpJdZUueYwG3nrbB97WCkKvSZNTPT4aoi9v9AIQxew=="
     },
     {
-      "path": "@kovojs/server/dist/static-export-CmpVoQP1.mjs",
-      "sha512": "sha512-H53XXyrn3sysWfQun+r2q34ahwlmQDzJnXfKYq4jOHNVu72EWQVaPyitYSKOuZtPZFriOseduI3xJ2wfp+Tlnw=="
+      "path": "@kovojs/server/dist/state-key-BAdGOFVS.mjs",
+      "sha512": "sha512-FkLpHLylPAvR9JmjOumUPQu1a+aq7ZxCXhfUuND/H/P9M4fX2ok+NouD73CA8MSp3xS76BgVNj35VpjKPZyvHQ=="
+    },
+    {
+      "path": "@kovojs/server/dist/static-export-C049qCx0.mjs",
+      "sha512": "sha512-9T+Um0Q+0ZtLgmb+znkqCpztozwsOZDGwdlGaHxgX0gV9XkgZuzUhdQc4w9djkmBYZ8ezZ9phIHyPHzUA9q/iw=="
     },
     {
       "path": "@kovojs/server/dist/static-host-header-policy-CmRtGnWy.mjs",
       "sha512": "sha512-2WPfeGtc7PzFQeds8AolIXe9cJk1Qgmv2f6W8OWC/ykFqZN0gu+rYRP8PfsQtV/D+/b8/QDXLQE5Z5Yis14Euw=="
     },
     {
-      "path": "@kovojs/server/dist/task-BfY957to.mjs",
-      "sha512": "sha512-ajdJR2tc1wjA9XyQ4KwsH179DwqaMJ5t/jrTMnY3BN63fOyoCRXt2ser5dIx/krMCu8wlE9GSpbWKv8jZENgyw=="
+      "path": "@kovojs/server/dist/task-C_eHA9lA.mjs",
+      "sha512": "sha512-LKvqKFd4Yfb9Ka2QYYl/STLocULqU+PVKv8GtAHufacFBmgLBUmvsBLeNf7Qz/3uUfrng9eyuOLBEQmrhCYTCg=="
     },
     {
-      "path": "@kovojs/server/dist/task-cron-Dt6YavI-.mjs",
-      "sha512": "sha512-EcqSP59z9JpqAQA4BYRdEuYU0wYWeoTxtUMadFl9/pvYJ/oS6qfevRaOQzQbFgbsGdP64SGik0tfjdd6GFBVvQ=="
+      "path": "@kovojs/server/dist/task-cron-Bxn9_hhT.mjs",
+      "sha512": "sha512-rDothG6F2o4xTm4jMq+QuwsC+9f3ZlmVBFgXk+L/+rqP6z17YkAebiDxjxmogZXzRdtGlg2w+KBW1r54U6zIOg=="
     },
     {
-      "path": "@kovojs/server/dist/task-queue-BvMm2OLe.mjs",
-      "sha512": "sha512-boppzcxeCcGE8cP5ZC3UhzEzDVPamm70D3OV1oS8YeU2l38wKJ5DO5Jrtrugr5JPR6iIbUOkr5Q8vdcFl1xsMA=="
+      "path": "@kovojs/server/dist/task-queue-DchE4ipV.mjs",
+      "sha512": "sha512-YiBDMbvv6+7eYxPEECTJ4vaBKZQ06xeOgo1bUEdf91XRC2V9S2mKpEz+j7Vh/i0y3P9e6XCO8sLTav+nwwNUHg=="
     },
     {
       "path": "@kovojs/server/dist/task-security-intrinsics-DsMpIeB9.mjs",
       "sha512": "sha512-cZUzash5VFgcvneLS2s3gLczZt8PxQu0RVvbQa2CIbgLt3mbglpK45N9hZSti/WiWS8YXC53VLqsRRDGrkbFxw=="
     },
     {
-      "path": "@kovojs/server/dist/testing.mjs",
-      "sha512": "sha512-I7GAFbQREXOCQTL3XY38FkQD99JxMUQYIbVmXF7YeyzlYZa7x5e3uTNISrJj06sZNDbN7N6yZzsb0PBQF7D5bQ=="
-    },
-    {
-      "path": "@kovojs/server/dist/vite-CRubUweo.mjs",
-      "sha512": "sha512-6jywVs/UEYiOAMOjNnI0lRi+w3LCLe7IGcuTCYD3QvpCE/SdFJBZa5lsDyA+rwuvxT5O1tGg8Xz/plMPeK7YfA=="
+      "path": "@kovojs/server/dist/vite-D8atUbxu.mjs",
+      "sha512": "sha512-iI2ebzzOR8k1+YxtxIFc1Ya/5lxWTjKeTa1A1ViMegLYGT2uo0oeOqlFEyqd72S0xRMuz5YF7dkypoY2ToUwVQ=="
     },
     {
       "path": "@kovojs/server/dist/vite-build-assets-CELlvPFz.mjs",
       "sha512": "sha512-ln6T7VGq5yiPEPDBAPdxCD4QHWkpkvI7OzNyZ86UGXZA7zdQfHGmVU8QeYSMGZSRN6dVICiLRVThs17J2NzknA=="
     },
     {
-      "path": "@kovojs/server/dist/vite-build-output-D4n4n9Fa.mjs",
-      "sha512": "sha512-s/X4W6U8K3hW0K5S2P3QF2haQSzA7YuIkhkYP+++lwNHG3EpNPmeofYKwZje0WlXCZO/aOJ4ELOguEfSqFKk7g=="
+      "path": "@kovojs/server/dist/vite-build-output-CWf8lb9D.mjs",
+      "sha512": "sha512-6ZIpKjtYRv9A9nsFpk7SUOUW/6VfpXLZKulzv2P7wHz5oQW2cx4+DfCNPdOSfMMc+fApZ+y1Y9iqSek0ZUDZnQ=="
     },
     {
-      "path": "@kovojs/server/dist/vite-dev-DSmtk0im.mjs",
-      "sha512": "sha512-L+4r+zudC5jNKAiX9EpJp82y0AW1sv64YJfC1W/CGXF1741vzmzYG2L+MKLS0EKmf84pSFpwNRFKcDEaV4Ec8A=="
+      "path": "@kovojs/server/dist/vite-dev-B6a_9hJx.mjs",
+      "sha512": "sha512-G8misp5hyBsYeWz5ua3RZsw1l/xtsLYdyCjchmrm135vdq6m7s8T5UPle3ZWbJ14D0rqPOy8MNwamKan/aZsmg=="
     },
     {
       "path": "@kovojs/server/dist/vite.mjs",
-      "sha512": "sha512-UAlnQUHKslD2kbqDk7jPPAlcE/9N847LYUh0udnmFaZ6qIGJ2FDQR65tbw1W73BGiV9HvPFD4yASZ+01gMisrw=="
+      "sha512": "sha512-gZmNexPhlyZrDge4O3JaeEc6nkJculjj+uQCN3jUhTMIiZ1iZagsv4OebkN+AJTZr/LV0lH4wr6QseUTYJmY+w=="
     },
     {
-      "path": "@kovojs/server/dist/write-governance-H41jtYGX.mjs",
-      "sha512": "sha512-AQqgsKvmzi9qveQ+iNMJvxpUc/ilR5+9HYoJddth3/ipcgvll99Mq3Y8LFpyWGZk27wZBPhg7dzbduetvZp0NA=="
+      "path": "@kovojs/server/dist/write-governance-BWS3CLKS.mjs",
+      "sha512": "sha512-weVsO9xIXRfunPSQ+suGeiIeqcPwEmH9EnM2UVDNe/orbp8G7FEoi5qA2rh0BL32W9u2RaJpj1TPBUHUud6EAQ=="
     },
     {
-      "path": "@kovojs/style/dist/engine-CXFYWPm_.mjs",
-      "sha512": "sha512-z3AjKQGwFEUYB748D3kY4AY0RazoNdTXp618mOYKSNbV6Rrxtcakdo5rNCbZapBjsAhrMpnh+kZDvdtLFBQqPQ=="
+      "path": "@kovojs/style/dist/engine-121TR1Ig.mjs",
+      "sha512": "sha512-wSYgw03CbMEZEnjxpW1IS/6RL4+FhzrFTzFn/q4rB0wBwQWlKhHk57DZJNTzxnMwFtYox1AXd42XNz/E2cvDGA=="
     },
     {
       "path": "@kovojs/style/dist/index.mjs",
-      "sha512": "sha512-jY9GCu5rR9wG/dE6ABE/PJ+4JbZy2iLrc5nAYON7GWfaBykyhw4ICPq3/I9fkqrrLA8r8xqJzz3ZljWOrfiuVg=="
+      "sha512": "sha512-7lppPBp2eJxfCCD1qvH8xGah3MEd6FgGLT1Y6OTkTURofdhVeeApaiNDNAA9AO7KgRkeXcahTVserrosp+PntA=="
     },
     {
       "path": "@kovojs/style/dist/internal.mjs",
-      "sha512": "sha512-lGcfUS0wjzzgdaTQXGw/DYME133vnf9fitlHTOBGTXo42ksntpdnsWhZRpRPcRlFOYLQ9YgANwY4objmQRV9SA=="
+      "sha512": "sha512-JYK+GoNiT8CSr/PORFFioU7zWGpXp0kLL9zl0LMeRiTOW/XgQq8lIQnXigg/1AGsHGelfO/S10qGpBD1xgfcQA=="
     },
     {
       "path": "@kovojs/verify/dist/bin.mjs",
-      "sha512": "sha512-uPClbLtI4NeIBdi4auK9IPeXaRo8J0UCMdRWXbeOk9y+YgkRX5y+MkU9R5hPCcfvkTXNxlT8KQABXKAHOF4x9A=="
+      "sha512": "sha512-U/MQ/34I1kBFeD5Wc81x1+7lOByqUGpSFzJI14G7PthTzX3Qa071EVO28ji9bJ7Z+MOK9DbITJCBWUeGh5ML3g=="
     },
     {
       "path": "@kovojs/verify/dist/index.mjs",
-      "sha512": "sha512-NwHoEuHEgFkZaqOgX/lq9wXHIzfEYEcyn0S67fp2T7cqkD7A64IE6+edl78WmoPY5WxIllnBBSE6iZbFZ94zkg=="
+      "sha512": "sha512-ewQIssM3cUVZO+gX8eN5y09U19PQHmvrriha0bTclNNf2mrSoQ0LxDnw/Xq4Qg4W382Nqo74xOPw3w2jN9oL+Q=="
     },
     {
       "path": "@kovojs/verify/dist/javascript-ast-CxKtzxyz.mjs",
       "sha512": "sha512-nx7YshVRyttqjZbSDyjDmoof16ANgaX0X3afeKz65GXtDMQyAiNMlbkyOfIkbi1kpVRPtTthqR+8sJSGOtuK6Q=="
     },
     {
-      "path": "@kovojs/verify/dist/src-BB4lJZ7L.mjs",
-      "sha512": "sha512-9221Z/NEN3nMFcROmS85ri53OA5ObUcT2QAV57SbUAE8IqFZFH31mk8Rrc0GU0R/IWtIG2oY/JYReeDhb3FdRQ=="
+      "path": "@kovojs/verify/dist/src-CiOIkPCa.mjs",
+      "sha512": "sha512-Rwg6cTgorzeomiIz2zsWzmieZd/uSYe1KxiZzTYKm/RycXBdHytgvC19S553kRAmvVwwRix9al+iigz9w5uLDw=="
     },
     {
       "path": "@kovojs/verify/dist/translation.mjs",
@@ -801,72 +1053,27 @@
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:.:hmacSignature"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:.:standardWebhooks"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-confidential-at-rest-v2:.:createConfidentialAtRestCipher,decryptAtRest,encryptAtRest,rewrapAtRest"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-hash-password:.:hashPassword"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-server:.:hmacSignature"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-mint-csrf-field:.:mintCsrfField"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-mint-csrf-token:.:mintCsrfToken"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-rendered-html-sink:.:renderRouteHtml"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-root-endpoint-storage-download:.:createStorageDownloadEndpoint"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-server:.:standardWebhooks"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-verify-credential:.:verifyCredential"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-verify-password:.:verifyPassword"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
     },
     {
       "escapeId": "crypto-acquisition",
@@ -876,157 +1083,42 @@
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-receipt-verification-v1:.:verifyPrincipalErasureReceipt"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-33d8930589:.:createPostgresAppRuntimeDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-5f65f0d1bb:.:migratePostgresAppDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-b39bf12ac8:.:planPostgresAppDbMigration"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-c0ccbbaf77:.:checkPostgresAppDbPosture"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-d957dd98c0:.:provisionPostgresAppDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-auth-database-driver-0c1b95ff8f:.:createBetterAuthSqliteBindings"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-auth-database-driver-3f352e628d:.:createBetterAuthPostgresBindingsFromEnvironment"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-auth-database-driver-683a14ff2e:.:createBetterAuthSqliteBindingsFromEnvironment"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-auth-database-driver-823b3accd1:.:createBetterAuthPostgresBindings"
+      "site": "certificate-door-summary:@kovojs/server/dist/public-signing.mjs:framework-export-posture:framework-door-module-initializer-server-crypto-process:./signing:<module>"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "digest",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "digest",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-server-network-digest:.:createS3CompatibleStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
     },
     {
       "escapeId": "dynamic-loader",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
+      "site": "certificate-door-summary:@kovojs/server/dist/egress-26KRNMNB.mjs:certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
     },
     {
       "escapeId": "filesystem",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-952e845c45:.:rootedFiles"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-fe48500f9b:.:exportStaticApp"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "network",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-root-factory-runtime-infra-network-root-endpoint-ee1db919ca:.:toNodeHandler"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-server-network-digest:.:createS3CompatibleStorage"
-    },
-    {
-      "escapeId": "process",
-      "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-framework-door-runtime-infra-process-c276cd0e28:.:runCommand"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
     },
     {
       "escapeId": "process",
@@ -1034,124 +1126,104 @@
       "site": "certificate-door-summary:@kovojs/server/dist/index.mjs:framework-export-posture:framework-door-module-initializer-server-crypto-process:.:<module>"
     },
     {
-      "escapeId": "vm",
+      "escapeId": "process",
       "module": "@kovojs/better-auth/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
+      "site": "certificate-door-summary:@kovojs/server/dist/public-signing.mjs:framework-export-posture:framework-door-module-initializer-server-crypto-process:./signing:<module>"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/better-auth/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-auth-app-bindings-database-driver-20260729:./postgres:createBetterAuthPostgresAppBindings"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/better-auth/dist/public-sqlite.mjs",
+      "site": "framework-export-posture:framework-door-auth-app-bindings-database-driver-20260729:./sqlite:createBetterAuthSqliteAppBindings"
     },
     {
       "escapeId": "crypto-acquisition",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "crypto-acquisition",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:.:hmacSignature"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:.:standardWebhooks"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "digest",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "digest",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
     },
     {
       "escapeId": "digest",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "filesystem",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "network",
-      "module": "@kovojs/core/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
+      "module": "@kovojs/core/dist/storage-public.mjs",
+      "site": "framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/core/dist/webhooks.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/core/dist/webhooks.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/core/dist/webhooks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/core/dist/webhooks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "dynamic-loader",
+      "module": "@kovojs/server/dist/egress-26KRNMNB.mjs",
+      "site": "certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:.:hmacSignature"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:.:standardWebhooks"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
     },
     {
       "escapeId": "crypto-acquisition",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-confidential-at-rest-v2:.:createConfidentialAtRestCipher,decryptAtRest,encryptAtRest,rewrapAtRest"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-hash-password:.:hashPassword"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-hmac-signature-server:.:hmacSignature"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-mint-csrf-field:.:mintCsrfField"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-mint-csrf-token:.:mintCsrfToken"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-rendered-html-sink:.:renderRouteHtml"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-root-endpoint-storage-download:.:createStorageDownloadEndpoint"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-server:.:standardWebhooks"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-verify-credential:.:verifyCredential"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-crypto-acquisition-verify-password:.:verifyPassword"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
     },
     {
       "escapeId": "crypto-acquisition",
@@ -1159,139 +1231,39 @@
       "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:.:<module>"
     },
     {
-      "escapeId": "crypto-acquisition",
+      "escapeId": "digest",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-receipt-verification-v1:.:verifyPrincipalErasureReceipt"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "crypto-acquisition",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-33d8930589:.:createPostgresAppRuntimeDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-5f65f0d1bb:.:migratePostgresAppDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-b39bf12ac8:.:planPostgresAppDbMigration"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-c0ccbbaf77:.:checkPostgresAppDbPosture"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-d957dd98c0:.:provisionPostgresAppDb"
-    },
-    {
-      "escapeId": "database-driver",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
     },
     {
       "escapeId": "digest",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:.:<module>"
-    },
-    {
-      "escapeId": "digest",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "digest",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "digest",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-server-network-digest:.:createS3CompatibleStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
     },
     {
       "escapeId": "dynamic-loader",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
+      "site": "certificate-door-summary:@kovojs/server/dist/egress-26KRNMNB.mjs:certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
     },
     {
       "escapeId": "filesystem",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:.:createFileSystemStorage"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-952e845c45:.:rootedFiles"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-fe48500f9b:.:exportStaticApp"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-server-filesystem-crypto-digest:.:createFileSystemStorage"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
     },
     {
       "escapeId": "network",
       "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/core/dist/index.mjs:framework-export-posture:framework-door-core-network-digest:.:createS3CompatibleStorage"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-principal-erasure-v1:.:erasePrincipal"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-root-factory-runtime-infra-network-root-endpoint-ee1db919ca:.:toNodeHandler"
-    },
-    {
-      "escapeId": "network",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-server-network-digest:.:createS3CompatibleStorage"
-    },
-    {
-      "escapeId": "process",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-process-c276cd0e28:.:runCommand"
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
     },
     {
       "escapeId": "process",
@@ -1299,9 +1271,694 @@
       "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:.:<module>"
     },
     {
-      "escapeId": "vm",
-      "module": "@kovojs/server/dist/index.mjs",
-      "site": "certificate-door-summary:@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs:certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./agent:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "dynamic-loader",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/server/dist/egress-26KRNMNB.mjs:certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./agent:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-client-modules.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./client-modules:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-client-modules.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./client-modules:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-command.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./command:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-command.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-process-c276cd0e28:./command:runCommand"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-command.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./command:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-confidential.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-confidential-at-rest-v2:./confidential:createConfidentialAtRestCipher,decryptAtRest,encryptAtRest,rewrapAtRest"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-confidential.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./confidential:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-confidential.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./confidential:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./custom-adapters:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "dynamic-loader",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/server/dist/egress-26KRNMNB.mjs:certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./custom-adapters:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-data.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./data:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-data.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./data:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-delegation.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./delegation:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-delegation.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./delegation:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-derived-data.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./derived-data:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-derived-data.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./derived-data:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-diagnostics.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./diagnostics:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-diagnostics.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./diagnostics:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-egress.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./egress:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-egress.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./egress:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-files.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./files:<module>"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-files.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-952e845c45:./files:rootedFiles"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-files.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./files:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./node:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "framework-export-posture:framework-door-root-factory-runtime-infra-network-root-endpoint-ee1db919ca:./node:toNodeHandler"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./node:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-password.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-hash-password:./password:hashPassword"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-password.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-verify-credential:./password:verifyCredential"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-password.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-verify-password:./password:verifyPassword"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-password.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./password:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-password.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./password:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./postgres:<module>"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-33d8930589:./postgres:createPostgresAppRuntimeDb"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-5f65f0d1bb:./postgres:migratePostgresAppDb"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-b39bf12ac8:./postgres:planPostgresAppDbMigration"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-c0ccbbaf77:./postgres:checkPostgresAppDbPosture"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-database-driver-d957dd98c0:./postgres:provisionPostgresAppDb"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-postgres.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./postgres:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-principal-epochs.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./principal-epochs:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-principal-epochs.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./principal-epochs:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./principal-erasure:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-receipt-verification-v1:./principal-erasure:verifyPrincipalErasureReceipt"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-v1:./principal-erasure:erasePrincipal"
+    },
+    {
+      "escapeId": "database-driver",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-v1:./principal-erasure:erasePrincipal"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-v1:./principal-erasure:erasePrincipal"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-v1:./principal-erasure:erasePrincipal"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-principal-erasure-v1:./principal-erasure:erasePrincipal"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-principal-erasure.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./principal-erasure:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-render-tree.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./render-tree:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-render-tree.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./render-tree:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-rendering.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-rendered-html-sink:./rendering:renderRouteHtml"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-rendering.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./rendering:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-rendering.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./rendering:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-replay.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./replay:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-replay.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./replay:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-routing.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./routing:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-routing.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./routing:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-secret-reading.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./secret-reading:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-secret-reading.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./secret-reading:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-security.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-mint-csrf-field:./security:mintCsrfField"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-security.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-mint-csrf-token:./security:mintCsrfToken"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-security.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./security:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-security.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./security:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-signing.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./signing:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-signing.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./signing:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-static-export.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./static-export:<module>"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-static-export.mjs",
+      "site": "framework-export-posture:framework-door-framework-door-runtime-infra-filesystem-fe48500f9b:./static-export:exportStaticApp"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-static-export.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./static-export:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "framework-export-posture:framework-door-crypto-acquisition-root-endpoint-storage-download:./storage-downloads:createStorageDownloadEndpoint"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./storage-downloads:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./storage-downloads:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-storage-keys.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./storage-keys:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-storage-keys.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./storage-keys:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./tasks:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./tasks:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-hmac-signature-core:./webhooks:hmacSignature"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-crypto-acquisition-standard-webhooks-core:./webhooks:standardWebhooks"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./webhooks:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./storage:<module>"
+    },
+    {
+      "escapeId": "digest",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/webhooks.mjs:framework-export-posture:framework-door-module-initializer-core-crypto-digest:./webhooks:<module>"
+    },
+    {
+      "escapeId": "dynamic-loader",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/server/dist/egress-26KRNMNB.mjs:certificate-internal-door:pinned-undici-egress-runtime:src/egress-undici-runtime.ts"
+    },
+    {
+      "escapeId": "filesystem",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-filesystem-crypto-digest:./storage:createFileSystemStorage"
+    },
+    {
+      "escapeId": "network",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "certificate-door-summary:@kovojs/core/dist/storage-public.mjs:framework-export-posture:framework-door-core-network-digest:./storage:createS3CompatibleStorage"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./webhooks:<module>"
+    },
+    {
+      "escapeId": "crypto-acquisition",
+      "module": "@kovojs/server/dist/public-write-safety.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./write-safety:<module>"
+    },
+    {
+      "escapeId": "process",
+      "module": "@kovojs/server/dist/public-write-safety.mjs",
+      "site": "framework-export-posture:framework-door-module-initializer-server-crypto-process:./write-safety:<module>"
     },
     {
       "escapeId": "process",
@@ -1310,17 +1967,17 @@
     },
     {
       "escapeId": "dynamic-loader",
-      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs",
+      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-BTyLXt0L.mjs",
       "site": "certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
     },
     {
       "escapeId": "filesystem",
-      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs",
+      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-BTyLXt0L.mjs",
       "site": "certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
     },
     {
       "escapeId": "vm",
-      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs",
+      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-BTyLXt0L.mjs",
       "site": "certificate-internal-door:isolated-managed-sql-parser:src/sql-parser-authority.ts"
     },
     {
@@ -1341,35 +1998,47 @@
   ],
   "opaque": [
     {
-      "module": "@kovojs/better-auth/dist/index.mjs",
+      "module": "@kovojs/better-auth/dist/password-reset-mail-ggVjfNit.mjs",
+      "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/better-auth/dist/postgres-BUYFUvvU.mjs",
       "reason": "imports external module \"better-auth\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/better-auth/dist/index.mjs",
+      "module": "@kovojs/better-auth/dist/postgres-BUYFUvvU.mjs",
       "reason": "imports external module \"better-auth/adapters/drizzle\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/better-auth/dist/trusted-plaintext-BaCb6mG6.mjs",
-      "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
+      "module": "@kovojs/better-auth/dist/sqlite-Bcpm6Pu5.mjs",
+      "reason": "imports external module \"better-auth\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/better-auth/dist/sqlite-Bcpm6Pu5.mjs",
+      "reason": "imports external module \"better-auth/adapters/drizzle\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/browser/dist/client.mjs",
+      "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
       "module": "@kovojs/browser/dist/internal/inline-loader.mjs",
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DBxA0o2a.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DBxA0o2a.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DBxA0o2a.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-CH_GGlTW.mjs",
+      "module": "@kovojs/compiler/dist/compile-CicFwi9X.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1382,18 +2051,14 @@
     },
     {
       "module": "@kovojs/compiler/dist/internal.mjs",
-      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/compiler/dist/internal.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-L4gEmps8.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-L4gEmps8.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1401,11 +2066,11 @@
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
+      "module": "@kovojs/compiler/dist/route-pages-DAU9kiyX.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
+      "module": "@kovojs/compiler/dist/route-pages-DAU9kiyX.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1437,15 +2102,15 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
+      "module": "@kovojs/compiler/dist/vite-B62WG7P3.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
+      "module": "@kovojs/compiler/dist/vite-B62WG7P3.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
+      "module": "@kovojs/compiler/dist/vite-B62WG7P3.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1493,15 +2158,15 @@
       "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/drizzle/dist/runtime-metadata-1Sku_ad9.mjs",
+      "module": "@kovojs/drizzle/dist/runtime-metadata-internal.mjs",
       "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/drizzle/dist/runtime-metadata-1Sku_ad9.mjs",
+      "module": "@kovojs/drizzle/dist/runtime-metadata-internal.mjs",
       "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/drizzle/dist/runtime-metadata-1Sku_ad9.mjs",
+      "module": "@kovojs/drizzle/dist/runtime-metadata-internal.mjs",
       "reason": "imports external module \"drizzle-orm/sqlite-core\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1529,6 +2194,10 @@
       "reason": "imports external module \"ts-morph\" outside the nine-kind lexical capability domain"
     },
     {
+      "module": "@kovojs/server/dist/auth-principal-DedOCqHn.mjs",
+      "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
+    },
+    {
       "module": "@kovojs/server/dist/build-security-intrinsics-D_uN9Bk3.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
@@ -1545,7 +2214,7 @@
       "reason": "imports external module \"node:buffer\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/client-modules-CX5rEz2l.mjs",
+      "module": "@kovojs/server/dist/client-modules-C6lLb03J.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1553,32 +2222,28 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/data-plane-static-analysis-Bl4wUGql.mjs",
+      "module": "@kovojs/server/dist/data-plane-static-analysis-8gLclmsx.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/data-plane-static-analysis-Bl4wUGql.mjs",
+      "module": "@kovojs/server/dist/data-plane-static-analysis-8gLclmsx.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-DTl7ZQm6.mjs",
+      "module": "@kovojs/server/dist/document-core-qwhSQ2bE.mjs",
       "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-DTl7ZQm6.mjs",
+      "module": "@kovojs/server/dist/document-core-qwhSQ2bE.mjs",
       "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/document-core-DTl7ZQm6.mjs",
+      "module": "@kovojs/server/dist/document-core-qwhSQ2bE.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/egress-Cqzhux6f.mjs",
+      "module": "@kovojs/server/dist/egress-26KRNMNB.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
-    },
-    {
-      "module": "@kovojs/server/dist/index.mjs",
-      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
       "module": "@kovojs/server/dist/internal/better-auth.mjs",
@@ -1597,47 +2262,51 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
+      "module": "@kovojs/server/dist/internal/testing.mjs",
+      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
+    },
+    {
       "module": "@kovojs/server/dist/jsx-form-helper-intrinsics-BabmUvAy.mjs",
       "reason": "imports external module \"node:async_hooks\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/managed-db-Dy6zwBrg.mjs",
-      "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/server/dist/node-DdJuqY_-.mjs",
+      "module": "@kovojs/server/dist/node-2Cm38JwI.mjs",
       "reason": "imports external module \"node:stream\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/node-DdJuqY_-.mjs",
+      "module": "@kovojs/server/dist/node-2Cm38JwI.mjs",
       "reason": "imports external module \"node:stream/promises\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/node-DdJuqY_-.mjs",
+      "module": "@kovojs/server/dist/node-2Cm38JwI.mjs",
       "reason": "imports external module \"node:zlib\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-BBJ92t4N.mjs",
-      "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/server/dist/postgres-runtime-BBJ92t4N.mjs",
-      "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/server/dist/postgres-runtime-BBJ92t4N.mjs",
+      "module": "@kovojs/server/dist/postgres-replay-CPBqPP2G.mjs",
       "reason": "imports external module \"node:timers\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/postgres-runtime-BBJ92t4N.mjs",
+      "module": "@kovojs/server/dist/postgres-runtime-B73JjLiQ.mjs",
+      "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/server/dist/postgres-runtime-B73JjLiQ.mjs",
+      "reason": "imports external module \"drizzle-orm/pg-core\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/server/dist/postgres-runtime-B73JjLiQ.mjs",
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/request-state-intrinsics-Dx4vXiOW.mjs",
-      "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
+      "module": "@kovojs/server/dist/public-command.mjs",
+      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-1Zb9LS9w.mjs",
+      "module": "@kovojs/server/dist/readonly-collection-snapshot-BrbFAiE9.mjs",
+      "reason": "imports external module \"drizzle-orm\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/server/dist/sql-parser-authority-bootstrap-BTyLXt0L.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
@@ -1657,7 +2326,7 @@
       "reason": "imports external module \"node:util\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/static-export-CmpVoQP1.mjs",
+      "module": "@kovojs/server/dist/static-export-C049qCx0.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1665,15 +2334,11 @@
       "reason": "imports external module \"node:timers\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/testing.mjs",
+      "module": "@kovojs/server/dist/vite-D8atUbxu.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/server/dist/vite-CRubUweo.mjs",
-      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/style/dist/engine-CXFYWPm_.mjs",
+      "module": "@kovojs/style/dist/engine-121TR1Ig.mjs",
       "reason": "imports external module \"@material/material-color-utilities\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1685,7 +2350,7 @@
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/verify/dist/src-BB4lJZ7L.mjs",
+      "module": "@kovojs/verify/dist/src-CiOIkPCa.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     }
   ],
@@ -1694,16 +2359,29 @@
       "manifest": {
         "dependencies": {
           "@kovojs/core": "0.2.0",
-          "@kovojs/server": "0.2.0"
+          "better-auth": "1.6.17",
+          "drizzle-orm": "0.45.2"
         },
         "devDependencies": {
-          "better-auth": "1.6.17",
+          "@kovojs/server": "0.2.0",
           "vitest": "4.1.8"
         },
         "exports": {
           ".": {
             "default": "./dist/index.mjs",
             "types": "./dist/index.d.mts"
+          },
+          "./generated": {
+            "default": "./dist/generated.mjs",
+            "types": "./dist/generated.d.mts"
+          },
+          "./generated/postgres": {
+            "default": "./dist/generated-postgres.mjs",
+            "types": "./dist/generated-postgres.d.mts"
+          },
+          "./generated/sqlite": {
+            "default": "./dist/generated-sqlite.mjs",
+            "types": "./dist/generated-sqlite.d.mts"
           },
           "./internal": {
             "default": "./dist/internal.mjs",
@@ -1712,6 +2390,14 @@
           "./internal/server-mount-adapter": {
             "default": "./dist/internal/server-mount-adapter.mjs",
             "types": "./dist/internal/server-mount-adapter.d.mts"
+          },
+          "./postgres": {
+            "default": "./dist/public-postgres.mjs",
+            "types": "./dist/public-postgres.d.mts"
+          },
+          "./sqlite": {
+            "default": "./dist/public-sqlite.mjs",
+            "types": "./dist/public-sqlite.d.mts"
           }
         },
         "files": [
@@ -1724,14 +2410,14 @@
         },
         "name": "@kovojs/better-auth",
         "peerDependencies": {
-          "better-auth": "1.6.17"
+          "@kovojs/server": "0.2.0"
         },
         "repository": {
           "type": "git",
           "url": "git+https://github.com/kovojs/kovo.git"
         },
         "scripts": {
-          "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts --dts"
+          "build:dist": "vp pack src/generated-postgres.ts src/generated-sqlite.ts src/generated.ts src/index.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts src/public-postgres.ts src/public-sqlite.ts --dts"
         },
         "type": "module",
         "version": "0.2.0"
@@ -1809,7 +2495,6 @@
       "manifest": {
         "dependencies": {
           "@kovojs/core": "0.2.0",
-          "@kovojs/style": "0.2.0",
           "@kovojs/verify": "0.2.0",
           "typescript": "6.0.3"
         },
@@ -1817,6 +2502,7 @@
           "@kovojs/browser": "0.2.0",
           "@kovojs/headless-ui": "0.2.0",
           "@kovojs/server": "0.2.0",
+          "@kovojs/style": "0.2.0",
           "vitest": "4.1.8"
         },
         "exports": {
@@ -1862,6 +2548,9 @@
           ]
         },
         "name": "@kovojs/compiler",
+        "peerDependencies": {
+          "@kovojs/style": "0.2.0"
+        },
         "repository": {
           "type": "git",
           "url": "git+https://github.com/kovojs/kovo.git"
@@ -1884,6 +2573,10 @@
           ".": {
             "default": "./dist/index.mjs",
             "types": "./dist/index.d.mts"
+          },
+          "./diagnostics": {
+            "default": "./dist/diagnostics-public.mjs",
+            "types": "./dist/diagnostics-public.d.mts"
           },
           "./generated": {
             "default": "./dist/generated.mjs",
@@ -1977,6 +2670,10 @@
             "default": "./dist/internal/route-pattern.mjs",
             "types": "./dist/internal/route-pattern.d.mts"
           },
+          "./internal/security": {
+            "default": "./dist/internal/security.mjs",
+            "types": "./dist/internal/security.d.mts"
+          },
           "./internal/security-markers": {
             "default": "./dist/internal/security-markers.mjs",
             "types": "./dist/internal/security-markers.d.mts"
@@ -2020,6 +2717,18 @@
           "./internal/wire-json": {
             "default": "./dist/internal/wire-json.mjs",
             "types": "./dist/internal/wire-json.d.mts"
+          },
+          "./security": {
+            "default": "./dist/security.mjs",
+            "types": "./dist/security.d.mts"
+          },
+          "./storage": {
+            "default": "./dist/storage-public.mjs",
+            "types": "./dist/storage-public.d.mts"
+          },
+          "./webhooks": {
+            "default": "./dist/webhooks.mjs",
+            "types": "./dist/webhooks.d.mts"
           }
         },
         "files": [
@@ -2044,7 +2753,7 @@
           "url": "git+https://github.com/kovojs/kovo.git"
         },
         "scripts": {
-          "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts"
+          "build:dist": "vp pack src/diagnostics-public.ts src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/security.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts src/security.ts src/storage-public.ts src/webhooks.ts --dts"
         },
         "sideEffects": [
           "./src/secret.ts",
@@ -2128,7 +2837,6 @@
           "@kovojs/compiler": "0.2.0",
           "@kovojs/core": "0.2.0",
           "@kovojs/drizzle": "0.2.0",
-          "@kovojs/style": "0.2.0",
           "@node-rs/argon2": "2.0.2",
           "pg": "8.22.0",
           "pgsql-ast-parser": "12.0.2",
@@ -2137,6 +2845,7 @@
         },
         "devDependencies": {
           "@kovojs/better-auth": "0.2.0",
+          "@kovojs/style": "0.2.0",
           "@types/better-sqlite3": "^7.6.13",
           "@types/pg": "^8.15.6",
           "better-sqlite3": "12.11.1",
@@ -2148,9 +2857,57 @@
             "default": "./dist/index.mjs",
             "types": "./dist/index.d.mts"
           },
+          "./agent": {
+            "default": "./dist/public-agent.mjs",
+            "types": "./dist/public-agent.d.mts"
+          },
           "./build": {
             "default": "./dist/build.mjs",
             "types": "./dist/build.d.mts"
+          },
+          "./client-modules": {
+            "default": "./dist/public-client-modules.mjs",
+            "types": "./dist/public-client-modules.d.mts"
+          },
+          "./command": {
+            "default": "./dist/public-command.mjs",
+            "types": "./dist/public-command.d.mts"
+          },
+          "./confidential": {
+            "default": "./dist/public-confidential.mjs",
+            "types": "./dist/public-confidential.d.mts"
+          },
+          "./custom-adapters": {
+            "default": "./dist/public-custom-adapters.mjs",
+            "types": "./dist/public-custom-adapters.d.mts"
+          },
+          "./data": {
+            "default": "./dist/public-data.mjs",
+            "types": "./dist/public-data.d.mts"
+          },
+          "./delegation": {
+            "default": "./dist/public-delegation.mjs",
+            "types": "./dist/public-delegation.d.mts"
+          },
+          "./derived-data": {
+            "default": "./dist/public-derived-data.mjs",
+            "types": "./dist/public-derived-data.d.mts"
+          },
+          "./diagnostics": {
+            "default": "./dist/public-diagnostics.mjs",
+            "types": "./dist/public-diagnostics.d.mts"
+          },
+          "./egress": {
+            "default": "./dist/public-egress.mjs",
+            "types": "./dist/public-egress.d.mts"
+          },
+          "./files": {
+            "default": "./dist/public-files.mjs",
+            "types": "./dist/public-files.d.mts"
+          },
+          "./generated/db-capabilities": {
+            "default": "./dist/generated-db-capabilities.mjs",
+            "types": "./dist/generated-db-capabilities.d.mts"
           },
           "./internal/app-shell-vite": {
             "default": "./dist/internal/app-shell-vite.mjs",
@@ -2220,6 +2977,10 @@
             "default": "./dist/internal/managed-db.mjs",
             "types": "./dist/internal/managed-db.d.mts"
           },
+          "./internal/managed-db-capabilities": {
+            "default": "./dist/internal/managed-db-capabilities.mjs",
+            "types": "./dist/internal/managed-db-capabilities.d.mts"
+          },
           "./internal/postgres-capability": {
             "default": "./dist/internal/postgres-capability.mjs",
             "types": "./dist/internal/postgres-capability.d.mts"
@@ -2236,6 +2997,10 @@
             "default": "./dist/internal/runtime-registry-wire.mjs",
             "types": "./dist/internal/runtime-registry-wire.d.mts"
           },
+          "./internal/sql-parser-authority-bootstrap": {
+            "default": "./dist/sql-parser-authority-bootstrap.mjs",
+            "types": "./dist/sql-parser-authority-bootstrap.d.mts"
+          },
           "./internal/sqlite": {
             "default": "./dist/internal/sqlite.mjs",
             "types": "./dist/internal/sqlite.d.mts"
@@ -2247,6 +3012,10 @@
           "./internal/static-export": {
             "default": "./dist/internal/static-export.mjs",
             "types": "./dist/internal/static-export.d.mts"
+          },
+          "./internal/testing": {
+            "default": "./dist/internal/testing.mjs",
+            "types": "./dist/internal/testing.d.mts"
           },
           "./internal/vite-security-profile": {
             "default": "./dist/internal/vite-security-profile.mjs",
@@ -2264,21 +3033,89 @@
             "default": "./dist/jsx-runtime.mjs",
             "types": "./dist/jsx-runtime.d.mts"
           },
+          "./node": {
+            "default": "./dist/public-node.mjs",
+            "types": "./dist/public-node.d.mts"
+          },
+          "./password": {
+            "default": "./dist/public-password.mjs",
+            "types": "./dist/public-password.d.mts"
+          },
+          "./postgres": {
+            "default": "./dist/public-postgres.mjs",
+            "types": "./dist/public-postgres.d.mts"
+          },
+          "./principal-epochs": {
+            "default": "./dist/public-principal-epochs.mjs",
+            "types": "./dist/public-principal-epochs.d.mts"
+          },
+          "./principal-erasure": {
+            "default": "./dist/public-principal-erasure.mjs",
+            "types": "./dist/public-principal-erasure.d.mts"
+          },
+          "./render-tree": {
+            "default": "./dist/public-render-tree.mjs",
+            "types": "./dist/public-render-tree.d.mts"
+          },
+          "./rendering": {
+            "default": "./dist/public-rendering.mjs",
+            "types": "./dist/public-rendering.d.mts"
+          },
+          "./replay": {
+            "default": "./dist/public-replay.mjs",
+            "types": "./dist/public-replay.d.mts"
+          },
+          "./routing": {
+            "default": "./dist/public-routing.mjs",
+            "types": "./dist/public-routing.d.mts"
+          },
           "./runtime-bootstrap": {
             "default": "./dist/runtime-bootstrap.mjs",
             "types": "./dist/runtime-bootstrap.d.mts"
+          },
+          "./secret-reading": {
+            "default": "./dist/public-secret-reading.mjs",
+            "types": "./dist/public-secret-reading.d.mts"
+          },
+          "./security": {
+            "default": "./dist/public-security.mjs",
+            "types": "./dist/public-security.d.mts"
+          },
+          "./signing": {
+            "default": "./dist/public-signing.mjs",
+            "types": "./dist/public-signing.d.mts"
           },
           "./sqlite": {
             "default": "./dist/sqlite.mjs",
             "types": "./dist/sqlite.d.mts"
           },
-          "./testing": {
-            "default": "./dist/testing.mjs",
-            "types": "./dist/testing.d.mts"
+          "./static-export": {
+            "default": "./dist/public-static-export.mjs",
+            "types": "./dist/public-static-export.d.mts"
+          },
+          "./storage-downloads": {
+            "default": "./dist/public-storage-downloads.mjs",
+            "types": "./dist/public-storage-downloads.d.mts"
+          },
+          "./storage-keys": {
+            "default": "./dist/public-storage-keys.mjs",
+            "types": "./dist/public-storage-keys.d.mts"
+          },
+          "./tasks": {
+            "default": "./dist/public-tasks.mjs",
+            "types": "./dist/public-tasks.d.mts"
           },
           "./vite": {
             "default": "./dist/vite.mjs",
             "types": "./dist/vite.d.mts"
+          },
+          "./webhooks": {
+            "default": "./dist/public-webhooks.mjs",
+            "types": "./dist/public-webhooks.d.mts"
+          },
+          "./write-safety": {
+            "default": "./dist/public-write-safety.mjs",
+            "types": "./dist/public-write-safety.d.mts"
           }
         },
         "files": [
@@ -2287,6 +3124,7 @@
         "name": "@kovojs/server",
         "peerDependencies": {
           "@kovojs/better-auth": "0.2.0",
+          "@kovojs/style": "0.2.0",
           "better-sqlite3": "12.11.1",
           "drizzle-orm": "1.0.0-rc.4"
         },
@@ -2303,7 +3141,7 @@
           "url": "git+https://github.com/kovojs/kovo.git"
         },
         "scripts": {
-          "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts"
+          "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/generated-db-capabilities.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db-capabilities.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/testing.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/public-agent.ts src/public-client-modules.ts src/public-command.ts src/public-confidential.ts src/public-custom-adapters.ts src/public-data.ts src/public-delegation.ts src/public-derived-data.ts src/public-diagnostics.ts src/public-egress.ts src/public-files.ts src/public-node.ts src/public-password.ts src/public-postgres.ts src/public-principal-epochs.ts src/public-principal-erasure.ts src/public-render-tree.ts src/public-rendering.ts src/public-replay.ts src/public-routing.ts src/public-secret-reading.ts src/public-security.ts src/public-signing.ts src/public-static-export.ts src/public-storage-downloads.ts src/public-storage-keys.ts src/public-tasks.ts src/public-webhooks.ts src/public-write-safety.ts src/runtime-bootstrap.ts src/sql-parser-authority-bootstrap.ts src/sqlite.ts src/vite.ts --dts"
         },
         "type": "module",
         "version": "0.2.0"
@@ -2366,7 +3204,8 @@
         },
         "files": [
           "dist",
-          "NOTICE"
+          "NOTICE",
+          "README.md"
         ],
         "name": "@kovojs/verify",
         "repository": {
@@ -2393,18 +3232,6 @@
     },
     {
       "module": "@kovojs/server/dist/index.mjs",
-      "rootKind": "agent-tool-callback"
-    },
-    {
-      "module": "@kovojs/server/dist/index.mjs",
-      "rootKind": "application"
-    },
-    {
-      "module": "@kovojs/server/dist/index.mjs",
-      "rootKind": "durable-task"
-    },
-    {
-      "module": "@kovojs/server/dist/index.mjs",
       "rootKind": "endpoint"
     },
     {
@@ -2424,7 +3251,27 @@
       "rootKind": "route"
     },
     {
-      "module": "@kovojs/server/dist/index.mjs",
+      "module": "@kovojs/server/dist/public-agent.mjs",
+      "rootKind": "agent-tool-callback"
+    },
+    {
+      "module": "@kovojs/server/dist/public-custom-adapters.mjs",
+      "rootKind": "endpoint"
+    },
+    {
+      "module": "@kovojs/server/dist/public-node.mjs",
+      "rootKind": "endpoint"
+    },
+    {
+      "module": "@kovojs/server/dist/public-storage-downloads.mjs",
+      "rootKind": "endpoint"
+    },
+    {
+      "module": "@kovojs/server/dist/public-tasks.mjs",
+      "rootKind": "durable-task"
+    },
+    {
+      "module": "@kovojs/server/dist/public-webhooks.mjs",
       "rootKind": "webhook"
     }
   ],
