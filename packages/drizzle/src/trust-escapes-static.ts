@@ -3769,6 +3769,9 @@ function requestBuildConfigConstructorCallIsClosed(
 const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@electric-sql/pglite',
   '@kovojs/better-auth',
+  '@kovojs/better-auth/generated',
+  '@kovojs/better-auth/generated/postgres',
+  '@kovojs/better-auth/generated/sqlite',
   '@kovojs/browser',
   '@kovojs/core',
   '@kovojs/core/diagnostics',
@@ -3788,6 +3791,7 @@ const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@kovojs/server/diagnostics',
   '@kovojs/server/egress',
   '@kovojs/server/files',
+  '@kovojs/server/generated/db-capabilities',
   '@kovojs/server/node',
   '@kovojs/server/password',
   '@kovojs/server/postgres',
@@ -5380,6 +5384,20 @@ function requestCallIsExactDefinedKovoRetainedConfigMethod(
   );
 }
 
+function requestCallIsExactDefinedKovoAssembly(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const [options, ...extra] = call.getArguments();
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    options &&
+    extra.length === 0 &&
+    Node.isObjectLiteralExpression(unwrapStaticExpression(options)) &&
+    requestDefinedKovoMemberForExpression(call.getExpression(), session) === 'assemble'
+  );
+}
+
 function requestExpressionIsDefinedKovoQueryHandle(
   expression: Node,
   seen: Set<string>,
@@ -5974,16 +5992,19 @@ function requestComputedPropertyNameIsExactGeneratedQueryKey(
   const [declaration] = declarations;
   const initializer = declaration?.getInitializer();
   const call = initializer ? unwrapStaticExpression(initializer) : undefined;
+  if (!call || !Node.isCallExpression(call)) return false;
+  const directQuery =
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'query') &&
+    requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'query');
+  const appQuery =
+    requestAppAuthoringFactoryForExpression(call.getExpression(), session) === 'query';
   if (
     declarations.length !== 1 ||
     !declaration ||
     declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const ||
     declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile() ||
     declaration.getName() !== receiver.getText() ||
-    !call ||
-    !Node.isCallExpression(call) ||
-    !requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'query') ||
-    !requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'query') ||
+    (!directQuery && !appQuery) ||
     !requestHandlerFactoryInvocationsForCall(call, session).some(
       (invocation) => invocation.factory.exportName === 'query',
     )
@@ -6004,12 +6025,13 @@ function requestComputedPropertyNameIsExactGeneratedQueryKey(
       );
     if (!exactImport) return false;
   }
-  return requestExactQueryKeyBindingIsPristine(declaration, symbol);
+  return requestExactQueryKeyBindingIsPristine(declaration, symbol, session);
 }
 
 function requestExactQueryKeyBindingIsPristine(
   declaration: import('ts-morph').VariableDeclaration,
   symbol: NonNullable<ReturnType<Node['getSymbol']>>,
+  session: RequestProvenanceSession,
 ): boolean {
   const project = declaration.getProject();
   let projectMemo = REQUEST_EXACT_QUERY_KEY_BINDING_PRISTINE_MEMO.get(project);
@@ -6029,19 +6051,17 @@ function requestExactQueryKeyBindingIsPristine(
       (value && requestSymbolKey(value) === target)
     );
   };
-  const exactConsumer = (call: import('ts-morph').CallExpression): boolean =>
-    !!(
+  const exactConsumer = (call: import('ts-morph').CallExpression): boolean => {
+    const mutationFactory = requestHandlerFactoryInvocationsForCall(call, session).some(
+      (invocation) => invocation.factory.exportName === 'mutation',
+    );
+    return !!(
       (requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'component') &&
         requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/core', 'component')) ||
-      (requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'mutation') &&
-        requestExactImportedCarrierIsPristine(
-          call.getExpression(),
-          '@kovojs/server',
-          'mutation',
-        )) ||
-      (requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'createApp') &&
-        requestExactImportedCarrierIsPristine(call.getExpression(), '@kovojs/server', 'createApp'))
+      mutationFactory ||
+      requestCallIsExactDefinedKovoAssembly(call, session)
     );
+  };
   const referenceIsReviewed = (reference: import('ts-morph').Identifier): boolean => {
     if (requestNodesAreSame(reference, declaration.getNameNode())) return true;
     const parent = reference.getParent();
@@ -7436,6 +7456,42 @@ function requestExpressionIsExactLocalTaskDeclaration(
   ) {
     return false;
   }
+  const taskSymbol = declaration.getNameNode().getSymbol();
+  if (!taskSymbol) return false;
+  const taskTarget = new Set([requestSymbolKey(taskSymbol)]);
+  for (const sourceFile of declaration.getProject().getSourceFiles()) {
+    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      const operator = assignment.getOperatorToken().getKind();
+      if (
+        operator >= SyntaxKind.FirstAssignment &&
+        operator <= SyntaxKind.LastAssignment &&
+        requestExpressionReferencesAny(assignment.getLeft(), taskTarget)
+      ) {
+        return false;
+      }
+    }
+    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
+      if (requestExpressionReferencesAny(deletion.getExpression(), taskTarget)) return false;
+    }
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const callee = unwrapStaticExpression(call.getExpression());
+      const receiver = requestCallReceiver(callee);
+      const member = requestStaticCallMember(callee);
+      const [target] = call.getArguments();
+      if (
+        target &&
+        requestExpressionReferencesAny(target, taskTarget) &&
+        receiver &&
+        member &&
+        ((expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
+          ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member)) ||
+          (expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
+            ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member)))
+      ) {
+        return false;
+      }
+    }
+  }
   const [key, definition, ...extra] = taskCall.getArguments();
   return !!(
     key &&
@@ -8227,7 +8283,7 @@ function requestCallConsumesExactGeneratedPostgresAuthSchema(
   if (
     !requestExactPristineDirectImport(
       call.getExpression(),
-      '@kovojs/better-auth',
+      '@kovojs/better-auth/generated/postgres',
       'createBetterAuthPostgresBindingsFromEnvironment',
     ) ||
     call.getArguments().length !== 1
@@ -8312,8 +8368,8 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
   call: import('ts-morph').CallExpression,
 ): boolean {
   const identities = [
-    ['createBetterAuthPostgresBindingsFromEnvironment', '@kovojs/better-auth'],
-    ['createBetterAuthSqliteBindingsFromEnvironment', '@kovojs/better-auth'],
+    ['createBetterAuthPostgresBindingsFromEnvironment', '@kovojs/better-auth/generated/postgres'],
+    ['createBetterAuthSqliteBindingsFromEnvironment', '@kovojs/better-auth/generated/sqlite'],
   ] as const;
   if (
     !identities.some(([exportName, module]) =>
@@ -9474,10 +9530,20 @@ function requestCallIsExactManagedAppRuntimeSystemDb(
   call: import('ts-morph').CallExpression,
 ): boolean {
   const callee = unwrapStaticExpression(call.getExpression());
-  if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'systemDb') return false;
-  const receiver = callee.getExpression();
-  const [options, ...extra] = call.getArguments();
+  if (!Node.isIdentifier(callee)) return false;
+  const helpers = [
+    'postgresSystemDbForGeneratedIntegration',
+    'sqliteSystemDbForGeneratedIntegration',
+  ] as const;
+  const helper = helpers.find(
+    (name) =>
+      callee.getText() === name &&
+      requestExactPristineDirectImport(callee, '@kovojs/server/generated/db-capabilities', name),
+  );
+  const [receiver, options, ...extra] = call.getArguments();
   return !!(
+    helper &&
+    receiver &&
     options &&
     extra.length === 0 &&
     requestExpressionIsClosedStaticData(options) &&
@@ -9546,6 +9612,9 @@ function requestCallIsExactBootOnlyGeneratedSetup(
         return close(requestCallIsExactSqliteRuntimeConstructor(call));
       case 'postgresAppRuntimeOptions':
         return close(requestExactGeneratedPostgresOptionsArguments(call) !== undefined);
+      case 'postgresSystemDbForGeneratedIntegration':
+      case 'sqliteSystemDbForGeneratedIntegration':
+        return close(requestCallIsExactManagedAppRuntimeSystemDb(call));
       case 'session':
         return close(requestCallIsExactSessionDescriptor(call, session));
       default:
@@ -9560,8 +9629,6 @@ function requestCallIsExactBootOnlyGeneratedSetup(
       return close(requestCallIsExactBetterAuthSessionProvider(call, session));
     case 'seedDemoUser':
       return close(requestCallIsExactBetterAuthSeed(call));
-    case 'systemDb':
-      return close(requestCallIsExactManagedAppRuntimeSystemDb(call));
     default:
       return close(false);
   }
@@ -9985,7 +10052,7 @@ function requestMemoryClientModuleRegistryIsPristine(
       if (
         requestNodesAreSame(identifier, name) ||
         requestMemoryClientModuleRegistryPutUseIsReviewed(identifier, declaration) ||
-        requestMemoryClientModuleRegistryCreateAppUseIsReviewed(identifier)
+        requestMemoryClientModuleRegistryDefineKovoUseIsReviewed(identifier)
       ) {
         continue;
       }
@@ -10017,7 +10084,7 @@ function requestMemoryClientModuleRegistryPutUseIsReviewed(
   );
 }
 
-function requestMemoryClientModuleRegistryCreateAppUseIsReviewed(
+function requestMemoryClientModuleRegistryDefineKovoUseIsReviewed(
   identifier: import('ts-morph').Identifier,
 ): boolean {
   const parent = identifier.getParent();
@@ -10033,13 +10100,7 @@ function requestMemoryClientModuleRegistryCreateAppUseIsReviewed(
   const object = property.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
   const call = object?.getParentIfKind(SyntaxKind.CallExpression);
   if (!object || !call || !requestNodesAreSame(call.getArguments()[0], object)) return false;
-  const callee = unwrapStaticExpression(call.getExpression());
-  return !!(
-    Node.isIdentifier(callee) &&
-    callee.getText() === 'createApp' &&
-    requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'createApp') &&
-    requestExactImportedCarrierIsPristine(callee, '@kovojs/server', 'createApp')
-  );
+  return requestCallIsExactDefineKovo(call);
 }
 
 /**
@@ -10543,8 +10604,9 @@ function requestStorageDownloadEndpointConfigIsExact(
   );
 }
 
-function requestStorageEndpointCreateAppUseIsExact(
+function requestStorageEndpointAssemblyUseIsExact(
   reference: import('ts-morph').Identifier,
+  session: RequestProvenanceSession,
 ): boolean {
   const array = reference.getParentIfKind(SyntaxKind.ArrayLiteralExpression);
   const property = array?.getParentIfKind(SyntaxKind.PropertyAssignment);
@@ -10565,7 +10627,7 @@ function requestStorageEndpointCreateAppUseIsExact(
     call &&
     call.getArguments().length === 1 &&
     requestNodesAreSame(call.getArguments()[0], options) &&
-    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'createApp')
+    requestCallIsExactDefinedKovoAssembly(call, session)
   );
 }
 
@@ -10581,7 +10643,7 @@ function requestStorageEndpointBindingIsPristine(
   const pristine = !!(
     references &&
     references.length === 1 &&
-    requestStorageEndpointCreateAppUseIsExact(references[0]!)
+    requestStorageEndpointAssemblyUseIsExact(references[0]!, session)
   );
   session.exactCapabilityBindingMemo.set(memoKey, pristine);
   return pristine;
@@ -14702,7 +14764,11 @@ function requestCallTargetsPostgresRuntimeConstructor(
   const callee = unwrapStaticExpression(call.getExpression());
   return !!(
     Node.isIdentifier(callee) &&
-    requestExpressionIsDirectImportedExport(callee, '@kovojs/server', 'createPostgresAppRuntimeDb')
+    requestExpressionIsDirectImportedExport(
+      callee,
+      '@kovojs/server/postgres',
+      'createPostgresAppRuntimeDb',
+    )
   );
 }
 
@@ -22324,10 +22390,7 @@ function requestJsxTagIsIntrinsic(tag: Node): boolean {
 
 /** SPEC §10.6: `<Defer>` is an exact framework-owned streaming primitive, not an authored call. */
 function requestJsxTagIsExactDefer(tag: Node): boolean {
-  return !!(
-    requestExactPristineDirectImport(tag, '@kovojs/server', 'Defer') &&
-    requestExactImportedCarrierIsPristine(tag, '@kovojs/server', 'Defer')
-  );
+  return !!requestExactPristineDirectImport(tag, '@kovojs/server', 'Defer');
 }
 
 function requestExactDeferAttributes(
@@ -32184,11 +32247,17 @@ function requestDrizzleTableReferenceIsExactGeneratedAuthSchemaEntry(
   for (const sourceFile of project.getSourceFiles()) {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       if (
-        ![
-          'createBetterAuthPostgresBindingsFromEnvironment',
-          'createBetterAuthSqliteBindingsFromEnvironment',
-        ].some((exportName) =>
-          requestExactPristineDirectImport(call.getExpression(), '@kovojs/better-auth', exportName),
+        !(
+          requestExactPristineDirectImport(
+            call.getExpression(),
+            '@kovojs/better-auth/generated/postgres',
+            'createBetterAuthPostgresBindingsFromEnvironment',
+          ) ||
+          requestExactPristineDirectImport(
+            call.getExpression(),
+            '@kovojs/better-auth/generated/sqlite',
+            'createBetterAuthSqliteBindingsFromEnvironment',
+          )
         ) ||
         call.getArguments().length !== 1
       ) {
@@ -33390,7 +33459,7 @@ function requestCallIsExactWebhookReplayIdentity(call: import('ts-morph').CallEx
     call.getArguments().length === 2 &&
     requestExactPristineDirectImport(
       call.getExpression(),
-      '@kovojs/server',
+      '@kovojs/server/webhooks',
       'webhookReplayIdentity',
     )
   );

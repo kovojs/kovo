@@ -137,34 +137,33 @@ describe('bugz-3 H1: query() loader recognition is alias/namespace hardened', ()
   });
 });
 
-// bugz-3 L11 (SPEC §11.1): the legacy `domain({ action: write(...) })` write-surface extractor must
-// resolve `domain`/`write` through their @kovojs/server binding too, closing the silent-vs-fail-closed
-// asymmetry where an aliased outer `domain(...)` produced an empty touch graph.
-describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened', () => {
+// bugz-3 L11 (SPEC §11.1): the public mutation write-surface extractor must resolve `mutation`
+// through its exact @kovojs/server binding too, closing the silent-vs-fail-closed asymmetry where
+// an aliased mutation factory produced an unresolved touch graph.
+describe('bugz-3 L11: mutation() recognition is alias/namespace hardened', () => {
   const dbTypes = pgDatabaseTypes([
     'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
   ]);
 
-  function cartDomainFile(
+  function cartMutationFile(
     importLine: string,
-    domainCallee: string,
-    writeCallee: string,
+    mutationCallee: string,
     setupLine = '',
   ): SourceFileInput {
     return {
-      fileName: 'cart.domain.ts',
+      fileName: 'cart.mutations.ts',
       source: [
         importLine,
         'import { eq } from "drizzle-orm";',
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
         setupLine,
         '',
-        'export const cartItems = pgTable("cart_items", {}, kovo((columns) => ({ domain: "cart", key: columns.productId })));',
+        'export const cartItems = pgTable("cart_items", { productId: text("product_id").primaryKey() }, kovo((columns) => ({ domain: "cart", key: columns.productId })));',
         '',
-        `export const cart = ${domainCallee}({`,
-        `  addItem: ${writeCallee}({ touches: [cartItems] }, async (db: PgAsyncDatabase<any, any>, productId: string) => {`,
-        '    await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
-        '  }),',
+        `export const addItem = ${mutationCallee}("cart.addItem", {`,
+        '  async handler({ productId }: { productId: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+        '    await request.db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+        '  },',
         '});',
       ].join('\n'),
     };
@@ -184,10 +183,10 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
   };
 
   const literalGraph = extractTouchGraphFromProject({
-    files: [dbTypes, cartDomainFile('', 'domain', 'write')],
+    files: [dbTypes, cartMutationFile('import { mutation } from "@kovojs/server";', 'mutation')],
   });
 
-  it('control: literal domain()/write() yields the cart.addItem touch fact', () => {
+  it('control: literal mutation() yields the cart.addItem touch fact', () => {
     expect(Object.keys(literalGraph)).toEqual(['cart.addItem']);
     expect(stripSites(literalGraph)).toEqual({
       'cart.addItem': {
@@ -202,46 +201,38 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
     label: string;
     importLine: string;
     setupLine?: string;
-    domainCallee: string;
-    writeCallee: string;
+    mutationCallee: string;
   }[] = [
     {
-      label: 'aliased import { domain as dom, write as wr }',
-      importLine: 'import { domain as dom, write as wr } from "@kovojs/server";',
-      domainCallee: 'dom',
-      writeCallee: 'wr',
+      label: 'aliased import { mutation as mutate }',
+      importLine: 'import { mutation as mutate } from "@kovojs/server";',
+      mutationCallee: 'mutate',
     },
     {
       label: 'namespace import * as srv',
       importLine: 'import * as srv from "@kovojs/server";',
-      domainCallee: 'srv.domain',
-      writeCallee: 'srv.write',
+      mutationCallee: 'srv.mutation',
     },
     {
-      label: 'const aliases of imported domain/write',
-      importLine: 'import { domain, write } from "@kovojs/server";',
-      setupLine: 'const dom = domain;\nconst wr = write;',
-      domainCallee: 'dom',
-      writeCallee: 'wr',
+      label: 'const alias of imported mutation',
+      importLine: 'import { mutation } from "@kovojs/server";',
+      setupLine: 'const mutate = mutation;',
+      mutationCallee: 'mutate',
     },
     {
       label: 'const alias of server namespace',
       importLine: 'import * as srv from "@kovojs/server";',
       setupLine: 'const s = srv;',
-      domainCallee: 's.domain',
-      writeCallee: 's.write',
+      mutationCallee: 's.mutation',
     },
   ];
 
   for (const form of aliasedForms) {
     it(`extracts the same touch graph for ${form.label} (was silently {})`, () => {
       const graph = extractTouchGraphFromProject({
-        files: [
-          dbTypes,
-          cartDomainFile(form.importLine, form.domainCallee, form.writeCallee, form.setupLine),
-        ],
+        files: [dbTypes, cartMutationFile(form.importLine, form.mutationCallee, form.setupLine)],
       });
-      // KEY ASSERTION: the aliased/namespaced legacy form no longer collapses to an empty graph.
+      // KEY ASSERTION: the aliased/namespaced public form no longer becomes an opaque graph.
       expect(Object.keys(graph)).toEqual(['cart.addItem']);
       expect(stripSites(graph)).toEqual(stripSites(literalGraph));
     });
@@ -253,9 +244,9 @@ describe('bugz-3 L11: domain()/write() recognition is alias/namespace hardened',
         dbTypes,
         {
           fileName: 'server-barrel.ts',
-          source: 'export { domain as dom, write as wr } from "@kovojs/server";',
+          source: 'export { mutation as mutate } from "@kovojs/server";',
         },
-        cartDomainFile('import { dom, wr } from "./server-barrel";', 'dom', 'wr'),
+        cartMutationFile('import { mutate } from "./server-barrel";', 'mutate'),
       ],
     });
 

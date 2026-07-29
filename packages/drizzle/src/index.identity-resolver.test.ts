@@ -396,6 +396,58 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     ).toBe(false);
   });
 
+  it('recognizes only the canonical homes of Drizzle-reviewed public authoring helpers', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    const sourceFile = project.createSourceFile(
+      '/app/public-authoring.ts',
+      [
+        'import { Defer, session, stylesheet } from "@kovojs/server";',
+        'import { Defer as wrongDefer, stylesheet as wrongStylesheet } from "@kovojs/server/rendering";',
+        'import { session as wrongSession } from "@kovojs/server/data";',
+        'import { customVerifier, hmacSignature } from "@kovojs/core/webhooks";',
+        'import { customVerifier as wrongVerifier, hmacSignature as wrongSignature } from "@kovojs/core";',
+        'import { defineTheme } from "@kovojs/style";',
+        'import { defineTheme as wrongTheme } from "@kovojs/style/internal";',
+        'Defer({}); session({}); stylesheet("./app.css");',
+        'customVerifier("fixture", () => true); hmacSignature({}); defineTheme({});',
+        'wrongDefer({}); wrongSession({}); wrongStylesheet("./app.css");',
+        'wrongVerifier("fixture", () => true); wrongSignature({}); wrongTheme({});',
+      ].join('\n'),
+    );
+    const calls = new Map(
+      sourceFile
+        .getDescendantsOfKind(SyntaxKind.CallExpression)
+        .map((call) => [call.getExpression().getText(), call] as const),
+    );
+    const canonical = [
+      ['Defer', frameworkExport('@kovojs/server', 'Defer')],
+      ['session', frameworkExport('@kovojs/server', 'session')],
+      ['stylesheet', frameworkExport('@kovojs/server', 'stylesheet')],
+      ['customVerifier', frameworkExport('@kovojs/core', 'customVerifier')],
+      ['hmacSignature', frameworkExport('@kovojs/core', 'hmacSignature')],
+      ['defineTheme', frameworkExport('@kovojs/style', 'defineTheme')],
+    ] as const;
+    for (const [callee, identity] of canonical) {
+      expect(
+        expressionResolvesToFrameworkExport(calls.get(callee)!.getExpression(), identity),
+      ).toBe(true);
+    }
+
+    const wrongHomes = [
+      ['wrongDefer', frameworkExport('@kovojs/server', 'Defer')],
+      ['wrongSession', frameworkExport('@kovojs/server', 'session')],
+      ['wrongStylesheet', frameworkExport('@kovojs/server', 'stylesheet')],
+      ['wrongVerifier', frameworkExport('@kovojs/core', 'customVerifier')],
+      ['wrongSignature', frameworkExport('@kovojs/core', 'hmacSignature')],
+      ['wrongTheme', frameworkExport('@kovojs/style', 'defineTheme')],
+    ] as const;
+    for (const [callee, identity] of wrongHomes) {
+      expect(
+        expressionResolvesToFrameworkExport(calls.get(callee)!.getExpression(), identity),
+      ).toBe(false);
+    }
+  });
+
   it('resolves literal element namespace members and star barrels without trusting computed keys', () => {
     const project = new Project({ useInMemoryFileSystem: true });
     project.createSourceFile(

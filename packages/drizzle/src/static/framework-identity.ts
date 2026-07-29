@@ -155,10 +155,7 @@ export function moduleSpecifierResolvesToFrameworkExport(
   specifier: string | undefined,
   expected: CanonicalFrameworkExportIdentity,
 ): boolean {
-  return frameworkExportEquals(
-    frameworkCatalogExportForModuleSpecifier(specifier, expected.exportName),
-    expected,
-  );
+  return frameworkExportEquals(moduleSpecifierIdentity(specifier, expected.exportName), expected);
 }
 
 /** @internal */
@@ -611,6 +608,27 @@ function moduleSpecifierIdentity(
   specifier: string | undefined,
   exportName: string,
 ): CanonicalFrameworkExportIdentity | undefined {
+  // These public contracts are intentionally absent from the shared executable data-plane
+  // catalog, but Drizzle has exact finite grammars for them. Preserve only their manifest-declared
+  // homes after the API cut; no former root or sibling subpath inherits framework identity.
+  if (specifier === '@kovojs/server/data' && exportName === 'Reader') {
+    return frameworkExport('@kovojs/server', 'Reader');
+  }
+  if (
+    specifier === '@kovojs/server' &&
+    (exportName === 'Defer' || exportName === 'session' || exportName === 'stylesheet')
+  ) {
+    return frameworkExport('@kovojs/server', exportName);
+  }
+  if (specifier === '@kovojs/style' && exportName === 'defineTheme') {
+    return frameworkExport('@kovojs/style', exportName);
+  }
+  if (
+    specifier === '@kovojs/core/webhooks' &&
+    (exportName === 'customVerifier' || exportName === 'hmacSignature')
+  ) {
+    return frameworkExport('@kovojs/core', exportName);
+  }
   return frameworkCatalogExportForModuleSpecifier(specifier, exportName);
 }
 

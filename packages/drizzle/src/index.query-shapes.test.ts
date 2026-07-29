@@ -379,7 +379,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       files: [
         {
           fileName: 'schema-api.ts',
-          source: 'export { s as schema } from "@kovojs/server/api/data";',
+          source: 'export { s as schema } from "@kovojs/server";',
         },
         {
           fileName: 'cart.queries.ts',
@@ -387,7 +387,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { sql } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { schema } from "./schema-api";',
-            'import * as data from "@kovojs/server/api/data";',
+            'import * as data from "@kovojs/server";',
             '',
             'const schemaAlias = schema;',
             'const s = { object: (value: unknown) => value, number: () => "number" };',

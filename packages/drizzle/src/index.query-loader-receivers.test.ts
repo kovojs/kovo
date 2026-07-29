@@ -18,15 +18,11 @@ const queryReceiverTypes = pgDatabaseTypes([
   'update(table: unknown): { set(value: unknown): Promise<void> };',
 ]);
 
-const kovoServerQueryTypes = {
-  fileName: 'kovo-server-query-types.d.ts',
+const kovoServerReaderTypes = {
+  fileName: 'kovo-server-reader-types.d.ts',
   source: [
-    'declare module "@kovojs/server" {',
+    'declare module "@kovojs/server/data" {',
     '  export type Reader<Db> = Omit<Db, "insert" | "update" | "delete" | "execute" | "run" | "batch">;',
-    '  export interface QueryLoadContext<Request = unknown, Db = unknown> {',
-    '    db?: Reader<Db>;',
-    '    request: Request;',
-    '  }',
     '}',
   ].join('\n'),
 };
@@ -1099,11 +1095,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'todo.queries.ts',
           source: [
-            'import type { QueryLoadContext, Reader } from "@kovojs/server";',
+            'import type { Reader } from "@kovojs/server/data";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'type AppDb = PgAsyncDatabase<any, any>;',
-            'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+            'interface AppQueryLoadContext { db?: Reader<AppDb>; request: { session?: { userId: string } | null } }',
             '',
             'export const todos = pgTable("todos", {',
             '  id: text("id").primaryKey(),',
@@ -1148,7 +1144,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     [
       'renamed inline type import',
       {
-        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server";'],
+        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server/data";'],
         readerType: 'FrameworkReader<AppDb>',
       },
     ],
@@ -1158,7 +1154,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         files: [
           {
             fileName: 'reader-barrel.ts',
-            source: 'export type { Reader as FrameworkReader } from "@kovojs/server";',
+            source: 'export type { Reader as FrameworkReader } from "@kovojs/server/data";',
           },
         ],
         imports: ['import type { FrameworkReader } from "./reader-barrel.js";'],
@@ -1221,15 +1217,15 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     [
       'namespace import',
       {
-        imports: ['import type * as server from "@kovojs/server";'],
-        readerType: 'server.Reader<AppDb>',
+        imports: ['import type * as serverData from "@kovojs/server/data";'],
+        readerType: 'serverData.Reader<AppDb>',
       },
     ],
     [
       'import-equals namespace',
       {
-        imports: ['import server = require("@kovojs/server");'],
-        readerType: 'server.Reader<AppDb>',
+        imports: ['import serverData = require("@kovojs/server/data");'],
+        readerType: 'serverData.Reader<AppDb>',
       },
     ],
     [
@@ -1238,14 +1234,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         declarations: [
           'interface FakeDb { select(value?: unknown): { from(table: unknown): Promise<unknown[]> } }',
         ],
-        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server";'],
+        imports: ['import type { Reader as FrameworkReader } from "@kovojs/server/data";'],
         readerType: 'FrameworkReader<AppDb | FakeDb>',
       },
     ],
     [
       'value-form import',
       {
-        imports: ['import { Reader as FrameworkReader } from "@kovojs/server";'],
+        imports: ['import { Reader as FrameworkReader } from "@kovojs/server/data";'],
         readerType: 'FrameworkReader<AppDb>',
       },
     ],
@@ -1259,17 +1255,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
   it('keeps inline context.db query-loader reads in the owner-scope audit', () => {
     const files = [
-      kovoServerQueryTypes,
+      kovoServerReaderTypes,
       queryReceiverTypes,
       {
         fileName: 'note.queries.ts',
         source: [
           'import { eq } from "drizzle-orm";',
-          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { Reader } from "@kovojs/server/data";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'type AppDb = PgAsyncDatabase<any, any>;',
-          'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+          'interface AppQueryLoadContext { db?: Reader<AppDb> }',
           '',
           'export const notes = pgTable("notes", {',
           '  id: text("id").primaryKey(),',
@@ -1335,17 +1331,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
   it('keeps context non-null assertion query-loader reads in the owner-scope audit', () => {
     const files = [
-      kovoServerQueryTypes,
+      kovoServerReaderTypes,
       queryReceiverTypes,
       {
         fileName: 'note.queries.ts',
         source: [
           'import { eq } from "drizzle-orm";',
-          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { Reader } from "@kovojs/server/data";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'type AppDb = PgAsyncDatabase<any, any>;',
-          'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+          'interface AppQueryLoadContext { db?: Reader<AppDb> }',
           '',
           'export const notes = pgTable("notes", {',
           '  id: text("id").primaryKey(),',
@@ -1411,16 +1407,16 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
   it('keeps Kovo Reader context.db reads when Drizzle declarations are unresolved', () => {
     const files = [
-      kovoServerQueryTypes,
+      kovoServerReaderTypes,
       {
         fileName: 'note.queries.ts',
         source: [
           'import { eq } from "drizzle-orm";',
-          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { Reader } from "@kovojs/server/data";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'type AppDb = PgAsyncDatabase<any, any>;',
-          'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
+          'interface AppQueryLoadContext { db?: Reader<AppDb> }',
           '',
           'export const notes = pgTable("notes", {',
           '  id: text("id").primaryKey(),',

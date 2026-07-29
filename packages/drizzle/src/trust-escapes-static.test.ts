@@ -245,6 +245,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
           import * as browser from '@kovojs/browser';
           import { trustedSql } from '@kovojs/drizzle';
           import * as server from '@kovojs/server';
+          import * as webhooks from '@kovojs/server/webhooks';
           import { barrelHtml } from './browser-barrel';
           const localUrl = trustedUrl;
           const localHtml = (value: string) => value;
@@ -254,7 +255,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
           localUrl(aliasUrl);
           trustedSql(rawSql);
           server.endpoint('/raw', { reason: 'raw transport' });
-          server.webhook('unsigned', { verify: 'none', verifyJustification: 'fixture' });
+          webhooks.webhook('unsigned', { verify: 'none', verifyJustification: 'fixture' });
           barrelHtml(barrel);
           localHtml(shadowed);
         `,
@@ -3120,7 +3121,7 @@ export const report = query('report', {
   // @kovo-security-certifies C13 finite-ir-starter-door-reconciliation
   it('accepts exact finite-IR starter doors while keeping lookalike and aliased doors closed', () => {
     const safe = sinksFor(`
-      import { createApp, mutation, publicAccess, query, route, s } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'; import { publicScopedKey } from '@kovojs/core'; import { task } from '@kovojs/server/tasks';
+      import { defineKovo, mutation, publicAccess, query, route, s } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads'; import { publicScopedKey } from '@kovojs/core'; import { task } from '@kovojs/server/tasks';
 
       const signingKeys = createSigningKeyRing({
         keys: [{
@@ -3138,6 +3139,7 @@ export const report = query('report', {
         secret: signingKeys,
         storage,
       });
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
 
       export const parseStaticFile = query({
         access: publicAccess('static file parser proof'),
@@ -3179,7 +3181,7 @@ export const report = query('report', {
         },
       });
 
-      export default createApp({
+      export default app.assemble({
         endpoints: [download],
         mutations: [enqueue],
         queries: [parseStaticFile],
@@ -5539,8 +5541,9 @@ export const report = query('report', {
 
   it('accepts only the exact framework Defer JSX grammar and scans deferred render callbacks', () => {
     const safe = sinksFor(`
-      import { createApp, Defer, publicAccess, route } from '@kovojs/server';
-      export default createApp({ routes: [route('/defer', {
+      import { defineKovo, Defer, publicAccess, route } from '@kovojs/server';
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      export default app.assemble({ routes: [route('/defer', {
         access: publicAccess('fixture'),
         async page() {
           const unsafe = '<img src=x onerror=alert(1)>';
@@ -5557,8 +5560,9 @@ export const report = query('report', {
 
     const hostile = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, Defer, publicAccess, route } from '@kovojs/server';
-      export default createApp({ routes: [route('/defer', {
+      import { defineKovo, Defer, publicAccess, route } from '@kovojs/server';
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      export default app.assemble({ routes: [route('/defer', {
         access: publicAccess('fixture'),
         page() { return <Defer
           fallback={<p>Loading</p>}
@@ -5574,8 +5578,9 @@ export const report = query('report', {
     );
 
     const malformed = sinksFor(`
-      import { createApp, Defer, publicAccess, route } from '@kovojs/server';
-      export default createApp({ routes: [route('/defer', {
+      import { defineKovo, Defer, publicAccess, route } from '@kovojs/server';
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      export default app.assemble({ routes: [route('/defer', {
         access: publicAccess('fixture'),
         page() { return <Defer fallback={<p>Loading</p>} render={async () => <p>Done</p>} target="proof" unknown="open" />; },
       })] });
@@ -5745,23 +5750,39 @@ export const report = query('report', {
     }
   });
 
-  it('resolves a framework-factory member write through 1024 module aliases', () => {
-    const aliases = Array.from({ length: 1_024 }, (_unused, index) =>
-      index === 0 ? 'const holder0 = {};' : `const holder${index} = holder${index - 1};`,
-    ).join('\n');
-    const started = Date.now();
-    const facts = sinksFor(`
-      import { execFileSync } from 'node:child_process';
-      import { mutation } from '@kovojs/server';
-      ${aliases}
-      holder1023.run = mutation;
-      holder0.run({ handler(input) { return execFileSync(input.program); } });
-    `);
+  it('resolves bounded framework-factory member aliases and fails closed beyond the budget', () => {
+    const factsFor = (length: number) => {
+      const aliases = Array.from({ length }, (_unused, index) =>
+        index === 0 ? 'const holder0 = {};' : `const holder${index} = holder${index - 1};`,
+      ).join('\n');
+      return sinksFor(`
+        import { execFileSync } from 'node:child_process';
+        import { mutation } from '@kovojs/server';
+        ${aliases}
+        holder${length - 1}.run = mutation;
+        holder0.run({ handler(input) { return execFileSync(input.program); } });
+      `);
+    };
 
-    expect(facts).toEqual(
+    const boundedStarted = Date.now();
+    expect(factsFor(512)).toEqual(
       expect.arrayContaining([expect.objectContaining({ sink: 'child_process.execFileSync' })]),
     );
-    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(Date.now() - boundedStarted).toBeLessThan(3_000);
+
+    const overBudgetStarted = Date.now();
+    const overBudget = factsFor(1_024);
+    expect(overBudget).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'request-handler.provenance-budget' }),
+        expect.objectContaining({
+          sink: 'request-handler.opaque-source',
+          source: '<unresolved-mutable-factory-provenance>',
+        }),
+      ]),
+    );
+    expect(overBudget.some((fact) => fact.sink === 'child_process.execFileSync')).toBe(false);
+    expect(Date.now() - overBudgetStarted).toBeLessThan(15_000);
   });
 
   it('keeps exact boot-setup memo verdicts scoped to one source-program analysis', () => {
@@ -5993,28 +6014,24 @@ export const report = query('report', {
     );
   });
 
-  it('discovers request roots supplied by createApp authoring callbacks', () => {
+  it('discovers request roots supplied by the app-scoped authoring contract', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp } from '@kovojs/server';
-      function makeQuery(factory) {
-        return factory({ load(input) { return execFileSync(input.program); } });
-      }
-      function makeRoute(factories) {
-        return factories.route('/', {
-          page(context) { return execFileSync(context.params.program); },
-        });
-      }
-      function defineRoutes(factories) { return [makeRoute(factories)]; }
-      createApp({
-        queries: ({ query: defineQuery }) => [makeQuery(defineQuery)],
-        mutations: (factories) => {
-          const { mutation: defineMutation } = factories;
-          return [defineMutation({
-            handler(input) { return execFileSync(input.program); },
-          })];
-        },
-        routes: defineRoutes,
+      import { defineKovo } from '@kovojs/server';
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      const unsafeQuery = app.query({
+        load(input) { return execFileSync(input.program); },
+      });
+      const unsafeMutation = app.mutation({
+        handler(input) { return execFileSync(input.program); },
+      });
+      const unsafeRoute = app.route('/', {
+        page(context) { return execFileSync(context.params.program); },
+      });
+      export default app.assemble({
+        mutations: [unsafeMutation],
+        queries: [unsafeQuery],
+        routes: [unsafeRoute],
       });
     `);
 
@@ -6024,7 +6041,7 @@ export const report = query('report', {
   it('closes the authoritative provider, access, schema, verifier, replay, registry, and nested-layout census', () => {
     const facts = sinksFor(`
       import { execFileSync } from 'node:child_process';
-      import { createApp, endpoint, layout, query, route } from '@kovojs/server'; import { customVerifier, hmacSignature } from '@kovojs/core/webhooks'; import { webhook } from '@kovojs/server/webhooks';
+      import { defineKovo, endpoint, layout, query, route } from '@kovojs/server'; import { customVerifier, hmacSignature } from '@kovojs/core/webhooks'; import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 
       const schema = {
         parse(value) { execFileSync('schema-parse'); return value; },
@@ -6106,25 +6123,30 @@ export const report = query('report', {
         verify: verifier,
       });
 
-      createApp({
+      const app = defineKovo({
+        appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
         clientModules,
         csrf: {
           secret: '0123456789abcdef0123456789abcdef',
           sessionId() { execFileSync('csrf-session-id'); return 'session'; },
         },
         db() { execFileSync('db-provider'); return {}; },
-        endpoints: [machine, hook],
         mutationReplayStore: replayStore,
         onError() { execFileSync('on-error'); },
         principalEpochStore,
         requestLimits: {
-          clientIp() { execFileSync('client-ip'); return '127.0.0.1'; },
+            clientIp() { execFileSync('client-ip'); return '127.0.0.1'; },
         },
-        routes: [page],
-        sessionProvider() {
+        auth() {
           execFileSync('session-provider');
           return { setCookies: [], value: {} };
         },
+      });
+      export default app.assemble({
+        endpoints: [machine, hook],
+        layouts: [shell],
+        queries: [],
+        routes: [page],
       });
     `);
 
@@ -7249,9 +7271,10 @@ export const report = query('report', {
         {
           fileName: 'app.ts',
           source: `
-            import { createApp } from '@kovojs/server';
+            import { defineKovo } from '@kovojs/server';
             import { contactsQuery } from './queries.js';
-            export default createApp({ queries: [contactsQuery], routes: [] });
+            const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+            export default app.assemble({ queries: [contactsQuery], routes: [] });
           `,
         },
       ]),
@@ -7781,13 +7804,14 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
-          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
+          import { sqliteSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
           import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
           import { authSchema, user } from '../schema.js';
           const APP_TABLES = [user];
           const APP_SEED = [];
           const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
-          const authSystemDb = appDatabase.systemDb({
+          const authSystemDb = sqliteSystemDbForGeneratedIntegration(appDatabase, {
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
           export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
@@ -7812,7 +7836,7 @@ export const report = query('report', {
         fileName: 'app.tsx',
         source: `
           import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
-          import { createApp, publicAccess, s, session } from '@kovojs/server';
+          import { defineKovo, publicAccess, s, session } from '@kovojs/server';
           import { appRuntimeDbReady, createAppAuthBindings } from './_kovo/app-runtime-db.js';
           const appCsrf = betterAuthCsrfFromEnvironment({
             field: 'csrf',
@@ -7826,10 +7850,11 @@ export const report = query('report', {
           await appRuntimeDbReady;
           await bindings.seedDemoUser();
           const appSession = session(s.object({ id: s.string() }));
-          export default createApp({
-            routes: [],
-            sessionProvider: appSession.provider(bindings.sessionProvider),
+          const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+            auth: appSession.provider(bindings.sessionProvider),
           });
+          export default app.assemble({ routes: [] });
         `,
       },
     ];
@@ -7842,8 +7867,9 @@ export const report = query('report', {
           ...file,
           source: file.source
             .replace(
-              'import { createBetterAuthSqliteBindingsFromEnvironment }',
-              'import { authed, createBetterAuthSqliteBindingsFromEnvironment }',
+              `import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';`,
+              `import { authed } from '@kovojs/better-auth';
+               import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';`,
             )
             .replace('signOutAccess: options.signOutAccess', 'signOutAccess: [authed()]'),
         };
@@ -7869,10 +7895,7 @@ export const report = query('report', {
         ? {
             ...file,
             source: file.source
-              .replace(
-                'import { authed, createBetterAuthSqliteBindingsFromEnvironment }',
-                'import { createBetterAuthSqliteBindingsFromEnvironment }',
-              )
+              .replace(`import { authed } from '@kovojs/better-auth';`, '')
               .replace(
                 'const APP_TABLES',
                 `function authed() { return (request) => eval(request.url); }\nconst APP_TABLES`,
@@ -7993,8 +8016,8 @@ export const report = query('report', {
               ...file,
               source: file.source
                 .replace(
-                  `import { createApp, publicAccess, s, session } from '@kovojs/server';`,
-                  `import { createApp, publicAccess, s, session } from '@kovojs/server';\nimport { execFileSync } from 'node:child_process';`,
+                  `import { defineKovo, publicAccess, s, session } from '@kovojs/server';`,
+                  `import { defineKovo, publicAccess, s, session } from '@kovojs/server';\nimport { execFileSync } from 'node:child_process';`,
                 )
                 .replace(
                   'appSession.provider(bindings.sessionProvider)',
@@ -8048,11 +8071,12 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
-          import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
+          import { postgresSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
           import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
           import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
           const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
-          const authSystemDb = appDatabase.systemDb({
+          const authSystemDb = postgresSystemDbForGeneratedIntegration(appDatabase, {
             operation: 'write', reason: 'auth', surface: 'fixture',
           });
           export const appRuntimePrincipalEpochStore = appDatabase.principalEpochStore;
@@ -8078,7 +8102,7 @@ export const report = query('report', {
         fileName: 'app.tsx',
         source: `
           import { authed, betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
-          import { createApp, publicAccess, s, session } from '@kovojs/server';
+          import { defineKovo, publicAccess, s, session } from '@kovojs/server';
           import {
             appRuntimeDbProvider,
             appRuntimeDbReady,
@@ -8094,11 +8118,12 @@ export const report = query('report', {
           await appRuntimeDbReady;
           await bindings.seedDemoUser();
           const appSession = session(s.object({ id: s.string() }));
-          export default createApp({
+          const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+            auth: appSession.provider(bindings.sessionProvider),
             db: appRuntimeDbProvider,
-            routes: [],
-            sessionProvider: appSession.provider(bindings.sessionProvider),
           });
+          export default app.assemble({ routes: [] });
         `,
       },
     ];
@@ -8434,11 +8459,11 @@ export const report = query('report', {
               ...file,
               source: file.source
                 .replace(
-                  `createApp, publicAccess, s, session`,
-                  `createApp, mutation, publicAccess, s, session`,
+                  `defineKovo, publicAccess, s, session`,
+                  `defineKovo, mutation, publicAccess, s, session`,
                 )
                 .replace(
-                  `export default createApp({`,
+                  `const app = defineKovo({`,
                   `export const unsafeSeed = mutation({
                     access: publicAccess('fixture'),
                     handler() { return bindings.seedDemoUser(); },
@@ -8453,7 +8478,7 @@ export const report = query('report', {
                       });
                     },
                   });
-                  export default createApp({`,
+                  const app = defineKovo({`,
                 ),
             }
           : file,
@@ -8516,8 +8541,8 @@ export const report = query('report', {
     }
 
     for (const setup of [
-      `import { createBetterAuthPostgresBindingsFromEnvironment as construct } from '@kovojs/better-auth';`,
-      `import * as auth from '@kovojs/better-auth'; const construct = auth.createBetterAuthPostgresBindingsFromEnvironment;`,
+      `import { createBetterAuthPostgresBindingsFromEnvironment as construct } from '@kovojs/better-auth/generated/postgres';`,
+      `import * as auth from '@kovojs/better-auth/generated/postgres'; const construct = auth.createBetterAuthPostgresBindingsFromEnvironment;`,
     ]) {
       const facts = sinksFor(`
         ${setup}
@@ -8566,8 +8591,8 @@ export const report = query('report', {
               ...file,
               source: file.source
                 .replace(
-                  `import { createApp, publicAccess, s, session } from '@kovojs/server';`,
-                  `import { createApp, publicAccess, s, session } from '@kovojs/server';\n          import { execFileSync } from 'node:child_process';`,
+                  `import { defineKovo, publicAccess, s, session } from '@kovojs/server';`,
+                  `import { defineKovo, publicAccess, s, session } from '@kovojs/server';\n          import { execFileSync } from 'node:child_process';`,
                 )
                 .replace(
                   `const bindings = createAppAuthBindings({`,
@@ -8675,6 +8700,7 @@ export const report = query('report', {
     }
   });
 
+  // @kovo-security-certifies KV424 complete-generated-runtime-auth-query-closure
   it('accepts the complete generated runtime, auth, and source-derived query closure', () => {
     const appSource = `
       import { app } from './kovo.js';
@@ -8760,6 +8786,16 @@ export const report = query('report', {
       expect.arrayContaining([expect.objectContaining({ sink: 'eval' })]),
     );
 
+    const mutatedQueryKey = postgresFiles.map((file) =>
+      file.fileName === 'app.tsx'
+        ? {
+            ...file,
+            source: `${file.source}\n(contactsQuery as { key: string }).key = 'forged';`,
+          }
+        : file,
+    );
+    expect(sinksForFiles(mutatedQueryKey)).not.toEqual([]);
+
     const mutatedPrincipalEpochStore = postgresFiles.map((file) =>
       file.fileName === 'app.tsx'
         ? {
@@ -8808,9 +8844,10 @@ export const report = query('report', {
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
+          import { defineKovo } from '@kovojs/server';
           import { contactsQuery } from './queries.js';
-          export default createApp({ queries: [contactsQuery], routes: [] });
+          const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+          export default app.assemble({ queries: [contactsQuery], routes: [] });
         `,
       },
     ];
@@ -8848,13 +8885,12 @@ export const report = query('report', {
       identityCall?: string;
       identityImport?: string;
     } = {}) => `
+      import { publicAccess, s } from '@kovojs/server';
       import {
         createMemoryWebhookReplayStore,
-        publicAccess,
-        s,
         webhook,
         ${identityImport}
-      } from '@kovojs/server';
+      } from '@kovojs/server/webhooks';
       ${extra}
       const replayStore = createMemoryWebhookReplayStore();
       webhook('/webhooks/identity-constructor', {
@@ -9028,7 +9064,8 @@ export const report = query('report', {
 
   it('accepts only the exact declarative SQLite app runtime constructor grammar', () => {
     const source = (constructor: string, options: string, mutation = '') => `
-      import { createApp } from '@kovojs/server';
+      import { defineKovo } from '@kovojs/server';
+      import { sqliteSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
       ${constructor}
       import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
       const contacts = sqliteTable('contacts', { id: text('id').primaryKey() });
@@ -9036,8 +9073,14 @@ export const report = query('report', {
       const APP_SEED = [{ table: contacts, rows: [{ id: 'c1' }] }];
       ${mutation}
       const runtime = createSqliteAppRuntime(${options});
-      runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
-      export default createApp({ db: runtime.db, routes: [] });
+      sqliteSystemDbForGeneratedIntegration(runtime, {
+        operation: 'write', reason: 'auth', surface: 'test',
+      });
+      const app = defineKovo({
+        appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+        db: runtime.db,
+      });
+      export default app.assemble({ routes: [] });
     `;
     const directImport = `import { createSqliteAppRuntime } from '@kovojs/server/sqlite';`;
     const exactFiles = [
@@ -9066,6 +9109,7 @@ export const report = query('report', {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
             ${directImport}
+            import { sqliteSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
             import { contactNotes, contacts } from '../schema.js';
             const APP_TABLES = [contacts, contactNotes];
             const APP_SEED = [
@@ -9073,7 +9117,9 @@ export const report = query('report', {
               { table: contactNotes, rows: [{ contact_id: 'c1', id: 'n1' }] },
             ];
             const runtime = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
-            runtime.systemDb({ operation: 'write', reason: 'auth', surface: 'test' });
+            sqliteSystemDbForGeneratedIntegration(runtime, {
+              operation: 'write', reason: 'auth', surface: 'test',
+            });
             export const appRuntimeDbProvider = runtime.db;
             export const appRuntimeMutationReplayStore = runtime.mutationReplayStore;
             export const appRuntimePrincipalEpochStore = runtime.principalEpochStore;
@@ -9082,7 +9128,7 @@ export const report = query('report', {
       {
         fileName: 'app.tsx',
         source: `
-            import { createApp } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+            import { defineKovo } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
             import {
               appRuntimeDbProvider,
               appRuntimeMutationReplayStore,
@@ -9090,13 +9136,14 @@ export const report = query('report', {
             } from './_kovo/app-runtime-db.js';
             const clientModules = createMemoryVersionedClientModuleRegistry();
             const mutationReplayStore = appRuntimeMutationReplayStore;
-            export default createApp({
+            const app = defineKovo({
+              appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
               clientModules,
               db: appRuntimeDbProvider,
               mutationReplayStore,
               principalEpochStore: appRuntimePrincipalEpochStore,
-              routes: [],
             });
+            export default app.assemble({ routes: [] });
           `,
       },
       {
@@ -9414,7 +9461,7 @@ export const report = query('report', {
       {
         fileName: '_kovo/app-runtime-db.ts',
         source: `
-          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
+          import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
           import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
           import { account, authSchema, rateLimit, session, user, verification } from '../schema.js';
           const APP_TABLES = [user, session, account, verification, rateLimit];
@@ -10809,17 +10856,18 @@ export const report = query('report', {
 
   it('accepts only the exact static generated client-module registry grammar', () => {
     const facts = sinksFor(`
-      import { createApp, stylesheet } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+      import { defineKovo, stylesheet } from '@kovojs/server'; import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
       const clientModules = createMemoryVersionedClientModuleRegistry();
       clientModules.put({
         path: '/c/cart.client.js',
         source: 'export const cartClient = true;',
       });
-      export default createApp({
+      const app = defineKovo({
+        appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
         clientModules,
-        routes: [],
         stylesheets: [stylesheet('./local.css')],
       });
+      export default app.assemble({ routes: [] });
     `);
 
     expect(facts).toEqual([]);
@@ -13612,7 +13660,7 @@ export const report = query('report', {
 
   it('accepts only the exact module-scope storage download capability grammar', () => {
     const safe = sinksFor(`
-      import { createApp } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
+      import { defineKovo } from '@kovojs/server'; import { createMemoryStorage } from '@kovojs/core/storage'; import { createSigningKeyRing } from '@kovojs/server/signing'; import { createStorageDownloadEndpoint } from '@kovojs/server/storage-downloads';
 
       const signingKeys = createSigningKeyRing({
         keys: [{
@@ -13631,7 +13679,8 @@ export const report = query('report', {
         secret: signingKeys,
         storage,
       });
-      export default createApp({ endpoints: [download] });
+      const app = defineKovo({ appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e' });
+      export default app.assemble({ endpoints: [download] });
     `);
     expect(safe).toEqual([]);
 

@@ -12,6 +12,7 @@ import { isDrizzleDatabaseTypeName, isDrizzleTableFactoryName } from '../drizzle
 import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  moduleSpecifierResolvesToFrameworkExport,
   typeAliasResolvesToFrameworkExport,
 } from './framework-identity.js';
 import {
@@ -329,14 +330,41 @@ function typeAliasMatchesExactNamedFrameworkImport(
       // relative paths, value aliases, and structural lookalikes do not establish authority.
       if (!imported.isTypeOnly() && !clause?.isTypeOnly()) continue;
       const local = imported.getAliasNode() ?? imported.getNameNode();
-      if (!expressionResolvesToFrameworkExport(local, expected)) continue;
+      const exactIdentity =
+        expressionResolvesToFrameworkExport(local, expected) ||
+        (imported.getName() === expected.exportName &&
+          moduleSpecifierResolvesToFrameworkExport(
+            declaration.getModuleSpecifierValue(),
+            expected,
+          ));
+      if (!exactIdentity) continue;
+      if (target.getDeclarations().length === 0 && target.getName() === local.getText()) {
+        return true;
+      }
       const symbol = local.getSymbol();
       if (!symbol) continue;
+      if (symbol.compilerSymbol === target.compilerSymbol) return true;
       try {
         const aliased = symbol.getAliasedSymbol();
-        if (aliased?.compilerSymbol === target.compilerSymbol) return true;
+        const targetAliased = target.getAliasedSymbol();
+        if (
+          aliased?.compilerSymbol === target.compilerSymbol ||
+          aliased?.compilerSymbol === targetAliased?.compilerSymbol ||
+          symbol.compilerSymbol === targetAliased?.compilerSymbol
+        ) {
+          return true;
+        }
       } catch {
-        // Unresolved or non-alias imports fail closed.
+        // An unresolved exact named type import has no aliased declaration to compare. Its local
+        // import symbol must still be the type's own alias symbol; source/name similarity alone is
+        // insufficient (SPEC §6.6 / compiler hard rule 10).
+        if (
+          target.getDeclarations().length === 0 &&
+          target.getName() === local.getText() &&
+          symbol.getName() === target.getName()
+        ) {
+          return true;
+        }
       }
     }
   }
