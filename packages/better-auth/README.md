@@ -17,6 +17,9 @@ import { publicAccess } from '@kovojs/server';
 import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 
 type AuthRequest = BetterAuthAppRequest<{ id: string }>;
+declare const databaseOptions: Parameters<typeof createPostgresAppRuntimeDb>[0];
+declare const authSchema: Record<string, unknown>;
+
 const database = createPostgresAppRuntimeDb(databaseOptions);
 const auth = createBetterAuthPostgresAppBindings(database, {
   csrf: betterAuthCsrfFromEnvironment<AuthRequest>({ field: 'csrf' }),
@@ -40,6 +43,9 @@ source must not import them.
 
 ```ts
 import { createBetterAuthSqliteAppBindings } from '@kovojs/better-auth/sqlite';
+
+declare const sqliteRuntime: Parameters<typeof createBetterAuthSqliteAppBindings>[0];
+declare const appBindingOptions: Parameters<typeof createBetterAuthSqliteAppBindings>[1];
 
 const localAuth = createBetterAuthSqliteAppBindings(sqliteRuntime, appBindingOptions);
 ```
@@ -66,6 +72,14 @@ import {
   type BetterAuthPasswordResetOptions,
 } from '@kovojs/better-auth';
 import { publicAccess } from '@kovojs/server';
+
+declare const transactionalMail: {
+  send(message: {
+    template: 'password-reset';
+    to: string;
+    variables: { resetUrl: string };
+  }): Promise<void>;
+};
 
 export const passwordReset = {
   access: publicAccess('account recovery form'),

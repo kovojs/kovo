@@ -39,7 +39,7 @@ task runner cannot replace it with another fetch implementation.
 With no allowlist, the call fails closed. The thrown error tells you what to add:
 
 ```text
-Outbound egress to api.resend.com:443 was blocked by the Kovo private-network deny floor (public; SPEC §6.6 runtime defense-in-depth). Add the exact origin to createApp({ egress: { allowDestinations: [...] } }).
+Outbound egress to api.resend.com:443 was blocked by the Kovo private-network deny floor (public; SPEC §6.6 runtime defense-in-depth). Add the exact origin to defineKovo({ egress: { allowDestinations: [...] } }).
 ```
 
 That is an `EgressBlockedError`.
@@ -50,14 +50,16 @@ Add only the origins and internal destinations you mean to trust:
 
 ```ts
 // Source-verified shape from packages/server/src/app-types.ts
-import { createApp } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-createApp({
+const app = defineKovo({
   egress: {
     allowDestinations: ['https://api.resend.com', 'https://api.stripe.com'],
     allowInternal: ['127.0.0.1:11434'],
   },
 });
+
+export default app.assemble({});
 ```
 
 `allowDestinations` is for framework-owned HTTP surfaces. `allowInternal` is the narrow
@@ -81,13 +83,15 @@ Do this when your deployment uses DNS64/NAT64 with a Network-Specific Prefix. Co
 from the network configuration into the app posture:
 
 ```ts
-import { createApp } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-createApp({
+const app = defineKovo({
   egress: {
     nat64Prefixes: ['2001:db8:64::/96'],
   },
 });
+
+export default app.assemble({});
 ```
 
 Kovo can now decode the IPv4 destination inside each synthesized IPv6 answer. A synthesized

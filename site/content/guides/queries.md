@@ -42,7 +42,7 @@ import { component } from '@kovojs/core';
 
 export const CartBadge = component({
   queries: { cart: cartSummary },
-  render: ({ cart }) => <span>Cart: {cart.count}</span>,
+  render: ({ cart }: { cart: { count: number } }) => <span>Cart: {cart.count}</span>,
 });
 ```
 

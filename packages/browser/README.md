@@ -9,7 +9,10 @@ pnpm add @kovojs/browser
 
 ```ts
 import { derive } from '@kovojs/browser';
-import { cart } from './cart.server.js';
+import type { QueryHandle } from '@kovojs/server';
+import { cart as cartQuery } from './queries.js';
+
+const cart: QueryHandle<undefined, { count: number }> = cartQuery;
 
 export const cartLabel = derive([derive.query(cart)], (value) =>
   value.count === 1 ? '1 item' : `${value.count} items`,
@@ -24,6 +27,9 @@ Reviewed HTML and URL escape hatches require structured audit metadata:
 
 ```ts
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
+
+const reviewedMarkup = '<p>Terms reviewed by the content team.</p>';
+const paymentUrl = 'https://payments.example/checkout';
 
 const article = trustedHtml(reviewedMarkup, {
   reason: 'rendered by the audited Markdown pipeline',

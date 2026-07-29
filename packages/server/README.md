@@ -11,18 +11,16 @@ pnpm add @kovojs/server
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
-import { defineKovo, publicAccess, tag } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-export const inventoryItem = tag('inventory-item');
+const app = defineKovo({});
 
-export default defineKovo({
-  routes: ({ route }) => [
-    route('/', {
-      access: publicAccess('public homepage'),
-      page: () => <main>Hello from Kovo</main>,
-    }),
-  ],
+const home = app.route('/', {
+  access: app.publicAccess('public homepage'),
+  page: () => <main>Hello from Kovo</main>,
 });
+
+export default app.assemble({ routes: [home] });
 ```
 
 The root is the daily declaration surface: app assembly, routes, layouts, guards, schemas, queries,
@@ -93,7 +91,11 @@ import {
   type Reader,
   type Writer,
 } from '@kovojs/server/data';
-import { replayMutationWireBody, type MutationReplayBody } from '@kovojs/server/replay';
+import {
+  createMemoryMutationReplayStore,
+  replayMutationWireBody,
+  type MutationReplayBody,
+} from '@kovojs/server/replay';
 import { createDelegationAuthority, onBehalfOf } from '@kovojs/server/delegation';
 import { derived } from '@kovojs/server/derived-data';
 import { EgressBlockedError, EgressConfigError } from '@kovojs/server/egress';
@@ -136,7 +138,6 @@ import {
   renderTree,
 } from '@kovojs/server/render-tree';
 import { renderRouteHtml } from '@kovojs/server/rendering';
-import { createMemoryMutationReplayStore, replayMutationWireBody } from '@kovojs/server/replay';
 import { declareSecretReadCapability } from '@kovojs/server/secret-reading';
 import {
   InlineUnverifiedUploadError,

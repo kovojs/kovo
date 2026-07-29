@@ -134,14 +134,16 @@ against the state/query shape and are null-aware: traversing a nullable segment 
 import { derive } from '@kovojs/browser/generated';
 
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
-  String(state.pressed),
+  String(/** @type {{ pressed: boolean }} */ (state).pressed),
 );
-export const GalleryToggleDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.pressed ? 'pressed' : 'off',
-);
-export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) =>
-  state.pressed ? 'pressed' : 'off',
-);
+export const GalleryToggleDemo$button_data_state_derive = derive(['state'], (state) => {
+  const localState = /** @type {{ pressed: boolean }} */ (state);
+  return localState.pressed ? 'pressed' : 'off';
+});
+export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) => {
+  const localState = /** @type {{ pressed: boolean }} */ (state);
+  return localState.pressed ? 'pressed' : 'off';
+});
 ```
 
 This is compiler-emitted IR, so its generated-only import deliberately retains the inspectable
@@ -183,7 +185,7 @@ inputs, so declare the cadence once and let the compiler thread that time source
 ```tsx
 export const RelativeTimestamp = component({
   clocks: { ago: { every: '30s' } },
-  render: ({ now }) => <time>{formatRelative(now.ago)}</time>,
+  render: ({ now }: { now: { ago: Date } }) => <time>{formatRelative(now.ago)}</time>,
 });
 ```
 
@@ -198,21 +200,23 @@ export const TrialBadge = component({
   queries: {
     trial: trialQuery.refresh({ every: '1m' }),
   },
-  render: ({ trial }) => <strong>{trial.daysLeft} days left</strong>,
+  render: ({ trial }: { trial: { daysLeft: number } }) => (
+    <strong>{trial.daysLeft} days left</strong>
+  ),
 });
 
 export const AuctionBadge = component({
   queries: {
     auction: auctionQuery.refresh({ at: (auction) => auction.endsAt }),
   },
-  render: ({ auction }) => <strong>{auction.status}</strong>,
+  render: ({ auction }: { auction: { status: string } }) => <strong>{auction.status}</strong>,
 });
 
 export const QueueBadge = component({
   queries: {
     queue: queueQuery.refresh({ until: (queue) => queue.done }),
   },
-  render: ({ queue }) => <strong>{queue.position}</strong>,
+  render: ({ queue }: { queue: { position: number } }) => <strong>{queue.position}</strong>,
 });
 ```
 
@@ -226,7 +230,7 @@ const renderOnce = <Value,>(value: Value) => value;
 
 export const PublishedAt = component({
   queries: { post: postQuery },
-  render: ({ post }) => (
+  render: ({ post }: { post: { publishedAt: string } }) => (
     <time dateTime={post.publishedAt}>{renderOnce(formatDate(post.publishedAt))}</time>
   ),
 });

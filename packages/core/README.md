@@ -70,6 +70,8 @@ import {
   createS3CompatibleStorage,
 } from '@kovojs/core/storage';
 
+declare const providerOperations: Parameters<typeof S3CompatibleObjectClient.create>[0];
+
 const client = S3CompatibleObjectClient.create(providerOperations);
 const objects = createS3CompatibleStorage({
   bucket: 'app-assets',

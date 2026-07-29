@@ -45,15 +45,18 @@ export const commerceHomeRoute = route('/', {
 });
 ```
 
-Routes are registered on the closed `createApp()` aggregate the request shell owns:
+Routes minted by one app contract are listed once in that contract's closed assembly:
 
 ```tsx
 // Source: examples/commerce/src/app.tsx
-const app = createApp({
+const app = defineKovo({
+  auth: () => demoSession,
+  db: () => db,
+});
+
+export default app.assemble({
   routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
   mutations: [addToCart, commerceSignIn, commerceSignOut],
-  db: () => db,
-  sessionProvider: () => demoSession,
 });
 ```
 

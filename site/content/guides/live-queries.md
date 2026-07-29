@@ -54,7 +54,7 @@ query shapes from a newer deploy.
 ## Roadmap: SSE live queries
 
 The technical preview does not ship the SSE live-query subsystem. Do not author `live: true`,
-`<kovo-live>`, `createApp({ live })`, `redisLiveEmitter()`, or `inProcessLiveEmitter()` in preview
+`<kovo-live>`, `defineKovo({ live })`, `redisLiveEmitter()`, or `inProcessLiveEmitter()` in preview
 apps.
 
 The intended roadmap shape is still useful for planning infrastructure: an SSE push would carry the

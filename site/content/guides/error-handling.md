@@ -81,15 +81,17 @@ Unexpected enhanced-mutation failures use the browser runtime's response posture
 For document-level shells, configure them once on the app:
 
 ```ts
-import { createApp } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
 const ErrorShell = () => 'Server error';
 const ForbiddenShell = () => 'Forbidden';
 const NotFoundShell = () => 'Not found';
 
-export default createApp({
+const app = defineKovo({
   errorShells: { forbidden: ForbiddenShell, notFound: NotFoundShell, serverError: ErrorShell },
 });
+
+export default app.assemble({});
 ```
 
 ## Handle failure
@@ -106,13 +108,15 @@ Choose the narrowest failure surface that matches the app:
 The request shell gives you one hook for unexpected exceptions:
 
 ```ts
-import { createApp } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-export default createApp({
+const app = defineKovo({
   onError(error, context) {
     console.error('request failed', context.operation, error);
   },
 });
+
+export default app.assemble({});
 ```
 
 Keep that hook for logging and reporting. It is not the place to invent alternate response bodies.

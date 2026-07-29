@@ -43,7 +43,9 @@ import { Defer, route } from '@kovojs/server';
 
 export const ProductGrid = component({
   queries: { productGrid },
-  render: ({ productGrid }) => <section>{productGrid.items.map(renderProduct)}</section>,
+  render: ({ productGrid }: { productGrid: { items: unknown[] } }) => (
+    <section>{productGrid.items.map(renderProduct)}</section>
+  ),
 });
 
 export const productPage = route('/products', {

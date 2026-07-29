@@ -1,27 +1,34 @@
 ---
 title: Request shell
-description: Configure createApp(), dispatch order, structured documents, adapters, error shells, and pre-dispatch load shedding.
+description: Close one app contract, inspect dispatch order, and configure documents, adapters, error shells, and pre-dispatch load shedding.
 order: 4.7
 ---
 
 # Request shell
 
-Your app needs one exported server value that knows its routes, mutations, queries, document shell,
-database, and session provider. `createApp()` is that value; the request shell turns it into a
-Web-standard `Request -> Response` handler, assembles documents, serves framework endpoints, and
-runs guards before route/query/mutation code.
+Your app needs one exported server value that closes its routes, mutations, queries, document shell,
+database, and auth provider. Call `defineKovo()` once for provider/config context, declare each
+surface through that contract, then call `app.assemble()` once. The request shell turns the opaque
+result into a Web-standard `Request -> Response` handler, assembles documents, serves framework
+endpoints, and runs guards before route/query/mutation code.
 
-## Create the app aggregate
+## Close the app contract
 
 Start with the surfaces the app serves:
 
 ```ts
-export default createApp({
-  routes,
-  mutations,
-  queries,
+import { defineKovo } from '@kovojs/server';
+
+declare const db: unknown;
+declare const mutations: any[];
+declare const queries: any[];
+declare const routes: any[];
+
+const app = defineKovo({
   db: () => db,
 });
+
+export default app.assemble({ mutations, queries, routes });
 ```
 
 Then add the document, session, error, and limit policy around that core:
@@ -29,7 +36,7 @@ Then add the document, session, error, and limit policy around that core:
 <!-- kovo-sample: illustrative reason="The complete request shell depends on app-local routes, auth bindings, generated database bindings, and document components." -->
 
 ```tsx
-import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
+import { BodyEnd, defineKovo, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
 
 import { appCsrf, appSessionProvider } from './auth.js';
 import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
@@ -48,13 +55,9 @@ const appDocument = (
   </Document>
 );
 
-export default createApp({
-  routes,
-  mutations,
-  queries,
-  endpoints,
+const app = defineKovo({
+  auth: appSessionProvider,
   db: appRuntimeDbProvider,
-  sessionProvider: appSessionProvider,
   csrf: appCsrf,
   document: appDocument,
   errorShells: {
@@ -75,6 +78,8 @@ export default createApp({
     maxQueryListItems: 500,
   },
 });
+
+export default app.assemble({ endpoints, mutations, queries, routes });
 ```
 
 The generated route IR, live-target registry, and client-module registry are build artifacts wired
@@ -108,7 +113,7 @@ Dispatch is fixed and printable:
 6. The 404 shell.
 
 There is no user middleware chain in v1. Control-flow extension points are declared surfaces:
-`sessionProvider`, guards, `endpoint()`, and `webhook()`. That is why `kovo explain endpoints`,
+the `auth` provider, guards, `app.endpoint()`, and `webhook()`. That is why `kovo explain endpoints`,
 `kovo explain unguarded`, and `kovo explain unscoped` can audit the app without executing a browser.
 
 ## Load shed before parsing
@@ -196,9 +201,10 @@ objects inside route/query/mutation logic.
 <details>
 <summary>Spec & diagnostics</summary>
 
-`createApp()` ownership, app options, generated artifacts, Web `Request -> Response` handler,
-dispatch order, no middleware chain, document assembly, error shells, static export through the
-handler, and pre-dispatch 413/429 limits: SPEC §9.5. Mutation lifecycle after pre-dispatch:
+`defineKovo()` ownership, single `assemble()` closure, generated artifacts, Web
+`Request -> Response` handler, dispatch order, no middleware chain, document assembly, error
+shells, static export through the handler, and pre-dispatch 413/429 limits: SPEC §6.2.1 and §9.5.
+Mutation lifecycle after pre-dispatch:
 SPEC §10.3. Endpoint audit enrollment for the coarse limiter: SPEC §11.4.
 
 API reference: [@kovojs/server](/api/server/).

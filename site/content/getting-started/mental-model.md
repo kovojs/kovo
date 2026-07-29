@@ -47,7 +47,7 @@ import { cartQuery } from './queries.js';
 
 export const CartBadge = component({
   queries: { cart: cartQuery },
-  render: ({ cart }) => (
+  render: ({ cart }: { cart: { count: number } }) => (
     <cart-badge>
       Cart: <span>{cart.count}</span>
     </cart-badge>

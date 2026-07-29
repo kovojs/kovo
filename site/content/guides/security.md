@@ -113,11 +113,13 @@ not the raw auth instance:
 // authBindings comes from the framework-owned generated auth/database boundary
 export const commerceSessionProvider = commerceSession.provider(authBindings.sessionProvider);
 
-// wired into the request shell alongside routes, mutations, and the db provider
-createApp({
-  sessionProvider: commerceSessionProvider,
-  // routes, mutations, queries, csrf, db, …
+// captured once by the app contract; declarations close under app.assemble(...)
+const app = defineKovo({
+  auth: commerceSessionProvider,
+  // csrf, db, document, …
 });
+
+export default app.assemble({ mutations, queries, routes });
 ```
 
 A provider that returns `null`/`undefined` is anonymous, and `guards.authed()` rejects it as

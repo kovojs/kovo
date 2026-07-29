@@ -142,8 +142,9 @@ artifact. The detailed static-export constraints and diagnostic ownership live i
 
 ### Run a Node server entrypoint
 
-The server is the `createApp()` aggregate: your routes, mutations, queries, the `db` provider, and
-the `sessionProvider`. `toNodeHandler()` adapts its Web-standard `Request -> Response` handler to a
+The server receives the opaque value returned by your app contract's one `assemble()` call. That
+value closes the routes, mutations, queries, database, and auth providers. `toNodeHandler()` adapts
+its Web-standard `Request -> Response` handler to a
 `node:http` listener. Define the host-independent handler first:
 
 ```ts
@@ -174,7 +175,7 @@ boot check detects an omitted bootstrap; it cannot authenticate earlier evaluati
 JavaScript realm. Importing app or package code first and bootstrapping later is unsupported
 privileged-host misuse, not a repair path—restart the process with the documented order.
 The separate handler module is required: it keeps `node:http` host authority out of the
-request-reachable closure while `createApp()` lifecycle callbacks and the handler graph remain
+request-reachable closure while `defineKovo()` lifecycle callbacks and the handler graph remain
 compiler roots.
 
 The generated `app` already carries its database provider, session provider, CSRF configuration,
@@ -264,7 +265,7 @@ Kovo has three shipped liveness paths, each with a different operational cost:
   the same `<kovo-query>` / `<kovo-fragment>` vocabulary that powers later refreshes.
 
 SSE live queries are roadmap, not part of the technical preview. Do not deploy `live: true`,
-`<kovo-live>`, `createApp({ live })`, or live emitters in preview apps. See
+`<kovo-live>`, `defineKovo({ live })`, or live emitters in preview apps. See
 [Live queries](/guides/live-queries/) for the shipped paths and the roadmap caveat.
 
 ## Observe the request shell
@@ -279,22 +280,21 @@ Access logs can group by endpoint without parsing a framework envelope:
 - `/c/__v/<representation-digest>/<module>` — immutable client modules.
 - Declared `endpoint()` and `webhook()` paths — raw machine ingress.
 
-Use `createApp({ onError })` for runtime exceptions from the request shell. It receives the thrown
+Use `defineKovo({ onError })` for runtime exceptions from the request shell. It receives the thrown
 error plus a `ServerErrorDiagnosticContext` with the failing operation and any known route,
 mutation, query, target, status, URL, or request identity. The hook is diagnostic only: errors thrown
 inside it are swallowed, and it cannot change Kovo's stable 403/404/500 responses.
 
 ```ts
-import { createApp } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
-export default createApp({
-  routes,
-  mutations,
-  queries,
+const app = defineKovo({
   onError(error, context) {
     console.error('kovo request failed', { error, ...context });
   },
 });
+
+export default app.assemble({ mutations, queries, routes });
 ```
 
 Keep build-time and runtime signals separate. `kovo check`, `kovo explain`, and the
@@ -351,7 +351,7 @@ module URLs, prior-token typed reads, the 24-hour retention floor, and deploy-sk
 SPEC §6.6 and §14. Static export through the request shell: SPEC §9.5; see
 [Static export](/guides/static-export/) for exportability diagnostics. Schema-validated old-form
 recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free pre-deploy
-gates: SPEC §11.4. `createApp({ onError })` and `ServerErrorDiagnosticContext` report
+gates: SPEC §11.4. `defineKovo({ onError })` and `ServerErrorDiagnosticContext` report
 request-shell runtime failures without changing stable error responses: SPEC §9.2. KV417 reports a
 serving layer that cannot meet the skew-retention floor.
 

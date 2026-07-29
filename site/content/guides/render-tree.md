@@ -16,7 +16,7 @@ import { renderRegistry } from '@kovojs/server/render-tree';
 import { s } from '@kovojs/server';
 
 const Callout = component({
-  render: ({ tone = 'info' }, _state, slots: { children?: ComponentChild }) => (
+  render: ({ tone = 'info' }: { tone?: string }, _state, slots: { children?: ComponentChild }) => (
     <aside data-tone={tone}>{slots.children ?? ''}</aside>
   ),
 });

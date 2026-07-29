@@ -25,11 +25,12 @@ my-app/
 |   |-- _kovo/
 |   |   |-- app-runtime-db-options.ts # validated schema and boot/CLI database options
 |   |   `-- app-runtime-db.ts         # framework-owned database and auth boundary
-|   |-- app.tsx             # createApp(), routes, layout, request shell
+|   |-- app.tsx             # routes, layout, and the single app.assemble() call
 |   |-- app.test.ts         # focused app smoke test
 |   |-- auth.ts             # typed session, guard, CSRF, and sanitized auth bindings
 |   |-- db.ts               # app-facing read-only Drizzle value
 |   |-- endpoint-posture.test.ts
+|   |-- kovo.ts             # the single defineKovo() provider/config contract
 |   |-- mutations.ts        # guarded add-contact mutation
 |   |-- queries.ts          # typed contact query
 |   |-- schema.ts           # app tables plus Better Auth tables
@@ -47,17 +48,47 @@ inside your generated app.
 
 ## The app entry
 
-`src/app.tsx` is the center of the scaffold. It imports the database, session provider, mutations,
-queries, route components, theme, and stylesheet, then creates the app:
+`src/kovo.ts` captures providers and app-wide config once:
 
 ```tsx
-createApp({
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { defineKovo } from '@kovojs/server';
+
+declare const appCsrf: any;
+declare const appRuntimeDbProvider: () => unknown;
+declare const appSessionProvider: (request: Request) => unknown;
+
+export const app = defineKovo({
   appId: '61cc6f90-8870-4dcf-977f-2df98af8cd93',
+  auth: appSessionProvider,
   clientModules: createMemoryVersionedClientModuleRegistry(),
-  db: () => appDb,
-  mutations: [addContact, appSignIn, appSignOut],
+  csrf: appCsrf,
+  db: appRuntimeDbProvider,
+});
+```
+
+`src/app.tsx` declares routes and closes the exact handle inventory:
+
+```tsx
+import { app } from './kovo.js';
+
+declare const addContact: any;
+declare const AppLayout: any;
+declare const contactsQuery: any;
+declare const healthEndpoint: any;
+declare const homeRoute: any;
+declare const loginRoute: any;
+declare const appSignIn: any;
+declare const appSignOut: any;
+
+const signInMutation = app.integrateMutation(appSignIn);
+const signOutMutation = app.integrateMutation(appSignOut);
+
+export default app.assemble({
+  endpoints: [healthEndpoint],
+  layouts: [AppLayout],
+  mutations: [addContact, signInMutation, signOutMutation],
   queries: [contactsQuery],
-  sessionProvider: appSessionProvider,
   routes: [homeRoute, loginRoute],
 });
 ```
@@ -70,8 +101,8 @@ separate processes or isolates. Keep the CSRF or `KOVO_LIVE_TARGET_SECRET` signi
 the app as well.
 
 The home route redirects unauthenticated requests to `/login`; the login route renders the auth
-form. The full scaffold passes `appSessionProvider` to `createApp()`, registers the health endpoint,
-and uses the same `layout()` and stylesheet declaration on both pages.
+form. The full scaffold passes `appSessionProvider` to `defineKovo()`, registers the health endpoint,
+and uses the same `app.layout()` and stylesheet declaration on both pages.
 
 ## Auth and secrets
 

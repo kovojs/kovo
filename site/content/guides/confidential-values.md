@@ -15,14 +15,16 @@ not quietly turn into JSON or browser-visible markup.
 Declare the environment keys your app uses. `s.secret(...)` keeps credentials boxed after boot:
 
 ```tsx
-import { createApp, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 
-export const app = createApp({
+export const app = defineKovo({
   env: s.object({
     API_TOKEN: s.secret(s.string()),
     PUBLIC_ORIGIN: s.string(),
   }),
 });
+
+export default app.assemble({});
 ```
 
 `app.env` is frozen and contains only those two keys. A missing key stops boot, including in
@@ -131,7 +133,7 @@ There are four common lanes:
 Keep the published value next to the handler so the compiler can copy data without importing code:
 
 ```ts
-import { publishToClient } from '@kovojs/core';
+import { publishToClient } from '@kovojs/core/security';
 
 const CHECKOUT_VERSION = 'v2';
 

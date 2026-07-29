@@ -35,35 +35,36 @@ Use `parent` when a route segment adds chrome inside a broader shell:
 
 ```tsx
 // Source: examples/crm/src/app-shell.ts
-export default createApp({
-  routes: ({ layout, route }) => {
-    const AccountLayout = layout({
-      parent: AppShell,
-      guard: guards.authed(),
-      queries: { viewer: viewerQuery },
-      render: ({ viewer }, _state, { children }) => (
-        <section>
-          <h1>{viewer.name}</h1>
-          {children}
-        </section>
-      ),
-    });
+const AccountLayout = app.layout({
+  access: [app.authenticated],
+  parent: AppShell,
+  queries: { viewer: viewerQuery },
+  render: ({ viewer }, _state, { children }) => (
+    <section>
+      <h1>{viewer.name}</h1>
+      {children}
+    </section>
+  ),
+});
 
-    return [
-      route('/account/settings', {
-        layout: AccountLayout,
-        page: () => <SettingsPage />,
-      }),
-    ];
-  },
+const accountSettings = app.route('/account/settings', {
+  access: [app.authenticated],
+  layout: AccountLayout,
+  page: () => <SettingsPage />,
+});
+
+export default app.assemble({
+  layouts: [AppShell, AccountLayout],
+  queries: [viewerQuery],
+  routes: [accountSettings],
 });
 ```
 
-Use the `createApp()` route authoring context when a layout guard depends on the app's request
-shape. Layouts may declare `queries`, `guard`, stylesheets, and per-segment boundaries. Guards refine
-the request before the layout renders, just like route and mutation guards. Layout queries are normal
-queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
-rules as page queries.
+Use `app.layout()` when access depends on the app's inferred request shape. Layouts may declare
+`queries`, `access`, stylesheets, and per-segment boundaries. Guards refine the request before the
+layout renders, just like route and mutation guards. Layout queries are normal queries: they appear
+in `kovo explain page`, carry update plans, and observe the same cache and guard rules as page
+queries.
 
 ## Run it
 

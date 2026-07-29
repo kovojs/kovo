@@ -541,6 +541,7 @@ export async function writeAuthoredSnippetSupportFiles(
   await writeFile(path.join(stubsDir, 'kovo.ts'), `${KOVO_STUBS}\n`, 'utf8');
   if (includeNodeModuleStubs) await writeNodeModuleStubs(outDir);
   await writeFile(path.join(outDir, 'app.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
+  await writeFile(path.join(outDir, 'kovo.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'db.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'domains.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'handler.ts'), 'export const handler = {} as any;\n', 'utf8');
@@ -558,7 +559,10 @@ async function writeSupportFiles(outDir) {
 
 async function writeNodeModuleStubs(outDir) {
   await writePackageWithDistFallback(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
-  await writePackageWithDistFallback(outDir, '@kovojs/core', { '.': KOVO_DTS });
+  await writePackageWithDistFallback(outDir, '@kovojs/core', {
+    '.': KOVO_DTS,
+    './security': KOVO_SECURITY_DTS,
+  });
   await writePackageWithDistFallback(outDir, '@kovojs/server', {
     '.': KOVO_DTS,
     './build': KOVO_DTS,
@@ -813,7 +817,6 @@ declare global {
   var contactListQuery: any;
   var contactsQuery: any;
   var createSession: any;
-  var createApp: any;
   var createCommerceDb: any;
   var createMemoryVersionedClientModuleRegistry: any;
   var createOrderInput: any;
@@ -1103,7 +1106,7 @@ export const cloudflare: any;
 export const trustedAssign: any;
 export const component: any;
 export const create: any;
-export const createApp: any;
+export const defineKovo: any;
 export const createFileSystemStorage: any;
 export const createMemoryStorage: any;
 export const createQueryStore: any;
@@ -1145,7 +1148,6 @@ export const queue: any;
 export const query: any;
 export const publicAccess: any;
 export const publicScopedKey: any;
-export const publishToClient: any;
 export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;
@@ -1207,6 +1209,10 @@ export const webhookReplayIdentity: any;
 export const write: any;
 `;
 
+const KOVO_SECURITY_DTS = String.raw`
+export const publishToClient: any;
+`;
+
 const KOVO_STUBS = String.raw`
 type AnyFn = (...args: any[]) => any;
 
@@ -1244,7 +1250,7 @@ export const cloudflare = anyFn;
 export const trustedAssign = anyFn;
 export const create = anyFn;
 export const component = anyFn;
-export const createApp = anyFn;
+export const defineKovo = anyFn;
 export const createFileSystemStorage = anyFn;
 export const createMemoryStorage = anyFn;
 export const createQueryStore = anyFn;

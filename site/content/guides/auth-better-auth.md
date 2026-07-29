@@ -73,35 +73,45 @@ creating a session; the user still has to submit the CSRF-protected sign-in form
 
 ## Wire the request shell
 
-Register the generated values like any other Kovo session, CSRF configuration, and mutations:
+Capture the generated providers once, then integrate the two package-owned credential mutations into
+the same app contract:
 
 ```tsx
-import { createApp, route } from '@kovojs/server';
 import { redirect } from '@kovojs/core';
+import { defineKovo } from '@kovojs/server';
 
-declare const appAuthed: any;
+type AppSession = {
+  id: string;
+  user: { email: string; id: string; name: string };
+};
+
 declare const appCsrf: any;
-declare const appRuntimeDbProvider: any;
-declare const appSessionProvider: any;
+declare const appRuntimeDbProvider: () => unknown;
+declare const appSessionProvider: (request: Request) => Promise<AppSession | null>;
 declare const appSignIn: any;
 declare const appSignOut: any;
-declare const addContact: any;
 declare function HomePage(props: { userName: string }): string;
 
-const app = createApp({
+const app = defineKovo({
+  auth: appSessionProvider,
   csrf: appCsrf,
   db: appRuntimeDbProvider,
-  mutations: [addContact, appSignIn, appSignOut],
-  sessionProvider: appSessionProvider,
-  routes: [
-    route('/', {
-      access: [appAuthed],
-      page(_context, request: AppRequest) {
-        if (!request.session) return redirect('/login', {});
-        return <HomePage userName={request.session.user.name} />;
-      },
-    }),
-  ],
+});
+
+const home = app.route('/', {
+  access: [app.authenticated],
+  page(_context, request) {
+    if (!request.session) return redirect('/login', {});
+    return <HomePage userName={request.session.user.name} />;
+  },
+});
+
+const signIn = app.integrateMutation(appSignIn);
+const signOut = app.integrateMutation(appSignOut);
+
+export default app.assemble({
+  mutations: [signIn, signOut],
+  routes: [home],
 });
 ```
 

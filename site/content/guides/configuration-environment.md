@@ -15,14 +15,16 @@ your own required env at boot and let the framework refuse early.
 Start with the app-owned vars you actually need:
 
 ```ts
-import { createApp, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 
-export const app = createApp({
+const app = defineKovo({
   env: s.object({
     STRIPE_SECRET_KEY: s.string().pattern(/.+/),
     SENTRY_DSN: s.string().url().optional(),
   }),
 });
+
+export default app.assemble({});
 ```
 
 That check happens at boot, not on the first live request. In production, invalid env blocks app
@@ -37,7 +39,7 @@ without a real CSRF secret:
 NODE_ENV=production pnpm dev
 ```
 
-The boot path reports a typed `CreateAppBootError` instead of failing later from inside a route or
+The boot path reports a typed assembly error instead of failing later from inside a route or
 mutation.
 
 ## Understand the production shape
@@ -48,7 +50,7 @@ Boot mode comes from `NODE_ENV` unless an adapter overrides it. The practical di
 - Development warns about advisory issues instead of throwing.
 - The default outbound egress floor is stricter in production.
 
-The secret floor applies to the framework-owned signing material you wire through `createApp`, not
+The secret floor applies to the framework-owned signing material you wire through `defineKovo`, not
 every random string in your process env.
 
 ## Use the app-facing variables
@@ -66,7 +68,7 @@ cannot use a non-local managed Postgres URL.
 
 | Variable                    | Used by                                                                       | What it does                                                                                |
 | --------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `KOVO_CSRF_SECRET`          | `createApp({ csrf })`, starter auth                                           | Framework signing secret for browser mutation CSRF when you wire it through app config.     |
+| `KOVO_CSRF_SECRET`          | `defineKovo({ csrf })`, starter auth                                          | Framework signing secret for browser mutation CSRF when you wire it through app config.     |
 | `KOVO_DATABASE_URL`         | runtime DB, egress bootstrap                                                  | Ordinary least-privilege app login.                                                         |
 | `KOVO_RUNTIME_DATABASE_URL` | `kovo db provision` / `kovo db migrate` / `kovo db check`                     | Runtime witness used for grants and posture. Usually the same login as `KOVO_DATABASE_URL`. |
 | `KOVO_ADMIN_DATABASE_URL`   | `kovo db generate` / `kovo db migrate` / `kovo db provision` / fallback check | Privileged setup and fallback-check authority. Keep it out of the app process.              |
