@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "8e56e79c87ce985c67da2483220c0053c4ced8cbeae9ae0a5244b5980ce573ca",
+      "sourceTreeSha256": "8e2b71e501b9e7375710374e359c47af90f8c208922a7b11f31d39821b425de9",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -680,14 +680,14 @@
               "default": "./dist/index.mjs"
             }
           },
-          "fingerprint": "sha256:7b28433b398f349e38f7f7916aee45f6d34d9540a9c531fd96571ed30e2db134"
+          "fingerprint": "sha256:1da4c77e585dfe5b17ec87b17616f6a5167ed3002a1934ce7f4c3f4d4a48e8cd"
         },
         {
           "exports": {
             ".": "./src/api.ts",
             "./internal": "./src/index.ts"
           },
-          "fingerprint": "sha256:971cbc49aac49b3169170045bf1b91d0d3e69d60c5edc8e909b33fdcba526a85"
+          "fingerprint": "sha256:6837c702089b1099aadedd04ac4c5126c01ccc1bdaf2204a86670f29b1d7e330"
         },
         {
           "exports": {
@@ -700,7 +700,7 @@
               "default": "./dist/index.mjs"
             }
           },
-          "fingerprint": "sha256:e3d8d6b0ac34c1e039c8584ac63d7423a78026170fcc7ed3a8af90c7335ac658"
+          "fingerprint": "sha256:f0c151901ae6d963336ab5298247249ea93543c2a33676ca3fd0de58be0f9393"
         }
       ],
       "packageName": "@kovojs/cli",
@@ -765,7 +765,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "ae1ab2ff056a126eeafafa5a7912150d67097a9e031024a16ce50cfe21cd1adf"
+      "sourceTreeSha256": "2636f88501957c13538f80bd1dadc00854b5b658483adf40dde439678e0ccac1"
     },
     {
       "manifestVariants": [
@@ -1607,7 +1607,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "35e94ee48f563f8a6c44580db0150b22bb001574cf5dfe2d24cdca629cc26c09"
+      "sourceTreeSha256": "922686e55bb3b29178b3493fc665bc83385c25bd2c5f87537dad0b1535c0affa"
     },
     {
       "manifestVariants": [
@@ -1872,7 +1872,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "ef7c2c415f587bd7ee61aa044e47f218690757805133ed5c377a6737be8fc3ec"
+      "sourceTreeSha256": "bfb3e5fcc095a8a3a41cff6a55174c4bd4a153251f842668403f5d8eeaf4b8eb"
     },
     {
       "manifestVariants": [
@@ -9857,7 +9857,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "66a6874a3ac83cb3972701c9ee12c89718df21dec22ea0855a065ce501563171"
+      "sourceTreeSha256": "3201cc2f7043e3fd8d3c90e8d469499c994143ea7c7e308ef8a16aa690e2434a"
     },
     {
       "manifestVariants": [
