@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'e049b038da05c0005ba399243435ab2013310fb7504b6f3776c5451d1d191e81';
+  'd1eee9e66fdcc3c44d35336b09cea8944d4d855057a4f74e8a73f834aa69fb3f';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
 const expectedDiagnosticActualLayerReviewDigest =
-  'e703ccd93477cbf5265cc5fe456e829035bbf45e6755310cdef289e543f99cf9';
+  '14da1e94dbdf082831fd82a826ba151eb27ec505c9d93bcee26c309a905a60eb';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -113,7 +113,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
     'packages/cli/src/add-catalog.ts',
-    '4223c4e089295aecd0aa972fa96e8a1f2fb36dbe3e967e2027e823b3df798683',
+    '60c05c286b71101f1dcd03621be6fa4b8602f5be47e8bcdb93f0e8195ac031e1',
   ],
   [
     'packages/cli/src/artifact-provenance.ts',
@@ -126,15 +126,19 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'e8284f9d5ea2c101bdb70e3580eb7ad0761bf5ee536f583be8da4ea10d915e4a',
+    'e0bebabd240865a2dccb782e95a3358f23491e3eabce06dc9291262338865506',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '1739a4ca5d5dcb16166f6271026c7a313e86e0a33645d504cbc629fa64df8617',
+    '6c8449d1ef60543e5d78503ea35dc340956aaa1b31c42042be659563d2f764bf',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '778f7d0fda54f55fd172b244965950aefa090ff35e7e319d9548b8bbbe692aa9',
+    'ac4f7f4acfcce3648f7765a823db84c3166682632ca3a633b3f2f0f4e163edd9',
+  ],
+  [
+    'packages/cli/src/commands/test.ts',
+    '6425b9c1069eaa372db3433042a2250d664c41e3439696cf746b8f26a3ec925d',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
@@ -162,7 +166,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
-    '4d740398a37db8ee61656535c11276898ce7ffdb6a38944406d37a8cfa74bbe5',
+    '4eeed572e6cbc9708addbc9aa8de32cc213c79ac6f00d091ba465afd9fed781a',
   ],
   [
     'packages/server/src/egress-undici-runtime.ts',
@@ -215,6 +219,14 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
     'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#285e010de3a30b636431bae8b63296487e078f1aa8d94a0584bd5d2af957af63',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
+  ],
+  [
+    'packages/cli/src/commands/doctor.ts#literal#ffcc9326808c385bc36079618771bff30bd03ec7eecd41613e16a32d7c9fdc4a#4402f9b02d4e6ee6d4c507157639b9f2f00f35f25fbf8d67ffec7d7a00bef61c',
+    'Finite KOVO_DOCTOR_* finding projected through the private doctor registry constructor before it can enter the kovo-diagnostic/v1 envelope.',
+  ],
+  [
+    'packages/cli/src/commands/doctor.ts#literal#a34215d7a29a5d9c46de0b9ea9ad1360ed2580300358f5c8af1b0de78895d11b#68a2becc374d3eeada3f7358b94ce4c7fd7d2a273c94ccddaf8b3e945f0fb8e6',
+    'Finite KOVO_DOCTOR_* finding carrier; doctorResult authenticates every finding through doctorFindingDiagnostic before structured emission.',
   ],
   [
     'packages/cli/src/commands/mcp.ts#literal#b6188b2dc75cde7ed04e5dffc1bb8cc23ff69c7bac827d79d3963f2166cad02b#2b1864d1eea92c670f67d773404460999b0f0a1bb7d5151aa8e23a8432cd9438',
@@ -307,6 +319,14 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
     'packages/server/src/env.ts#literal#6e9025da188ba1cb4c94a737eefe30281af97395f899fda9b9301bd5a925fc50#cfdba098c0b392161a80651304be42747e07f4a462cb112720d03b1f418ba6e3',
     'Environment validation issue protocol with a non-Kovo code namespace.',
+  ],
+  [
+    'packages/verify/src/bin.ts#literal#b5d4d5e43ebbb9a25af7375d941c9479b0930fef75f15a120e1eb87d675a0646#5b5fbca9f1ed1faf5a52fb2af3c3d0198bb7f82b8ceac31555542f44e7ed0ca0',
+    'Runtime-independent verifier presentation evidence derived only from certificate finding records; it carries no Kovo runtime registry authority.',
+  ],
+  [
+    'packages/verify/src/bin.ts#literal#2623ba9b03a851728df79b2ab630ec2c4f2120f8781721c697adf7a3cef74d87#7fa5c37f36f5631f0a61176682719b429be6b2238619724946e8da71d31c8055',
+    'Runtime-independent verifier command-error evidence with the single finite KOVO_VERIFY_INDETERMINATE code; it carries no Kovo runtime registry authority.',
   ],
   [
     'packages/server/src/env.ts#literal#622aa0217340621345170650b52ee58989e8f029e6e7ae1c2cafd59bc6e1ae13#cfdba098c0b392161a80651304be42747e07f4a462cb112720d03b1f418ba6e3',
