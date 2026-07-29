@@ -34,7 +34,6 @@
     "src/menubar.tsx",
     "src/meter.tsx",
     "src/navigation-menu.tsx",
-    "src/navigation-types.ts",
     "src/number-field.tsx",
     "src/otp-field.tsx",
     "src/pass-through.ts",

@@ -7,9 +7,9 @@ import {
   checkboxGroupRootAttributes,
   type CheckboxGroupItem as HeadlessCheckboxGroupItem,
 } from '@kovojs/headless-ui/checkbox-group';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
 
-import type { CollectionOrientation, TextDirection } from './navigation-types.js';
 import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';

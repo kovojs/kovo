@@ -28,6 +28,7 @@ describe('@kovojs/ui headless-ui subpath parity', () => {
     );
     const publicSubpaths = new Set(headlessManifest?.apiBoundary?.public ?? []);
     const directImports = new Map<string, Set<string>>();
+    const sharedTypeImports = new Set<string>();
 
     for (const fileName of readdirSync(srcDir).filter((entry) => entry.endsWith('.tsx'))) {
       const source = readFileSync(join(srcDir, fileName), 'utf8');
@@ -38,6 +39,10 @@ describe('@kovojs/ui headless-ui subpath parity', () => {
       for (const match of source.matchAll(/@kovojs\/headless-ui\/([a-z0-9-]+)/g)) {
         const family = match[1];
         if (family === undefined) continue;
+        if (family === 'types') {
+          sharedTypeImports.add(fileName);
+          continue;
+        }
         const files = directImports.get(family) ?? new Set<string>();
         files.add(fileName);
         directImports.set(family, files);
@@ -80,6 +85,20 @@ describe('@kovojs/ui headless-ui subpath parity', () => {
       'toolbar',
       'tooltip',
     ]);
+
+    expect([...sharedTypeImports].sort()).toEqual([
+      'accordion.tsx',
+      'checkbox-group.tsx',
+      'menubar.tsx',
+      'navigation-menu.tsx',
+      'radio-group.tsx',
+      'scroll-area.tsx',
+      'tabs.tsx',
+      'toggle-group.tsx',
+      'toolbar.tsx',
+    ]);
+    expect(headlessPackage.exports).toHaveProperty('./types');
+    expect(publicSubpaths, 'shared navigation vocabulary must remain public').toContain('./types');
 
     for (const [family, files] of directImports) {
       const subpath = `./${family}`;

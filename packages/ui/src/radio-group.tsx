@@ -7,9 +7,9 @@ import {
   radioGroupRootAttributes,
   type RadioGroupItem as HeadlessRadioGroupItem,
 } from '@kovojs/headless-ui/radio-group';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import * as style from '@kovojs/style';
 
-import type { CollectionOrientation, TextDirection } from './navigation-types.js';
 import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';

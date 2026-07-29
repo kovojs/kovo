@@ -11,10 +11,10 @@ import {
   navigationMenuViewportAttributes,
   type NavigationMenuItem as HeadlessNavigationMenuItem,
 } from '@kovojs/headless-ui/navigation-menu';
+import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui/types';
 import { ChevronDown } from '@kovojs/icons/chevron-down';
 import * as style from '@kovojs/style';
 
-import type { CollectionOrientation, TextDirection } from './navigation-types.js';
 import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
