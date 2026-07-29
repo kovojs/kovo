@@ -48,8 +48,12 @@ compiler/runtime facts; none may become a second analyzer.
     examples before signatures, and exclusion of generated/internal and Drizzle runtime carriers.
 - [ ] Publish and pack-test one canonical recipe for every golden task named in the charter.
 - [ ] Run rename drills for props, query results, route params, form fields, and mutation errors.
-- [ ] Generate searchable UI and icon catalogs from owning manifests and one catalog schema.
-- [ ] Require a valid README/reference or generated-family landing page for every public package.
+- [x] Generate searchable UI and icon catalogs from owning manifests and one catalog schema.
+  - Evidence: the focused catalog suite in Latest verification proves 44 component and 1,737 icon
+    entries, shared schema validity, deterministic regeneration, and site search coverage.
+- [x] Require a valid README/reference or generated-family landing page for every public package.
+  - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages and the
+    focused mutation tests reject missing, stale, or repository-internal front doors.
 - [ ] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
 - [ ] Keep authored task docs progressively disclosed and proof-backed.
 
@@ -62,5 +66,8 @@ compiler/runtime facts; none may become a second analyzer.
 
 - `pnpm exec vitest --run site/scripts/api-ref.test.mjs site/src/content-api-manifest.test.ts
   --reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
+- `node scripts/build-component-catalog.mjs && node scripts/package-front-door.mjs && node
+  site/scripts/golden-recipes.mjs` plus the four focused suites passed (4 files, 10 tests; 44
+  components, 1,737 icons, 14 package front doors, 16 recipe sources).
 - `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
   1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.

@@ -238,7 +238,7 @@ signature passes.
 <!-- kovo-recipe task="webhook" source="site/recipes/golden/webhook.ts" export="defineOrderWebhook" -->
 
 ```ts
-import { hmacSignature } from '@kovojs/core';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import { s } from '@kovojs/server';
 import { webhook } from '@kovojs/server/webhooks';
 

@@ -987,12 +987,16 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       against packed packages; run rename drills for component props, query results, route
       params, form fields, and mutation errors, asserting the intended diagnostic and fix;
       validate every source-attribution marker against a real tracked path and exported symbol.
-- [ ] (S) Generate searchable component and icon catalogs from their owning manifests into one
+- [x] (S) Generate searchable component and icon catalogs from their owning manifests into one
       catalog schema; show package import, copy command, anatomy where applicable, enhancement
       tier, and accessibility contract.
-- [ ] (S) Add package-front-door checks so every public package has an accurate README/reference
+  - Evidence: the combined-catalog generator and focused schema/search suite pass for 44 component
+    plus 1,737 icon entries, including task metadata and deterministic site search.
+- [x] (S) Add package-front-door checks so every public package has an accurate README/reference
       or an explicit generated-family landing page; remove current nonexistent imports and
       internal compiler guidance.
+  - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages; its mutation
+    suite rejects missing, stale-import, and repository-internal guidance.
 - [ ] (S) Add `create-kovo --example <name>` cloning packed-passing examples (crm/commerce) — the
       task-orientation channel matching the external bar, cheaper than templates because the
       examples are already CI'd. Example presentation/coverage detail stays owned by
