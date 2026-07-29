@@ -103,6 +103,21 @@ export function inheritAppLiveTargetIdentity(source: KovoApp, derived: KovoApp):
 }
 
 /**
+ * @internal Read the normalized, app-authored identity registered for an exact closed aggregate.
+ *
+ * Build/test graph proofs use this value as a replica-stable binding. An omitted id remains
+ * `undefined`; callers that require portable proof must reject that posture rather than falling
+ * back to the process-local live-target audience.
+ */
+export function declaredKovoAppId(app: KovoApp): string | undefined {
+  const identity = witnessWeakMapGet(identities, app);
+  if (identity === undefined) {
+    throw new TypeError('Declared Kovo app identity requires an exact closed app aggregate.');
+  }
+  return identity.appId;
+}
+
+/**
  * @internal Return the app-bound audience included in live-target attestations.
  *
  * `clientModules.buildToken()` is replica-stable but two distinct app aggregates can legitimately

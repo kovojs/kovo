@@ -5,6 +5,7 @@ import { defineKovo } from './app-contract.js';
 import { resolveKovoAppToken, type InferKovoAppTypes } from './app-token.js';
 import { registerAppMutationAdapter } from './app-mutation-adapter.js';
 import { createRequestHandler } from './app.js';
+import { declaredKovoAppId } from './live-target-app-identity.js';
 import { mutation } from './mutation/definition.js';
 import { assignDerivedMutationKey } from './mutation/definition.js';
 import { assignDerivedQueryKey } from './query.js';
@@ -62,6 +63,7 @@ describe('defineKovo app contract', () => {
     expectTypeOf<AppTypes['declarations']['mutation']>().toBeNever();
     expectTypeOf<AppTypes['db']>().toEqualTypeOf<typeof db>();
     const runtime = resolveKovoAppToken(token, 'app-contract test');
+    expect(declaredKovoAppId(runtime)).toBe(APP_ID);
     expect(runtime.env).toEqual({ APP_NAME: 'Kovo CRM' });
     expect(runtime.queries).toHaveLength(1);
     expect(Object.keys(token)).toEqual([]);
