@@ -90,6 +90,5 @@ import type {
 
 ## Reference
 
-- API: `/api/core/`, `/api/core-security/`, `/api/core-storage/`,
-  `/api/core-webhooks/`, `/api/core-diagnostics/`
+- API: `/api/core/` (grouped by the root, diagnostics, security, storage, and webhooks task paths)
 - Guides: `/getting-started/mental-model/`, `/guides/routing/`, `/guides/queries/`
