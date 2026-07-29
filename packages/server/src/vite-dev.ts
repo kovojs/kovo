@@ -59,7 +59,7 @@ import {
   type NodeRequestHandler,
 } from './node.js';
 import { renderLiveTargetChunks } from './mutation.js';
-import { mutationWireRequestFromHeaders } from './mutation-wire.js';
+import { mutationWireRequestFromHeaders, type LiveTargetRenderer } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { authorizeRouteRequest } from './route.js';
 import { matchShellDispatch } from './shell.js';
@@ -345,11 +345,20 @@ interface KovoAppShellViteDevClientModuleSnapshot {
   renderPlanFingerprint: string;
 }
 
+interface KovoAppShellViteDevLiveTargetInventory {
+  buildToken: string;
+  renderers: readonly LiveTargetRenderer<unknown>[];
+}
+
 const publishedViteDevClientModuleSnapshots = createWitnessWeakMap<
   KovoApp,
   KovoAppShellViteDevClientModuleSnapshot
 >();
 const failedViteDevClientModulePublications = createWitnessWeakMap<KovoApp, Error>();
+const retainedViteDevLiveTargetInventories = createWitnessWeakMap<
+  KovoAppShellViteDevModuleServer,
+  Map<string, Map<string, KovoAppShellViteDevLiveTargetInventory>>
+>();
 
 /**
  * @internal App-shell Vite dev/host internal (SPEC.md §9.5). Stored diagnostic record
@@ -509,7 +518,18 @@ export async function dispatchKovoAppShellViteDevRequest(
   // bundles, but an authored dependency cannot run first and influence their dev-time capture.
   await server.ssrLoadModule(kovoServerRootModuleId);
   const module = await runWithGeneratedLiveTargetRegistry(() => server.ssrLoadModule(moduleId));
-  const baseApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+  const loadedApp = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+  const compilerSnapshotPublished = publishKovoAppShellViteDevClientModuleSnapshot(
+    loadedApp,
+    options,
+  );
+  const baseApp = appWithRetainedKovoAppShellViteDevLiveTargets(
+    server,
+    moduleId,
+    appExportName,
+    loadedApp,
+    compilerSnapshotPublished,
+  );
   const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
   const declaredStylesheetAssets = await materializeKovoAppShellViteDevStylesheets(
     baseApp,
@@ -528,7 +548,6 @@ export async function dispatchKovoAppShellViteDevRequest(
     return;
   }
 
-  publishKovoAppShellViteDevClientModuleSnapshot(baseApp, options);
   const app = appWithDevDiagnostics(
     appWithDevStylesheetAssets(
       appWithDevStylesheetAssets(baseApp, declaredStylesheetAssets),
@@ -592,7 +611,7 @@ export async function dispatchKovoAppShellViteDevRequest(
 function publishKovoAppShellViteDevClientModuleSnapshot(
   app: KovoApp,
   options: KovoAppShellViteDevPluginOptions,
-): void {
+): boolean {
   const priorFailure = witnessWeakMapGet(failedViteDevClientModulePublications, app);
   if (priorFailure !== undefined) throw priorFailure;
 
@@ -601,7 +620,7 @@ function publishKovoAppShellViteDevClientModuleSnapshot(
     'clientModules',
     'Vite dev compiler client-module getter',
   );
-  if (getter === undefined) return;
+  if (getter === undefined) return false;
   if (typeof getter !== 'function') {
     throw new TypeError('Vite dev compiler client-module getter must be a function.');
   }
@@ -611,7 +630,7 @@ function publishKovoAppShellViteDevClientModuleSnapshot(
   );
   const published = witnessWeakMapGet(publishedViteDevClientModuleSnapshots, app);
   if (published !== undefined && sameKovoAppShellViteDevClientModuleSnapshot(published, snapshot)) {
-    return;
+    return true;
   }
 
   try {
@@ -625,6 +644,144 @@ function publishKovoAppShellViteDevClientModuleSnapshot(
     throw failure;
   }
   witnessWeakMapSet(publishedViteDevClientModuleSnapshots, app, snapshot);
+  return true;
+}
+
+/**
+ * Preserve compiler-registered live-target renderers across Vite's partial SSR invalidations.
+ *
+ * Vite can re-evaluate the app aggregate while leaving imported component modules cached. Those
+ * cached modules do not replay their compiler-emitted registration side effects, so the new
+ * createApp() aggregate sees only the subset of renderers whose modules actually re-evaluated.
+ * The compiler's published build token is the fail-closed inventory generation: reuse is confined
+ * to one exact Vite server/module/export tuple and never crosses a token change (SPEC §5.2.1/§9.5).
+ */
+function appWithRetainedKovoAppShellViteDevLiveTargets(
+  server: KovoAppShellViteDevModuleServer,
+  moduleId: string,
+  appExportName: string,
+  app: KovoApp,
+  compilerSnapshotPublished: boolean,
+): KovoApp {
+  const moduleInventories = witnessWeakMapGet(retainedViteDevLiveTargetInventories, server);
+  const exportInventories =
+    moduleInventories === undefined ? undefined : securityMapGet(moduleInventories, moduleId);
+
+  if (!compilerSnapshotPublished) {
+    if (exportInventories !== undefined) {
+      securityMapDelete(exportInventories, appExportName);
+    }
+    return app;
+  }
+
+  const buildToken = app.clientModules.buildToken();
+  const prior = exportInventories ? securityMapGet(exportInventories, appExportName) : undefined;
+  const priorRenderers = prior?.buildToken === buildToken ? prior.renderers : [];
+  const renderers = mergeKovoAppShellViteDevLiveTargetRenderers(
+    priorRenderers,
+    app.liveTargetRenderers,
+  );
+  const effectiveApp = sameKovoAppShellViteDevLiveTargetRenderers(
+    renderers,
+    app.liveTargetRenderers,
+  )
+    ? app
+    : deriveClosedKovoApp(app, { liveTargetRenderers: renderers });
+
+  let retainedModules = moduleInventories;
+  if (retainedModules === undefined) {
+    retainedModules = createSecurityMap<
+      string,
+      Map<string, KovoAppShellViteDevLiveTargetInventory>
+    >();
+    witnessWeakMapSet(retainedViteDevLiveTargetInventories, server, retainedModules);
+  }
+  let retainedExports = securityMapGet(retainedModules, moduleId);
+  if (retainedExports === undefined) {
+    retainedExports = createSecurityMap<string, KovoAppShellViteDevLiveTargetInventory>();
+    securityMapSet(retainedModules, moduleId, retainedExports);
+  }
+  securityMapSet(
+    retainedExports,
+    appExportName,
+    witnessFreeze({
+      buildToken,
+      renderers: effectiveApp.liveTargetRenderers,
+    }),
+  );
+  return effectiveApp;
+}
+
+function mergeKovoAppShellViteDevLiveTargetRenderers(
+  prior: readonly LiveTargetRenderer<unknown>[],
+  current: readonly LiveTargetRenderer<unknown>[],
+): readonly LiveTargetRenderer<unknown>[] {
+  const priorValues = viteDevDenseArrayValues<LiveTargetRenderer<unknown>>(
+    prior,
+    'Retained Vite dev live-target renderers',
+  );
+  const currentValues = viteDevDenseArrayValues<LiveTargetRenderer<unknown>>(
+    current,
+    'Current Vite dev live-target renderers',
+  );
+  const currentByComponent = createSecurityMap<string, LiveTargetRenderer<unknown>>();
+  const emittedComponents = createSecuritySet<string>();
+  const merged: LiveTargetRenderer<unknown>[] = [];
+
+  for (let index = 0; index < currentValues.length; index += 1) {
+    const renderer = currentValues[index]!;
+    securityMapSet(
+      currentByComponent,
+      viteDevLiveTargetRendererComponent(
+        renderer,
+        `Current Vite dev live-target renderer[${index}]`,
+      ),
+      renderer,
+    );
+  }
+  for (let index = 0; index < priorValues.length; index += 1) {
+    const priorRenderer = priorValues[index]!;
+    const component = viteDevLiveTargetRendererComponent(
+      priorRenderer,
+      `Retained Vite dev live-target renderer[${index}]`,
+    );
+    const renderer = securityMapGet(currentByComponent, component) ?? priorRenderer;
+    securityArrayPush(merged, renderer);
+    securitySetAdd(emittedComponents, component);
+  }
+  for (let index = 0; index < currentValues.length; index += 1) {
+    const renderer = currentValues[index]!;
+    const component = viteDevLiveTargetRendererComponent(
+      renderer,
+      `Current Vite dev live-target renderer[${index}]`,
+    );
+    if (securitySetHas(emittedComponents, component)) continue;
+    securityArrayPush(merged, renderer);
+    securitySetAdd(emittedComponents, component);
+  }
+  return witnessFreeze(merged);
+}
+
+function sameKovoAppShellViteDevLiveTargetRenderers(
+  left: readonly LiveTargetRenderer<unknown>[],
+  right: readonly LiveTargetRenderer<unknown>[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!witnessObjectIs(left[index], right[index])) return false;
+  }
+  return true;
+}
+
+function viteDevLiveTargetRendererComponent(
+  renderer: LiveTargetRenderer<unknown>,
+  label: string,
+): string {
+  const component = viteDevOwnDataValue(renderer, 'component', `${label}.component`);
+  if (typeof component !== 'string' || component.length === 0) {
+    throw new TypeError(`${label}.component must be a stable non-empty string.`);
+  }
+  return component;
 }
 
 function snapshotKovoAppShellViteDevClientModules(

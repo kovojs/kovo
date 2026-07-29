@@ -1624,6 +1624,133 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('retains cached component renderers across parent-only Vite invalidation', async () => {
+    const appId = 'a3d28c1f-9201-4f09-8ceb-952480f246ae';
+    const firstFingerprint = computeRenderPlanFingerprint({ contacts: 'field:id,email' });
+    const secondFingerprint = computeRenderPlanFingerprint({
+      contacts: 'field:id,email,updatedAt',
+    });
+    let renderPlanFingerprint = firstFingerprint;
+    let appLoads = 0;
+    const loadedApps: ReturnType<typeof createApp>[] = [];
+    const contactsRenderer: LiveTargetRenderer<Request> = {
+      component: 'src/components/ContactsRegion',
+      mutationKeys: [],
+      render: (context) =>
+        `<contacts-region data-target="${context.target}">retained</contacts-region>`,
+    };
+    const clientModules = () => [
+      {
+        path: '/c/contacts.client.js',
+        renderPlanFingerprint,
+        source: 'export const contacts = true;',
+      },
+    ];
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      clientModules,
+      moduleId: '/src/app-shell.ts',
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      ssrLoadModule: viteDevSsrLoadModule(async () => {
+        appLoads += 1;
+        // Vite replays this compiler side effect only for invalidated component modules. The
+        // second app aggregate models a parent-only invalidation with its child module cached.
+        if (appLoads === 1) registerGeneratedLiveTargetRenderer(contactsRenderer);
+        const app = createApp({
+          appId,
+          routes: [
+            route('/contacts', {
+              page: () => renderedHtml('<main>Contacts</main>'),
+            }),
+          ],
+        });
+        loadedApps.push(app);
+        return { default: app };
+      }),
+    });
+
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, {
+          'Content-Type': 'text/plain; charset=utf-8',
+        });
+        response.end(error instanceof Error ? error.message : 'vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const page = await fetch(`${origin}/contacts`);
+      expect(page.status).toBe(200);
+      expect(loadedApps[0]?.liveTargetRenderers).toHaveLength(1);
+      const oldBuild = loadedApps[0]!.clientModules.buildToken();
+      const liveTarget = attestedLiveTargetHeader(
+        'contacts-region',
+        'src/components/ContactsRegion',
+        appLiveTargetAttestationAudience(loadedApps[0]!, oldBuild),
+        {},
+        `${origin}/contacts`,
+      );
+
+      const retained = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?oldBuild=${encodeURIComponent(oldBuild)}`,
+        {
+          headers: {
+            'Kovo-Build': oldBuild,
+            'Kovo-Current-Url': '/contacts',
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': liveTarget,
+          },
+          method: 'POST',
+        },
+      );
+
+      expect(loadedApps[1]?.liveTargetRenderers).toHaveLength(0);
+      expect(retained.status).toBe(200);
+      expect(await retained.text()).toBe(
+        '<kovo-fragment target="contacts-region"><contacts-region data-target="contacts-region">retained</contacts-region></kovo-fragment>',
+      );
+
+      renderPlanFingerprint = secondFingerprint;
+      const stale = await fetch(
+        `${origin}/@kovo/hmr/refresh/live-targets?oldBuild=${encodeURIComponent(oldBuild)}`,
+        {
+          headers: {
+            'Kovo-Build': oldBuild,
+            'Kovo-Current-Url': '/contacts',
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': liveTarget,
+          },
+          method: 'POST',
+        },
+      );
+
+      expect(loadedApps[2]?.liveTargetRenderers).toHaveLength(0);
+      expect(stale.status).toBe(409);
+      expect(await stale.text()).toBe('Kovo HMR live-target refresh found no matching renderers.');
+      expect(stale.headers.get('kovo-build')).not.toBe(oldBuild);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('runs the exact target route and layout guards before HMR live-target queries', async () => {
     const secret = 'ADMIN_HMR_SECRET_MUST_NOT_LEAK';
     let layoutGuardRuns = 0;
