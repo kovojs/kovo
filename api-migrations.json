@@ -5358,8 +5358,8 @@
             "specifier": "@kovojs/server",
             "symbol": "MutationCsrfDeclaration"
           },
-          "category": "app-context",
-          "reason": "MutationCsrfDeclaration is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+          "category": "csrf-posture",
+          "reason": "MutationCsrfDeclaration was framework-owned CSRF protocol state; the app must select its route verifier or reviewed exemption explicitly."
         },
         {
           "id": "209-mutation-queue-refusal",
@@ -7992,8 +7992,8 @@
             "specifier": "@kovojs/server/sqlite",
             "symbol": "KovoSqliteSystemDb"
           },
-          "category": "app-context",
-          "reason": "The system database carrier bypasses app-scoped authorization and has no supported application-owned replacement."
+          "category": "sql-semantics",
+          "reason": "The system database carrier bypasses app-scoped authorization; the app must use typed Drizzle or declare the reviewed raw-SQL read/write facts."
         },
         {
           "id": "434-server-testing-subpath-remove",
@@ -8308,8 +8308,8 @@
             "specifier": "@kovojs/drizzle",
             "symbol": "KovoRuntimeAuthorizationClassification"
           },
-          "category": "app-context",
-          "reason": "Runtime authorization classifications are compiler-bound framework facts and have no supported app-authored replacement."
+          "category": "sql-semantics",
+          "reason": "Runtime authorization classifications are compiler-bound SQL access facts; the app must express the equivalent typed Drizzle or reviewed raw-SQL semantics."
         },
         {
           "id": "internalize-runtime-column-source",
@@ -8437,8 +8437,8 @@
             "specifier": "@kovojs/better-auth",
             "symbol": "BetterAuthCredentialMutationValue"
           },
-          "category": "app-context",
-          "reason": "The credential mutation wire carrier was framework-owned; app-authored uses need an explicit local result contract rather than a guessed replacement."
+          "category": "auth-posture",
+          "reason": "The credential mutation wire carrier was framework-owned; the app must define its local auth result contract and bind the responsible guard or session authority explicitly."
         },
         {
           "id": "003-better-auth-development-seed-move",

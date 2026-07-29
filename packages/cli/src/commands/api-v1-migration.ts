@@ -319,13 +319,13 @@ function manualActionFor(batch: ApiV1Batch, category: string): string {
     case 'dynamic-import':
       return `Replace the cited namespace, default, wildcard, CommonJS, computed, or dynamic access with direct named imports, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     case 'auth-posture':
-      return `Choose the app's guard and session authority explicitly, write that binding in source, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
+      return `Define the app-local auth result contract and bind its guard or session authority explicitly, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     case 'csrf-posture':
       return `Choose the route's CSRF verifier or explicit reviewed exemption in source, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     case 'deployment-posture':
       return `Configure the concrete deployment origin/runtime boundary in source, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     case 'sql-semantics':
-      return `Replace the cited SQL with the typed Drizzle form or declare its reviewed read/write facts, then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
+      return `Use the app-scoped query or mutation database, then replace the cited SQL with typed Drizzle or declare its reviewed read/write facts; rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     case 'trust-decision':
       return `Write the app-owned structured trust/declassification review for the cited value; Kovo will not invent it. Then rerun \`kovo fix api-v1 --check\`; see ${guide}.`;
     default:

@@ -58,7 +58,8 @@ describe('server API v1 migration executable', () => {
   it.each([
     ["import { renderWithRequestForTesting } from '@kovojs/server/testing';", 'app-context'],
     ["import '@kovojs/server/testing';", 'ambiguous-binding'],
-    ["import { KovoSqliteSystemDb } from '@kovojs/server/sqlite';", 'app-context'],
+    ["import { MutationCsrfDeclaration } from '@kovojs/server';", 'csrf-posture'],
+    ["import { KovoSqliteSystemDb } from '@kovojs/server/sqlite';", 'sql-semantics'],
   ])('refuses removed server carriers without guessing: %s', (source, category) => {
     const result = analyzeServerApiV1Migration({ fileName: 'removed.ts', source });
 

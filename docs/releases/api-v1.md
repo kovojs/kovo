@@ -282,16 +282,16 @@ refused because the correct replacement is an app-local result contract, not gen
 The command never chooses security or deployment intent. The refusal category tells you what must
 be explicit before rerunning:
 
-| Category             | Manual action                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `trust-decision`     | Write structured, non-empty review metadata or construct the policy for the exact declassification door.                 |
-| `auth-posture`       | Bind the app's guard and session authority explicitly; do not infer it from an old carrier name.                         |
-| `csrf-posture`       | Select the route's CSRF verifier or a reviewed explicit exemption in source.                                             |
-| `sql-semantics`      | Replace the SQL with the typed Drizzle form or declare the reviewed read/write facts; never infer meaning from a string. |
-| `deployment-posture` | Configure the concrete origin/runtime boundary, including a separate HTTP origin when the harness needs page behavior.   |
-| `app-context`        | Import the exact app contract or define the app-local boundary named by the refusal.                                     |
-| `ambiguous-binding`  | Replace namespace/default/wildcard/CommonJS access with direct named imports, then rerun the command.                    |
-| `dynamic-import`     | Replace computed module access with a static canonical import, then rerun the command.                                   |
+| Category             | Manual action                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `trust-decision`     | Write structured, non-empty review metadata or construct the policy for the exact declassification door.               |
+| `auth-posture`       | Define the app-local auth result contract and bind its guard or session authority explicitly.                          |
+| `csrf-posture`       | Select the route's CSRF verifier or a reviewed explicit exemption in source.                                           |
+| `sql-semantics`      | Use the app-scoped database, typed Drizzle, or explicit reviewed raw-SQL read/write facts.                             |
+| `deployment-posture` | Configure the concrete origin/runtime boundary, including a separate HTTP origin when the harness needs page behavior. |
+| `app-context`        | Import the exact app contract or define the app-local boundary named by the refusal.                                   |
+| `ambiguous-binding`  | Replace namespace/default/wildcard/CommonJS access with direct named imports, then rerun the command.                  |
+| `dynamic-import`     | Replace computed module access with a static canonical import, then rerun the command.                                 |
 
 Every refusal includes a `manualAction` with the task section to use. Do not suppress the refusal
 with a cast, a compatibility barrel, a copied internal type, or a raw generated import.

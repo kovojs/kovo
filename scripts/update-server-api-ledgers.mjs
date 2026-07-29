@@ -285,11 +285,18 @@ function migrationRule(entry, index) {
     id: `${prefix}-refusal`,
     action: 'refuse',
     from: { specifier: PACKAGE, symbol: entry.symbol },
-    category: entry.symbol === 'committedSecretWaiver' ? 'trust-decision' : 'app-context',
+    category:
+      entry.symbol === 'committedSecretWaiver'
+        ? 'trust-decision'
+        : entry.symbol === 'MutationCsrfDeclaration'
+          ? 'csrf-posture'
+          : 'app-context',
     reason:
       entry.symbol === 'committedSecretWaiver'
         ? 'The discarded process-global waiver had no enforceable compiler evidence and has no replacement.'
-        : `${entry.symbol} is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context.`,
+        : entry.symbol === 'MutationCsrfDeclaration'
+          ? 'MutationCsrfDeclaration was framework-owned CSRF protocol state; the app must select its route verifier or reviewed exemption explicitly.'
+          : `${entry.symbol} is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context.`,
   };
 }
 

@@ -44,9 +44,9 @@ const replacements = new Map([
       decision: 'internalize',
       canonicalHome: `internal:${PACKAGE}`,
       refusal: {
-        category: 'app-context',
+        category: 'auth-posture',
         reason:
-          'The credential mutation wire carrier was framework-owned; app-authored uses need an explicit local result contract rather than a guessed replacement.',
+          'The credential mutation wire carrier was framework-owned; the app must define its local auth result contract and bind the responsible guard or session authority explicitly.',
       },
     },
   ],

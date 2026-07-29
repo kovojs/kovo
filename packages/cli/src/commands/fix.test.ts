@@ -327,6 +327,102 @@ export const dark = createTheme(vars, { accent: 'black' });
     }
   });
 
+  it('reports every security refusal category with its exact executable manual action', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-security-refusals-'));
+    const cases = [
+      {
+        category: 'ambiguous-binding',
+        file: 'ambiguous.ts',
+        guide: 'move-server-imports-by-task',
+        manualAction:
+          'Replace the cited namespace, default, wildcard, CommonJS, computed, or dynamic access with direct named imports',
+        source: "import server from '@kovojs/server';\nvoid server;\n",
+      },
+      {
+        category: 'app-context',
+        file: 'app-context.ts',
+        guide: 'move-server-imports-by-task',
+        manualAction: 'Remove the retired framework carrier and use the task subpath',
+        source: "import { isKovoApp } from '@kovojs/server';\nvoid isKovoApp;\n",
+      },
+      {
+        category: 'auth-posture',
+        file: 'auth.ts',
+        guide: 'move-generated-auth-bindings',
+        manualAction:
+          'Define the app-local auth result contract and bind its guard or session authority explicitly',
+        source:
+          "import type { BetterAuthCredentialMutationValue } from '@kovojs/better-auth';\nexport type Result = BetterAuthCredentialMutationValue;\n",
+      },
+      {
+        category: 'csrf-posture',
+        file: 'csrf.ts',
+        guide: 'move-server-imports-by-task',
+        manualAction: "Choose the route's CSRF verifier or explicit reviewed exemption in source",
+        source:
+          "import type { MutationCsrfDeclaration } from '@kovojs/server';\nexport type Csrf = MutationCsrfDeclaration;\n",
+      },
+      {
+        category: 'deployment-posture',
+        file: 'deployment.ts',
+        guide: 'bind-tests-to-the-built-app',
+        manualAction: 'Configure the concrete deployment origin/runtime boundary in source',
+        source:
+          "import type { HarnessPageFixture } from '@kovojs/test/harness';\nexport type Page = HarnessPageFixture;\n",
+      },
+      {
+        category: 'sql-semantics',
+        file: 'sql.ts',
+        guide: 'move-server-imports-by-task',
+        manualAction: 'Use the app-scoped query or mutation database',
+        source:
+          "import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';\nexport type Db = KovoSqliteSystemDb;\n",
+      },
+      {
+        category: 'trust-decision',
+        file: 'trust.ts',
+        guide: 'replace-custom-client-assembly',
+        manualAction: 'Write the app-owned structured trust/declassification review',
+        source:
+          "import { defaultEnhancedFetch } from '@kovojs/browser/client';\nvoid defaultEnhancedFetch;\n",
+      },
+    ] as const;
+
+    try {
+      for (const entry of cases) writeFileSync(join(root, entry.file), entry.source);
+
+      const checked = await runApiV1Migration(
+        { mode: 'check', sourcePaths: cases.map((entry) => entry.file) },
+        root,
+      );
+      expect(checked).toMatchObject({ exitCode: 1 });
+      const result = JSON.parse(checked.output ?? '') as {
+        files: {
+          path: string;
+          refusals: {
+            category: string;
+            manualAction: string;
+          }[];
+          state: string;
+        }[];
+        summary: { refused: number; rewritten: number; unchanged: number };
+      };
+      expect(result.summary).toEqual({ refused: cases.length, rewritten: 0, unchanged: 0 });
+      const byPath = new Map(result.files.map((file) => [file.path, file]));
+      for (const entry of cases) {
+        const file = byPath.get(entry.file);
+        expect(file).toMatchObject({ state: 'refused' });
+        expect(file?.refusals).toHaveLength(1);
+        expect(file?.refusals[0]).toMatchObject({ category: entry.category });
+        expect(file?.refusals[0]?.manualAction).toContain(entry.manualAction);
+        expect(file?.refusals[0]?.manualAction).toContain('kovo fix api-v1 --check');
+        expect(file?.refusals[0]?.manualAction).toContain(`docs/releases/api-v1.md#${entry.guide}`);
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('writes the structured api-v1 finding result to stdout', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-stdout-'));
     const sourcePath = join(root, 'button.ts');

@@ -120,4 +120,15 @@ describe('Drizzle typed-annotation API migration executable', () => {
     expect(result.status).toBe('refused');
     expect(result.refusals).toEqual([expect.objectContaining({ category: 'app-context' })]);
   });
+
+  it('refuses retired runtime authorization classifications as SQL semantics', () => {
+    const result = analyzeDrizzleApiV1Migration({
+      fileName: 'metadata.ts',
+      source:
+        "import type { KovoRuntimeAuthorizationClassification } from '@kovojs/drizzle';\nexport type Authorization = KovoRuntimeAuthorizationClassification;\n",
+    });
+
+    expect(result.status).toBe('refused');
+    expect(result.refusals).toEqual([expect.objectContaining({ category: 'sql-semantics' })]);
+  });
 });

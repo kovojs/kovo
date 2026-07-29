@@ -34,7 +34,7 @@ describe('Better Auth generated-assembly migration executable', () => {
     );
   });
 
-  it('keeps a write batch unchanged when one retired carrier needs application context', () => {
+  it('keeps a write batch unchanged when one retired carrier needs explicit auth posture', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-better-auth-api-v1-'));
     const rewritePath = path.join(root, 'generated.ts');
     const refusalPath = path.join(root, 'carrier.ts');
@@ -60,11 +60,28 @@ describe('Better Auth generated-assembly migration executable', () => {
       expect(result.files[0]).toMatchObject({
         path: 'carrier.ts',
         state: 'refused',
-        refusals: [{ category: 'app-context' }],
+        refusals: [{ category: 'auth-posture' }],
       });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('names the app-owned auth decision behind the retired credential carrier', () => {
+    const result = analyzeBetterAuthApiV1Migration({
+      fileName: 'carrier.ts',
+      source:
+        "import type { BetterAuthCredentialMutationValue } from '@kovojs/better-auth';\nexport type Result = BetterAuthCredentialMutationValue;\n",
+    });
+
+    expect(result.status).toBe('refused');
+    if (result.status !== 'refused') return;
+    expect(result.refusals).toEqual([
+      expect.objectContaining({
+        category: 'auth-posture',
+        reason: expect.stringContaining('guard or session authority'),
+      }),
+    ]);
   });
 
   it('atomically replaces a fully mechanical write batch', () => {

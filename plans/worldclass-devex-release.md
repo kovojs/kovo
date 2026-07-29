@@ -11,11 +11,11 @@ applicable G1-G24 proof is current.
 - [x] Prove every mechanical rewrite before its corresponding export/call shape is removed.
   - Evidence: the focused migration/analyzer suite covers all nine removed checked-ledger batches;
     the packed gate rewrites one installed-consumer fixture for each batch with a mechanical rule.
-- [ ] Prove ambiguous security, app-context, SQL, auth, CSRF, and deployment choices are refused
+- [x] Prove ambiguous security, app-context, SQL, auth, CSRF, and deployment choices are refused
       with exact manual actions.
-  - Current gap: removed-batch fixtures exercise ambiguous binding, app context, trust, and
-    deployment posture. No checked removed rule currently emits auth, CSRF, or SQL posture, so
-    those categories cannot be claimed from synthetic formatter-only coverage.
+  - Evidence: `pnpm exec vitest run packages/cli/src/commands/fix.test.ts -t 'reports every
+security refusal category'` proves all seven semantic categories through real removed API
+    rules, including category-specific actions and task-guide anchors.
 - [x] Publish a task-organized breaking guide with posture changes, before/after source, and
       `kovo explain` output.
   - Evidence: `docs/releases/api-v1.md` owns the cumulative workflow, task migrations, refusal

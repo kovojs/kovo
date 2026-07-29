@@ -31,7 +31,6 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 const RETIRED_RUNTIME_METADATA = new Set([
   'extractKovoRuntimeDbMetadata',
-  'KovoRuntimeAuthorizationClassification',
   'KovoRuntimeDbColumnSource',
   'KovoRuntimeDbMetadata',
   'KovoRuntimeDbTable',
@@ -39,6 +38,7 @@ const RETIRED_RUNTIME_METADATA = new Set([
   'KovoRuntimeOwnerSource',
   'KovoRuntimeOwnerViaSource',
 ]);
+const RETIRED_RUNTIME_SQL_SEMANTICS = new Set(['KovoRuntimeAuthorizationClassification']);
 const COLUMN_FIELDS = new Set([
   'atomic',
   'confidentialAtRest',
@@ -74,6 +74,13 @@ export function analyzeDrizzleApiV1Migration({ fileName, source }) {
     const bindings = clause?.namedBindings;
     if (bindings && ts.isNamespaceImport(bindings)) {
       if (
+        [...RETIRED_RUNTIME_SQL_SEMANTICS].some((name) =>
+          source.includes(`${bindings.name.text}.${name}`),
+        )
+      ) {
+        refusals.push(refusal('sql-semantics', bindings, sourceFile));
+      }
+      if (
         RETIRED_RUNTIME_METADATA.size > 0 &&
         [...RETIRED_RUNTIME_METADATA].some((name) =>
           source.includes(`${bindings.name.text}.${name}`),
@@ -87,7 +94,9 @@ export function analyzeDrizzleApiV1Migration({ fileName, source }) {
     for (const element of bindings.elements) {
       const imported = element.propertyName?.text ?? element.name.text;
       if (imported === 'kovo') kovoBindings.add(element.name.text);
-      if (RETIRED_RUNTIME_METADATA.has(imported)) {
+      if (RETIRED_RUNTIME_SQL_SEMANTICS.has(imported)) {
+        refusals.push(refusal('sql-semantics', element, sourceFile));
+      } else if (RETIRED_RUNTIME_METADATA.has(imported)) {
         refusals.push(refusal('app-context', element, sourceFile));
       }
     }
