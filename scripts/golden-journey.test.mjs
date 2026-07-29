@@ -9,6 +9,7 @@ import {
   parseGoldenJourneyArgs,
   validateExternalPackedJourneyManifest,
 } from './golden-journey.mjs';
+import { DEVEX_GOLDEN_RELEASE_SCENARIO } from './devex-golden-contract.mjs';
 import { offlineAgentScenario } from './golden-journey/offline-agent.mjs';
 import { packedAppsScenario } from './golden-journey/packed-app.mjs';
 import { manifestPath, repoRoot } from './release-packages.mjs';
@@ -78,6 +79,32 @@ describe('golden journey command', () => {
     expect(() =>
       parseGoldenJourneyArgs(['--scenario', packedAppsScenario, '--samples', '0']),
     ).toThrow(/integer from 1 through 20/u);
+  });
+
+  it('binds the release scorecard to N-sample evaluation and explicit ratification posture', () => {
+    expect(
+      parseGoldenJourneyArgs([
+        '--scenario',
+        DEVEX_GOLDEN_RELEASE_SCENARIO,
+        '--samples',
+        '5',
+        '--evaluate',
+        '--require-ratified',
+      ]),
+    ).toMatchObject({
+      budgets: path.join(repoRoot, 'devex-budgets.json'),
+      dialects: ['postgres', 'sqlite'],
+      evaluate: true,
+      requireRatified: true,
+      samples: 5,
+      scenario: DEVEX_GOLDEN_RELEASE_SCENARIO,
+    });
+    expect(() =>
+      parseGoldenJourneyArgs(['--scenario', DEVEX_GOLDEN_RELEASE_SCENARIO, '--require-ratified']),
+    ).toThrow(/requires --evaluate/u);
+    expect(() => parseGoldenJourneyArgs(['--scenario', packedAppsScenario, '--evaluate'])).toThrow(
+      /only to release-scorecard/u,
+    );
   });
 
   it('authenticates an external manifest against its own release tarball root', () => {

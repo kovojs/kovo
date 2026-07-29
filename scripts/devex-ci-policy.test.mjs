@@ -39,12 +39,16 @@ describe('DevEx CI and baseline policy', () => {
 
     const browserAfterJourney = new Map(workflowSources);
     const workflow = browserAfterJourney.get('.github/workflows/devex-nightly.yml');
+    const journeyCommand = ci.gates.find((gate) => gate.id === 'nightly-packed-journeys')
+      .commands[0];
     browserAfterJourney.set(
       '.github/workflows/devex-nightly.yml',
-      workflow.replace(
-        '      - uses: ./.github/actions/playwright-install\n      - run: vp exec node scripts/golden-journey.mjs',
-        '      - run: vp exec node scripts/golden-journey.mjs\n      - uses: ./.github/actions/playwright-install',
-      ),
+      workflow
+        .replace('      - uses: ./.github/actions/playwright-install\n', '')
+        .replace(
+          `      - run: ${journeyCommand}`,
+          `      - run: ${journeyCommand}\n      - uses: ./.github/actions/playwright-install`,
+        ),
     );
     expect(validateDevexCiPolicy(ci, { workflowSources: browserAfterJourney })).toContain(
       'gates[4] must install the declared browser before its journey command',
@@ -75,6 +79,30 @@ describe('DevEx CI and baseline policy', () => {
     expect(validateDevexCiPolicy(releaseBypass, { workflowSources })).toContain(
       'releaseAuthority must cover every nightly DevEx gate',
     );
+
+    const partialJourney = structuredClone(ci);
+    partialJourney.gates.find((gate) => gate.id === 'nightly-packed-journeys').commands = [
+      'vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1',
+    ];
+    expect(validateDevexCiPolicy(partialJourney, { workflowSources })).toContain(
+      'gates[4] must bind both packed starters and the offline agent to one retained N>=5 release scorecard',
+    );
+
+    const discardedJourney = structuredClone(ci);
+    delete discardedJourney.gates.find((gate) => gate.id === 'nightly-packed-journeys')
+      .preserveReportOnFailure;
+    expect(validateDevexCiPolicy(discardedJourney, { workflowSources })).toContain(
+      'gates[4] must bind both packed starters and the offline agent to one retained N>=5 release scorecard',
+    );
+
+    const nonBindingBenchmark = structuredClone(ci);
+    nonBindingBenchmark.gates.find((gate) => gate.id === 'nightly-benchmark').commands[1] =
+      nonBindingBenchmark.gates
+        .find((gate) => gate.id === 'nightly-benchmark')
+        .commands[1].replace(' --require-ratified', '');
+    expect(validateDevexCiPolicy(nonBindingBenchmark, { workflowSources })).toContain(
+      'gates[3] must collect N>=5 and fail closed before runner budget ratification',
+    );
   });
 
   it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
@@ -93,6 +121,12 @@ describe('DevEx CI and baseline policy', () => {
     const prematurelyRatified = structuredClone(budgets);
     prematurelyRatified.metrics['check.cold.durationMs'].ratification = {};
     expect(validateDevexBaselinePolicy(baseline, prematurelyRatified, ci)).toContain(
+      'an unratified baseline policy cannot contain runner-bound metric ratifications',
+    );
+
+    const journeyRatified = structuredClone(budgets);
+    journeyRatified.metrics['dev.ready.cold.durationMs'].ratification = {};
+    expect(validateDevexBaselinePolicy(baseline, journeyRatified, ci)).not.toContain(
       'an unratified baseline policy cannot contain runner-bound metric ratifications',
     );
 
@@ -128,7 +162,7 @@ function policyWorkflowSources(policy) {
     if (gate.requiresBrowser) {
       lines.push('      - uses: ./.github/actions/playwright-install');
     }
-    if (['nightly-benchmark', 'pr-scorecard'].includes(gate.id)) {
+    if (['nightly-benchmark', 'nightly-packed-journeys', 'pr-scorecard'].includes(gate.id)) {
       lines.push(
         '      - run: |',
         '          printf \'%s\\n\' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"',
@@ -138,7 +172,21 @@ function policyWorkflowSources(policy) {
     }
     for (const command of gate.commands) lines.push(`      - run: ${command}`);
     if (gate.preserveReportOnFailure) {
-      lines.push('      - if: always()', '        with:', '          name: kovo-devex-baseline');
+      lines.push(
+        '      - if: always()',
+        '        with:',
+        `          name: ${
+          gate.id === 'nightly-packed-journeys'
+            ? 'kovo-devex-golden-journey'
+            : 'kovo-devex-baseline'
+        }`,
+        ...(gate.id === 'nightly-packed-journeys'
+          ? [
+              '          path: ${{ runner.temp }}/kovo-devex-golden',
+              '          include-hidden-files: true',
+            ]
+          : []),
+      );
     }
     if (gate.prVisible) {
       lines.push(

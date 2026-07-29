@@ -539,7 +539,7 @@ describe('DevEx benchmark foundation', () => {
   });
 
   it('closes the v5 metric vocabulary against invented and deleted gates', () => {
-    expect(budgets.schema).toBe('kovo-devex-budgets/v6');
+    expect(budgets.schema).toBe('kovo-devex-budgets/v7');
     expect(budgets.metrics).toMatchObject({
       'create.install.cold.durationMs': {
         unit: 'ms',
@@ -581,13 +581,13 @@ describe('DevEx benchmark foundation', () => {
       ratification: null,
     };
     expect(validateBudgets(invented)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v6 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v7 vocabulary'),
     );
 
     const deleted = structuredClone(budgets);
     delete deleted.metrics['check.cold.durationMs'];
     expect(validateBudgets(deleted)).toContainEqual(
-      expect.stringContaining('must contain the exact kovo-devex-budgets/v6 vocabulary'),
+      expect.stringContaining('must contain the exact kovo-devex-budgets/v7 vocabulary'),
     );
   });
 
@@ -1196,6 +1196,28 @@ describe('DevEx benchmark foundation', () => {
     expect(
       breach.results.find((result) => result.metric === 'check.cold.durationMs'),
     ).toMatchObject({ status: 'breach', observed: 112, threshold: 102 });
+  });
+
+  it('can collect an unratified report while making the release invocation fail closed', () => {
+    const report = benchmarkReport({
+      'check.cold.durationMs': [100, 101, 102, 103, 104],
+    });
+    const informational = evaluateBudgets(unratifiedBudgetFixture(), report);
+    const release = evaluateBudgets(unratifiedBudgetFixture(), report, {
+      requireRatified: true,
+    });
+
+    expect(informational.pass).toBe(true);
+    expect(
+      informational.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({ status: 'unratified' });
+    expect(release.pass).toBe(false);
+    expect(
+      release.results.find((result) => result.metric === 'check.cold.durationMs'),
+    ).toMatchObject({ status: 'unratified-required' });
+    expect(
+      release.results.find((result) => result.metric === 'dev.ready.cold.durationMs'),
+    ).toMatchObject({ status: 'not-applicable', source: 'golden-journey' });
   });
 
   it('makes evaluation red when a statistical report has fewer than five samples', () => {

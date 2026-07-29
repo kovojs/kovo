@@ -16,6 +16,7 @@ import {
   DEVEX_BENCHMARK_REPORT_SCHEMA,
   benchmarkWorkloadContractIdentity,
   statisticValue,
+  validateBudgets,
 } from './devex-benchmark.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { buildPublicApiInventory } from './public-api-inventory.mjs';
@@ -41,7 +42,7 @@ export function buildDevexPrReport({
   installedDocs = null,
   inventory,
 } = {}) {
-  const docs = docsFreshness(freshDocs, installedDocs);
+  const docs = docsFreshness(freshDocs, installedDocs, budgets);
   const publicSurface = {
     findings: inventory.findings,
     ...inventory.summary,
@@ -52,18 +53,30 @@ export function buildDevexPrReport({
     publicSurface,
     docs,
     speed,
-    pass: inventory.findings.length === 0 && docs.status !== 'stale',
+    pass:
+      inventory.findings.length === 0 && docs.status === 'current' && docs.budgetStatus === 'pass',
   };
 }
 
-export function docsFreshness(fresh, installed) {
+export function docsFreshness(fresh, installed, budgets) {
   if (!fresh?.snapshot || !Buffer.isBuffer(fresh.compressed)) {
     throw new TypeError('fresh docs snapshot evidence is required');
   }
   const installedBytes = fresh.snapshot.files.reduce((total, file) => total + file.bytes, 0);
+  const sizeBudgets = docsSizeBudgets(budgets, {
+    'docs.snapshot.compressedBytes': fresh.compressed.byteLength,
+    'docs.snapshot.installedBytes': installedBytes,
+  });
+  const budgetStatus = sizeBudgets.some((budget) => budget.status === 'breach')
+    ? 'breach'
+    : sizeBudgets.length === 2 && sizeBudgets.every((budget) => budget.status === 'pass')
+      ? 'pass'
+      : 'unratified';
   if (installed === null) {
     return {
       status: 'unavailable',
+      budgetStatus,
+      budgets: sizeBudgets,
       reason: 'No installed packed snapshot was supplied for comparison.',
       snapshotDigest: fresh.snapshot.snapshotDigest,
       publicManifestDigest: fresh.snapshot.publicManifestDigest,
@@ -80,6 +93,8 @@ export function docsFreshness(fresh, installed) {
     installed.version === fresh.snapshot.version;
   return {
     status: current ? 'current' : 'stale',
+    budgetStatus,
+    budgets: sizeBudgets,
     ...(current
       ? {}
       : {
@@ -149,6 +164,7 @@ export function speedDeltas(current, baseline, budgets) {
                 ? null
                 : ((currentValue - reference.value) / reference.value) * 100,
           }),
+      budget: speedBudget(metricId, currentValue, current, budgets),
     });
   }
   const comparison = statisticalBaseline
@@ -192,7 +208,7 @@ export function renderDevexPrReport(report) {
     '| Signal | Status | Evidence |',
     '| --- | --- | --- |',
     `| Public surface | ${surface.findings.length === 0 ? 'current' : 'findings'} | ${formatInteger(surface.manifestPublicSubpaths)} subpaths · ${formatInteger(surface.analyzedTypeScriptEntrypoints)} TS entrypoints · ${formatInteger(surface.exportedDeclarations)} declarations · ${formatInteger(surface.generatedFamilyMembers)} generated members |`,
-    `| Agent docs | ${report.docs.status} | ${report.docs.files} files · ${formatBytes(report.docs.compressedBytes)} compressed · ${formatBytes(report.docs.installedBytes)} installed |`,
+    `| Agent docs | ${report.docs.status}/${report.docs.budgetStatus} | ${report.docs.files} files · ${formatBytes(report.docs.compressedBytes)} compressed · ${formatBytes(report.docs.installedBytes)} installed |`,
     `| Speed | ${report.speed.status} | ${report.speed.currentSampleCount ?? 0} current sample(s) · comparison=${report.speed.comparison} |`,
   ];
   if (report.docs.reason) lines.push('', `Docs: ${report.docs.reason}`);
@@ -200,8 +216,8 @@ export function renderDevexPrReport(report) {
   if (report.speed.metrics.length > 0) {
     lines.push(
       '',
-      '| Speed metric | Current | Reference | Delta |',
-      '| --- | ---: | ---: | ---: |',
+      '| Speed metric | Current | Reference | Delta | Budget evidence |',
+      '| --- | ---: | ---: | ---: | --- |',
     );
     for (const metric of report.speed.metrics) {
       lines.push(
@@ -209,7 +225,7 @@ export function renderDevexPrReport(report) {
           metric.reference === null
             ? '—'
             : `${formatMs(metric.reference.value)} (${metric.reference.kind})`
-        } | ${metric.deltaPercent === null ? '—' : formatPercent(metric.deltaPercent)} |`,
+        } | ${metric.deltaPercent === null ? '—' : formatPercent(metric.deltaPercent)} | ${formatSpeedBudget(metric.budget)} |`,
       );
     }
   }
@@ -235,9 +251,16 @@ async function runDevexPrReport(argv = process.argv.slice(2)) {
     if (options.installedDocs && existsSync(options.installedDocs)) {
       installedDocs = decodeAgentDocsSnapshot(readFileSync(options.installedDocs));
     }
+    const budgets = JSON.parse(readFileSync(options.budgets, 'utf8'));
+    const budgetFindings = validateBudgets(budgets, {
+      repoRoot: path.dirname(options.budgets),
+    });
+    if (budgetFindings.length > 0) {
+      throw new Error(`invalid DevEx budgets:\n- ${budgetFindings.join('\n- ')}`);
+    }
     const report = buildDevexPrReport({
       baselineBenchmark: readOptionalJson(options.baseline),
-      budgets: JSON.parse(readFileSync(options.budgets, 'utf8')),
+      budgets,
       currentBenchmark: readOptionalJson(options.benchmark),
       freshDocs,
       installedDocs,
@@ -310,6 +333,44 @@ function validSamples(value) {
     value.length > 0 &&
     value.every((sample) => Number.isFinite(sample) && sample >= 0)
   );
+}
+
+function docsSizeBudgets(budgets, observations) {
+  return Object.entries(observations).map(([metric, observed]) => {
+    const ratification = budgets?.metrics?.[metric]?.ratification;
+    if (!ratification || !Number.isFinite(ratification.threshold)) {
+      return { metric, observed, status: 'unratified', threshold: null };
+    }
+    return {
+      metric,
+      observed,
+      status: observed > ratification.threshold ? 'breach' : 'pass',
+      threshold: ratification.threshold,
+    };
+  });
+}
+
+function speedBudget(metricId, observed, report, budgets) {
+  const metric = budgets?.metrics?.[metricId];
+  const ratification = metric?.ratification;
+  if (!ratification) return { status: 'unratified', threshold: null };
+  const exactRunner = sameJson(report?.runner, ratification.runnerFingerprint);
+  const exactWorkload = sameJson(
+    benchmarkWorkloadContractIdentity(report),
+    ratification.workloadIdentity,
+  );
+  if (!exactRunner || !exactWorkload) {
+    return { status: 'not-comparable', threshold: ratification.threshold };
+  }
+  return {
+    status: observed > ratification.threshold ? 'smoke-over' : 'smoke-within',
+    threshold: ratification.threshold,
+  };
+}
+
+function formatSpeedBudget(budget) {
+  if (budget?.threshold === null || budget?.threshold === undefined) return budget?.status ?? '—';
+  return `${budget.status} at ${formatMs(budget.threshold)}`;
 }
 
 function formatBytes(value) {

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -14,6 +15,11 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { applyEgressFloorEnv } from '../egress-floor.mjs';
+import {
+  discoverEnvSecrets,
+  preserveRedactedFailureArtifact,
+  redactSecrets,
+} from './artifacts.mjs';
 
 export const offlineAgentScenario = 'offline-agent';
 export const offlineAgentReportSchema = 'kovo.golden-journey/offline-agent/v1';
@@ -34,6 +40,7 @@ const DIAGNOSTIC_SEVERITIES = new Set(['error', 'warn', 'lint', 'notice']);
  * `kovo-diagnostic/v1` envelope, digest-checked installed-doc excerpts, and authored source.
  */
 export function runOfflineAgentJourney({
+  artifactRoot,
   commandRunner = runOfflineCommand,
   packedPackages,
   temporaryParent = tmpdir(),
@@ -185,9 +192,45 @@ export function runOfflineAgentJourney({
         path: SOURCE_PATH,
       }),
     });
+  } catch (error) {
+    const secretInventory = existsSync(appRoot)
+      ? discoverEnvSecrets(appRoot)
+      : Object.freeze({ keys: Object.freeze([]), values: Object.freeze([]) });
+    const artifact =
+      artifactRoot !== undefined && existsSync(appRoot)
+        ? preserveRedactedFailureArtifact({
+            appRoot,
+            artifactRoot,
+            label: 'offline-agent',
+          })
+        : null;
+    return Object.freeze({
+      agent: 'offline-json-and-local-docs-only',
+      failure: Object.freeze({
+        artifact:
+          artifact === null
+            ? null
+            : Object.freeze({
+                directory: path
+                  .relative(artifactRoot, artifact.directory)
+                  .split(path.sep)
+                  .join('/'),
+                manifest: path.relative(artifactRoot, artifact.manifest).split(path.sep).join('/'),
+                sha256: artifact.sha256,
+              }),
+        message: redactSecrets(
+          error instanceof Error ? error.message : String(error),
+          secretInventory.values,
+        ).slice(0, 4_096),
+      }),
+      pass: false,
+      phases: Object.freeze(phases),
+      scenario: offlineAgentScenario,
+      schema: offlineAgentReportSchema,
+    });
   } finally {
-    // Scaffolded `.env` contains generated credentials. Failure preservation belongs to the
-    // golden-runner artifact layer only after that layer implements verified redaction.
+    // Scaffolded `.env` contains generated credentials; only the bounded redacted artifact above
+    // can survive the fixture.
     rmSync(temporaryRoot, { force: true, recursive: true });
   }
 }

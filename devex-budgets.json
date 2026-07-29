@@ -1,5 +1,5 @@
 {
-  "schema": "kovo-devex-budgets/v6",
+  "schema": "kovo-devex-budgets/v7",
   "runner": {
     "status": "unratified",
     "fingerprint": null
@@ -16,6 +16,7 @@
   },
   "metrics": {
     "check.cold.durationMs": {
+      "source": "benchmark",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -24,6 +25,7 @@
       "ratification": null
     },
     "check.cold.peakRssBytes": {
+      "source": "benchmark",
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
@@ -32,6 +34,7 @@
       "ratification": null
     },
     "check.warm.durationMs": {
+      "source": "benchmark",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -40,6 +43,7 @@
       "ratification": null
     },
     "check.warm.peakRssBytes": {
+      "source": "benchmark",
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
@@ -48,6 +52,7 @@
       "ratification": null
     },
     "check.oneFileIncremental.durationMs": {
+      "source": "benchmark",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -56,6 +61,7 @@
       "ratification": null
     },
     "check.oneFileIncremental.peakRssBytes": {
+      "source": "benchmark",
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",
@@ -64,6 +70,7 @@
       "ratification": null
     },
     "create.install.cold.durationMs": {
+      "source": "golden-journey",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -72,6 +79,7 @@
       "ratification": null
     },
     "create.install.installedBytes": {
+      "source": "golden-journey",
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
@@ -80,6 +88,7 @@
       "ratification": null
     },
     "dev.editToDiagnostic.durationMs": {
+      "source": "benchmark",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -88,6 +97,7 @@
       "ratification": null
     },
     "dev.editToServedResult.durationMs": {
+      "source": "benchmark",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -96,6 +106,7 @@
       "ratification": null
     },
     "dev.ready.cold.durationMs": {
+      "source": "golden-journey",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -104,6 +115,7 @@
       "ratification": null
     },
     "dev.ready.warm.durationMs": {
+      "source": "golden-journey",
       "unit": "ms",
       "direction": "max",
       "sampling": "statistical",
@@ -112,6 +124,7 @@
       "ratification": null
     },
     "browser.bootstrapBytes": {
+      "source": "benchmark",
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
@@ -120,6 +133,7 @@
       "ratification": null
     },
     "docs.snapshot.compressedBytes": {
+      "source": "packed-docs",
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
@@ -154,6 +168,7 @@
       }
     },
     "docs.snapshot.installedBytes": {
+      "source": "packed-docs",
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
@@ -188,6 +203,7 @@
       }
     },
     "ui.fullCatalog.peakRssBytes": {
+      "source": "full-catalog",
       "unit": "bytes",
       "direction": "max",
       "sampling": "statistical",

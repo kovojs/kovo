@@ -34,6 +34,12 @@ import {
   nonSymlinkDescendant,
   nonSymlinkRootDirectory,
 } from './lib/non-symlink-path.mjs';
+import {
+  DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA,
+  goldenJourneyWorkloadIdentity,
+  validateGoldenReleaseScorecard,
+  validateGoldenWorkloadIdentity,
+} from './devex-golden-contract.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
 import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 import {
@@ -43,7 +49,7 @@ import {
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 import { releasePackages } from './release-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v6';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v7';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v4';
 export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
 export const DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA =
@@ -100,83 +106,99 @@ const DEV_PROFILE_METRICS = Object.freeze([
 ]);
 const DEVEX_METRIC_CONTRACT = Object.freeze({
   'browser.bootstrapBytes': Object.freeze({
+    source: 'benchmark',
     sampling: 'deterministic',
     statistic: 'median',
     unit: 'bytes',
   }),
   'check.cold.durationMs': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'check.cold.peakRssBytes': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'bytes',
   }),
   'check.oneFileIncremental.durationMs': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'check.oneFileIncremental.peakRssBytes': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'bytes',
   }),
   'check.warm.durationMs': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'check.warm.peakRssBytes': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'bytes',
   }),
   'create.install.cold.durationMs': Object.freeze({
+    source: 'golden-journey',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'create.install.installedBytes': Object.freeze({
+    source: 'golden-journey',
     sampling: 'deterministic',
     statistic: 'median',
     unit: 'bytes',
   }),
   'dev.editToDiagnostic.durationMs': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'ms',
   }),
   'dev.editToServedResult.durationMs': Object.freeze({
+    source: 'benchmark',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'ms',
   }),
   'dev.ready.cold.durationMs': Object.freeze({
+    source: 'golden-journey',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'dev.ready.warm.durationMs': Object.freeze({
+    source: 'golden-journey',
     sampling: 'statistical',
     statistic: 'median',
     unit: 'ms',
   }),
   'docs.snapshot.compressedBytes': Object.freeze({
+    source: 'packed-docs',
     binding: 'packed-artifact',
     sampling: 'deterministic',
     statistic: 'median',
     unit: 'bytes',
   }),
   'docs.snapshot.installedBytes': Object.freeze({
+    source: 'packed-docs',
     binding: 'packed-artifact',
     sampling: 'deterministic',
     statistic: 'median',
     unit: 'bytes',
   }),
   'ui.fullCatalog.peakRssBytes': Object.freeze({
+    source: 'full-catalog',
     sampling: 'statistical',
     statistic: 'p95',
     unit: 'bytes',
@@ -185,6 +207,10 @@ const DEVEX_METRIC_CONTRACT = Object.freeze({
 
 function metricBinding(metricId) {
   return DEVEX_METRIC_CONTRACT[metricId]?.binding ?? 'runner';
+}
+
+function metricSource(metricId) {
+  return DEVEX_METRIC_CONTRACT[metricId]?.source;
 }
 
 function compareStrings(left, right) {
@@ -538,7 +564,7 @@ export function validateBenchmarkScenario(scenario) {
   return findings;
 }
 
-function currentBenchmarkEnvironment(options = {}) {
+export function collectDevexEnvironment(options = {}) {
   if (options.observedEnvironment) return structuredClone(options.observedEnvironment);
   const repositoryRoot = path.resolve(options.repositoryRoot ?? defaultRepoRoot);
   const sourceCommit = checkedCommandOutput('git', ['rev-parse', 'HEAD'], repositoryRoot);
@@ -577,6 +603,8 @@ function currentBenchmarkEnvironment(options = {}) {
     cpuModel: os.cpus()[0]?.model ?? 'unknown',
   };
 }
+
+const currentBenchmarkEnvironment = collectDevexEnvironment;
 
 function checkedCommandOutput(executable, args, cwd) {
   const result = spawnSync(executable, args, {
@@ -2124,6 +2152,7 @@ function baselineSourceBytes(record, options) {
 function validateRatificationProvenance(metricId, metric, record, budgets, options) {
   const findings = [];
   const binding = metricBinding(metricId);
+  const evidenceSource = metricSource(metricId);
   const source = record?.baselineReport;
   if (!safeRepositoryRelativePath(source?.path)) {
     findings.push(`${metricId}.ratification.baselineReport.path must be repository-relative`);
@@ -2134,13 +2163,17 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   const allowedSchemas =
     binding === 'packed-artifact'
       ? new Set([DEVEX_BENCHMARK_REPORT_SCHEMA, DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA])
-      : new Set([DEVEX_BENCHMARK_REPORT_SCHEMA]);
+      : evidenceSource === 'golden-journey'
+        ? new Set([DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA])
+        : new Set([DEVEX_BENCHMARK_REPORT_SCHEMA]);
   if (!allowedSchemas.has(source?.schema)) {
     findings.push(
       `${metricId}.ratification.baselineReport.schema must be ${
         binding === 'packed-artifact'
           ? `${DEVEX_BENCHMARK_REPORT_SCHEMA} or ${DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA}`
-          : DEVEX_BENCHMARK_REPORT_SCHEMA
+          : evidenceSource === 'golden-journey'
+            ? DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA
+            : DEVEX_BENCHMARK_REPORT_SCHEMA
       }`,
     );
   }
@@ -2171,11 +2204,14 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
     findings.push(`${metricId}.ratification baseline report is not valid JSON`);
     return findings;
   }
-  const reportIdentityFindings = validateRatificationReportIdentity(
-    report,
-    `${metricId}.ratification.baselineReport`,
-    binding === 'packed-artifact',
-  );
+  const reportIdentityFindings =
+    evidenceSource === 'golden-journey'
+      ? validateGoldenReleaseScorecard(report, `${metricId}.ratification.baselineReport`)
+      : validateRatificationReportIdentity(
+          report,
+          `${metricId}.ratification.baselineReport`,
+          binding === 'packed-artifact',
+        );
   findings.push(...reportIdentityFindings);
   if (reportIdentityFindings.length > 0) return findings;
   if (
@@ -2189,12 +2225,17 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
   }
   const reportWorkloadIdentity =
-    binding === 'runner' ? benchmarkWorkloadContractIdentity(report) : null;
+    binding !== 'runner'
+      ? null
+      : evidenceSource === 'golden-journey'
+        ? goldenJourneyWorkloadIdentity(report)
+        : benchmarkWorkloadContractIdentity(report);
   if (binding === 'runner' && !sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
     findings.push(`${metricId}.ratification workload does not match its baseline report`);
   }
   if (
     binding === 'runner' &&
+    evidenceSource === 'benchmark' &&
     budgets?.workload?.status === 'ratified' &&
     !sameJson(reportWorkloadIdentity, budgets.workload.identity)
   ) {
@@ -2307,10 +2348,11 @@ export function validateBudgets(budgets, options = {}) {
       contract &&
       (metric?.unit !== contract.unit ||
         metric?.sampling !== contract.sampling ||
-        metric?.statistic !== contract.statistic)
+        metric?.statistic !== contract.statistic ||
+        metric?.source !== contract.source)
     ) {
       findings.push(
-        `${metricId} must retain unit=${contract.unit}, sampling=${contract.sampling}, and statistic=${contract.statistic}`,
+        `${metricId} must retain unit=${contract.unit}, sampling=${contract.sampling}, statistic=${contract.statistic}, and source=${contract.source}`,
       );
     }
     const expectedBinding = metricBinding(metricId);
@@ -2403,14 +2445,20 @@ export function validateBudgets(budgets, options = {}) {
         ),
       );
       findings.push(
-        ...validateWorkloadIdentity(
-          record.workloadIdentity,
-          `${metricId}.ratification.workloadIdentity`,
-        ),
+        ...(metricSource(metricId) === 'golden-journey'
+          ? validateGoldenWorkloadIdentity(
+              record.workloadIdentity,
+              `${metricId}.ratification.workloadIdentity`,
+            )
+          : validateWorkloadIdentity(
+              record.workloadIdentity,
+              `${metricId}.ratification.workloadIdentity`,
+            )),
       );
     }
     if (
       expectedBinding === 'runner' &&
+      metricSource(metricId) === 'benchmark' &&
       budgets?.runner?.status === 'ratified' &&
       !sameJson(record.runnerFingerprint, budgets.runner.fingerprint)
     ) {
@@ -2418,6 +2466,7 @@ export function validateBudgets(budgets, options = {}) {
     }
     if (
       expectedBinding === 'runner' &&
+      metricSource(metricId) === 'benchmark' &&
       budgets?.workload?.status === 'ratified' &&
       !sameJson(record.workloadIdentity, budgets.workload.identity)
     ) {
@@ -2426,7 +2475,10 @@ export function validateBudgets(budgets, options = {}) {
     findings.push(...validateRatificationProvenance(metricId, metric, record, budgets, options));
   }
   const runnerRatifiedMetricCount = Object.entries(budgets.metrics).filter(
-    ([metricId, metric]) => metricBinding(metricId) === 'runner' && metric?.ratification !== null,
+    ([metricId, metric]) =>
+      metricBinding(metricId) === 'runner' &&
+      metricSource(metricId) === 'benchmark' &&
+      metric?.ratification !== null,
   ).length;
   if (budgets?.runner?.status === 'unratified' && runnerRatifiedMetricCount > 0) {
     findings.push(
@@ -2470,13 +2522,31 @@ function validateProposal(proposal, options = {}) {
  * supplies the product target and rationale; the harness never invents a threshold from one run.
  */
 export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
+  const reportSource =
+    baselineReport?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA ? 'golden-journey' : 'benchmark';
   if (
-    baselineReport?.scenario?.name !== 'kovo-packed-check' ||
-    !authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
-    !sameJson(baselineReport.scenario.definition, options.authenticatedProductionScenario)
+    reportSource === 'benchmark' &&
+    (baselineReport?.scenario?.name !== 'kovo-packed-check' ||
+      !authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
+      !sameJson(baselineReport.scenario.definition, options.authenticatedProductionScenario))
   ) {
     throw new Error(
       'budget ratification requires the exact production scenario authenticated by the fresh code-owned pack producer',
+    );
+  }
+  const proposalMetricIds =
+    proposal?.metrics && typeof proposal.metrics === 'object' && !Array.isArray(proposal.metrics)
+      ? Object.keys(proposal.metrics)
+      : [];
+  const incompatibleMetrics = proposalMetricIds.filter((metricId) => {
+    const source = metricSource(metricId);
+    return reportSource === 'golden-journey'
+      ? source !== 'golden-journey'
+      : !['benchmark', 'packed-docs'].includes(source);
+  });
+  if (incompatibleMetrics.length > 0) {
+    throw new Error(
+      `${reportSource} baseline cannot ratify metrics from another evidence source: ${incompatibleMetrics.join(', ')}`,
     );
   }
   const runnerBoundProposal =
@@ -2492,7 +2562,9 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     ...validateProposal(proposal, { requiresRunner: runnerBoundProposal }),
   ];
   findings.push(
-    ...validateRatificationReportIdentity(baselineReport, 'baselineReport', !runnerBoundProposal),
+    ...(reportSource === 'golden-journey'
+      ? validateGoldenReleaseScorecard(baselineReport, 'baselineReport')
+      : validateRatificationReportIdentity(baselineReport, 'baselineReport', !runnerBoundProposal)),
   );
   if (!safeRepositoryRelativePath(options.baselineReportPath)) {
     findings.push('baselineReportPath must be a repository-relative path');
@@ -2515,6 +2587,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   }
   if (
     runnerBoundProposal &&
+    reportSource === 'benchmark' &&
     budgets.runner.status === 'ratified' &&
     !sameJson(budgets.runner.fingerprint, baselineReport.runner)
   ) {
@@ -2522,6 +2595,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   }
   if (
     runnerBoundProposal &&
+    reportSource === 'benchmark' &&
     budgets.workload.status === 'ratified' &&
     !sameJson(budgets.workload.identity, benchmarkWorkloadContractIdentity(baselineReport))
   ) {
@@ -2529,7 +2603,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   }
 
   const updated = structuredClone(budgets);
-  if (runnerBoundProposal) {
+  if (runnerBoundProposal && reportSource === 'benchmark') {
     updated.runner = {
       status: 'ratified',
       fingerprint: structuredClone(baselineReport.runner),
@@ -2558,6 +2632,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     const binding = metricBinding(metricId);
     if (
       binding === 'packed-artifact' &&
+      reportSource === 'benchmark' &&
       !sameJson(
         baselineMetric?.evidence,
         authenticatedProductionDocsEvidence.get(options.authenticatedProductionScenario),
@@ -2604,7 +2679,11 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       runnerFingerprint:
         binding === 'packed-artifact' ? null : structuredClone(baselineReport.runner),
       workloadIdentity:
-        binding === 'packed-artifact' ? null : benchmarkWorkloadContractIdentity(baselineReport),
+        binding === 'packed-artifact'
+          ? null
+          : reportSource === 'golden-journey'
+            ? goldenJourneyWorkloadIdentity(baselineReport)
+            : benchmarkWorkloadContractIdentity(baselineReport),
       baselineReport: structuredClone(baselineReportSource),
       ...(binding === 'packed-artifact'
         ? { binding: packedArtifactBinding(baselineMetric.evidence) }
@@ -2633,15 +2712,34 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
 export function evaluateBudgets(budgets, report, options = {}) {
   const findings = validateBudgets(budgets, options);
   if (findings.length > 0) throw new Error(`Invalid DevEx budgets:\n- ${findings.join('\n- ')}`);
-  const reportFindings = validateBenchmarkReportIdentity(report);
+  const reportSource =
+    report?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA ? 'golden-journey' : 'benchmark';
+  const reportFindings =
+    reportSource === 'golden-journey'
+      ? validateGoldenReleaseScorecard(report)
+      : validateBenchmarkReportIdentity(report);
   if (reportFindings.length > 0) {
-    throw new Error(`Invalid benchmark report:\n- ${reportFindings.join('\n- ')}`);
+    throw new Error(`Invalid ${reportSource} report:\n- ${reportFindings.join('\n- ')}`);
   }
-  const reportWorkload = benchmarkWorkloadContractIdentity(report);
+  const reportWorkload =
+    reportSource === 'golden-journey'
+      ? goldenJourneyWorkloadIdentity(report)
+      : benchmarkWorkloadContractIdentity(report);
   const results = [];
   for (const [metricId, metric] of Object.entries(budgets.metrics)) {
+    const source = metricSource(metricId);
+    const applicable =
+      source === reportSource || (reportSource === 'benchmark' && source === 'packed-docs');
+    if (!applicable) {
+      results.push({ metric: metricId, source, status: 'not-applicable' });
+      continue;
+    }
     if (metric.ratification === null) {
-      results.push({ metric: metricId, status: 'unratified' });
+      results.push({
+        metric: metricId,
+        source,
+        status: options.requireRatified === true ? 'unratified-required' : 'unratified',
+      });
       continue;
     }
     const binding = metricBinding(metricId);
@@ -2728,6 +2826,7 @@ export function evaluateBudgets(budgets, report, options = {}) {
           'runner-mismatch',
           'scenario-mismatch',
           'unit-mismatch',
+          'unratified-required',
         ].includes(result.status),
     ),
     results,
@@ -3209,6 +3308,7 @@ function parseArgs(argv) {
     else if (arg === '--output') args.output = argv[++index];
     else if (arg === '--budgets') args.budgets = argv[++index];
     else if (arg === '--evaluate') args.evaluate = true;
+    else if (arg === '--require-ratified') args.requireRatified = true;
     else if (arg === '--deterministic-artifacts') args.deterministicArtifacts = true;
     else if (arg === '--ratify') args.ratify = true;
     else if (arg === '--baseline') args.baseline = argv[++index];
@@ -3226,7 +3326,7 @@ function parseArgs(argv) {
 function usage() {
   return [
     'Usage:',
-    '  node scripts/devex-benchmark.mjs --scenario <file> [--samples N] [--output <file>] [--evaluate]',
+    '  node scripts/devex-benchmark.mjs --scenario <file> [--samples N] [--output <file>] [--evaluate] [--require-ratified]',
     '  node scripts/devex-benchmark.mjs --scenario <file> --deterministic-artifacts [--output <file>]',
     '  node scripts/devex-benchmark.mjs --ratify --baseline <report> [--baseline-record-path <path>] --proposal <file> [--write]',
     '  node scripts/devex-benchmark.mjs --check-budgets',
@@ -3280,6 +3380,21 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
       args.baselineRecordPath ?? path.relative(budgetsRoot, baselinePath);
     const baselineBytes = readFileSync(baselinePath);
     const baselineReport = JSON.parse(baselineBytes.toString('utf8'));
+    if (baselineReport?.schema === DEVEX_GOLDEN_RELEASE_REPORT_SCHEMA) {
+      const updated = ratifyBudgets(
+        budgets,
+        baselineReport,
+        readJson(path.resolve(args.proposal)),
+        {
+          baselineReportPath: relativeBaselinePath,
+          baselineReportBytes: baselineBytes,
+          repoRoot: budgetsRoot,
+        },
+      );
+      if (args.write) writeJson(args.budgets, updated);
+      else process.stdout.write(`${JSON.stringify(updated, null, 2)}\n`);
+      return 0;
+    }
     const productionScenarioFindings =
       baselineReport?.scenario?.name === 'kovo-packed-check'
         ? validateKovoProductionScenario(
@@ -3333,6 +3448,9 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
   if (args.deterministicArtifacts && args.evaluate) {
     throw new Error('--deterministic-artifacts cannot be combined with --evaluate');
   }
+  if (args.requireRatified && !args.evaluate) {
+    throw new Error('--require-ratified requires --evaluate');
+  }
   const report = args.deterministicArtifacts
     ? runDeterministicArtifactScenario(readJson(scenarioPath))
     : runBenchmarkScenario(readJson(scenarioPath), {
@@ -3342,6 +3460,7 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
   if (args.evaluate) {
     report.evaluation = evaluateBudgets(budgets, report, {
       repoRoot: path.dirname(path.resolve(args.budgets)),
+      requireRatified: args.requireRatified,
     });
   }
   if (args.output) writeJson(args.output, report);
