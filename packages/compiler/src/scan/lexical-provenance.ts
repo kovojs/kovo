@@ -96,9 +96,13 @@ const reviewedFrameworkOpaqueValueCalls = new Set([
 ]);
 const reviewedFrameworkDeclarationFactoryCalls = new Set([
   frameworkCallModelId('@kovojs/server', '.', 'defineKovo'),
-  frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
-  frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
-  frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'),
+  frameworkCallModelId('@kovojs/core', '.', 'createMemoryStorage'),
+  frameworkCallModelId(
+    '@kovojs/server',
+    './client-modules',
+    'createMemoryVersionedClientModuleRegistry',
+  ),
+  frameworkCallModelId('@kovojs/server', './files', 'rootedFiles'),
 ]);
 const reviewedFrameworkDeclarationReceiverMethods = new Map([
   [
@@ -122,14 +126,18 @@ const reviewedFrameworkDeclarationReceiverMethods = new Map([
   ],
   [frameworkCallModelId('@kovojs/server', '.', 'query'), new Set(['optimistic'])],
   [
-    frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
+    frameworkCallModelId('@kovojs/core', '.', 'createMemoryStorage'),
     new Set(['delete', 'get', 'put', 'stat', 'stream']),
   ],
   [
-    frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
+    frameworkCallModelId(
+      '@kovojs/server',
+      './client-modules',
+      'createMemoryVersionedClientModuleRegistry',
+    ),
     new Set(['buildToken', 'entries', 'put', 'resolve']),
   ],
-  [frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'), new Set(['serve'])],
+  [frameworkCallModelId('@kovojs/server', './files', 'rootedFiles'), new Set(['serve'])],
 ]);
 // Keep this finite: frozen `s` declaration builders/modifiers return schema data. Parse, storage,
 // callback-bearing, and otherwise effectful APIs intentionally remain opaque (SPEC §6.6, §13.1).

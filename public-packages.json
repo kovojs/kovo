@@ -1838,7 +1838,43 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [".", "./build", "./runtime-bootstrap", "./sqlite", "./testing", "./vite"],
+        "public": [
+          ".",
+          "./agent",
+          "./build",
+          "./client-modules",
+          "./command",
+          "./confidential",
+          "./custom-adapters",
+          "./data",
+          "./delegation",
+          "./derived-data",
+          "./diagnostics",
+          "./egress",
+          "./files",
+          "./node",
+          "./password",
+          "./postgres",
+          "./principal-epochs",
+          "./principal-erasure",
+          "./render-tree",
+          "./rendering",
+          "./replay",
+          "./routing",
+          "./runtime-bootstrap",
+          "./secret-reading",
+          "./security",
+          "./signing",
+          "./sqlite",
+          "./static-export",
+          "./storage-downloads",
+          "./storage-keys",
+          "./tasks",
+          "./testing",
+          "./vite",
+          "./webhooks",
+          "./write-safety"
+        ],
         "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
@@ -1877,7 +1913,12 @@
           {
             "path": ".",
             "slug": "server",
-            "description": "Schemas and validation, guards and sessions, the request lifecycle, route matching, rendering, and streaming."
+            "description": "The ordinary app declaration surface: schemas, access, routes, queries, mutations, responses, and document structure."
+          },
+          {
+            "path": "./agent",
+            "slug": "server-agent",
+            "description": "Agent sessions, typed tools, model decisions, and turn execution."
           },
           {
             "path": "./build",
@@ -1885,14 +1926,144 @@
             "description": "Build-time deployment presets and neutral artifact helpers for kovo build."
           },
           {
+            "path": "./client-modules",
+            "slug": "server-client-modules",
+            "description": "Versioned client-module registries and storage contracts."
+          },
+          {
+            "path": "./command",
+            "slug": "server-command",
+            "description": "Allowlisted operating-system command construction and execution."
+          },
+          {
+            "path": "./confidential",
+            "slug": "server-confidential",
+            "description": "Confidential-at-rest encryption, decryption, and key rewrapping."
+          },
+          {
+            "path": "./custom-adapters",
+            "slug": "server-custom-adapters",
+            "description": "Opaque app tokens and request handlers for custom server integrations."
+          },
+          {
+            "path": "./data",
+            "slug": "server-data",
+            "description": "Managed-data read declarations, invalidation records, and cache influences."
+          },
+          {
+            "path": "./delegation",
+            "slug": "server-delegation",
+            "description": "Principal delegation authorities and on-behalf-of execution."
+          },
+          {
+            "path": "./derived-data",
+            "slug": "server-derived-data",
+            "description": "Derived vector dataset declarations and storage adapters."
+          },
+          {
+            "path": "./diagnostics",
+            "slug": "server-diagnostics",
+            "description": "Application diagnostic and server error reporting contracts."
+          },
+          {
+            "path": "./egress",
+            "slug": "server-egress",
+            "description": "Outbound network policy configuration and blocked-egress diagnostics."
+          },
+          {
+            "path": "./files",
+            "slug": "server-files",
+            "description": "Root-confined filesystem access and file-serving options."
+          },
+          {
+            "path": "./node",
+            "slug": "server-node",
+            "description": "Node.js HTTP handler adapters."
+          },
+          {
+            "path": "./password",
+            "slug": "server-password",
+            "description": "Argon2id password hashing and credential verification."
+          },
+          {
+            "path": "./postgres",
+            "slug": "server-postgres",
+            "description": "Postgres provisioning, migration planning, posture checks, and runtime databases."
+          },
+          {
+            "path": "./principal-epochs",
+            "slug": "server-principal-epochs",
+            "description": "Principal epoch lifecycle and stale-principal enforcement."
+          },
+          {
+            "path": "./principal-erasure",
+            "slug": "server-principal-erasure",
+            "description": "Principal erasure orchestration and verifiable receipts."
+          },
+          {
+            "path": "./render-tree",
+            "slug": "server-render-tree",
+            "description": "Structured component XML parsing and registry-backed tree rendering."
+          },
+          {
+            "path": "./rendering",
+            "slug": "server-rendering",
+            "description": "Advanced route rendering, document authoring, metadata, and prefetch contracts."
+          },
+          {
+            "path": "./replay",
+            "slug": "server-replay",
+            "description": "Mutation replay stores and Postgres replay surfaces."
+          },
+          {
+            "path": "./routing",
+            "slug": "server-routing",
+            "description": "Advanced endpoint, guard, route, and response declaration types."
+          },
+          {
             "path": "./runtime-bootstrap",
             "slug": "server-runtime-bootstrap",
             "description": "First-import runtime lockdown for custom server entries."
           },
           {
+            "path": "./secret-reading",
+            "slug": "server-secret-reading",
+            "description": "Explicit secret-read capability declarations."
+          },
+          {
+            "path": "./security",
+            "slug": "server-security",
+            "description": "Explicit security postures for cookies, CSRF, uploads, CSP, and regular expressions."
+          },
+          {
+            "path": "./signing",
+            "slug": "server-signing",
+            "description": "Validated signing key-ring construction and key lifecycle types."
+          },
+          {
             "path": "./sqlite",
             "slug": "server-sqlite",
             "description": "Experimental single-principal SQLite runtime with framework-owned native database construction."
+          },
+          {
+            "path": "./static-export",
+            "slug": "server-static-export",
+            "description": "Static app export execution, policy, and diagnostics."
+          },
+          {
+            "path": "./storage-downloads",
+            "slug": "server-storage-downloads",
+            "description": "Capability-protected storage download endpoint construction."
+          },
+          {
+            "path": "./storage-keys",
+            "slug": "server-storage-keys",
+            "description": "Server-side scoped storage key derivation."
+          },
+          {
+            "path": "./tasks",
+            "slug": "server-tasks",
+            "description": "Durable task declarations, scheduling, and status observation."
           },
           {
             "path": "./testing",
@@ -1903,6 +2074,16 @@
             "path": "./vite",
             "slug": "server-vite",
             "description": "The Vite plugin that serves authored Kovo apps through the app shell in development and build."
+          },
+          {
+            "path": "./webhooks",
+            "slug": "server-webhooks",
+            "description": "Webhook declarations, replay protection, and transaction contracts."
+          },
+          {
+            "path": "./write-safety",
+            "slug": "server-write-safety",
+            "description": "Explicit server-derived and trusted assignment write evidence."
           }
         ]
       }

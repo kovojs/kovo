@@ -1178,7 +1178,7 @@ function discoverRoots(
         if (kind === undefined) continue;
         if (kind === 'durable-task' && call.hasCron) kind = 'scheduled-task';
         const callbackOrigins =
-          factoryId === frameworkMemberId('@kovojs/server', '.', 'toNodeHandler')
+          factoryId === frameworkMemberId('@kovojs/server', './node', 'toNodeHandler')
             ? resolveCallUse(resolver, module.fileName, call, true).origins
             : [];
         const callbackOrigin = callbackOrigins.find(
@@ -1283,7 +1283,7 @@ function packageUses(
       );
       if (
         origin?.kind !== 'package' ||
-        origin.specifier !== '@kovojs/server' ||
+        origin.specifier !== '@kovojs/server/node' ||
         origin.exportName !== 'toNodeHandler' ||
         (call.firstArgumentBinding === undefined && call.firstArgumentCandidates === undefined)
       ) {

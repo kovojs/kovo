@@ -647,9 +647,7 @@ describe('server app-shell public API barrels', () => {
       onBehalfOf: delegationApi.onBehalfOf,
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
-      // env/secret validation surface — the typed boot error, its guard, and the
-      // committed-secret waiver are public at the root barrel.
-      committedSecretWaiver: envApi.committedSecretWaiver,
+      // env/secret validation surface — the typed boot error and its guard are public.
       CreateAppBootError: envApi.CreateAppBootError,
       isCreateAppBootError: envApi.isCreateAppBootError,
       // SPEC.md §6.6 / plans/secure-framework.md Phase 5: app-facing egress config errors

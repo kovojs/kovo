@@ -121,36 +121,85 @@ describe('framework identity resolver', () => {
     ).toBeUndefined();
   });
 
-  it('catalogs createApp as the app-authoring root by exact package identity', () => {
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toEqual({
-      exportName: 'createApp',
+  it('catalogs defineKovo as the app-authoring root by exact package identity', () => {
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'defineKovo')).toEqual({
+      exportName: 'defineKovo',
       module: '@kovojs/server',
     });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp'),
+    ).toBeUndefined();
   });
 
-  it('catalogs public command and storage authority across server re-exports', () => {
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'commandAllowlist')).toEqual({
-      exportName: 'commandAllowlist',
-      module: '@kovojs/server',
-    });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'runCommand')).toEqual({
+  it('catalogs server authorities only from their semantic task subpaths', () => {
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/command', 'runCommand'),
+    ).toEqual({
       exportName: 'runCommand',
       module: '@kovojs/server',
     });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'csrfField')).toEqual({
-      exportName: 'csrfField',
-      module: '@kovojs/server',
-    });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'mintCsrfToken')).toEqual({
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'runCommand')).toBeUndefined();
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/security', 'mintCsrfToken'),
+    ).toEqual({
       exportName: 'mintCsrfToken',
       module: '@kovojs/server',
     });
     expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createFileSystemStorage'),
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/agent', 'agent'),
+    ).toEqual({
+      exportName: 'agent',
+      module: '@kovojs/server',
+    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server/tasks', 'task')).toEqual({
+      exportName: 'task',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/webhooks', 'webhook'),
+    ).toEqual({
+      exportName: 'webhook',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/files', 'rootedFiles'),
+    ).toEqual({
+      exportName: 'rootedFiles',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/storage-keys', 'scopedKey'),
+    ).toEqual({
+      exportName: 'scopedKey',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/derived-data', 'derived'),
+    ).toEqual({
+      exportName: 'derived',
+      module: '@kovojs/server',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server/write-safety', 'serverValue'),
+    ).toEqual({
+      exportName: 'serverValue',
+      module: '@kovojs/server',
+    });
+  });
+
+  it('catalogs core storage and scoped keys without server duplicate homes', () => {
+    expect(
+      frameworkCatalogExportForModuleSpecifier(
+        '@kovojs/core/storage',
+        'createFileSystemStorage',
+      ),
     ).toEqual({
       exportName: 'createFileSystemStorage',
       module: '@kovojs/core',
     });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createFileSystemStorage'),
+    ).toBeUndefined();
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/core/storage', 'createS3CompatibleStorage'),
     ).toEqual({
@@ -160,14 +209,13 @@ describe('framework identity resolver', () => {
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'createS3CompatibleStorage'),
     ).toBeUndefined();
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'publicScopedKey')).toEqual({
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'publicScopedKey')).toEqual({
       exportName: 'publicScopedKey',
       module: '@kovojs/core',
     });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'scopedKey')).toEqual({
-      exportName: 'scopedKey',
-      module: '@kovojs/server',
-    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'publicScopedKey'),
+    ).toBeUndefined();
   });
 
   it('catalogs security doors only from their canonical task subpath', () => {

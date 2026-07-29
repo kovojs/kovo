@@ -5,7 +5,6 @@ import { createApp } from './app.js';
 import { commandAllowlist } from './command.js';
 import { unsafeCookie } from './cookies.js';
 import { endpoint } from './endpoint.js';
-import { committedSecretWaiver } from './env.js';
 import { guard, guards } from './guards.js';
 import { declarePublicRead } from './managed-db.js';
 import { declarePublicRelation } from './postgres-runtime.js';
@@ -49,9 +48,6 @@ describe('server audited text floor (SPEC §6.6)', () => {
         /machine-readable/u,
       );
       expect(() => publicAccess(forged)).toThrow(/printable|control/u);
-      expect(() => committedSecretWaiver('fixture', { justification: forged })).toThrow(
-        /printable|control/u,
-      );
       expect(() => replayMutationWireBody('cached', { reason: forged })).toThrow(
         /printable|control/u,
       );
@@ -66,7 +62,6 @@ describe('server audited text floor (SPEC §6.6)', () => {
       /machine-readable/u,
     );
     expect(() => publicAccess(oversized)).toThrow(/4096/u);
-    expect(() => committedSecretWaiver('fixture', { justification: oversized })).toThrow(/4096/u);
     expect(() => replayMutationWireBody('cached', { reason: oversized })).toThrow(/4096/u);
     expect(() => unsafeRegex(new RegExp(oversized, 'u'), 'bounded source regression')).toThrow(
       /4096/u,

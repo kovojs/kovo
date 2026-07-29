@@ -1,5 +1,4 @@
 import type { Schema } from './schema.js';
-import { snapshotAuditJustification } from './audit-justification.js';
 import {
   isFrameworkCsrfSigningSecret,
   isSigningKeyRing,
@@ -23,7 +22,6 @@ import {
 } from './response-security-intrinsics.js';
 import {
   createWitnessMap,
-  createWitnessSet,
   witnessArrayAppend,
   witnessCreateNullRecord,
   witnessFreeze,
@@ -33,9 +31,6 @@ import {
   witnessMapGet,
   witnessMapSet,
   witnessMapSize,
-  witnessObjectIs,
-  witnessSetAdd,
-  witnessSetHas,
 } from './security-witness-intrinsics.js';
 
 const EMPTY_APP_ENV = witnessFreeze(witnessCreateNullRecord<unknown>()) as Readonly<
@@ -371,63 +366,21 @@ function appendEnvIssue(issues: EnvValidationIssue[], issue: EnvValidationIssue)
  * Audit-grade committed-secret detection (SPEC §6.6; `plans/secure-framework.md` Tier 1,
  * secondary). Flags a framework secret that looks like a hardcoded high-entropy literal
  * (long + high-variety + no env-lookup laundering). This is a heuristic with false
- * positives, so it is **advisory** and suppressible by passing the secret through
- * `committedSecretWaiver(value, { justification })`.
+ * positives, so it is **advisory**.
  *
  * NOTE: a true by-construction "the literal in source is the secret" check requires AST
  * provenance the server package does not own (it would need the compiler to prove the
  * argument is a string literal, not an env read). That is out of this slice's ownership.
  * // SF-WIRE: a compiler/cli provenance pass over `createApp({ csrf: { secret } })` would
  * // turn this runtime heuristic into an audit-grade lint surfaced in `kovo explain`.
- * The runtime helper here gives apps a waiver primitive now; the compiler lint is the
- * follow-up. We keep this as a stand-alone helper rather than wiring it into the fatal
- * path so its false positives never brick a deploy.
+ * We keep this as a stand-alone helper rather than wiring it into the fatal path so its
+ * false positives never brick a deploy.
  */
 export function looksLikeCommittedSecret(value: unknown): boolean {
   if (typeof value !== 'string') return false;
-  if (isWaived(value)) return false;
   if (value.length < FRAMEWORK_SECRET_MIN_LENGTH) return false;
   // High-entropy literal heuristic: long, varied alphabet, ≥80 bits estimated.
   return estimateEntropyBits(value) >= 80 && distinctRatio(value) >= 0.4;
-}
-
-const WAIVED_STRINGS = createWitnessSet<string>();
-
-/**
- * Mark a framework-secret value as an audited committed-secret waiver so
- * `looksLikeCommittedSecret` stops flagging it. Apps that intentionally inline a public,
- * non-sensitive token (a test fixture, a documented sample) pass it through here with a
- * `justification` recorded for the audit trail.
- */
-export function committedSecretWaiver(value: string, options: { justification: string }): string {
-  if (!options || typeof options !== 'object') {
-    throw new TypeError(
-      'committedSecretWaiver requires a non-empty justification (audited in the committed-secret lint, SPEC §6.6).',
-    );
-  }
-  const before = witnessGetOwnPropertyDescriptor(options, 'justification');
-  const after = witnessGetOwnPropertyDescriptor(options, 'justification');
-  if (
-    before === undefined ||
-    after === undefined ||
-    !('value' in before) ||
-    !('value' in after) ||
-    !witnessObjectIs(before.value, after.value)
-  ) {
-    throw new TypeError(
-      'committedSecretWaiver justification must be a stable own data property (SPEC §6.6).',
-    );
-  }
-  snapshotAuditJustification(
-    before.value,
-    'committedSecretWaiver() (audited in the committed-secret lint, SPEC §6.6)',
-  );
-  witnessSetAdd(WAIVED_STRINGS, value);
-  return value;
-}
-
-function isWaived(value: string): boolean {
-  return witnessSetHas(WAIVED_STRINGS, value);
 }
 
 /**

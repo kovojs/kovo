@@ -180,11 +180,9 @@ const TOOL_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'tool');
 const VERIFIED_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'verifiedAccess');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const CSRF_FIELD_IDENTITIES: readonly FrameworkExportIdentity[] = [
-  frameworkExport('@kovojs/server', 'csrfField'),
   frameworkExport('@kovojs/server', 'mintCsrfField'),
 ];
 const CSRF_TOKEN_IDENTITIES: readonly FrameworkExportIdentity[] = [
-  frameworkExport('@kovojs/server', 'csrfToken'),
   frameworkExport('@kovojs/server', 'mintCsrfToken'),
 ];
 const JSX_RUNTIME_FACTORY_IDENTITIES = {

@@ -11,11 +11,40 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./agent": "./src/public-agent.ts",
     "./build": "./src/build.ts",
+    "./client-modules": "./src/public-client-modules.ts",
+    "./command": "./src/public-command.ts",
+    "./confidential": "./src/public-confidential.ts",
+    "./custom-adapters": "./src/public-custom-adapters.ts",
+    "./data": "./src/public-data.ts",
+    "./delegation": "./src/public-delegation.ts",
+    "./derived-data": "./src/public-derived-data.ts",
+    "./diagnostics": "./src/public-diagnostics.ts",
+    "./egress": "./src/public-egress.ts",
+    "./files": "./src/public-files.ts",
+    "./node": "./src/public-node.ts",
+    "./password": "./src/public-password.ts",
+    "./postgres": "./src/public-postgres.ts",
+    "./principal-epochs": "./src/public-principal-epochs.ts",
+    "./principal-erasure": "./src/public-principal-erasure.ts",
+    "./render-tree": "./src/public-render-tree.ts",
+    "./rendering": "./src/public-rendering.ts",
+    "./replay": "./src/public-replay.ts",
+    "./routing": "./src/public-routing.ts",
     "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
+    "./secret-reading": "./src/public-secret-reading.ts",
+    "./security": "./src/public-security.ts",
+    "./signing": "./src/public-signing.ts",
     "./sqlite": "./src/sqlite.ts",
+    "./static-export": "./src/public-static-export.ts",
+    "./storage-downloads": "./src/public-storage-downloads.ts",
+    "./storage-keys": "./src/public-storage-keys.ts",
+    "./tasks": "./src/public-tasks.ts",
     "./testing": "./src/testing.ts",
     "./vite": "./src/vite-source.ts",
+    "./webhooks": "./src/public-webhooks.ts",
+    "./write-safety": "./src/public-write-safety.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
     "./internal/audit-facts": "./src/internal/audit-facts.ts",
     "./internal/better-auth": "./src/internal/better-auth.ts",
@@ -51,17 +80,125 @@
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
       },
+      "./agent": {
+        "types": "./dist/public-agent.d.mts",
+        "default": "./dist/public-agent.mjs"
+      },
       "./build": {
         "types": "./dist/build.d.mts",
         "default": "./dist/build.mjs"
+      },
+      "./client-modules": {
+        "types": "./dist/public-client-modules.d.mts",
+        "default": "./dist/public-client-modules.mjs"
+      },
+      "./command": {
+        "types": "./dist/public-command.d.mts",
+        "default": "./dist/public-command.mjs"
+      },
+      "./confidential": {
+        "types": "./dist/public-confidential.d.mts",
+        "default": "./dist/public-confidential.mjs"
+      },
+      "./custom-adapters": {
+        "types": "./dist/public-custom-adapters.d.mts",
+        "default": "./dist/public-custom-adapters.mjs"
+      },
+      "./data": {
+        "types": "./dist/public-data.d.mts",
+        "default": "./dist/public-data.mjs"
+      },
+      "./delegation": {
+        "types": "./dist/public-delegation.d.mts",
+        "default": "./dist/public-delegation.mjs"
+      },
+      "./derived-data": {
+        "types": "./dist/public-derived-data.d.mts",
+        "default": "./dist/public-derived-data.mjs"
+      },
+      "./diagnostics": {
+        "types": "./dist/public-diagnostics.d.mts",
+        "default": "./dist/public-diagnostics.mjs"
+      },
+      "./egress": {
+        "types": "./dist/public-egress.d.mts",
+        "default": "./dist/public-egress.mjs"
+      },
+      "./files": {
+        "types": "./dist/public-files.d.mts",
+        "default": "./dist/public-files.mjs"
+      },
+      "./node": {
+        "types": "./dist/public-node.d.mts",
+        "default": "./dist/public-node.mjs"
+      },
+      "./password": {
+        "types": "./dist/public-password.d.mts",
+        "default": "./dist/public-password.mjs"
+      },
+      "./postgres": {
+        "types": "./dist/public-postgres.d.mts",
+        "default": "./dist/public-postgres.mjs"
+      },
+      "./principal-epochs": {
+        "types": "./dist/public-principal-epochs.d.mts",
+        "default": "./dist/public-principal-epochs.mjs"
+      },
+      "./principal-erasure": {
+        "types": "./dist/public-principal-erasure.d.mts",
+        "default": "./dist/public-principal-erasure.mjs"
+      },
+      "./render-tree": {
+        "types": "./dist/public-render-tree.d.mts",
+        "default": "./dist/public-render-tree.mjs"
+      },
+      "./rendering": {
+        "types": "./dist/public-rendering.d.mts",
+        "default": "./dist/public-rendering.mjs"
+      },
+      "./replay": {
+        "types": "./dist/public-replay.d.mts",
+        "default": "./dist/public-replay.mjs"
+      },
+      "./routing": {
+        "types": "./dist/public-routing.d.mts",
+        "default": "./dist/public-routing.mjs"
       },
       "./runtime-bootstrap": {
         "types": "./dist/runtime-bootstrap.d.mts",
         "default": "./dist/runtime-bootstrap.mjs"
       },
+      "./secret-reading": {
+        "types": "./dist/public-secret-reading.d.mts",
+        "default": "./dist/public-secret-reading.mjs"
+      },
+      "./security": {
+        "types": "./dist/public-security.d.mts",
+        "default": "./dist/public-security.mjs"
+      },
+      "./signing": {
+        "types": "./dist/public-signing.d.mts",
+        "default": "./dist/public-signing.mjs"
+      },
       "./sqlite": {
         "types": "./dist/sqlite.d.mts",
         "default": "./dist/sqlite.mjs"
+      },
+      "./static-export": {
+        "types": "./dist/public-static-export.d.mts",
+        "default": "./dist/public-static-export.mjs"
+      },
+      "./storage-downloads": {
+        "types": "./dist/public-storage-downloads.d.mts",
+        "default": "./dist/public-storage-downloads.mjs"
+      },
+      "./storage-keys": {
+        "types": "./dist/public-storage-keys.d.mts",
+        "default": "./dist/public-storage-keys.mjs"
+      },
+      "./tasks": {
+        "types": "./dist/public-tasks.d.mts",
+        "default": "./dist/public-tasks.mjs"
       },
       "./testing": {
         "types": "./dist/testing.d.mts",
@@ -70,6 +207,14 @@
       "./vite": {
         "types": "./dist/vite.d.mts",
         "default": "./dist/vite.mjs"
+      },
+      "./webhooks": {
+        "types": "./dist/public-webhooks.d.mts",
+        "default": "./dist/public-webhooks.mjs"
+      },
+      "./write-safety": {
+        "types": "./dist/public-write-safety.d.mts",
+        "default": "./dist/public-write-safety.mjs"
       },
       "./internal/app-shell-vite": {
         "types": "./dist/internal/app-shell-vite.d.mts",
@@ -186,7 +331,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/public-agent.ts src/public-client-modules.ts src/public-command.ts src/public-confidential.ts src/public-custom-adapters.ts src/public-data.ts src/public-delegation.ts src/public-derived-data.ts src/public-diagnostics.ts src/public-egress.ts src/public-files.ts src/public-node.ts src/public-password.ts src/public-postgres.ts src/public-principal-epochs.ts src/public-principal-erasure.ts src/public-render-tree.ts src/public-rendering.ts src/public-replay.ts src/public-routing.ts src/public-secret-reading.ts src/public-security.ts src/public-signing.ts src/public-static-export.ts src/public-storage-downloads.ts src/public-storage-keys.ts src/public-tasks.ts src/public-webhooks.ts src/public-write-safety.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

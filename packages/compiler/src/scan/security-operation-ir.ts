@@ -99,7 +99,7 @@ export interface ResolvedSecurityIrCallable {
 
 type ServerSecurityScanSurface = SecurityOperationSurface | 'route';
 
-const REDIRECT_IDENTITY = frameworkExport('@kovojs/server', 'redirect');
+const REDIRECT_IDENTITY = frameworkExport('@kovojs/core', 'redirect');
 const TRUSTED_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'trustedSql');
 const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
 const DECLARE_SECRET_READ_CAPABILITY_IDENTITY = frameworkExport(
@@ -110,15 +110,9 @@ const SECRET_IDENTITY = frameworkExport('@kovojs/core', 'secret');
 const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core', 'DeclassifyPolicy');
 const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
 const DRIZZLE_ALIAS_IDENTITY = frameworkExport('drizzle-orm', 'alias');
-const TRUSTED_HTML_IDENTITIES = [
-  frameworkExport('@kovojs/browser', 'trustedHtml'),
-  frameworkExport('@kovojs/server', 'trustedHtml'),
-] as const;
+const TRUSTED_HTML_IDENTITIES = [frameworkExport('@kovojs/browser', 'trustedHtml')] as const;
 const RUN_COMMAND_IDENTITY = frameworkExport('@kovojs/server', 'runCommand');
-const PUBLIC_SCOPED_KEY_IDENTITIES = [
-  frameworkExport('@kovojs/core', 'publicScopedKey'),
-  frameworkExport('@kovojs/server', 'publicScopedKey'),
-] as const;
+const PUBLIC_SCOPED_KEY_IDENTITIES = [frameworkExport('@kovojs/core', 'publicScopedKey')] as const;
 const SCOPED_KEY_IDENTITY = frameworkExport('@kovojs/server', 'scopedKey');
 const DERIVED_IDENTITY = frameworkExport('@kovojs/server', 'derived');
 const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
@@ -131,7 +125,6 @@ const SERVER_OPERATION_LEGACY_IDENTITIES = [
   REDIRECT_IDENTITY,
   TRUSTED_SQL_IDENTITY,
   TRUSTED_HTML_IDENTITIES[0],
-  TRUSTED_HTML_IDENTITIES[1],
 ] as const;
 const SERVER_REVIEWED_DATA_HELPER_IDENTITIES = [
   frameworkExport('@kovojs/server', 'serverValue'),

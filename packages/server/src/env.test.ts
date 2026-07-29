@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  drainSecretRevealAuditFacts,
   isSecret,
   trustedReveal,
   type SecretValue,
-} from '@kovojs/core';
+} from '@kovojs/core/security';
+import { drainSecretRevealAuditFacts } from '@kovojs/core/internal/security';
 
 import { createApp } from './app.js';
 import {
-  committedSecretWaiver,
   CreateAppBootError,
   estimateEntropyBits,
   isCreateAppBootError,
@@ -323,39 +322,6 @@ describe('committed-secret lint (audit-grade, SPEC §6.6)', () => {
   it('does not flag a short/low-entropy value', () => {
     expect(looksLikeCommittedSecret('changeme')).toBe(false);
     expect(looksLikeCommittedSecret('a'.repeat(64))).toBe(false);
-  });
-
-  it('a waiver suppresses the flag', () => {
-    const secret = 'Zq7' + 'rT4yU8iO1pA5sD9fG3hJ6kL0xC4vB8nM2qW7eR1tY';
-    expect(looksLikeCommittedSecret(secret)).toBe(true);
-    committedSecretWaiver(secret, { justification: 'public sample token in a fixture' });
-    expect(looksLikeCommittedSecret(secret)).toBe(false);
-  });
-
-  it('a waiver requires a justification', () => {
-    expect(() => committedSecretWaiver('x', { justification: '' })).toThrow(/justification/);
-  });
-
-  it('requires the waiver justification to be an exact own data property', () => {
-    const inheritedSecret = 'Lm8' + 'zQ2wE6rT9yU3iO7pA1sD5fG8hJ2kL6xC9vB3nM7qW';
-    expect(() =>
-      committedSecretWaiver(
-        inheritedSecret,
-        Object.create({ justification: 'prototype-provided waiver' }),
-      ),
-    ).toThrow('own data property');
-
-    let getterCalls = 0;
-    const accessor = {} as { justification: string };
-    Object.defineProperty(accessor, 'justification', {
-      configurable: true,
-      get() {
-        getterCalls += 1;
-        return 'accessor-provided waiver';
-      },
-    });
-    expect(() => committedSecretWaiver('another-secret', accessor)).toThrow('own data property');
-    expect(getterCalls).toBe(0);
   });
 });
 

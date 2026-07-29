@@ -44,35 +44,21 @@ export interface FrameworkIdentityCatalogEntry extends FrameworkExportIdentity {
   readonly specifiers: readonly string[];
 }
 
-const SERVER_DATA_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/data'] as const;
+const SERVER_DATA_SPECIFIERS = ['@kovojs/server'] as const;
 const SERVER_APP_SPECIFIERS = ['@kovojs/server'] as const;
-const SERVER_ROUTING_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/routing'] as const;
-const SERVER_RENDERING_SPECIFIERS = ['@kovojs/server', '@kovojs/server/api/rendering'] as const;
-const SERVER_WRITE_GOVERNANCE_SPECIFIERS = [
-  '@kovojs/server',
-  '@kovojs/server/write-governance',
-] as const;
-const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server'] as const;
-const CORE_STORAGE_SPECIFIERS = ['@kovojs/core/storage', '@kovojs/server'] as const;
-const CORE_SCOPED_KEY_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
+const SERVER_ROUTING_SPECIFIERS = ['@kovojs/server'] as const;
+const SERVER_RENDERING_SPECIFIERS = ['@kovojs/server'] as const;
+const SERVER_WRITE_GOVERNANCE_SPECIFIERS = ['@kovojs/server/write-safety'] as const;
+const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server/command'] as const;
+const CORE_STORAGE_SPECIFIERS = ['@kovojs/core/storage'] as const;
+const CORE_SCOPED_KEY_SPECIFIERS = ['@kovojs/core'] as const;
 const CORE_SECURITY_SPECIFIERS = ['@kovojs/core/security'] as const;
 
-const serverDataSourceFiles = [
-  'agent',
-  'api/data',
-  'derived-dataset',
-  'domain',
-  'index',
-  'managed-db',
-  'mutation',
-  'query',
-  'schema',
-  'task',
-] as const;
-const serverAppSourceFiles = ['app', 'index'] as const;
-const serverRoutingSourceFiles = ['api/routing', 'endpoint', 'index', 'route', 'webhook'] as const;
-const serverRenderingSourceFiles = ['api/rendering', 'index', 'rendering/html/safe-html'] as const;
-const serverWriteGovernanceSourceFiles = ['index', 'write-governance'] as const;
+const serverDataSourceFiles = ['domain', 'index', 'mutation', 'query', 'schema'] as const;
+const serverAppSourceFiles = ['app-contract', 'index'] as const;
+const serverRoutingSourceFiles = ['endpoint', 'guards', 'index', 'route'] as const;
+const serverRenderingSourceFiles = ['index', 'rendering/html/safe-html'] as const;
+const serverWriteGovernanceSourceFiles = ['public-write-safety', 'write-governance'] as const;
 
 function serverData(exportName: string): FrameworkIdentityCatalogEntry {
   return {
@@ -118,22 +104,13 @@ function serverRendering(
   };
 }
 
-function serverBrowserRenderingReExport(exportName: string): FrameworkIdentityCatalogEntry {
-  return {
-    exportName,
-    module: '@kovojs/browser',
-    scopes: ['authoring', 'rendering'],
-    specifiers: SERVER_RENDERING_SPECIFIERS,
-  };
-}
-
 function serverCsrfAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/server',
-    packageSourceFiles: ['csrf', 'index'],
+    packageSourceFiles: ['csrf', 'public-security'],
     scopes: ['authoring', 'rendering', 'routing'],
-    specifiers: ['@kovojs/server'],
+    specifiers: ['@kovojs/server/security'],
   };
 }
 
@@ -171,9 +148,24 @@ function serverCommand(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/server',
-    packageSourceFiles: ['command', 'index'],
+    packageSourceFiles: ['command', 'public-command'],
     scopes: ['authoring', 'data-plane'],
     specifiers: SERVER_COMMAND_SPECIFIERS,
+  };
+}
+
+function serverTaskSurface(
+  exportName: string,
+  specifier: string,
+  packageSourceFiles: readonly string[],
+  scopes: readonly FrameworkIdentityScope[] = ['authoring', 'data-plane'],
+): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles,
+    scopes,
+    specifiers: [specifier],
   };
 }
 
@@ -271,55 +263,72 @@ function drizzleOrmSchema(
 
 const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
 
-appendCatalogEntry(catalogEntries, serverApp('createApp'));
+appendCatalogEntry(catalogEntries, serverApp('defineKovo'));
 
-appendCatalogFactories(
+appendCatalogFactories(catalogEntries, ['domain', 'mutation', 'query', 's', 'tag'], serverData);
+appendCatalogEntry(
   catalogEntries,
-  [
-    'agent',
-    'declareSecretReadCapability',
-    'domain',
-    'mutation',
-    'query',
-    'Reader',
-    's',
-    'scopedKey',
-    'tag',
-    'task',
-    'tool',
-    'write',
-  ],
-  serverData,
+  serverTaskSurface('agent', '@kovojs/server/agent', ['agent', 'public-agent']),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('tool', '@kovojs/server/agent', ['agent', 'public-agent']),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('declareSecretReadCapability', '@kovojs/server/secret-reading', [
+    'public-secret-reading',
+    'secret-read-boundary',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('scopedKey', '@kovojs/server/storage-keys', [
+    'public-storage-keys',
+    'state-key',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('task', '@kovojs/server/tasks', ['public-tasks', 'task']),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface(
+    'webhook',
+    '@kovojs/server/webhooks',
+    ['public-webhooks', 'webhook'],
+    ['authoring', 'routing'],
+  ),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface(
+    'rootedFiles',
+    '@kovojs/server/files',
+    ['file', 'public-files'],
+    ['authoring', 'routing'],
+  ),
 );
 appendCatalogFactories(
   catalogEntries,
   [
     'endpoint',
     'guard',
-    'href',
+    'guards',
     'layout',
-    'Link',
     'notFound',
     'publicAccess',
-    'redirect',
     'respond',
-    'rootedFiles',
     'route',
     'verifiedAccess',
-    'webhook',
   ],
   serverRouting,
 );
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml'));
 appendCatalogEntry(catalogEntries, serverRendering('trustedHtml', '@kovojs/browser'));
 appendCatalogEntry(catalogEntries, serverRendering('trustedUrl', '@kovojs/browser'));
-appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedHtml'));
-appendCatalogEntry(catalogEntries, serverBrowserRenderingReExport('trustedUrl'));
-appendCatalogFactories(
-  catalogEntries,
-  ['csrfField', 'csrfToken', 'mintCsrfField', 'mintCsrfToken'],
-  serverCsrfAuthoring,
-);
+appendCatalogFactories(catalogEntries, ['mintCsrfField', 'mintCsrfToken'], serverCsrfAuthoring);
 appendCatalogEntry(catalogEntries, serverInternalRendering('renderedHtml'));
 appendCatalogFactories(
   catalogEntries,
@@ -327,9 +336,24 @@ appendCatalogFactories(
   serverJsxRuntime,
 );
 appendCatalogEntry(catalogEntries, serverWriteGovernance('trustedAssign'));
-appendCatalogEntry(catalogEntries, serverData('encryptAtRest'));
-appendCatalogEntry(catalogEntries, serverData('derived'));
-appendCatalogEntry(catalogEntries, serverData('hashPassword'));
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('encryptAtRest', '@kovojs/server/confidential', [
+    'confidential-at-rest',
+    'public-confidential',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('derived', '@kovojs/server/derived-data', [
+    'derived-dataset',
+    'public-derived-data',
+  ]),
+);
+appendCatalogEntry(
+  catalogEntries,
+  serverTaskSurface('hashPassword', '@kovojs/server/password', ['password', 'public-password']),
+);
 appendCatalogEntry(catalogEntries, serverWriteGovernance('serverValue'));
 appendCatalogEntry(catalogEntries, serverData('stream'));
 appendCatalogFactories(catalogEntries, ['cmd', 'commandAllowlist', 'runCommand'], serverCommand);
@@ -339,7 +363,7 @@ appendCatalogFactories(
   coreStorage,
 );
 appendCatalogEntry(catalogEntries, coreScopedKey('publicScopedKey'));
-appendCatalogFactories(catalogEntries, ['component'], coreAuthoring);
+appendCatalogFactories(catalogEntries, ['component', 'redirect'], coreAuthoring);
 appendCatalogFactories(
   catalogEntries,
   [
