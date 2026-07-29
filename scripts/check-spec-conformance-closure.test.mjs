@@ -89,6 +89,27 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     });
   }, 600_000);
 
+  it('keeps TypeScript 6 CommonJS symbol inspection fail-closed', () => {
+    const result = scanProductionSources([
+      {
+        path: 'packages/vscode/src/diagnostic-adapter.cjs',
+        text: productionText('packages/vscode/src/diagnostic-adapter.cjs'),
+      },
+      {
+        path: 'packages/vscode/src/extension.cjs',
+        text: `${productionText('packages/vscode/src/extension.cjs')}
+function unreviewedDiagnostic(code, severity) {
+  return { code, severity };
+}
+`,
+      },
+    ]);
+
+    expect(result.siteCount).toBe(0);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toContain('unreviewed dynamic structured diagnostic literal');
+  });
+
   it('C13 mutation: rejects a SPEC row whose enforcement-class column disappears', () => {
     const specMarkdown = baseline.specMarkdown.replace(
       /^\| KV201 \| error\s+\| compile-error\s+\|/mu,
