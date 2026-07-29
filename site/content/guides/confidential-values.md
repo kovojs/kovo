@@ -38,7 +38,7 @@ not in your build command or CI artifact job.
 
 Wrap the value where it first becomes sensitive:
 
-```text
+```ts
 // Source-verified shape from packages/core/src/index.ts
 import { secret } from '@kovojs/core';
 
@@ -52,7 +52,7 @@ template literals, and string concatenation all throw instead of laundering the 
 
 The runtime failure is explicit:
 
-```text
+```ts
 // Source-verified runtime refusal from packages/core/src/internal/wire-json.test.ts
 import { secret } from '@kovojs/core';
 
@@ -67,7 +67,7 @@ explicitly before returning it.
 Reveal the value only where a boot-time dependency actually needs the raw bytes. The policy is a
 closed `purpose × door × owner scope` tuple, not caller-authored prose:
 
-```text
+```ts
 // Source-verified shape from packages/core/src/secret.ts
 import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core';
 
@@ -130,7 +130,9 @@ There are four common lanes:
 
 Keep the published value next to the handler so the compiler can copy data without importing code:
 
-```text
+```ts
+import { publishToClient } from '@kovojs/core';
+
 const CHECKOUT_VERSION = 'v2';
 
 publishToClient(CHECKOUT_VERSION, { reason: 'public checkout protocol version' });
@@ -142,7 +144,7 @@ instead.
 
 Column-level secrecy lives in the schema annotation, not in query prose:
 
-```text
+```ts
 import { kovo } from '@kovojs/drizzle';
 
 kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] });
@@ -150,7 +152,7 @@ kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] });
 
 For confidential-at-rest columns, encrypt before the write:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/confidential-at-rest.ts
 import {
   createConfidentialAtRestCipher,

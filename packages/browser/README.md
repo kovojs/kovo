@@ -10,7 +10,7 @@ pnpm add @kovojs/browser
 ```ts
 import { derive } from '@kovojs/browser';
 
-export const cartLabel = derive((cart: { count: number }) =>
+export const cartLabel = derive(['cart'], (cart: { count: number }) =>
   cart.count === 1 ? '1 item' : `${cart.count} items`,
 );
 ```

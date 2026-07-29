@@ -18,7 +18,7 @@ const harness = createKovoTestHarness({
 });
 
 const page = await harness.page('/');
-expect(page.text()).toContain('Contacts');
+expect(page.html).toContain('Contacts');
 ```
 
 ## Reference

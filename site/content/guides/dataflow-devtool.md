@@ -33,6 +33,8 @@ For a visual devtool host, pass the graph object or a build-produced graph file 
 Inside this repository, the Vite plugin can mount the devtool under an existing dev server path such
 as `/__kovo`:
 
+<!-- kovo-sample: illustrative reason="The devtool package is repository-private until its Track 6 publication milestone; no public tarball exists yet." -->
+
 ```ts
 import { devtoolMountPlugin } from '@kovojs/devtool/vite';
 
@@ -52,6 +54,8 @@ KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool run dev
 ## Build a bundle directly in repo tooling
 
 For repo tooling that owns the host, provide the graph JSON and source root:
+
+<!-- kovo-sample: illustrative reason="The devtool package is repository-private until its Track 6 publication milestone; no public tarball exists yet." -->
 
 ```ts
 import { readFileSync } from 'node:fs';

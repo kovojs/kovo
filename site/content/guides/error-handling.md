@@ -14,7 +14,7 @@ unexpected request-shell exception.
 
 Start with the smallest region-level fallback:
 
-```text
+```tsx
 // Source-verified shape from packages/core/src/index.ts
 import { ErrorBoundary, component } from '@kovojs/core';
 
@@ -22,7 +22,11 @@ declare function ProductGrid(): string;
 declare function ProductGridError(): string;
 
 export const CatalogPage = component({
-  render: () => <ErrorBoundary fallback={<ProductGridError />}><ProductGrid /></ErrorBoundary>,
+  render: () => (
+    <ErrorBoundary fallback={<ProductGridError />}>
+      <ProductGrid />
+    </ErrorBoundary>
+  ),
 });
 ```
 
@@ -51,7 +55,7 @@ export const accountRoute = route('/account/:id', {
 Mutation failures are their own path. Expected form errors stay typed and local to the submitted
 form; they are not exceptions:
 
-```text
+```tsx
 // Source-verified shape from packages/core/src/index.ts
 import { FieldError, FormError, component } from '@kovojs/core';
 

@@ -11,6 +11,7 @@ import {
   scanMarkdownSamples,
   tokenizeShell,
   validateKovoInvocations,
+  validateAuxiliarySamples,
 } from './packed-doc-samples.mjs';
 
 const policy = loadCodeSamplePolicy();
@@ -99,6 +100,31 @@ describe('packed documentation sample inventory', () => {
       class: 'illustrative',
       reason: policy.reviewedSkips['source-provenance'].reason,
     });
+  });
+
+  it('supports tilde fences and rejects source code disguised as text output', () => {
+    const [sample] = scanMarkdownSamples(
+      ['~~~ts', "import { component } from '@kovojs/core';", 'void component;', '~~~'].join('\n'),
+      { origin: 'authored-guide', policy, sourcePath: 'guide.md' },
+    );
+    expect(sample).toMatchObject({ class: 'executable', language: 'ts' });
+
+    expect(() =>
+      scanMarkdownSamples(
+        ['```text', "import { component } from '@kovojs/core';", '```'].join('\n'),
+        { origin: 'authored-guide', policy, sourcePath: 'bad.md' },
+      ),
+    ).toThrow('code-shaped text fence requires its real language');
+  });
+
+  it('requires reviewed source-provenance skips to name a tracked repository file', () => {
+    const samples = scanMarkdownSamples(
+      ['```ts', '// Source: examples/does-not-exist.ts', 'void example;', '```'].join('\n'),
+      { origin: 'authored-guide', policy, sourcePath: 'guide.md' },
+    );
+    expect(() => validateAuxiliarySamples(samples, policy)).toThrow(
+      'reviewed source path does not exist',
+    );
   });
 });
 

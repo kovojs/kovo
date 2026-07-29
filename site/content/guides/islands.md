@@ -96,9 +96,12 @@ this generated client module:
 // generated — but valid, authorable Kovo source
 import { handler } from '@kovojs/browser';
 
-export const GalleryToggleDemo$button_click = handler((event, ctx) => {
-  ctx.state.pressed = !ctx.state.pressed;
-});
+export const GalleryToggleDemo$button_click =
+  handler <
+  { pressed: boolean } >
+  ((event, ctx) => {
+    ctx.state.pressed = !ctx.state.pressed;
+  });
 ```
 
 ```html
@@ -131,6 +134,8 @@ against the state/query shape and are null-aware: traversing a nullable segment 
 `data-state={...}` expressions lower to named, exported, pure derives with declared inputs:
 
 ```js
+import { derive } from '@kovojs/browser';
+
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
   String(state.pressed),
 );
@@ -244,6 +249,8 @@ Interaction is the default trigger. Three declared alternatives extend the same
 The devtool reference app bootstraps its pan/zoom canvas island on first visibility. The server-
 rendered graph is fully usable with the module absent (selection is real `<a href>` navigation); the
 island only enhances:
+
+<!-- kovo-sample: illustrative reason="This abbreviated generated-widget excerpt intentionally omits the fit implementation and Element type augmentation." -->
 
 ```js
 // devtool-pz.client.js — an on:visible bootstrap that owns a widget

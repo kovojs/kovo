@@ -14,14 +14,17 @@ user gets a response.
 
 Start with one durable function:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 import { s, task } from '@kovojs/server';
 
 export const sendWelcomeEmail = task('email/send-welcome', {
   input: s.object({ email: s.string().email(), userId: s.string() }),
   async run({ email }) {
-    await fetch('https://api.resend.com/emails', { body: JSON.stringify({ to: email }), method: 'POST' });
+    await fetch('https://api.resend.com/emails', {
+      body: JSON.stringify({ to: email }),
+      method: 'POST',
+    });
   },
 });
 ```
@@ -33,7 +36,7 @@ transaction, so background work cannot quietly reuse the caller's DB handle.
 
 Schedule it where the write commits:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 import { mutation, publicAccess, s } from '@kovojs/server';
 
@@ -75,7 +78,7 @@ SUMMARY total=1
 
 Keyed schedules let you collapse repeated work:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 await request.schedule(sendWelcomeEmail, input, {
   key: `welcome:${input.userId}`,
@@ -85,7 +88,7 @@ await request.schedule(sendWelcomeEmail, input, {
 That default is debounce: the latest ready job wins. Use throttle when the first ready job should
 stay put and later duplicates should be ignored:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 await request.schedule(sendWelcomeEmail, input, {
   coalesce: 'throttle',
@@ -97,7 +100,7 @@ await request.schedule(sendWelcomeEmail, input, {
 
 Recurring tasks are declared on the task itself:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 import { s, task } from '@kovojs/server';
 
@@ -120,7 +123,7 @@ persists queue rows in Postgres.
 For inspection or custom operational views, adapt your DB client and read `_kovo_jobs` through the
 framework surface:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task-queue.ts and task-observability.ts
 import { createDurableTaskStatus } from '@kovojs/server';
 
@@ -143,7 +146,7 @@ request-scoped `request.db`; that handle deliberately cannot be unwrapped into a
 
 Task failures retry according to the task definition. Cancellation is explicit:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 const handle = await request.schedule(sendWelcomeEmail, input, { afterMs: 5_000 });
 await request.cancel(handle);

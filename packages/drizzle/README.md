@@ -19,7 +19,7 @@ export const carts = pgTable(
     userId: text('user_id').notNull(),
     version: integer('version').notNull(),
   },
-  (table) => [kovo(table).domain('cart').key(table.id).owner(table.userId).version(table.version)],
+  kovo({ domain: 'cart', key: 'id', owner: 'userId', version: 'version' }),
 );
 ```
 

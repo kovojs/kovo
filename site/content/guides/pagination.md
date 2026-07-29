@@ -14,7 +14,7 @@ new rows into it.
 
 Start with `after`, `limit`, and a `nextCursor`:
 
-```text
+```ts
 // Source-verified shape from examples/commerce/src/queries.ts
 export const productGridQuery = query({
   access: publicAccess('public storefront browsing'),
@@ -33,13 +33,15 @@ next page.
 
 Key the rendered rows and carry the cursor in markup:
 
-```text
+```tsx
 // Source-verified shape from examples/commerce/src/components/product-grid.tsx
 export const ProductGrid = component({
   queries: { productGrid: productGridQuery },
   render: ({ productGrid }) => (
     <section data-page-cursor={productGrid.nextCursor ?? ''}>
-      {productGrid.items.map((item) => <article kovo-key={item.id}>{item.name}</article>)}
+      {productGrid.items.map((item) => (
+        <article kovo-key={item.id}>{item.name}</article>
+      ))}
     </section>
   ),
 });
@@ -52,8 +54,10 @@ export const ProductGrid = component({
 The commerce example proves the wire shape end to end. A new page is sent as a delta chunk, not a
 full re-ship of page one:
 
-```text
-<kovo-query name="productGrid" delta>{"lists":{"items":{"key":"id","upsert":[{"id":"p3"},{"id":"p4"}]}}}</kovo-query>
+```html
+<kovo-query name="productGrid" delta
+  >{"lists":{"items":{"key":"id","upsert":[{"id":"p3"},{"id":"p4"}]}}}</kovo-query
+>
 ```
 
 That exact shape is asserted in `packages/server/src/wire-html.test.ts`, and the commerce pagination
@@ -64,7 +68,7 @@ test checks that re-applying the same page does not duplicate rows because the c
 
 If another mutation can add rows to the same collection, declare the keyed list delta on the query:
 
-```text
+```ts
 // Source-verified shape from examples/commerce/src/queries.ts
 export const orderHistoryQuery = query({
   async load() {

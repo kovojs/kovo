@@ -28,9 +28,8 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const PACKAGES = documentedApiEntries();
 
 const UNDOCUMENTED = '*Undocumented.*';
-const MAX_SIGNATURE_LINES = 40;
 // Type cells in the params table can balloon for complex generics; elide so the
-// table stays readable (mirrors MAX_SIGNATURE_LINES discipline for signatures).
+// table stays readable.
 const MAX_TYPE_LENGTH = 120;
 // Source links in the sidebar manifest point at the real defining file + line on
 // GitHub. A fixed ref keeps output deterministic (no timestamps/abs paths).
@@ -198,17 +197,6 @@ function declarationSignature(decl) {
   }
 
   return stripExportPrefix(decl.getText(sourceFile).trim());
-}
-
-function truncateSignature(signature, kind) {
-  if (kind === 'function') return signature;
-  const lines = signature.split('\n');
-  if (lines.length <= MAX_SIGNATURE_LINES) return signature;
-  const omitted = lines.length - MAX_SIGNATURE_LINES;
-  return [
-    ...lines.slice(0, MAX_SIGNATURE_LINES),
-    `// … truncated (${omitted} more lines); see the package source for the full declaration.`,
-  ].join('\n');
 }
 
 function cleanJsDoc(raw) {
@@ -407,10 +395,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
   const rendered = overloads.length > 0 ? overloads : [declarations[0]];
 
   const kind = kindOf(declarations[0]);
-  const signature = truncateSignature(
-    rendered.map((decl) => declarationSignature(decl)).join('\n'),
-    kind,
-  );
+  const signature = rendered.map((decl) => declarationSignature(decl)).join('\n');
   const doc = declarations.map((decl) => docCommentOf(decl)).find((text) => text !== '') ?? '';
 
   return {
@@ -863,6 +848,10 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
       name: pkg.name,
       names: entries.map((entry) => entry.name),
       subpaths: subpaths.map((subpath) => subpath.importPath),
+      symbolsBySubpath: subpaths.map((subpath) => ({
+        importPath: subpath.importPath,
+        symbols: subpath.entries.map((entry) => ({ kind: entry.kind, name: entry.name })),
+      })),
     });
   }
 

@@ -8,21 +8,19 @@ pnpm add @kovojs/core
 ```
 
 ```ts
-import { component, query, route, s } from '@kovojs/core';
+import { component, queryRef, routeRef } from '@kovojs/core';
 
-export const contactRoute = route('/contacts/:id', {
-  params: s.object({ id: s.string() }),
+export const contactRoute = routeRef('/contacts/:id', {
+  params: { id: '' },
 });
 
-export const contactQuery = query({
-  name: 'contact',
-  args: s.object({ id: s.string() }),
-  loader: async ({ args }) => ({ id: args.id, name: 'Ada' }),
-});
+export const contactQuery = queryRef('contact');
 
-export const ContactName = component(({ contact }: { contact: { name: string } }) => (
-  <strong>{contact.name}</strong>
-));
+export const ContactName = component({
+  render({ contact }: { contact: { name: string } }) {
+    return <strong>{contact.name}</strong>;
+  },
+});
 ```
 
 ## Reference

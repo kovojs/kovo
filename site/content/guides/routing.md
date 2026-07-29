@@ -16,7 +16,7 @@ A `route()` couples a literal path, optional param/search schemas, per-route con
 function. From the CRM reference app's parameterized detail route:
 
 ```tsx
-// Source: examples/crm/src/app.tsx
+// Source: examples/crm/src/interactive-app.tsx
 import { route, s } from '@kovojs/server';
 
 export const dealDetailRoute = route('/deals/:id', {
@@ -225,7 +225,7 @@ Returning `notFound()` from `page` renders the app's 404 shell with the correct 
 codes stay part of the typed surface rather than hand-constructed responses:
 
 ```tsx
-// Source: examples/crm/src/app.tsx
+// Source: examples/crm/src/interactive-app.tsx
 export const dealDetailRoute = route('/deals/:id', {
   params: s.object({ id: s.string() }),
   page({ params }, req) {

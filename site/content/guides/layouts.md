@@ -109,8 +109,9 @@ present for the `error` boundary.
 Use route-level `regions` when a layout needs sibling areas such as a docs page plus a sidebar rail.
 The layout decides placement; the route decides what each named region renders.
 
+<!-- kovo-sample: illustrative reason="The parallel-region excerpt depends on app-local layout, page, sidebar, and shell components." -->
+
 ```tsx
-// Source: site/src/docs-app.tsx
 import type { RoutePageResult } from '@kovojs/server';
 
 type DocsRegions = Readonly<{

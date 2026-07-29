@@ -104,7 +104,9 @@ return type must be assignable to the session schema under static checking; brow
 crosses the runtime validators. The generated Better Auth integration returns a sanitized provider,
 not the raw auth instance:
 
-```text
+<!-- kovo-sample: illustrative reason="The session provider excerpt depends on generated auth bindings and the app-local request shell." -->
+
+```ts
 // authBindings comes from the framework-owned generated auth/database boundary
 export const commerceSessionProvider = commerceSession.provider(authBindings.sessionProvider);
 
@@ -141,8 +143,9 @@ export const orders = pgTable(
 
 Then scope every read and write of that table to the session, not to client input:
 
+<!-- kovo-sample: illustrative reason="The authorization excerpt depends on the app-owned request, schema, database, and domain declarations." -->
+
 ```ts
-// Source: app/orders/query.ts
 import { guards, query } from '@kovojs/server';
 
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor

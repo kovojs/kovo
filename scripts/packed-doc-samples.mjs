@@ -13,7 +13,7 @@ import {
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
-import { repoRoot } from './public-packages.mjs';
+import { publicPackages, repoRoot } from './public-packages.mjs';
 import { generateApiReference } from '../site/scripts/api-ref.mjs';
 import { writeAuthoredSnippetSupportFiles } from '../site/scripts/code-snippets-check.mjs';
 
@@ -28,6 +28,9 @@ const HTML_DIRECTIVE =
 const CODE_DIRECTIVE =
   /^\s*(?:\/\/|#)\s*kovo-sample:\s*(executable|illustrative|output|type-error)(?:\s+reason="([^"]+)")?\s*$/u;
 const KOVO_PACKAGE = /^@kovojs\/[a-z0-9-]+(?:\/.*)?$/u;
+const SOURCE_PROVENANCE =
+  /^\/\/\s*Source(?::\s*(.+)|-verified\s+(?:shape|runtime refusal)\s+from\s+(.+))$/u;
+const VALUE_KINDS = new Set(['class', 'const', 'enum', 'function']);
 
 export function loadCodeSamplePolicy(policyPath = POLICY_PATH) {
   const policy = JSON.parse(readFileSync(policyPath, 'utf8'));
@@ -44,6 +47,11 @@ export function loadCodeSamplePolicy(policyPath = POLICY_PATH) {
     assertClassification(rule, `reviewed skip ${name}`);
     if (rule.class !== 'illustrative' || !rule.reason?.trim()) {
       throw new TypeError(`reviewed skip ${name}: illustrative skips require a reason`);
+    }
+  }
+  for (const [packageName, exclusion] of Object.entries(policy.readmeExclusions ?? {})) {
+    if (typeof exclusion?.reason !== 'string' || exclusion.reason.trim() === '') {
+      throw new TypeError(`README exclusion ${packageName}: missing reviewed reason`);
     }
   }
   return policy;
@@ -73,9 +81,13 @@ export function scanMarkdownSamples(
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (!open) {
-      const fence = /^(\s*)(`{3,})([^`]*)$/u.exec(line);
+      const fence = /^(\s*)(`{3,}|~{3,})(.*)$/u.exec(line);
       if (!fence) continue;
+      const marker = fence[2][0];
       const info = fence[3].trim();
+      if (info.includes(marker)) {
+        throw sampleError(sourcePath, index + 1, 'code fence info contains its fence marker');
+      }
       if (!/^[A-Za-z0-9_-]+$/u.test(info)) {
         throw sampleError(sourcePath, index + 1, 'code fences require one policy-owned language');
       }
@@ -89,6 +101,7 @@ export function scanMarkdownSamples(
         body: [],
         directive,
         fenceLength: fence[2].length,
+        fenceMarker: marker,
         language: info.toLowerCase(),
         line: index + 1,
         previous: previousNonblankLine(lines, (directive ? directiveIndex : index) - 1),
@@ -96,7 +109,8 @@ export function scanMarkdownSamples(
       continue;
     }
 
-    const close = new RegExp(`^\\s*\`{${open.fenceLength},}\\s*$`, 'u');
+    const fenceMarker = open.fenceMarker === '`' ? '`' : '~';
+    const close = new RegExp(`^\\s*${fenceMarker}{${open.fenceLength},}\\s*$`, 'u');
     if (!close.test(line)) {
       open.body.push(line);
       continue;
@@ -226,7 +240,7 @@ function classificationRule({
   if (directive)
     return { ...directive, validator: validatorFor(language, directive.class, policy) };
   const first = body.find((entry) => entry.trim() !== '')?.trim() ?? '';
-  if (/^\/\/\s*Source:\s*\S+/u.test(first)) {
+  if (SOURCE_PROVENANCE.test(first)) {
     return policy.reviewedSkips['source-provenance'];
   }
   if (origin === 'generated-api') {
@@ -234,7 +248,20 @@ function classificationRule({
   }
   const rule = policy.languages[language];
   if (!rule) throw sampleError(sourcePath, line, `unclassified code-fence language ${language}`);
+  if (language === 'text' && looksLikeSourceCode(body.join('\n'))) {
+    throw sampleError(
+      sourcePath,
+      line,
+      'code-shaped text fence requires its real language or an explicit illustrative directive',
+    );
+  }
   return rule;
+}
+
+function looksLikeSourceCode(source) {
+  return /^\s*(?:\/[/*]|import\b|export\b|(?:async\s+)?function\b|(?:const|let|var|type|interface|class|enum)\b|createApp\s*\(|kovo\s*\(|<[A-Za-z][^>]*>)/u.test(
+    source,
+  );
 }
 
 function validatorFor(language, classification, policy) {
@@ -427,8 +454,27 @@ function registerTypeScriptSourceResolution() {
   });
 }
 
-function validateAuxiliarySamples(samples) {
+export function validateAuxiliarySamples(samples, policy) {
   for (const sample of samples) {
+    if (
+      (sample.class === 'executable' || sample.class === 'type-error') &&
+      sample.validator === 'none'
+    ) {
+      throw sampleError(
+        sample.sourcePath,
+        sample.startLine,
+        `${sample.class} sample has no validating runner`,
+      );
+    }
+    if (
+      sample.origin === 'generated-api' &&
+      sample.reason === policy.reviewedSkips['generated-signature'].reason
+    ) {
+      assertTypescriptSyntax(sample);
+    }
+    if (sample.reason === policy.reviewedSkips['source-provenance'].reason) {
+      assertTrackedSourceProvenance(sample);
+    }
     if (sample.class !== 'executable') continue;
     if (sample.validator === 'jsonc') {
       const parsed = ts.parseConfigFileTextToJson(`${sample.id}.jsonc`, sample.code);
@@ -451,10 +497,100 @@ function validateAuxiliarySamples(samples) {
   }
 }
 
+function assertTypescriptSyntax(sample) {
+  const attempts = [ts.ScriptKind.TS, ts.ScriptKind.TSX].map((kind) =>
+    ts.createSourceFile(
+      `${sample.id}.${kind === ts.ScriptKind.TSX ? 'tsx' : 'ts'}`,
+      sample.code,
+      ts.ScriptTarget.Latest,
+      true,
+      kind,
+    ),
+  );
+  if (attempts.some((sourceFile) => sourceFile.parseDiagnostics.length === 0)) return;
+  const diagnostic = attempts[0].parseDiagnostics[0];
+  throw sampleError(
+    sample.sourcePath,
+    sample.startLine,
+    `generated signature is not valid TypeScript: ${ts.flattenDiagnosticMessageText(
+      diagnostic.messageText,
+      ' ',
+    )}`,
+  );
+}
+
+function assertTrackedSourceProvenance(sample) {
+  const first =
+    sample.code
+      .split('\n')
+      .find((line) => line.trim() !== '')
+      ?.trim() ?? '';
+  const match = SOURCE_PROVENANCE.exec(first);
+  if (!match) {
+    throw sampleError(
+      sample.sourcePath,
+      sample.startLine,
+      'reviewed source skip has no source path',
+    );
+  }
+  const rawPaths = (match[1] ?? match[2])
+    .split(/\s+and\s+/u)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  let previousDirectory = repoRoot;
+  for (const [index, rawPath] of rawPaths.entries()) {
+    const candidate =
+      index > 0 && !rawPath.includes('/')
+        ? path.join(previousDirectory, rawPath)
+        : path.resolve(repoRoot, rawPath);
+    if (!existsSync(candidate) || !statSync(candidate).isFile()) {
+      throw sampleError(
+        sample.sourcePath,
+        sample.startLine,
+        `reviewed source path does not exist: ${path.relative(repoRoot, candidate)}`,
+      );
+    }
+    const relative = path.relative(repoRoot, candidate);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw sampleError(
+        sample.sourcePath,
+        sample.startLine,
+        `reviewed source path escapes the repository: ${candidate}`,
+      );
+    }
+    const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '--', relative], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    if (tracked.status !== 0) {
+      throw sampleError(
+        sample.sourcePath,
+        sample.startLine,
+        `reviewed source path is not tracked: ${relative}`,
+      );
+    }
+    previousDirectory = path.dirname(candidate);
+  }
+}
+
 export async function materializePackedPackages({ manifestPath, nodeModulesDir }) {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   if (manifest?.schema !== 'kovo.packed-public-packages/v2' || !Array.isArray(manifest.packages)) {
     throw new TypeError(`${manifestPath}: unsupported packed package manifest`);
+  }
+  const names = manifest.packages.map((entry) => entry?.name);
+  if (names.some((name) => typeof name !== 'string')) {
+    throw new TypeError(`${manifestPath}: malformed packed package name`);
+  }
+  if (new Set(names).size !== names.length) {
+    throw new TypeError(`${manifestPath}: duplicate packed package rows`);
+  }
+  const expectedNames = publicPackages()
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  const actualNames = [...names].sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(actualNames) !== JSON.stringify(expectedNames)) {
+    throw new TypeError(`${manifestPath}: packed package set differs from public-packages.json`);
   }
   await mkdir(nodeModulesDir, { recursive: true });
   const packageDirs = new Map();
@@ -558,7 +694,15 @@ function workspaceReadmeSamples(packageDirs, policy) {
     left.localeCompare(right),
   )) {
     const packedReadme = path.join(packageDir, 'README.md');
-    if (!existsSync(packedReadme)) continue;
+    if (!existsSync(packedReadme)) {
+      if (!policy.readmeExclusions?.[packageName]) {
+        throw new TypeError(`${packageName}: packed package has no README or reviewed exclusion`);
+      }
+      continue;
+    }
+    if (policy.readmeExclusions?.[packageName]) {
+      throw new TypeError(`${packageName}: stale README exclusion; packed README now exists`);
+    }
     const manifest = JSON.parse(readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
     const sourceDir =
       packageName === 'create-kovo'
@@ -631,7 +775,7 @@ async function generatedApiSamples(policy, outDir) {
       `generated-api: generated ${generated.exports} exports but classified ${signatureCount} signatures`,
     );
   }
-  return samples;
+  return { generated, samples };
 }
 
 async function markdownFiles(root) {
@@ -655,11 +799,16 @@ function assertUniqueSamples(samples) {
   }
 }
 
-async function writeTypescriptSamples(projectDir, samples, { authoredSupport }) {
+async function writeTypescriptSamples(
+  projectDir,
+  samples,
+  { authoredSupport, generatedPackages = [] },
+) {
   await mkdir(projectDir, { recursive: true });
   await writeFile(path.join(projectDir, 'package.json'), '{"private":true,"type":"module"}\n');
   if (authoredSupport) {
     await writeAuthoredSnippetSupportFiles(projectDir, { includeNodeModuleStubs: false });
+    await bindAmbientFrameworkGlobals(projectDir, generatedPackages);
   }
   const written = [];
   for (const sample of samples) {
@@ -675,6 +824,85 @@ async function writeTypescriptSamples(projectDir, samples, { authoredSupport }) 
   if (written.length === 0)
     throw new TypeError(`${projectDir}: no TypeScript samples were written`);
   return written;
+}
+
+async function bindAmbientFrameworkGlobals(projectDir, generatedPackages) {
+  const exportsByName = new Map();
+  for (const pkg of generatedPackages) {
+    for (const subpath of pkg.symbolsBySubpath ?? []) {
+      for (const symbol of subpath.symbols) {
+        if (!VALUE_KINDS.has(symbol.kind) || exportsByName.has(symbol.name)) continue;
+        exportsByName.set(symbol.name, subpath.importPath);
+      }
+    }
+  }
+  const preludePath = path.join(projectDir, 'snippet-prelude.d.ts');
+  let prelude = await readFile(preludePath, 'utf8');
+  const bindings = [];
+  prelude = prelude.replace(
+    /^  var ([A-Za-z_$][A-Za-z0-9_$]*):[\s\S]*?;\n/gmu,
+    (declaration, name) => {
+      const importPath = exportsByName.get(name);
+      if (!importPath) return declaration;
+      bindings.push({ importPath, name });
+      return '';
+    },
+  );
+  if (bindings.length === 0) {
+    throw new TypeError('authored sample prelude did not bind any packed framework globals');
+  }
+  const bridge = [
+    '',
+    'declare global {',
+    ...bindings.map(
+      ({ importPath, name }) =>
+        `  var ${name}: typeof import(${JSON.stringify(importPath)}).${name};`,
+    ),
+    '}',
+    '',
+    'export {};',
+    '',
+  ].join('\n');
+  await writeFile(preludePath, `${prelude.trimEnd()}\n${bridge}`, 'utf8');
+}
+
+async function writePackedApiBindings(projectDir, generatedPackages) {
+  const bindings = [];
+  for (const pkg of generatedPackages) {
+    for (const [index, subpath] of (pkg.symbolsBySubpath ?? []).entries()) {
+      const names = [...new Set(subpath.symbols.map((symbol) => symbol.name))];
+      if (names.length === 0) continue;
+      const id = stableSampleId(`packed-api/${subpath.importPath}`, index + 1);
+      const file = path.join(projectDir, `${id}.ts`);
+      const imports = names.map((name, symbolIndex) => `  ${name} as Export${symbolIndex},`);
+      await writeFile(
+        file,
+        [
+          `import type {`,
+          ...imports,
+          `} from ${JSON.stringify(subpath.importPath)};`,
+          '',
+          'export {};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      bindings.push({
+        class: 'executable',
+        code: '',
+        file,
+        id,
+        language: 'ts',
+        origin: 'generated-api/binding',
+        sourcePath: `packed-api/${subpath.importPath}`,
+        startLine: 1,
+        validator: 'typescript',
+      });
+    }
+  }
+  if (bindings.length === 0)
+    throw new TypeError('generated API produced no packed export bindings');
+  return bindings;
 }
 
 function normalizeModuleSample(code) {
@@ -693,6 +921,11 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
   const supportFiles = ['snippet-prelude.d.ts'].filter((file) =>
     existsSync(path.join(projectDir, file)),
   );
+  const supportWitnesses = supportFiles.map((file) => ({
+    file: path.join(projectDir, file),
+    sourcePath: `sample-support/${file}`,
+    startLine: 1,
+  }));
   const config = {
     compilerOptions: {
       allowJs: true,
@@ -715,7 +948,12 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
   const configPath = path.join(projectDir, 'tsconfig.json');
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   runTypecheck(configPath, true);
-  assertPackedKovoResolutions(executable, projectDir, nodeModulesDir, config.compilerOptions);
+  assertPackedKovoResolutions(
+    [...executable, ...supportWitnesses],
+    projectDir,
+    nodeModulesDir,
+    config.compilerOptions,
+  );
 
   for (const sample of expectedErrors) {
     const errorConfig = {
@@ -725,7 +963,12 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
     const errorConfigPath = path.join(projectDir, `tsconfig.${sample.id}.json`);
     await writeFile(errorConfigPath, `${JSON.stringify(errorConfig, null, 2)}\n`, 'utf8');
     runTypecheck(errorConfigPath, false);
-    assertPackedKovoResolutions([sample], projectDir, nodeModulesDir, config.compilerOptions);
+    assertPackedKovoResolutions(
+      [sample, ...supportWitnesses],
+      projectDir,
+      nodeModulesDir,
+      config.compilerOptions,
+    );
   }
 }
 
@@ -855,14 +1098,15 @@ export async function runPackedDocSamples({
     });
     await linkExternalDependencies(nodeModulesDir, new Set(packageDirs.keys()));
 
-    const [readmeSamples, guideSamples, apiSamples] = await Promise.all([
+    const [readmeSamples, guideSamples, generatedApi] = await Promise.all([
       Promise.resolve(workspaceReadmeSamples(packageDirs, policy)),
       authoredGuideSamples(policy),
       generatedApiSamples(policy, path.join(scratch, 'generated-api')),
     ]);
+    const apiSamples = generatedApi.samples;
     const samples = [...readmeSamples, ...guideSamples, ...apiSamples];
     assertUniqueSamples(samples);
-    validateAuxiliarySamples(samples);
+    validateAuxiliarySamples(samples, policy);
     const cliInvocations = await validateKovoInvocations(samples);
 
     const authoredProject = path.join(scratch, 'authored');
@@ -870,11 +1114,12 @@ export async function runPackedDocSamples({
     const authoredWritten = await writeTypescriptSamples(
       authoredProject,
       [...readmeSamples, ...guideSamples],
-      { authoredSupport: true },
+      { authoredSupport: true, generatedPackages: generatedApi.generated.packages },
     );
     const apiWritten = await writeTypescriptSamples(apiProject, apiSamples, {
       authoredSupport: false,
     });
+    apiWritten.push(...(await writePackedApiBindings(apiProject, generatedApi.generated.packages)));
     await compileTypescriptProject(authoredProject, authoredWritten, nodeModulesDir);
     await compileTypescriptProject(apiProject, apiWritten, nodeModulesDir);
 

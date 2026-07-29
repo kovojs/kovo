@@ -26,7 +26,9 @@ export default createApp({
 
 Then add the document, session, error, and limit policy around that core:
 
-```text
+<!-- kovo-sample: illustrative reason="The complete request shell depends on app-local routes, auth bindings, generated database bindings, and document components." -->
+
+```tsx
 import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
 
 import { appCsrf, appSessionProvider } from './auth.js';

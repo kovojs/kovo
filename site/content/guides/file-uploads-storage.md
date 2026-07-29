@@ -66,7 +66,7 @@ The served HTML stays a real multipart form:
 
 Use a filesystem store in local development so you can see the bytes land:
 
-```text
+```ts
 // Source-verified shape from packages/core/src/storage.ts
 import { createFileSystemStorage } from '@kovojs/server';
 
@@ -87,7 +87,7 @@ You should see a server-minted key under the `avatars/` prefix, not the original
 
 The storage capability is the swap point:
 
-```text
+```ts
 // Source-verified shape from packages/core/src/storage.ts
 import {
   createFileSystemStorage,
