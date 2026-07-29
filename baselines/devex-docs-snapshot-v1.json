@@ -1,0 +1,438 @@
+{
+  "schema": "kovo-devex-deterministic-artifact-report/v1",
+  "subject": "packed-docs-snapshot",
+  "scenario": {
+    "name": "kovo-packed-check",
+    "digest": "sha256:54cab990c79210f6ecb074561a3a5aa6f61ce4f924e267f58a62590204ef80bc",
+    "definition": {
+      "schema": "kovo-devex-benchmark-scenario/v4",
+      "name": "kovo-packed-check",
+      "profile": {
+        "id": "kovo-packed-check/v3",
+        "commandDigest": "sha256:b02f4667763091a05da3129a00623d894f926fa15763f082e9b11605cd21e52c"
+      },
+      "environment": {
+        "runnerName": "local-Mac16.10-arm-a",
+        "platform": "darwin",
+        "arch": "arm64",
+        "node": "v24.18.0",
+        "cpuModel": "Apple M4",
+        "packageManager": "pnpm@10.12.1",
+        "osImage": "local/macos-26.2-25C56-Mac16.10@sha256:adae1f457518c4012c3d6d02176026017a65b1a4a5a13bcaba0d1177a0f4283d"
+      },
+      "provenance": {
+        "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+        "sourceTree": "clean",
+        "workloadManifest": {
+          "path": "packed-workload.json",
+          "sha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+        },
+        "packedArtifacts": [
+          {
+            "name": "@kovojs/devex-packed-check-consumer",
+            "path": "tarballs/kovojs-devex-packed-check-consumer-1.0.0.tgz",
+            "sha256": "sha256:c58b405c2eebbc5a3c99a891028de3a132d96dadac68c7f75f4cd2c245229fc0"
+          },
+          {
+            "name": "@kovojs/core",
+            "path": "tarballs/kovojs-core-0.2.0.tgz",
+            "sha256": "sha256:e8fb1b4155885b575d5ac250dfc4a19c61fd8d424fb992f34399f33e1fe7bb28"
+          },
+          {
+            "name": "@kovojs/browser",
+            "path": "tarballs/kovojs-browser-0.2.0.tgz",
+            "sha256": "sha256:d444bf10c64d80e8ebac3d8472c26a1131e6c0e4a83a95337cd5e95ac8cf2ca4"
+          },
+          {
+            "name": "@kovojs/style",
+            "path": "tarballs/kovojs-style-0.2.0.tgz",
+            "sha256": "sha256:eff6a2b8db6ca50f02e2b3588b51637232aeee7e9f8a8bea3d231ee28da80fdb"
+          },
+          {
+            "name": "@kovojs/verify",
+            "path": "tarballs/kovojs-verify-0.2.0.tgz",
+            "sha256": "sha256:e82559eaeec099dc7b18255739e0dc8c3ae2b24167b34db0040b0ef3d88c3f41"
+          },
+          {
+            "name": "@kovojs/compiler",
+            "path": "tarballs/kovojs-compiler-0.2.0.tgz",
+            "sha256": "sha256:a7b1eaf9916b7b03d6c4edccdae3800e7d2c3fd79db5820f13012a7ecee4a2ef"
+          },
+          {
+            "name": "@kovojs/drizzle",
+            "path": "tarballs/kovojs-drizzle-0.2.0.tgz",
+            "sha256": "sha256:455cd2e209bccfa1f4acc79452874778e630618b18a704254db22a4e21926a06"
+          },
+          {
+            "name": "@kovojs/server",
+            "path": "tarballs/kovojs-server-0.2.0.tgz",
+            "sha256": "sha256:5257f0a72f9b0d828b8a43c1a08ec4a43272487c8537e18916defd35d57958c4"
+          },
+          {
+            "name": "@kovojs/icons",
+            "path": "tarballs/kovojs-icons-0.2.0.tgz",
+            "sha256": "sha256:f6e481cb3fecaae4dcf3c561326ab86c9e67d8092b4c62635afd3424ce142f14"
+          },
+          {
+            "name": "@kovojs/test",
+            "path": "tarballs/kovojs-test-0.2.0.tgz",
+            "sha256": "sha256:13c2794603ad25f87f8de3f86e7e51d2ce432edc82e321ba6c40b86fc032fac1"
+          },
+          {
+            "name": "@kovojs/headless-ui",
+            "path": "tarballs/kovojs-headless-ui-0.2.0.tgz",
+            "sha256": "sha256:fadbce8d85a68b3e45a528d4f462f884f482d77f4aef6ef82876d64506e2ea4e"
+          },
+          {
+            "name": "@kovojs/better-auth",
+            "path": "tarballs/kovojs-better-auth-0.2.0.tgz",
+            "sha256": "sha256:fe349a8808e9b54ecf92222cc0c7e1757a9ed2d70d456ffd7e9822a59e941192"
+          },
+          {
+            "name": "@kovojs/ui",
+            "path": "tarballs/kovojs-ui-0.2.0.tgz",
+            "sha256": "sha256:662b920cadb8e0c066c5e786cd8b6cc5a215ad95bae7fad5252d094041f1dfaa"
+          },
+          {
+            "name": "@kovojs/cli",
+            "path": "tarballs/kovojs-cli-0.2.0.tgz",
+            "sha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717"
+          },
+          {
+            "name": "create-kovo",
+            "path": "tarballs/create-kovo-0.2.0.tgz",
+            "sha256": "sha256:ade497b06ef6a8baf9eb0708198436621c2a431d39546fda5f014929f8130a16"
+          }
+        ],
+        "supportFiles": [
+          {
+            "path": "benchmark-lock.yaml",
+            "sha256": "sha256:bfd038d0c833acedb6a831fed05366238b3f0a17fda581ce1c2dee17a77b49f2",
+            "executable": false
+          },
+          {
+            "path": "build-browser.mjs",
+            "sha256": "sha256:a415f9b6516f359f4eef176ae655f9724f7e0af1e2e23f3d7bf22d32a784479c",
+            "executable": false
+          },
+          {
+            "path": "dev-profile.mjs",
+            "sha256": "sha256:64f0d43ced7d66941876e4c1b60e913dcf0e4daba5bade74fdabf13c7dab59a8",
+            "executable": false
+          },
+          {
+            "path": "index.html",
+            "sha256": "sha256:41bc7583c9145613a78dc1c83f0953aea1cb087b2531cf38e90200af20675472",
+            "executable": false
+          },
+          {
+            "path": "kovo.config.ts",
+            "sha256": "sha256:efd91548ccf6c69c3f467fc588ecf633177b0cfbe5d9b1cea6e849a1c48206ee",
+            "executable": false
+          },
+          {
+            "path": "package.json",
+            "sha256": "sha256:0b853ccfffb4034961d3cf3a9128732468f52f7f0094dbb3f72f29d04b5f5346",
+            "executable": false
+          },
+          {
+            "path": "profile.mjs",
+            "sha256": "sha256:9f8fb61564c1378d54856f1f8a4eb788fdd16f0b28449fea3d296ca743f01dc6",
+            "executable": false
+          },
+          {
+            "path": "src/app.tsx",
+            "sha256": "sha256:d9d2358d4a7c124df6a8cd18ca034e105c8a25820ae07d26cfe3b55ef437232c",
+            "executable": false
+          },
+          {
+            "path": "src/client.ts",
+            "sha256": "sha256:5b49b1cf60463762065a1c948c9f7088e86bb4062caf3f82aaf5386e97772567",
+            "executable": false
+          },
+          {
+            "path": "src/components/counter-island.tsx",
+            "sha256": "sha256:cc5ee6945dd00a99de72f5358e8996620dc42b2dd28332a328822af71a9884b1",
+            "executable": false
+          },
+          {
+            "path": "src/style.css",
+            "sha256": "sha256:025d14963ebbd58f5d92a2d07f4a5b2d85abad385af236d7e5bdafe0dd8ba8f4",
+            "executable": false
+          },
+          {
+            "path": "workload.mjs",
+            "sha256": "sha256:99f0b88dd70fa30e6527676806ae1ab512e0635d047723fc7315347f83fa3f70",
+            "executable": false
+          }
+        ],
+        "producerAttestation": {
+          "schema": "kovo-devex-producer-attestation/v1",
+          "producer": "kovo-clean-source-pack/v1",
+          "consumer": "@kovojs/devex-packed-check-consumer",
+          "releasePackages": [
+            "@kovojs/better-auth",
+            "@kovojs/browser",
+            "@kovojs/cli",
+            "@kovojs/compiler",
+            "@kovojs/core",
+            "@kovojs/drizzle",
+            "@kovojs/headless-ui",
+            "@kovojs/icons",
+            "@kovojs/server",
+            "@kovojs/style",
+            "@kovojs/test",
+            "@kovojs/ui",
+            "@kovojs/verify",
+            "create-kovo"
+          ],
+          "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+          "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e",
+          "profileCommandDigest": "sha256:b02f4667763091a05da3129a00623d894f926fa15763f082e9b11605cd21e52c",
+          "browserBuildCommandDigest": "sha256:4d8445ec7b0087524436e3fda8dbd59683372c77712d3331eab425bafe9b092d",
+          "artifactCensusSha256": "sha256:f0c1bbb9bbeff008b21022298c5436d5e412e52fc0e941a376bbcf6286da1c68",
+          "supportFileCensusSha256": "sha256:a936e07661b2e045a9a02df9229caa681b3666b70a8bd12d4e40cd77acd74417"
+        }
+      }
+    }
+  },
+  "provenance": {
+    "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+    "sourceTree": "clean",
+    "packageManager": "pnpm@10.12.1",
+    "osImage": "local/macos-26.2-25C56-Mac16.10@sha256:adae1f457518c4012c3d6d02176026017a65b1a4a5a13bcaba0d1177a0f4283d",
+    "workloadManifest": {
+      "path": "packed-workload.json",
+      "sha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+    },
+    "commandDigest": "sha256:b02f4667763091a05da3129a00623d894f926fa15763f082e9b11605cd21e52c",
+    "packedArtifacts": [
+      {
+        "name": "@kovojs/devex-packed-check-consumer",
+        "path": "tarballs/kovojs-devex-packed-check-consumer-1.0.0.tgz",
+        "sha256": "sha256:c58b405c2eebbc5a3c99a891028de3a132d96dadac68c7f75f4cd2c245229fc0"
+      },
+      {
+        "name": "@kovojs/core",
+        "path": "tarballs/kovojs-core-0.2.0.tgz",
+        "sha256": "sha256:e8fb1b4155885b575d5ac250dfc4a19c61fd8d424fb992f34399f33e1fe7bb28"
+      },
+      {
+        "name": "@kovojs/browser",
+        "path": "tarballs/kovojs-browser-0.2.0.tgz",
+        "sha256": "sha256:d444bf10c64d80e8ebac3d8472c26a1131e6c0e4a83a95337cd5e95ac8cf2ca4"
+      },
+      {
+        "name": "@kovojs/style",
+        "path": "tarballs/kovojs-style-0.2.0.tgz",
+        "sha256": "sha256:eff6a2b8db6ca50f02e2b3588b51637232aeee7e9f8a8bea3d231ee28da80fdb"
+      },
+      {
+        "name": "@kovojs/verify",
+        "path": "tarballs/kovojs-verify-0.2.0.tgz",
+        "sha256": "sha256:e82559eaeec099dc7b18255739e0dc8c3ae2b24167b34db0040b0ef3d88c3f41"
+      },
+      {
+        "name": "@kovojs/compiler",
+        "path": "tarballs/kovojs-compiler-0.2.0.tgz",
+        "sha256": "sha256:a7b1eaf9916b7b03d6c4edccdae3800e7d2c3fd79db5820f13012a7ecee4a2ef"
+      },
+      {
+        "name": "@kovojs/drizzle",
+        "path": "tarballs/kovojs-drizzle-0.2.0.tgz",
+        "sha256": "sha256:455cd2e209bccfa1f4acc79452874778e630618b18a704254db22a4e21926a06"
+      },
+      {
+        "name": "@kovojs/server",
+        "path": "tarballs/kovojs-server-0.2.0.tgz",
+        "sha256": "sha256:5257f0a72f9b0d828b8a43c1a08ec4a43272487c8537e18916defd35d57958c4"
+      },
+      {
+        "name": "@kovojs/icons",
+        "path": "tarballs/kovojs-icons-0.2.0.tgz",
+        "sha256": "sha256:f6e481cb3fecaae4dcf3c561326ab86c9e67d8092b4c62635afd3424ce142f14"
+      },
+      {
+        "name": "@kovojs/test",
+        "path": "tarballs/kovojs-test-0.2.0.tgz",
+        "sha256": "sha256:13c2794603ad25f87f8de3f86e7e51d2ce432edc82e321ba6c40b86fc032fac1"
+      },
+      {
+        "name": "@kovojs/headless-ui",
+        "path": "tarballs/kovojs-headless-ui-0.2.0.tgz",
+        "sha256": "sha256:fadbce8d85a68b3e45a528d4f462f884f482d77f4aef6ef82876d64506e2ea4e"
+      },
+      {
+        "name": "@kovojs/better-auth",
+        "path": "tarballs/kovojs-better-auth-0.2.0.tgz",
+        "sha256": "sha256:fe349a8808e9b54ecf92222cc0c7e1757a9ed2d70d456ffd7e9822a59e941192"
+      },
+      {
+        "name": "@kovojs/ui",
+        "path": "tarballs/kovojs-ui-0.2.0.tgz",
+        "sha256": "sha256:662b920cadb8e0c066c5e786cd8b6cc5a215ad95bae7fad5252d094041f1dfaa"
+      },
+      {
+        "name": "@kovojs/cli",
+        "path": "tarballs/kovojs-cli-0.2.0.tgz",
+        "sha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717"
+      },
+      {
+        "name": "create-kovo",
+        "path": "tarballs/create-kovo-0.2.0.tgz",
+        "sha256": "sha256:ade497b06ef6a8baf9eb0708198436621c2a431d39546fda5f014929f8130a16"
+      }
+    ],
+    "supportFiles": [
+      {
+        "path": "benchmark-lock.yaml",
+        "sha256": "sha256:bfd038d0c833acedb6a831fed05366238b3f0a17fda581ce1c2dee17a77b49f2",
+        "executable": false
+      },
+      {
+        "path": "build-browser.mjs",
+        "sha256": "sha256:a415f9b6516f359f4eef176ae655f9724f7e0af1e2e23f3d7bf22d32a784479c",
+        "executable": false
+      },
+      {
+        "path": "dev-profile.mjs",
+        "sha256": "sha256:64f0d43ced7d66941876e4c1b60e913dcf0e4daba5bade74fdabf13c7dab59a8",
+        "executable": false
+      },
+      {
+        "path": "index.html",
+        "sha256": "sha256:41bc7583c9145613a78dc1c83f0953aea1cb087b2531cf38e90200af20675472",
+        "executable": false
+      },
+      {
+        "path": "kovo.config.ts",
+        "sha256": "sha256:efd91548ccf6c69c3f467fc588ecf633177b0cfbe5d9b1cea6e849a1c48206ee",
+        "executable": false
+      },
+      {
+        "path": "package.json",
+        "sha256": "sha256:0b853ccfffb4034961d3cf3a9128732468f52f7f0094dbb3f72f29d04b5f5346",
+        "executable": false
+      },
+      {
+        "path": "profile.mjs",
+        "sha256": "sha256:9f8fb61564c1378d54856f1f8a4eb788fdd16f0b28449fea3d296ca743f01dc6",
+        "executable": false
+      },
+      {
+        "path": "src/app.tsx",
+        "sha256": "sha256:d9d2358d4a7c124df6a8cd18ca034e105c8a25820ae07d26cfe3b55ef437232c",
+        "executable": false
+      },
+      {
+        "path": "src/client.ts",
+        "sha256": "sha256:5b49b1cf60463762065a1c948c9f7088e86bb4062caf3f82aaf5386e97772567",
+        "executable": false
+      },
+      {
+        "path": "src/components/counter-island.tsx",
+        "sha256": "sha256:cc5ee6945dd00a99de72f5358e8996620dc42b2dd28332a328822af71a9884b1",
+        "executable": false
+      },
+      {
+        "path": "src/style.css",
+        "sha256": "sha256:025d14963ebbd58f5d92a2d07f4a5b2d85abad385af236d7e5bdafe0dd8ba8f4",
+        "executable": false
+      },
+      {
+        "path": "workload.mjs",
+        "sha256": "sha256:99f0b88dd70fa30e6527676806ae1ab512e0635d047723fc7315347f83fa3f70",
+        "executable": false
+      }
+    ],
+    "producerAttestation": {
+      "schema": "kovo-devex-producer-attestation/v1",
+      "producer": "kovo-clean-source-pack/v1",
+      "consumer": "@kovojs/devex-packed-check-consumer",
+      "releasePackages": [
+        "@kovojs/better-auth",
+        "@kovojs/browser",
+        "@kovojs/cli",
+        "@kovojs/compiler",
+        "@kovojs/core",
+        "@kovojs/drizzle",
+        "@kovojs/headless-ui",
+        "@kovojs/icons",
+        "@kovojs/server",
+        "@kovojs/style",
+        "@kovojs/test",
+        "@kovojs/ui",
+        "@kovojs/verify",
+        "create-kovo"
+      ],
+      "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+      "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e",
+      "profileCommandDigest": "sha256:b02f4667763091a05da3129a00623d894f926fa15763f082e9b11605cd21e52c",
+      "browserBuildCommandDigest": "sha256:4d8445ec7b0087524436e3fda8dbd59683372c77712d3331eab425bafe9b092d",
+      "artifactCensusSha256": "sha256:f0c1bbb9bbeff008b21022298c5436d5e412e52fc0e941a376bbcf6286da1c68",
+      "supportFileCensusSha256": "sha256:a936e07661b2e045a9a02df9229caa681b3666b70a8bd12d4e40cd77acd74417"
+    }
+  },
+  "metrics": {
+    "docs.snapshot.compressedBytes": {
+      "unit": "bytes",
+      "samples": [1077819],
+      "summary": {
+        "count": 1,
+        "min": 1077819,
+        "median": 1077819,
+        "p95": 1077819,
+        "max": 1077819,
+        "medianAbsoluteDeviation": 0
+      },
+      "evidence": {
+        "schema": "kovo-devex-packed-docs-evidence/v1",
+        "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e",
+        "package": {
+          "name": "@kovojs/cli",
+          "sha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
+          "version": "0.2.0"
+        },
+        "snapshot": {
+          "compressedBytes": 1077819,
+          "files": 77,
+          "installedBytes": 4291085,
+          "publicManifestDigest": "sha256:ad54b2807c0008dc30f8cfed7a14157b9637e73087fce13f1fa78a8a26f22de2",
+          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
+          "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+          "version": "0.2.0"
+        }
+      }
+    },
+    "docs.snapshot.installedBytes": {
+      "unit": "bytes",
+      "samples": [4291085],
+      "summary": {
+        "count": 1,
+        "min": 4291085,
+        "median": 4291085,
+        "p95": 4291085,
+        "max": 4291085,
+        "medianAbsoluteDeviation": 0
+      },
+      "evidence": {
+        "schema": "kovo-devex-packed-docs-evidence/v1",
+        "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e",
+        "package": {
+          "name": "@kovojs/cli",
+          "sha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
+          "version": "0.2.0"
+        },
+        "snapshot": {
+          "compressedBytes": 1077819,
+          "files": 77,
+          "installedBytes": 4291085,
+          "publicManifestDigest": "sha256:ad54b2807c0008dc30f8cfed7a14157b9637e73087fce13f1fa78a8a26f22de2",
+          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
+          "sourceCommit": "5a02d31ee93faf773dec30c02a5e341d50c673c4",
+          "version": "0.2.0"
+        }
+      }
+    }
+  }
+}

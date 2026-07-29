@@ -112,7 +112,34 @@
       "sampling": "deterministic",
       "binding": "packed-artifact",
       "provisionalTarget": null,
-      "ratification": null
+      "ratification": {
+        "runnerFingerprint": null,
+        "workloadIdentity": null,
+        "baselineReport": {
+          "path": "baselines/devex-docs-snapshot-v1.json",
+          "sha256": "sha256:dcc6630cea9f412c0f813522e9195a105bc1305dfda961f93d0b9f0e651ce987",
+          "schema": "kovo-devex-deterministic-artifact-report/v1",
+          "scenarioName": "kovo-packed-check",
+          "scenarioDigest": "sha256:54cab990c79210f6ecb074561a3a5aa6f61ce4f924e267f58a62590204ef80bc"
+        },
+        "binding": {
+          "schema": "kovo-devex-packed-artifact-binding/v1",
+          "kind": "packed-artifact",
+          "evidenceSha256": "sha256:7d1417f235c473e46fe51321b8185300d92f9574a340e71c6f46d2447dbb0aa8",
+          "packedArtifactSha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
+          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
+          "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+        },
+        "sampleCount": 1,
+        "statistic": "median",
+        "baseline": 1077819,
+        "targetRationale": "Cap the packed compressed docs payload at 1.25 MiB, preserving reviewed growth headroom above the authenticated baseline.",
+        "budget": 1310720,
+        "noiseStatistic": "median-absolute-deviation",
+        "noise": 0,
+        "noiseMultiplier": 0,
+        "threshold": 1310720
+      }
     },
     "docs.snapshot.installedBytes": {
       "unit": "bytes",
@@ -120,7 +147,34 @@
       "sampling": "deterministic",
       "binding": "packed-artifact",
       "provisionalTarget": null,
-      "ratification": null
+      "ratification": {
+        "runnerFingerprint": null,
+        "workloadIdentity": null,
+        "baselineReport": {
+          "path": "baselines/devex-docs-snapshot-v1.json",
+          "sha256": "sha256:dcc6630cea9f412c0f813522e9195a105bc1305dfda961f93d0b9f0e651ce987",
+          "schema": "kovo-devex-deterministic-artifact-report/v1",
+          "scenarioName": "kovo-packed-check",
+          "scenarioDigest": "sha256:54cab990c79210f6ecb074561a3a5aa6f61ce4f924e267f58a62590204ef80bc"
+        },
+        "binding": {
+          "schema": "kovo-devex-packed-artifact-binding/v1",
+          "kind": "packed-artifact",
+          "evidenceSha256": "sha256:7d1417f235c473e46fe51321b8185300d92f9574a340e71c6f46d2447dbb0aa8",
+          "packedArtifactSha256": "sha256:6d75d9346b3355d89471e0753bb980d37d5399d582684ae8cadd2a499c873717",
+          "snapshotDigest": "sha256:1544e8be3003734b931b12fe6ce672c54610c4f91a9e0075a39dfa76b62721be",
+          "workloadManifestSha256": "sha256:b079c1e8f060daac48cecb98dc0a7b89df975094dbfaf238a231f8caee36f95e"
+        },
+        "sampleCount": 1,
+        "statistic": "median",
+        "baseline": 4291085,
+        "targetRationale": "Cap the installed local docs corpus at 5 MiB, preserving reviewed growth headroom while preventing unbounded agent context.",
+        "budget": 5242880,
+        "noiseStatistic": "median-absolute-deviation",
+        "noise": 0,
+        "noiseMultiplier": 0,
+        "threshold": 5242880
+      }
     },
     "ui.fullCatalog.peakRssBytes": {
       "unit": "bytes",

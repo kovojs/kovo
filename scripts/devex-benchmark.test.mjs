@@ -522,11 +522,18 @@ describe('DevEx benchmark foundation', () => {
     expect(devexBenchmarkSource).toContain("['run', 'check:publish']");
   });
 
-  it('keeps every provisional budget non-binding before baseline ratification', () => {
-    expect(validateBudgets(budgets)).toEqual([]);
-    expect(Object.values(budgets.metrics).every((metric) => metric.ratification === null)).toBe(
-      true,
-    );
+  it('keeps runner-bound provisional budgets non-binding before runner ratification', () => {
+    expect(validateBudgets(budgets, { repoRoot })).toEqual([]);
+    expect(
+      Object.entries(budgets.metrics)
+        .filter(([metricId]) => !metricId.startsWith('docs.snapshot.'))
+        .every(([, metric]) => metric.ratification === null),
+    ).toBe(true);
+    expect(
+      ['docs.snapshot.compressedBytes', 'docs.snapshot.installedBytes'].every(
+        (metricId) => budgets.metrics[metricId].ratification !== null,
+      ),
+    ).toBe(true);
     expect(budgets.runner.status).toBe('unratified');
   });
 
@@ -653,14 +660,34 @@ describe('DevEx benchmark foundation', () => {
   });
 
   it('represents deterministic documentation snapshot sizes without inventing thresholds', () => {
-    for (const metricId of ['docs.snapshot.compressedBytes', 'docs.snapshot.installedBytes']) {
-      expect(budgets.metrics[metricId]).toEqual({
+    for (const [metricId, baseline, budget] of [
+      ['docs.snapshot.compressedBytes', 1_077_819, 1_310_720],
+      ['docs.snapshot.installedBytes', 4_291_085, 5_242_880],
+    ]) {
+      expect(budgets.metrics[metricId]).toMatchObject({
         unit: 'bytes',
         direction: 'max',
         sampling: 'deterministic',
         binding: 'packed-artifact',
         provisionalTarget: null,
-        ratification: null,
+        ratification: {
+          baseline,
+          budget,
+          noise: 0,
+          noiseMultiplier: 0,
+          runnerFingerprint: null,
+          sampleCount: 1,
+          threshold: budget,
+          workloadIdentity: null,
+          baselineReport: {
+            path: 'baselines/devex-docs-snapshot-v1.json',
+            schema: DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA,
+          },
+          binding: {
+            kind: 'packed-artifact',
+            schema: 'kovo-devex-packed-artifact-binding/v1',
+          },
+        },
       });
     }
     const forgedStatisticalBinding = structuredClone(budgets);

@@ -1,0 +1,16 @@
+{
+  "schema": "kovo-devex-budget-proposal/v5",
+  "runnerFingerprint": null,
+  "metrics": {
+    "docs.snapshot.compressedBytes": {
+      "budget": 1310720,
+      "noiseMultiplier": 0,
+      "targetRationale": "Cap the packed compressed docs payload at 1.25 MiB, preserving reviewed growth headroom above the authenticated baseline."
+    },
+    "docs.snapshot.installedBytes": {
+      "budget": 5242880,
+      "noiseMultiplier": 0,
+      "targetRationale": "Cap the installed local docs corpus at 5 MiB, preserving reviewed growth headroom while preventing unbounded agent context."
+    }
+  }
+}

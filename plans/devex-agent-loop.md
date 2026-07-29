@@ -13,7 +13,10 @@ reference material; `SPEC.md` remains normative.
       SHA-256 digests.
   - Evidence: `scripts/agent-docs-snapshot.test.mjs` verifies every authenticated manifest field
     and file digest.
-- [ ] Ratify compressed tarball and installed-size budgets through `devex-budgets.json`.
+- [x] Ratify compressed tarball and installed-size budgets through `devex-budgets.json`.
+  - Evidence: `node scripts/devex-benchmark.mjs --check-budgets` authenticates the recorded
+    clean-source packed baseline and reports two ratified packed-artifact metrics: 1,077,819 bytes
+    compressed against 1.25 MiB, and 4,291,085 bytes installed against 5 MiB.
 - [x] Make snapshot generation deterministic across two clean temporary directories.
   - Evidence: the agent-docs suite in Latest verification byte-compares independent clean-root
     generations.
@@ -40,22 +43,28 @@ reference material; `SPEC.md` remains normative.
 
 ## Agent acceptance
 
-- [ ] Add an offline scaffold→edit→check→fix journey using only JSON diagnostics and installed
+- [x] Add an offline scaffold→edit→check→fix journey using only JSON diagnostics and installed
       local docs.
-  - Integration-ready evidence: `pnpm run test:devex-offline-agent` passes 20 runner, JSON-only,
-    authenticated-docs, packed-input, and deny-all-network adversarial assertions. A real
-    authenticated-tarball run completes scaffold, strict offline install, and `update-docs`, then
-    stops at the exact open dependency: packed `kovo build --check --format json` must emit one
-    `kovo-diagnostic/v1` KV436 record with an authored `src/queries.ts` source anchor and no stderr
-    prelude. Keep this item open until that packed run reaches the fixed empty envelope.
+  - Evidence: `node scripts/golden-journey.mjs --scenario offline-agent --packed-manifest
+<authenticated-packed-packages.json>` completed the deny-all-network journey with one KV436
+    authored-source diagnostic, five authenticated local-doc results, and an empty diagnostic
+    envelope after the source-only fix; `pnpm run test:devex-offline-agent` covers the exact packed
+    command sequence and adversarial JSON/docs/network cases.
 - [ ] Regenerate and verify the snapshot in every breaking public-API batch.
-- [ ] Track 3 exit: the packed offline journey passes and no placeholder snapshot can report
+- [x] Track 3 exit: the packed offline journey passes and no placeholder snapshot can report
       success.
+  - Evidence: the packed journey above is green; `packages/cli/src/docs-store.test.ts` and
+    `packages/cli/src/index.update-docs.test.ts` reject placeholder, partial, digest-mismatched,
+    and wrong-version snapshots before atomic installation can report success.
 
 ## Latest verification
 
 - **Agent-docs suite:** `pnpm exec vitest run` over snapshot generation, storage, CLI/MCP
-  retrieval, update, and llms generation passed (7 files, 29 tests).
+  retrieval, update, llms generation, benchmark binding, and CI policy passed (9 files, 57 tests).
+- **Offline-agent suite:** `pnpm run test:devex-offline-agent` passed (3 files, 24 tests), including
+  the exact `check source` edit/fix sequence and denial of network and prose diagnostics.
+- **Budget proof:** `node scripts/devex-benchmark.mjs --check-budgets` validated the recorded
+  deterministic artifact report and both snapshot byte ratifications without claiming a runner.
 - `pnpm run check:publish` generated an authenticated 77-file snapshot, packed all 14 public
   packages, and passed the offline packed CLI consumer. The digest remains source-revision-bound
   rather than copied into this evolving ledger.
