@@ -677,7 +677,7 @@ function addBugz25ToctouProof(root: string): void {
     'export const bugz25MutableConcurrency = pgTable(',
     "  'bugz25_mutable_concurrency',",
     '  { id: text("id").primaryKey(), stock: text("stock"), price: text("price") },',
-    '  kovo({ domain: "bugz25-mutable", key: "id", ...mutableConcurrency }),',
+    '  kovo((columns) => ({ domain: "bugz25-mutable", key: columns.id, ...mutableConcurrency })),',
     ');',
     '',
   ].join('\n');

@@ -6605,8 +6605,12 @@ function kovoAnnotationObject(
   const key = columnNamePropertyFromObject(annotationObject, 'key', annotation.columns);
   const owner = columnNamePropertyFromObject(annotationObject, 'owner', annotation.columns);
   const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
-  const ownerViaParent = objectPropertyInitializer(ownerVia, 'parent');
-  const ownerViaParentKey = directTableColumnRef(objectPropertyInitializer(ownerVia, 'parentKey'));
+  const ownerViaParent =
+    ownerVia === undefined ? undefined : objectPropertyInitializer(ownerVia, 'parent');
+  const ownerViaParentKey =
+    ownerVia === undefined
+      ? undefined
+      : directTableColumnRef(objectPropertyInitializer(ownerVia, 'parentKey'));
   const ownerViaResolved =
     ownerVia !== undefined &&
     columnNamePropertyFromObject(ownerVia, 'fk', annotation.columns) !== undefined &&

@@ -1,5 +1,5 @@
 import { createBetterAuthSqliteRateLimitBucketConsumer } from '@kovojs/server/internal/better-auth';
-import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
+import type { KovoSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
 
 import { createBetterAuthBoundedRateLimitStorage } from './rate-limit-storage.js';
 

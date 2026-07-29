@@ -210,7 +210,13 @@ export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unkn
 sql.raw = <T = unknown>(value: string) => {
   const raw = drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [value]);
   stampRawSqlChunk(raw, value);
-  return stampStaticSql(raw, { containsRawChunk: true }, { kind: 'text', text: value });
+  // The core constructor mints the runtime WeakSet witness; this private type witness only makes
+  // that already-enforced invariant visible to authors (SPEC §6.6/§10.2).
+  return stampStaticSql(
+    raw,
+    { containsRawChunk: true },
+    { kind: 'text', text: value },
+  ) as KovoStaticSql<T>;
 };
 
 sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string[] } = {}) => {
@@ -222,12 +228,15 @@ sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string
     drizzleIdentifier === undefined
       ? drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [quoteSqlIdentifier(identifier)])
       : drizzleApply<SQL<T>>(drizzleIdentifier, drizzleSql, [identifier]);
-  return stampSqlIdentifier(statement, quoteSqlIdentifier(identifier));
+  return stampSqlIdentifier(statement, quoteSqlIdentifier(identifier)) as KovoSqlIdentifier<T>;
 };
 
 sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampSqlKeyword(drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [fragment]), fragment);
+  return stampSqlKeyword(
+    drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [fragment]),
+    fragment,
+  ) as KovoSqlKeyword<T>;
 };
 
 sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
@@ -249,7 +258,7 @@ sql.join = <T = unknown>(parts: readonly unknown[], separator?: unknown) => {
     kind: 'join',
     parts: partSnapshot,
     separator,
-  });
+  }) as KovoParameterizedSql<T>;
 };
 
 /**

@@ -39,7 +39,11 @@ export interface GeneratedIntegrationSystemDbOptions {
 export function postgresSystemDbForGeneratedIntegration(
   runtime: KovoPostgresAppRuntimeDb,
   options: GeneratedIntegrationSystemDbOptions,
-): GeneratedIntegrationSystemDb<'postgres'> {
+): GeneratedIntegrationSystemDb<'postgres'>;
+export function postgresSystemDbForGeneratedIntegration(
+  runtime: KovoPostgresAppRuntimeDb,
+  options: GeneratedIntegrationSystemDbOptions,
+): unknown {
   const posture = snapshotGeneratedIntegrationSystemDbOptions(options, 'Postgres');
   const db = usePostgresAppRuntimeDb(runtime, {
     principalPosture: declareSystemPrincipal(posture.reason, {
@@ -48,7 +52,7 @@ export function postgresSystemDbForGeneratedIntegration(
       surface: posture.surface,
     }),
   });
-  return createPostgresSystemDb(db) as GeneratedIntegrationSystemDb<'postgres'>;
+  return createPostgresSystemDb(db);
 }
 
 /**
@@ -59,9 +63,13 @@ export function postgresSystemDbForGeneratedIntegration(
 export function sqliteSystemDbForGeneratedIntegration(
   runtime: KovoSqliteAppRuntime,
   options: GeneratedIntegrationSystemDbOptions,
-): GeneratedIntegrationSystemDb<'sqlite'> {
+): GeneratedIntegrationSystemDb<'sqlite'>;
+export function sqliteSystemDbForGeneratedIntegration(
+  runtime: KovoSqliteAppRuntime,
+  options: GeneratedIntegrationSystemDbOptions,
+): unknown {
   snapshotGeneratedIntegrationSystemDbOptions(options, 'SQLite');
-  return sqliteSystemDbForAppRuntime(runtime) as GeneratedIntegrationSystemDb<'sqlite'>;
+  return sqliteSystemDbForAppRuntime(runtime);
 }
 
 function snapshotGeneratedIntegrationSystemDbOptions(
