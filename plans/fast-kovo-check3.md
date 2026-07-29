@@ -1,13 +1,14 @@
 # Plan: Make `kovo build` faster (round 3)
 
-Status: **#1 + #3 implemented & merged; #2 rejected; #4 + cache-value portability cleanup remain**
+Status: **#1 retained; #2 rejected; #3 retired on packed RSS evidence; #4 remains; #5 removed**
 Owner: perf
 
 ## Implementation status (2026-06-29)
 
-Implemented this round: **#1 (drizzle memo)** + **#3 (overlap tsc preflight)**. Combined on
-commerce: cold `kovo build` ~9.4s → **~6.5–7s**, warm ~2.6s → **~2.0s**, byte-identical KV
-diagnostics, drizzle suite 620/620, create-kovo build gate green.
+Current state: **#1 (drizzle memo)** remains. The former **#3 (overlap tsc preflight)** was removed
+after an exact packed 44-component journey proved aggregate process-tree RSS breached the
+provisional 2 GiB ceiling. The persistent compiler cache was later deleted, so its absolute-path
+value cleanup is no longer applicable.
 
 - **Round-2 ownership port:** the only still-live `fast-kovo-check2.md` item is the cosmetic
   absolute path in persistent compiler-cache result values. Cross-path cache hits are already
@@ -81,22 +82,14 @@ and **do not stack** (pick one as primary); item 1 is independent and **stacks**
     `tsc`, never surface a phantom error; confirm tsgo's `--incremental`/`--tsBuildInfoFile` behavior.
     Re-run the create-kovo graph-gate in CI (the offline worktree couldn't link the kovo dist).
 
-- [x] **3. Run the tsc preflight concurrently with the load + analysis phase** (fail-closed join). DONE.
-      `runTypeScriptBuildPreflight` is now async `execFile`, started as a promise and joined fail-closed
-      (tsc-error-first) before any artifact emit. Verified: byte-identical oracle, injected type error still
-      fails the build (TS2322, exit 1), passing-app emit unchanged. (`#2` not chosen — this covers the
-      preflight without a native dependency.)
-      Est: **cold ~−1.7s (~16%)** and **warm ~−0.7s (~20%)** · Effort: low · Risk: low · Confidence: high.
-  - The preflight is independent, so overlapping it with the ~1.8s vite load + ~5s check hides its
-    wall time. Convert `runTypeScriptBuildPreflight` to async `execFile`, start it as a promise, and
-    **join before any artifact is emitted**, surfacing the tsc error first (preserves today's ordering
-    and fail-closed behavior). Already production-shaped in the spike.
-  - Files: `packages/cli/src/commands/build-export.ts` `runBuildCommand` + `runTypeScriptBuildPreflight`.
-  - Verified: byte-identical diagnostics; injected type error still fails the build with the exact
-    message + zero artifacts; tsc-error-first ordering preserved; passing app emits byte-identical output.
-  - **Relationship to #2:** redundant with it (both target the same ~2s). Lower risk than #2 (no native
-    dependency) but doesn't reduce CPU, only hides latency. **Pick #2 OR #3 as the primary tsc fix.**
-    Doing both adds only ~0.4s on top (overlapping an already-tiny tsgo preflight), so it's optional.
+- [x] **3. Retire tsc/load overlap after the exact packed memory regression.**
+  - `kovo check` and `kovo build` now run TypeScript, project quality, sound-subset, and
+    entry-reachable analysis sequentially while retaining TypeScript-first failure ordering and
+    zero artifact emission on failure.
+  - Evidence: the exact 44-component journey passes standalone typecheck at 553.8 MiB; the previous
+    concurrent implementation was killed above 2 GiB before a valid result. The remaining
+    KF-DEVEX-007 breach is isolated to the formatter process and stays open in
+    `plans/devex-first-loop.md`.
 
 - [ ] **4. Derive the app graph without a full vite dev server** (the ~1.8s load).
       Est: **potential cold ~−1.8s + removes the teardown-drain root cause** · Effort: high · Risk: medium · Confidence: **low (unmeasured)**.
@@ -108,15 +101,15 @@ and **do not stack** (pick one as primary); item 1 is independent and **stacks**
     is whether the app object can be obtained without evaluating `createApp` under the kovo compiler
     transform. Highest ceiling, highest uncertainty.
 
-- [ ] **5. Remove the remaining absolute path from persistent compiler-cache result values.**
-  - The key and cross-path hit behavior are already portable; this is a value/provenance cleanup.
-    Prove a cache generated in one absolute worktree contains no first-worktree path, restores in a
-    second path, remains a hit, and emits byte-identical diagnostics.
+- [x] **5. Retire the persistent compiler-cache value cleanup because the cache no longer exists.**
+  - Evidence: commit `cab4b4b84` removed `compile-cache.ts`,
+    `persistent-compile-cache.ts`, their tests, and the public/internal cache hooks; the current
+    compiler source census contains no persistent compile-cache implementation to make portable.
 
 ### Combined potential
 
-Adopt **#1 + (#2 or #3)** — they stack: **cold ~9.4s → ~6.5s (~31%)**, **warm ~2.6s → ~2.0s (~23%)**.
-#4, if it pans out, would take cold toward ~5s and remove the teardown-drain root cause.
+Keep **#1**. Do not restore #3 without a packed process-tree RSS proof. #4 remains the only live
+performance experiment and must preserve the same diagnostics and artifact-failure contract.
 
 ### Still-deferred from prior rounds (low value)
 

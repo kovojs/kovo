@@ -135,6 +135,10 @@ proof; shared root verification belongs in the latest-verification block.
     lockfile changes while reporting the attempted and still-planned work separately.
 - [ ] Fix source-closure scanning so the packed 44-component copy-in fixture typechecks, checks,
       and builds within the ratified RSS budget.
+  - Current proof: exact clean-commit tarballs copy all 44 components without importing them and
+    `tsc --noEmit` passes at 553.8 MiB peak RSS. The provisional 2 GiB probe still kills
+    `kovo check` at 2,083.2 MiB and `kovo build` at 2,058.9 MiB; live process-tree sampling names
+    `vp fmt --list-different` as the oversized phase, so KF-DEVEX-007 remains open.
 - [ ] Publish an instrumented `kovo check` phase census and meet the ratified cold/warm/one-file
       budgets without dropping a diagnostic-producing phase.
 - [ ] Complete one packed create→build→deploy→public-200 journey on the selected Node host.
@@ -158,6 +162,11 @@ proof; shared root verification belongs in the latest-verification block.
 - **Creator contract:** `packages/create-kovo/src/{cli-schema,index}.test.ts` passed (2 files,
   46 tests), including schema-derived prompts/flags, host posture, SQLite pre-write refusal, and
   install-aware handoff.
+- **First-loop closeout:** the focused add, source-closure, project-quality, creator, readiness,
+  known-failure, and packed-journey suites passed (7 files, 104 tests before the feedback merge;
+  post-merge source-closure/project-quality checks passed 5 tests). KF-DEVEX-002 now separates a
+  120-second listener-acquisition ceiling from the unchanged five-second post-bind readiness
+  contract; the scorecard budget remains unratified.
 - **Starter DDL proof:** focused `packages/create-kovo/src/index.build.runtime.test.ts` passed
   (1 test, 5 skipped), including initial, additive, reordered-FK, and serial-column boot.
 - **First-loop proof:** `pnpm run test:devex-known-failures-available` passes all ten registered
