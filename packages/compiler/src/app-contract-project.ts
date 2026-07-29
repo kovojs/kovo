@@ -847,7 +847,7 @@ function proveDirectDefineKovo(
   const appId = stringProperty(argument, 'appId');
   const providerKey = stringProperty(argument, 'providerKey');
   const providerIdentity = importedProviderIdentity(argument, providerKey, context);
-  if (!appId || !providerKey || !providerIdentity) return undefined;
+  if (!appId) return undefined;
   // Bind the proof to the declaration that owns the initializer, not merely an equivalent call.
   if (
     initializer.getSourceFile() !== declaration.getSourceFile() ||
@@ -855,14 +855,53 @@ function proveDirectDefineKovo(
   ) {
     return undefined;
   }
+  if (providerKey !== undefined || hasStaticProperty(argument, 'provider')) {
+    // Preserve the authenticated D1 Arm-B fixture contract while it remains as conformance
+    // evidence. A partial provider identity is never allowed to fall through to the product
+    // app-contract path.
+    if (!providerKey || !providerIdentity) return undefined;
+    const identityFields = {
+      appId,
+      providerExportBinding: providerIdentity.exportBinding,
+      providerImportSpecifier: providerIdentity.importSpecifier,
+      providerKey,
+    };
+    const ownerKey = `d1v6:${createHash('sha256')
+      .update(JSON.stringify(identityFields))
+      .digest('hex')}`;
+    return {
+      identity: {
+        ...identityFields,
+        ownerKey,
+        providerAppExportName: declaration.name.text,
+        providerAppFileName: declaration.getSourceFile().fileName,
+        providerDefinitionFileName: providerIdentity.definitionFileName,
+      },
+      kind: 'app',
+      ownerKey,
+      serverPackageRoot,
+    };
+  }
+
+  // Product authoring uses the normative `defineKovo({ appId, db, auth, env, ... })` contract,
+  // not the spike-only provider/providerKey vocabulary. The UUID is the cross-command live-target
+  // identity (SPEC §9.1); the exact TypeScript declaration symbol remains the provenance proof.
+  // The legacy-shaped identity fields below are private compatibility carriers for the retired
+  // Arm-B manifest evaluator and are never accepted as an authored provider claim.
   const identityFields = {
     appId,
-    providerExportBinding: providerIdentity.exportBinding,
-    providerImportSpecifier: providerIdentity.importSpecifier,
-    providerKey,
+    providerExportBinding: declaration.name.text,
+    providerImportSpecifier: normalizeFileName(declaration.getSourceFile().fileName),
+    providerKey: `app:${appId}`,
   };
-  const ownerKey = `d1v6:${createHash('sha256')
-    .update(JSON.stringify(identityFields))
+  const ownerKey = `d1v7:${createHash('sha256')
+    .update(
+      JSON.stringify({
+        appId,
+        appExportBinding: declaration.name.text,
+        appSourceSha256: sha256Text(declaration.getSourceFile().text),
+      }),
+    )
     .digest('hex')}`;
   return {
     identity: {
@@ -870,7 +909,7 @@ function proveDirectDefineKovo(
       ownerKey,
       providerAppExportName: declaration.name.text,
       providerAppFileName: declaration.getSourceFile().fileName,
-      providerDefinitionFileName: providerIdentity.definitionFileName,
+      providerDefinitionFileName: declaration.getSourceFile().fileName,
     },
     kind: 'app',
     ownerKey,
@@ -2465,6 +2504,15 @@ function stringProperty(object: ts.ObjectLiteralExpression, name: string): strin
     }
   }
   return undefined;
+}
+
+function hasStaticProperty(object: ts.ObjectLiteralExpression, name: string): boolean {
+  return object.properties.some(
+    (property) =>
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+      ((ts.isIdentifier(property.name) && property.name.text === name) ||
+        (ts.isStringLiteralLike(property.name) && property.name.text === name)),
+  );
 }
 
 function staticMemberName(expression: ts.Expression): string | undefined {

@@ -16,6 +16,37 @@ afterEach(async () => {
 });
 
 describe('D1 compiler-owned exact project resolver', () => {
+  it('accepts the normative appId/provider-descriptor contract without spike-only provider keys', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      "import { app } from './kovo.js';\nexport const item = app.query({ load() { return 1; } });\n",
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [contract, entry],
+    });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ownerKey).toMatch(/^d1v7:[a-f0-9]{64}$/u);
+    expect(result.parsedFactories).toContain('query');
+    expect(result.resolver.exactNodeCount).toBe(1);
+    expect(result.serverPackageRoots).toEqual([fixture.serverA]);
+  });
+
   it('accepts ordinary, named/star re-exported, aliased, and shared-package receivers', async () => {
     const fixture = await createFixture();
     const entries = [fixture.local, fixture.named, fixture.star, fixture.alias, fixture.shared];
@@ -586,8 +617,9 @@ async function createServerPackage(root: string): Promise<string> {
       'export declare function publicAccess(reason: string): unknown;',
       'export declare function defineKovo<const AppId extends string>(options: {',
       '  readonly appId: AppId;',
-      '  readonly provider: unknown;',
-      '  readonly providerKey: string;',
+      '  readonly db?: unknown;',
+      '  readonly provider?: unknown;',
+      '  readonly providerKey?: string;',
       '}): {',
       '  readonly endpoint: typeof endpoint;',
       '  readonly layout: typeof layout;',
