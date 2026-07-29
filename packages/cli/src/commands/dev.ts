@@ -160,6 +160,7 @@ export async function startKovoDevServer(
     }
     const kovoPlugin = freezeFrameworkPlugin(createdPlugin) as PluginOption;
     const devtoolOptions = nativeObjectFreeze<KovoDevtoolPluginOptions>({
+      appShellModuleId: profile.appShellModuleId,
       appModuleId: viteAppModuleId(options.appModulePath, root),
       appModulePath: options.appModulePath,
       debug: options.debug === true,
@@ -319,6 +320,7 @@ function boundDevServerOrigin(server: ViteDevServer): string {
 }
 
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
+  appShellModuleId: string;
   securityProfileModuleId: string;
   serverModuleId: string;
   trustedKovoVitePlugin(options: {
@@ -391,6 +393,10 @@ async function preloadDevSecurityProfile(
   );
   const serverModuleId = viteSsrModuleId(serverRootPath, root);
   await server.ssrLoadModule(serverModuleId);
+  const appShellModuleId = viteSsrModuleId(
+    requireFromApp.resolve('@kovojs/server/internal/app-shell-vite'),
+    root,
+  );
   const securityProfileModuleId = viteSsrModuleId(
     requireFromApp.resolve('@kovojs/server/internal/vite-security-profile'),
     root,
@@ -421,6 +427,7 @@ async function preloadDevSecurityProfile(
     );
   }
   return nativeObjectFreeze({
+    appShellModuleId,
     nodeRequestPreloadIngressRejection:
       nodeRequestPreloadIngressRejection as DevSecurityProfileModule['nodeRequestPreloadIngressRejection'],
     rejectNodeRequestPreloadIngress:

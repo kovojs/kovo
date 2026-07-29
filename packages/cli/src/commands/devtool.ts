@@ -64,6 +64,7 @@ const DEVTOOL_STYLES = `
 `;
 
 export interface KovoDevtoolPluginOptions {
+  appShellModuleId: string;
   appModuleId: string;
   appModulePath: string;
   debug: boolean;
@@ -204,8 +205,24 @@ async function loadKovoDevtoolApp(
   if (typeof isKovoApp !== 'function') {
     throw new TypeError('@kovojs/server must export isKovoApp.');
   }
-  const appModule = await server.ssrLoadModule(options.appModuleId);
-  const app = appModule.default;
+  const appShellModule = await server.ssrLoadModule(options.appShellModuleId);
+  const runWithGeneratedLiveTargetRegistry =
+    appShellModule.runWithGeneratedLiveTargetRegistry;
+  if (typeof runWithGeneratedLiveTargetRegistry !== 'function') {
+    throw new TypeError(
+      '@kovojs/server/internal/app-shell-vite must export runWithGeneratedLiveTargetRegistry.',
+    );
+  }
+  // Startup readiness inspects database posture before the first HTTP request. That inspection
+  // must own the same compiler-emitted renderer registration scope as request dispatch; otherwise
+  // Vite caches an app aggregate with no live-target inventory and every enhanced mutation falls
+  // back to an empty fragment response (SPEC §9.1/§9.5).
+  const appModule = await nativeReflectApply(
+    runWithGeneratedLiveTargetRegistry,
+    undefined,
+    [() => server.ssrLoadModule(options.appModuleId)],
+  );
+  const app = ownDevtoolData(appModule, 'default');
   if (nativeReflectApply(isKovoApp, undefined, [app]) !== true) {
     throw new TypeError(
       'Kovo devtool requires the app module to default-export a closed createApp() aggregate.',
