@@ -28,6 +28,7 @@ const PROVENANCE_COMMENT =
   /^\/\/\s*Source(?::\s*(.+)|-verified\s+(?:shape|runtime refusal)\s+from\s+(.+))$/;
 const REVIEWED_ILLUSTRATIVE_DIRECTIVE =
   /^<!--\s*kovo-sample:\s*illustrative\s+reason="[^"]+"\s*-->$/;
+const EXPECTED_ERROR_DIRECTIVE = /^<!--\s*kovo-sample:\s*type-error\s*-->$/;
 const STRICT_POLICY_SOURCE_PATHS = new Set([
   'getting-started/why-kovo.md',
   'guides/data-layer.md',
@@ -209,9 +210,11 @@ export async function checkAuthoredCodeSnippets({
 
   if (!keepOnSuccess) rmSync(outDir, { force: true, recursive: true });
   const standaloneCount = snippets.filter((snippet) => snippet.mode === 'standalone').length;
-  const provenanceCount = snippets.length - standaloneCount;
+  const provenanceCount = snippets.filter((snippet) => snippet.mode === 'provenance').length;
+  const expectedErrorCount = snippets.filter((snippet) => snippet.mode === 'expected-error').length;
+  const reviewedCount = snippets.filter((snippet) => snippet.mode === 'reviewed').length;
   process.stdout.write(
-    `code-snippets/v1 snippets=${snippets.length} standalone=${standaloneCount} provenance=${provenanceCount} OK\n`,
+    `code-snippets/v1 snippets=${snippets.length} standalone=${standaloneCount} expected-error=${expectedErrorCount} provenance=${provenanceCount} reviewed=${reviewedCount} OK\n`,
   );
   return { ok: true, outDir, snippets };
 }
@@ -219,6 +222,7 @@ export async function checkAuthoredCodeSnippets({
 function snippetMode(code, precedingLine) {
   const firstLine = firstNonblankLine(code);
   if (firstLine && PROVENANCE_COMMENT.test(firstLine)) return 'provenance';
+  if (EXPECTED_ERROR_DIRECTIVE.test(precedingLine ?? '')) return 'expected-error';
   return REVIEWED_ILLUSTRATIVE_DIRECTIVE.test(precedingLine ?? '') ? 'reviewed' : 'standalone';
 }
 
@@ -1045,6 +1049,7 @@ export const Button: any;
 export const Defer: any;
 export const Document: any;
 export const FontPreload: any;
+export const FieldError: any;
 export const FormError: any;
 export const Head: any;
 export const InlineScript: any;
@@ -1135,6 +1140,7 @@ export const selectTriggerAttributes: any;
 export const session: any;
 export const StaleVersionError: any;
 export const stylesheet: any;
+export const task: any;
 export const toNodeHandler: any;
 export const tokens: any;
 export const DeclassifyPolicy: any;

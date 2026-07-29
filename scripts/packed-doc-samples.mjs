@@ -16,6 +16,10 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 import { generateApiReference } from '../site/scripts/api-ref.mjs';
 import { writeAuthoredSnippetSupportFiles } from '../site/scripts/code-snippets-check.mjs';
+import {
+  compileAndExecuteGoldenRecipes,
+  validateGoldenRecipes,
+} from '../site/scripts/golden-recipes.mjs';
 
 const DEFAULT_PACKED_MANIFEST = path.join(repoRoot, '.release/packed-packages.json');
 const POLICY_PATH = path.join(repoRoot, 'site/code-sample-policy.json');
@@ -31,6 +35,7 @@ const CODE_DIRECTIVE =
 const KOVO_PACKAGE = /^@kovojs\/[a-z0-9-]+(?:\/.*)?$/u;
 const SOURCE_PROVENANCE =
   /^\/\/\s*Source(?::\s*(.+)|-verified\s+(?:shape|runtime refusal)\s+from\s+(.+))$/u;
+const EXPECTED_TYPE_ERROR = /^\s*\/\/\s*kovo-expected-error:\s*(.+?)\s*$/mu;
 const VALUE_KINDS = new Set(['class', 'const', 'enum', 'function']);
 
 export function loadCodeSamplePolicy(policyPath = POLICY_PATH) {
@@ -1037,7 +1042,7 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
     };
     const errorConfigPath = path.join(projectDir, `tsconfig.${sample.id}.json`);
     await writeFile(errorConfigPath, `${JSON.stringify(errorConfig, null, 2)}\n`, 'utf8');
-    runTypecheck(errorConfigPath, false);
+    runTypecheck(errorConfigPath, false, expectedTypeErrorDiagnostic(sample));
     assertPackedKovoResolutions(
       [sample, ...supportWitnesses],
       projectDir,
@@ -1047,18 +1052,30 @@ async function compileTypescriptProject(projectDir, written, nodeModulesDir) {
   }
 }
 
-function runTypecheck(configPath, shouldPass) {
+export function expectedTypeErrorDiagnostic(sample) {
+  if (sample.class !== 'type-error') return undefined;
+  return EXPECTED_TYPE_ERROR.exec(sample.code)?.[1];
+}
+
+function runTypecheck(configPath, shouldPass, expectedDiagnostic) {
   const result = spawnSync(
     path.join(repoRoot, 'node_modules/.bin/tsgo'),
     ['-p', configPath, '--pretty', 'false'],
     { cwd: path.dirname(configPath), encoding: 'utf8' },
   );
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
   if ((result.status === 0) !== shouldPass) {
-    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
     throw new Error(
       `${path.basename(configPath)} ${shouldPass ? 'failed' : 'unexpectedly passed'}${
         output ? `:\n${output}` : ''
       }`,
+    );
+  }
+  if (!shouldPass && expectedDiagnostic !== undefined && !output.includes(expectedDiagnostic)) {
+    throw new Error(
+      `${path.basename(configPath)} failed for the wrong reason; expected diagnostic containing ${JSON.stringify(
+        expectedDiagnostic,
+      )}:\n${output}`,
     );
   }
 }
@@ -1172,6 +1189,7 @@ export async function runPackedDocSamples({
       nodeModulesDir,
     });
     await linkExternalDependencies(nodeModulesDir, new Set(packageDirs.keys()));
+    const goldenRecipes = validateGoldenRecipes();
 
     const [readmeSamples, guideSamples, generatedApi] = await Promise.all([
       Promise.resolve(workspaceReadmeSamples(packageDirs, policy)),
@@ -1197,6 +1215,10 @@ export async function runPackedDocSamples({
     apiWritten.push(...(await writePackedApiBindings(apiProject, generatedApi.generated.packages)));
     await compileTypescriptProject(authoredProject, authoredWritten, nodeModulesDir);
     await compileTypescriptProject(apiProject, apiWritten, nodeModulesDir);
+    const goldenExecution = await compileAndExecuteGoldenRecipes({
+      nodeModulesDir,
+      projectRoot: path.join(scratch, 'golden-recipes'),
+    });
 
     const byClass = Object.fromEntries(
       [...SAMPLE_CLASSES].map((classification) => [
@@ -1207,6 +1229,7 @@ export async function runPackedDocSamples({
     const report = {
       classes: byClass,
       cliInvocations,
+      goldenRecipes: goldenExecution.tasks,
       jsdocExamples: apiSamples.filter((sample) => sample.origin === 'generated-api/jsdoc').length,
       origins: {
         authoredGuides: guideSamples.length,
@@ -1220,7 +1243,7 @@ export async function runPackedDocSamples({
     };
     await writeFile(path.join(scratch, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
     process.stdout.write(
-      `packed-doc-samples/v1 packages=${report.packages} samples=${report.samples} executable=${byClass.executable} type-error=${byClass['type-error']} output=${byClass.output} illustrative=${byClass.illustrative} jsdoc=${report.jsdocExamples} cli=${cliInvocations} OK\n`,
+      `packed-doc-samples/v1 packages=${report.packages} samples=${report.samples} executable=${byClass.executable} type-error=${byClass['type-error']} output=${byClass.output} illustrative=${byClass.illustrative} jsdoc=${report.jsdocExamples} cli=${cliInvocations} golden=${goldenRecipes.tasks} OK\n`,
     );
     success = true;
     return report;

@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@kovojs/server",
+    "noEmit": true
+  },
+  "include": ["*.ts", "*.tsx"]
+}

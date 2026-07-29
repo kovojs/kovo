@@ -66,6 +66,21 @@ describe('authored code snippet extractor', () => {
     expect(snippet.mode).toBe('reviewed');
   });
 
+  it('leaves expected-error compilation to the packed sample gate', () => {
+    const [snippet] = extractCodeSnippets(
+      [
+        '<!-- kovo-sample: type-error -->',
+        '',
+        '```ts',
+        "// kovo-expected-error: Property 'oldName' does not exist",
+        'value.oldName;',
+        '```',
+      ].join('\n'),
+      'page.md',
+    );
+    expect(snippet.mode).toBe('expected-error');
+  });
+
   it('ignores non-TypeScript fences', () => {
     const markdown = ['```sh', 'pnpm run check', '```', '', '```json', '{"ok":true}', '```'].join(
       '\n',

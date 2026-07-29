@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertPackedKovoResolutions,
+  expectedTypeErrorDiagnostic,
   extractCreateKovoInvocations,
   extractKovoInvocations,
   loadCodeSamplePolicy,
@@ -52,6 +53,26 @@ describe('packed documentation sample inventory', () => {
       'illustrative',
     ]);
     expect(samples[3].reason).toBe('Requires an app-owned schema.');
+  });
+
+  it('extracts an optional diagnostic witness from expected-error samples', () => {
+    expect(
+      expectedTypeErrorDiagnostic({
+        class: 'type-error',
+        code: ["// kovo-expected-error: Property 'oldName' does not exist", 'value.oldName;'].join(
+          '\n',
+        ),
+      }),
+    ).toBe("Property 'oldName' does not exist");
+    expect(
+      expectedTypeErrorDiagnostic({ class: 'type-error', code: 'value.oldName;' }),
+    ).toBeUndefined();
+    expect(
+      expectedTypeErrorDiagnostic({
+        class: 'executable',
+        code: '// kovo-expected-error: ignored',
+      }),
+    ).toBeUndefined();
   });
 
   it.each([
