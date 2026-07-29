@@ -88,9 +88,11 @@ export type ComponentGraphFact = Pick<
   | 'cacheInfluence'
   | 'disambiguatedDomName'
   | 'clocks'
+  | 'derives'
   | 'domName'
   | 'exportName'
   | 'fragments'
+  | 'handlers'
   | 'mutableLocalState'
   | 'name'
   | 'mutationForms'
@@ -99,6 +101,8 @@ export type ComponentGraphFact = Pick<
   | 'securityOperations'
   | 'source'
   | 'styleRules'
+  | 'suppressions'
+  | 'triggers'
 >;
 
 /** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
@@ -252,6 +256,7 @@ export type RegistryGraphInput = Pick<
   | 'cacheInfluence'
   | 'components'
   | 'cookieDowngrades'
+  | 'domains'
   | 'endpoints'
   | 'handlerWriteSinks'
   | 'mutations'
@@ -776,6 +781,7 @@ export interface QueryUpdatePlanFact {
 export interface QueryDeriveFact {
   expression: string;
   exportName: string;
+  generatedFromSpan?: { end: number; start: number };
   input: string;
   /** Generated object-map ABI: callback aliases mapped to runtime query/state/clock inputs. */
   inputMap?: Readonly<Record<string, string>>;
@@ -784,6 +790,7 @@ export interface QueryDeriveFact {
   param: string;
   params?: readonly string[];
   selector: string;
+  sourceSpan?: { end: number; start: number };
 }
 
 export interface StateDeriveFact {
@@ -839,6 +846,7 @@ export interface QueryTemplateStampFact {
   listReadSegments: readonly BindingPathSegmentFact[];
   outputContext: GeneratedOutputWriteFact;
   selector: string;
+  sourceSpan?: { end: number; start: number };
   template: string;
 }
 
@@ -868,6 +876,7 @@ export interface QueryUpdateCoverageFact {
   position: string;
   query: string;
   source?: 'query' | 'state';
+  sourceAnchor?: CoreGraph.SourceAnchor;
   sourceSpan?: { length: number; start: number };
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }

@@ -1,3 +1,5 @@
+import '@kovojs/server/internal/sql-parser-authority-bootstrap';
+
 import { describe, expect, it } from 'vitest';
 
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';

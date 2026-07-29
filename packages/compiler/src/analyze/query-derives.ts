@@ -3,7 +3,7 @@
 // facts. Behavior-neutral: emitted bytes and the hidden non-enumerable
 // `outputContext` channel are unchanged.
 import { parseBindingPath } from './query-shapes.js';
-import { withOutputContext } from './query-internal.js';
+import { withGeneratedFromSpan, withOutputContext, withSourceSpan } from './query-internal.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
@@ -72,18 +72,25 @@ export function exportedDerives(
     const exportName = call.exportedConstName;
     const inputMap = deriveInputMapFromModel(deriveInputs);
 
-    compilerMapSet(derives, exportName, {
+    compilerMapSet(
+      derives,
       exportName,
-      expression: derive.expression,
-      input,
-      ...(inputMap === undefined ? {} : { inputMap }),
-      ...(inputs.length > 1 ? { inputs } : {}),
-      name: exportName,
-      param: derive.param,
-      ...(deriveInputs?.form !== 'object' && derive.params.length > 1
-        ? { params: derive.params }
-        : {}),
-    });
+      withSourceSpan(
+        {
+          exportName,
+          expression: derive.expression,
+          input,
+          ...(inputMap === undefined ? {} : { inputMap }),
+          ...(inputs.length > 1 ? { inputs } : {}),
+          name: exportName,
+          param: derive.param,
+          ...(deriveInputs?.form !== 'object' && derive.params.length > 1
+            ? { params: derive.params }
+            : {}),
+        },
+        { end: call.end, start: call.start },
+      ),
+    );
   }
 
   return derives;
@@ -195,10 +202,7 @@ export function dataDeriveStamps(
         withOutputContext(
           {
             attr,
-            derive: {
-              ...derive,
-              selector,
-            },
+            derive: queryDeriveAtUse(derive, selector, attribute),
             selector,
             ...(trustedUrl ? { trustedUrl: true as const } : {}),
           },
@@ -229,10 +233,11 @@ export function dataDeriveStamps(
     const derive = compilerMapGet(derives, name);
     if (!derive || !containsString(derivePlanInputs(derive), input)) continue;
 
-    const deriveFact = {
-      ...derive,
-      selector: `[data-derive="${input}.${name}"]`,
-    };
+    const deriveFact = queryDeriveAtUse(
+      derive,
+      `[data-derive="${input}.${name}"]`,
+      deriveAttribute,
+    );
 
     if (attr) {
       const trustedUrl = hasTrustedUrlMarker(attributes, attr);
@@ -264,6 +269,26 @@ export function dataDeriveStamps(
     derives: deriveFacts,
     stamps: stampFacts,
   };
+}
+
+function queryDeriveAtUse(
+  derive: Omit<QueryDeriveFact, 'selector'>,
+  selector: string,
+  generatedFrom: { end: number; start: number },
+): QueryDeriveFact {
+  const fact = withGeneratedFromSpan(
+    {
+      ...derive,
+      selector,
+    },
+    { end: generatedFrom.end, start: generatedFrom.start },
+  );
+  return derive.sourceSpan === undefined
+    ? fact
+    : withSourceSpan(fact, {
+        end: derive.sourceSpan.end,
+        start: derive.sourceSpan.start,
+      });
 }
 
 function hasTrustedUrlMarker(

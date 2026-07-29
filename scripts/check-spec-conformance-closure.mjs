@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  'd1eee9e66fdcc3c44d35336b09cea8944d4d855057a4f74e8a73f834aa69fb3f';
+  'b003df78c1be16f494f1104afad3aefb81b2255667eaf11d021c780f8eda3705';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -69,9 +69,9 @@ const expectedSqlSafetyDiagnosticRehydrationDoorDigest =
 const expectedTransferredSqlSafetyDiagnosticRegistrarDigest =
   '2cdea2713c1c594bb2a1453d69505a98bab9a45b1d5e0a9cb87b557a3482f4c1';
 const expectedTransferredSqlSafetyDiagnosticRegistrarCallDigest =
-  '40914c794a78158a415efd98b93aed57383ec92753537c2bcdd89a017a37dc34';
+  'f77774b825b0aba3838916197593b585a5ad00e0db1214a479bc0908ca0b40b5';
 const expectedStaticBuildAnalysisFactsOwnerDigest =
-  '131a460c49b2a17ee1264f59ea8f574d416adcc0c0570915bca2fa7d06074605';
+  '17c46df8d4213641cde1a927989f3de7b869000368566032fd031e119dc5f17b';
 const expectedStaticBuildAnalysisProjectExtractorDigest =
   '4126691cecf0b02b425bd79694915ae62a0534c5d4a5915cd3d71d5815b341f9';
 const expectedStaticBuildDiagnosticTransferDigest =
@@ -83,9 +83,9 @@ const expectedDiagnosticFactoryConstructorDigest =
 const expectedDiagnosticFactorySinkDigest =
   '96999736c35834ba759c757cd71ed3c17515c7246041565b4c751b8f1964dd58';
 const expectedDiagnosticEvidenceWitnessDigest =
-  'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
+  '23014067df10912624d8419128d1362787bb212e84ef0aac772d78ad26156aa3';
 const expectedDiagnosticActualLayerReviewDigest =
-  '14da1e94dbdf082831fd82a826ba151eb27ec505c9d93bcee26c309a905a60eb';
+  'ef6891a08970becc7c222fef8d865d50c6c4b64eb781c2b10e33d123b037226b';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -95,21 +95,22 @@ const expectedCompileComponentModuleDigest =
 const expectedValidateComponentPhaseDigest =
   '54f995664b8b91f754f04481585a009e256dce30ac8f3a66cabb80fc53d109db';
 const expectedCoreBuildDistCommand =
-  'vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts';
+  'vp pack src/diagnostics-public.ts src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/security.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts src/security.ts src/storage-public.ts src/webhooks.ts --dts';
 // Capability-closure summaries for the few framework-owned loaders whose target is intentionally
 // runtime-selected. Each row pins both the complete source file and the acquisition expression, so
 // a new loader, consumer shape, or file-level dataflow change fails closed instead of extending a hand-written
 // JavaScript flow interpreter (plans/10x-better-security.md, layered-closure decision).
 const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
+  'packages/browser/src/client-installer.ts#2c7b7a1aae697bd8d488d7459007da844cddb796d21fb790fe0fffb74ab46bcb#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
   'packages/browser/src/inline-loader.ts#20f1d4a5dfc82c788169bbbf007314ede0a76e284689ff210367268bf10bcd01#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/db.ts#7eedbb67422433d5e6f6a41045a1e07a231b53d71482285ca4a3ebb60694549a#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
-  'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
+  'packages/cli/src/commands/db.ts#71f2e25eedf60743b28fb20ffadac69b9a2d9f342be7b5361e2133f0830fbfdf#88ff0d5b98c41aa906dd00878fccf940791c27dc1e087908d6efa85c9d56af3f',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#097bafb23d4d76c0b8891edb3d66bdf166b7249a9590ac266c858ae5e71241fa#4597d4868f6caa7d49aa7fd626313ad01af41164f801c7ee52a9395287151099',
+  'packages/compiler/src/security-analyzer-soundness-oracle.ts#097bafb23d4d76c0b8891edb3d66bdf166b7249a9590ac266c858ae5e71241fa#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
-  'packages/server/src/sqlite.ts#5ae4b492509f7482fd6eb5b6fca9b86585f68631e3e3e81cf924e79edb3584e9#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
-  'packages/test/src/integration/optimistic-client.ts#e54d1c166f3e8fd585b9c65bbdf6281a7fc5b25644415776589ef44dda89d943#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
-  'packages/cli/src/commands/sound-subset.mjs#2e84f3dec7396e04d0149ac0d5373498cba164452eb106633b5d1ed6280dc205#0a2e825ccb996448551e9e666568a12ebc039398f5e35848d8adf5b936a5f136',
+  'packages/server/src/sqlite.ts#6130e055e7a0a3dddfde44acbd354cedb7693528989f72b2f87fed50772369a8#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
+  'packages/test/src/integration/optimistic-client.ts#76cb9bf08937fb545140200a397317b0b6c6667090c61cc45fc1ccf889b93e88#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/cli/src/commands/sound-subset.mjs#b8407e44e848df26049d0c21aa69ac65f8b43cd6df9662d092b1222c93926111#0a2e825ccb996448551e9e666568a12ebc039398f5e35848d8adf5b936a5f136',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
@@ -127,19 +128,19 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '5e4067711a0bf0ff1cdbc8687b0fb49a2cbc03f006a4634b8df89ec68481c78e',
+    'b5d9690a5305941f3c144f9db5183b6b037903cb12587d52143c3dc29124ebcd',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    '6c8449d1ef60543e5d78503ea35dc340956aaa1b31c42042be659563d2f764bf',
+    '085172bc8d7ec8f7d081a3a471ec59b611a075ac762df957d8aafd43034aa8e5',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    'ac4f7f4acfcce3648f7765a823db84c3166682632ca3a633b3f2f0f4e163edd9',
+    'cb8225a71eb76d19bbc88dc7ea63fc692b72387d25266e328acda0f6da043617',
   ],
   [
     'packages/cli/src/commands/sound-subset.mjs',
-    '2e84f3dec7396e04d0149ac0d5373498cba164452eb106633b5d1ed6280dc205',
+    'b8407e44e848df26049d0c21aa69ac65f8b43cd6df9662d092b1222c93926111',
   ],
   [
     'packages/cli/src/commands/vite-plus-bin.ts',
@@ -147,7 +148,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
-    '92ca8a506905e4108dee30e1779ea03a0817e8c0ca2b8d9b26743a456cd97734',
+    '8d06b534d7909d1239bdeb729f4bcd322977e267dab46f1eefe2e5768aff7db5',
   ],
   [
     'packages/compiler/src/ts-api.ts',
@@ -163,11 +164,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/core/src/secret.ts',
-    'b18abbf9d4787e7370b655061e96796fa5c9832afc193e0144d06d3591346d5c',
+    'be8b096472c232fb316fe882787e1b7199284117dd34f6b8066ee0cf06016ff9',
   ],
   [
     'packages/drizzle/src/trust-escapes-static.ts',
-    'c546cb0cfea3846551c3a54f70a2abde55ea4a8185d6751c416783d5a459f4eb',
+    'ae24aaaea1bdd2d4e7ce959ec008d860727f044b474b7f006b8fe9464e052c69',
   ],
   [
     'packages/icons/scripts/icon-plan.mjs',
@@ -183,7 +184,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/sqlite.ts',
-    '5ae4b492509f7482fd6eb5b6fca9b86585f68631e3e3e81cf924e79edb3584e9',
+    '6130e055e7a0a3dddfde44acbd354cedb7693528989f72b2f87fed50772369a8',
   ],
   [
     'packages/server/src/vite-source.ts',
@@ -195,11 +196,11 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/test/src/sqlite.ts',
-    'e97464eaef4e91110c9d8e5c40d4038844b36ff871f27bd51958e95e3c8b6221',
+    '15136219f7837b476bc50a68ce4b2562e2afba609905d83a3a8b16e52f7cb57c',
   ],
 ]);
 const reviewedExcludedSourceReachability = new Set([
-  'packages/browser/src/inline-loader-response-apply-fixture.ts#77c214c4f09dea1fc4f04ad5dd0b82d91ebb9e28e160eb43f4ba3757a469f7f0#packages/conformance-fixtures/src/oracle-fixtures.ts#296830253989e0b95f67bda799647ab13254403ed3344491e427e14dad067c56',
+  'packages/browser/src/inline-loader-response-apply-fixture.ts#f74d1e121d03bd6d3d2dafa01dacaa17e6732f9cee0269a00566ae3f92717ed3#packages/conformance-fixtures/src/oracle-fixtures.ts#b5946ecdc48ef64c0ec8e9065e70d02d496f13ef346aefca4f545e435a6f209a',
 ]);
 // Dynamic `{ code, message/severity }` projections are denied by default. The few existing
 // non-diagnostic protocols and registry-derived projections are capability-closed by exact site +
@@ -226,7 +227,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
   ],
   [
-    'packages/cli/src/commands/doctor.ts#literal#ffcc9326808c385bc36079618771bff30bd03ec7eecd41613e16a32d7c9fdc4a#4402f9b02d4e6ee6d4c507157639b9f2f00f35f25fbf8d67ffec7d7a00bef61c',
+    'packages/cli/src/commands/doctor.ts#literal#ffcc9326808c385bc36079618771bff30bd03ec7eecd41613e16a32d7c9fdc4a#9124fe610cba434a45139ceb733c45ee9ce1750253a7fc4605a2577b358cccc3',
     'Finite KOVO_DOCTOR_* finding projected through the private doctor registry constructor before it can enter the kovo-diagnostic/v1 envelope.',
   ],
   [
@@ -246,28 +247,44 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Pre-ratification D1 experiment diagnostic with a closed D1A/D1B/D1X code union; it is not a registry-backed Kovo diagnostic.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#561dab988dab679ae8976d07b4a89ce087927c0b4b418b7e8fddafe71010a109#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#4082fcd1d47e8e82a6ecbc4a725942957ca161e4f5ded5836f9f3212edc3cab6#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#4a21ee13172cd2e7b41b53888310c7c03561128f254015b815a0859a8333c1e9#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#561dab988dab679ae8976d07b4a89ce087927c0b4b418b7e8fddafe71010a109#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#3e147ce7771064f255df44e485e97f025a13042151db0769e7b5c871668d200f#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#4a21ee13172cd2e7b41b53888310c7c03561128f254015b815a0859a8333c1e9#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#abe8a4690d69bb06608c2e44275d0952dfa0a1aa4558a0357b725ea008d9b2f6#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#3e147ce7771064f255df44e485e97f025a13042151db0769e7b5c871668d200f#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#4cccb9decd32f6a59066e67ed0b5b2d358e5d894edd41192fda0b9e8c8fe6566#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#abe8a4690d69bb06608c2e44275d0952dfa0a1aa4558a0357b725ea008d9b2f6#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
-    'packages/compiler/src/app-contract-resolver.ts#literal#7338cf420a48c2ebb520d96455342385d608e1f26ebefda3f33affcc7ff5a274#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
-    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+    'packages/compiler/src/app-contract-resolver.ts#literal#4cccb9decd32f6a59066e67ed0b5b2d358e5d894edd41192fda0b9e8c8fe6566#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#7338cf420a48c2ebb520d96455342385d608e1f26ebefda3f33affcc7ff5a274#13d76be66bcb214fed48ea36343bb345e1bf670550de3b5978b1ad962ff0a0fd',
+    'Compiler-internal app-contract resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#0d625f7d6ae55458ff28ec3af7f78636ef008c6c151046e25946594e9cc1c548#f0360ce013e12a6d71798a50db5a19b38557e8f8818524884c37a9892b6ea8e4',
+    'Compiler-internal app-contract member-resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#2aad634c5c8f5f07e6693ad6abfebac2ea247c2dbce51f0f7c64145478cc15c2#f0360ce013e12a6d71798a50db5a19b38557e8f8818524884c37a9892b6ea8e4',
+    'Compiler-internal app-contract member-resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#9024585553faa845ce441d45c6b8f7b5bb26e8161e358957d91d96b19ee161bf#f0360ce013e12a6d71798a50db5a19b38557e8f8818524884c37a9892b6ea8e4',
+    'Compiler-internal app-contract member-resolution integrity record with a finite D1A10x code union; callers reject every nonempty result before lowering, and it never carries Kovo registry authority.',
   ],
   [
     'packages/compiler/src/gallery-merge-fixtures-oracle.tsx#literal#9e8369d836f76e77dbc76c7168ac5fb93c4d0f5f8a05670cfc7fb9212ee06b8f#f49042cb6512bbdb4bfa641c021afaefcfa27de91c2a54f0541c1fa1de3bb4a7',
@@ -286,7 +303,7 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Registry-derived compiler diagnostic projection for the HMR impact protocol.',
   ],
   [
-    'packages/drizzle/src/graph.ts#literal#037a71b0f00e382d761fb4137b567a34140f2e1d5daa99e58cfcce9f396328f0#beed01b5fa90fee5ddd948ea765c0648b95dd154a2326d104ed6f3e69b39008b',
+    'packages/drizzle/src/graph.ts#literal#037a71b0f00e382d761fb4137b567a34140f2e1d5daa99e58cfcce9f396328f0#c4c830904fe3cbee13917343377519e8b93223065f206b9ebe00ab8c538892fe',
     'Touch-graph unresolved fact; downstream graph diagnostics own registered KV emission.',
   ],
   [
@@ -326,11 +343,11 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
     'Environment validation issue protocol with a non-Kovo code namespace.',
   ],
   [
-    'packages/verify/src/bin.ts#literal#b5d4d5e43ebbb9a25af7375d941c9479b0930fef75f15a120e1eb87d675a0646#5b5fbca9f1ed1faf5a52fb2af3c3d0198bb7f82b8ceac31555542f44e7ed0ca0',
+    'packages/verify/src/bin.ts#literal#b5d4d5e43ebbb9a25af7375d941c9479b0930fef75f15a120e1eb87d675a0646#84be75ecaca7617efc3021dd38dc85e9afd3696dd98049a5dc253bcbe8242786',
     'Runtime-independent verifier presentation evidence derived only from certificate finding records; it carries no Kovo runtime registry authority.',
   ],
   [
-    'packages/verify/src/bin.ts#literal#2623ba9b03a851728df79b2ab630ec2c4f2120f8781721c697adf7a3cef74d87#7fa5c37f36f5631f0a61176682719b429be6b2238619724946e8da71d31c8055',
+    'packages/verify/src/bin.ts#literal#2623ba9b03a851728df79b2ab630ec2c4f2120f8781721c697adf7a3cef74d87#f5aecfd253e45af33cd0a802b5cf1ea17ad9c582752be04d6655dcb85db10e15',
     'Runtime-independent verifier command-error evidence with the single finite KOVO_VERIFY_INDETERMINATE code; it carries no Kovo runtime registry authority.',
   ],
   [
@@ -484,7 +501,7 @@ const namedFixtureTestCache = new Map();
 const diagnosticLiteralExemptions = new Map([
   [
     'packages/core/src/diagnostics.ts',
-    '99c90e9cc0ee35a1bdf6a9352796f09d27812c618828ffca8786b527482a7fd9',
+    'ff873900d582bb9bc27f04932856f4647ebb34362e853c8eea04d1aa858540f4',
   ],
   [
     'packages/core/src/internal/diagnostic-registry.generated.ts',
@@ -1874,9 +1891,10 @@ function isExactTransferredSqlSafetyDiagnosticRegistrarUse(identifier, context) 
   const options = call.arguments[0];
   if (
     !ts.isObjectLiteralExpression(options) ||
-    options.properties.length !== 1 ||
-    !ts.isShorthandPropertyAssignment(options.properties[0]) ||
-    options.properties[0].name.text !== 'files'
+    options.properties.length !== 2 ||
+    !ts.isSpreadAssignment(options.properties[0]) ||
+    !ts.isShorthandPropertyAssignment(options.properties[1]) ||
+    options.properties[1].name.text !== 'files'
   ) {
     return false;
   }

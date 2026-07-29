@@ -511,7 +511,10 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       expect(result.diagnostics).toHaveLength(1);
       expect(result.diagnostics[0]).toMatchObject({ code: 'KV448', fileName: 'app.ts' });
       expect(result.facts).toContainEqual(
-        expect.objectContaining({ capability: 'declassification', kind: 'closed' }),
+        expect.objectContaining({
+          kind: 'closed',
+          reason: expect.stringMatching(/declassification.*unavailable/iu),
+        }),
       );
     }
   });
@@ -2917,10 +2920,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     const result = analyze(files);
     expect(result.diagnostics).toEqual([]);
     expect(
-      result.facts
-        .filter((fact) => fact.kind === 'door')
-        .map((fact) => fact.capability)
-        .sort(),
+      [
+        ...new Set(
+          result.facts.filter((fact) => fact.kind === 'door').map((fact) => fact.capability),
+        ),
+      ].sort(),
     ).toEqual([
       'crypto-acquisition',
       'database-driver',
@@ -2935,40 +2939,35 @@ describe('SPEC §6.6 capability-closed module graph', () => {
   });
 
   it('keeps reviewed purpose-minimal crypto exports open and explain-visible', () => {
-    const exportsByPackage = {
-      '@kovojs/core': ['createFileSystemStorage', 'hmacSignature', 'standardWebhooks'],
-      '@kovojs/server': [
+    const exportsByModule = {
+      '@kovojs/core/storage': ['createFileSystemStorage'],
+      '@kovojs/core/webhooks': ['hmacSignature', 'standardWebhooks'],
+      '@kovojs/server/confidential': [
         'createConfidentialAtRestCipher',
-        'createFileSystemStorage',
-        'createStorageDownloadEndpoint',
         'decryptAtRest',
         'encryptAtRest',
-        'hashPassword',
-        'hmacSignature',
-        'mintCsrfField',
-        'mintCsrfToken',
-        'renderRouteHtml',
         'rewrapAtRest',
-        'standardWebhooks',
-        'verifyCredential',
-        'verifyPassword',
       ],
+      '@kovojs/server/password': ['hashPassword', 'verifyCredential', 'verifyPassword'],
+      '@kovojs/server/rendering': ['renderRouteHtml'],
+      '@kovojs/server/security': ['mintCsrfField', 'mintCsrfToken'],
+      '@kovojs/server/storage-downloads': ['createStorageDownloadEndpoint'],
     } as const;
 
-    for (const [packageName, exportNames] of Object.entries(exportsByPackage)) {
+    for (const [moduleSpecifier, exportNames] of Object.entries(exportsByModule)) {
       for (const exportName of exportNames) {
         const result = analyze([
           {
             fileName: 'app.ts',
             source: `
               import { route } from '@kovojs/server';
-              import { ${exportName} as cryptoDoor } from '${packageName}';
+              import { ${exportName} as cryptoDoor } from '${moduleSpecifier}';
               export const page = route('/crypto-door', { render() { return cryptoDoor; } });
             `,
           },
         ]);
-        expect(result.diagnostics, `${packageName}#${exportName}`).toEqual([]);
-        expect(result.facts, `${packageName}#${exportName}`).toContainEqual(
+        expect(result.diagnostics, `${moduleSpecifier}#${exportName}`).toEqual([]);
+        expect(result.facts, `${moduleSpecifier}#${exportName}`).toContainEqual(
           expect.objectContaining({
             capability: 'crypto-acquisition',
             kind: 'door',
@@ -2996,7 +2995,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     const result = analyze(files);
     expect(result.diagnostics).toHaveLength(6);
     expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
-      'testing is tooling/bootstrap authority',
+      'test-process setup authority',
     );
     expect(result.diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
       'vite is tooling/bootstrap authority',
@@ -3081,20 +3080,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .filter((fact) => fact.kind === 'door')
         .map((fact) => fact.capability)
         .sort(),
-    ).toEqual([
-      'crypto-acquisition',
-      'crypto-acquisition',
-      'database-driver',
-      'database-driver',
-      'digest',
-      'digest',
-      'filesystem',
-      'filesystem',
-      'network',
-      'network',
-      'process',
-      'process',
-    ]);
+    ).toEqual(['crypto-acquisition', 'crypto-acquisition', 'process', 'process']);
   });
 
   it('request-closes custom-shell bootstrap authority from a serialized handler', () => {

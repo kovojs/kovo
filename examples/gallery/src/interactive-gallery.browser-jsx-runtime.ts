@@ -1,4 +1,9 @@
-import type { Component, ComponentDefinitionInput } from '@kovojs/core';
+import type { Component } from '@kovojs/core';
+
+import {
+  browserHarnessComponentDefinition,
+  isBrowserHarnessComponent,
+} from './interactive-gallery.browser-core.js';
 
 type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
 
@@ -8,7 +13,7 @@ interface JsxProps {
 }
 
 type JsxComponent = (props: any) => any;
-type KovoJsxComponent = Component<ComponentDefinitionInput>;
+type KovoJsxComponent = Component<any>;
 type MaybePromise<Value> = Promise<Value> | Value;
 
 const voidElements = new Set([
@@ -55,12 +60,17 @@ export const jsxDEV = jsx;
 export function escapeText(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (Array.isArray(value)) return value.map((item) => escapeText(item)).join('');
-  return escapeHtmlText(String(value));
+  if (typeof value === 'string') return escapeHtmlText(value);
+  if (typeof value === 'bigint' || typeof value === 'number') {
+    return escapeHtmlText(`${value}`);
+  }
+  return escapeHtmlText(JSON.stringify(value) ?? '');
 }
 
 async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps): Promise<string> {
-  const state = component.definition.state?.();
-  const render = component.definition.render as (
+  const definition = browserHarnessComponentDefinition(component);
+  const state = definition.state?.();
+  const render = definition.render as (
     queries: Record<string, unknown>,
     state: unknown,
     slots: Record<string, unknown>,
@@ -106,11 +116,7 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
 }
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
-  return (
-    (typeof value === 'object' || typeof value === 'function') &&
-    value !== null &&
-    typeof (value as { definition?: { render?: unknown } }).definition?.render === 'function'
-  );
+  return isBrowserHarnessComponent(value);
 }
 
 function isPromiseLike(value: unknown): value is Promise<unknown> {

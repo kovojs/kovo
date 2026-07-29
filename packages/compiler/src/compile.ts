@@ -16,6 +16,7 @@ import {
   registerFrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { SourceAnchor } from '@kovojs/core/internal/graph';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
@@ -28,6 +29,7 @@ import {
 import { verifyEmittedTranslation } from '@kovojs/verify/internal/translation';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
+import { jsxAttributes } from './analyze/query-internal.js';
 import { canonicalJson } from './canonical-json.js';
 import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-result.js';
 import { snapshotCompileComponentOptions } from './compile-options.js';
@@ -97,14 +99,18 @@ import {
   handlerWriteSinkUsesManagedAppTransaction,
   handlerWriteSinks,
   inferComponentName,
+  callExpressions,
   jsxElements,
+  jsxExpressions,
   normalizeComponentFileName,
   parseComponentModule as parseComponentModuleModel,
   parseDiagnosticsForSourceFile,
   parseSourceFile,
   firstComponentModel,
   componentHasInferredFragmentTarget,
+  componentModelForSourceSpan,
   componentOptionObjectEntries,
+  jsxComments,
   type CallExpressionModel,
   type ComponentModel,
   type ComponentModuleModel,
@@ -124,7 +130,12 @@ import { analyzeClientCaptures } from './validate/client-capture.js';
 import { secretQueryWireDecisionFacts } from './validate/confidentiality.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import { escapeAttribute, type SourceReplacement } from './shared.js';
+import {
+  escapeAttribute,
+  generatedOffsetToOriginal,
+  type SourceOffsetMap,
+  type SourceReplacement,
+} from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import { componentCacheInfluenceFacts } from './cache-influence-facts.js';
 import { agentGraphFactsFromModel } from './agent-tool-facts.js';
@@ -144,6 +155,7 @@ import type {
   EndpointGraphFact,
   HandlerWriteSinkFact,
   HandlerLowering,
+  QueryDeriveFact,
   QueryUpdatePlanFact,
   QueryShape,
   QueryShapeWrapper,
@@ -156,6 +168,7 @@ import type {
 import {
   compileArtifactFileNames,
   createEmptyCompileResult,
+  elementParamNameFromAttribute,
   emittedFileKind,
   queryShapesFromFacts,
 } from './types.js';
@@ -418,6 +431,488 @@ function authoredComponentSourceAnchor(
   return undefined;
 }
 
+interface ComponentFeedbackExplainInput {
+  readonly clientHref: string;
+  readonly component: ComponentModel;
+  readonly fileName: string;
+  readonly handlers: readonly HandlerLowering[];
+  readonly loweredModel: ComponentModuleModel;
+  readonly originalModel: ComponentModuleModel;
+  readonly queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  readonly sourceOffsetMap: SourceOffsetMap;
+  readonly stateDerives: readonly StateDeriveFact[];
+}
+
+function componentFeedbackExplainFacts(
+  input: Omit<ComponentFeedbackExplainInput, 'component'> & {
+    readonly component: ComponentModel | null;
+  },
+): Pick<CoreGraph.ComponentExplain, 'derives' | 'handlers' | 'suppressions' | 'triggers'> {
+  if (input.component === null) return {};
+  const componentInput: ComponentFeedbackExplainInput = {
+    ...input,
+    component: input.component,
+  };
+  const handlerFacts = componentHandlerExplainFacts(componentInput);
+  const derives = componentDeriveExplainFacts(componentInput);
+  const suppressions = componentDiagnosticSuppressionFacts(componentInput);
+  return {
+    ...(derives.length === 0 ? {} : { derives }),
+    ...(handlerFacts.handlers.length === 0 ? {} : { handlers: handlerFacts.handlers }),
+    ...(suppressions.length === 0 ? {} : { suppressions }),
+    ...(handlerFacts.triggers.length === 0 ? {} : { triggers: handlerFacts.triggers }),
+  };
+}
+
+function componentHandlerExplainFacts(input: ComponentFeedbackExplainInput): {
+  handlers: CoreGraph.HandlerExplain[];
+  triggers: CoreGraph.TriggerExplain[];
+} {
+  const handlers: CoreGraph.HandlerExplain[] = [];
+  const triggers: CoreGraph.TriggerExplain[] = [];
+  const source = compilerSnapshotDenseArray(input.handlers, 'Component explain handlers');
+  for (let index = 0; index < source.length; index += 1) {
+    const handler = source[index]!;
+    const generatedSpan = { end: handler.attributeEnd, start: handler.attributeStart };
+    if (componentModelForSourceSpan(input.loweredModel, generatedSpan) !== input.component)
+      continue;
+    const authored =
+      authoredSourceAnchorForGeneratedSpan(input.fileName, generatedSpan, input.sourceOffsetMap) ??
+      authoredComponentSourceAnchor(input.originalModel, input.fileName, input.component.localName);
+    if (authored === undefined) continue;
+
+    const params = compilerMapDense(
+      handler.params,
+      'Component explain handler parameters',
+      (param) => elementParamNameFromAttribute(param.attributeName),
+    );
+    const event = compilerStringStartsWith(handler.attributeName, 'on:')
+      ? compilerStringSlice(handler.attributeName, 'on:'.length)
+      : handler.attributeName;
+    if (event === 'idle' || event === 'load' || event === 'visible') {
+      const justification = triggerJustification(input.originalModel, authored.start);
+      appendCompileValue(
+        triggers,
+        {
+          ...(params.length === 0 ? {} : { deps: params }),
+          exportName: handler.exportName,
+          generatedFrom: authored,
+          ...(justification === undefined ? {} : { justification }),
+          ref: handler.attributeValue,
+          source: authored,
+          trigger: event,
+        },
+        'Component explain trigger facts',
+      );
+      continue;
+    }
+
+    const captures: CoreGraph.CaptureChannel[] = ['ctx'];
+    if (params.length > 0) appendCompileValue(captures, 'element-params', 'Handler captures');
+    if ((handler.clientConstants?.length ?? 0) > 0 || (handler.clientImports?.length ?? 0) > 0) {
+      appendCompileValue(captures, 'module-scope', 'Handler captures');
+    }
+    appendCompileValue(
+      handlers,
+      {
+        captures,
+        event,
+        exportName: handler.exportName,
+        generatedFrom: authored,
+        ...(params.length === 0 ? {} : { params }),
+        ref: handler.attributeValue,
+        source: authored,
+      },
+      'Component explain handler facts',
+    );
+  }
+  return { handlers, triggers };
+}
+
+function componentDeriveExplainFacts(
+  input: ComponentFeedbackExplainInput,
+): CoreGraph.DeriveExplain[] {
+  const output: CoreGraph.DeriveExplain[] = [];
+  const seen = compilerCreateSet<string>();
+  const plans = compilerSnapshotDenseArray(
+    input.queryUpdatePlans,
+    'Component explain query-update plans',
+  );
+  for (let planIndex = 0; planIndex < plans.length; planIndex += 1) {
+    const plan = plans[planIndex]!;
+    const derives = compilerSnapshotDenseArray(
+      plan.derives ?? [],
+      'Component explain query derives',
+    );
+    for (let index = 0; index < derives.length; index += 1) {
+      appendQueryDeriveExplainFact(
+        output,
+        seen,
+        input,
+        plan,
+        derives[index]!,
+        derives[index]!.selector,
+      );
+    }
+    const stamps = compilerSnapshotDenseArray(
+      plan.stamps ?? [],
+      'Component explain query derive stamps',
+    );
+    for (let index = 0; index < stamps.length; index += 1) {
+      const stamp = stamps[index]!;
+      appendQueryDeriveExplainFact(output, seen, input, plan, stamp.derive, stamp.selector);
+    }
+  }
+
+  const stateDerives = compilerSnapshotDenseArray(
+    input.stateDerives,
+    'Component explain state derives',
+  );
+  for (let index = 0; index < stateDerives.length; index += 1) {
+    const derive = stateDerives[index]!;
+    const generatedSpan = derive.sourceSpan;
+    if (
+      generatedSpan !== undefined &&
+      componentModelForSourceSpan(input.loweredModel, generatedSpan) !== input.component
+    ) {
+      continue;
+    }
+    if (
+      generatedSpan === undefined &&
+      input.component.localName !== undefined &&
+      !compilerStringStartsWith(derive.exportName, `${input.component.localName}$`)
+    ) {
+      continue;
+    }
+    const source =
+      authoredSourceAnchorForReactivePaths(
+        input.originalModel,
+        input.fileName,
+        derive.sourcePaths ?? [],
+      ) ??
+      (generatedSpan === undefined
+        ? undefined
+        : authoredSourceAnchorForGeneratedSpan(
+            input.fileName,
+            generatedSpan,
+            input.sourceOffsetMap,
+          )) ??
+      authoredComponentSourceAnchor(input.originalModel, input.fileName, input.component.localName);
+    if (source === undefined) continue;
+    const key = `${derive.exportName}\0${derive.placeholder}\0${source.start}\0${source.end}`;
+    if (compilerSetHas(seen, key)) continue;
+    compilerSetAdd(seen, key);
+    const inputs =
+      derive.sourcePaths === undefined || derive.sourcePaths.length === 0
+        ? ['state']
+        : compilerSnapshotDenseArray(derive.sourcePaths, 'Component explain state derive inputs');
+    appendCompileValue(
+      output,
+      {
+        generatedFrom: source,
+        inputs,
+        name: derive.name,
+        ref: `${input.clientHref}#${derive.exportName}`,
+        source,
+        target: derive.placeholder,
+      },
+      'Component explain state derive facts',
+    );
+  }
+  return output;
+}
+
+function appendQueryDeriveExplainFact(
+  output: CoreGraph.DeriveExplain[],
+  seen: Set<string>,
+  input: ComponentFeedbackExplainInput,
+  plan: QueryUpdatePlanFact,
+  derive: QueryDeriveFact,
+  target: string,
+): void {
+  const ownershipSpan = derive.generatedFromSpan ?? derive.sourceSpan;
+  if (
+    ownershipSpan !== undefined &&
+    componentModelForSourceSpan(input.loweredModel, ownershipSpan) !== input.component
+  ) {
+    return;
+  }
+  if (
+    ownershipSpan === undefined &&
+    input.component.localName !== undefined &&
+    plan.componentName !== input.component.localName
+  ) {
+    return;
+  }
+  const componentSource = authoredComponentSourceAnchor(
+    input.originalModel,
+    input.fileName,
+    input.component.localName,
+  );
+  const source =
+    (derive.sourceSpan === undefined
+      ? undefined
+      : authoredSourceAnchorForGeneratedSpan(
+          input.fileName,
+          derive.sourceSpan,
+          input.sourceOffsetMap,
+        )) ?? componentSource;
+  const generatedFrom =
+    (derive.generatedFromSpan === undefined
+      ? undefined
+      : authoredSourceAnchorForGeneratedSpan(
+          input.fileName,
+          derive.generatedFromSpan,
+          input.sourceOffsetMap,
+        )) ?? source;
+  if (source === undefined) return;
+  const key = `${derive.exportName}\0${target}\0${source.start}\0${source.end}`;
+  if (compilerSetHas(seen, key)) return;
+  compilerSetAdd(seen, key);
+  const inputs = compilerSnapshotDenseArray(
+    derive.inputs ?? [derive.input],
+    'Component explain query derive inputs',
+  );
+  appendCompileValue(
+    output,
+    {
+      ...(generatedFrom === undefined ? {} : { generatedFrom }),
+      inputs,
+      name: derive.name,
+      ref: `${input.clientHref}#${derive.exportName}`,
+      source,
+      target,
+    },
+    'Component explain query derive facts',
+  );
+}
+
+function componentDiagnosticSuppressionFacts(
+  input: ComponentFeedbackExplainInput,
+): CoreGraph.DiagnosticSuppressionExplain[] {
+  const output: CoreGraph.DiagnosticSuppressionExplain[] = [];
+  const comments = compilerSnapshotDenseArray(
+    jsxComments(input.originalModel),
+    'Component explain diagnostic suppressions',
+  );
+  const attributes = compilerSnapshotDenseArray(
+    jsxAttributes(input.originalModel),
+    'Component explain suppression targets',
+  );
+  for (let index = 0; index < comments.length; index += 1) {
+    const comment = comments[index]!;
+    if (
+      comment.justifiedDiagnostics === undefined ||
+      comment.justifiedDiagnostics.length === 0 ||
+      !originalSpanBelongsToComponent(input.originalModel, input.component, comment)
+    ) {
+      continue;
+    }
+    let target: SourceAnchor | undefined;
+    if (comment.attachedAttributeStart !== undefined) {
+      for (let attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+        const attribute = attributes[attributeIndex]!;
+        if (attribute.start !== comment.attachedAttributeStart) continue;
+        target = { end: attribute.end, file: input.fileName, start: attribute.start };
+        break;
+      }
+    }
+    appendCompileValue(
+      output,
+      {
+        codes: compilerSnapshotDenseArray(
+          comment.justifiedDiagnostics,
+          'Component explain suppression codes',
+        ),
+        source: { end: comment.end, file: input.fileName, start: comment.start },
+        ...(target === undefined ? {} : { target }),
+      },
+      'Component explain diagnostic suppression facts',
+    );
+  }
+  return output;
+}
+
+function originalSpanBelongsToComponent(
+  model: ComponentModuleModel,
+  loweredComponent: ComponentModel,
+  span: { end: number; start: number },
+): boolean {
+  const original = componentModelForSourceSpan(model, span);
+  if (original === null) return false;
+  if (loweredComponent.localName !== undefined) {
+    return original.localName === loweredComponent.localName;
+  }
+  return model.components.length === 1;
+}
+
+function triggerJustification(
+  originalModel: ComponentModuleModel,
+  targetStart: number,
+): string | undefined {
+  const comments = compilerSnapshotDenseArray(
+    jsxComments(originalModel),
+    'Execution trigger justifications',
+  );
+  for (let index = 0; index < comments.length; index += 1) {
+    const comment = comments[index]!;
+    if (
+      comment.attachedAttributeStart === targetStart &&
+      containsCompilerString(comment.justifiedDiagnostics ?? [], 'KV211')
+    ) {
+      return comment.text;
+    }
+  }
+  return undefined;
+}
+
+function containsCompilerString(values: readonly string[], expected: string): boolean {
+  const source = compilerSnapshotDenseArray(values, 'Compiler string membership');
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index] === expected) return true;
+  }
+  return false;
+}
+
+function authoredSourceAnchorForGeneratedSpan(
+  file: string,
+  span: { end: number; start: number },
+  sourceOffsetMap: SourceOffsetMap,
+): SourceAnchor | undefined {
+  const start = generatedOffsetToOriginal(sourceOffsetMap, span.start);
+  const end =
+    span.end === span.start
+      ? start
+      : generatedOffsetToOriginal(sourceOffsetMap, Math.max(span.start, span.end - 1));
+  if (start === undefined || end === undefined) return undefined;
+  return { end: span.end === span.start ? end : end + 1, file, start };
+}
+
+function sourceAnchoredUpdateCoverage(
+  coverage: readonly import('./types.js').QueryUpdateCoverageFact[],
+  originalModel: ComponentModuleModel,
+  fileName: string,
+  sourceOffsetMap: SourceOffsetMap,
+  stateDerives: readonly StateDeriveFact[],
+): import('./types.js').QueryUpdateCoverageFact[] {
+  return compilerMapDense(coverage, 'Source-anchored update coverage', (fact) => {
+    const generatedSpan =
+      fact.sourceSpan === undefined
+        ? undefined
+        : {
+            end: fact.sourceSpan.start + fact.sourceSpan.length,
+            start: fact.sourceSpan.start,
+          };
+    const sourceAnchor =
+      (generatedSpan === undefined
+        ? undefined
+        : authoredSourceAnchorForGeneratedSpan(fileName, generatedSpan, sourceOffsetMap)) ??
+      authoredCoverageSourceAnchor(fact, originalModel, fileName, stateDerives) ??
+      authoredComponentSourceAnchor(originalModel, fileName, fact.componentName) ??
+      authoredComponentSourceAnchor(originalModel, fileName, undefined);
+    const output: import('./types.js').QueryUpdateCoverageFact = {
+      componentName: fact.componentName,
+      ...(fact.detail === undefined ? {} : { detail: fact.detail }),
+      position: fact.position,
+      query: fact.query,
+      ...(fact.source === undefined ? {} : { source: fact.source }),
+      ...(fact.status === 'UNHANDLED' && fact.sourceSpan !== undefined
+        ? { sourceSpan: fact.sourceSpan }
+        : {}),
+      status: fact.status,
+    };
+    if (sourceAnchor !== undefined) {
+      compilerDefineOwnDataProperty(output, 'sourceAnchor', sourceAnchor, false);
+    }
+    return output;
+  });
+}
+
+function authoredCoverageSourceAnchor(
+  fact: import('./types.js').QueryUpdateCoverageFact,
+  originalModel: ComponentModuleModel,
+  fileName: string,
+  stateDerives: readonly StateDeriveFact[],
+): SourceAnchor | undefined {
+  const direct = authoredSourceAnchorForReactivePaths(originalModel, fileName, [fact.query]);
+  if (direct !== undefined || !compilerStringStartsWith(fact.query, 'state.')) return direct;
+
+  const deriveExportName = compilerStringSlice(fact.query, 'state.'.length);
+  const derives = compilerSnapshotDenseArray(stateDerives, 'Coverage state derive provenance');
+  for (let index = 0; index < derives.length; index += 1) {
+    const derive = derives[index]!;
+    if (derive.exportName !== deriveExportName) continue;
+    return authoredSourceAnchorForReactivePaths(originalModel, fileName, derive.sourcePaths ?? []);
+  }
+  return undefined;
+}
+
+function authoredSourceAnchorForReactivePaths(
+  model: ComponentModuleModel,
+  fileName: string,
+  paths: readonly string[],
+): SourceAnchor | undefined {
+  if (paths.length === 0) return undefined;
+
+  const attributes = compilerSnapshotDenseArray(
+    jsxAttributes(model),
+    'Authored reactive JSX attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (
+      attribute.value !== undefined &&
+      containsCompilerString(paths, attribute.value) &&
+      (attribute.name === 'data-bind' ||
+        attribute.name === 'data-bind-list' ||
+        compilerStringStartsWith(attribute.name, 'data-bind:'))
+    ) {
+      return { end: attribute.end, file: fileName, start: attribute.start };
+    }
+    const access = reactiveAccessForPaths(attribute.expressionPropertyAccesses ?? [], paths);
+    if (access !== undefined) {
+      return { end: access.end, file: fileName, start: access.start };
+    }
+  }
+
+  const expressions = compilerSnapshotDenseArray(
+    jsxExpressions(model),
+    'Authored reactive JSX expressions',
+  );
+  for (let index = 0; index < expressions.length; index += 1) {
+    const access = reactiveAccessForPaths(expressions[index]!.propertyAccesses, paths);
+    if (access !== undefined) {
+      return { end: access.end, file: fileName, start: access.start };
+    }
+  }
+
+  const calls = compilerSnapshotDenseArray(callExpressions(model), 'Authored reactive calls');
+  for (let callIndex = 0; callIndex < calls.length; callIndex += 1) {
+    const groups = compilerSnapshotDenseArray(
+      calls[callIndex]!.argumentPropertyAccesses,
+      'Authored reactive call arguments',
+    );
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const access = reactiveAccessForPaths(groups[groupIndex]!, paths);
+      if (access !== undefined) {
+        return { end: access.end, file: fileName, start: access.start };
+      }
+    }
+  }
+  return undefined;
+}
+
+function reactiveAccessForPaths(
+  accesses: readonly { readonly end: number; readonly path: string; readonly start: number }[],
+  paths: readonly string[],
+): { readonly end: number; readonly path: string; readonly start: number } | undefined {
+  const source = compilerSnapshotDenseArray(accesses, 'Authored reactive property accesses');
+  for (let index = 0; index < source.length; index += 1) {
+    if (containsCompilerString(paths, source[index]!.path)) return source[index]!;
+  }
+  return undefined;
+}
+
 function authoredStyleRuleUsages(
   loweredUsages: readonly StyleRuleUsage[],
   authoredUsages: readonly StyleRuleUsage[],
@@ -583,16 +1078,22 @@ function validateComponentPhase(
     parsed.componentName,
     queryUpdatePlans,
   );
-  const updateCoverage = mergeStyleUpdateCoverage(
-    collectQueryUpdateCoverage(
-      lowered.model,
-      parsed.compileOptions,
-      parsed.componentName,
-      stateDerives,
-      lowered.lowering.validationOffsetMap,
+  const updateCoverage = sourceAnchoredUpdateCoverage(
+    mergeStyleUpdateCoverage(
+      collectQueryUpdateCoverage(
+        lowered.model,
+        parsed.compileOptions,
+        parsed.componentName,
+        stateDerives,
+        lowered.lowering.validationOffsetMap,
+      ),
+      styleExtraction.updateCoverage,
+      styleExtraction.handledSpans,
     ),
-    styleExtraction.updateCoverage,
-    styleExtraction.handledSpans,
+    parsed.originalModel,
+    parsed.options.fileName,
+    lowered.lowering.validationOffsetMap,
+    stateDerives,
   );
 
   return {
@@ -759,6 +1260,17 @@ function emitRegistryCssPhase(
           parsed.options.fileName,
           fact.component?.localName,
         ),
+        componentFeedbackExplainFacts({
+          clientHref: client.clientHref,
+          component: fact.component,
+          fileName: parsed.options.fileName,
+          handlers: client.versionedHandlers,
+          loweredModel: lowered.model,
+          originalModel: parsed.originalModel,
+          queryUpdatePlans: validated.queryUpdatePlans,
+          sourceOffsetMap: lowered.lowering.validationOffsetMap,
+          stateDerives: client.stateDerives,
+        }),
       ),
   );
   const cssAssets = cssSource
@@ -1296,12 +1808,14 @@ function componentCompileFactSnapshot(
   originalModel: ComponentModuleModel,
 ): CompileFactSnapshot {
   const ledger = createCompileFactLedger();
+  // Validation owns the final source-anchored coverage. Append it first so the lower pipeline's
+  // structurally identical pre-anchor style facts dedupe behind the authoritative projection.
+  ledger.append('queryUpdateCoverage', { phase: 'validate', pass: 'query-update-coverage' }, [
+    ...validated.updateCoverage,
+  ]);
   ledger.merge(lowered.lowering.factSnapshot, { phase: 'lower', pass: 'lowering-pipeline' });
   ledger.append('clockUpdatePlans', { phase: 'validate', pass: 'clock-update-plans' }, [
     ...validated.clockUpdatePlans,
-  ]);
-  ledger.append('queryUpdateCoverage', { phase: 'validate', pass: 'query-update-coverage' }, [
-    ...validated.updateCoverage,
   ]);
   ledger.append('queryUpdatePlans', { phase: 'validate', pass: 'query-update-plans' }, [
     ...validated.queryUpdatePlans,

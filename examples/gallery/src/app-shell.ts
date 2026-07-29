@@ -3,7 +3,7 @@ import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
-import { createApp, publicAccess, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import { renderRouteHtml } from '@kovojs/server/rendering';
@@ -30,6 +30,14 @@ const headlessUiSourceRoot = fileURLToPath(
   new URL('../../../packages/headless-ui/src/', import.meta.url),
 );
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
+const galleryApp = defineKovo({
+  appId: 'a6a65802-25f9-40ce-a2ad-5ab960ff3277',
+  clientModules: galleryInteractiveClientModules,
+  document: { lang: 'en-US' },
+  renderRoute(value) {
+    return routeValueToHtml(value);
+  },
+});
 
 // SPEC.md §4.4: load-bearing import maps are a non-goal. Generated client modules carry a manifest
 // of package dependencies; the gallery resolves those entries to served /c/ URLs.
@@ -59,9 +67,9 @@ export const galleryInteractiveClientModuleHrefs = Object.freeze(
   galleryInteractiveClientModuleBindings.map(({ href }) => href),
 );
 
-export const galleryInteractiveRoute = route('/gallery/interactive', {
+export const galleryInteractiveRoute = galleryApp.route('/gallery/interactive', {
   // A public UI-primitive demo page (KV436 access decision, SPEC §10.2).
-  access: publicAccess('public UI primitive demo gallery'),
+  access: galleryApp.publicAccess('public UI primitive demo gallery'),
   meta: {
     description: 'Compiled Kovo UI primitive demos with generated client handlers.',
     title: 'Kovo Interactive Gallery',
@@ -85,17 +93,12 @@ export const galleryInteractiveRoute = route('/gallery/interactive', {
   stylesheets: ['/assets/site.css'],
 });
 
+const galleryInteractiveApplication = galleryApp.assemble({
+  routes: [galleryInteractiveRoute],
+});
+
 export function createGalleryInteractiveApplication() {
-  const app = createApp({
-    appId: 'a6a65802-25f9-40ce-a2ad-5ab960ff3277',
-    clientModules: galleryInteractiveClientModules,
-    document: { lang: 'en-US' },
-    renderRoute(value) {
-      return routeValueToHtml(value);
-    },
-    routes: [galleryInteractiveRoute],
-  });
-  return { app };
+  return { app: galleryInteractiveApplication };
 }
 
 export function createGalleryInteractiveAppShell() {

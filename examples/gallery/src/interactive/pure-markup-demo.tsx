@@ -27,42 +27,33 @@ export interface GalleryPureMarkupDemoState {
 export const GalleryPureMarkupDemo = component({
   state: () => ({ submitted: false }),
   render: (_queries: Record<string, never>, state: GalleryPureMarkupDemoState) => {
-    const header = TableHead.definition.render({
-      children: TableRow.definition.render({
-        children: [
-          TableHeaderCell.definition.render({
-            children: 'Surface',
-          }),
-          TableHeaderCell.definition.render({
-            children: 'Status',
-          }),
-        ],
-      }),
-    });
-    const body = TableBody.definition.render({
-      children: [
-        TableRow.definition.render({
-          children: [
-            TableCell.definition.render({
-              children: 'Card and badge',
-            }),
-            TableCell.definition.render({
-              children: 'compiled',
-            }),
-          ],
-        }),
-        TableRow.definition.render({
-          children: [
-            TableCell.definition.render({
-              children: 'Breadcrumb and keyboard hint',
-            }),
-            TableCell.definition.render({
-              children: 'compiled',
-            }),
-          ],
-        }),
-      ],
-    });
+    const header = (
+      <TableHead>
+        {
+          <TableRow>
+            {[
+              <TableHeaderCell>{'Surface'}</TableHeaderCell>,
+              <TableHeaderCell>{'Status'}</TableHeaderCell>,
+            ]}
+          </TableRow>
+        }
+      </TableHead>
+    );
+    const body = (
+      <TableBody>
+        {[
+          <TableRow>
+            {[<TableCell>{'Card and badge'}</TableCell>, <TableCell>{'compiled'}</TableCell>]}
+          </TableRow>,
+          <TableRow>
+            {[
+              <TableCell>{'Breadcrumb and keyboard hint'}</TableCell>,
+              <TableCell>{'compiled'}</TableCell>,
+            ]}
+          </TableRow>,
+        ]}
+      </TableBody>
+    );
 
     return (
       <section style="display:grid;gap:1rem" data-gallery-interactive="pure-markup">
@@ -103,7 +94,7 @@ export const GalleryPureMarkupDemo = component({
             {state.submitted ? 'confirmed' : 'pending'}
           </output>
         </Card>
-        {Table.definition.render({ children: [header, body] })}
+        {<Table>{[header, body]}</Table>}
         <div
           aria-hidden="true"
           style="height:1.5rem;width:100%;border-radius:0.375rem;background:var(--edge,#e5e5e5)"

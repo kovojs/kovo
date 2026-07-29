@@ -1880,8 +1880,8 @@ describe('SPEC↔implementation diagnostic conformance closure (SPEC §2/§11)',
     const fileName = 'packages/server/src/internal/data-plane-static-analysis.ts';
     const source = productionText(fileName);
     const mutated = source.replace(
-      'extractStaticBuildAnalysisFactsFromProject({ files }, registerTransferredSqlSafetyDiagnostic)',
-      'extractStaticBuildAnalysisFactsFromProject({ files }, (registerTransferredSqlSafetyDiagnostic))',
+      '        registerTransferredSqlSafetyDiagnostic,\n      )',
+      '        (registerTransferredSqlSafetyDiagnostic),\n      )',
     );
     expect(mutated).not.toBe(source);
     expect(

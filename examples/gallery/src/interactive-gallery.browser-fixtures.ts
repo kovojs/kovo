@@ -1,5 +1,6 @@
 import axe from 'axe-core';
 import { installKovoLoader, type KovoLoader } from '@kovojs/browser/generated';
+import type { Component } from '@kovojs/core';
 import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
 import { expect, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -9,18 +10,14 @@ import {
   staticVisualFixtureHtml,
   type StaticVisualFixturePath,
 } from './interactive-gallery.browser-manifest.js';
+import { jsx } from './interactive-gallery.browser-jsx-runtime.js';
 
 export {
   staticVisualFixtureHtml,
   type StaticVisualFixturePath,
 } from './interactive-gallery.browser-manifest.js';
 
-export interface InteractiveDemoComponent {
-  definition: {
-    render: (queries: Record<string, never>, state: never) => Promise<string> | string;
-    state: () => unknown;
-  };
-}
+export type InteractiveDemoComponent = Component<any>;
 
 type InteractiveClientModule = Record<string, unknown>;
 
@@ -46,7 +43,7 @@ export async function mountInteractiveDemo(
   component: InteractiveDemoComponent,
 ): Promise<HTMLElement> {
   const host = document.createElement('main');
-  host.innerHTML = await component.definition.render({}, component.definition.state() as never);
+  host.innerHTML = await jsx(component, {});
   document.body.append(host);
 
   return required(host.firstElementChild as HTMLElement | null);

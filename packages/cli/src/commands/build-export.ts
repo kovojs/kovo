@@ -2375,6 +2375,7 @@ function staticDiagnosticFact(
     message: diagnostic.message,
     severity: diagnostic.severity ?? 'error',
     site: diagnostic.fileName,
+    ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
     ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
   };
 }
@@ -2470,8 +2471,21 @@ async function staticBuildCheckGraph(
         position: fact.position,
         query: fact.query,
         ...(fact.source === undefined ? {} : { source: fact.source }),
+        ...(fact.sourceAnchor === undefined ? {} : { sourceAnchor: fact.sourceAnchor }),
         status: fact.status,
       })),
+  );
+  const domains = buildFlatMapDense(
+    sourceGraphFacts.domainDeclarationNames,
+    'Source domain declaration names',
+    (name): CoreGraph.DomainExplain[] => {
+      const source = registryDeclarationSource(
+        sourceGraphFacts.registryDeclarationAnchors,
+        'domain',
+        name,
+      );
+      return source === undefined ? [] : [{ name, source }];
+    },
   );
   const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', (endpoint) =>
     endpointCheckFact(
@@ -2560,6 +2574,7 @@ async function staticBuildCheckGraph(
       // manifest distinguishes a proved-zero dependency surface from a missing producer.
       dependencyCapabilities: options.preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       ...(cookieDowngrades.length === 0 ? {} : { cookieDowngrades }),
+      ...(domains.length === 0 ? {} : { domains }),
       egressPosture,
       escapeCensus: {
         doors: ESCAPE_CENSUS_DOORS,
@@ -2737,6 +2752,7 @@ interface SourceGraphFacts {
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
   components: SourceComponentGraphFacts[];
+  domainDeclarationNames: string[];
   registryDeclarationAnchors: Map<string, KovoDiagnosticSourceAnchor | null>;
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
@@ -3004,6 +3020,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
   const compilerTaskBBlockingDiagnostics: CoreGraph.StaticDiagnosticFact[] = [];
   const components: SourceComponentGraphFacts[] = [];
+  const domainDeclarationNames: string[] = [];
   const registryDeclarationAnchors = buildCreateMap<string, KovoDiagnosticSourceAnchor | null>();
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
@@ -3096,6 +3113,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       registryDeclarationAnchors,
       file.fileName,
       parsedModule.calls,
+      domainDeclarationNames,
     );
     buildSecurityArrayAppend(
       compilerSecuritySemanticSources,
@@ -3203,6 +3221,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       semanticSources: compilerSecuritySemanticSources,
     }),
     components,
+    domainDeclarationNames,
     registryDeclarationAnchors,
     routeOutcomes,
     routePages,
@@ -3213,6 +3232,7 @@ function collectRegistryDeclarationAnchors(
   target: Map<string, KovoDiagnosticSourceAnchor | null>,
   fileName: string,
   calls: ReturnType<typeof parseComponentModule>['calls'],
+  domainNames?: string[],
 ): void {
   const snapshot = buildSnapshotDenseArray(calls, `Registry declaration calls for ${fileName}`);
   for (let index = 0; index < snapshot.length; index += 1) {
@@ -3220,6 +3240,7 @@ function collectRegistryDeclarationAnchors(
     const kind = call.frameworkFactory;
     if (
       kind !== 'agent' &&
+      kind !== 'domain' &&
       kind !== 'endpoint' &&
       kind !== 'mutation' &&
       kind !== 'query' &&
@@ -3231,7 +3252,11 @@ function collectRegistryDeclarationAnchors(
     }
     const name = sourceRegistryDeclarationName(fileName, call);
     if (name === undefined) continue;
-    collectRegistryDeclarationAnchor(target, `${kind}\0${name}`, {
+    const key = `${kind}\0${name}`;
+    if (kind === 'domain' && domainNames !== undefined && !buildMapHas(target, key)) {
+      buildSecurityArrayAppend(domainNames, name, 'Compiler-owned domain declaration names');
+    }
+    collectRegistryDeclarationAnchor(target, key, {
       end: call.end,
       file: fileName,
       start: call.start,
@@ -3279,7 +3304,16 @@ function sourceRegistryDeclarationName(
 
 function registryDeclarationSource(
   anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
-  kind: 'agent' | 'endpoint' | 'mutation' | 'page' | 'query' | 'task' | 'tool' | 'webhook',
+  kind:
+    | 'agent'
+    | 'domain'
+    | 'endpoint'
+    | 'mutation'
+    | 'page'
+    | 'query'
+    | 'task'
+    | 'tool'
+    | 'webhook',
   name: string,
 ): KovoDiagnosticSourceAnchor | undefined {
   const source = buildMapGet(anchors, `${kind}\0${name}`);
@@ -3321,12 +3355,30 @@ export function snapshotBuildCompilerDiagnosticsForTests(
   );
 }
 
+/** Internal seam proving exact compiler diagnostic ranges survive the build-graph projection. */
+export function snapshotBuildCompilerDiagnosticAnchorsForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): CoreGraph.StaticDiagnosticFact[] {
+  return buildFlatMapDense(files, 'Build compiler diagnostic source-anchor files', (file) =>
+    buildMapDense(
+      compileComponentModule({
+        fileName: file.fileName,
+        source: file.source,
+        sourceProvenance: 'app',
+      }).diagnostics,
+      `Build compiler diagnostic source anchors for ${file.fileName}`,
+      staticDiagnosticFact,
+    ),
+  );
+}
+
 /** Internal test seam for compiler-emitted declaration/node provenance in built graph artifacts. */
 export function snapshotBuildCompilerSourceAnchorsForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
   declarations: readonly {
     readonly kind:
       | 'agent'
+      | 'domain'
       | 'endpoint'
       | 'mutation'
       | 'page'

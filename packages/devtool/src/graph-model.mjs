@@ -27,11 +27,12 @@ import {
   setHas,
   stringCharCodeAt,
   stringSlice,
+  stringStartsWith,
 } from './output-security.mjs';
 
 /**
- * @typedef {'mutation'|'domain'|'query'|'component'|'page'} NodeKind
- * @typedef {'writes'|'backs'|'feeds'|'emits'|'renders'} EdgeKind
+ * @typedef {'mutation'|'domain'|'query'|'component'|'handler'|'trigger'|'derive'|'binding-position'|'page'} NodeKind
+ * @typedef {'writes'|'backs'|'feeds'|'emits'|'renders'|'handles'|'triggers'|'derives'|'owns'|'updates'} EdgeKind
  */
 
 /** Left→right dataflow lanes. A write propagates rightward to the UI. */
@@ -57,10 +58,44 @@ export const KIND_META = freeze({
     glyph: '▢',
     label: 'Components',
   }),
+  handler: freeze({
+    accent: '#c792ea',
+    blurb: 'browser behavior',
+    glyph: '↯',
+    label: 'Handlers',
+  }),
+  trigger: freeze({
+    accent: '#c792ea',
+    blurb: 'execution timing',
+    glyph: '◷',
+    label: 'Triggers',
+  }),
+  derive: freeze({
+    accent: '#c792ea',
+    blurb: 'computed bindings',
+    glyph: 'ƒ',
+    label: 'Derives',
+  }),
+  'binding-position': freeze({
+    accent: '#c792ea',
+    blurb: 'refresh coverage',
+    glyph: '⌖',
+    label: 'Bindings',
+  }),
   page: freeze({ accent: '#94a3b8', blurb: 'routes', glyph: '◧', label: 'Pages' }),
 });
 
 const id = (kind, name) => `${kind}:${name}`;
+
+/** Keep component-local detail nodes in the component lane rather than multiplying columns. */
+export function laneForKind(kind) {
+  return kind === 'handler' ||
+    kind === 'trigger' ||
+    kind === 'derive' ||
+    kind === 'binding-position'
+    ? 'component'
+    : kind;
+}
 
 /**
  * Build the traversable dataflow graph from a raw KovoExplainInput object.
@@ -104,8 +139,14 @@ export function buildDataflowGraph(raw) {
     });
   };
 
-  // --- domains (union of every mention) ---
-  const domainNode = (d) => ensure('domain', d, d);
+  // --- domains (union of every mention; exact declarations win over usage fallbacks) ---
+  const domainAnchors = createMap();
+  for (const domain of raw.domains ?? []) {
+    if (domain?.name && domain?.source && !mapHas(domainAnchors, domain.name)) {
+      mapSet(domainAnchors, domain.name, domain.source);
+    }
+  }
+  const domainNode = (d) => ensure('domain', d, d, {}, mapGet(domainAnchors, d));
 
   // --- mutations ---
   const optByMutation = groupBy(raw.optimistic ?? [], (o) => o.mutation);
@@ -170,6 +211,70 @@ export function buildDataflowGraph(raw) {
       if (mnode)
         link(node, mnode, 'emits', { slot: mf.slot, fields: mf.fields }, mf.source ?? c.source); // component → mutation (action out)
     }
+    for (const handler of c.handlers ?? []) {
+      const handlerNode = ensure(
+        'handler',
+        `${c.name}:${handler.exportName}`,
+        handler.event,
+        { component: c.name, exportName: handler.exportName, ref: handler.ref },
+        handler.source,
+      );
+      link(node, handlerNode, 'handles', {}, handler.generatedFrom ?? handler.source ?? c.source);
+    }
+    for (const trigger of c.triggers ?? []) {
+      const triggerNode = ensure(
+        'trigger',
+        `${c.name}:${trigger.exportName}`,
+        trigger.trigger,
+        { component: c.name, exportName: trigger.exportName, ref: trigger.ref },
+        trigger.source,
+      );
+      link(node, triggerNode, 'triggers', {}, trigger.generatedFrom ?? trigger.source ?? c.source);
+    }
+    for (const derive of c.derives ?? []) {
+      const deriveNode = ensure(
+        'derive',
+        `${c.name}:${derive.name}:${derive.target}`,
+        derive.name,
+        { component: c.name, inputs: derive.inputs, ref: derive.ref, target: derive.target },
+        derive.source,
+      );
+      link(deriveNode, node, 'derives', {}, derive.generatedFrom ?? derive.source ?? c.source);
+    }
+  }
+
+  // --- update-coverage binding positions (compiler facts; no source rediscovery) ---
+  let coverageIndex = 0;
+  for (const coverage of raw.updateCoverage ?? []) {
+    const component = componentNodeForCoverage(nodes, coverage.component);
+    if (!component || !coverage.sourceAnchor) continue;
+    const binding = ensure(
+      'binding-position',
+      `${component.name}:${coverage.sourceAnchor.file}:${coverage.sourceAnchor.start}:${coverageIndex}`,
+      `${coverage.status} · ${coverage.query}`,
+      {
+        component: component.name,
+        compilerComponentName: coverage.component,
+        detail: coverage.detail,
+        position: coverage.position,
+        query: coverage.query,
+        source: coverage.source ?? 'query',
+        status: coverage.status,
+      },
+      coverage.sourceAnchor,
+    );
+    link(component, binding, 'owns', {}, coverage.sourceAnchor);
+    const query = queryNodeForCoverage(nodes, coverage.query);
+    if (query) {
+      link(
+        query,
+        binding,
+        'updates',
+        { detail: coverage.detail, position: coverage.position, status: coverage.status },
+        coverage.sourceAnchor,
+      );
+    }
+    coverageIndex += 1;
   }
 
   // --- pages (renders components, loads queries) ---
@@ -204,6 +309,32 @@ export function buildDataflowGraph(raw) {
   const index = buildIndex(list, edges, byId);
 
   return { nodes: list, edges, byId, index };
+}
+
+function componentNodeForCoverage(nodes, name) {
+  const exact = nodes.get(id('component', name));
+  if (exact) return exact;
+  for (const node of nodes.values()) {
+    if (node.kind === 'component' && (node.data.exportName === name || node.label === name)) {
+      return node;
+    }
+  }
+  return undefined;
+}
+
+function queryNodeForCoverage(nodes, path) {
+  let selected;
+  for (const node of nodes.values()) {
+    if (
+      node.kind !== 'query' ||
+      (path !== node.name && !stringStartsWith(path, `${node.name}.`)) ||
+      (selected && selected.name.length >= node.name.length)
+    ) {
+      continue;
+    }
+    selected = node;
+  }
+  return selected;
 }
 
 function buildIndex(nodes, edges, byId) {

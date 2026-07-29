@@ -197,6 +197,7 @@ const JSX_RUNTIME_FACTORY_IDENTITIES = {
 const TRUSTED_URL_IDENTITY = frameworkExport('@kovojs/browser', 'trustedUrl');
 const SERVER_CALL_FACTORY_IDENTITIES: readonly FrameworkExportIdentity[] = [
   AGENT_FACTORY_IDENTITY,
+  DOMAIN_FACTORY_IDENTITY,
   ENDPOINT_FACTORY_IDENTITY,
   MUTATION_FACTORY_IDENTITY,
   QUERY_FACTORY_IDENTITY,
@@ -487,17 +488,19 @@ export function parseComponentModule(
         ? 'endpoint'
         : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
           ? 'agent'
-          : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
-            ? 'mutation'
-            : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
-              ? 'query'
-              : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
-                ? 'task'
-                : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
-                  ? 'tool'
-                  : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
-                    ? 'webhook'
-                    : undefined;
+          : frameworkExportEquals(factoryIdentity, DOMAIN_FACTORY_IDENTITY)
+            ? 'domain'
+            : frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)
+              ? 'mutation'
+              : frameworkExportEquals(factoryIdentity, QUERY_FACTORY_IDENTITY)
+                ? 'query'
+                : frameworkExportEquals(factoryIdentity, TASK_FACTORY_IDENTITY)
+                  ? 'task'
+                  : frameworkExportEquals(factoryIdentity, TOOL_FACTORY_IDENTITY)
+                    ? 'tool'
+                    : frameworkExportEquals(factoryIdentity, WEBHOOK_FACTORY_IDENTITY)
+                      ? 'webhook'
+                      : undefined;
       const frameworkSecurityOperation = frameworkIdentityIn(factoryIdentity, CSRF_FIELD_IDENTITIES)
         ? 'csrf-field'
         : frameworkIdentityIn(factoryIdentity, CSRF_TOKEN_IDENTITIES)

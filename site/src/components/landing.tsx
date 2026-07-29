@@ -631,7 +631,7 @@ export interface LandingPageProps {
 export function LandingRoutePage({ clients }: LandingPageProps): string {
   return (
     <div style={landingStyles.root}>
-      {SiteHeader.definition.render({ activePath: '/', clients })}
+      <SiteHeader activePath="/" clients={clients} />
       <div style={landingStyles.wrap}>
         <SecurityHero clients={clients} />
         <HowItWorks />
@@ -640,7 +640,7 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
         <BatteriesIncluded />
         <Credibility />
       </div>
-      {SiteFooter.definition.render()}
+      <SiteFooter />
     </div>
   );
 }

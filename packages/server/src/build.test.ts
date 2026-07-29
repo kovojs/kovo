@@ -67,6 +67,16 @@ const declaredDeploySkewRetention = {
   immutableClientModules: 'retained',
   priorTokenQueryReads: 'retained',
 } as const;
+const serverAppSourceEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/app.ts')).href;
+const serverHintsSourceEntry = pathToFileURL(
+  join(process.cwd(), 'packages/server/src/hints.ts'),
+).href;
+const serverHtmlSourceEntry = pathToFileURL(
+  join(process.cwd(), 'packages/server/src/html.ts'),
+).href;
+const serverRouteSourceEntry = pathToFileURL(
+  join(process.cwd(), 'packages/server/src/route.ts'),
+).href;
 
 function testClientModuleHref(path: string, source: string): string {
   return versionedClientModuleHref(path, clientModuleRepresentationDigest(source));
@@ -203,19 +213,21 @@ describe('server build-time deployment API', () => {
 
     try {
       const packedOut = join(root, 'packed');
+      const runtimeEntry = join(root, 'runtime-entry.ts');
+      await writeFile(
+        runtimeEntry,
+        [
+          "export { createApp, createRequestHandler } from '../src/app.js';",
+          "export { mintCsrfToken } from '../src/csrf.js';",
+          "export { endpoint, pinEndpointBrowserCredentialDelegation } from '../src/endpoint.js';",
+          "export { respond } from '../src/response.js';",
+          "export { route } from '../src/route.js';",
+          '',
+        ].join('\n'),
+      );
       execFileSync(
         'pnpm',
-        [
-          'exec',
-          'vp',
-          'pack',
-          'src/index.ts',
-          'src/endpoint.ts',
-          '--out-dir',
-          packedOut,
-          '--logLevel',
-          'error',
-        ],
+        ['exec', 'vp', 'pack', runtimeEntry, '--out-dir', packedOut, '--logLevel', 'error'],
         { cwd: packageRoot, stdio: 'pipe' },
       );
 
@@ -307,8 +319,7 @@ describe('server build-time deployment API', () => {
         'dir',
       );
 
-      const packedIndexUrl = pathToFileURL(join(packedOut, 'index.mjs')).href;
-      const packedEndpointUrl = pathToFileURL(join(packedOut, 'endpoint.mjs')).href;
+      const packedRuntimeUrl = pathToFileURL(join(packedOut, 'runtime-entry.mjs')).href;
       const build = await writeKovoNeutralBuild({
         app: createApp({
           routes: [
@@ -325,10 +336,10 @@ import {
   createRequestHandler,
   endpoint,
   mintCsrfToken,
+  pinEndpointBrowserCredentialDelegation,
   respond,
   route,
-} from ${JSON.stringify(packedIndexUrl)};
-import { pinEndpointBrowserCredentialDelegation } from ${JSON.stringify(packedEndpointUrl)};
+} from ${JSON.stringify(packedRuntimeUrl)};
 
 const csrf = {
   secret: 'packed-anonymous-csrf-witness-secret-0123456789abcdef',
@@ -987,17 +998,19 @@ export default createRequestHandler(app);
       const srcDir = join(root, 'src');
       await mkdir(srcDir, { recursive: true });
       await writeFile(join(srcDir, 'local.css'), '.local-source { color: teal; }\n', 'utf8');
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(srcDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./local.css')],",
-          '      page: () => trustedHtml(\'<main class="local-source">Home</main>\', { reason: "local stylesheet fixture" }),',
+          '      page: () => renderedHtml(\'<main class="local-source">Home</main>\'),',
           '    }),',
           '  ],',
           '});',
@@ -1036,17 +1049,19 @@ export default createRequestHandler(app);
       const outDir = join(root, 'dist', '.kovo');
       await mkdir(routeDir, { recursive: true });
       await writeFile(outsideSource, 'BUILD_HOST_SECRET=must-not-ship\n', 'utf8');
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(routeDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('../../hosts')],",
-          "      page: () => trustedHtml('<main>Home</main>', { reason: 'stylesheet boundary fixture' }),",
+          "      page: () => renderedHtml('<main>Home</main>'),",
           '    }),',
           '  ],',
           '});',
@@ -1081,17 +1096,19 @@ export default createRequestHandler(app);
       await mkdir(externalDir, { recursive: true });
       const externalCss = join(externalDir, 'private.css');
       await writeFile(externalCss, '.private { content: "BUILD_HOST_SECRET"; }\n', 'utf8');
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(externalDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./private.css')],",
-          "      page: () => trustedHtml('<main>Home</main>', { reason: 'stylesheet boundary fixture' }),",
+          "      page: () => renderedHtml('<main>Home</main>'),",
           '    }),',
           '  ],',
           '});',
@@ -1123,17 +1140,19 @@ export default createRequestHandler(app);
       await mkdir(outsideDir, { recursive: true });
       await writeFile(join(outsideDir, 'private.css'), '.private { color: red; }\n', 'utf8');
       await symlink(join(outsideDir, 'private.css'), join(srcDir, 'linked.css'));
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(srcDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./linked.css')],",
-          "      page: () => trustedHtml('<main>Home</main>', { reason: 'stylesheet symlink fixture' }),",
+          "      page: () => renderedHtml('<main>Home</main>'),",
           '    }),',
           '  ],',
           '});',
@@ -1166,17 +1185,19 @@ export default createRequestHandler(app);
       const outsideCss = join(outsideDir, 'private.css');
       await writeFile(outsideCss, '.private { color: red; }\n', 'utf8');
       await link(outsideCss, join(srcDir, 'linked.css'));
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(srcDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./linked.css')],",
-          "      page: () => trustedHtml('<main>Home</main>', { reason: 'stylesheet symlink fixture' }),",
+          "      page: () => renderedHtml('<main>Home</main>'),",
           '    }),',
           '  ],',
           '});',
@@ -1205,20 +1226,22 @@ export default createRequestHandler(app);
       const outDir = join(root, 'dist', '.kovo');
       await mkdir(srcDir, { recursive: true });
       await writeFile(join(srcDir, 'local.css'), '.approved { color: teal; }\n', 'utf8');
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(srcDir, 'app.mjs');
       await writeFile(
         appModule,
         [
           "import { writeFileSync } from 'node:fs';",
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./local.css')],",
           '      page: () => {',
           "        writeFileSync(new URL('./local.css', import.meta.url), '.late { color: red; }\\n');",
-          '        return trustedHtml(\'<main class="approved">Home</main>\');',
+          '        return renderedHtml(\'<main class="approved">Home</main>\');',
           '      },',
           '    }),',
           '  ],',
@@ -1315,17 +1338,19 @@ export default createRequestHandler(app);
     try {
       const srcDir = join(root, 'src');
       await mkdir(srcDir, { recursive: true });
-      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
       const appModule = join(srcDir, 'app.mjs');
       await writeFile(
         appModule,
         [
-          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          `import { createApp } from ${JSON.stringify(serverAppSourceEntry)};`,
+          `import { stylesheet } from ${JSON.stringify(serverHintsSourceEntry)};`,
+          `import { renderedHtml } from ${JSON.stringify(serverHtmlSourceEntry)};`,
+          `import { route } from ${JSON.stringify(serverRouteSourceEntry)};`,
           'export const app = createApp({',
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./missing.css')],",
-          "      page: () => trustedHtml('<main>Home</main>', { reason: 'missing stylesheet fixture' }),",
+          "      page: () => renderedHtml('<main>Home</main>'),",
           '    }),',
           '  ],',
           '});',

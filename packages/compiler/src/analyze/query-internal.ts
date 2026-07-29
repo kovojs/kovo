@@ -55,6 +55,24 @@ export function withOutputContexts<Value extends object>(
   return value as Value & { outputContexts: readonly GeneratedOutputWriteFact[] };
 }
 
+/** Carry compiler-only source provenance without changing serialized update-plan bytes/hashes. */
+export function withSourceSpan<Value extends object, Span>(
+  value: Value,
+  sourceSpan: Span,
+): Value & { sourceSpan: Span } {
+  compilerDefineOwnDataProperty(value, 'sourceSpan', sourceSpan, false);
+  return value as Value & { sourceSpan: Span };
+}
+
+/** Carry a generated use-site beside a declaration span without changing emitted fact bytes. */
+export function withGeneratedFromSpan<Value extends object, Span>(
+  value: Value,
+  generatedFromSpan: Span,
+): Value & { generatedFromSpan: Span } {
+  compilerDefineOwnDataProperty(value, 'generatedFromSpan', generatedFromSpan, false);
+  return value as Value & { generatedFromSpan: Span };
+}
+
 export function jsxAttributes(model: ComponentModuleModel) {
   const attributes: ReturnType<typeof jsxElements>[number]['attributes'][number][] = [];
   const elements = compilerSnapshotDenseArray(jsxElements(model), 'Compiler query JSX elements');

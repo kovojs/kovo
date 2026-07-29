@@ -79,14 +79,23 @@ export function renderOnceQueryPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
 ): string[] {
-  const paths: string[] = [];
-  const seen = compilerCreateSet<string>();
+  return pathNames(
+    renderOnceQueryPathFacts(model, knownQueries),
+    'Compiler renderOnce query path names',
+  );
+}
 
+export function renderOnceQueryPathFacts(
+  model: ComponentModuleModel,
+  knownQueries: ReadonlySet<string>,
+): QueryPathExpressionFact[] {
+  const paths: QueryPathExpressionFact[] = [];
+  const seen = compilerCreateSet<string>();
   const calls = compilerSnapshotDenseArray(callExpressions(model), 'Compiler renderOnce calls');
   for (let index = 0; index < calls.length; index += 1) {
     const call = calls[index]!;
     if (call.name !== 'renderOnce') continue;
-    appendCallPropertyPaths(call.argumentPropertyAccesses, paths, seen, (path) =>
+    appendCallPropertyPathFacts(call.argumentPropertyAccesses, paths, seen, (path) =>
       queryPathUsesKnownQuery(path, knownQueries),
     );
   }
@@ -95,14 +104,17 @@ export function renderOnceQueryPaths(
 }
 
 export function renderOnceStatePaths(model: ComponentModuleModel): string[] {
-  const paths: string[] = [];
-  const seen = compilerCreateSet<string>();
+  return pathNames(renderOnceStatePathFacts(model), 'Compiler renderOnce state path names');
+}
 
+export function renderOnceStatePathFacts(model: ComponentModuleModel): QueryPathExpressionFact[] {
+  const paths: QueryPathExpressionFact[] = [];
+  const seen = compilerCreateSet<string>();
   const calls = compilerSnapshotDenseArray(callExpressions(model), 'Compiler renderOnce calls');
   for (let index = 0; index < calls.length; index += 1) {
     const call = calls[index]!;
     if (call.name !== 'renderOnce') continue;
-    appendCallPropertyPaths(call.argumentPropertyAccesses, paths, seen, isStatePath);
+    appendCallPropertyPathFacts(call.argumentPropertyAccesses, paths, seen, isStatePath);
   }
 
   return paths;
@@ -273,9 +285,9 @@ function isQueryBindingPath(path: string | undefined): boolean {
   return query !== null && query !== 'state';
 }
 
-function appendCallPropertyPaths(
-  groups: readonly (readonly { readonly path: string }[])[],
-  output: string[],
+function appendCallPropertyPathFacts(
+  groups: readonly (readonly QueryPathExpressionFact[])[],
+  output: QueryPathExpressionFact[],
   seen: Set<string>,
   keep: (path: string) => boolean,
 ): void {
@@ -286,12 +298,26 @@ function appendCallPropertyPaths(
       'Compiler call property accesses',
     );
     for (let index = 0; index < accesses.length; index += 1) {
-      const path = accesses[index]!.path;
+      const access = accesses[index]!;
+      const path = access.path;
       if (!keep(path) || compilerSetHas(seen, path)) continue;
       compilerSetAdd(seen, path);
-      compilerArrayAppend(output, path, 'Compiler call property paths');
+      compilerArrayAppend(
+        output,
+        { end: access.end, path, start: access.start },
+        'Compiler call property paths',
+      );
     }
   }
+}
+
+function pathNames(facts: readonly QueryPathExpressionFact[], label: string): string[] {
+  const source = compilerSnapshotDenseArray(facts, label);
+  const names: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    compilerArrayAppend(names, source[index]!.path, label);
+  }
+  return names;
 }
 
 function jsxExpressionPaths(

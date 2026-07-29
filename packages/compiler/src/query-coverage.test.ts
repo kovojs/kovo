@@ -1054,9 +1054,7 @@ export const CartRow = component({
   });
 
   it('force-disables inferred server refresh targets with disableServerRefresh', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-row.tsx',
-      source: `
+    const source = `
 export const CartRow = component({
   queries: { cart: {} },
   disableServerRefresh: true,
@@ -1064,7 +1062,10 @@ export const CartRow = component({
     <cart-row className={cart.count > 5 ? 'full' : 'empty'}>Cart</cart-row>
   ),
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source,
     });
 
     expect(result.componentGraphFacts).toEqual([
@@ -1073,8 +1074,16 @@ export const CartRow = component({
         exportName: 'CartRow',
         name: 'cart-row/cart-row',
         queries: ['cart'],
+        source: expect.objectContaining({ file: 'cart-row.tsx' }),
       },
     ]);
+    const componentSource = result.componentGraphFacts[0]?.source;
+    expect(source.slice(componentSource?.start, componentSource?.end)).toContain(
+      'CartRow = component',
+    );
+    expect(source.slice(componentSource?.start, componentSource?.end)).toContain(
+      'disableServerRefresh: true',
+    );
     expect(result.files[0]?.source).not.toContain('kovo-fragment-target=');
     expect(result.updateCoverage).toContainEqual(
       expect.objectContaining({

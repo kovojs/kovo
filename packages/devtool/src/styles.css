@@ -420,6 +420,12 @@ body {
 .node--component {
   --accent: var(--component);
 }
+.node--handler,
+.node--trigger,
+.node--derive,
+.node--binding-position {
+  --accent: var(--component);
+}
 .node--page {
   --accent: var(--page);
 }
