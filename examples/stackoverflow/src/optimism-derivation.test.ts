@@ -20,9 +20,9 @@ let cachedFacts: ExampleOptimisticDerivationFact[] | undefined;
 function facts(): ExampleOptimisticDerivationFact[] {
   cachedFacts ??= exampleOptimisticDerivationFacts({
     mutationTouchGraphKeys: {
-      'mutations/post-answer-mutation': 'postAnswer',
-      'mutations/post-question-mutation': 'postQuestion',
-      'mutations/vote-up-mutation': 'voteUp',
+      'mutations/post-answer-mutation': 'mutations/post-answer-mutation',
+      'mutations/post-question-mutation': 'mutations/post-question-mutation',
+      'mutations/vote-up-mutation': 'mutations/vote-up-mutation',
     },
     queries: [
       { query: 'queries/question-list', exportName: 'questionList', domains: ['model/question'] },

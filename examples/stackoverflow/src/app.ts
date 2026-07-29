@@ -6,20 +6,9 @@ export {
   answer,
   question,
   type AnswerListResult,
-  type PostAnswerInput,
-  type PostQuestionInput,
   type QuestionListResult,
   type QuestionScoreResult,
-  type SoRequest,
   vote,
-  type VoteUpInput,
 } from './model.js';
 export { answerList, questionList, questionScore } from './queries.js';
-export {
-  postAnswer,
-  postAnswerMutation,
-  postQuestion,
-  postQuestionMutation,
-  voteUp,
-  voteUpMutation,
-} from './mutations.js';
+export { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';

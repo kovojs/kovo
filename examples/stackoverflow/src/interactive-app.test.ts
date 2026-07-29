@@ -13,10 +13,7 @@ import {
 } from '@kovojs/core/internal/wire-input-grammar';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
-import {
-  buildSoInteractiveApp as buildSoInteractiveApplication,
-  type BuildSoInteractiveAppOptions,
-} from './interactive-app.js';
+import type { BuildSoInteractiveAppOptions } from './interactive-app.js';
 import { answers, questions, votes } from './schema.js';
 
 const questionListTarget = 'question-list-region';
@@ -26,6 +23,8 @@ const demoSessionHeader = 'x-kovo-demo-sid';
 
 async function buildSoInteractiveApp(options: BuildSoInteractiveAppOptions = {}) {
   return runWithStackOverflowGeneratedGraphs(async () => {
+    const { buildSoInteractiveApp: buildSoInteractiveApplication } =
+      await import('./interactive-app.js');
     const application = await buildSoInteractiveApplication(options);
     return { ...application, handler: createExampleTestRequestHandler(application.app) };
   });

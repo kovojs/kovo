@@ -54,16 +54,16 @@ const derivationFacts = writeExampleCoreRegistry({
   // Query loaders are exported by key from `src/queries.ts`; `../queries.js` is relative to the
   // generated file at `src/generated/registry.d.ts`.
   queryModule: '../queries.js',
-  // Mutation key → touch-graph function name (the inline Drizzle write handlers in mutations.ts).
+  // Mutation key → compiler-derived touch-graph key for the inline Drizzle write handlers.
   mutationTouchGraphKeys: {
-    'mutations/post-answer-mutation': 'postAnswer',
-    'mutations/post-question-mutation': 'postQuestion',
-    'mutations/vote-up-mutation': 'voteUp',
+    'mutations/post-answer-mutation': 'mutations/post-answer-mutation',
+    'mutations/post-question-mutation': 'mutations/post-question-mutation',
+    'mutations/vote-up-mutation': 'mutations/vote-up-mutation',
   },
-  // Compact declared query → read-domain graph (SPEC.md §10.2/§11.1): the project query-fact
-  // analyzer cannot prove reads through this example's `Reader<SoDb>` + `requireSoQueryDb(context)`
-  // loader indirection, so the read set is declared here. The mutation→query InvalidationSets union
-  // is still DERIVED from this read set folded against the analyzer-derived Drizzle touch graph.
+  // Compact declared query → read-domain graph (SPEC.md §10.2/§11.1): app queries own the
+  // compiler facts even though this standalone example generator cannot recover them from a
+  // prebuilt module. The mutation→query InvalidationSets union is still DERIVED from this read set
+  // folded against the analyzer-derived Drizzle touch graph.
   queries: [
     { query: 'queries/question-list', exportName: 'questionList', domains: ['model/question'] },
     { query: 'queries/answer-list', exportName: 'answerList', domains: ['model/answer'] },

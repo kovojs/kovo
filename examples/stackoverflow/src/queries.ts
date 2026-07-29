@@ -1,25 +1,23 @@
-import { publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { s } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
-import type { SoDb } from './db.js';
+import { app } from './kovo.js';
 import {
   vote,
+  type AnswerListResult,
   type QuestionAnswersResult,
   type QuestionDetailResult,
-  type SoRequest,
+  type QuestionListResult,
+  type QuestionScoreResult,
 } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Drizzle selects stay inline so the generated StackOverflow artifacts can
 // inspect query shapes and register derived query-read domains.
 
-// SPEC §9.4/§10.3 (MARQUEE): a query loader destructures the framework-owned read-only handle
-// `{ db }` (typed `Reader<SoDb>` — the write verbs are removed at the type level and throw
-// `KovoReadonlyHandleError` at runtime). The loader no longer brings its own db; the framework
-// threads the SQL-safe, read-only managed handle as `context.db`. A write in a loader is a `tsc`
-// error AND a runtime throw AND a KV433 static-gate error. `session` rides the request for the
-// per-session row scope; mutations (model.ts `SoRequest`) keep the read-write `request.db`.
-type SoQueryLoadContext = QueryLoadContext<SoRequest, SoDb>;
+// SPEC §9.4/§10.3 (MARQUEE): `defineKovo({ db })` infers the framework-owned read-only handle at
+// `context.db`. Write verbs are absent at the type level and throw at runtime; session scope rides
+// the app-inferred request context.
 
 // The list is ordered by stable id so a vote changes the score without reshuffling
 // rows while a fragment response is being applied.
@@ -28,11 +26,11 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest, SoDb>;
 // gets an auto-provisioned demo session, so there is no authentication wall on reads.
 const PUBLIC_QA_READ = 'public Q&A browsing';
 
-export const questionList = query({
-  access: publicAccess(PUBLIC_QA_READ),
-  load: async (_input: unknown, context?: SoQueryLoadContext) => {
-    const db = requireSoQueryDb(context);
-    const sessionId = context?.request?.session?.id;
+export const questionList = app.query({
+  access: app.publicAccess(PUBLIC_QA_READ),
+  load: async (_input, context): Promise<QuestionListResult> => {
+    const db = context.db;
+    const sessionId = context.request.session?.id;
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
@@ -57,11 +55,11 @@ export const questionList = query({
 });
 
 // All answers, ordered by stable id.
-export const answerList = query({
-  access: publicAccess(PUBLIC_QA_READ),
-  load: async (_input: unknown, context?: SoQueryLoadContext) => {
-    const db = requireSoQueryDb(context);
-    const sessionId = context?.request?.session?.id;
+export const answerList = app.query({
+  access: app.publicAccess(PUBLIC_QA_READ),
+  load: async (_input, context): Promise<AnswerListResult> => {
+    const db = context.db;
+    const sessionId = context.request.session?.id;
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
@@ -79,15 +77,12 @@ export const answerList = query({
   },
 });
 
-export const questionDetail = query({
-  access: publicAccess(PUBLIC_QA_READ),
+export const questionDetail = app.query({
+  access: app.publicAccess(PUBLIC_QA_READ),
   args: s.object({ id: s.string() }),
-  load: async (
-    input: { id: string },
-    context?: SoQueryLoadContext,
-  ): Promise<QuestionDetailResult | null> => {
-    const db = requireSoQueryDb(context);
-    const sessionId = context?.request?.session?.id;
+  load: async (input, context): Promise<QuestionDetailResult | null> => {
+    const db = context.db;
+    const sessionId = context.request.session?.id;
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
@@ -110,15 +105,12 @@ export const questionDetail = query({
   },
 });
 
-export const questionAnswers = query({
-  access: publicAccess(PUBLIC_QA_READ),
+export const questionAnswers = app.query({
+  access: app.publicAccess(PUBLIC_QA_READ),
   args: s.object({ questionId: s.string() }),
-  load: async (
-    input: { questionId: string },
-    context?: SoQueryLoadContext,
-  ): Promise<QuestionAnswersResult> => {
-    const db = requireSoQueryDb(context);
-    const sessionId = context?.request?.session?.id;
+  load: async (input, context): Promise<QuestionAnswersResult> => {
+    const db = context.db;
+    const sessionId = context.request.session?.id;
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
@@ -141,13 +133,13 @@ export const questionAnswers = query({
 });
 
 // Total score across all question votes.
-export const questionScore = query({
-  access: publicAccess(PUBLIC_QA_READ),
+export const questionScore = app.query({
+  access: app.publicAccess(PUBLIC_QA_READ),
   output: s.object({ score: s.number() }),
   reads: [vote],
-  load: async (_input: unknown, context?: SoQueryLoadContext) => {
-    const db = requireSoQueryDb(context);
-    const sessionId = context?.request?.session?.id;
+  load: async (_input, context): Promise<QuestionScoreResult> => {
+    const db = context.db;
+    const sessionId = context.request.session?.id;
     if (!sessionId) {
       throw new Error('stackoverflow query loaders require request.session.id');
     }
@@ -158,14 +150,3 @@ export const questionScore = query({
     return { score: Number(rows[0]?.value ?? 0) };
   },
 });
-
-// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle. A loader
-// reads it directly; this guard surfaces a clear error when a loader is invoked without the
-// framework-threaded handle (e.g. a direct `query.load()` call missing its db).
-function requireSoQueryDb(context?: SoQueryLoadContext): Reader<SoDb> {
-  const db = context?.db;
-  if (!db) {
-    throw new Error('stackoverflow query loaders require the framework-provided context.db');
-  }
-  return db;
-}

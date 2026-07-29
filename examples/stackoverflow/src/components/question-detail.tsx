@@ -6,7 +6,7 @@ import * as style from '@kovojs/style';
 
 import { postAnswerMutation } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
-import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
+import type { QuestionAnswersResult, QuestionDetailResult } from '../model.js';
 import {
   compactCount,
   freshId,
@@ -329,8 +329,10 @@ export const QuestionDetailRegion = component({
   mutations: { postAnswer: postAnswerMutation },
   props: { questionId: String },
   queries: {
-    answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
-    question: questionDetail.args((props) => ({ id: props.questionId })),
+    answers: questionAnswers.args((props: { questionId: string }) => ({
+      questionId: props.questionId,
+    })),
+    question: questionDetail.args((props: { questionId: string }) => ({ id: props.questionId })),
   },
   render: (
     {
@@ -343,7 +345,6 @@ export const QuestionDetailRegion = component({
       questionId: string;
     },
     _state,
-    _slots: { request?: SoRequest | undefined } = {},
   ) => {
     if (!question) {
       return (

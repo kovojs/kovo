@@ -1,39 +1,13 @@
-import { domain } from '@kovojs/server';
+import { domain, type JsonValue } from '@kovojs/server';
 
-import type { SoDb } from './db.js';
-
-// Shared demo facts: invalidation domains, typed mutation inputs, and the small
-// request/result shapes consumed across the interactive example.
+// Shared demo facts: invalidation domains and query result shapes consumed across the
+// interactive example. Mutation input and request types are inferred by the app contract.
 export const question = domain();
 export const answer = domain();
 export const vote = domain();
 
-export interface PostQuestionInput {
-  body: string;
-  id: string;
-  title: string;
-}
-
-export interface PostAnswerInput {
-  body: string;
-  id: string;
-  questionId: string;
-}
-
-export interface VoteUpInput {
-  id: string;
-  targetId: string;
-}
-
-export interface SoRequest {
-  db: SoDb;
-  session?: {
-    id?: string;
-    user?: { id?: string; roles?: readonly string[] } | null;
-  } | null;
-}
-
 export type QuestionListItem = {
+  readonly [key: string]: JsonValue;
   authorId: string;
   authorName: string;
   body: string;
@@ -46,10 +20,12 @@ export type QuestionListItem = {
 };
 
 export type QuestionListResult = {
+  readonly [key: string]: JsonValue;
   items: QuestionListItem[];
 };
 
 export type QuestionDetailResult = {
+  readonly [key: string]: JsonValue;
   id: string;
   title: string;
   body: string;
@@ -62,6 +38,7 @@ export type QuestionDetailResult = {
 };
 
 export type AnswerListItem = {
+  readonly [key: string]: JsonValue;
   id: string;
   questionId: string;
   body: string;
@@ -69,6 +46,7 @@ export type AnswerListItem = {
 };
 
 export type AnswerListResult = {
+  readonly [key: string]: JsonValue;
   items: AnswerListItem[];
 };
 
@@ -82,5 +60,6 @@ export type QuestionAnswerDetail = AnswerListItem & {
 export type QuestionAnswersResult = QuestionAnswerDetail[];
 
 export type QuestionScoreResult = {
+  readonly [key: string]: JsonValue;
   score: number;
 };

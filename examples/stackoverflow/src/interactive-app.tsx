@@ -3,18 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  layout,
-  publicAccess,
-  route,
-  s,
-  stylesheet,
-  type RoutePageResult,
-  type StylesheetAsset,
-} from '@kovojs/server';
-import { eq } from 'drizzle-orm';
+import { s, stylesheet, type RoutePageResult, type StylesheetAsset } from '@kovojs/server';
 
 import { QuestionDetailRegion } from './components/question-detail.js';
 import { QuestionListRegion } from './components/question-list.js';
@@ -22,10 +11,10 @@ import { TaggedQuestionsRegion } from './components/tagged-questions.js';
 import { TagsPage } from './components/tags-page.js';
 import { UserProfileRegion } from './components/user-profile.js';
 import { UsersPage } from './components/users-page.js';
-import { SoShell, type NavSection } from './components/chrome.js';
+import { SoShell } from './components/chrome.js';
 import { homeRail, questionRail, withRail } from './components/right-rail.js';
-import { createSoDb, type SoDb } from './db.js';
-import { seedSoDemo } from './demo-data.js';
+import type { SoDb } from './db.js';
+import { app, resetSoDatabase } from './kovo.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
 import {
   answerList,
@@ -34,7 +23,6 @@ import {
   questionList,
   questionScore,
 } from './queries.js';
-import { questions } from './schema.js';
 import { soTheme } from './theme.js';
 
 // SPEC.md §9.1: KovOverflow — the Stack Overflow example as a fully interactive
@@ -45,9 +33,6 @@ import { soTheme } from './theme.js';
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 const soCriticalCss = stackOverflowCriticalCss();
-const SO_DEMO_SESSION_HEADER = 'x-kovo-demo-sid';
-const SO_DEMO_SESSION_COOKIE = 'kovo_demo_sid';
-export const FALLBACK_SO_DEMO_SESSION_ID = 'demo-session';
 const soStaticQuestionPaths = Array.from(
   { length: 14 },
   (_unused, index) => `/questions/q${index + 1}`,
@@ -58,14 +43,18 @@ const soStaticQuestionPaths = Array.from(
 // Every section route is public Q&A browsing — visitors get an auto-provisioned demo
 // session, so reads have no auth wall. The layouts carry the public access decision
 // each child route inherits (KV436, SPEC §10.2); writes (votes/posts) stay guarded.
-const soLayout = (active: NavSection) =>
-  layout({
-    access: publicAccess('public Q&A browsing'),
-    render: (_queries, _state, { children }) => <SoShell active={active}>{children}</SoShell>,
-  });
-const QuestionsLayout = soLayout('questions');
-const TagsLayout = soLayout('tags');
-const UsersLayout = soLayout('users');
+const QuestionsLayout = app.layout({
+  access: app.publicAccess('public Q&A browsing'),
+  render: (_queries, _state, { children }) => <SoShell active="questions">{children}</SoShell>,
+});
+const TagsLayout = app.layout({
+  access: app.publicAccess('public Q&A browsing'),
+  render: (_queries, _state, { children }) => <SoShell active="tags">{children}</SoShell>,
+});
+const UsersLayout = app.layout({
+  access: app.publicAccess('public Q&A browsing'),
+  render: (_queries, _state, { children }) => <SoShell active="users">{children}</SoShell>,
+});
 
 interface StackOverflowStylesheetManifest {
   app: readonly StylesheetAsset[];
@@ -184,161 +173,101 @@ function stackOverflowCriticalCss(): string | undefined {
   }
 }
 
-export interface SoInteractiveApp {
-  app: ReturnType<typeof createApp>;
-  db: SoDb;
-}
-
 export interface BuildSoInteractiveAppOptions {
   db?: SoDb;
-  onError?: NonNullable<Parameters<typeof createApp>[0]>['onError'];
 }
 
-/**
- * Build the interactive KovOverflow app over a PGlite database. The app keeps
- * one database handle and seeds each browser session's rows on first request, so
- * the hosted demo avoids rebuilding a full app/PGlite instance for every
- * cookieless visitor while preserving isolated public ids like q1/q2.
- */
-export async function buildSoInteractiveApp(
-  options: BuildSoInteractiveAppOptions = {},
-): Promise<SoInteractiveApp> {
-  const database = options.db ?? (await createSoDb());
-  const ensureDemoSession = createSoDemoSessionSeeder(database);
-  await ensureDemoSession(FALLBACK_SO_DEMO_SESSION_ID);
-  const stylesheetManifest = stackOverflowStylesheetManifest();
+const stylesheetManifest = stackOverflowStylesheetManifest();
+const publicBrowsing = app.publicAccess('public Q&A browsing');
 
-  // SPEC.md §5.1: one parameterized detail route (not a route per seeded row), so
-  // questions posted at runtime are immediately viewable. SPEC.md §9.5 route
-  // JSX composition lets the component query declarations load question +
-  // answers from PGlite by `params.id`.
-  const questionDetailRoute = route('/questions/:id', {
-    meta: { description: 'Question detail', title: 'Question · KovOverflow' },
-    params: s.object({ id: s.string() }),
-    staticPaths: soStaticQuestionPaths,
-    page({ params }: { params: { id: string } }) {
-      return withRail(
-        <QuestionDetailRegion questionId={params.id} />,
-        questionRail(params.id),
-      ) as RoutePageResult;
-    },
-    layout: QuestionsLayout,
-    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/:id'),
-  });
+// SPEC.md §5.1: one parameterized detail route (not a route per seeded row), so questions posted
+// at runtime are immediately viewable.
+const questionDetailRoute = app.route('/questions/:id', {
+  access: publicBrowsing,
+  meta: { description: 'Question detail', title: 'Question · KovOverflow' },
+  params: s.object({ id: s.string() }),
+  staticPaths: soStaticQuestionPaths,
+  page({ params }) {
+    return withRail(
+      <QuestionDetailRegion questionId={params.id} />,
+      questionRail(params.id),
+    ) as RoutePageResult;
+  },
+  layout: QuestionsLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/:id'),
+});
 
-  const taggedQuestionsRoute = route('/questions/tagged/:tag', {
-    meta: { description: 'Questions filtered by tag', title: 'Tagged questions · KovOverflow' },
-    params: s.object({ tag: s.string() }),
-    page({ params }: { params: { tag: string } }) {
-      return <TaggedQuestionsRegion tag={params.tag} />;
-    },
-    layout: TagsLayout,
-    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/tagged/:tag'),
-  });
+const taggedQuestionsRoute = app.route('/questions/tagged/:tag', {
+  access: publicBrowsing,
+  meta: { description: 'Questions filtered by tag', title: 'Tagged questions · KovOverflow' },
+  params: s.object({ tag: s.string() }),
+  page({ params }) {
+    return <TaggedQuestionsRegion tag={params.tag} />;
+  },
+  layout: TagsLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/tagged/:tag'),
+});
 
-  const userProfileRoute = route('/users/:id', {
-    meta: { description: 'Member profile', title: 'User · KovOverflow' },
-    params: s.object({ id: s.string() }),
-    page({ params }: { params: { id: string } }) {
-      return <UserProfileRegion userId={params.id} />;
-    },
-    layout: UsersLayout,
-    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users/:id'),
-  });
+const userProfileRoute = app.route('/users/:id', {
+  access: publicBrowsing,
+  meta: { description: 'Member profile', title: 'User · KovOverflow' },
+  params: s.object({ id: s.string() }),
+  page({ params }) {
+    return <UserProfileRegion userId={params.id} />;
+  },
+  layout: UsersLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users/:id'),
+});
 
-  const app = createApp({
-    appId: '1eeb2490-f12b-4af7-b1ca-2023f2c621e8',
-    clientModules: createMemoryVersionedClientModuleRegistry(),
-    db: async (request) => {
-      const sessionId = request.session?.id ?? FALLBACK_SO_DEMO_SESSION_ID;
-      await ensureDemoSession(sessionId);
-      return database;
-    },
-    document: { lang: 'en-US' },
-    mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
-    routes: [
-      route('/', {
-        meta: {
-          description: 'Top developer questions and answers.',
-          title: 'Questions · KovOverflow',
-        },
-        page() {
-          return withRail(<QuestionListRegion />, homeRail()) as RoutePageResult;
-        },
-        layout: QuestionsLayout,
-        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/'),
-      }),
-      taggedQuestionsRoute,
-      questionDetailRoute,
-      route('/tags', {
-        meta: { description: 'Browse questions by tag.', title: 'Tags · KovOverflow' },
-        page() {
-          return <TagsPage />;
-        },
-        layout: TagsLayout,
-        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/tags'),
-      }),
-      route('/users', {
-        meta: { description: 'The KovOverflow community.', title: 'Users · KovOverflow' },
-        page() {
-          return <UsersPage />;
-        },
-        layout: UsersLayout,
-        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users'),
-      }),
-      userProfileRoute,
-    ],
-    sessionProvider: soDemoSessionProvider,
-  });
+const homeRoute = app.route('/', {
+  access: publicBrowsing,
+  meta: {
+    description: 'Top developer questions and answers.',
+    title: 'Questions · KovOverflow',
+  },
+  page() {
+    return withRail(<QuestionListRegion />, homeRail()) as RoutePageResult;
+  },
+  layout: QuestionsLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/'),
+});
 
-  return { app, db: database };
-}
+const tagsRoute = app.route('/tags', {
+  access: publicBrowsing,
+  meta: { description: 'Browse questions by tag.', title: 'Tags · KovOverflow' },
+  page() {
+    return <TagsPage />;
+  },
+  layout: TagsLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/tags'),
+});
 
-function soDemoSessionProvider(request: Request) {
-  const id =
-    request.headers.get(SO_DEMO_SESSION_HEADER) ??
-    readCookie(request.headers.get('cookie'), SO_DEMO_SESSION_COOKIE) ??
-    FALLBACK_SO_DEMO_SESSION_ID;
-  return { id, user: { id: 'demo-viewer', roles: ['member'] as const } };
-}
+const usersRoute = app.route('/users', {
+  access: publicBrowsing,
+  meta: { description: 'The KovOverflow community.', title: 'Users · KovOverflow' },
+  page() {
+    return <UsersPage />;
+  },
+  layout: UsersLayout,
+  stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users'),
+});
 
-function readCookie(header: string | null, name: string): string | undefined {
-  if (!header) return undefined;
-  for (const part of header.split(';')) {
-    const eqIndex = part.indexOf('=');
-    if (eqIndex === -1) continue;
-    if (part.slice(0, eqIndex).trim() !== name) continue;
-    return decodeURIComponent(part.slice(eqIndex + 1).trim());
-  }
-  return undefined;
-}
+export const soApp = app.assemble({
+  layouts: [QuestionsLayout, TagsLayout, UsersLayout],
+  mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
+  queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
+  routes: [
+    homeRoute,
+    taggedQuestionsRoute,
+    questionDetailRoute,
+    tagsRoute,
+    usersRoute,
+    userProfileRoute,
+  ],
+});
 
-function createSoDemoSessionSeeder(db: SoDb): (sessionId: string) => Promise<void> {
-  const seeded = new Set<string>();
-  const pending = new Map<string, Promise<void>>();
-
-  return async function ensureSoDemoSession(sessionId: string): Promise<void> {
-    if (seeded.has(sessionId)) return;
-    const inFlight = pending.get(sessionId);
-    if (inFlight) return inFlight;
-
-    const seed = (async () => {
-      const [existing] = await db
-        .select({ id: questions.id })
-        .from(questions)
-        .where(eq(questions.sessionId, sessionId))
-        .limit(1);
-      if (!existing) {
-        await seedSoDemo(db, sessionId);
-      }
-      seeded.add(sessionId);
-    })().finally(() => {
-      pending.delete(sessionId);
-    });
-
-    pending.set(sessionId, seed);
-    return seed;
-  };
+/** Reset the test/development database and return the already-closed app token. */
+export async function buildSoInteractiveApp(options: BuildSoInteractiveAppOptions = {}) {
+  const db = await resetSoDatabase(options.db);
+  return { app: soApp, db };
 }

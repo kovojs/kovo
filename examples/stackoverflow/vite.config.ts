@@ -38,9 +38,9 @@ export const soViteConfig = defineConfig({
     exampleDrizzleRegistryPlugin({
       appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
       mutationTouchGraphKeys: {
-        'mutations/post-answer-mutation': 'postAnswer',
-        'mutations/post-question-mutation': 'postQuestion',
-        'mutations/vote-up-mutation': 'voteUp',
+        'mutations/post-answer-mutation': 'mutations/post-answer-mutation',
+        'mutations/post-question-mutation': 'mutations/post-question-mutation',
+        'mutations/vote-up-mutation': 'mutations/vote-up-mutation',
       },
       sourceRoot: 'src',
     }),

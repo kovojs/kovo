@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { questionList } from '../queries.js';
-import type { QuestionListItem } from '../model.js';
+import type { QuestionListItem, QuestionListResult } from '../model.js';
 import { orderTags, tagDescription } from '../directory.js';
 import { parseTags, tagHref } from './chrome.js';
 
@@ -26,7 +26,7 @@ const so = {
 // grid. Counts are computed live from the questionList query (reused, so no new
 // query enters the behavior graph).
 
-type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
+type QuestionListQueryResult = QuestionListResult;
 
 const SO_NOW = Date.parse('2026-06-17T00:00:00Z');
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;

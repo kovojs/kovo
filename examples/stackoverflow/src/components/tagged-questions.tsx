@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { questionList } from '../queries.js';
-import type { QuestionListItem } from '../model.js';
+import type { QuestionListItem, QuestionListResult } from '../model.js';
 import { tagDescription } from '../directory.js';
 import { parseTags } from './chrome.js';
 import { newestFirst, renderQuestionRow } from './question-card.js';
@@ -28,7 +28,7 @@ const so = {
 // row. This route is not a morph target, so the rows render a static score
 // rather than the live vote control.
 
-type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
+type QuestionListQueryResult = QuestionListResult;
 
 const taggedStyles = style.create({
   head: {

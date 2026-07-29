@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { questionList } from '../queries.js';
-import type { QuestionListItem } from '../model.js';
+import type { QuestionListItem, QuestionListResult } from '../model.js';
 import { answersByUser, displayName, reputationOf, userById } from '../directory.js';
 import { initials, tagHref } from './chrome.js';
 import { newestFirst, renderQuestionRow } from './question-card.js';
@@ -33,7 +33,7 @@ const so = {
 // blurb, top tags, and the questions they have asked (read live from
 // questionList and filtered by author).
 
-type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
+type QuestionListQueryResult = QuestionListResult;
 
 const SO_NOW = Date.parse('2026-06-17T00:00:00Z');
 

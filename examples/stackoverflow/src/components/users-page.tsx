@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { questionList } from '../queries.js';
-import type { QuestionListItem } from '../model.js';
+import type { QuestionListItem, QuestionListResult } from '../model.js';
 import { type DemoUser, DEMO_USERS } from '../directory.js';
 import { compactCount, initials, tagHref } from './chrome.js';
 
@@ -29,7 +29,7 @@ const so = {
 // avatar, name, location, reputation, and top tags. Question counts are read
 // live from questionList; reputation and profile come from the directory.
 
-type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
+type QuestionListQueryResult = QuestionListResult;
 
 const usersStyles = style.create({
   title: { color: so.text, fontSize: 27, fontWeight: 400, marginBlock: 0 },

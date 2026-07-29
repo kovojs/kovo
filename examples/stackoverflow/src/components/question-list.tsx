@@ -1,10 +1,10 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
-import { type QuestionListItem, type SoRequest } from '../model.js';
+import type { QuestionListItem, QuestionListResult, QuestionScoreResult } from '../model.js';
 import { freshId } from '../components/chrome.js';
 import { newestFirst, renderQuestionRow } from '../components/question-card.js';
 
@@ -27,21 +27,12 @@ const so = {
 // renders the KovOverflow "All Questions" header, the filter tabs, the question
 // rows (stat rail + title + excerpt + tags + user card), and the ask composer.
 
-type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
-type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
-type QuestionListRenderSlots = ComponentRenderSlots<{
-  postQuestion: typeof postQuestionMutation;
-}> & {
-  request?: SoRequest | undefined;
-};
+type QuestionListQueryResult = QuestionListResult;
+type QuestionScoreQueryResult = QuestionScoreResult;
 interface DuplicateTitleFailure {
   code: 'DUPLICATE_TITLE';
   payload: { title: string };
 }
-
-const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
-  forms: { postQuestion: { failure: null } },
-};
 
 const listStyles = style.create({
   pageHead: {
@@ -161,7 +152,7 @@ export const QuestionListRegion = component({
       questionScore: QuestionScoreQueryResult;
     },
     _state,
-    _slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+    slots,
   ) => {
     const questions = newestFirst(questionList.items as QuestionListItem[]);
     const totalVotes = questionScore.score;
@@ -218,6 +209,7 @@ export const QuestionListRegion = component({
           />
           <FormError
             code="DUPLICATE_TITLE"
+            failure={slots.forms.postQuestion.failure}
             style={listStyles.error}
             message={(failure: DuplicateTitleFailure) =>
               `A question titled "${failure.payload.title}" already exists.`
