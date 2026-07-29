@@ -1510,10 +1510,6 @@ export async function resolveLifecycleRequest<
 ): Promise<LifecycleRequest<Request, SessionValue, DbValue, EnvValue>> {
   let lifecycleRequest: unknown = request;
 
-  if (options.env !== undefined) {
-    lifecycleRequest = requestWithProperty(lifecycleRequest, 'env', options.env);
-  }
-
   if (options.sessionProvider) {
     const resolved = await options.sessionProvider(request);
     // part-3 I2 (SPEC §6.5): unwrap the additive `{ value, setCookies }` envelope so a
@@ -1583,6 +1579,14 @@ export async function resolveLifecycleRequest<
     if (clientIp !== undefined && clientIp !== '') {
       lifecycleRequest = requestWithProperty(lifecycleRequest, 'clientIp', clientIp);
     }
+  }
+
+  // Provider callbacks receive the declared RawRequest/session surface, not the handler-only env
+  // projection. Install env after providers finish so a DB provider may legitimately clone a
+  // body-bearing native Request before the first pinned carrier snapshots its stream. Pinning env
+  // first would retain the pre-tee body stream, which Request.clone() then locks (SPEC §6.6/§9.5).
+  if (options.env !== undefined) {
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'env', options.env);
   }
 
   // SPEC §6.6 C9 / §10.3: every completed lifecycle exposes one framework-owned request
