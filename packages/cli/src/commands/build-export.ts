@@ -91,12 +91,11 @@ import type {
   AccessDecision,
   AppEgressOptions,
   Guard,
-  KovoApp,
   StaticExportCompileDiagnostic,
   StaticExportResult,
   StylesheetAsset,
 } from '@kovojs/server';
-import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import type { KovoApp, KovoNeutralBuild } from '@kovojs/server/internal/build';
 import type {
   KovoBuildPreset,
   KovoBuildPresetContext,
@@ -522,7 +521,8 @@ type ExportArgParseResult =
   | { message: string; ok: false };
 
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
-type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
+type ExportStaticApp =
+  (typeof import('@kovojs/server/internal/static-export'))['exportStaticApp'];
 
 interface KovoBuildOptions {
   appModulePath: string;
@@ -559,6 +559,7 @@ interface LoadedExportAppModule {
   staticExportCompileDiagnosticsFromModule: (
     moduleValue: unknown,
   ) => StaticExportCompileDiagnostic[];
+  resolveKovoAppToken: typeof import('@kovojs/server/internal/build').resolveKovoAppToken;
 }
 
 export interface KovoExportCommandResult extends KovoCheckResult {
@@ -939,7 +940,11 @@ async function loadAndCheckBuildApp(
   const execution = loadedBuildApp.serverExecutionModule;
   const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
-  const app = appFromModule(appModule, options.appModulePath);
+  const app = appFromModule(
+    appModule,
+    options.appModulePath,
+    loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
+  );
   const buildCheck = await runKovoBuildCheckPreflight(app, {
     cache: options.cache,
     execution,
@@ -5833,7 +5838,11 @@ export async function runExportCommandStructured(
         preEvaluationStaticTrust.approvedSourceFiles,
         preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       );
-      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
+      const app = appFromModule(
+        loadedExport.appModule,
+        resolvedOptions.appModulePath,
+        loadedExport.resolveKovoAppToken,
+      );
       const realmResult = await loadedExport.exportStaticApp(app, {
         ...(currentManifestPlan.assets.length === 0 ? {} : { assets: currentManifestPlan.assets }),
         ...(resolvedOptions.onNonExportable === undefined
@@ -6132,6 +6141,7 @@ async function loadExportAppModule(
       exportStaticApp: exportStaticAppFromModule(serverModule),
       isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
       isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
+      resolveKovoAppToken: serverInternalBuildModule.resolveKovoAppToken,
       staticExportCompileDiagnosticsFromModule:
         serverModule.staticExportCompileDiagnosticsFromModule,
     };
@@ -6463,15 +6473,25 @@ function exportManifestAssetHref(file: string, base: string | undefined): string
   return `${normalizedBase}${file}`;
 }
 
-function appFromModule(module: unknown, source: string): KovoApp {
+function appFromModule(
+  module: unknown,
+  source: string,
+  resolveToken: typeof import('@kovojs/server/internal/build').resolveKovoAppToken,
+): KovoApp {
   if (typeof module === 'object' && module !== null) {
     const exports = module as { app?: unknown; default?: unknown };
     const app = exports.default ?? exports.app;
     if (isKovoApp(app)) return app;
+    try {
+      return resolveToken(app, `${source} app export`);
+    } catch {
+      // Fall through to the stable configuration diagnostic.
+    }
   }
 
   throw new KovoCommandConfigurationError(
-    `kovo expected ${source} to export a Kovo app as default or named 'app'.`,
+    `kovo expected ${source} to export the opaque Kovo app returned by app.assemble() ` +
+      `as default or named 'app'.`,
   );
 }
 

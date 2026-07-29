@@ -954,3 +954,12 @@ export function authorityNeutralAbortSignal(source: AbortSignal): AbortSignal {
   if (witnessReflectApply<boolean>(nativeAbortSignalAborted, source, [])) abort();
   return signal;
 }
+
+/** Create a framework-owned non-aborted signal for direct/internal query execution. */
+export function createAuthorityNeutralAbortSignal(): AbortSignal {
+  if (typeof nativeAbortControllerSignal !== 'function') {
+    throw new TypeError('The Web AbortSignal implementation lacks required intrinsics.');
+  }
+  const controller = new NativeAbortController();
+  return witnessReflectApply<AbortSignal>(nativeAbortControllerSignal, controller, []);
+}

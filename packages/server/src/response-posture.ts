@@ -112,16 +112,17 @@ export interface WireOutputProvenance {
 
 export type RequestLifecycleSurface = 'document' | 'endpoint' | 'mutation' | 'query' | 'system';
 
-type LifecycleCommonOptions<RawRequest, SessionValue, DbValue> = Pick<
-  RequestLifecycleOptions<RawRequest, SessionValue, DbValue>,
-  'clientIp' | 'db' | 'onError' | 'sessionProvider'
+type LifecycleCommonOptions<RawRequest, SessionValue, DbValue, EnvValue> = Pick<
+  RequestLifecycleOptions<RawRequest, SessionValue, DbValue, EnvValue>,
+  'clientIp' | 'db' | 'env' | 'onError' | 'sessionProvider'
 >;
 
 export interface DocumentLifecyclePolicy<
   RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
-> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  EnvValue = never,
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue, EnvValue> {
   onSessionSetCookie?: RequestLifecycleOptions<
     RawRequest,
     SessionValue,
@@ -134,7 +135,8 @@ export interface QueryLifecyclePolicy<
   RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
-> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  EnvValue = never,
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue, EnvValue> {
   principalPosture?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['principalPosture'];
   surface: 'query';
 }
@@ -143,7 +145,8 @@ export interface MutationLifecyclePolicy<
   RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
-> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  EnvValue = never,
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue, EnvValue> {
   csrf: { mode: 'exempt' | 'protected' };
   idempotency: { mode: 'none' | 'replay-store' };
   principalPosture?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['principalPosture'];
@@ -151,9 +154,9 @@ export interface MutationLifecyclePolicy<
   surface: 'mutation';
 }
 
-export interface EndpointLifecyclePolicy extends Pick<
-  RequestLifecycleOptions<Request, never, never>,
-  'clientIp' | 'onError'
+export interface EndpointLifecyclePolicy<EnvValue = never> extends Pick<
+  RequestLifecycleOptions<Request, never, never, EnvValue>,
+  'clientIp' | 'env' | 'onError'
 > {
   declaration?: EndpointDeclaration<string, EndpointMethod, EndpointMount>;
   stripAuthorization?: boolean;
@@ -168,11 +171,12 @@ export type ResolveKovoLifecycleRequestOptions<
   RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
+  EnvValue = never,
 > =
-  | DocumentLifecyclePolicy<RawRequest, SessionValue, DbValue>
-  | QueryLifecyclePolicy<RawRequest, SessionValue, DbValue>
-  | MutationLifecyclePolicy<RawRequest, SessionValue, DbValue>
-  | EndpointLifecyclePolicy
+  | DocumentLifecyclePolicy<RawRequest, SessionValue, DbValue, EnvValue>
+  | QueryLifecyclePolicy<RawRequest, SessionValue, DbValue, EnvValue>
+  | MutationLifecyclePolicy<RawRequest, SessionValue, DbValue, EnvValue>
+  | EndpointLifecyclePolicy<EnvValue>
   | SystemLifecyclePolicy;
 
 /** Resolve the request lifecycle from one centralized policy entrypoint. */
@@ -180,19 +184,26 @@ export async function resolveKovoLifecycleRequest<
   RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
+  EnvValue = never,
 >(
   request: RawRequest,
-  options: ResolveKovoLifecycleRequestOptions<RawRequest, SessionValue, DbValue>,
-): Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>> {
+  options: ResolveKovoLifecycleRequestOptions<RawRequest, SessionValue, DbValue, EnvValue>,
+): Promise<LifecycleRequest<RawRequest, SessionValue, DbValue, EnvValue>> {
   assertKnownLifecyclePolicy(options);
 
   switch (options.surface) {
     case 'document': {
-      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+      const lifecycleOptions: RequestLifecycleOptions<
+        RawRequest,
+        SessionValue,
+        DbValue,
+        EnvValue
+      > = {
         dbMode: 'read',
       };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.env !== undefined) lifecycleOptions.env = options.env;
       if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
       if (options.onSessionSetCookie !== undefined) {
         lifecycleOptions.onSessionSetCookie = options.onSessionSetCookie;
@@ -203,11 +214,17 @@ export async function resolveKovoLifecycleRequest<
       return resolveLifecycleRequest(request, lifecycleOptions);
     }
     case 'query': {
-      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+      const lifecycleOptions: RequestLifecycleOptions<
+        RawRequest,
+        SessionValue,
+        DbValue,
+        EnvValue
+      > = {
         dbMode: 'read',
       };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.env !== undefined) lifecycleOptions.env = options.env;
       if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
       if (options.principalPosture !== undefined) {
         lifecycleOptions.principalPosture = options.principalPosture;
@@ -218,11 +235,17 @@ export async function resolveKovoLifecycleRequest<
       return resolveLifecycleRequest(request, lifecycleOptions);
     }
     case 'mutation': {
-      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+      const lifecycleOptions: RequestLifecycleOptions<
+        RawRequest,
+        SessionValue,
+        DbValue,
+        EnvValue
+      > = {
         dbMode: 'write',
       };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.env !== undefined) lifecycleOptions.env = options.env;
       if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
       if (options.principalPosture !== undefined) {
         lifecycleOptions.principalPosture = options.principalPosture;
@@ -253,14 +276,28 @@ export async function resolveKovoLifecycleRequest<
           });
         }
       }
-      return endpointRequest as unknown as LifecycleRequest<RawRequest, SessionValue, DbValue>;
+      if (options.env !== undefined) {
+        witnessDefineProperty(endpointRequest, 'env', {
+          configurable: true,
+          enumerable: true,
+          value: options.env,
+          writable: false,
+        });
+      }
+      return endpointRequest as unknown as LifecycleRequest<
+        RawRequest,
+        SessionValue,
+        DbValue,
+        EnvValue
+      >;
     }
     case 'system': {
       assertWebRequest(request, options.surface);
       return endpointRequestWithoutSession(request) as unknown as LifecycleRequest<
         RawRequest,
         SessionValue,
-        DbValue
+        DbValue,
+        EnvValue
       >;
     }
     default:
@@ -1168,6 +1205,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
   document: stringWitnessSet([
     'clientIp',
     'db',
+    'env',
     'onError',
     'onSessionSetCookie',
     'sessionProvider',
@@ -1176,6 +1214,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
   endpoint: stringWitnessSet([
     'clientIp',
     'declaration',
+    'env',
     'onError',
     'stripAuthorization',
     'surface',
@@ -1184,6 +1223,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'clientIp',
     'csrf',
     'db',
+    'env',
     'idempotency',
     'onError',
     'principalPosture',
@@ -1194,6 +1234,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
   query: stringWitnessSet([
     'clientIp',
     'db',
+    'env',
     'onError',
     'principalPosture',
     'sessionProvider',

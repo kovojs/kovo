@@ -21,6 +21,7 @@ import {
 } from '@kovojs/core/internal/filesystem';
 import { createHmrTargetSnapshotReader } from '@kovojs/browser/internal/hmr-target-snapshot';
 import { isKovoApp } from './app-guards.js';
+import { resolveKovoAppToken } from './app-token.js';
 import { deriveClosedKovoApp } from './app-snapshot.js';
 import { runWithGeneratedLiveTargetRegistry } from './live-target-registry.js';
 import { createRequestHandler } from './app.js';
@@ -1805,8 +1806,13 @@ function readKovoAppShellViteDevApp(
 ): KovoApp {
   const app = viteDevModuleExportValue(module, exportName, `${moduleId} ${exportName} export`);
   if (isKovoApp(app)) return app;
-
-  throw new Error(`${moduleId} must export ${exportName} as a Kovo app for Vite dev.`);
+  try {
+    return resolveKovoAppToken(app, `${moduleId} ${exportName} export`);
+  } catch {
+    throw new Error(
+      `${moduleId} must export ${exportName} as the opaque Kovo app returned by app.assemble().`,
+    );
+  }
 }
 
 function readKovoAppShellViteDevNodeHandler(

@@ -141,7 +141,11 @@ export function snapshotAppQuery(
   assertUnambiguousAccessDeclaration(object, 'query declaration');
 
   const access = accessDecisionFor(object as AppQueryDeclaration & { access?: AccessDecision });
-  const record = snapshotOwnDataRecord(object, 'query declaration', omittedProperties('access'));
+  const record = snapshotOwnDataRecord(
+    object,
+    'query declaration',
+    omittedProperties('access', 'optimistic'),
+  );
   snapshotSchemaProperty(record, 'args', 'query.args');
   snapshotSchemaProperty(record, 'output', 'query.output');
   snapshotDomainArrayProperty(record, 'reads', 'query.reads');

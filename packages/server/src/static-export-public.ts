@@ -1,4 +1,4 @@
-import type { KovoApp } from './app-types.js';
+import { resolveKovoAppToken, type KovoApp } from './app-token.js';
 import { assertServerRequestSafeRuntimeRealmLocked } from './security-bootstrap.js';
 import { exportStaticApp as exportStaticAppInternal } from './static-export.js';
 import type { StaticExportOptions, StaticExportResult } from './static-export-types.js';
@@ -13,5 +13,5 @@ export function exportStaticApp(
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
   assertServerRequestSafeRuntimeRealmLocked('exportStaticApp()');
-  return exportStaticAppInternal(app, options);
+  return exportStaticAppInternal(resolveKovoAppToken(app, 'exportStaticApp()'), options);
 }

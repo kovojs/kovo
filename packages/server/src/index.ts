@@ -2,7 +2,7 @@ import './security-bootstrap.js';
 
 import { sealManagedSqlParserAuthorityRegistry } from './sql-write-allowlist.js';
 
-export { createApp } from './app.js';
+export { defineKovo } from './app-contract.js';
 export { createRequestHandler } from './request-handler.js';
 // SPEC §6.6: the model sees only a finite descriptor set; every executable tool is an exact
 // compiler-witnessed mutation and runs under the invoking request's pinned guard/RLS authority.
@@ -78,7 +78,7 @@ export type {
 } from './postgres-runtime.js';
 export { declareSecretReadCapability } from './secret-read-boundary.js';
 export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
-export { isKovoApp } from './app-guards.js';
+export { isKovoApp } from './app-token.js';
 export { publicAccess, verifiedAccess } from './access.js';
 export {
   trustedAssign,
@@ -274,14 +274,36 @@ export type {
   AppRequestRateLimitOptions,
   AppRouteRenderContext,
   AppTaskDeclaration,
-  CreateAppOptions,
   ErrorShellRenderer,
-  KovoApp,
   RequestHandler,
   ResolvedAppRateLimitOptions,
   ResolvedAppRequestLimitOptions,
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
+export type {
+  AppAssemblyOptions,
+  AppDeclarationHandle,
+  AppEndpointFactory,
+  AppLayoutFactory,
+  AppMutationFactory,
+  AppQueryFactory,
+  AppRouteFactory,
+  AppTaskFactory,
+  AuthenticatedAppRequest,
+  DefineKovoOptions,
+  EndpointHandle,
+  KeyedQueryOptimisticOptions,
+  KovoContract,
+  LayoutHandle,
+  MutationHandle,
+  QueryHandle,
+  QueryOptimisticApply,
+  QueryOptimisticBinding,
+  QueryOptimisticStatus,
+  RouteHandle,
+  TaskHandle as AppTaskHandle,
+} from './app-contract.js';
+export type { KovoApp } from './app-token.js';
 // `@kovojs/server/sqlite` names this opaque carrier in KovoSqliteDbProvider. Export the recursive
 // type without exposing its module-private mint/resolve controls (rules/api-surface.md; SPEC
 // §6.6/§10.3 C9).

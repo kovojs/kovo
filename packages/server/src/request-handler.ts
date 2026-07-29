@@ -1,5 +1,6 @@
 import { createRequestHandler as createAppRequestHandler } from './app.js';
-import type { KovoApp, RequestHandler } from './app-types.js';
+import type { RequestHandler } from './app-types.js';
+import { resolveKovoAppToken, type KovoApp } from './app-token.js';
 import { assertServerRequestSafeRuntimeRealmLocked } from './security-bootstrap.js';
 
 /**
@@ -10,10 +11,10 @@ import { assertServerRequestSafeRuntimeRealmLocked } from './security-bootstrap.
  * refuses to start without that ordering proof because classifier-reviewed globals otherwise
  * remain caller-mutable (SPEC §6.6/§9.5).
  *
- * @param app App aggregate returned by `createApp`.
+ * @param app Opaque app token returned by `app.assemble()`.
  * @returns A bootstrapped request handler suitable for the platform adapter.
  */
 export function createRequestHandler(app: KovoApp): RequestHandler {
   assertServerRequestSafeRuntimeRealmLocked();
-  return createAppRequestHandler(app);
+  return createAppRequestHandler(resolveKovoAppToken(app, 'createRequestHandler()'));
 }

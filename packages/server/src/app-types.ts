@@ -39,7 +39,8 @@ export type AppLifecycleRequest<
   RawRequest extends globalThis.Request = globalThis.Request,
   SessionValue = never,
   DbValue = never,
-> = LifecycleRequest<RawRequest, SessionValue, DbValue>;
+  EnvValue = never,
+> = LifecycleRequest<RawRequest, SessionValue, DbValue, EnvValue>;
 
 export interface AppQueryDeclaration<_AppRequest = unknown> {
   key: string;

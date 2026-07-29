@@ -27,7 +27,12 @@ import {
 import { resolveKovoLifecycleRequest } from './response-posture.js';
 import { principalPostureFromRequest } from './auth-principal.js';
 import { registeredCacheInfluenceForRoot } from './generated-cache-influence-registry.js';
-import { isNativeRequest } from './request-carrier.js';
+import {
+  createAuthorityNeutralAbortSignal,
+  isNativeAbortSignal,
+  isNativeRequest,
+} from './request-carrier.js';
+import { currentRequestDeadlineSignal } from './request-deadline.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
@@ -114,16 +119,41 @@ export interface QueryReadConfig {
  * that throws `KovoReadonlyHandleError`). A loader destructures `{ db }` and reads through it; a
  * write in a loader is a `tsc` error, a runtime throw, AND a KV433 static-gate error.
  */
-export interface QueryLoadContext<Request = unknown, Db = unknown> {
-  db?: Reader<Db>;
+type QueryContextDb<Request, Db> = [Db] extends [never]
+  ? Request extends { db: infer RequestDb }
+    ? RequestDb
+    : never
+  : Reader<Db>;
+
+type QueryContextEnv<Request, Env> = [Env] extends [never]
+  ? Request extends { env: infer RequestEnv }
+    ? Readonly<RequestEnv>
+    : never
+  : Readonly<Env>;
+
+type QueryContextDbField<Request, Db> = [QueryContextDb<Request, Db>] extends [never]
+  ? { db?: never }
+  : { db: QueryContextDb<Request, Db> };
+
+export type QueryLoadContext<
+  Request = unknown,
+  Db = never,
+  Env = never,
+> = QueryContextDbField<Request, Db> & {
   request: Request;
-}
+  signal: AbortSignal;
+} & (Request extends { session: infer Session }
+  ? { session: Session }
+  : { session?: never }) &
+  ([QueryContextEnv<Request, Env>] extends [never]
+    ? { env?: never }
+    : { env: QueryContextEnv<Request, Env> });
 
 /** @internal */
 export interface QueryEndpointRequest<
   Request = unknown,
   SessionValue = unknown,
-> extends GuardFailureResponseOptions<Request, SessionValue> {
+> extends GuardFailureResponseOptions<Request, SessionValue, unknown, unknown> {
   /**
    * Optional build token (SPEC §5.2.1 rule 2(d), §9.4): when present, stamped
    * as a `Kovo-Build` response header on every typed-read response so a plain
@@ -178,7 +208,7 @@ export interface QueryDefinition<
     call(request: Request): GuardResult | Promise<GuardResult>;
   }['call'];
   instanceKey?: QueryInstanceKey<Input>;
-  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+  load?(input: Input, context: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
   read?: QueryReadConfig;
@@ -489,7 +519,7 @@ function snapshotQueryReadConfig(value: unknown): QueryReadConfig {
  * modules call this after evaluating an exported query declaration so every downstream wire surface
  * (`/_q/<key>`, `<kovo-query name>`, `kovo-deps`, and query stores) observes the derived key.
  */
-export function assignDerivedQueryKey<Query extends QueryDefinition<string, any, any, any>>(
+export function assignDerivedQueryKey<Query extends { key: string }>(
   definition: Query,
   key: string,
 ): Query {
@@ -606,9 +636,22 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // instead of bringing their own (the breaking change). When no `db` provider is configured the
   // field is simply absent, preserving today's behavior for db-less queries.
   const threadedDb = (lifecycleRequest as { db?: unknown }).db;
+  const requestContext = lifecycleRequest as {
+    env?: unknown;
+    session?: unknown;
+    signal?: unknown;
+  };
+  const requestSignal = requestContext.signal;
   const loadContext = {
     request: lifecycleRequest,
     ...(threadedDb === undefined ? {} : { db: threadedDb }),
+    ...(requestContext.env === undefined ? {} : { env: requestContext.env }),
+    ...(requestContext.session === undefined ? {} : { session: requestContext.session }),
+    signal:
+      currentRequestDeadlineSignal() ??
+      (isNativeAbortSignal(requestSignal)
+        ? requestSignal
+        : createAuthorityNeutralAbortSignal()),
   } as QueryLoadContext<Request>;
   const value = definition.load ? await definition.load(input, loadContext) : (null as Value);
   const outputResult = parseQueryOutput(definition, value);
@@ -712,6 +755,7 @@ export const renderQueryEndpointResponse = wireEmitter(
         lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
           ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
           ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
+          ...(endpointRequest.env === undefined ? {} : { env: endpointRequest.env }),
           ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
           ...(endpointRequest.sessionProvider === undefined
             ? {}
