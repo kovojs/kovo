@@ -2503,6 +2503,35 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         {
           fileName: 'app.ts',
           source: `
+            import { verifyCertificate } from '@kovojs/verify';
+            import { route } from '@kovojs/server';
+            export const page = route('/tool-import', { render() { return verifyCertificate; } });
+          `,
+        },
+      ],
+      {
+        packages: [
+          resolved('@kovojs/server'),
+          resolved('@kovojs/verify', {
+            implementationDigest: null,
+          }),
+        ],
+      },
+    );
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]!.message).toContain(
+      'compiler-owned @kovojs/verify is unconditionally request-closed',
+    );
+    expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
+  });
+
+  it('requires exact bytes for a mixed-posture tool package', () => {
+    const result = analyze(
+      [
+        {
+          fileName: 'app.ts',
+          source: `
             import { kovoCheck } from '@kovojs/cli';
             import { route } from '@kovojs/server';
             export const page = route('/tool-import', { render() { return kovoCheck; } });
@@ -2521,16 +2550,13 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]!.message).toContain(
-      'compiler-owned @kovojs/cli is unconditionally request-closed',
+      'compiler-owned @kovojs/cli posture has no compiler-derived installed implementation digest',
     );
-    expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
+    expect(result.diagnostics[0]!.message).not.toContain('unconditionally request-closed');
   });
 
   // @kovo-security-certifies C13 request-closed-package-identity-before-digest-omission
-  it.each([
-    ['@kovojs/cli', 'kovoCheck'],
-    ['@kovojs/verify', 'verifyCertificate'],
-  ] as const)(
+  it.each([['@kovojs/verify', 'verifyCertificate']] as const)(
     'requires reviewed installed identity before applying %s digest-free request closure',
     (packageName, importedName) => {
       const files = [

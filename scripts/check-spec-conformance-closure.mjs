@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '1eb2cd6c206e4537b3bfeb42457391abcc5955ba3b401d3c04ebdca79f179f2e';
+  'e049b038da05c0005ba399243435ab2013310fb7504b6f3776c5451d1d191e81';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -85,7 +85,7 @@ const expectedDiagnosticFactorySinkDigest =
 const expectedDiagnosticEvidenceWitnessDigest =
   'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
 const expectedDiagnosticActualLayerReviewDigest =
-  '42277510287a54c68bc0f1a89c4b280990985d4f6dcfeb57bc31ba133f2866df';
+  'e703ccd93477cbf5265cc5fe456e829035bbf45e6755310cdef289e543f99cf9';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -223,6 +223,34 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
     'packages/core/src/internal/mcp-stdio.ts#literal#f2091906e301fb03121aa20a853418afcc31c978c1d8a82154ca6f5b7ae00d7c#cf6591b3a4ba873f14a91d88c778ffa00721f6204fd2134f6b3302370450ab8e',
     'Non-Kovo JSON-RPC error response with protocol-defined code and message fields.',
+  ],
+  [
+    'packages/compiler/src/app-contract-project.ts#literal#49b787e5c61160df2d4f918188617ff9a0d8567690e6372a3af41f4871c890a8#3bd02af709ad98b0775169514ef4f7a9c43820d29183eb2c0a214474051799f5',
+    'Pre-ratification D1 experiment diagnostic with a closed D1A/D1B/D1X code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#561dab988dab679ae8976d07b4a89ce087927c0b4b418b7e8fddafe71010a109#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#4a21ee13172cd2e7b41b53888310c7c03561128f254015b815a0859a8333c1e9#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#3e147ce7771064f255df44e485e97f025a13042151db0769e7b5c871668d200f#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#abe8a4690d69bb06608c2e44275d0952dfa0a1aa4558a0357b725ea008d9b2f6#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#4cccb9decd32f6a59066e67ed0b5b2d358e5d894edd41192fda0b9e8c8fe6566#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
+  ],
+  [
+    'packages/compiler/src/app-contract-resolver.ts#literal#7338cf420a48c2ebb520d96455342385d608e1f26ebefda3f33affcc7ff5a274#695fe9c37a60e7b255af288accc52169bbe2632fa20d6f2806fd7ca97d50f473',
+    'Pre-ratification D1 resolver-integrity result with a closed D1A code union; it is not a registry-backed Kovo diagnostic.',
   ],
   [
     'packages/compiler/src/gallery-merge-fixtures-oracle.tsx#literal#9e8369d836f76e77dbc76c7168ac5fb93c4d0f5f8a05670cfc7fb9212ee06b8f#f49042cb6512bbdb4bfa641c021afaefcfa27de91c2a54f0541c1fa1de3bb4a7',

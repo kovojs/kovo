@@ -171,7 +171,7 @@ export function createCompilerOwnedAppContractProject(
     const dynamicImport = firstAppProviderDynamicImport(sourceFile, context);
     if (dynamicImport) {
       diagnostics.push(
-        diagnosticAt(
+        appContractExperimentDiagnostic(
           sourceFile,
           dynamicImport,
           'D1A009',
@@ -219,7 +219,7 @@ export function createCompilerOwnedAppContractProject(
         const generated = ts.isIdentifier(unwrapExpression(hidden.call.expression));
         const code = generated ? 'D1B007' : 'D1A007';
         diagnostics.push(
-          diagnosticAt(
+          appContractExperimentDiagnostic(
             sourceFile,
             hidden.call.expression,
             code,
@@ -246,7 +246,7 @@ export function createCompilerOwnedAppContractProject(
       const target = facts[0]?.node ?? firstTopLevelCall(sourceFile)?.expression ?? sourceFile;
       return {
         diagnostics: [
-          diagnosticAt(
+          appContractExperimentDiagnostic(
             sourceFile,
             target,
             'D1X001',
@@ -264,7 +264,7 @@ export function createCompilerOwnedAppContractProject(
     const ownerKeys = unique(facts.map((fact) => fact.ownerKey));
     if (ownerKeys.length > 1) {
       diagnostics.push(
-        diagnosticAt(
+        appContractExperimentDiagnostic(
           sourceFile,
           facts[0]?.node ?? sourceFile,
           'D1A006',
@@ -435,7 +435,7 @@ function proveFactoryCall(
       expressionDerivesFromApp(expression.expression, context, new Set(), 0)
     ) {
       return {
-        diagnostic: diagnosticAt(
+        diagnostic: appContractExperimentDiagnostic(
           sourceFile,
           expression,
           'D1A008',
@@ -455,7 +455,7 @@ function proveFactoryCall(
 
   if (isTransferredAppFactoryInvocation(expression, call.arguments, context)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         sourceFile,
         expression,
         'D1A007',
@@ -480,7 +480,7 @@ function proveFactoryCall(
   );
   if (callback) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         sourceFile,
         expression,
         'D1A007',
@@ -512,7 +512,7 @@ function proveFactoryCall(
   if (functionLike && functionContainsAppDeclarationFactory(functionLike, context)) {
     const code = functionLike.parameters.length === 0 ? 'D1A007' : 'D1A001';
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         sourceFile,
         expression,
         code,
@@ -548,7 +548,7 @@ function proveFactoryCall(
       functionHasAppDerivedParameterInitializer(functionLike, context))
   ) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         sourceFile,
         expression,
         'D1A007',
@@ -570,7 +570,7 @@ function proveFactoryCall(
       expressionDerivesFromApp(variable.initializer, context, new Set(), 0)
     ) {
       return {
-        diagnostic: diagnosticAt(
+        diagnostic: appContractExperimentDiagnostic(
           sourceFile,
           expression,
           'D1A003',
@@ -586,7 +586,7 @@ function proveFactoryCall(
     if (assignment) {
       const code = assignment.destructured ? 'D1A003' : 'D1A007';
       return {
-        diagnostic: diagnosticAt(
+        diagnostic: appContractExperimentDiagnostic(
           sourceFile,
           expression,
           code,
@@ -608,7 +608,7 @@ function proveFactoryCall(
   ) {
     const bound = expressionIsBoundAppFactory(localDeclaration.initializer, context);
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         sourceFile,
         expression,
         bound ? 'D1A007' : 'D1A002',
@@ -631,7 +631,7 @@ function proveReceiver(
 ): ReceiverProof {
   if (depth > 48) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         rawExpression,
         'D1A007',
@@ -644,7 +644,7 @@ function proveReceiver(
   if (ts.isConditionalExpression(expression) || isJoiningBinaryExpression(expression)) {
     if (expressionDerivesFromApp(expression, context, new Set(), depth + 1)) {
       return {
-        diagnostic: diagnosticAt(
+        diagnostic: appContractExperimentDiagnostic(
           diagnosticSourceFile,
           expression,
           'D1A006',
@@ -664,7 +664,7 @@ function proveReceiver(
       declarationDerivesFromApp(localDeclaration, context, new Set(), depth + 1)
     ) {
       return {
-        diagnostic: diagnosticAt(
+        diagnostic: appContractExperimentDiagnostic(
           diagnosticSourceFile,
           expression,
           'D1A007',
@@ -702,7 +702,7 @@ function proveReceiver(
 
   if (expressionDerivesFromApp(expression, context, new Set(), depth + 1)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A007',
@@ -724,7 +724,7 @@ function proveVariableReceiver(
 ): ReceiverProof {
   if (seen.has(declaration)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A006',
@@ -743,7 +743,7 @@ function proveVariableReceiver(
   if (!derives && !assignment) return { kind: 'none' };
   if (!derives && assignment) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A007',
@@ -756,7 +756,7 @@ function proveVariableReceiver(
   }
   if (!variableDeclarationIsConst(declaration)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A004',
@@ -767,7 +767,7 @@ function proveVariableReceiver(
   }
   if (variableIsReassigned(declaration, context.checker, context.program)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A005',
@@ -781,7 +781,7 @@ function proveVariableReceiver(
   const initializer = unwrapExpression(declaredInitializer);
   if (ts.isConditionalExpression(initializer) || isJoiningBinaryExpression(initializer)) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         diagnosticSourceFile,
         expression,
         'D1A006',
@@ -796,7 +796,7 @@ function proveVariableReceiver(
     return proveReceiver(diagnosticSourceFile, initializer, context, nextSeen, depth + 1);
   }
   return {
-    diagnostic: diagnosticAt(
+    diagnostic: appContractExperimentDiagnostic(
       diagnosticSourceFile,
       expression,
       'D1A007',
@@ -1187,7 +1187,7 @@ function proveGeneratedAppFactory(
     )
   ) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         callSourceFile,
         expression,
         'D1B009',
@@ -1202,7 +1202,7 @@ function proveGeneratedAppFactory(
     initializer.name.text !== declaration.name.text
   ) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         callSourceFile,
         expression,
         'D1B009',
@@ -1220,7 +1220,7 @@ function proveGeneratedAppFactory(
   );
   if (receiver.kind !== 'app') {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         callSourceFile,
         expression,
         'D1B009',
@@ -1238,7 +1238,7 @@ function proveGeneratedAppFactory(
     )
   ) {
     return {
-      diagnostic: diagnosticAt(
+      diagnostic: appContractExperimentDiagnostic(
         callSourceFile,
         expression,
         'D1B009',
@@ -1400,7 +1400,7 @@ function generatedDiagnostic(
   detail: string,
 ): Extract<FactoryProof, { kind: 'diagnostic' }> {
   return {
-    diagnostic: diagnosticAt(
+    diagnostic: appContractExperimentDiagnostic(
       sourceFile,
       node,
       code,
@@ -2483,7 +2483,7 @@ function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
-function diagnosticAt(
+function appContractExperimentDiagnostic(
   sourceFile: ts.SourceFile,
   node: ts.Node,
   code: CompilerOwnedAppContractDiagnostic['code'],
