@@ -92,7 +92,14 @@ export function inheritAppLiveTargetIdentity(source: KovoApp, derived: KovoApp):
       'Production derived apps with live-target renderers require the source createApp({ appId }) identity (SPEC §6.6/§9.3).',
     );
   }
-  witnessWeakMapSet(identities, derived, identity);
+  // SPEC §6.6/§9.3: a derived aggregate keeps the same replica-stable audience, but it owns a
+  // freshly snapshotted CSRF posture. Never share the cached opaque authority from the source
+  // aggregate: its WeakMap facts are intentionally bound by exact object identity to source.csrf.
+  witnessWeakMapSet(identities, derived, {
+    appId: identity.appId,
+    localInstance: identity.localInstance,
+    production: identity.production,
+  });
 }
 
 /**

@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { encodeFrameworkLiveTargetHeader } from '@kovojs/core/internal/wire-input-grammar';
 
 import { createApp } from './app.js';
+import { deriveClosedKovoApp } from './app-snapshot.js';
 import { createMemoryVersionedClientModuleStore } from './client-modules.js';
 import { domain } from './domain.js';
-import { appLiveTargetAttestationAudience } from './live-target-app-identity.js';
+import {
+  appLiveTargetAttestationAudience,
+  appLiveTargetAttestationAuthority,
+} from './live-target-app-identity.js';
 import { createLiveTargetAttestation as createAppLiveTargetAttestation } from './internal/wire.js';
 import {
   registerGeneratedLiveTargetRenderer,
@@ -27,6 +31,7 @@ const appIds = {
   oneShotSecond: '4565808c-42d7-410e-a2ce-dbd14fa7df91',
   rendererOwner: '0763f09d-3b43-43cb-8d8b-dd7bc7841de1',
   rendererless: 'ee443c98-19f2-4b57-b07c-504990f70b74',
+  snapshotDerived: '975b30e8-c147-4d6e-a30a-af92d49c923c',
   tenantA: '6cbfeea5-425b-46c6-b482-0895b74cfa20',
   tenantB: '8da1382e-a034-4a2b-9ef5-595c2cc20348',
 } as const;
@@ -195,6 +200,74 @@ describe('live-target app authority isolation', () => {
     expect(appLiveTargetAttestationAudience(rendererless)).not.toBe(
       appLiveTargetAttestationAudience(rendererOwner),
     );
+  });
+
+  it('reissues authority for each derived aggregate CSRF snapshot without changing its audience', async () => {
+    const update = mutation('derived/update', {
+      csrf: false,
+      csrfJustification: 'authority-isolation regression uses an internal mutation',
+      handler: () => ({}),
+      input: s.object({}),
+    });
+    const render = vi.fn(() => '<derived>updated</derived>');
+    const renderer: LiveTargetRenderer = {
+      component: 'derived/card',
+      mutationKeys: [update.key],
+      render,
+    };
+    const source = runWithGeneratedLiveTargetRegistry(() => {
+      registerGeneratedLiveTargetRenderer(renderer);
+      return createApp({
+        appId: appIds.snapshotDerived,
+        csrf: {
+          secret: 'derived-aggregate-csrf-secret-32-bytes',
+          sessionId: () => 'derived-session',
+        },
+      });
+    });
+    const first = deriveClosedKovoApp(source, {});
+    const second = deriveClosedKovoApp(source, {});
+
+    const firstAuthority = appLiveTargetAttestationAuthority(first);
+    const secondAuthority = appLiveTargetAttestationAuthority(second);
+    expect(firstAuthority).not.toBe(secondAuthority);
+    expect(appLiveTargetAttestationAudience(first)).toBe(appLiveTargetAttestationAudience(second));
+
+    const request = {};
+    const descriptor = { component: renderer.component, props: {}, target: 'derived-target' };
+    const attestation = createLiveTargetAttestation(descriptor, {
+      buildToken: appLiveTargetAttestationAudience(second),
+      csrf: second.csrf,
+      request,
+    });
+    const headers = {
+      'Kovo-Fragment': 'true',
+      'Kovo-Live-Targets': encodeFrameworkLiveTargetHeader([
+        { ...descriptor, attestation, propsSource: '{}' },
+      ]),
+    };
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: second.clientModules.buildToken(),
+        csrf: second.csrf,
+        headers,
+        liveTargetAudience: appLiveTargetAttestationAudience(second),
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toHaveLength(1);
+    const response = await renderMutationEndpointResponse(update, {
+      buildToken: second.clientModules.buildToken(),
+      csrf: second.csrf,
+      headers,
+      liveTargetAttestationAuthority: secondAuthority,
+      liveTargetAudience: appLiveTargetAttestationAudience(second),
+      liveTargetRenderers: second.liveTargetRenderers,
+      rawInput: {},
+      request,
+    });
+
+    expect(response.status).toBe(200);
   });
 
   it('never falls back from an endpoint to a generated registry outside its owner scope', async () => {
