@@ -1548,6 +1548,7 @@ interface DrizzleOptimisticCommandInput {
   entries: readonly {
     domains?: readonly string[];
     query: string;
+    queryImport?: { name: string; path: string };
     shape: unknown;
     status?: DrizzleOptimisticEntryStatus;
   }[];
@@ -1663,6 +1664,9 @@ async function runCompileDrizzleOptimisticCommand(
     constName: input.constName,
     entries: derivedEntries,
     formImport: input.formImport,
+    queryValueImports: input.entries.flatMap((entry) =>
+      entry.queryImport === undefined ? [] : [{ ...entry.queryImport, query: entry.query }],
+    ),
     ...(input.queue === undefined ? {} : { queue: input.queue }),
     ...(overrideQueries.length === 0 ? {} : { overrides: overrideQueries }),
   });

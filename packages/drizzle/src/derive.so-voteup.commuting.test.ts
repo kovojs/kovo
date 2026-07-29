@@ -18,14 +18,13 @@ import { deriveOptimistic } from './derive.js';
 //
 // i.e. predicting the patch on the client's view of the data equals re-deriving that view
 // after the server applies the write. A transform that fails this is worse than no derivation
-// (it predicts a value the server then contradicts), so EACH derived (mutation × query) pair the
-// generator folds into `OptimisticDerivationSets` is gated here over a generated state sweep.
+// (it predicts a value the server then contradicts), so each derived (mutation × query) pair is
+// gated here over a generated state sweep.
 //
 // The `effects` + `shapes` below are the REAL output of the §10.5 extractor over
 // `examples/stackoverflow/src` (Stage-1 `extractSymbolicEffectsFromProject`, Stage-2
-// `extractAlgebraicShapesFromProject`); regenerate via the example's `generate-registry` if the
-// example source changes. The derived `program` is re-derived here (not hand-pinned) so this
-// suite proves the live deriver — not a stale snapshot.
+// `extractAlgebraicShapesFromProject`). The derived `program` is re-derived here (not hand-pinned)
+// so this suite proves the live deriver — not a stale global registry snapshot.
 
 const SID = 'demo-session';
 const SESSION = { id: SID, user: { id: 'demo-viewer' } } as const;

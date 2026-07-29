@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite-plus';
 
-import { exampleDrizzleRegistryPlugin } from './examples/vite-drizzle-registry.js';
 import {
   commerceRegistryFacts,
   crmRegistryFacts,
@@ -57,25 +56,9 @@ export default defineConfig({
       registryFacts: commerceRegistryFacts,
     }),
     exampleKovoCompilerPlugin({ include: ['examples/reference/src/auth.ts'] }),
-    exampleDrizzleRegistryPlugin({
-      appEntries: ['examples/crm/src/app-shell.ts', 'examples/crm/src/interactive-app.tsx'],
-      sourceRoot: 'examples/crm/src',
-    }),
     exampleKovoCompilerPlugin({
       include: ['examples/crm/src/components', 'examples/crm/src/mutations.ts'],
       registryFacts: crmRegistryFacts,
-    }),
-    exampleDrizzleRegistryPlugin({
-      appEntries: [
-        'examples/stackoverflow/src/app-shell.ts',
-        'examples/stackoverflow/src/interactive-app.tsx',
-      ],
-      mutationTouchGraphKeys: {
-        'mutations/post-answer-mutation': 'postAnswer',
-        'mutations/post-question-mutation': 'postQuestion',
-        'mutations/vote-up-mutation': 'voteUp',
-      },
-      sourceRoot: 'examples/stackoverflow/src',
     }),
     exampleKovoCompilerPlugin({
       include: [
@@ -257,17 +240,10 @@ export default defineConfig({
         ],
       },
       'typecheck-examples': {
-        // SPEC.md §6.1/§10.6/§11.1 (capability-gaps §3): generate the StackOverflow example's
-        // `@kovojs/core` registry augmentation (QueryRegistry + InvalidationSets) into its gitignored
-        // `src/generated/` artifact BEFORE `tsc` runs, so KV310 / `OptimisticFor` exhaustiveness is
-        // enforced from a generated graph (not a hand-authored `declare module`). Plain `tsc` does
-        // not run the compiler/Drizzle Vite plugins, so this generate step is ordered explicitly here.
         command:
-          'node examples/stackoverflow/scripts/generate-registry.mjs && tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p examples/stackoverflow/tsconfig.json --noEmit && tsc -p examples/crm/tsconfig.json --noEmit && tsc -p examples/reference/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/better-auth-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
+          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p examples/stackoverflow/tsconfig.json --noEmit && tsc -p examples/crm/tsconfig.json --noEmit && tsc -p examples/reference/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/better-auth-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
         input: [
           { auto: true },
-          { pattern: 'examples/stackoverflow/scripts/**', base: 'workspace' },
-          { pattern: 'examples/drizzle-registry-runtime.ts', base: 'workspace' },
           { pattern: 'examples/commerce/package.json', base: 'workspace' },
           { pattern: 'examples/commerce/tsconfig.json', base: 'workspace' },
           { pattern: 'examples/commerce/vite.config.ts', base: 'workspace' },

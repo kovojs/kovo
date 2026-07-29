@@ -11,11 +11,7 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';
-import {
-  lowerTransform,
-  serializeCoreRegistryModule,
-  serializeDerivedOptimistic,
-} from './derive-codegen.js';
+import { lowerTransform, serializeDerivedOptimistic } from './derive-codegen.js';
 
 // SPEC.md §10.4 Phase 3 — the generated module is committed, reviewable, and
 // overridable. These tests pin the DO-NOT-EDIT header, the `satisfies
@@ -43,6 +39,10 @@ const pushProgram: PatchProgram = {
   query: 'orderHistory',
 };
 
+function queryValueImport(query: string, name = query, path = '../../queries.js') {
+  return [{ name, path, query }] as const;
+}
+
 describe('serializeDerivedOptimistic', () => {
   it('emits a DO-NOT-EDIT header and a satisfies clause when complete', () => {
     const source = serializeDerivedOptimistic({
@@ -50,6 +50,7 @@ describe('serializeDerivedOptimistic', () => {
       constName: 'cartAddDerivedOptimistic',
       entries: [{ program: cartProgram, query: 'cart' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('cart'),
       queue: 'cart',
     });
 
@@ -60,12 +61,18 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
     expect(source).toContain('cart: (draft, $input) => {');
+    expect(source).toContain("import type { QueryResult } from '@kovojs/server';");
+    expect(source).toContain("cart: QueryResult<typeof import('../../queries.js').cart>;");
     // C5 (SPEC.md §10.5:1172) — inc coerces base + increment via the shared `n(...)`
     // helper (identical to the interpreter's `asNumber`) so string-serialized
     // numeric/decimal/bigint columns sum rather than string-concatenate.
     expect(source).toContain('const n = (v) => (typeof v === "number" ? v : Number(v ?? 0));');
     expect(source).toContain('draft.count = n(draft.count) + n($input.quantity);');
-    expect(source).toContain('} satisfies OptimisticFor<typeof addToCartForm>;');
+    expect(source).toContain(
+      '} satisfies OptimisticFor<typeof addToCartForm, {\n' +
+        "  cart: QueryResult<typeof import('../../queries.js').cart>;\n" +
+        '}>;',
+    );
   });
 
   it('imports tempId only when a push uses a tempId placeholder', () => {
@@ -74,6 +81,7 @@ describe('serializeDerivedOptimistic', () => {
       constName: 'plan',
       entries: [{ program: pushProgram, query: 'orderHistory' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('orderHistory'),
     });
     expect(source).toContain(
       "import { tempId, type OptimisticFor } from '@kovojs/browser/generated';",
@@ -82,6 +90,38 @@ describe('serializeDerivedOptimistic', () => {
       'draft.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );
     expect(source).not.toContain('now()');
+  });
+
+  it('fails closed when a complete plan lacks an exact query identity map', () => {
+    const complete = {
+      complete: true,
+      constName: 'plan',
+      entries: [{ program: cartProgram, query: 'cart' }],
+      formImport: { name: 'addToCartForm', path: '../../app.js' },
+    } as const;
+
+    expect(() => serializeDerivedOptimistic(complete)).toThrow(/missing: cart; extra: none/u);
+    expect(() =>
+      serializeDerivedOptimistic({
+        ...complete,
+        queryValueImports: [
+          { name: 'cart', path: '../../queries.js', query: 'cart' },
+          { name: 'cartAgain', path: '../../queries.js', query: 'cart' },
+        ],
+      }),
+    ).toThrow(/Duplicate generated optimistic query identity: cart/u);
+    expect(() =>
+      serializeDerivedOptimistic({
+        ...complete,
+        queryValueImports: [
+          {
+            name: 'cart; export const owned = true',
+            path: '../../queries.js',
+            query: 'cart',
+          },
+        ],
+      }),
+    ).toThrow(/KV451/u);
   });
 
   it('confines hostile queue/import/comment data and rejects hostile emitted identifiers', () => {
@@ -200,6 +240,7 @@ describe('serializeDerivedOptimistic', () => {
           },
         ],
         formImport: { name: 'addLineForm', path: './form.js' },
+        queryValueImports: queryValueImport('orderHistory', 'orderHistory', './queries.js'),
       });
 
       writeFileSync(
@@ -214,10 +255,9 @@ describe('serializeDerivedOptimistic', () => {
               noEmit: true,
               noImplicitAny: false,
               paths: {
-                '@kovojs/browser/generated': [
-                  join(process.cwd(), 'packages/browser/src/generated.ts'),
-                ],
+                '@kovojs/browser/generated': ['./src/browser-generated.ts'],
                 '@kovojs/core': [join(process.cwd(), 'packages/core/src/index.ts')],
+                '@kovojs/server': ['./src/server.ts'],
               },
               strict: true,
               target: 'ES2022',
@@ -232,6 +272,31 @@ describe('serializeDerivedOptimistic', () => {
         'utf8',
       );
       writeFileSync(
+        join(root, 'src', 'browser-generated.ts'),
+        [
+          "import type { Form } from '@kovojs/core';",
+          '',
+          'type FormInput<Definition> =',
+          '  Definition extends Form<string, infer Input, unknown> ? Input : never;',
+          '',
+          'export type OptimisticFor<',
+          '  Definition,',
+          '  QueryValues extends Record<string, unknown>,',
+          '> = {',
+          '  transforms: {',
+          '    [Query in keyof QueryValues]:',
+          '      | ((draft: QueryValues[Query], input: FormInput<Definition>) => void)',
+          "      | 'await-fragment';",
+          '  };',
+          '};',
+          '',
+          'export declare function now(): number;',
+          'export declare function tempId(): string;',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
         join(root, 'src', 'form.ts'),
         [
           "import type { Form } from '@kovojs/core';",
@@ -242,18 +307,27 @@ describe('serializeDerivedOptimistic', () => {
         'utf8',
       );
       writeFileSync(
-        join(root, 'src', 'registry.d.ts'),
+        join(root, 'src', 'queries.ts'),
         [
-          "import type { JsonValue } from '@kovojs/core';",
+          'export declare const orderHistory: {',
+          '  load: () => {',
+          '    items: Array<{',
+          '      createdAt: number;',
+          '      id: string;',
+          '      productId: string;',
+          '      total: number;',
+          '    }>;',
+          '  };',
+          '};',
           '',
-          "declare module '@kovojs/core' {",
-          '  interface QueryRegistry {',
-          '    orderHistory: { items: JsonValue[] };',
-          '  }',
-          '  interface InvalidationSets {',
-          "    addLine: 'orderHistory';",
-          '  }',
-          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src', 'server.ts'),
+        [
+          'export type QueryResult<Query> =',
+          '  Query extends { load: (...args: never[]) => infer Value } ? Awaited<Value> : never;',
           '',
         ].join('\n'),
         'utf8',
@@ -365,6 +439,7 @@ describe('serializeDerivedOptimistic', () => {
       constName: 'questionVoteDerivedOptimistic',
       entries: [{ program: result.program, query: 'questionList' }],
       formImport: { name: 'voteQuestionForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('questionList'),
     });
 
     expect(source).toContain('entry.id === $input.targetId');
@@ -764,89 +839,5 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
       );
       expect(generated).toEqual(interpreted);
     }
-  });
-});
-
-// SPEC.md §6.1/§10.6/§11.1 — the generated `@kovojs/core` registry augmentation drives KV310 /
-// `OptimisticFor` exhaustiveness without a hand-authored `declare module` (capability-gaps §3).
-describe('serializeCoreRegistryModule', () => {
-  it('confines a hostile invalidation key to one parse-tree string leaf (C13)', () => {
-    // Plan 3 §2.3 red oracle: this reaches the raw union interpolation that was at
-    // derive-codegen.ts:179 when the plan was written. A string search is insufficient here;
-    // the security claim is that attacker-controlled data cannot become sibling TS syntax.
-    const hostile = "cart'; injected: 'owned";
-    const source = serializeCoreRegistryModule({
-      invalidations: { voteUp: [hostile] },
-      queries: [{ name: 'cart', type: 'unknown' }],
-    });
-    const parsed = ts.createSourceFile(
-      'generated/core-registry.d.ts',
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
-    const hostileLeaves: ts.StringLiteral[] = [];
-    const visit = (node: ts.Node): void => {
-      if (ts.isStringLiteral(node) && node.text === hostile) hostileLeaves.push(node);
-      ts.forEachChild(node, visit);
-    };
-    visit(parsed);
-
-    expect(parsed.parseDiagnostics).toEqual([]);
-    expect(hostileLeaves).toHaveLength(1);
-    expect(hostileLeaves[0]?.getChildCount(parsed)).toBe(0);
-    expect(
-      parsed.statements.some(
-        (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === 'injected',
-      ),
-    ).toBe(false);
-  });
-
-  it('emits a module-augmentation .d.ts with sorted QueryRegistry + InvalidationSets', () => {
-    const source = serializeCoreRegistryModule({
-      headerImports: [`import type { QueryResult } from '@kovojs/server';`],
-      invalidations: {
-        voteUp: ['questionScore', 'questionList', 'questionDetail'],
-        postQuestion: ['questionList', 'questionDetail'],
-      },
-      queries: [
-        {
-          name: 'questionScore',
-          type: `QueryResult<typeof import('../queries.js').questionScore>`,
-        },
-        { name: 'questionList', type: `QueryResult<typeof import('../queries.js').questionList>` },
-      ],
-    });
-
-    // Top-level import makes the file a module, so `declare module` is a merging augmentation.
-    expect(source).toContain(`import type { QueryResult } from '@kovojs/server';`);
-    expect(source).toContain(`declare module '@kovojs/core' {`);
-    expect(source).toContain(`interface QueryRegistry {`);
-    expect(source).toContain(
-      `questionList: QueryResult<typeof import('../queries.js').questionList>;`,
-    );
-    // InvalidationSets entries are mutation→query unions, deterministically sorted.
-    expect(source).toContain(`voteUp: 'questionDetail' | 'questionList' | 'questionScore';`);
-    expect(source).toContain(`postQuestion: 'questionDetail' | 'questionList';`);
-    // Keys are emitted in sorted order (postQuestion before voteUp; questionList before score).
-    expect(source.indexOf('postQuestion:')).toBeLessThan(source.indexOf('voteUp:'));
-    expect(source.indexOf('questionList:')).toBeLessThan(source.indexOf('questionScore:'));
-  });
-
-  it('emits an empty OptimisticDerivationSets when no derivations are supplied', () => {
-    const source = serializeCoreRegistryModule({
-      invalidations: { voteUp: ['questionList'] },
-      queries: [{ name: 'questionList', type: 'unknown' }],
-    });
-    expect(source).toMatch(/interface OptimisticDerivationSets \{\s*\}/);
-  });
-
-  it('quotes registry keys that are not valid identifiers', () => {
-    const source = serializeCoreRegistryModule({
-      invalidations: { 'cart/add': ['cart'] },
-      queries: [{ name: 'cart', type: 'unknown' }],
-    });
-    expect(source).toContain(`"cart/add": 'cart';`);
   });
 });

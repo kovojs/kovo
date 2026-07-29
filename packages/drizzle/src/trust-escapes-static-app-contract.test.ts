@@ -134,7 +134,7 @@ describe('defineKovo request-authority provenance', () => {
             kovo((columns) => ({
               authzPolicy: sql\`current_setting('kovo.principal', true) <> ''\`,
               domain: contact,
-              key: (table) => table.id,
+              key: columns.id,
             })),
           );
         `,
@@ -187,7 +187,7 @@ describe('defineKovo request-authority provenance', () => {
             kovo((columns) => ({
               authzPolicy: sql\`\${policy}\`,
               domain: contact,
-              key: (table) => table.id,
+              key: columns.id,
             })),
           );
           const app = { mutation(definition) { return definition; } };

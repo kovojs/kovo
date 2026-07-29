@@ -2,11 +2,7 @@ import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 import { fileURLToPath } from 'node:url';
 
-import {
-  crmRegistryFacts,
-  exampleDrizzleRegistryPlugin,
-  exampleKovoCompilerPlugin,
-} from '../vite-kovo-compiler.js';
+import { crmRegistryFacts, exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
 
 const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
@@ -35,10 +31,6 @@ export const crmViteConfig = defineConfig({
   // KOVO_DEMO_MULTITENANT still only controls the singleton app-shell plugin because
   // scripts/demo-serve.mjs mounts its own per-session request dispatch.
   plugins: [
-    exampleDrizzleRegistryPlugin({
-      appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
-      sourceRoot: 'src',
-    }),
     ...(process.env.KOVO_DEMO_MULTITENANT
       ? [exampleKovoCompilerPlugin({ include: ['src'], registryFacts: crmRegistryFacts })]
       : [kovo({ app: '/src/app-shell.ts' })]),

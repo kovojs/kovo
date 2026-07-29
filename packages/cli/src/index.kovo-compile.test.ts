@@ -1253,6 +1253,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
             entries: [
               {
                 query: 'cart',
+                queryImport: { name: 'cart', path: '../../queries.js' },
                 shape: {
                   fields: {
                     count: {
@@ -1526,7 +1527,13 @@ export const addToCart = mutation({
           {
             constName: 'refreshCatalogOptimistic',
             effects: [],
-            entries: [{ query: 'productStats', shape: { query: 'productStats' } }],
+            entries: [
+              {
+                query: 'productStats',
+                queryImport: { name: 'productStats', path: '../../queries.js' },
+                shape: { query: 'productStats' },
+              },
+            ],
             formImport: { name: 'refreshCatalogForm', path: '../../app.js' },
             materializedViewRefreshFacts: [
               {

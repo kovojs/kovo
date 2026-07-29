@@ -2,11 +2,7 @@ import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 import { fileURLToPath } from 'node:url';
 
-import {
-  exampleDrizzleRegistryPlugin,
-  exampleKovoCompilerPlugin,
-  stackOverflowRegistryFacts,
-} from '../vite-kovo-compiler.js';
+import { exampleKovoCompilerPlugin, stackOverflowRegistryFacts } from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
 
 const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
@@ -35,15 +31,6 @@ export const soViteConfig = defineConfig({
   // compiler. KOVO_DEMO_MULTITENANT still only controls the singleton app-shell
   // plugin because scripts/demo-serve.mjs mounts its own per-session request dispatch.
   plugins: [
-    exampleDrizzleRegistryPlugin({
-      appEntries: ['src/app-shell.ts', 'src/interactive-app.tsx'],
-      mutationTouchGraphKeys: {
-        'mutations/post-answer-mutation': 'mutations/post-answer-mutation',
-        'mutations/post-question-mutation': 'mutations/post-question-mutation',
-        'mutations/vote-up-mutation': 'mutations/vote-up-mutation',
-      },
-      sourceRoot: 'src',
-    }),
     ...(process.env.KOVO_DEMO_MULTITENANT
       ? [
           exampleKovoCompilerPlugin({

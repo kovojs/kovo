@@ -12,6 +12,10 @@ import { deriveOptimistic } from './derive.js';
 import { serializeDerivedOptimistic } from './derive-codegen.js';
 import { pgDatabaseTypes } from './test-helpers.js';
 
+function queryValueImport(query: string) {
+  return [{ name: query, path: '../../queries.js', query }] as const;
+}
+
 describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
   it('derives exported object-form query names for algebraic shapes', () => {
     const files = [
@@ -286,6 +290,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'answerPostDerivedOptimistic',
       entries: [{ program: postAnswerResult.program, query: 'questionList' }],
       formImport: { name: 'postAnswerForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('questionList'),
     });
     expect(postAnswerSource).toContain('entry.id === $input.targetId');
     expect(postAnswerSource).toContain('target.answerCount = (n(target.answerCount) + n(1));');
@@ -298,6 +303,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'questionVoteDerivedOptimistic',
       entries: [{ program: result.program, query: 'questionList' }],
       formImport: { name: 'voteQuestionForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('questionList'),
     });
     expect(source).toContain('entry.id === $input.targetId');
     expect(source).toContain('target.score = (n(target.score) + n(1));');
@@ -310,6 +316,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'questionScoreDerivedOptimistic',
       entries: [{ program: scoreResult.program, query: 'questionScore' }],
       formImport: { name: 'voteQuestionForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('questionScore'),
     });
     expect(scoreSource).toContain('entry.id === $input.targetId');
     expect(scoreSource).toContain('target.score = (n(target.score) + n(1));');
@@ -441,6 +448,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'ticketCloseDerivedOptimistic',
       entries: [{ program: result.program, query: 'openTickets' }],
       formImport: { name: 'closeTicketForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('openTickets'),
     });
     expect(source).toContain('entry.id === $input.targetId');
     expect(source).not.toContain('tenantId');
@@ -522,6 +530,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'ticketCloseDerivedOptimistic',
       entries: [{ program: result.program, query: 'openTickets' }],
       formImport: { name: 'closeTicketForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('openTickets'),
     });
     const publicQueryKey = queryFact.query;
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
@@ -622,6 +631,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'documentArchiveDerivedOptimistic',
       entries: [{ program: result.program, query: 'openDocuments' }],
       formImport: { name: 'archiveDocumentForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('openDocuments'),
     });
     const publicQueryKey = queryFact.query;
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
@@ -806,6 +816,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'archiveCaseFileDerivedOptimistic',
       entries: [{ program: result.program, query: 'activeCaseFiles' }],
       formImport: { name: 'archiveCaseFileForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('activeCaseFiles'),
     });
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
       (match) => match[1] ?? '',
@@ -1079,6 +1090,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'archiveCaseDerivedOptimistic',
       entries: [{ program: archiveResult.program, query: 'openCases' }],
       formImport: { name: 'archiveCaseForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('openCases'),
     });
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
       (match) => match[1] ?? '',
@@ -1288,6 +1300,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'quantityUpdateDerivedOptimistic',
       entries: [{ program: updateResult.program, query: 'cartSummary' }],
       formImport: { name: 'updateQuantityForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('cartSummary'),
     });
     expect(updateSource).toContain('entry.productId === $input.productId');
     expect(updateSource).toContain('target.quantity = $input.nextQuantity;');
@@ -1303,6 +1316,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'lineRemoveDerivedOptimistic',
       entries: [{ program: removeResult.program, query: 'cartSummary' }],
       formImport: { name: 'removeLineForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('cartSummary'),
     });
     expect(removeSource).toContain('entry.productId === $input.productId');
     expect(removeSource).toContain('draft.itemCount = draft.items.length;');
@@ -1424,6 +1438,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'closeTaskDerivedOptimistic',
       entries: [{ program: closeResult.program, query: 'openTasks' }],
       formImport: { name: 'closeTaskForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('openTasks'),
     });
     expect(exitSource).toContain('entry.id === $input.id');
     expect(exitSource).toContain('draft.items.splice(index, 1);');
@@ -1594,6 +1609,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       constName: 'invoiceMarkPaidDerivedOptimistic',
       entries: [{ program: summarizedResult.program, query: 'invoiceList' }],
       formImport: { name: 'markPaidForm', path: '../../app.js' },
+      queryValueImports: queryValueImport('invoiceList'),
     });
     expect(source).toContain('entry.id === $input.targetId');
     expect(source).toContain('target.status = "paid";');

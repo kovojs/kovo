@@ -3,7 +3,6 @@ import { Project, SyntaxKind } from 'ts-morph';
 
 import {
   analyzeSqlSafetyFromProject,
-  createProjectExtraction,
   expressionResolvesToFrameworkExport,
   extractMassAssignmentFromProject,
   extractOwnerAuditFromProject,
@@ -11,7 +10,6 @@ import {
   extractTouchGraphFromProject,
   frameworkExport,
   frameworkIdentityExpressionKindRows,
-  isDrizzleDatabaseType,
   type SourceFileInput,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
@@ -25,18 +23,9 @@ const DB = pgDatabaseTypes([
 const bridgeFile: SourceFileInput = {
   fileName: 'framework.ts',
   source: [
-    'export { domain as makeDomain, mutation as mutate, query as read, write as writer } from "@kovojs/server"; export { task as runTask } from "@kovojs/server/tasks";',
-    'export type { Reader as AppReader } from "@kovojs/server";',
+    'export { domain as makeDomain, mutation as mutate, query as read } from "@kovojs/server";',
+    'export { task as runTask } from "@kovojs/server/tasks";',
     'export { kovo as annotate, sql as ksql, trustedSql as trust } from "@kovojs/drizzle";',
-  ].join('\n'),
-};
-
-const kovoServerReaderTypes: SourceFileInput = {
-  fileName: 'kovo-server-reader-types.d.ts',
-  source: [
-    'declare module "@kovojs/server" {',
-    '  export type Reader<Db> = Omit<Db, "insert" | "update" | "delete" | "execute" | "run" | "batch">;',
-    '}',
   ].join('\n'),
 };
 
@@ -50,7 +39,7 @@ const schemaViaBridge: SourceFileInput = {
     '  id: text("id").primaryKey(),',
     '  ownerId: text("owner_id").notNull(),',
     '  role: text("role").notNull(),',
-    '}, annotate({ domain: "account", key: "id", owner: "ownerId", governed: ["role"] }));',
+    '}, annotate((columns) => ({ domain: "account", key: columns.id, owner: columns.ownerId, governed: [columns.role] })));',
   ].join('\n'),
 };
 
@@ -61,13 +50,12 @@ const usageViaBridge: SourceFileInput = {
     'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
     'import * as framework from "./framework";',
     'import { accounts } from "./schema";',
-    'const { makeDomain: domainAlias, writer: writeAlias, read: queryAlias, mutate: mutationAlias, ksql: sqlAlias, trust: trustedAlias } = framework;',
+    'const { makeDomain: domainAlias, read: queryAlias, mutate: mutationAlias, ksql: sqlAlias, trust: trustedAlias } = framework;',
     '',
-    'export const account = domainAlias({',
-    '  promote: writeAlias(async (db: PgAsyncDatabase<any, any>, input: { id: string; role: string }) => {',
-    '    await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
-    '  }),',
-    '});',
+    'export const account = domainAlias("account");',
+    'export async function promote(db: PgAsyncDatabase<any, any>, input: { id: string; role: string }) {',
+    '  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
+    '}',
     '',
     'export const accountQuery = queryAlias("account/reexported", {',
     '  load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
@@ -195,8 +183,8 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     const files = [DB, bridgeFile, schemaViaBridge, usageViaBridge];
 
     const graph = extractTouchGraphFromProject(withPgDatabaseTypes({ files }));
-    expect(Object.keys(graph).sort()).toEqual(['account.promote', 'save-account']);
-    expect(graph['account.promote']?.touches).toEqual([
+    expect(Object.keys(graph).sort()).toEqual(['promote', 'save-account']);
+    expect(graph.promote?.touches).toEqual([
       expect.objectContaining({ domain: 'account', keys: 'arg:id', via: 'accounts' }),
     ]);
     expect(graph['save-account']?.touches).toEqual([
@@ -222,7 +210,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     expect(massAssignmentFacts).toHaveLength(2);
     expect(massAssignmentFacts).toEqual(
       expect.arrayContaining([
-        { column: 'role', name: 'account.promote', provenance: 'input', via: 'set' },
+        { column: 'role', name: 'promote', provenance: 'input', via: 'set' },
       ]),
     );
     expect(massAssignmentFacts.every((fact) => fact.provenance === 'input')).toBe(true);
@@ -315,71 +303,6 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
         frameworkExport('drizzle-orm', 'sql'),
       ),
     ).toBe(false);
-  });
-
-  it('recognizes re-exported Reader type identity for Drizzle receiver proof', () => {
-    const extraction = createProjectExtraction({
-      files: [
-        DB,
-        kovoServerReaderTypes,
-        bridgeFile,
-        {
-          fileName: 'reader.ts',
-          source: [
-            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-            'import type { AppReader } from "./framework";',
-            'type AppDb = PgAsyncDatabase<any, any>;',
-            'declare const db: AppReader<AppDb>;',
-          ].join('\n'),
-        },
-      ],
-    });
-
-    try {
-      const sourceFile = extraction.sourceFiles.find((file) => file.getBaseName() === 'reader.ts');
-      expect(sourceFile).toBeDefined();
-      const type = sourceFile!.getVariableDeclarationOrThrow('db').getType();
-      expect(isDrizzleDatabaseType(type)).toBe(true);
-    } finally {
-      extraction.dispose();
-    }
-  });
-
-  it('binds source-resolved Reader proof to the exact package import symbol', () => {
-    const extraction = createProjectExtraction({
-      files: [
-        DB,
-        bridgeFile,
-        {
-          fileName: 'reader-source.ts',
-          source: [
-            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-            'import type { Reader as GenuineReader } from "@kovojs/server";',
-            'import type { AppReader } from "./framework";',
-            'type AppDb = PgAsyncDatabase<any, any>;',
-            'type Reader<Db> = Pick<Db, Extract<keyof Db, "select">> & { readonly local: true };',
-            'declare const direct: GenuineReader<AppDb>;',
-            'declare const reexported: AppReader<AppDb>;',
-            'declare const lookalike: Reader<AppDb>;',
-          ].join('\n'),
-        },
-      ],
-    });
-
-    try {
-      const sourceFile = extraction.sourceFiles.find(
-        (file) => file.getBaseName() === 'reader-source.ts',
-      );
-      expect(sourceFile).toBeDefined();
-      for (const name of ['direct', 'reexported']) {
-        const declaration = sourceFile!.getVariableDeclarationOrThrow(name);
-        expect(isDrizzleDatabaseType(declaration.getType(), declaration.getNameNode())).toBe(true);
-      }
-      const lookalike = sourceFile!.getVariableDeclarationOrThrow('lookalike');
-      expect(isDrizzleDatabaseType(lookalike.getType(), lookalike.getNameNode())).toBe(false);
-    } finally {
-      extraction.dispose();
-    }
   });
 
   it('resolves task through re-export and destructuring without trusting local shadows', () => {

@@ -18,6 +18,16 @@ export interface DerivedTransformEntry {
   query: string;
 }
 
+/** @internal Exact query definition used to derive one generated optimistic value type. */
+export interface DerivedQueryValueImport {
+  /** Exported query binding name. */
+  name: string;
+  /** Static module specifier for the query binding. */
+  path: string;
+  /** Query key matched by the generated transform. */
+  query: string;
+}
+
 /** @internal */
 export interface SerializeDerivedOptimisticOptions {
   /** Exported binding name, e.g. `cartAddDerivedOptimistic`. */
@@ -29,6 +39,11 @@ export interface SerializeDerivedOptimisticOptions {
   awaitFragments?: readonly string[];
   /** Type-only import of the mutation form, e.g. `{ name: 'addToCartForm', path: '../../app.js' }`. */
   formImport: { name: string; path: string };
+  /**
+   * Exact query definitions used to emit the second `OptimisticFor` generic. A complete generated
+   * plan must provide one identity for every emitted transform or awaited fragment.
+   */
+  queryValueImports?: readonly DerivedQueryValueImport[];
   /** Optional named FIFO serialization queue (mirrors the hand-written plan). */
   queue?: string;
   /** Query names covered by a hand-written transform / `'await-fragment'` (suppressed here). */
@@ -82,7 +97,18 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
     .filter((line): line is string => line !== null)
     .join('\n');
 
-  const satisfies = options.complete ? ` satisfies OptimisticFor<typeof ${formImportName}>` : '';
+  const queryValues = options.complete
+    ? serializeQueryValueMap(options.queryValueImports, [
+        ...sorted.map((entry) => entry.query),
+        ...awaitFragments,
+      ])
+    : undefined;
+  const queryResultImport =
+    queryValues === undefined ? '' : `\nimport type { QueryResult } from '@kovojs/server';`;
+  const satisfies =
+    queryValues === undefined
+      ? ''
+      : ` satisfies OptimisticFor<typeof ${formImportName}, ${queryValues}>`;
   const overrideNote =
     options.overrides && options.overrides.length > 0
       ? `\n// Overridden in the mutation module (derivation suppressed): ${[...options.overrides]
@@ -92,7 +118,7 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
       : '';
 
   return `${DO_NOT_EDIT}
-${runtimeImport}
+${runtimeImport}${queryResultImport}
 
 import type { ${formImportName} } from ${formImportPath};${overrideNote}
 
@@ -102,93 +128,37 @@ ${planBody}
 `;
 }
 
-// SPEC.md §6.1 / §10.6 / §11.1 — emit the app's `@kovojs/core` registry augmentation as a
-// generated module-augmentation artifact instead of a hand-authored `declare module` block.
-// The compiler emits the same interfaces from compiled components (compiler/src/emit/registry.ts);
-// this serializer covers the Drizzle data-plane path: it folds the (analyzer-derived) mutation
-// touch graph against the query read set into `InvalidationSets`, and maps each query to its
-// loader result type in `QueryRegistry`, so `OptimisticFor`/the inline `mutation({optimistic})`
-// exhaustiveness check (SPEC.md §10.6, server/mutation/definition.ts `MutationOptimisticMap`)
-// bites WITHOUT the app hand-listing the mutation→query union (which silently drifts from the real
-// invalidation graph, capability-gaps §3). Pair with `OptimisticDerivationSets` once derived
-// optimism is wired (SPEC.md §10.5); until then it stays empty so every invalidated query is a
-// REQUIRED optimistic entry.
-
-/** @internal One `QueryRegistry` entry: a query key and the TypeScript type its loader produces. */
-export interface CoreRegistryQueryEntry {
-  /** The query registry key (must match the query's `query('<name>', …)` key). */
-  name: string;
-  /** The result type expression, e.g. `QueryResult<typeof import('../queries.js').questionList>`. */
-  type: string;
-}
-
-/** @internal Options for {@link serializeCoreRegistryModule}. */
-export interface SerializeCoreRegistryModuleOptions {
-  /** `QueryRegistry` entries (query key → loader result type expression). */
-  queries: readonly CoreRegistryQueryEntry[];
-  /** `InvalidationSets` entries: mutation key → invalidated query keys. */
-  invalidations: Readonly<Record<string, readonly string[]>>;
-  /** `OptimisticDerivationSets` entries: mutation key → derived (optional) query keys (SPEC.md §10.5). */
-  derivations?: Readonly<Record<string, readonly string[]>>;
-  /** Top-level imports the type expressions reference (also make the file a module for augmentation). */
-  headerImports?: readonly string[];
-}
-
-const REGISTRY_DO_NOT_EDIT = [
-  '// DO NOT EDIT — generated @kovojs/core registry augmentation (SPEC.md §6.1/§10.6/§11.1).',
-  '// Produced from the Drizzle touch graph + query read set so the mutation→query',
-  '// InvalidationSets union cannot drift from the real graph (capability-gaps §3).',
-  '// QueryRegistry result types come from each query loader, the single source of truth.',
-].join('\n');
-
-/**
- * @internal
- *
- * Serialize a `declare module '@kovojs/core'` augmentation (`QueryRegistry`, `InvalidationSets`,
- * and `OptimisticDerivationSets`) into a generated `.d.ts`/`.ts` module the app's `tsc` program
- * includes (SPEC.md §6.1/§10.6/§11.1). The file is a module (top-level imports), so the
- * `declare module` block is a declaration-merging augmentation, not an ambient redefinition.
- */
-export function serializeCoreRegistryModule(options: SerializeCoreRegistryModuleOptions): string {
-  const queryLines = [...options.queries]
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .map((entry) => indent(`${tsPropertyKey(entry.name)}: ${entry.type};`, 4))
-    .join('\n');
-  const invalidationLines = registryUnionLines(options.invalidations);
-  const derivationLines = registryUnionLines(options.derivations ?? {});
-  const header = (options.headerImports ?? []).join('\n');
-
-  return `${REGISTRY_DO_NOT_EDIT}
-${header}
-
-declare module '@kovojs/core' {
-  interface QueryRegistry {
-${queryLines}
+function serializeQueryValueMap(
+  imports: readonly DerivedQueryValueImport[] | undefined,
+  emittedQueries: readonly string[],
+): string {
+  const expected = [...new Set(emittedQueries)].sort();
+  const byQuery = new Map<string, DerivedQueryValueImport>();
+  for (const entry of imports ?? []) {
+    if (byQuery.has(entry.query)) {
+      throw new TypeError(`Duplicate generated optimistic query identity: ${entry.query}`);
+    }
+    byQuery.set(entry.query, entry);
   }
 
-  interface InvalidationSets {
-${invalidationLines}
+  const missing = expected.filter((query) => !byQuery.has(query));
+  const extra = [...byQuery.keys()].filter((query) => !expected.includes(query)).sort();
+  if (missing.length > 0 || extra.length > 0) {
+    throw new TypeError(
+      `Complete generated optimistic plans require one exact query identity per emitted key (missing: ${
+        missing.join(', ') || 'none'
+      }; extra: ${extra.join(', ') || 'none'}).`,
+    );
   }
 
-  interface OptimisticDerivationSets {
-${derivationLines}
-  }
-}
-`;
-}
-
-function registryUnionLines(map: Readonly<Record<string, readonly string[]>>): string {
-  return Object.entries(map)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, queries]) => {
-      const union =
-        [...new Set(queries)]
-          .sort()
-          .map((query) => jsStringLiteral(query))
-          .join(' | ') || 'never';
-      return indent(`${tsPropertyKey(key)}: ${union};`, 4);
-    })
-    .join('\n');
+  const lines = expected.map((query) => {
+    const entry = byQuery.get(query);
+    if (entry === undefined) throw new TypeError(`Missing generated optimistic query: ${query}`);
+    const name = jsIdentifier(entry.name);
+    const path = importSpecifier(entry.path);
+    return indent(`${tsPropertyKey(query)}: QueryResult<typeof import(${path}).${name}>;`, 2);
+  });
+  return `{\n${lines.join('\n')}\n}`;
 }
 
 /**
