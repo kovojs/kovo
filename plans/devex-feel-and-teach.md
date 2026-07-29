@@ -88,6 +88,10 @@ compiler/runtime facts; none may become a second analyzer.
   - Evidence: `kovo-package-front-door/v1` validates all 14 manifest-public packages and the
     focused mutation tests reject missing, stale, or repository-internal front doors.
 - [ ] Add `create-kovo --example` only for packed-passing CRM/commerce sources.
+  - Implemented: one semantic schema accepts only `crm`/`commerce`; the packed asset builder
+    accounts for every tracked source, excludes repo-only/secret-shaped material, and binds copied
+    bytes to SHA-256. Packed creation, install, typecheck, and standalone smoke tests pass for both.
+  - Closure gap: both packed `kovo build` commands must pass on the integrated app-contract source.
 - [ ] Keep authored task docs progressively disclosed and proof-backed.
 
 ## Exit
@@ -122,3 +126,7 @@ packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5
 - `pnpm run test:devex-editor` passed (2 files, 28 tests) and built/verified a deterministic
   six-entry `kovojs.kovo-diagnostics` VSIX; `pnpm run check:api-surface` stayed at zero public and
   recursive-publicness findings.
+- `pnpm exec vitest --run packages/create-kovo/src/cli-schema.test.ts
+packages/create-kovo/src/example-assets.test.ts packages/create-kovo/src/index.test.ts
+packages/create-kovo/src/index.example.packed.test.ts --no-file-parallelism --reporter=dot` passed
+  (4 files, 56 tests); both packed examples install, typecheck, and pass their standalone tests.
