@@ -10,7 +10,7 @@ const TRUSTED_BOUNDARY_FAILURE =
 const KOVO_READY_REPORT =
   /Kovo dev ready in \d+ms\r?\n\s+Local URL\s+http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/\r?\n\s+Network URL\s+http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/ \(loopback only\)\r?\n\s+Mode\s+\S+\r?\n\s+App\s+\S+\r?\n\s+Database\s+.+\r?\n\s+Devtool\s+http:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/__kovo\r?\n?/u;
 const MEMORY_EXHAUSTION =
-  /(?:Allocation failed|heap out of memory|Reached heap limit|JavaScript heap out of memory|exit signal SIG(?:ABRT|KILL))/iu;
+  /(?:Allocation failed|heap out of memory|Reached heap limit|JavaScript heap out of memory)/iu;
 const KV417_DEPLOYMENT_PROOF =
   /(?:ERROR\s+)?KV417[^\n]*(?:retention|client-module|deploy|deployment)/iu;
 const SAFE_RUNTIME_DIAGNOSTIC =
@@ -210,8 +210,10 @@ export function packedFirstLoopContractOutcome(mode, observation) {
     ];
     if (
       phases.some(
-        ({ memoryExceeded, peakRssMiB }) =>
-          peakRssMiB < 0 || (memoryExceeded && peakRssMiB <= FULL_CATALOG_RSS_CEILING_MIB),
+        ({ exit, memoryExceeded, peakRssMiB }) =>
+          peakRssMiB < 0 ||
+          (memoryExceeded && peakRssMiB <= FULL_CATALOG_RSS_CEILING_MIB) ||
+          (memoryExceeded && exit === 0),
       )
     ) {
       return null;
@@ -221,15 +223,18 @@ export function packedFirstLoopContractOutcome(mode, observation) {
         exit === 0 && !memoryExceeded && peakRssMiB <= FULL_CATALOG_RSS_CEILING_MIB,
     );
     if (desired) return 'desired-behavior';
-    const defect = phases.every(
-      ({ exit, output, peakRssMiB }) =>
-        (exit === 0 && peakRssMiB <= FULL_CATALOG_RSS_CEILING_MIB) ||
-        peakRssMiB > FULL_CATALOG_RSS_CEILING_MIB ||
-        (exit !== 0 && MEMORY_EXHAUSTION.test(output)),
-    );
+    const outcomes = phases.map(({ exit, memoryExceeded, output, peakRssMiB }) => {
+      if (exit === 0 && !memoryExceeded) {
+        return peakRssMiB <= FULL_CATALOG_RSS_CEILING_MIB ? 'pass' : 'memory-defect';
+      }
+      if (exit !== 0 && (memoryExceeded || MEMORY_EXHAUSTION.test(output))) {
+        return 'memory-defect';
+      }
+      return 'unrelated-failure';
+    });
     if (
-      defect &&
-      phases.some(({ exit, peakRssMiB }) => exit !== 0 || peakRssMiB > FULL_CATALOG_RSS_CEILING_MIB)
+      outcomes.every((outcome) => outcome !== 'unrelated-failure') &&
+      outcomes.some((outcome) => outcome === 'memory-defect')
     ) {
       return 'defect-reproduced';
     }
@@ -257,12 +262,10 @@ export function packedFirstLoopContractOutcome(mode, observation) {
 
 /** Classify only the registered packed full-catalog RSS/OOM failure, never an unrelated error. */
 export function fullCatalogOutcome(sample) {
-  if (
-    sample?.functionalPass === true &&
-    sample?.budget?.withinThreshold === true &&
-    sample?.copiedComponents === 44 &&
-    sample?.unimportedDuringProof === true
-  ) {
+  if (sample?.copiedComponents !== 44 || sample?.unimportedDuringProof !== true) {
+    return null;
+  }
+  if (sample?.functionalPass === true && sample?.budget?.withinThreshold === true) {
     return 'desired-behavior';
   }
   const message = sample?.failure?.message ?? '';
@@ -272,16 +275,11 @@ export function fullCatalogOutcome(sample) {
   if (
     sample?.functionalPass === false &&
     ['typecheck', 'check', 'build'].includes(sample?.failure?.phase) &&
-    (sample?.peakProcessTreeRssBytes > sample?.budget?.thresholdBytes || recognizedOom)
+    recognizedOom
   ) {
     return 'defect-reproduced';
   }
-  if (
-    sample?.functionalPass === true &&
-    sample?.budget?.withinThreshold === false &&
-    sample?.copiedComponents === 44 &&
-    sample?.unimportedDuringProof === true
-  ) {
+  if (sample?.functionalPass === true && sample?.budget?.withinThreshold === false) {
     return 'defect-reproduced';
   }
   return null;

@@ -37,6 +37,8 @@ describe('full-catalog known-failure classifier', () => {
         failure: { message: 'FATAL ERROR: heap out of memory', phase: 'check' },
         peakProcessTreeRssBytes: 1_500,
         budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
       }),
     ).toBe('defect-reproduced');
     expect(
@@ -45,6 +47,8 @@ describe('full-catalog known-failure classifier', () => {
         failure: { message: 'KV417 classifier setup is missing', phase: 'check' },
         peakProcessTreeRssBytes: 1_500,
         budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
       }),
     ).toBeNull();
     expect(
@@ -53,6 +57,8 @@ describe('full-catalog known-failure classifier', () => {
         failure: { message: 'exit=null signal=SIGKILL; command exceeded 600000ms', phase: 'check' },
         peakProcessTreeRssBytes: 1_500,
         budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
       }),
     ).toBeNull();
     expect(
@@ -61,14 +67,31 @@ describe('full-catalog known-failure classifier', () => {
         failure: { message: 'exit=null signal=SIGKILL; command exceeded 600000ms', phase: 'check' },
         peakProcessTreeRssBytes: 2_500,
         budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
       }),
-    ).toBe('defect-reproduced');
+    ).toBeNull();
+    expect(
+      fullCatalogOutcome({
+        functionalPass: false,
+        failure: {
+          message: 'ERROR KV448 installed implementation digest does not match',
+          phase: 'check',
+        },
+        peakProcessTreeRssBytes: 5_980,
+        budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
+      }),
+    ).toBeNull();
     expect(
       fullCatalogOutcome({
         functionalPass: false,
         failure: { message: 'heap out of memory', phase: 'install' },
         peakProcessTreeRssBytes: 3_000,
         budget: { thresholdBytes: 2_000 },
+        copiedComponents: 44,
+        unimportedDuringProof: true,
       }),
     ).toBeNull();
   });

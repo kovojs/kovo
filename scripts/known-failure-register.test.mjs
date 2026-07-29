@@ -709,6 +709,25 @@ describe('known-failure register', () => {
         buildMemoryExceeded: false,
         buildOutput: '',
         buildPeakRssMiB: 1_000,
+        checkExit: 1,
+        checkMemoryExceeded: false,
+        checkOutput:
+          'ERROR KV448 compiler-owned posture installed implementation digest does not match',
+        checkPeakRssMiB: 5_700,
+        componentCount: 44,
+        typecheckExit: 0,
+        typecheckMemoryExceeded: false,
+        typecheckOutput: '',
+        typecheckPeakRssMiB: 1_000,
+        unimported: true,
+      }),
+    ).toBeNull();
+    expect(
+      packedFirstLoopContractOutcome('full-catalog', {
+        buildExit: 0,
+        buildMemoryExceeded: false,
+        buildOutput: '',
+        buildPeakRssMiB: 1_000,
         checkExit: 0,
         checkMemoryExceeded: false,
         checkOutput: '',
