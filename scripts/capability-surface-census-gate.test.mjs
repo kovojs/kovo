@@ -349,10 +349,61 @@ it('retains structural closed verdicts for raw exports, internal consumers, and 
   const rawExport = evaluateCapabilityBoundaryPosture({
     readText: (file) =>
       file === 'packages/create-kovo/templates/src/_kovo/app-runtime-db.ts'
-        ? `${readText(file)}\nexport const leakedSystemDb = authSystemDb;\n`
+        ? `${readText(file)}\nexport const leakedDatabase = appDatabase;\n`
         : readText(file),
   });
-  expect(rawExport).toContain('generated templates must not export raw systemDb capabilities');
+  expect(rawExport).toContain(
+    'generated runtime modules must export only opaque app providers, readiness, stores, and the sanitized auth-binding factory',
+  );
+
+  const directInternalConsumer = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/better-auth/src/public-postgres.ts'
+        ? `${readText(file)}\nimport { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';\n`
+        : readText(file),
+  });
+  expect(directInternalConsumer).toContain(
+    'public Better Auth app doors must not import raw system capability consumers',
+  );
+
+  const forgedRuntimeDoor = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/better-auth/src/public-sqlite.ts'
+        ? readText(file).replace(
+            'sqliteSystemDbForGeneratedIntegration(runtime, {',
+            'sqliteSystemDbForGeneratedIntegration({}, {',
+          )
+        : readText(file),
+  });
+  expect(forgedRuntimeDoor).toContain(
+    'Better Auth SQLite public door must recover system authority only from its exact app runtime',
+  );
+
+  const bypassedPublicDoor = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts'
+        ? readText(file).replaceAll(
+            'createBetterAuthSqliteAppBindings',
+            'createBetterAuthSqliteBindingsFromEnvironment',
+          )
+        : readText(file),
+  });
+  expect(bypassedPublicDoor).toEqual(
+    expect.arrayContaining([
+      'generated SQLite runtime must import only the public SQLite app-binding door',
+      'generated SQLite runtime must pass only its exact app runtime into the public binding door',
+    ]),
+  );
+
+  const unsnapshottedOptions = evaluateCapabilityBoundaryPosture({
+    readText: (file) =>
+      file === 'packages/better-auth/src/public-postgres.ts'
+        ? readText(file).replace('csrf: snapshot.csrf,', 'csrf: options.csrf,')
+        : readText(file),
+  });
+  expect(unsnapshottedOptions).toContain(
+    'Better Auth Postgres public door must forward only its snapshotted options and minted capability',
+  );
 
   const publicConsumer = evaluateCapabilityBoundaryPosture({
     readText: (file) =>

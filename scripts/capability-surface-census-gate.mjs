@@ -13,9 +13,15 @@ export const capabilitySurfaceCensusManifestPath =
   'scripts/capability-surface-census.manifest.json';
 
 const defaultCanonicalSymbols = {
-  systemDbDeclarations: [
-    { file: 'packages/server/src/postgres-runtime.ts', owner: 'KovoPostgresAppRuntimeDb' },
-    { file: 'packages/server/src/sqlite.ts', owner: 'KovoSqliteAppRuntime' },
+  systemDbFactories: [
+    {
+      exportName: 'createPostgresSystemDb',
+      file: 'packages/server/src/internal/postgres-capability.ts',
+    },
+    {
+      exportName: 'createSqliteSystemDb',
+      file: 'packages/server/src/internal/sqlite-capability.ts',
+    },
   ],
   witnessFactories: [
     {
@@ -29,8 +35,8 @@ const requiredPublicSurfaceIds = [
   'better-auth-mount-adapter',
   'generated-postgres-auth-adapter',
   'generated-sqlite-auth-adapter',
-  'generated-postgres-readonly-db',
   'generated-postgres-request-db-provider',
+  'generated-sqlite-request-db-provider',
   'server-system-db-capability',
   'managed-sql-statement-identity',
   'postgres-role-topology',
@@ -442,6 +448,8 @@ export function evaluateCapabilityBoundaryPosture({
   const findings = [];
   const files = {
     betterAuthPostgres: 'packages/better-auth/src/postgres.ts',
+    betterAuthPublicPostgres: 'packages/better-auth/src/public-postgres.ts',
+    betterAuthPublicSqlite: 'packages/better-auth/src/public-sqlite.ts',
     betterAuthSqlite: 'packages/better-auth/src/sqlite.ts',
     postgresAuth: 'packages/create-kovo/templates/src/auth.ts',
     postgresCapability: 'packages/server/src/internal/postgres-capability.ts',
@@ -474,6 +482,8 @@ export function evaluateCapabilityBoundaryPosture({
   const postgresAuth = sourceFiles.postgresAuth;
   const sqliteAuth = sourceFiles.sqliteAuth;
   const betterAuthPostgres = sourceFiles.betterAuthPostgres;
+  const betterAuthPublicPostgres = sourceFiles.betterAuthPublicPostgres;
+  const betterAuthPublicSqlite = sourceFiles.betterAuthPublicSqlite;
   const betterAuthSqlite = sourceFiles.betterAuthSqlite;
   const serverRoot = sourceFiles.serverRoot;
   const postgresCapability = sourceFiles.postgresCapability;
@@ -491,16 +501,24 @@ export function evaluateCapabilityBoundaryPosture({
   ) {
     findings.push('generated templates must not export raw systemDb capabilities');
   }
-  requireFact(
-    findings,
-    hasVariableCall(postgresRuntime, 'authSystemDb', 'systemDb'),
-    'generated Postgres runtime must mint a module-private opaque auth system capability',
-  );
-  requireFact(
-    findings,
-    hasVariableCall(sqliteRuntime, 'authSystemDb', 'systemDb'),
-    'generated SQLite runtime must mint a module-private opaque auth system capability',
-  );
+  const generatedRuntimeExports = [
+    'appRuntimeDbProvider',
+    'appRuntimeDbReady',
+    'appRuntimeMutationReplayStore',
+    'appRuntimePrincipalEpochStore',
+    'createAppAuthBindings',
+  ].sort(compareStrings);
+  if (
+    [postgresRuntime, sqliteRuntime].some(
+      (runtime) =>
+        canonicalJson([...exportedValueNames(runtime)].sort(compareStrings)) !==
+        canonicalJson(generatedRuntimeExports),
+    )
+  ) {
+    findings.push(
+      'generated runtime modules must export only opaque app providers, readiness, stores, and the sanitized auth-binding factory',
+    );
+  }
   requireFact(
     findings,
     hasSystemDbAdapterUnwrap(betterAuthPostgres, 'usePostgresSystemDb', 'pg'),
@@ -508,17 +526,17 @@ export function evaluateCapabilityBoundaryPosture({
   );
   requireFact(
     findings,
-    namedImports(postgresRuntime, '@kovojs/better-auth').has(
-      'createBetterAuthPostgresBindingsFromEnvironment',
-    ),
-    'generated Postgres runtime must route environment and adapter construction through @kovojs/better-auth',
+    exactNamedImport(postgresRuntime, '@kovojs/better-auth/postgres', [
+      'createBetterAuthPostgresAppBindings',
+    ]),
+    'generated Postgres runtime must import only the public Postgres app-binding door',
   );
   requireFact(
     findings,
-    namedImports(sqliteRuntime, '@kovojs/better-auth').has(
-      'createBetterAuthSqliteBindingsFromEnvironment',
-    ),
-    'generated SQLite runtime must route environment and adapter construction through @kovojs/better-auth',
+    exactNamedImport(sqliteRuntime, '@kovojs/better-auth/sqlite', [
+      'createBetterAuthSqliteAppBindings',
+    ]),
+    'generated SQLite runtime must import only the public SQLite app-binding door',
   );
   for (const runtime of [postgresRuntime, sqliteRuntime]) {
     const forbidden = new Set([
@@ -526,8 +544,12 @@ export function evaluateCapabilityBoundaryPosture({
       'betterAuthPostgresSecret',
       'betterAuthSqliteSecret',
       'createAuthAdapter',
+      'createBetterAuthPostgresBindingsFromEnvironment',
+      'createBetterAuthSqliteBindingsFromEnvironment',
       'drizzleAdapter',
       'loadEnvFile',
+      'postgresSystemDbForGeneratedIntegration',
+      'sqliteSystemDbForGeneratedIntegration',
       'usePostgresSystemDb',
       'useSqliteSystemDb',
     ]);
@@ -540,13 +562,51 @@ export function evaluateCapabilityBoundaryPosture({
   }
   requireFact(
     findings,
-    hasBindingFactoryCall(postgresRuntime, 'createBetterAuthPostgresBindingsFromEnvironment'),
-    'generated Postgres runtime must pass only its opaque capability into the sanitized binding constructor',
+    hasAppBindingFactoryCall(postgresRuntime, 'createBetterAuthPostgresAppBindings'),
+    'generated Postgres runtime must pass only its exact app runtime into the public binding door',
   );
   requireFact(
     findings,
-    hasBindingFactoryCall(sqliteRuntime, 'createBetterAuthSqliteBindingsFromEnvironment'),
-    'generated SQLite runtime must pass only its opaque capability into the sanitized binding constructor',
+    hasAppBindingFactoryCall(sqliteRuntime, 'createBetterAuthSqliteAppBindings'),
+    'generated SQLite runtime must pass only its exact app runtime into the public binding door',
+  );
+  requireFact(
+    findings,
+    hasAppRuntimeCapabilityMint(
+      betterAuthPublicPostgres,
+      'createBetterAuthPostgresAppBindings',
+      'postgresSystemDbForGeneratedIntegration',
+      '@kovojs/better-auth/postgres#createBetterAuthPostgresAppBindings',
+    ),
+    'Better Auth Postgres public door must mint system authority only from its exact app runtime',
+  );
+  requireFact(
+    findings,
+    hasAppRuntimeCapabilityMint(
+      betterAuthPublicSqlite,
+      'createBetterAuthSqliteAppBindings',
+      'sqliteSystemDbForGeneratedIntegration',
+      '@kovojs/better-auth/sqlite#createBetterAuthSqliteAppBindings',
+    ),
+    'Better Auth SQLite public door must recover system authority only from its exact app runtime',
+  );
+  requireFact(
+    findings,
+    hasAppBindingEnvironmentForward(
+      betterAuthPublicPostgres,
+      'createBetterAuthPostgresAppBindings',
+      'createBetterAuthPostgresBindingsFromEnvironment',
+    ),
+    'Better Auth Postgres public door must forward only its snapshotted options and minted capability',
+  );
+  requireFact(
+    findings,
+    hasAppBindingEnvironmentForward(
+      betterAuthPublicSqlite,
+      'createBetterAuthSqliteAppBindings',
+      'createBetterAuthSqliteBindingsFromEnvironment',
+    ),
+    'Better Auth SQLite public door must forward only its snapshotted options and minted capability',
   );
   requireFact(
     findings,
@@ -621,6 +681,7 @@ export function evaluateCapabilityBoundaryPosture({
   requireFact(
     findings,
     exactNamedImport(betterAuthPostgres, '@kovojs/server/internal/postgres-capability', [
+      'KovoPostgresSystemDb',
       'usePostgresSystemDb',
     ]),
     'Better Auth Postgres must import the raw capability consumer only from the internal subpath',
@@ -628,10 +689,18 @@ export function evaluateCapabilityBoundaryPosture({
   requireFact(
     findings,
     exactNamedImport(betterAuthSqlite, '@kovojs/server/internal/sqlite-capability', [
+      'KovoSqliteSystemDb',
       'useSqliteSystemDb',
     ]),
     'Better Auth SQLite must import the raw capability consumer only from the internal subpath',
   );
+  if (
+    namedImports(betterAuthPublicPostgres, '@kovojs/server/internal/postgres-capability').size >
+      0 ||
+    namedImports(betterAuthPublicSqlite, '@kovojs/server/internal/sqlite-capability').size > 0
+  ) {
+    findings.push('public Better Auth app doors must not import raw system capability consumers');
+  }
   requireFact(
     findings,
     hasPrivateRegistryConsumer(postgresCapability, 'postgresSystemDbValues', 'usePostgresSystemDb'),
@@ -905,20 +974,6 @@ function exactNamedImport(sourceFile, moduleName, expected) {
   return canonicalJson(actual) === canonicalJson([...expected].sort(compareStrings));
 }
 
-function hasVariableCall(sourceFile, variableName, calleeName) {
-  return descendants(sourceFile).some((node) => {
-    if (!ts.isVariableDeclaration(node)) return false;
-    const initializer = unwrapExpression(node.initializer);
-    return (
-      ts.isIdentifier(node.name) &&
-      node.name.text === variableName &&
-      initializer !== undefined &&
-      ts.isCallExpression(initializer) &&
-      terminalCallName(initializer.expression) === calleeName
-    );
-  });
-}
-
 function hasSystemDbAdapterUnwrap(sourceFile, consumerName, provider) {
   return descendants(sourceFile).some((node) => {
     if (!ts.isCallExpression(node) || terminalCallName(node.expression) !== consumerName)
@@ -938,7 +993,7 @@ function hasSystemDbAdapterUnwrap(sourceFile, consumerName, provider) {
   });
 }
 
-function hasBindingFactoryCall(sourceFile, factoryName) {
+function hasAppBindingFactoryCall(sourceFile, factoryName) {
   const fn = namedFunction(sourceFile, 'createAppAuthBindings');
   return (
     fn !== undefined &&
@@ -946,9 +1001,93 @@ function hasBindingFactoryCall(sourceFile, factoryName) {
       (node) =>
         ts.isCallExpression(node) &&
         terminalCallName(node.expression) === factoryName &&
-        objectPropertyIdentifier(node.arguments[0], 'systemDb') === 'authSystemDb',
+        node.arguments.length === 2 &&
+        isIdentifierText(node.arguments[0], 'appDatabase') &&
+        ts.isObjectLiteralExpression(unwrapExpression(node.arguments[1])),
     )
   );
+}
+
+function hasAppRuntimeCapabilityMint(sourceFile, ownerName, mintName, surface) {
+  const fn = namedFunction(sourceFile, ownerName);
+  if (fn === undefined) return false;
+  return descendants(fn).some((node) => {
+    if (!ts.isVariableDeclaration(node) || !isIdentifierText(node.name, 'systemDb')) return false;
+    const initializer = unwrapExpression(node.initializer);
+    if (
+      initializer === undefined ||
+      !ts.isCallExpression(initializer) ||
+      terminalCallName(initializer.expression) !== mintName ||
+      initializer.arguments.length !== 2 ||
+      !isIdentifierText(initializer.arguments[0], 'runtime')
+    ) {
+      return false;
+    }
+    const posture = unwrapExpression(initializer.arguments[1]);
+    return !!(
+      posture &&
+      ts.isObjectLiteralExpression(posture) &&
+      exactObjectPropertyNames(posture, ['operation', 'reason', 'surface']) &&
+      objectPropertyString(posture, 'operation') === 'write' &&
+      substantive(objectPropertyString(posture, 'reason')) &&
+      objectPropertyString(posture, 'surface') === surface
+    );
+  });
+}
+
+function hasAppBindingEnvironmentForward(sourceFile, ownerName, factoryName) {
+  const fn = namedFunction(sourceFile, ownerName);
+  if (fn === undefined) return false;
+  const snapshot = descendants(fn).some((node) => {
+    if (!ts.isVariableDeclaration(node) || !isIdentifierText(node.name, 'snapshot')) return false;
+    const initializer = unwrapExpression(node.initializer);
+    return !!(
+      initializer &&
+      ts.isCallExpression(initializer) &&
+      terminalCallName(initializer.expression) === 'snapshotBetterAuthAppBindingsOptions' &&
+      initializer.arguments.length === 2 &&
+      isIdentifierText(initializer.arguments[0], 'options') &&
+      isStringText(initializer.arguments[1], ownerName.includes('Postgres') ? 'Postgres' : 'SQLite')
+    );
+  });
+  if (!snapshot) return false;
+  return descendants(fn).some((node) => {
+    if (!ts.isReturnStatement(node)) return false;
+    const invocation = unwrapExpression(node.expression);
+    if (
+      !invocation ||
+      !ts.isCallExpression(invocation) ||
+      terminalCallName(invocation.expression) !== factoryName ||
+      invocation.arguments.length !== 1
+    ) {
+      return false;
+    }
+    const options = unwrapExpression(invocation.arguments[0]);
+    if (
+      !options ||
+      !ts.isObjectLiteralExpression(options) ||
+      !exactObjectPropertyNames(options, [
+        'csrf',
+        'mapSession',
+        'principalEpochStore',
+        'schema',
+        'signInAccess',
+        'signOutAccess',
+        'systemDb',
+      ])
+    ) {
+      return false;
+    }
+    return (
+      objectPropertyPath(options, 'csrf') === 'snapshot.csrf' &&
+      objectPropertyPath(options, 'mapSession') === 'snapshot.mapSession' &&
+      objectPropertyPath(options, 'principalEpochStore') === 'runtime.principalEpochStore' &&
+      objectPropertyPath(options, 'schema') === 'snapshot.schema' &&
+      objectPropertyPath(options, 'signInAccess') === 'snapshot.signInAccess' &&
+      objectPropertyIdentifier(options, 'systemDb') === 'systemDb' &&
+      objectPropertyIsExactAuthedArray(options, 'signOutAccess')
+    );
+  });
 }
 
 function hasFrozenBindingReturn(sourceFile) {
@@ -1166,9 +1305,25 @@ function objectPropertyIdentifier(node, key) {
   const object = unwrapExpression(node);
   if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
   for (const property of object.properties) {
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === key) {
+      return property.name.text;
+    }
     if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== key) continue;
     const initializer = unwrapExpression(property.initializer);
     return initializer && ts.isIdentifier(initializer) ? initializer.text : undefined;
+  }
+  return undefined;
+}
+
+function objectPropertyPath(node, key) {
+  const object = unwrapExpression(node);
+  if (!object || !ts.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== key) continue;
+    const initializer = unwrapExpression(property.initializer);
+    return initializer && ts.isPropertyAccessExpression(initializer)
+      ? propertyAccessPath(initializer)?.join('.')
+      : undefined;
   }
   return undefined;
 }
@@ -1182,6 +1337,37 @@ function objectPropertyString(node, key) {
     return initializer && ts.isStringLiteral(initializer) ? initializer.text : undefined;
   }
   return undefined;
+}
+
+function exactObjectPropertyNames(object, expected) {
+  const actual = object.properties.flatMap((property) => {
+    if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
+      return [propertyNameText(property.name)];
+    }
+    return [];
+  });
+  return (
+    actual.length === object.properties.length &&
+    canonicalJson(actual.sort(compareStrings)) === canonicalJson([...expected].sort(compareStrings))
+  );
+}
+
+function objectPropertyIsExactAuthedArray(node, key) {
+  const object = unwrapExpression(node);
+  if (!object || !ts.isObjectLiteralExpression(object)) return false;
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== key) continue;
+    const value = unwrapExpression(property.initializer);
+    if (!value || !ts.isArrayLiteralExpression(value) || value.elements.length !== 1) return false;
+    const call = unwrapExpression(value.elements[0]);
+    return !!(
+      call &&
+      ts.isCallExpression(call) &&
+      terminalCallName(call.expression) === 'authed' &&
+      call.arguments.length === 0
+    );
+  }
+  return false;
 }
 
 function propertyAccessPath(node) {
@@ -1351,6 +1537,24 @@ function canonicalTargetSymbols({ canonicalSymbols, checker, context }) {
     }
     const target = {
       api: 'createWitnessWeakMap',
+      declaration,
+      identity: `${reference.file}#${reference.exportName}`,
+    };
+    bySymbol.set(symbol, target);
+    targets.push(target);
+  }
+  for (const reference of canonicalSymbols.systemDbFactories ?? []) {
+    const sourceFile = context.sourceFile(reference.file);
+    const declaration = sourceFile && namedTopLevelDeclaration(sourceFile, reference.exportName);
+    const symbol =
+      declaration && resolveAlias(checker, checker.getSymbolAtLocation(declaration.name));
+    if (symbol === undefined) {
+      throw new Error(
+        `missing canonical systemDb factory ${reference.file}#${reference.exportName}`,
+      );
+    }
+    const target = {
+      api: 'systemDb',
       declaration,
       identity: `${reference.file}#${reference.exportName}`,
     };

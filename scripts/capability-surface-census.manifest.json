@@ -1,9 +1,9 @@
 {
   "schema": "kovo-capability-surface-census/v2",
   "summary": {
-    "internalRegistries": 116,
-    "mints": 4,
-    "sites": 120
+    "internalRegistries": 123,
+    "mints": 3,
+    "sites": 126
   },
   "rows": [
     {
@@ -22,32 +22,28 @@
     {
       "id": "generated-postgres-auth-adapter",
       "kind": "auth-adapter-db",
-      "authority": "Opaque Postgres system-write capability unwrapped only to construct Better Auth's Drizzle adapter",
-      "mint": "packages/server/src/postgres-runtime.ts#KovoPostgresAppRuntimeDb.systemDb",
-      "publicStatus": "opaque capability type public; raw consumer package-internal; sanitized environment constructor public",
-      "allowedConsumers": ["packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindings"],
-      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass only authSystemDb into createBetterAuthPostgresBindingsFromEnvironment",
-      "evidence": "packages/server/src/runtime-bootstrap.test.ts proves the packed server mint and packed Better Auth consumer share one private registry"
+      "authority": "Exact Postgres app runtime accepted by one public Better Auth app-binding door, which mints a purpose-closed system-write capability and returns only sanitized bindings",
+      "mint": "packages/server/src/generated-db-capabilities.ts#postgresSystemDbForGeneratedIntegration",
+      "publicStatus": "exact app-runtime door public; capability mint and raw consumer private; sanitized binding result public",
+      "allowedConsumers": [
+        "packages/better-auth/src/public-postgres.ts#createBetterAuthPostgresAppBindings",
+        "packages/better-auth/src/postgres.ts#createBetterAuthPostgresBindingsFromEnvironment"
+      ],
+      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass the exact appDatabase runtime only to createBetterAuthPostgresAppBindings",
+      "evidence": "packages/better-auth/src/public-postgres.ts validates the exact runtime/posture, snapshots options, and alone forwards the private systemDb to the internal environment binding"
     },
     {
       "id": "generated-sqlite-auth-adapter",
       "kind": "auth-adapter-db",
-      "authority": "Opaque SQLite system-write capability unwrapped only to construct Better Auth's Drizzle adapter",
-      "mint": "packages/server/src/sqlite.ts#KovoSqliteAppRuntime.systemDb",
-      "publicStatus": "opaque capability type public; raw consumer package-internal; sanitized environment constructor public",
-      "allowedConsumers": ["packages/better-auth/src/sqlite.ts#createBetterAuthSqliteBindings"],
-      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass only authSystemDb into createBetterAuthSqliteBindingsFromEnvironment",
-      "evidence": "packages/server/src/runtime-bootstrap.test.ts proves the packed server mint and packed Better Auth consumer share one private registry"
-    },
-    {
-      "id": "generated-postgres-readonly-db",
-      "kind": "readonly-db",
-      "authority": "Postgres request-independent read facade exported for app reads",
-      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeReadonlyDb",
-      "publicStatus": "reader-facade",
-      "allowedConsumers": ["packages/create-kovo/templates/src/db.ts"],
-      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeReadonlyDb from src/db.ts",
-      "evidence": "packages/create-kovo/src/index.test.ts asserts readonlyAppDb wiring"
+      "authority": "Exact SQLite app runtime accepted by one public Better Auth app-binding door, which recovers its purpose-closed system-write capability and returns only sanitized bindings",
+      "mint": "packages/server/src/generated-db-capabilities.ts#sqliteSystemDbForGeneratedIntegration",
+      "publicStatus": "exact app-runtime door public; capability recovery and raw consumer private; sanitized binding result public",
+      "allowedConsumers": [
+        "packages/better-auth/src/public-sqlite.ts#createBetterAuthSqliteAppBindings",
+        "packages/better-auth/src/sqlite.ts#createBetterAuthSqliteBindingsFromEnvironment"
+      ],
+      "buildDiagnostic": "capability census and starter sound-subset gates require generated code to pass the exact appDatabase runtime only to createBetterAuthSqliteAppBindings",
+      "evidence": "packages/better-auth/src/public-sqlite.ts validates the exact runtime/posture, snapshots options, and alone forwards the recovered systemDb to the internal environment binding"
     },
     {
       "id": "generated-postgres-request-db-provider",
@@ -55,21 +51,33 @@
       "authority": "Opaque Postgres request-scoped DB provider token consumed by createApp construction",
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeDbProvider",
       "publicStatus": "non-callable framework-managed provider token",
-      "allowedConsumers": ["packages/create-kovo/templates/src/app.tsx"],
-      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/app.tsx",
+      "allowedConsumers": ["packages/create-kovo/templates/src/kovo.ts"],
+      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/kovo.ts",
       "evidence": "packages/create-kovo/src/index.test.ts asserts appRuntimeDbProvider is the opaque appDatabase.db token and rejects auth.ts importing it"
+    },
+    {
+      "id": "generated-sqlite-request-db-provider",
+      "kind": "request-db-provider",
+      "authority": "Opaque SQLite request-scoped DB provider token consumed by createApp construction",
+      "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#appRuntimeDbProvider",
+      "publicStatus": "non-callable framework-managed provider token",
+      "allowedConsumers": ["packages/create-kovo/templates/src/kovo.ts"],
+      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/kovo.ts",
+      "evidence": "packages/create-kovo/src/index.test.ts asserts SQLite emits the opaque appDatabase.db token and rejects auth.ts importing it"
     },
     {
       "id": "server-system-db-capability",
       "kind": "system-db",
-      "authority": "KovoPostgresAppRuntimeDb.systemDb mints system-principal DB access for framework construction paths",
-      "mint": "packages/server/src/postgres-runtime.ts#systemDb",
-      "publicStatus": "public write-only mint method and opaque capability type; raw consumer internal subpath only",
+      "authority": "Framework-private Postgres and SQLite factories mint purpose-closed system-principal DB access only after exact runtime and posture validation",
+      "mint": "packages/server/src/internal/postgres-capability.ts#createPostgresSystemDb and packages/server/src/internal/sqlite-capability.ts#createSqliteSystemDb",
+      "publicStatus": "no public runtime mint method; opaque capability factories and consumers remain internal; generated integration helpers validate exact public runtime tokens",
       "allowedConsumers": [
-        "generated authSystemDb passed only to @kovojs/better-auth createBetterAuthPostgresBindingsFromEnvironment and internal framework system paths"
+        "packages/server/src/generated-db-capabilities.ts#postgresSystemDbForGeneratedIntegration",
+        "packages/server/src/generated-db-capabilities.ts#sqliteSystemDbForGeneratedIntegration",
+        "internal framework bootstrap and Better Auth adapter construction paths"
       ],
       "buildDiagnostic": "scripts/capability-surface-census-gate.mjs rejects generated raw system DB exports",
-      "evidence": "scripts/capability-surface-census-gate.mjs rejects root usePostgresSystemDb exports and scans generated templates for raw systemDb exports/consumers"
+      "evidence": "scripts/capability-surface-census-gate.mjs resolves canonical private factory symbols, rejects root capability consumers, and structurally verifies the public app-binding doors"
     },
     {
       "id": "managed-sql-statement-identity",
@@ -166,7 +174,7 @@
     {
       "id": "server.node-response-transport",
       "path": "packages/server/src/node.ts",
-      "owner": "toNodeHandler",
+      "owner": "createNodeHandler",
       "consumes": ["bindRequestDeadlineResponseTransport"],
       "purpose": "The Node adapter holds occupancy through actual response finish or close and destroys a slow response transport when its mandatory deadline expires.",
       "evidence": "packages/server/src/node.test.ts proves a stalled response transport is destroyed at deadline and the occupancy slot is reacquired."
@@ -249,34 +257,10 @@
     {
       "api": "systemDb",
       "file": "packages/better-auth/src/intrinsic-boundary.security-fixture.ts",
-      "id": "packages/better-auth/src/intrinsic-boundary.security-fixture.ts#systemDb",
-      "symbol": "packages/server/src/postgres-runtime.ts#KovoPostgresAppRuntimeDb.systemDb",
+      "id": "packages/better-auth/src/intrinsic-boundary.security-fixture.ts#inspectionSystemDb",
+      "symbol": "packages/server/src/internal/postgres-capability.ts#createPostgresSystemDb",
       "classification": "mint",
-      "reason": "Calls the canonical systemDb method to mint opaque framework-system database authority for reviewed bootstrap wiring."
-    },
-    {
-      "api": "systemDb",
-      "file": "packages/better-auth/src/intrinsic-boundary.security-fixture.ts",
-      "id": "packages/better-auth/src/intrinsic-boundary.security-fixture.ts#systemDb~2",
-      "symbol": "packages/server/src/sqlite.ts#KovoSqliteAppRuntime.systemDb",
-      "classification": "mint",
-      "reason": "Calls the canonical systemDb method to mint opaque framework-system database authority for reviewed bootstrap wiring."
-    },
-    {
-      "api": "systemDb",
-      "file": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts",
-      "id": "packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts#authSystemDb",
-      "symbol": "packages/server/src/sqlite.ts#KovoSqliteAppRuntime.systemDb",
-      "classification": "mint",
-      "reason": "Calls the canonical systemDb method to mint opaque framework-system database authority for reviewed bootstrap wiring."
-    },
-    {
-      "api": "systemDb",
-      "file": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts",
-      "id": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#authSystemDb",
-      "symbol": "packages/server/src/postgres-runtime.ts#KovoPostgresAppRuntimeDb.systemDb",
-      "classification": "mint",
-      "reason": "Calls the canonical systemDb method to mint opaque framework-system database authority for reviewed bootstrap wiring."
+      "reason": "The security fixture mints a bounded inspection-only system DB capability to exercise the raw consumer and intrinsic boundary; it is never part of the package's public runtime surface."
     },
     {
       "api": "createWitnessWeakMap",
@@ -317,6 +301,38 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Tracks framework-issued agent content identities in a private witness registry; no caller receives a capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-contract.ts",
+      "id": "packages/server/src/app-contract.ts#contractStates",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates each opaque app contract token with its framework-private contract state; callers cannot inspect or forge the registry entry."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-contract.ts",
+      "id": "packages/server/src/app-contract.ts#optimisticBindings",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates exact query optimistic handles with their framework-owned bindings; it does not mint caller-visible authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-declaration-owner.ts",
+      "id": "packages/server/src/app-declaration-owner.ts#declarationOwners",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Binds each declaration handle to its owning opaque app token inside the framework; no authority leaves the registry."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-declaration-owner.ts",
+      "id": "packages/server/src/app-declaration-owner.ts#declarationMetadata",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Records exact compiler metadata and source identity for framework-owned declaration handles; it is private validation state."
     },
     {
       "api": "createWitnessWeakMap",
@@ -397,6 +413,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/app-token.ts",
+      "id": "packages/server/src/app-token.ts#runtimeApps",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates each opaque public app token with its private runtime state; callers receive neither the registry nor its mutable record."
     },
     {
       "api": "createWitnessWeakMap",
@@ -497,10 +521,10 @@
     {
       "api": "createWitnessWeakMap",
       "file": "packages/server/src/diagnostics.ts",
-      "id": "packages/server/src/diagnostics.ts#prepareServerErrorDiagnostic.context",
+      "id": "packages/server/src/diagnostics.ts#projectedContext",
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
-      "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+      "reason": "Associates sanitized diagnostic projections with their private correlation metadata so rendering cannot recover raw context."
     },
     {
       "api": "createWitnessWeakMap",
@@ -533,6 +557,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "systemDb",
+      "file": "packages/server/src/generated-db-capabilities.ts",
+      "id": "packages/server/src/generated-db-capabilities.ts#postgresSystemDbForGeneratedIntegration.return",
+      "symbol": "packages/server/src/internal/postgres-capability.ts#createPostgresSystemDb",
+      "classification": "mint",
+      "reason": "The exact generated-integration helper validates the Postgres runtime identity and purpose posture before minting one purpose-closed system DB capability."
     },
     {
       "api": "createWitnessWeakMap",
@@ -605,6 +637,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/internal/sqlite-capability.ts",
+      "id": "packages/server/src/internal/sqlite-capability.ts#sqliteAppRuntimeSystemDbs",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Associates each exact SQLite app runtime token with its private system capability so the public integration helper can recover only the matching authority."
     },
     {
       "api": "createWitnessWeakMap",
@@ -1127,6 +1167,14 @@
       "reason": "Allocates a framework-private identity registry through the canonical witness intrinsic; the registry is not an outward capability mint."
     },
     {
+      "api": "systemDb",
+      "file": "packages/server/src/sqlite.ts",
+      "id": "packages/server/src/sqlite.ts#systemDb",
+      "symbol": "packages/server/src/internal/sqlite-capability.ts#createSqliteSystemDb",
+      "classification": "mint",
+      "reason": "SQLite runtime bootstrap mints one private system DB capability and registers it against the exact runtime token for later purpose-checked recovery."
+    },
+    {
       "api": "createWitnessWeakMap",
       "file": "packages/server/src/sqlite.ts",
       "id": "packages/server/src/sqlite.ts#tableIdentities",
@@ -1189,6 +1237,14 @@
       "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
       "classification": "internal-registry",
       "reason": "Latches a publication failure against the exact dev app identity so later refreshes fail closed; the private error registry does not mint outward authority."
+    },
+    {
+      "api": "createWitnessWeakMap",
+      "file": "packages/server/src/vite-dev.ts",
+      "id": "packages/server/src/vite-dev.ts#retainedViteDevLiveTargetInventories",
+      "symbol": "packages/server/src/security-witness-intrinsics.ts#createWitnessWeakMap",
+      "classification": "internal-registry",
+      "reason": "Retains each dev app's exact live-target inventory behind its private runtime identity so overlay refreshes cannot mix authorities across apps."
     },
     {
       "api": "createWitnessWeakMap",
