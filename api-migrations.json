@@ -8051,6 +8051,271 @@
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node scripts/migrate-drizzle-api-v1.mjs --check scripts/fixtures/api-migrations/drizzle-typed-annotations-v1"
       }
+    },
+    {
+      "id": "better-auth-generated-assembly-v1",
+      "state": "removed",
+      "owner": "better-auth-api",
+      "decisions": [
+        "@kovojs/better-auth#BetterAuthBindingRequest",
+        "@kovojs/better-auth#BetterAuthCredentialMutationValue",
+        "@kovojs/better-auth#BetterAuthDevelopmentSeed",
+        "@kovojs/better-auth#BetterAuthPostgresBindings",
+        "@kovojs/better-auth#BetterAuthPostgresBindingsOptions",
+        "@kovojs/better-auth#BetterAuthPostgresEnvironmentBindingsOptions",
+        "@kovojs/better-auth#betterAuthPostgresSecret",
+        "@kovojs/better-auth#BetterAuthPostgresSecret",
+        "@kovojs/better-auth#BetterAuthSqliteBindings",
+        "@kovojs/better-auth#BetterAuthSqliteBindingsOptions",
+        "@kovojs/better-auth#BetterAuthSqliteDevelopmentSeed",
+        "@kovojs/better-auth#BetterAuthSqliteEnvironmentBindingsOptions",
+        "@kovojs/better-auth#betterAuthSqliteSecret",
+        "@kovojs/better-auth#BetterAuthSqliteSecret",
+        "@kovojs/better-auth#createBetterAuthPostgresBindings",
+        "@kovojs/better-auth#createBetterAuthPostgresBindingsFromEnvironment",
+        "@kovojs/better-auth#createBetterAuthSqliteBindings",
+        "@kovojs/better-auth#createBetterAuthSqliteBindingsFromEnvironment"
+      ],
+      "tool": {
+        "path": "scripts/migrate-better-auth-api-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
+      },
+      "releaseNote": "docs/releases/better-auth-generated-assembly-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured Better Auth migration result.",
+      "rules": [
+        {
+          "id": "001-better-auth-binding-request-replacement",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthBindingRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated",
+            "symbol": "BetterAuthGeneratedRequest"
+          }
+        },
+        {
+          "id": "002-better-auth-credential-mutation-value-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthCredentialMutationValue"
+          },
+          "category": "app-context",
+          "reason": "The credential mutation wire carrier was framework-owned; app-authored uses need an explicit local result contract rather than a guessed replacement."
+        },
+        {
+          "id": "003-better-auth-development-seed-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthDevelopmentSeed"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated",
+            "symbol": "BetterAuthDevelopmentSeed"
+          }
+        },
+        {
+          "id": "004-better-auth-postgres-bindings-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthPostgresBindings"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "BetterAuthPostgresBindings"
+          }
+        },
+        {
+          "id": "005-better-auth-postgres-bindings-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthPostgresBindingsOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "BetterAuthPostgresBindingsOptions"
+          }
+        },
+        {
+          "id": "006-better-auth-postgres-environment-bindings-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthPostgresEnvironmentBindingsOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "BetterAuthPostgresEnvironmentBindingsOptions"
+          }
+        },
+        {
+          "id": "007-better-auth-postgres-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "betterAuthPostgresSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "betterAuthPostgresSecret"
+          }
+        },
+        {
+          "id": "008-better-auth-postgres-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthPostgresSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "BetterAuthPostgresSecret"
+          }
+        },
+        {
+          "id": "009-better-auth-sqlite-bindings-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthSqliteBindings"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "BetterAuthSqliteBindings"
+          }
+        },
+        {
+          "id": "010-better-auth-sqlite-bindings-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthSqliteBindingsOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "BetterAuthSqliteBindingsOptions"
+          }
+        },
+        {
+          "id": "011-better-auth-sqlite-development-seed-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthSqliteDevelopmentSeed"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "BetterAuthSqliteDevelopmentSeed"
+          }
+        },
+        {
+          "id": "012-better-auth-sqlite-environment-bindings-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthSqliteEnvironmentBindingsOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "BetterAuthSqliteEnvironmentBindingsOptions"
+          }
+        },
+        {
+          "id": "013-better-auth-sqlite-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "betterAuthSqliteSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "betterAuthSqliteSecret"
+          }
+        },
+        {
+          "id": "014-better-auth-sqlite-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "BetterAuthSqliteSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "BetterAuthSqliteSecret"
+          }
+        },
+        {
+          "id": "015-create-better-auth-postgres-bindings-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "createBetterAuthPostgresBindings"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "createBetterAuthPostgresBindings"
+          }
+        },
+        {
+          "id": "016-create-better-auth-postgres-bindings-from-environment-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "createBetterAuthPostgresBindingsFromEnvironment"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/postgres",
+            "symbol": "createBetterAuthPostgresBindingsFromEnvironment"
+          }
+        },
+        {
+          "id": "017-create-better-auth-sqlite-bindings-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "createBetterAuthSqliteBindings"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "createBetterAuthSqliteBindings"
+          }
+        },
+        {
+          "id": "018-create-better-auth-sqlite-bindings-from-environment-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/better-auth",
+            "symbol": "createBetterAuthSqliteBindingsFromEnvironment"
+          },
+          "to": {
+            "specifier": "@kovojs/better-auth/generated/sqlite",
+            "symbol": "createBetterAuthSqliteBindingsFromEnvironment"
+          }
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/better-auth-generated-assembly-v1/generated-bindings.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/better-auth-generated-assembly-v1/internal-carrier.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-better-auth-api-v1.mjs --check scripts/fixtures/api-migrations/better-auth-generated-assembly-v1"
+      }
     }
   ]
 }

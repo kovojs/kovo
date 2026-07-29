@@ -24,8 +24,6 @@ const securityRoleContracts = [
   ['@kovojs/better-auth', '.', 'authed', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthCsrfFromEnvironment', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthPasswordResetMailDoor', 'security-control'],
-  ['@kovojs/better-auth', '.', 'betterAuthPostgresSecret', 'secret-flow'],
-  ['@kovojs/better-auth', '.', 'betterAuthSqliteSecret', 'secret-flow'],
   ['@kovojs/better-auth', '.', 'role', 'security-control'],
   ['@kovojs/core', '.', 'DeclassifyPolicy', 'request-closed'],
   ['@kovojs/core', '.', 'hmacSignature', 'security-control'],

@@ -6,7 +6,10 @@
     "better-auth-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
       "contractTests": [
-        "packages/better-auth/src/index.session.test.ts"
+        "packages/better-auth/src/generated.api.test.ts",
+        "packages/better-auth/src/index.session.test.ts",
+        "scripts/check-packed-better-auth-consumer.test.mjs",
+        "scripts/migrate-better-auth-api-v1.test.mjs"
       ]
     },
     "browser-contract": {
@@ -487,22 +490,24 @@
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthBindingRequest",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/better-auth",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthCredentialMutationValue",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthCredentialMutationValue",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/better-auth",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#betterAuthCsrfFromEnvironment",
@@ -531,11 +536,12 @@
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthDevelopmentSeed",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
       "canonicalHome": "@kovojs/better-auth/generated",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthEnvironmentCsrfOptions",
@@ -619,55 +625,60 @@
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthPostgresBindings",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthPostgresBindingsOptions",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthPostgresBindingsOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthPostgresEnvironmentBindingsOptions",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthPostgresEnvironmentBindingsOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#betterAuthPostgresSecret",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "betterAuthPostgresSecret",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthPostgresSecret",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthPostgresSecret",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthRoleRequest",
@@ -762,110 +773,120 @@
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthSqliteBindings",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthSqliteBindingsOptions",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthSqliteBindingsOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthSqliteDevelopmentSeed",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthSqliteDevelopmentSeed",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthSqliteEnvironmentBindingsOptions",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthSqliteEnvironmentBindingsOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#betterAuthSqliteSecret",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "betterAuthSqliteSecret",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#BetterAuthSqliteSecret",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "BetterAuthSqliteSecret",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#createBetterAuthPostgresBindings",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "createBetterAuthPostgresBindings",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#createBetterAuthPostgresBindingsFromEnvironment",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "createBetterAuthPostgresBindingsFromEnvironment",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/postgres",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#createBetterAuthSqliteBindings",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "createBetterAuthSqliteBindings",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#createBetterAuthSqliteBindingsFromEnvironment",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
       "symbol": "createBetterAuthSqliteBindingsFromEnvironment",
-      "state": "public",
+      "state": "removed",
       "decision": "move",
-      "canonicalHome": "@kovojs/better-auth/generated",
+      "canonicalHome": "@kovojs/better-auth/generated/sqlite",
       "story": "better-auth-runtime",
-      "evidence": "better-auth-contract"
+      "evidence": "better-auth-contract",
+      "migrationBatch": "better-auth-generated-assembly-v1"
     },
     {
       "id": "@kovojs/better-auth#mount",

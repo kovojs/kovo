@@ -32,6 +32,18 @@
               "types": "./dist/index.d.mts",
               "default": "./dist/index.mjs"
             },
+            "./generated": {
+              "types": "./dist/generated.d.mts",
+              "default": "./dist/generated.mjs"
+            },
+            "./generated/postgres": {
+              "types": "./dist/generated-postgres.d.mts",
+              "default": "./dist/generated-postgres.mjs"
+            },
+            "./generated/sqlite": {
+              "types": "./dist/generated-sqlite.d.mts",
+              "default": "./dist/generated-sqlite.mjs"
+            },
             "./internal": {
               "types": "./dist/internal.d.mts",
               "default": "./dist/internal.mjs"
@@ -41,7 +53,18 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:af055dfc2a88c82082c6736f9bd0415b667a0363ba4c1ef9f09d3664778b2c2c"
+          "fingerprint": "sha256:701c0a827dd1cb4c52378f5e3b2935230077e92ea060e647222d6de3510d22db"
+        },
+        {
+          "exports": {
+            ".": "./src/index.ts",
+            "./generated": "./src/generated.ts",
+            "./generated/postgres": "./src/generated-postgres.ts",
+            "./generated/sqlite": "./src/generated-sqlite.ts",
+            "./internal": "./src/internal.ts",
+            "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
+          },
+          "fingerprint": "sha256:dbcddc1f0c382d65a0005528a4b3a3237efe75a90396f9899c078cf4ed6b5057"
         },
         {
           "exports": {
@@ -49,6 +72,18 @@
               "types": "./dist/index.d.mts",
               "default": "./dist/index.mjs"
             },
+            "./generated": {
+              "types": "./dist/generated.d.mts",
+              "default": "./dist/generated.mjs"
+            },
+            "./generated/postgres": {
+              "types": "./dist/generated-postgres.d.mts",
+              "default": "./dist/generated-postgres.mjs"
+            },
+            "./generated/sqlite": {
+              "types": "./dist/generated-sqlite.d.mts",
+              "default": "./dist/generated-sqlite.mjs"
+            },
             "./internal": {
               "types": "./dist/internal.d.mts",
               "default": "./dist/internal.mjs"
@@ -58,15 +93,7 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:bf3921f4561db922e47bbac359a08c883fdb7e8fec08d6b5cc6a5077eb6bcf6c"
-        },
-        {
-          "exports": {
-            ".": "./src/index.ts",
-            "./internal": "./src/internal.ts",
-            "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
-          },
-          "fingerprint": "sha256:cb769e097bead27372bf6995bdcf9ce935399a1f99bf991402e2e5f02cb42568"
+          "fingerprint": "sha256:fe6cd81e9116ee604a1ff570be7541905e6abf44e77598197a7ec49687eed914"
         }
       ],
       "packageName": "@kovojs/better-auth",
@@ -86,7 +113,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["<module>"]
+            ".": [
+              "<module>"
+            ]
           },
           "review": {
             "basis": "@kovojs/better-auth manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
@@ -117,7 +146,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["mount"]
+            ".": [
+              "mount"
+            ]
           },
           "review": {
             "basis": "The exact mount call creates a endpoint untrusted-data root; root status is independent from raw-capability disposition.",
@@ -137,68 +168,6 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
-          "id": "authority-free-secret-flow-auth-5a25124291",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["betterAuthPostgresSecret"]
-          },
-          "review": {
-            "basis": "betterAuthPostgresSecret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "secret-flow"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-secret-flow-auth-66658ad93f",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["betterAuthSqliteSecret"]
-          },
-          "review": {
-            "basis": "betterAuthSqliteSecret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "secret-flow"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
           "id": "authority-free-security-control-auth-587f167042",
           "matrix": {
             "cells": {
@@ -210,7 +179,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["authed"]
+            ".": [
+              "authed"
+            ]
           },
           "review": {
             "basis": "authed is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -241,7 +212,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["betterAuthCsrfFromEnvironment"]
+            ".": [
+              "betterAuthCsrfFromEnvironment"
+            ]
           },
           "review": {
             "basis": "betterAuthCsrfFromEnvironment is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -272,7 +245,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["betterAuthPasswordResetMailDoor"]
+            ".": [
+              "betterAuthPasswordResetMailDoor"
+            ]
           },
           "review": {
             "basis": "betterAuthPasswordResetMailDoor captures one exact non-Proxy deployer sender behind an opaque registry token; it acquires no raw host capability and fixed bindings can invoke it only through the reviewed password-reset mail sink.",
@@ -301,7 +276,9 @@
             "surface": "auth"
           },
           "members": {
-            ".": ["role"]
+            ".": [
+              "role"
+            ]
           },
           "review": {
             "basis": "role is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -317,133 +294,9 @@
           },
           "rootKind": "none",
           "securityRole": "security-control"
-        },
-        {
-          "capabilities": ["database-driver"],
-          "disposition": "framework-door",
-          "id": "framework-door-framework-door-auth-database-driver-0c1b95ff8f",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["createBetterAuthSqliteBindings"]
-          },
-          "review": {
-            "basis": "The exact @kovojs/better-auth#createBetterAuthSqliteBindings implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
-        },
-        {
-          "capabilities": ["database-driver"],
-          "disposition": "framework-door",
-          "id": "framework-door-framework-door-auth-database-driver-3f352e628d",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["createBetterAuthPostgresBindingsFromEnvironment"]
-          },
-          "review": {
-            "basis": "The exact @kovojs/better-auth#createBetterAuthPostgresBindingsFromEnvironment implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
-        },
-        {
-          "capabilities": ["database-driver"],
-          "disposition": "framework-door",
-          "id": "framework-door-framework-door-auth-database-driver-683a14ff2e",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["createBetterAuthSqliteBindingsFromEnvironment"]
-          },
-          "review": {
-            "basis": "The exact @kovojs/better-auth#createBetterAuthSqliteBindingsFromEnvironment implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
-        },
-        {
-          "capabilities": ["database-driver"],
-          "disposition": "framework-door",
-          "id": "framework-door-framework-door-auth-database-driver-823b3accd1",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "auth"
-          },
-          "members": {
-            ".": ["createBetterAuthPostgresBindings"]
-          },
-          "review": {
-            "basis": "The exact @kovojs/better-auth#createBetterAuthPostgresBindings implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
-            "evidence": [
-              "packages/better-auth/src/environment.ts",
-              "packages/better-auth/src/guards.ts",
-              "packages/better-auth/src/index.ts",
-              "packages/better-auth/src/internal/runtime-lock.ts",
-              "packages/better-auth/src/postgres.ts",
-              "packages/better-auth/src/sqlite.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "22f9995cb73508b599d3b3d6ecaf05024191b0bbfbd2259e353a49a1cc765d84"
+      "sourceTreeSha256": "c22040f4f310b4e975ed4c5cfcb0487602c01d836fa57d0eeb942163390e077c"
     },
     {
       "manifestVariants": [
