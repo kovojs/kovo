@@ -34,6 +34,7 @@ function readyLedger(decision) {
     resultSchema: API_MIGRATION_RESULT_SCHEMA,
     modes: ['check', 'write'],
     refusalCategories: [...API_MIGRATION_REFUSAL_CATEGORIES],
+    cumulativeTool: structuredClone(committedLedger.cumulativeTool),
     batches: [
       ...committedLedger.batches,
       {
@@ -99,6 +100,26 @@ describe('API migration protocol', () => {
     expect(
       validateApiMigrationLedger({ ledger: committedLedger, decisions, repoRoot }).findings,
     ).toEqual([]);
+  });
+
+  it('binds the installed cumulative command and packed gate to every removed batch', () => {
+    const ledger = structuredClone(committedLedger);
+    ledger.cumulativeTool.batches = ledger.cumulativeTool.batches.slice(1);
+    expect(validateApiMigrationLedger({ ledger, decisions, repoRoot }).findings).toContain(
+      'cumulativeTool.batches must equal every removed batch in checked-ledger order',
+    );
+
+    ledger.cumulativeTool.batches = committedLedger.cumulativeTool.batches;
+    ledger.cumulativeTool.writeArgs = [];
+    expect(validateApiMigrationLedger({ ledger, decisions, repoRoot }).findings).toContain(
+      'cumulativeTool must expose kovo fix api-v1 with exact --check/--write result protocol',
+    );
+
+    ledger.cumulativeTool.writeArgs = committedLedger.cumulativeTool.writeArgs;
+    ledger.cumulativeTool.packedArgs = [];
+    expect(validateApiMigrationLedger({ ledger, decisions, repoRoot }).findings).toContain(
+      'cumulativeTool must expose kovo fix api-v1 with exact --check/--write result protocol',
+    );
   });
 
   it('accepts a ready batch only after rewrite, refusal, and exercised evidence exists', () => {

@@ -12,6 +12,28 @@
     "sql-semantics",
     "trust-decision"
   ],
+  "cumulativeTool": {
+    "batch": "api-v1",
+    "command": "kovo fix api-v1",
+    "path": "packages/cli/src/commands/api-v1-migration.ts",
+    "resultSchema": "kovo-api-migration-result/v1",
+    "checkArgs": ["--check"],
+    "writeArgs": ["--write"],
+    "releaseNote": "docs/releases/api-v1.md",
+    "packedGate": "scripts/check-packed-cli-consumer.mjs",
+    "packedArgs": ["--api-v1-only"],
+    "batches": [
+      "core-task-topology-v1",
+      "style-opaque-handles",
+      "ui-headless-icons-v1",
+      "browser-client-installer-v1",
+      "browser-authoring-v1",
+      "server-task-topology-v1",
+      "test-harness-v2",
+      "drizzle-typed-annotations-v1",
+      "better-auth-generated-assembly-v1"
+    ]
+  },
   "batches": [
     {
       "id": "core-task-topology-v1",

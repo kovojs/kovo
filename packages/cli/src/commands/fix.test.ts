@@ -15,7 +15,11 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from '../index.js';
-import { runApiV1Migration } from './api-v1-migration.js';
+import {
+  API_V1_MIGRATION_BATCH_IDS,
+  apiV1MigrationRuntime,
+  runApiV1Migration,
+} from './api-v1-migration.js';
 import { fixFormatCommandShell, parseFixArgs, runFixCommand } from './fix.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -38,10 +42,20 @@ describe('kovo fix', () => {
       ok: true,
       options: {
         apiV1: true,
-        check: true,
+        mode: 'check',
         sourcePaths: ['src', 'packages/app/theme.ts'],
       },
     });
+    expect(parseFixArgs(['api-v1', 'src', '--write'])).toEqual({
+      ok: true,
+      options: {
+        apiV1: true,
+        mode: 'write',
+        sourcePaths: ['src'],
+      },
+    });
+    expect(parseFixArgs(['api-v1', 'src'])).toMatchObject({ ok: false });
+    expect(parseFixArgs(['api-v1', 'src', '--check', '--write'])).toMatchObject({ ok: false });
     expect(parseFixArgs(['format', 'src', 'package.json', '--check'])).toEqual({
       ok: true,
       options: {
@@ -220,7 +234,7 @@ export const Link = component({
     expect(readFileSync(sourcePath, 'utf8')).toBe(source);
   });
 
-  it('runs the api-v1 batch in read-only check mode and fail-closed refusal mode', async () => {
+  it('runs every checked api-v1 batch in read-only check mode and fail-closed refusal mode', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-'));
     const rewritePath = join(root, 'button.tsx');
     const refusalPath = join(root, 'theme.ts');
@@ -253,13 +267,28 @@ export const dark = createTheme(vars, { accent: 'black' });
         summary: { refused: number; rewritten: number; unchanged: number };
       };
       expect(result).toMatchObject({
+        batch: 'api-v1',
+        migrationBatches: API_V1_MIGRATION_BATCH_IDS,
         schema: 'kovo-api-migration-result/v1',
         summary: { refused: 1, rewritten: 1, unchanged: 0 },
       });
-      expect(result.files[0]).toEqual({ path: 'button.tsx', state: 'rewritten' });
+      expect(result.files[0]).toEqual({
+        batches: ['style-opaque-handles'],
+        path: 'button.tsx',
+        state: 'rewritten',
+      });
       expect(result.files[1]).toMatchObject({
         path: 'theme.ts',
-        refusals: [{ category: 'app-context' }],
+        refusals: [
+          {
+            batch: 'style-opaque-handles',
+            category: 'app-context',
+            manualAction: expect.stringContaining(
+              'docs/releases/api-v1.md#migrate-styles-and-themes',
+            ),
+            reason: expect.any(String),
+          },
+        ],
         state: 'refused',
       });
       const refusalStart = refusalSource.indexOf('createTheme');
@@ -283,6 +312,89 @@ export const dark = createTheme(vars, { accent: 'black' });
         "import type { StyleHandle } from '@kovojs/style';",
       );
       expect(readFileSync(rewritePath, 'utf8')).toContain('style?: StyleHandle');
+
+      const idempotent = await runApiV1Migration(
+        { mode: 'check', sourcePaths: ['button.tsx'] },
+        root,
+      );
+      expect(idempotent).toMatchObject({ exitCode: 0 });
+      expect(JSON.parse(idempotent.output ?? '')).toMatchObject({
+        files: [{ path: 'button.tsx', state: 'unchanged' }],
+        summary: { refused: 0, rewritten: 0, unchanged: 1 },
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('writes the structured api-v1 finding result to stdout', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-stdout-'));
+    const sourcePath = join(root, 'button.ts');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+    try {
+      writeFileSync(sourcePath, `import type { StyleRecord } from '@kovojs/style';\n`);
+      process.chdir(root);
+
+      await expect(mainAsync(['fix', 'api-v1', 'button.ts', '--check'])).resolves.toBe(1);
+
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(JSON.parse(output)).toMatchObject({
+        batch: 'api-v1',
+        mode: 'check',
+        summary: { refused: 0, rewritten: 1, unchanged: 0 },
+      });
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(sourcePath, 'utf8')).toContain('StyleRecord');
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('binds the cumulative command to every removed batch in the checked migration ledger', () => {
+    const ledger = JSON.parse(readFileSync(join(process.cwd(), 'api-migrations.json'), 'utf8')) as {
+      batches: { id: string; state: string }[];
+    };
+    expect(API_V1_MIGRATION_BATCH_IDS).toEqual(
+      ledger.batches.filter((batch) => batch.state === 'removed').map((batch) => batch.id),
+    );
+  });
+
+  it('rolls back prior files when a later captured rewrite cannot commit', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-rollback-'));
+    const firstPath = join(root, 'a.ts');
+    const secondPath = join(root, 'b.ts');
+    const source = `import type { StyleRecord } from '@kovojs/style';\n`;
+    const createBoundary = apiV1MigrationRuntime.createFileSystemBoundary;
+    try {
+      writeFileSync(firstPath, source);
+      writeFileSync(secondPath, source);
+      const boundary = await createBoundary(realpathSync(root));
+      let replacements = 0;
+      vi.spyOn(apiV1MigrationRuntime, 'createFileSystemBoundary').mockResolvedValue({
+        ...boundary,
+        async replaceCapturedFile(snapshot, body) {
+          replacements += 1;
+          await boundary.replaceCapturedFile(snapshot, body);
+          if (replacements === 2) throw new Error('injected post-commit failure');
+        },
+      });
+
+      const result = await runApiV1Migration(
+        { mode: 'write', sourcePaths: ['a.ts', 'b.ts'] },
+        root,
+      );
+
+      expect(result).toMatchObject({
+        error: expect.stringContaining('2 migration output file(s) rolled back'),
+        exitCode: 1,
+      });
+      expect(readFileSync(firstPath, 'utf8')).toBe(source);
+      expect(readFileSync(secondPath, 'utf8')).toBe(source);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

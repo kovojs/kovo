@@ -1336,6 +1336,9 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       flag('costReport', ['--cost-report'], 'Measure safe-vs-escape edit cost.', {
         category: 'selection',
       }),
+      flag('write', ['--write'], 'Apply the complete API migration transaction.', {
+        category: 'posture',
+      }),
     ],
     order: 100,
     processLifecycle: 'one-shot',
@@ -1359,14 +1362,25 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [argument('source', value('path', 'source.tsx|source.jsx')), option('check')],
       },
       {
-        id: 'api-v1',
+        id: 'api-v1-check',
         tokens: [
           literal('api-v1', 'Migrate the checked public API v1 batch.'),
           argument('sources', value('path', 'source-or-directory'), {
             repeatable: true,
             required: false,
           }),
-          option('check'),
+          option('check', true),
+        ],
+      },
+      {
+        id: 'api-v1-write',
+        tokens: [
+          literal('api-v1', 'Migrate the checked public API v1 batch.'),
+          argument('sources', value('path', 'source-or-directory'), {
+            repeatable: true,
+            required: false,
+          }),
+          option('write', true),
         ],
       },
       { id: 'cost-report', tokens: [option('costReport', true)] },

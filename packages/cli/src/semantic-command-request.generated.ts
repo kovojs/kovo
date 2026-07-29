@@ -676,9 +676,19 @@ export type KovoSemanticCommandRequest =
         readonly sources?: readonly string[];
       };
       readonly command: 'fix';
-      readonly form: 'api-v1';
-      readonly options?: {
-        readonly check?: boolean;
+      readonly form: 'api-v1-check';
+      readonly options: {
+        readonly check: true;
+      };
+    }
+  | {
+      readonly arguments: {
+        readonly sources?: readonly string[];
+      };
+      readonly command: 'fix';
+      readonly form: 'api-v1-write';
+      readonly options: {
+        readonly write: true;
       };
     }
   | {

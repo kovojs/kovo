@@ -102,6 +102,35 @@ export function validateApiMigrationLedger({ ledger, decisions, repoRoot = defau
   const batches = Array.isArray(ledger.batches) ? ledger.batches : [];
   const batchById = new Map();
   const assignedBatches = new Map();
+  const cumulativeTool = ledger.cumulativeTool;
+
+  if (!isRecord(cumulativeTool)) {
+    findings.push('cumulativeTool must define the installed api-v1 migration command');
+  } else {
+    if (
+      cumulativeTool.batch !== 'api-v1' ||
+      cumulativeTool.command !== 'kovo fix api-v1' ||
+      cumulativeTool.resultSchema !== API_MIGRATION_RESULT_SCHEMA ||
+      JSON.stringify(cumulativeTool.checkArgs) !== JSON.stringify(['--check']) ||
+      JSON.stringify(cumulativeTool.writeArgs) !== JSON.stringify(['--write']) ||
+      JSON.stringify(cumulativeTool.packedArgs) !== JSON.stringify(['--api-v1-only'])
+    ) {
+      findings.push(
+        'cumulativeTool must expose kovo fix api-v1 with exact --check/--write result protocol',
+      );
+    }
+    validateFile(findings, repoRoot, 'cumulativeTool.path', cumulativeTool.path);
+    validateFile(findings, repoRoot, 'cumulativeTool.releaseNote', cumulativeTool.releaseNote);
+    validateFile(findings, repoRoot, 'cumulativeTool.packedGate', cumulativeTool.packedGate);
+    const removedBatchIds = batches
+      .filter((batch) => isRecord(batch) && batch.state === 'removed')
+      .map((batch) => batch.id);
+    if (JSON.stringify(cumulativeTool.batches) !== JSON.stringify(removedBatchIds)) {
+      findings.push(
+        'cumulativeTool.batches must equal every removed batch in checked-ledger order',
+      );
+    }
+  }
 
   for (const [batchIndex, batch] of batches.entries()) {
     const label = `batches[${batchIndex}]`;

@@ -46,6 +46,7 @@
     "esbuild": "0.28.1",
     "parse5": "8.0.1",
     "sigstore": "5.0.0",
+    "typescript": "6.0.3",
     "vite-plus": "0.1.24"
   },
   "devDependencies": {

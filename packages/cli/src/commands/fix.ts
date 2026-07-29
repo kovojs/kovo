@@ -29,7 +29,7 @@ export type FixCommandOptions =
   | { readonly check: boolean; readonly sourcePath: string }
   | {
       readonly apiV1: true;
-      readonly check: boolean;
+      readonly mode: 'check' | 'write';
       readonly sourcePaths: readonly string[];
     }
   | {
@@ -51,12 +51,12 @@ export function parseFixArgs(args: readonly string[]): FixArgParseResult {
   if (parsed.value.form === 'cost-report') {
     return { ok: true, options: { costReport: true } };
   }
-  if (parsed.value.form === 'api-v1') {
+  if (parsed.value.form === 'api-v1-check' || parsed.value.form === 'api-v1-write') {
     return {
       ok: true,
       options: {
         apiV1: true,
-        check: parsed.value.options.check,
+        mode: parsed.value.form === 'api-v1-check' ? 'check' : 'write',
         sourcePaths: parsed.value.arguments.sources ?? [],
       },
     };
@@ -96,7 +96,7 @@ export async function runFixCommand(
     if ('apiV1' in options) {
       return runApiV1Migration(
         {
-          mode: options.check ? 'check' : 'write',
+          mode: options.mode,
           sourcePaths: options.sourcePaths,
         },
         invocationCwd,

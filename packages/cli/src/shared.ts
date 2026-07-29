@@ -85,6 +85,26 @@ export function writeCommandResult(
 }
 
 /**
+ * @internal Write a machine-readable result to stdout even when its exit status reports findings.
+ * Operational failures still go to stderr. This keeps JSON/NDJSON consumers independent of the
+ * human diagnostic stream without weakening the command's checked exit contract.
+ */
+export function writeStructuredCommandResult(
+  result: CliProcessResult,
+  category: Exclude<KovoDiagnosticCategory, 'usage'> = 'proof',
+  command?: KovoCommandName,
+  exitTwoClass: 'unknown' | 'usage' = 'usage',
+): 0 | 1 | 2 {
+  const normalized = normalizeCommandResultDiagnostics(result, category);
+  if ('error' in normalized) {
+    process.stderr.write(normalized.error);
+  } else {
+    process.stdout.write(normalized.output);
+  }
+  return validatedCommandExitCode(normalized.exitCode, command, exitTwoClass);
+}
+
+/**
  * @internal Render authenticated diagnostic records for machine consumers while
  * preserving each command's existing versioned fact protocol in human mode.
  */

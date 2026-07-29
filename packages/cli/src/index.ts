@@ -70,7 +70,12 @@ import {
   runSelectedGraphCommand,
   writeCheckUsageError,
 } from './graph-output.js';
-import { writeCommandResult, writeFormattedCommandResult, writeUsageError } from './shared.js';
+import {
+  writeCommandResult,
+  writeFormattedCommandResult,
+  writeStructuredCommandResult,
+  writeUsageError,
+} from './shared.js';
 import { runDeploymentEnvironmentCheck } from './deployment-environment-contract.js';
 import {
   scanSourceSinkDrift,
@@ -310,11 +315,10 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
   async fix(args, security) {
     const parsed = parseFixArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message, 'fix');
-    return writeCommandResult(
-      await runFixCommand(parsed.options, security.invocationCwd),
-      'build',
-      'fix',
-    );
+    const result = await runFixCommand(parsed.options, security.invocationCwd);
+    return 'apiV1' in parsed.options
+      ? writeStructuredCommandResult(result, 'build', 'fix')
+      : writeCommandResult(result, 'build', 'fix');
   },
   async mcp(args, security) {
     return runMcpCommand(args, security.invocationCwd);

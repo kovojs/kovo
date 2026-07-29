@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertPackedApiV1Result,
   assertPackedCliDependencyClosure,
   assertPackedComponentCatalogJourney,
   assertPackedCliProcessContract,
@@ -8,6 +9,7 @@ import {
   assertPackedMcpLifecycle,
   assertPackedSemanticApiBoundary,
   productionDependencyNamesFromLockfile,
+  sourceImportsPackage,
 } from './check-packed-cli-consumer.mjs';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -22,6 +24,44 @@ ${packages.map((name) => `  '${name}@1.0.0': {}`).join('\n')}
 }
 
 describe('packed CLI consumer proof', () => {
+  it('requires the exact cumulative api-v1 protocol and file-count summary', () => {
+    const result = {
+      batch: 'api-v1',
+      files: [
+        { batches: ['style-opaque-handles'], path: 'style.ts', state: 'rewritten' },
+        { path: 'current.ts', state: 'unchanged' },
+      ],
+      migrationBatches: [
+        'core-task-topology-v1',
+        'style-opaque-handles',
+        'ui-headless-icons-v1',
+        'browser-client-installer-v1',
+        'browser-authoring-v1',
+        'server-task-topology-v1',
+        'test-harness-v2',
+        'drizzle-typed-annotations-v1',
+        'better-auth-generated-assembly-v1',
+      ],
+      schema: 'kovo-api-migration-result/v1',
+      summary: { refused: 0, rewritten: 1, unchanged: 1 },
+    };
+    expect(() =>
+      assertPackedApiV1Result(result, { refused: 0, rewritten: 1, unchanged: 1 }),
+    ).not.toThrow();
+    expect(() =>
+      assertPackedApiV1Result(
+        { ...result, migrationBatches: result.migrationBatches.slice(1) },
+        { refused: 0, rewritten: 1, unchanged: 1 },
+      ),
+    ).toThrow('drifted from the checked cumulative protocol');
+    expect(() =>
+      assertPackedApiV1Result(
+        { ...result, summary: { refused: 0, rewritten: 2, unchanged: 0 } },
+        { refused: 0, rewritten: 1, unchanged: 1 },
+      ),
+    ).toThrow('drifted from the checked cumulative protocol');
+  });
+
   it('enforces informational, usage/config, and finding process contracts', () => {
     const result = (status, stdout = '', stderr = '') => ({
       error: undefined,
@@ -243,5 +283,20 @@ describe('packed CLI consumer proof', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('distinguishes executable package imports from documentation examples', () => {
+    expect(
+      sourceImportsPackage(
+        `/** @example import { Accordion } from '@kovojs/ui/accordion'; */\nexport const Accordion = {};\n`,
+        '@kovojs/ui',
+      ),
+    ).toBe(false);
+    expect(
+      sourceImportsPackage(
+        `import type { AccordionProps } from '@kovojs/ui/accordion';\nexport type Props = AccordionProps;\n`,
+        '@kovojs/ui',
+      ),
+    ).toBe(true);
   });
 });

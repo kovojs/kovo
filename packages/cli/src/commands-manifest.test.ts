@@ -185,7 +185,7 @@ describe('commands manifest', () => {
     );
     expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');
     expect(FIX_USAGE).toBe(
-      'usage: kovo fix format [source-or-directory] [--check] | kovo fix <source.tsx|source.jsx> [--check] | kovo fix api-v1 [source-or-directory] [--check] | kovo fix --cost-report',
+      'usage: kovo fix format [source-or-directory] [--check] | kovo fix <source.tsx|source.jsx> [--check] | kovo fix api-v1 [source-or-directory] --check | kovo fix api-v1 [source-or-directory] --write | kovo fix --cost-report',
     );
     expect(EXPORT_USAGE).toBe(
       'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]',

@@ -13,13 +13,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
+import migrationLedger from '../api-migrations.json' with { type: 'json' };
 
 const RESULT_SCHEMA = 'kovo-api-migration-result/v1';
 const BATCH = 'server-task-topology-v1';
-const SERVER_ROOT = '@kovojs/server';
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
@@ -29,10 +29,6 @@ const SKIPPED_DIRECTORIES = new Set([
   'generated',
   'node_modules',
 ]);
-const scriptRepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const migrationLedger = JSON.parse(
-  readFileSync(resolve(scriptRepoRoot, 'api-migrations.json'), 'utf8'),
-);
 const batch = migrationLedger.batches.find((entry) => entry.id === BATCH);
 if (!batch) throw new Error(`${BATCH} is missing from api-migrations.json`);
 const RULES = new Map(

@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import ts from 'typescript';
+
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
   packageSubjectFromSnapshotKey,
@@ -33,6 +35,40 @@ const expectedMcpTools = Object.freeze([
   'kovo_docs',
   'kovo_explain',
   'list_diagnostics',
+]);
+const expectedApiV1Batches = Object.freeze([
+  'core-task-topology-v1',
+  'style-opaque-handles',
+  'ui-headless-icons-v1',
+  'browser-client-installer-v1',
+  'browser-authoring-v1',
+  'server-task-topology-v1',
+  'test-harness-v2',
+  'drizzle-typed-annotations-v1',
+  'better-auth-generated-assembly-v1',
+]);
+const apiV1RewriteFixtures = Object.freeze([
+  'core-task-topology-v1/task-imports.input.ts',
+  'style-opaque-handles/style-record.input.ts',
+  'ui-headless-icons-v1/icon-render-result.input.ts',
+  'browser-client-installer-v1/install.input.ts',
+  'browser-authoring-v1/trust-reason.input.ts',
+  'server-task-topology-v1/task-imports.input.ts',
+  'drizzle-typed-annotations-v1/schema.input.ts',
+  'better-auth-generated-assembly-v1/generated-bindings.input.ts',
+]);
+const apiV1RefusalFixtures = Object.freeze([
+  'core-task-topology-v1/registry.refusal.ts',
+  'style-opaque-handles/create-theme.refusal.ts',
+  'ui-headless-icons-v1/headless-helper.refusal.ts',
+  'ui-headless-icons-v1/ui-root.refusal.ts',
+  'browser-client-installer-v1/manual-assembly.refusal.ts',
+  'browser-authoring-v1/derive-strings.refusal.ts',
+  'browser-authoring-v1/missing-metadata.refusal.ts',
+  'server-task-topology-v1/internal-carrier.refusal.ts',
+  'test-harness-v2/legacy-harness.refusal.ts',
+  'drizzle-typed-annotations-v1/runtime-metadata.refusal.ts',
+  'better-auth-generated-assembly-v1/internal-carrier.refusal.ts',
 ]);
 
 export function productionDependencyNamesFromLockfile(lockfileText) {
@@ -163,8 +199,9 @@ export function assertPackedCliProcessContract(observations) {
   for (const [label, result] of informational) {
     assertCompletedProcess(result, label);
     if (result.status !== 0 || result.stderr !== '' || result.stdout.length === 0) {
+      const detail = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
       throw new Error(
-        `Packed ${label} must exit 0 with stdout only; observed status=${String(result.status)}`,
+        `Packed ${label} must exit 0 with stdout only; observed status=${String(result.status)}${detail ? `:\n${detail}` : ''}`,
       );
     }
   }
@@ -214,7 +251,7 @@ export function assertPackedSemanticApiBoundary(stdout) {
   }
 }
 
-export async function checkPackedCliConsumer() {
+export async function checkPackedCliConsumer({ apiV1Only = false } = {}) {
   const rootManifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const packedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const packedPackages = validatePackedReleaseManifest(packedManifest, releasePackages());
@@ -247,6 +284,12 @@ export async function checkPackedCliConsumer() {
       'export const Component = () => null;\n',
       'utf8',
     );
+
+    if (apiV1Only) {
+      assertPackedApiV1MigrationJourney(consumerRoot);
+      console.log('Packed CLI cumulative api-v1 migration consumer passed.');
+      return;
+    }
 
     assertPackedCliProcessContract({
       buildHelp: captureCommand('pnpm', ['exec', 'kovo', 'build', '--help'], consumerRoot),
@@ -310,6 +353,7 @@ export async function checkPackedCliConsumer() {
     );
     assertPackedDocsJourney(updateDocs.stdout, docs.stdout, consumerRoot);
     assertPackedComponentCatalogJourney(consumerRoot);
+    assertPackedApiV1MigrationJourney(consumerRoot);
 
     const lifecycle = runCommand(
       'pnpm',
@@ -378,7 +422,7 @@ export function assertPackedComponentCatalogJourney(consumerRoot, { run = runCom
   }
   for (const component of componentNames) {
     const source = readFileSync(path.join(outDir, `${component}.tsx`), 'utf8');
-    if (/from ['"]@kovojs\/ui(?:\/|['"])/u.test(source)) {
+    if (sourceImportsPackage(source, '@kovojs/ui')) {
       throw new Error(`Packed copied ${component}.tsx recursively imports @kovojs/ui`);
     }
   }
@@ -394,6 +438,171 @@ export function assertPackedComponentCatalogJourney(consumerRoot, { run = runCom
     if (!card.includes(`export const ${symbol} = component({`)) {
       throw new Error(`Packed copied Card anatomy is missing ${symbol}`);
     }
+  }
+}
+
+export function sourceImportsPackage(source, packageName) {
+  return ts
+    .preProcessFile(source, true, true)
+    .importedFiles.some(
+      ({ fileName }) => fileName === packageName || fileName.startsWith(`${packageName}/`),
+    );
+}
+
+export function assertPackedApiV1MigrationJourney(consumerRoot, { capture = captureCommand } = {}) {
+  const fixturesRoot = path.join(repoRoot, 'scripts', 'fixtures', 'api-migrations');
+  const rewriteRoot = path.join(consumerRoot, 'api-v1-rewrites');
+  mkdirSync(rewriteRoot, { recursive: true });
+  const originals = new Map();
+  for (const [index, fixture] of apiV1RewriteFixtures.entries()) {
+    const target = path.join(rewriteRoot, `${String(index).padStart(2, '0')}.ts`);
+    const source = readFileSync(path.join(fixturesRoot, fixture), 'utf8');
+    writeFileSync(target, source, 'utf8');
+    originals.set(target, source);
+  }
+
+  const checked = capture(
+    'pnpm',
+    ['exec', 'kovo', 'fix', 'api-v1', 'api-v1-rewrites', '--check'],
+    consumerRoot,
+  );
+  const checkedResult = parsePackedApiV1Result(checked, 1, 'rewrite check');
+  assertPackedApiV1Result(checkedResult, {
+    refused: 0,
+    rewritten: apiV1RewriteFixtures.length,
+    unchanged: 0,
+  });
+  for (const [target, source] of originals) {
+    if (readFileSync(target, 'utf8') !== source) {
+      throw new Error('Packed kovo fix api-v1 --check changed a rewrite fixture');
+    }
+  }
+
+  const written = capture(
+    'pnpm',
+    ['exec', 'kovo', 'fix', 'api-v1', 'api-v1-rewrites', '--write'],
+    consumerRoot,
+  );
+  const writtenResult = parsePackedApiV1Result(written, 0, 'rewrite write');
+  assertPackedApiV1Result(writtenResult, {
+    refused: 0,
+    rewritten: apiV1RewriteFixtures.length,
+    unchanged: 0,
+  });
+  for (const [target, source] of originals) {
+    if (readFileSync(target, 'utf8') === source) {
+      throw new Error(`Packed kovo fix api-v1 did not rewrite ${path.basename(target)}`);
+    }
+  }
+
+  const idempotent = capture(
+    'pnpm',
+    ['exec', 'kovo', 'fix', 'api-v1', 'api-v1-rewrites', '--check'],
+    consumerRoot,
+  );
+  const idempotentResult = parsePackedApiV1Result(idempotent, 0, 'idempotence check');
+  assertPackedApiV1Result(idempotentResult, {
+    refused: 0,
+    rewritten: 0,
+    unchanged: apiV1RewriteFixtures.length,
+  });
+
+  const refusalRoot = path.join(consumerRoot, 'api-v1-refusals');
+  mkdirSync(refusalRoot, { recursive: true });
+  const refusalOriginals = new Map();
+  for (const [index, fixture] of apiV1RefusalFixtures.entries()) {
+    const target = path.join(refusalRoot, `${String(index).padStart(2, '0')}.ts`);
+    const source = readFileSync(path.join(fixturesRoot, fixture), 'utf8');
+    writeFileSync(target, source, 'utf8');
+    refusalOriginals.set(target, source);
+  }
+  const transactionProbe = path.join(refusalRoot, 'rewrite-probe.ts');
+  const transactionProbeSource = readFileSync(
+    path.join(fixturesRoot, apiV1RewriteFixtures[1]),
+    'utf8',
+  );
+  writeFileSync(transactionProbe, transactionProbeSource, 'utf8');
+
+  const refused = capture(
+    'pnpm',
+    ['exec', 'kovo', 'fix', 'api-v1', 'api-v1-refusals', '--write'],
+    consumerRoot,
+  );
+  const refusedResult = parsePackedApiV1Result(refused, 1, 'refusal transaction');
+  if (
+    refusedResult.summary.refused !== apiV1RefusalFixtures.length ||
+    refusedResult.summary.rewritten !== 1 ||
+    readFileSync(transactionProbe, 'utf8') !== transactionProbeSource
+  ) {
+    throw new Error('Packed kovo fix api-v1 did not keep a refused batch transaction read-only');
+  }
+  for (const [target, source] of refusalOriginals) {
+    if (readFileSync(target, 'utf8') !== source) {
+      throw new Error(`Packed kovo fix api-v1 changed refused source ${path.basename(target)}`);
+    }
+  }
+  for (const file of refusedResult.files.filter((entry) => entry.state === 'refused')) {
+    if (
+      !Array.isArray(file.refusals) ||
+      file.refusals.length === 0 ||
+      file.refusals.some(
+        (refusal) =>
+          !expectedApiV1Batches.includes(refusal.batch) ||
+          typeof refusal.category !== 'string' ||
+          refusal.category.length === 0 ||
+          typeof refusal.reason !== 'string' ||
+          refusal.reason.length === 0 ||
+          typeof refusal.manualAction !== 'string' ||
+          !refusal.manualAction.includes('kovo fix api-v1 --check') ||
+          !Number.isInteger(refusal.anchor?.start) ||
+          !Number.isInteger(refusal.anchor?.end) ||
+          refusal.anchor.start < 0 ||
+          refusal.anchor.end < refusal.anchor.start,
+      )
+    ) {
+      throw new Error(`Packed kovo fix api-v1 emitted a non-actionable refusal for ${file.path}`);
+    }
+  }
+}
+
+export function assertPackedApiV1Result(result, expectedSummary) {
+  if (
+    result?.schema !== 'kovo-api-migration-result/v1' ||
+    result?.batch !== 'api-v1' ||
+    JSON.stringify(result.migrationBatches) !== JSON.stringify(expectedApiV1Batches) ||
+    !Array.isArray(result.files) ||
+    result.summary?.rewritten !== expectedSummary.rewritten ||
+    result.summary?.unchanged !== expectedSummary.unchanged ||
+    result.summary?.refused !== expectedSummary.refused ||
+    result.files.length !==
+      expectedSummary.rewritten + expectedSummary.unchanged + expectedSummary.refused
+  ) {
+    throw new Error('Packed kovo fix api-v1 result drifted from the checked cumulative protocol');
+  }
+}
+
+function parsePackedApiV1Result(processResult, expectedStatus, label) {
+  assertCompletedProcess(processResult, `api-v1 ${label}`);
+  if (
+    processResult.status !== expectedStatus ||
+    processResult.stderr !== '' ||
+    processResult.stdout.length === 0
+  ) {
+    const detail = [processResult.stderr, processResult.stdout].filter(Boolean).join('\n').trim();
+    const contract = JSON.stringify({
+      expectedStatus,
+      status: processResult.status,
+      stderr: processResult.stderr,
+      stdoutLength: processResult.stdout.length,
+    });
+    throw new Error(
+      `Packed kovo fix api-v1 ${label} expected status ${String(expectedStatus)} with JSON stdout only; observed ${contract}${detail ? `:\n${detail}` : ''}`,
+    );
+  }
+  try {
+    return JSON.parse(processResult.stdout);
+  } catch {
+    throw new Error(`Packed kovo fix api-v1 ${label} emitted non-JSON stdout`);
   }
 }
 
@@ -471,13 +680,29 @@ function packedCliConsumerManifest(packedPackages, packageManager) {
     ]),
   );
   const cliTarball = tarballs['@kovojs/cli'];
+  const iconsTarball = tarballs['@kovojs/icons'];
   const serverTarball = tarballs['@kovojs/server'];
+  const styleTarball = tarballs['@kovojs/style'];
+  const uiTarball = tarballs['@kovojs/ui'];
   if (cliTarball === undefined) throw new Error('Packed release manifest is missing @kovojs/cli');
+  if (iconsTarball === undefined) {
+    throw new Error('Packed release manifest is missing @kovojs/icons');
+  }
   if (serverTarball === undefined) {
     throw new Error('Packed release manifest is missing @kovojs/server');
   }
+  if (styleTarball === undefined) {
+    throw new Error('Packed release manifest is missing @kovojs/style');
+  }
+  if (uiTarball === undefined) throw new Error('Packed release manifest is missing @kovojs/ui');
   return {
-    dependencies: { '@kovojs/cli': cliTarball, '@kovojs/server': serverTarball },
+    dependencies: {
+      '@kovojs/cli': cliTarball,
+      '@kovojs/icons': iconsTarball,
+      '@kovojs/server': serverTarball,
+      '@kovojs/style': styleTarball,
+      '@kovojs/ui': uiTarball,
+    },
     name: 'kovo-packed-cli-consumer',
     packageManager,
     pnpm: { overrides: tarballs },
@@ -657,4 +882,11 @@ function compareStrings(left, right) {
   return left.localeCompare(right);
 }
 
-if (isMainEntry(import.meta.url)) await runGate(checkPackedCliConsumer);
+if (isMainEntry(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const unsupported = args.filter((arg) => arg !== '--api-v1-only');
+  if (unsupported.length > 0) {
+    throw new Error(`Unsupported packed CLI consumer option: ${unsupported.join(', ')}`);
+  }
+  await runGate(() => checkPackedCliConsumer({ apiV1Only: args.includes('--api-v1-only') }));
+}

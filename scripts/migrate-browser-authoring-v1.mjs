@@ -80,6 +80,7 @@ export function analyzeBrowserAuthoringV1Migration({ fileName, source }) {
 
     if (
       ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
       ts.isStringLiteral(statement.moduleSpecifier) &&
       statement.moduleSpecifier.text === BROWSER_SPECIFIER &&
       (!statement.exportClause ||

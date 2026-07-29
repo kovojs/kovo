@@ -43,6 +43,19 @@ describe('browser authoring API v1 migration executable', () => {
     ]);
   });
 
+  it('ignores local export declarations without a module specifier', () => {
+    expect(
+      analyzeBrowserAuthoringV1Migration({
+        fileName: 'bindings.ts',
+        source: 'const local = 1;\nexport { local };\nexport type { LocalType };\n',
+      }),
+    ).toEqual({
+      source: 'const local = 1;\nexport { local };\nexport type { LocalType };\n',
+      status: 'unchanged',
+      refusals: [],
+    });
+  });
+
   it('keeps the whole write batch unchanged when any file is refused', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-browser-authoring-v1-'));
     const rewritePath = path.join(root, 'rewrite.ts');
