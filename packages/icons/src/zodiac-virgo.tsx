@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Zodiac Virgo icon (Lucide). https://lucide.dev/icons/zodiac-virgo */
-export function ZodiacVirgo(props: IconProps = {}): IconRenderResult {
+export function ZodiacVirgo(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 5.5a1 1 0 0 1 5 0V16a5 5 0 0 0 5 5"></path>

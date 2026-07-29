@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Funnel X icon (Lucide). https://lucide.dev/icons/funnel-x */
-export function FunnelX(props: IconProps = {}): IconRenderResult {
+export function FunnelX(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12.531 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l.427-.473"></path>

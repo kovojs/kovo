@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Captions icon (Lucide). https://lucide.dev/icons/captions */
-export function Captions(props: IconProps = {}): IconRenderResult {
+export function Captions(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="18" height="14" x="3" y="5" rx="2" ry="2"></rect>

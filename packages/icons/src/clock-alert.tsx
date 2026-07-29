@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Clock Alert icon (Lucide). https://lucide.dev/icons/clock-alert */
-export function ClockAlert(props: IconProps = {}): IconRenderResult {
+export function ClockAlert(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 6v6l4 2"></path>

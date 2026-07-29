@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** List Checks icon (Lucide). https://lucide.dev/icons/list-checks */
-export function ListChecks(props: IconProps = {}): IconRenderResult {
+export function ListChecks(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13 5h8"></path>

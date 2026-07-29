@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Sticky Note Plus icon (Lucide). https://lucide.dev/icons/sticky-note-plus */
-export function StickyNotePlus(props: IconProps = {}): IconRenderResult {
+export function StickyNotePlus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3v5a1 1 0 0 0 1 1h5"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Align End Horizontal icon (Lucide). https://lucide.dev/icons/align-end-horizontal */
-export function AlignEndHorizontal(props: IconProps = {}): IconRenderResult {
+export function AlignEndHorizontal(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="6" height="16" x="4" y="2" rx="2"></rect>

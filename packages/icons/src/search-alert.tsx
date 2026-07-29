@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Search Alert icon (Lucide). https://lucide.dev/icons/search-alert */
-export function SearchAlert(props: IconProps = {}): IconRenderResult {
+export function SearchAlert(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11" cy="11" r="8"></circle>

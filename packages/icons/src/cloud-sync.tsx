@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Cloud Sync icon (Lucide). https://lucide.dev/icons/cloud-sync */
-export function CloudSync(props: IconProps = {}): IconRenderResult {
+export function CloudSync(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m17 18-1.535 1.605a5 5 0 0 1-8-1.5"></path>

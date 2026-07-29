@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Closed Caption icon (Lucide). https://lucide.dev/icons/closed-caption */
-export function ClosedCaption(props: IconProps = {}): IconRenderResult {
+export function ClosedCaption(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 9.17a3 3 0 1 0 0 5.66"></path>

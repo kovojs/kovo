@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Soap Dispenser Droplet icon (Lucide). https://lucide.dev/icons/soap-dispenser-droplet */
-export function SoapDispenserDroplet(props: IconProps = {}): IconRenderResult {
+export function SoapDispenserDroplet(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.5 2v4"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Dices icon (Lucide). https://lucide.dev/icons/dices */
-export function Dices(props: IconProps = {}): IconRenderResult {
+export function Dices(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="12" height="12" x="2" y="10" rx="2" ry="2"></rect>

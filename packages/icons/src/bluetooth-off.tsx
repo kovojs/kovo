@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Bluetooth Off icon (Lucide). https://lucide.dev/icons/bluetooth-off */
-export function BluetoothOff(props: IconProps = {}): IconRenderResult {
+export function BluetoothOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m17 17-5 5V12l-5 5"></path>

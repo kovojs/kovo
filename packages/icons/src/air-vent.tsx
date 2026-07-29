@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Air Vent icon (Lucide). https://lucide.dev/icons/air-vent */
-export function AirVent(props: IconProps = {}): IconRenderResult {
+export function AirVent(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 17.5a2.5 2.5 0 1 1-4 2.03V12"></path>

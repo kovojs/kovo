@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Paw Print icon (Lucide). https://lucide.dev/icons/paw-print */
-export function PawPrint(props: IconProps = {}): IconRenderResult {
+export function PawPrint(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11" cy="4" r="2"></circle>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Stethoscope icon (Lucide). https://lucide.dev/icons/stethoscope */
-export function Stethoscope(props: IconProps = {}): IconRenderResult {
+export function Stethoscope(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 2v2"></path>

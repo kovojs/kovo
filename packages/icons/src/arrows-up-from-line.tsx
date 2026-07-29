@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Arrows Up From Line icon (Lucide). https://lucide.dev/icons/arrows-up-from-line */
-export function ArrowsUpFromLine(props: IconProps = {}): IconRenderResult {
+export function ArrowsUpFromLine(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m4 6 3-3 3 3"></path>

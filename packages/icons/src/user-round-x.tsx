@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** User Round X icon (Lucide). https://lucide.dev/icons/user-round-x */
-export function UserRoundX(props: IconProps = {}): IconRenderResult {
+export function UserRoundX(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 21a8 8 0 0 1 11.873-7"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Bubbles icon (Lucide). https://lucide.dev/icons/bubbles */
-export function Bubbles(props: IconProps = {}): IconRenderResult {
+export function Bubbles(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M7.001 15.085A1.5 1.5 0 0 1 9 16.5"></path>

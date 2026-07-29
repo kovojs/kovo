@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Square Split Vertical icon (Lucide). https://lucide.dev/icons/square-split-vertical */
-export function SquareSplitVertical(props: IconProps = {}): IconRenderResult {
+export function SquareSplitVertical(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M5 8V5c0-1 1-2 2-2h10c1 0 2 1 2 2v3"></path>

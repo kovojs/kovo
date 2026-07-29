@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** List Indent Increase icon (Lucide). https://lucide.dev/icons/list-indent-increase */
-export function ListIndentIncrease(props: IconProps = {}): IconRenderResult {
+export function ListIndentIncrease(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 5H11"></path>

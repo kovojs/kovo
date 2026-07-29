@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Alarm Smoke icon (Lucide). https://lucide.dev/icons/alarm-smoke */
-export function AlarmSmoke(props: IconProps = {}): IconRenderResult {
+export function AlarmSmoke(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 21c0-2.5 2-2.5 2-5"></path>

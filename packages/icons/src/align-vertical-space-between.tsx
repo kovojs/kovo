@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Align Vertical Space Between icon (Lucide). https://lucide.dev/icons/align-vertical-space-between */
-export function AlignVerticalSpaceBetween(props: IconProps = {}): IconRenderResult {
+export function AlignVerticalSpaceBetween(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="14" height="6" x="5" y="15" rx="2"></rect>

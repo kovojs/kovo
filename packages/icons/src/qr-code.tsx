@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Qr Code icon (Lucide). https://lucide.dev/icons/qr-code */
-export function QrCode(props: IconProps = {}): IconRenderResult {
+export function QrCode(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="5" height="5" x="3" y="3" rx="1"></rect>

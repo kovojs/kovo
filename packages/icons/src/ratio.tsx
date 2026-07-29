@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Ratio icon (Lucide). https://lucide.dev/icons/ratio */
-export function Ratio(props: IconProps = {}): IconRenderResult {
+export function Ratio(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="12" height="20" x="6" y="2" rx="2"></rect>

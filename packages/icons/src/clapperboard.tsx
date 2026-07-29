@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Clapperboard icon (Lucide). https://lucide.dev/icons/clapperboard */
-export function Clapperboard(props: IconProps = {}): IconRenderResult {
+export function Clapperboard(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12.296 3.464 3.02 3.956"></path>

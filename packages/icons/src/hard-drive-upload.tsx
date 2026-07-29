@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Hard Drive Upload icon (Lucide). https://lucide.dev/icons/hard-drive-upload */
-export function HardDriveUpload(props: IconProps = {}): IconRenderResult {
+export function HardDriveUpload(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 6-4-4-4 4"></path>

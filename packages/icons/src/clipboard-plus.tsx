@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Clipboard Plus icon (Lucide). https://lucide.dev/icons/clipboard-plus */
-export function ClipboardPlus(props: IconProps = {}): IconRenderResult {
+export function ClipboardPlus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>

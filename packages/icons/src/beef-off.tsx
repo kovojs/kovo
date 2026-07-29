@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Beef Off icon (Lucide). https://lucide.dev/icons/beef-off */
-export function BeefOff(props: IconProps = {}): IconRenderResult {
+export function BeefOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.771 6.109a2.5 2.5 0 0 1 3.12 3.12"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Shower Head icon (Lucide). https://lucide.dev/icons/shower-head */
-export function ShowerHead(props: IconProps = {}): IconRenderResult {
+export function ShowerHead(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m4 4 2.5 2.5"></path>

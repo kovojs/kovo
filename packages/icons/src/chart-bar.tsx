@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Chart Bar icon (Lucide). https://lucide.dev/icons/chart-bar */
-export function ChartBar(props: IconProps = {}): IconRenderResult {
+export function ChartBar(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>

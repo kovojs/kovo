@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Dna Off icon (Lucide). https://lucide.dev/icons/dna-off */
-export function DnaOff(props: IconProps = {}): IconRenderResult {
+export function DnaOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 2c-1.35 1.5-2.092 3-2.5 4.5L14 8"></path>

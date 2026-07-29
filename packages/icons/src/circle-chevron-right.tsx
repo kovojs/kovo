@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Circle Chevron Right icon (Lucide). https://lucide.dev/icons/circle-chevron-right */
-export function CircleChevronRight(props: IconProps = {}): IconRenderResult {
+export function CircleChevronRight(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="12" r="10"></circle>

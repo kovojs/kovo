@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Circle Arrow Out Down Left icon (Lucide). https://lucide.dev/icons/circle-arrow-out-down-left */
-export function CircleArrowOutDownLeft(props: IconProps = {}): IconRenderResult {
+export function CircleArrowOutDownLeft(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 12a10 10 0 1 1 10 10"></path>

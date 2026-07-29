@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Circle Parking Off icon (Lucide). https://lucide.dev/icons/circle-parking-off */
-export function CircleParkingOff(props: IconProps = {}): IconRenderResult {
+export function CircleParkingOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12.656 7H13a3 3 0 0 1 2.984 3.307"></path>

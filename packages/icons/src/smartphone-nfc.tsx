@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Smartphone Nfc icon (Lucide). https://lucide.dev/icons/smartphone-nfc */
-export function SmartphoneNfc(props: IconProps = {}): IconRenderResult {
+export function SmartphoneNfc(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="7" height="12" x="2" y="6" rx="1"></rect>

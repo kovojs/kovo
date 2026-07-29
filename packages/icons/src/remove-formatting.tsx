@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Remove Formatting icon (Lucide). https://lucide.dev/icons/remove-formatting */
-export function RemoveFormatting(props: IconProps = {}): IconRenderResult {
+export function RemoveFormatting(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M4 7V4h16v3"></path>

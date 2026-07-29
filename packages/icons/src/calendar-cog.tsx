@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Calendar Cog icon (Lucide). https://lucide.dev/icons/calendar-cog */
-export function CalendarCog(props: IconProps = {}): IconRenderResult {
+export function CalendarCog(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15.228 16.852-.923-.383"></path>

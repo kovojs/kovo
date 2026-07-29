@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Waves Arrow Down icon (Lucide). https://lucide.dev/icons/waves-arrow-down */
-export function WavesArrowDown(props: IconProps = {}): IconRenderResult {
+export function WavesArrowDown(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 10L12 2"></path>

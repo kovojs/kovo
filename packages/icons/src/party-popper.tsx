@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Party Popper icon (Lucide). https://lucide.dev/icons/party-popper */
-export function PartyPopper(props: IconProps = {}): IconRenderResult {
+export function PartyPopper(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M5.8 11.3 2 22l10.7-3.79"></path>

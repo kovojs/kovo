@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Radio icon (Lucide). https://lucide.dev/icons/radio */
-export function Radio(props: IconProps = {}): IconRenderResult {
+export function Radio(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16.247 7.761a6 6 0 0 1 0 8.478"></path>

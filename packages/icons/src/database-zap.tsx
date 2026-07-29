@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Database Zap icon (Lucide). https://lucide.dev/icons/database-zap */
-export function DatabaseZap(props: IconProps = {}): IconRenderResult {
+export function DatabaseZap(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>

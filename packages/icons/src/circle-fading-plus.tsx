@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Circle Fading Plus icon (Lucide). https://lucide.dev/icons/circle-fading-plus */
-export function CircleFadingPlus(props: IconProps = {}): IconRenderResult {
+export function CircleFadingPlus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 2a10 10 0 0 1 7.38 16.75"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Rss icon (Lucide). https://lucide.dev/icons/rss */
-export function Rss(props: IconProps = {}): IconRenderResult {
+export function Rss(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M4 11a9 9 0 0 1 9 9"></path>

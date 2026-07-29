@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Voicemail icon (Lucide). https://lucide.dev/icons/voicemail */
-export function Voicemail(props: IconProps = {}): IconRenderResult {
+export function Voicemail(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="6" cy="12" r="4"></circle>

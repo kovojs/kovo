@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Clipboard Pen icon (Lucide). https://lucide.dev/icons/clipboard-pen */
-export function ClipboardPen(props: IconProps = {}): IconRenderResult {
+export function ClipboardPen(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 4h2a2 2 0 0 1 2 2v2"></path>

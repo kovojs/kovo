@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Undo Dot icon (Lucide). https://lucide.dev/icons/undo-dot */
-export function UndoDot(props: IconProps = {}): IconRenderResult {
+export function UndoDot(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 17a9 9 0 0 0-15-6.7L3 13"></path>

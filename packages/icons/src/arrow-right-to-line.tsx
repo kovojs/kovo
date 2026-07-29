@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Arrow Right To Line icon (Lucide). https://lucide.dev/icons/arrow-right-to-line */
-export function ArrowRightToLine(props: IconProps = {}): IconRenderResult {
+export function ArrowRightToLine(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M17 12H3"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Rotate 3d icon (Lucide). https://lucide.dev/icons/rotate-3d */
-export function Rotate3d(props: IconProps = {}): IconRenderResult {
+export function Rotate3d(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15.194 13.707 3.814 1.86-1.86 3.814"></path>

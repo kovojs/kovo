@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Smile Plus icon (Lucide). https://lucide.dev/icons/smile-plus */
-export function SmilePlus(props: IconProps = {}): IconRenderResult {
+export function SmilePlus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 11v1a10 10 0 1 1-9-10"></path>

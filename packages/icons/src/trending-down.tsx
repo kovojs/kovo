@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Trending Down icon (Lucide). https://lucide.dev/icons/trending-down */
-export function TrendingDown(props: IconProps = {}): IconRenderResult {
+export function TrendingDown(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 17h6v-6"></path>

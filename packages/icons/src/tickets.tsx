@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Tickets icon (Lucide). https://lucide.dev/icons/tickets */
-export function Tickets(props: IconProps = {}): IconRenderResult {
+export function Tickets(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m3.173 8.18 11-5a2 2 0 0 1 2.647.993L18.56 8"></path>

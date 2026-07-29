@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Monitor Check icon (Lucide). https://lucide.dev/icons/monitor-check */
-export function MonitorCheck(props: IconProps = {}): IconRenderResult {
+export function MonitorCheck(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m9 10 2 2 4-4"></path>

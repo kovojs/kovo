@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Octagon Alert icon (Lucide). https://lucide.dev/icons/octagon-alert */
-export function OctagonAlert(props: IconProps = {}): IconRenderResult {
+export function OctagonAlert(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 16h.01"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Orbit icon (Lucide). https://lucide.dev/icons/orbit */
-export function Orbit(props: IconProps = {}): IconRenderResult {
+export function Orbit(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M20.341 6.484A10 10 0 0 1 10.266 21.85"></path>

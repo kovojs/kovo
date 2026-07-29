@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Bow Arrow icon (Lucide). https://lucide.dev/icons/bow-arrow */
-export function BowArrow(props: IconProps = {}): IconRenderResult {
+export function BowArrow(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M17 3h4v4"></path>

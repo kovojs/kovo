@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Git Pull Request Create Arrow icon (Lucide). https://lucide.dev/icons/git-pull-request-create-arrow */
-export function GitPullRequestCreateArrow(props: IconProps = {}): IconRenderResult {
+export function GitPullRequestCreateArrow(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="5" cy="6" r="3"></circle>

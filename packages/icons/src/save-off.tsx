@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Save Off icon (Lucide). https://lucide.dev/icons/save-off */
-export function SaveOff(props: IconProps = {}): IconRenderResult {
+export function SaveOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13 13H8a1 1 0 0 0-1 1v7"></path>

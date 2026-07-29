@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Toy Brick icon (Lucide). https://lucide.dev/icons/toy-brick */
-export function ToyBrick(props: IconProps = {}): IconRenderResult {
+export function ToyBrick(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="18" height="12" x="3" y="8" rx="1"></rect>

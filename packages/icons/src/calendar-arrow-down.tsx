@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Calendar Arrow Down icon (Lucide). https://lucide.dev/icons/calendar-arrow-down */
-export function CalendarArrowDown(props: IconProps = {}): IconRenderResult {
+export function CalendarArrowDown(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 18 4 4 4-4"></path>

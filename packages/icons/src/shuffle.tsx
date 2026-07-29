@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Shuffle icon (Lucide). https://lucide.dev/icons/shuffle */
-export function Shuffle(props: IconProps = {}): IconRenderResult {
+export function Shuffle(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m18 14 4 4-4 4"></path>

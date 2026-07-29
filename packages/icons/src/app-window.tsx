@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** App Window icon (Lucide). https://lucide.dev/icons/app-window */
-export function AppWindow(props: IconProps = {}): IconRenderResult {
+export function AppWindow(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="2" y="4" width="20" height="16" rx="2"></rect>

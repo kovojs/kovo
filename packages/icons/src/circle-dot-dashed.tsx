@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Circle Dot Dashed icon (Lucide). https://lucide.dev/icons/circle-dot-dashed */
-export function CircleDotDashed(props: IconProps = {}): IconRenderResult {
+export function CircleDotDashed(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.1 2.18a9.93 9.93 0 0 1 3.8 0"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Construction icon (Lucide). https://lucide.dev/icons/construction */
-export function Construction(props: IconProps = {}): IconRenderResult {
+export function Construction(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="2" y="6" width="20" height="8" rx="1"></rect>

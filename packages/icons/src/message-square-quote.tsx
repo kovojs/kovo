@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Message Square Quote icon (Lucide). https://lucide.dev/icons/message-square-quote */
-export function MessageSquareQuote(props: IconProps = {}): IconRenderResult {
+export function MessageSquareQuote(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 14a2 2 0 0 0 2-2V8h-2"></path>

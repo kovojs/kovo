@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Copy Slash icon (Lucide). https://lucide.dev/icons/copy-slash */
-export function CopySlash(props: IconProps = {}): IconRenderResult {
+export function CopySlash(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="12" x2="18" y1="18" y2="12"></line>

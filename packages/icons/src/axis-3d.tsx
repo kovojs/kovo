@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Axis 3d icon (Lucide). https://lucide.dev/icons/axis-3d */
-export function Axis3d(props: IconProps = {}): IconRenderResult {
+export function Axis3d(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.5 10.5 15 9"></path>

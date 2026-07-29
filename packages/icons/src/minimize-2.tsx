@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Minimize 2 icon (Lucide). https://lucide.dev/icons/minimize-2 */
-export function Minimize2(props: IconProps = {}): IconRenderResult {
+export function Minimize2(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 10 7-7"></path>

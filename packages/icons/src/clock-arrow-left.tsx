@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Clock Arrow Left icon (Lucide). https://lucide.dev/icons/clock-arrow-left */
-export function ClockArrowLeft(props: IconProps = {}): IconRenderResult {
+export function ClockArrowLeft(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 6v6l1.5.8"></path>

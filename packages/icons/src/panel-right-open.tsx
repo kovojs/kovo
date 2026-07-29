@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Panel Right Open icon (Lucide). https://lucide.dev/icons/panel-right-open */
-export function PanelRightOpen(props: IconProps = {}): IconRenderResult {
+export function PanelRightOpen(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="18" height="18" x="3" y="3" rx="2"></rect>

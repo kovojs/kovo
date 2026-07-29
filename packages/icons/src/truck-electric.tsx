@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Truck Electric icon (Lucide). https://lucide.dev/icons/truck-electric */
-export function TruckElectric(props: IconProps = {}): IconRenderResult {
+export function TruckElectric(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 19V7a2 2 0 0 0-2-2H9"></path>

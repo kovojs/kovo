@@ -30,6 +30,7 @@ import { PRESERVED_TSX, computeIconPlan } from '../packages/icons/scripts/icon-p
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const pkgDir = path.join(repoRoot, 'packages/icons');
 const srcDir = path.join(pkgDir, 'src');
+const catalogPath = path.join(pkgDir, 'catalog.json');
 const pkgJsonPath = path.join(pkgDir, 'package.json');
 const manifestPath = path.join(repoRoot, 'public-packages.json');
 
@@ -63,7 +64,7 @@ function upsertManifest(manifest, publicSubpaths) {
 }
 
 function write() {
-  const { names, files, exportsMap, publishExports, publicSubpaths } = computeIconPlan();
+  const { names, files, exportsMap, publishExports, publicSubpaths, catalog } = computeIconPlan();
 
   // Remove stale generated icon files (every src/*.tsx except hand-authored ones).
   for (const file of readdirSync(srcDir)) {
@@ -84,6 +85,7 @@ function write() {
     prepack: 'pnpm run build:dist',
   };
   writeJson(pkgJsonPath, pkgJson);
+  writeJson(catalogPath, catalog);
 
   const manifest = readJson(manifestPath);
   writeJson(manifestPath, upsertManifest(manifest, publicSubpaths));
@@ -94,7 +96,7 @@ function write() {
 }
 
 function check() {
-  const { names, files, exportsMap, publishExports, publicSubpaths } = computeIconPlan();
+  const { names, files, exportsMap, publishExports, publicSubpaths, catalog } = computeIconPlan();
   const drift = [];
 
   const onDisk = new Set(
@@ -114,6 +116,12 @@ function check() {
   }
 
   const pkgJson = readJson(pkgJsonPath);
+  if (
+    !existsSync(catalogPath) ||
+    JSON.stringify(readJson(catalogPath)) !== JSON.stringify(catalog)
+  ) {
+    drift.push('catalog.json out of date');
+  }
   const actualPublishExports = pkgJson.publishConfig?.exports ?? {};
   if (JSON.stringify(actualPublishExports) !== JSON.stringify(publishExports)) {
     drift.push('package.json publishConfig.exports out of date');

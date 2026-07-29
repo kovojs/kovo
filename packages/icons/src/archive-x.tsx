@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Archive X icon (Lucide). https://lucide.dev/icons/archive-x */
-export function ArchiveX(props: IconProps = {}): IconRenderResult {
+export function ArchiveX(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="20" height="5" x="2" y="3" rx="1"></rect>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Undo 2 icon (Lucide). https://lucide.dev/icons/undo-2 */
-export function Undo2(props: IconProps = {}): IconRenderResult {
+export function Undo2(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M9 14 4 9l5-5"></path>

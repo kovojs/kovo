@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Chart No Axes Combined icon (Lucide). https://lucide.dev/icons/chart-no-axes-combined */
-export function ChartNoAxesCombined(props: IconProps = {}): IconRenderResult {
+export function ChartNoAxesCombined(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 16v5"></path>

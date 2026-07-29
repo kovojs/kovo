@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Rainbow icon (Lucide). https://lucide.dev/icons/rainbow */
-export function Rainbow(props: IconProps = {}): IconRenderResult {
+export function Rainbow(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 17a10 10 0 0 0-20 0"></path>

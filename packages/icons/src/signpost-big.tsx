@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Signpost Big icon (Lucide). https://lucide.dev/icons/signpost-big */
-export function SignpostBig(props: IconProps = {}): IconRenderResult {
+export function SignpostBig(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 9H4L2 7l2-2h6"></path>

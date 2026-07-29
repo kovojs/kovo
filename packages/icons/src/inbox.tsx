@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Inbox icon (Lucide). https://lucide.dev/icons/inbox */
-export function Inbox(props: IconProps = {}): IconRenderResult {
+export function Inbox(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>

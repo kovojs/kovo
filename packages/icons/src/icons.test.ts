@@ -4,6 +4,7 @@ import {
   GENERATED_ARTIFACT_GENERATORS,
   generatedArtifactGeneratorCheckCommand,
 } from '../../../scripts/generated-artifacts.mjs';
+import type { ComponentRenderResult } from '@kovojs/core';
 import * as style from '@kovojs/style';
 import { ArrowRight } from './arrow-right.js';
 import { iconRootAttrs } from './icon-base.js';
@@ -17,6 +18,11 @@ describe('@kovojs/icons generation', () => {
   });
 });
 describe('@kovojs/icons rendering', () => {
+  it('uses the canonical Kovo component render contract', () => {
+    const result: ComponentRenderResult = ArrowRight({});
+    expect(String(result)).toContain('<svg');
+  });
+
   it('does not advertise generated icons as raw string components', () => {
     const assertIconIsNotString = () => {
       // @ts-expect-error SPEC §4.1: icon components return an opaque render result, not raw string markup.

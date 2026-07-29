@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Phone Missed icon (Lucide). https://lucide.dev/icons/phone-missed */
-export function PhoneMissed(props: IconProps = {}): IconRenderResult {
+export function PhoneMissed(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 2 6 6"></path>

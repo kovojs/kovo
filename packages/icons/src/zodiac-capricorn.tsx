@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Zodiac Capricorn icon (Lucide). https://lucide.dev/icons/zodiac-capricorn */
-export function ZodiacCapricorn(props: IconProps = {}): IconRenderResult {
+export function ZodiacCapricorn(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 21a3 3 0 0 0 3-3V6.5a1 1 0 0 0-7 0"></path>

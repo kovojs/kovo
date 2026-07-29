@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Layout Grid icon (Lucide). https://lucide.dev/icons/layout-grid */
-export function LayoutGrid(props: IconProps = {}): IconRenderResult {
+export function LayoutGrid(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="7" height="7" x="3" y="3" rx="1"></rect>

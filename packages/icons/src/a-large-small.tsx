@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** A Large Small icon (Lucide). https://lucide.dev/icons/a-large-small */
-export function ALargeSmall(props: IconProps = {}): IconRenderResult {
+export function ALargeSmall(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16"></path>

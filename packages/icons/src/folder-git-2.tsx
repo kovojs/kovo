@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Folder Git 2 icon (Lucide). https://lucide.dev/icons/folder-git-2 */
-export function FolderGit2(props: IconProps = {}): IconRenderResult {
+export function FolderGit2(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 19a5 5 0 0 1-5-5v8"></path>

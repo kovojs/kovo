@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Book Image icon (Lucide). https://lucide.dev/icons/book-image */
-export function BookImage(props: IconProps = {}): IconRenderResult {
+export function BookImage(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m20 13.7-2.1-2.1a2 2 0 0 0-2.8 0L9.7 17"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Land Plot icon (Lucide). https://lucide.dev/icons/land-plot */
-export function LandPlot(props: IconProps = {}): IconRenderResult {
+export function LandPlot(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12 8 6-3-6-3v10"></path>

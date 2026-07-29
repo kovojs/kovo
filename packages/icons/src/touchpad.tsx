@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Touchpad icon (Lucide). https://lucide.dev/icons/touchpad */
-export function Touchpad(props: IconProps = {}): IconRenderResult {
+export function Touchpad(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="20" height="16" x="2" y="4" rx="2"></rect>

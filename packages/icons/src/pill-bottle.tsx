@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Pill Bottle icon (Lucide). https://lucide.dev/icons/pill-bottle */
-export function PillBottle(props: IconProps = {}): IconRenderResult {
+export function PillBottle(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 11h-4a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h4"></path>

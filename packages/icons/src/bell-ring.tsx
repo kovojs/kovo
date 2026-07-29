@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Bell Ring icon (Lucide). https://lucide.dev/icons/bell-ring */
-export function BellRing(props: IconProps = {}): IconRenderResult {
+export function BellRing(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>

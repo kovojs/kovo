@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Torus icon (Lucide). https://lucide.dev/icons/torus */
-export function Torus(props: IconProps = {}): IconRenderResult {
+export function Torus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <ellipse cx="12" cy="11" rx="3" ry="2"></ellipse>

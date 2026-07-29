@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Book Marked icon (Lucide). https://lucide.dev/icons/book-marked */
-export function BookMarked(props: IconProps = {}): IconRenderResult {
+export function BookMarked(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 2v8l3-3 3 3V2"></path>

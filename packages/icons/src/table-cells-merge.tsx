@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Table Cells Merge icon (Lucide). https://lucide.dev/icons/table-cells-merge */
-export function TableCellsMerge(props: IconProps = {}): IconRenderResult {
+export function TableCellsMerge(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 21v-6"></path>

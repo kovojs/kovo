@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  COMPONENT_CATALOG_SCHEMA,
+  validateComponentCatalogDocument,
+} from '../../../scripts/component-catalog-schema.mjs';
+
 export const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 export const pkgDir = path.join(repoRoot, 'packages/icons');
 export const pkgJsonPath = path.join(pkgDir, 'package.json');
@@ -84,11 +89,12 @@ function iconSource(name, nodes) {
       : `    <svg {...iconRootAttrs(props)}></svg>`;
   return (
     `/** @jsxImportSource @kovojs/server */\n` +
-    `import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';\n` +
+    `import type { ComponentRenderResult } from '@kovojs/core';\n` +
+    `import { iconRootAttrs, type IconProps } from './icon-base.js';\n` +
     `\n` +
     `/** ${toTitle(name)} icon (Lucide). https://lucide.dev/icons/${name} */\n` +
     lintSuppression +
-    `export function ${symbol}(props: IconProps = {}): IconRenderResult {\n` +
+    `export function ${symbol}(props: IconProps = {}): ComponentRenderResult {\n` +
     `  return (\n` +
     `${svg}\n` +
     `  );\n` +
@@ -149,6 +155,47 @@ export function publicIconSubpaths(names = iconNames()) {
   return ['.', ...names.map(iconSubpath)];
 }
 
+export function iconCatalogDocument(names = iconNames()) {
+  const entries = names
+    .map((name) => {
+      const title = toTitle(name);
+      return {
+        anatomy: null,
+        copyCommand: null,
+        enhancement: {
+          accessibility:
+            'Decorative by default; aria-label or title promotes the SVG to an accessible image.',
+          keyboard: 'No custom keyboard behavior; icons never add an interactive focus target.',
+          roles: ['img'],
+          tier: 'none',
+        },
+        id: `icon:${name}`,
+        kind: 'icon',
+        name,
+        packageImport: `@kovojs/icons/${name}`,
+        searchText: [
+          name,
+          title,
+          `@kovojs/icons/${name}`,
+          'Lucide SVG icon glyph decorative accessible image',
+        ].join(' '),
+        summary: `${title} Lucide SVG icon.`,
+        title,
+      };
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const document = {
+    schema: COMPONENT_CATALOG_SCHEMA,
+    owner: '@kovojs/icons',
+    entries,
+  };
+  const findings = validateComponentCatalogDocument(document);
+  if (findings.length > 0) {
+    throw new Error(`Unable to generate packages/icons/catalog.json:\n${findings.join('\n')}`);
+  }
+  return document;
+}
+
 export function computeIconPlan() {
   const iconNodes = lucideIconNodes();
   const names = Object.keys(iconNodes).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -172,6 +219,7 @@ export function computeIconPlan() {
     exportsMap: iconPackageExports(),
     publishExports: iconPublishExports(),
     publicSubpaths: publicIconSubpaths(names),
+    catalog: iconCatalogDocument(names),
     packEntries: iconPackEntries(names),
     distTargets: iconDistTargets(names),
   };

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Copy Plus icon (Lucide). https://lucide.dev/icons/copy-plus */
-export function CopyPlus(props: IconProps = {}): IconRenderResult {
+export function CopyPlus(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="15" x2="15" y1="12" y2="18"></line>

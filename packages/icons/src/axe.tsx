@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Axe icon (Lucide). https://lucide.dev/icons/axe */
-export function Axe(props: IconProps = {}): IconRenderResult {
+export function Axe(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 12-8.381 8.38a1 1 0 0 1-3.001-3L11 9"></path>

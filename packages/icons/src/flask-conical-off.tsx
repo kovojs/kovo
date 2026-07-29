@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Flask Conical Off icon (Lucide). https://lucide.dev/icons/flask-conical-off */
-export function FlaskConicalOff(props: IconProps = {}): IconRenderResult {
+export function FlaskConicalOff(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 2v2.343"></path>

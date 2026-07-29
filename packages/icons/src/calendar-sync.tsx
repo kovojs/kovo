@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Calendar Sync icon (Lucide). https://lucide.dev/icons/calendar-sync */
-export function CalendarSync(props: IconProps = {}): IconRenderResult {
+export function CalendarSync(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 10v4h4"></path>

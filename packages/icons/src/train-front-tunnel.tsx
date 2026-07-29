@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Train Front Tunnel icon (Lucide). https://lucide.dev/icons/train-front-tunnel */
-export function TrainFrontTunnel(props: IconProps = {}): IconRenderResult {
+export function TrainFrontTunnel(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 22V12a10 10 0 1 1 20 0v10"></path>

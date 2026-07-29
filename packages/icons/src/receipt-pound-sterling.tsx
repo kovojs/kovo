@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Receipt Pound Sterling icon (Lucide). https://lucide.dev/icons/receipt-pound-sterling */
-export function ReceiptPoundSterling(props: IconProps = {}): IconRenderResult {
+export function ReceiptPoundSterling(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 17V9.5a1 1 0 0 1 5 0"></path>

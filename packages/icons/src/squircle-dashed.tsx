@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Squircle Dashed icon (Lucide). https://lucide.dev/icons/squircle-dashed */
-export function SquircleDashed(props: IconProps = {}): IconRenderResult {
+export function SquircleDashed(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.77 3.043a34 34 0 0 0-3.54 0"></path>

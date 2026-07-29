@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Volleyball icon (Lucide). https://lucide.dev/icons/volleyball */
-export function Volleyball(props: IconProps = {}): IconRenderResult {
+export function Volleyball(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 7a16 16 20 0 1 10.98 4.362"></path>

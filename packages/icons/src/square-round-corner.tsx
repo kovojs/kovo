@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Square Round Corner icon (Lucide). https://lucide.dev/icons/square-round-corner */
-export function SquareRoundCorner(props: IconProps = {}): IconRenderResult {
+export function SquareRoundCorner(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 11a8 8 0 0 0-8-8"></path>

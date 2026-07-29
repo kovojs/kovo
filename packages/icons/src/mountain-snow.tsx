@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Mountain Snow icon (Lucide). https://lucide.dev/icons/mountain-snow */
-export function MountainSnow(props: IconProps = {}): IconRenderResult {
+export function MountainSnow(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>

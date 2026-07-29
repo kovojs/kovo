@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Pause icon (Lucide). https://lucide.dev/icons/pause */
-export function Pause(props: IconProps = {}): IconRenderResult {
+export function Pause(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="14" y="3" width="5" height="18" rx="1"></rect>

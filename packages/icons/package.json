@@ -8,6 +8,7 @@
     "url": "git+https://github.com/kovojs/kovo.git"
   },
   "files": [
+    "catalog.json",
     "dist"
   ],
   "type": "module",
@@ -32,9 +33,11 @@
   "scripts": {
     "build:icons": "node ../../scripts/build-icons.mjs",
     "build:dist": "node ./scripts/build-dist.mjs",
+    "check:timing": "node ./scripts/icon-timing.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {

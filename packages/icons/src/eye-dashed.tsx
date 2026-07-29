@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Eye Dashed icon (Lucide). https://lucide.dev/icons/eye-dashed */
-export function EyeDashed(props: IconProps = {}): IconRenderResult {
+export function EyeDashed(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.054 18.946a11 11 0 0 1-2.11 0"></path>

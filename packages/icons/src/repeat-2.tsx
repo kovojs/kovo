@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Repeat 2 icon (Lucide). https://lucide.dev/icons/repeat-2 */
-export function Repeat2(props: IconProps = {}): IconRenderResult {
+export function Repeat2(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m2 9 3-3 3 3"></path>

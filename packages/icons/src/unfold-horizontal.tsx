@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Unfold Horizontal icon (Lucide). https://lucide.dev/icons/unfold-horizontal */
-export function UnfoldHorizontal(props: IconProps = {}): IconRenderResult {
+export function UnfoldHorizontal(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 12h6"></path>

@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Egg Fried icon (Lucide). https://lucide.dev/icons/egg-fried */
-export function EggFried(props: IconProps = {}): IconRenderResult {
+export function EggFried(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11.5" cy="12.5" r="3.5"></circle>

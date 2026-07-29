@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Scan Eye icon (Lucide). https://lucide.dev/icons/scan-eye */
-export function ScanEye(props: IconProps = {}): IconRenderResult {
+export function ScanEye(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>

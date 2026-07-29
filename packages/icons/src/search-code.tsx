@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Search Code icon (Lucide). https://lucide.dev/icons/search-code */
-export function SearchCode(props: IconProps = {}): IconRenderResult {
+export function SearchCode(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m13 13.5 2-2.5-2-2.5"></path>

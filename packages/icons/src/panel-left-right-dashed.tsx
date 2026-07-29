@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Panel Left Right Dashed icon (Lucide). https://lucide.dev/icons/panel-left-right-dashed */
-export function PanelLeftRightDashed(props: IconProps = {}): IconRenderResult {
+export function PanelLeftRightDashed(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 10V9"></path>

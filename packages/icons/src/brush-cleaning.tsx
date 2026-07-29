@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Brush Cleaning icon (Lucide). https://lucide.dev/icons/brush-cleaning */
-export function BrushCleaning(props: IconProps = {}): IconRenderResult {
+export function BrushCleaning(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 22-1-4"></path>

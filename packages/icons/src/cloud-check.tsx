@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Cloud Check icon (Lucide). https://lucide.dev/icons/cloud-check */
-export function CloudCheck(props: IconProps = {}): IconRenderResult {
+export function CloudCheck(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m17 15-5.5 5.5L9 18"></path>

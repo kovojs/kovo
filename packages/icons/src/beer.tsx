@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Beer icon (Lucide). https://lucide.dev/icons/beer */
-export function Beer(props: IconProps = {}): IconRenderResult {
+export function Beer(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M17 11h1a3 3 0 0 1 0 6h-1"></path>

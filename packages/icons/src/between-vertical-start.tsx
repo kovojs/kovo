@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Between Vertical Start icon (Lucide). https://lucide.dev/icons/between-vertical-start */
-export function BetweenVerticalStart(props: IconProps = {}): IconRenderResult {
+export function BetweenVerticalStart(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="7" height="13" x="3" y="8" rx="1"></rect>

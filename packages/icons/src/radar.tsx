@@ -1,8 +1,9 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
+import type { ComponentRenderResult } from '@kovojs/core';
+import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Radar icon (Lucide). https://lucide.dev/icons/radar */
-export function Radar(props: IconProps = {}): IconRenderResult {
+export function Radar(props: IconProps = {}): ComponentRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"></path>
