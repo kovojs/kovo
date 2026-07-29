@@ -12,17 +12,24 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs';
-import { isAbsolute, join, relative, sep } from 'node:path';
+import { basename, isAbsolute, join, relative, sep } from 'node:path';
 
 import { buildDataflowGraph } from './graph-model.mjs';
 import {
   arrayAppend,
   arrayLength,
+  arraySlice,
   arrayValue,
+  assertPlainCarrier,
   isArray,
   isSafeInteger,
+  joinStrings,
+  stableOwnData,
+  stringCharCodeAt,
   stringEndsWith,
   stringIncludes,
+  stringSlice,
+  stringSplit,
   stringStartsWith,
 } from './output-security.mjs';
 
@@ -71,6 +78,14 @@ export function buildBundle({
 export function resolveSource(node, srcRoot, files) {
   try {
     const canonicalSrcRoot = canonicalSourceRoot(srcRoot);
+    const anchorProperty = stableOwnData(node, 'anchor', 'Devtool dataflow node');
+    if (anchorProperty.found) {
+      const exact = anchoredBlock(anchorProperty.value, canonicalSrcRoot);
+      if (exact && node.kind === 'mutation') {
+        exact.touches = (node.data.touch?.touches ?? []).map((touch) => ({ ...touch }));
+      }
+      return exact;
+    }
     const sourceFiles = snapshotSourceFiles(files);
     const d = node.data;
     if (node.kind === 'component') {
@@ -140,6 +155,116 @@ export function resolveSource(node, srcRoot, files) {
     /* best-effort */
   }
   return null;
+}
+
+function anchoredBlock(value, srcRoot) {
+  const anchor = snapshotSourceAnchor(value);
+  const candidates = [];
+  if (isAbsolute(anchor.file)) {
+    arrayAppend(candidates, anchor.file, 'Devtool anchored source candidates');
+  } else {
+    arrayAppend(candidates, join(srcRoot, anchor.file), 'Devtool anchored source candidates');
+    const rootPrefix = `${basename(srcRoot)}/`;
+    if (stringStartsWith(anchor.file, rootPrefix)) {
+      arrayAppend(
+        candidates,
+        join(srcRoot, stringSlice(anchor.file, rootPrefix.length)),
+        'Devtool anchored source candidates',
+      );
+    }
+  }
+
+  let pinnedSourceFile = null;
+  for (
+    let index = 0;
+    index < arrayLength(candidates, 'Devtool anchored source candidates');
+    index += 1
+  ) {
+    try {
+      const sourceFile = confinedSourceFile(
+        arrayValue(candidates, index, 'Devtool anchored source candidates'),
+        srcRoot,
+      );
+      if (sourceFile) {
+        pinnedSourceFile = readPinnedSourceFile(sourceFile, srcRoot);
+        if (pinnedSourceFile) break;
+      }
+    } catch {
+      // Try the next deterministic root-relative spelling. A failed exact anchor never falls back
+      // to symbol heuristics, because that could preview an unrelated declaration.
+    }
+  }
+  if (!pinnedSourceFile || anchor.end > pinnedSourceFile.code.length) return null;
+
+  const start = sourceOffsetPosition(pinnedSourceFile.code, anchor.start);
+  const end = sourceOffsetPosition(pinnedSourceFile.code, anchor.end);
+  const lines = stringSplit(pinnedSourceFile.code, '\n');
+  const contextStart = start.line > 2 ? start.line - 2 : 0;
+  const endCandidate = end.line + 2;
+  const contextEnd =
+    endCandidate < arrayLength(lines, 'Devtool anchored source lines')
+      ? endCandidate
+      : arrayLength(lines, 'Devtool anchored source lines') - 1;
+  const codeLines = arraySlice(
+    lines,
+    contextStart,
+    contextEnd + 1,
+    'Devtool anchored source lines',
+  );
+  return {
+    anchorLine: start.line + 1,
+    code: joinStrings(codeLines, '\n', 'Devtool anchored source preview'),
+    end: anchor.end,
+    endLine: contextEnd + 1,
+    file: pinnedSourceFile.relative,
+    highlight: {
+      end: { column: end.column + 1, line: end.line + 1 },
+      start: { column: start.column + 1, line: start.line + 1 },
+    },
+    lang: stringEndsWith(pinnedSourceFile.absolute, '.tsx') ? 'tsx' : 'ts',
+    start: anchor.start,
+    startLine: contextStart + 1,
+  };
+}
+
+function snapshotSourceAnchor(value) {
+  const anchor = assertPlainCarrier(value, 'Devtool source anchor');
+  const file = stableOwnData(anchor, 'file', 'Devtool source anchor');
+  const start = stableOwnData(anchor, 'start', 'Devtool source anchor');
+  const end = stableOwnData(anchor, 'end', 'Devtool source anchor');
+  if (
+    !file.found ||
+    typeof file.value !== 'string' ||
+    file.value.length === 0 ||
+    file.value.length > 4_096
+  ) {
+    throw new TypeError('Devtool source anchor.file must be a bounded non-empty string.');
+  }
+  if (
+    !start.found ||
+    !end.found ||
+    !isSafeInteger(start.value) ||
+    !isSafeInteger(end.value) ||
+    start.value < 0 ||
+    end.value < start.value
+  ) {
+    throw new TypeError('Devtool source anchor offsets must be ordered safe integers.');
+  }
+  return { end: end.value, file: file.value, start: start.value };
+}
+
+function sourceOffsetPosition(source, offset) {
+  let line = 0;
+  let column = 0;
+  for (let index = 0; index < offset; index += 1) {
+    if (stringCharCodeAt(source, index) === 10) {
+      line += 1;
+      column = 0;
+    } else {
+      column += 1;
+    }
+  }
+  return { column, line };
 }
 
 function block(absFile, srcRoot, pred) {

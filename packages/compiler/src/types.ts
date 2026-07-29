@@ -97,6 +97,7 @@ export type ComponentGraphFact = Pick<
   | 'queries'
   | 'securitySemanticGraph'
   | 'securityOperations'
+  | 'source'
   | 'styleRules'
 >;
 
@@ -345,6 +346,7 @@ export interface RoutePageFact {
   outcome?: RoutePageOutcomeFact;
   regions?: readonly RouteRegionFact[];
   route: string;
+  source?: CoreGraph.SourceAnchor;
 }
 
 /** Response outcome facts derived from a route page body for build graph endpoint coverage. */

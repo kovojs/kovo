@@ -1,3 +1,5 @@
+import type * as CoreGraph from '@kovojs/core/internal/graph';
+
 import { findMatchingToken } from './scan/text.js';
 import {
   compilerArrayAppend,
@@ -71,6 +73,7 @@ export interface ComponentCssAsset extends CssAsset {
  */
 export interface StyleRuleUsage {
   className: string;
+  generatedFrom?: CoreGraph.SourceAnchor;
   moduleFileName: string;
   source: string;
   styleRef: string;

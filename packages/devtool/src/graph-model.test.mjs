@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBm25, KIND_META, LANES, traceGraph } from './graph-model.mjs';
+import { buildBm25, buildDataflowGraph, KIND_META, LANES, traceGraph } from './graph-model.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { arraySort } from './output-security.mjs';
 
@@ -41,6 +41,52 @@ function retrievalBundle() {
 }
 
 describe('devtool BM25 retrieval', () => {
+  it('carries compiler-owned declaration anchors onto every derived node and edge', () => {
+    const mutationSource = { end: 52, file: 'src/mutations.ts', start: 8 };
+    const querySource = { end: 94, file: 'src/queries.ts', start: 21 };
+    const componentSource = { end: 130, file: 'src/card.tsx', start: 12 };
+    const formSource = { end: 117, file: 'src/card.tsx', start: 80 };
+    const pageSource = { end: 84, file: 'src/routes.tsx', start: 9 };
+    const graph = buildDataflowGraph({
+      components: [
+        {
+          exportName: 'Card',
+          mutationForms: [{ mutation: 'cart/add', slot: 'add', source: formSource }],
+          name: 'components/card',
+          queries: ['cart'],
+          source: componentSource,
+        },
+      ],
+      mutations: [{ key: 'cart/add', source: mutationSource, writes: ['cart'] }],
+      pages: [
+        {
+          navigationSegments: [{ components: ['Card'], id: 'page:/', kind: 'page' }],
+          route: '/',
+          source: pageSource,
+        },
+      ],
+      queries: [{ domains: ['cart'], query: 'cart', source: querySource }],
+    });
+
+    expect(
+      Object.fromEntries(
+        graph.nodes.filter((node) => node.anchor).map((node) => [node.id, node.anchor]),
+      ),
+    ).toEqual({
+      'component:components/card': componentSource,
+      'mutation:cart/add': mutationSource,
+      'page:/': pageSource,
+      'query:cart': querySource,
+    });
+    expect(Object.fromEntries(graph.edges.map((edge) => [edge.kind, edge.anchor]))).toEqual({
+      backs: querySource,
+      emits: formSource,
+      feeds: componentSource,
+      renders: pageSource,
+      writes: mutationSource,
+    });
+  });
+
   it('preserves camel-case token ranking for the shared UI and MCP search surface', () => {
     const bundle = retrievalBundle();
     const hits = buildBm25(bundle.nodes)('order history');

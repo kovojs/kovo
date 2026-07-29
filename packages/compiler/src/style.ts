@@ -514,7 +514,7 @@ function collectStyleEnvironment(
         const resultRules = result.rules;
         compilerMapSet(staticValues, node.name.text, result.value);
         appendStyleValues(rules, resultRules, 'Style atomic rules');
-        pushRuleUsages(usages, fileName, node.name.text, resultRules);
+        pushRuleUsages(usages, fileName, node.name.text, resultRules, node);
         continue;
       }
 
@@ -572,6 +572,11 @@ function collectStyleEnvironment(
               usages,
               {
                 className: rule.className,
+                generatedFrom: {
+                  end: node.getEnd(),
+                  file: fileName,
+                  start: node.getStart(sourceFile),
+                },
                 moduleFileName: fileName,
                 source: rule.source,
                 styleRef,
@@ -1987,6 +1992,7 @@ function pushRuleUsages(
   fileName: string,
   styleRefRoot: string,
   rules: readonly AtomicRule[],
+  declaration: ts.Node,
 ): void {
   const ruleCount = compilerArrayLength(rules, 'Style rule usages');
   for (let index = 0; index < ruleCount; index += 1) {
@@ -1995,6 +2001,11 @@ function pushRuleUsages(
       usages,
       {
         className: rule.className,
+        generatedFrom: {
+          end: declaration.getEnd(),
+          file: fileName,
+          start: declaration.getStart(),
+        },
         moduleFileName: fileName,
         source: rule.source,
         styleRef: `${styleRefRoot}.${rule.property}`,

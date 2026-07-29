@@ -816,6 +816,7 @@ export function componentGraphFact(
   cacheInfluence: NonNullable<CoreGraph.ComponentExplain['cacheInfluence']> = [],
   securityOperations: NonNullable<CoreGraph.ComponentExplain['securityOperations']> = [],
   securitySemanticGraph?: CoreGraph.ComponentExplain['securitySemanticGraph'],
+  source?: CoreGraph.SourceAnchor,
 ): ComponentGraphFact {
   const queries = component
     ? componentQueryNames(component, model, sourceFileName)
@@ -823,13 +824,18 @@ export function componentGraphFact(
   const clocks = component
     ? componentClockExplainFacts(component)
     : componentClockExplainFactsForModule(model);
-  const styleRules: { className: string; source: string; styleRef: string }[] = [];
+  const styleRules: CoreGraph.StyleRuleExplain[] = [];
   const styleRuleSnapshot = compilerSnapshotDenseArray(styleRuleUsages, 'Component style rules');
   for (let index = 0; index < styleRuleSnapshot.length; index += 1) {
-    const { className, source, styleRef } = styleRuleSnapshot[index]!;
+    const { className, generatedFrom, source, styleRef } = styleRuleSnapshot[index]!;
     compilerArrayAppend(
       styleRules,
-      { className, source, styleRef },
+      {
+        ...(generatedFrom === undefined ? {} : { generatedFrom }),
+        className,
+        source,
+        styleRef,
+      },
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
   }
@@ -852,6 +858,7 @@ export function componentGraphFact(
     ...(queries.length === 0 ? {} : { queries }),
     ...(securitySemanticGraph === undefined ? {} : { securitySemanticGraph }),
     ...(securityOperations.length === 0 ? {} : { securityOperations }),
+    ...(source === undefined ? {} : { source }),
     ...(styleRules.length === 0 ? {} : { styleRules }),
   };
 }
@@ -1352,6 +1359,7 @@ function derivedPageFactsFromRoutePages(
         ...(navigationSegments.length > 0 ? { navigationSegments } : {}),
         ...(queries.length === 0 ? {} : { queries }),
         route: page.route,
+        ...(page.source === undefined ? {} : { source: page.source }),
       },
       'Compiler packages/compiler/src/app-graph.ts collection',
     );
@@ -1411,6 +1419,9 @@ function mergeGraphPage(
       : {
           queries: uniqueSorted(concatDense(authoredPage.queries ?? [], derivedPage.queries ?? [])),
         }),
+    ...(authoredPage.source === undefined && derivedPage.source !== undefined
+      ? { source: derivedPage.source }
+      : {}),
   };
 }
 

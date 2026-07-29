@@ -14,6 +14,83 @@ function pageGraph(...routes) {
 }
 
 describe('devtool source-root confinement', () => {
+  it('uses exact compiler offsets even when a decoy declaration appears first', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-source-anchor-'));
+    const root = join(fixture, 'src');
+    mkdirSync(root);
+    const file = join(root, 'routes.tsx');
+    const source =
+      "const decoy = route('/same', { page: () => 'decoy' });\n" +
+      '\n\n\n' +
+      "export const exact = route('/same', {\n  page: () => <main>Exact</main>,\n});\n";
+    writeFileSync(file, source);
+    const start = source.indexOf("route('/same'", source.indexOf('export const exact'));
+    const end = source.indexOf(');', start) + 2;
+
+    try {
+      const bundle = buildBundle({
+        app: 'fixture',
+        graph: {
+          pages: [
+            {
+              navigationSegments: [],
+              route: '/same',
+              source: { end, file: 'src/routes.tsx', start },
+            },
+          ],
+        },
+        srcRoot: root,
+      });
+
+      expect(bundle.nodes[0]?.source).toMatchObject({
+        anchorLine: 5,
+        end,
+        file: 'routes.tsx',
+        highlight: {
+          end: { column: 4, line: 7 },
+          start: { column: 22, line: 5 },
+        },
+        start,
+      });
+      expect(bundle.nodes[0]?.source?.code).toContain('<main>Exact</main>');
+      expect(bundle.nodes[0]?.source?.code).not.toContain("page: () => 'decoy'");
+    } finally {
+      rmSync(fixture, { force: true, recursive: true });
+    }
+  });
+
+  it('fails closed on an out-of-root compiler anchor without falling back to a symbol match', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-source-anchor-outside-'));
+    const root = join(fixture, 'src');
+    const outside = join(fixture, 'outside.tsx');
+    mkdirSync(root);
+    writeFileSync(
+      join(root, 'routes.tsx'),
+      "export const visible = route('/private', { page: () => 'VISIBLE'; });\n",
+    );
+    writeFileSync(outside, "export const secret = route('/private', { page: () => 'SECRET'; });\n");
+
+    try {
+      const outsideSource = "export const secret = route('/private', { page: () => 'SECRET'; });\n";
+      const bundle = buildBundle({
+        app: 'fixture',
+        graph: {
+          pages: [
+            {
+              navigationSegments: [],
+              route: '/private',
+              source: { end: outsideSource.length, file: outside, start: 0 },
+            },
+          ],
+        },
+        srcRoot: root,
+      });
+      expect(bundle.nodes[0]?.source).toBeNull();
+    } finally {
+      rmSync(fixture, { force: true, recursive: true });
+    }
+  });
+
   it('does not preview TypeScript reached through an out-of-root symlink', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'kovo-devtool-source-root-'));
     const root = join(fixture, 'root');

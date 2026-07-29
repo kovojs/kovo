@@ -230,8 +230,18 @@ export function mutationFormExplainFacts(
         ...(mutationInput === null ? {} : { fields: mutationFields }),
         ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
         ...(formErrors.length === 0 ? {} : { formErrors }),
+        generatedFrom: {
+          end: form.end,
+          file: options.fileName,
+          start: form.start,
+        },
         mutation: mutationInput?.key ?? mutationKey ?? binding.localName,
         slot,
+        source: {
+          end: form.end,
+          file: options.fileName,
+          start: form.start,
+        },
       },
       'Compiler packages/compiler/src/emit/mutation-form.ts collection',
     );

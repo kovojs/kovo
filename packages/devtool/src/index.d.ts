@@ -4,7 +4,14 @@
 
 export type GraphJson = Record<string, unknown>;
 
+export interface SourceAnchor {
+  file: string;
+  start: number;
+  end: number;
+}
+
 export interface DataflowNode {
+  anchor?: SourceAnchor;
   id: string;
   kind: 'mutation' | 'domain' | 'query' | 'component' | 'page';
   name: string;
@@ -16,6 +23,7 @@ export interface DataflowNode {
   lane?: number;
 }
 export interface DataflowEdge {
+  anchor?: SourceAnchor;
   id: string;
   from: string;
   to: string;
@@ -24,11 +32,17 @@ export interface DataflowEdge {
 }
 export interface SourceSlice {
   file: string;
+  start?: number;
   startLine: number;
   anchorLine: number;
+  end?: number;
   endLine: number;
   code: string;
   lang: string;
+  highlight?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
   touches?: Array<Record<string, unknown>>;
 }
 export interface DataflowBundle {

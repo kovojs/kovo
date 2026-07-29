@@ -66,7 +66,7 @@ generalizes it. So:
 
 1. A **traversable graph** layer: stable node IDs, typed directional edges, and
    reverse indices (component → mutations-that-affect-it) over the existing facts.
-2. **Source anchoring**: richer spans (start/end line:col) per node and edge, and
+2. **Source anchoring**: exact UTF-16 source offsets per node and edge, and
    a source-slice service that returns file + relevant lines + language + span.
 3. **MCP navigation tools** designed for bounded _tracing_, not graph dumps.
 4. A **visual graph UI** (select-and-trace, code-preview panels).
@@ -115,7 +115,8 @@ No new source analysis — it _indexes_ existing facts into a navigable shape.
 
 ### Layer 2 — Source anchoring & code preview (`SourceSlice`)
 
-- Extend graph facts to carry `SourceAnchor { file, start{line,col}, end{line,col} }`.
+- Extend graph facts to carry `SourceAnchor { file, start, end }` with zero-based UTF-16 offsets and
+  an exclusive end.
   Today touch-graph has `site: 'file:line'` and diagnostics have `start`; component
   handler/derive/binding facts need end spans added during emission (small compiler
   change — most positions are already computed, just not all surfaced).
@@ -224,7 +225,16 @@ surface ships before the MCP tools, which then drop onto the same model.
 ### Phase 1 — Source anchoring & previews (shared bedrock)
 
 - [x] Per-node source slices (`file`, line range, code, lang) resolved at build time (`examples/devtool/scripts/build-bundle.mjs`) + mutation touch-site `file:line` carried through. Rendered as gutter-numbered, syntax-highlighted previews (`src/highlight.ts`).
-- [ ] Promote slice resolution from the bundle script's symbol heuristic to compiler-emitted `SourceAnchor` (start/end line:col) for exact spans; consider shiki for the highlighter.
+- [x] Prefer compiler-emitted `SourceAnchor { file, start, end }` for component, query, mutation,
+      and page nodes plus `writes`/`backs`/`feeds`/`emits`/`renders` edges. Exact slicing is
+      root-confined and fails closed on a malformed or unresolved anchor rather than downgrading to
+      a symbol heuristic.
+  - Evidence: `packages/cli/src/source-anchors.test.ts`,
+    `packages/devtool/src/graph-model.test.mjs`, and
+    `packages/devtool/src/source-slice.security.test.mjs` pass in Latest verification.
+- [ ] Backfill compiler anchors for remaining domain, handler, derive, trigger, binding-position,
+      diagnostic-suppression, and runtime-registry facts, then remove their fallback symbol
+      heuristics; consider shiki for the highlighter.
 
 ### Phase 2 — Visual graph UI (the lead surface) — shipped
 
@@ -264,8 +274,9 @@ surface ships before the MCP tools, which then drop onto the same model.
 
 ## Risks / open questions
 
-- **Span backfill cost**: some binding/handler positions may not be retained
-  through emission; Phase 1 must confirm they're recoverable without re-analysis.
+- **Span backfill cost**: declaration/form/style anchors survive emission, but some
+  binding/handler positions are not yet retained; finish those through parser spans or explicit
+  lowering offset maps, never re-analysis.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
   the MCP side avoids this by being navigational (neighbors, not dumps).
 - **Live overlay & deploy skew**: frames carry the render-plan version token
@@ -277,3 +288,14 @@ Per §11.4, the whole devtool is checkable without a browser: the graph derivati
 source slices, and MCP tools are pure functions over committed facts, tested over
 the example fixtures; only the Phase 4 live overlay and Phase 3 render are
 browser-bound and get a small named browser suite.
+
+## Latest verification
+
+- `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
+packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
+packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
+packages/cli/src/source-anchors.test.ts --reporter=dot` passed (6 files, 120 tests).
+- `pnpm exec vitest --run packages/compiler/src/registry.test.ts -t 'emits
+live-target|honors disableServerRefresh|threads compiler-derived route layout|derives app graph
+component facts|derives page query facts|emits mutation form error binding facts|lowers
+object-form mutation values' --reporter=dot` passed (8 tests).

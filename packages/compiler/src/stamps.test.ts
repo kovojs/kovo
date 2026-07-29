@@ -318,7 +318,7 @@ export const UploadReceiptForm = component({
 
     const loweredSource = requireLoweredSource(result);
     expect(loweredSource).toContain('enctype="multipart/form-data"');
-    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+    expect(result.componentGraphFacts[0]?.mutationForms).toMatchObject([
       {
         enctype: 'multipart/form-data',
         fields: ['receipt'],

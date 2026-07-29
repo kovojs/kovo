@@ -7,8 +7,13 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Shared facts
 
-- [ ] Complete `SourceAnchor { file, start, end }` for declarations, graph edges/nodes,
-      diagnostics, suppressions, and generated-to-authored mappings.
+- [x] Carry compiler-owned `SourceAnchor { file, start, end }` through component/query/mutation/
+      page/endpoint declarations, form/style generated-to-authored facts, and the devtool's
+      mutation/query/component/page nodes and directional edges.
+  - Evidence: the focused source-anchor/compiler/devtool suites in Latest verification prove exact
+    authored slices, node/edge propagation, and fail-closed root confinement.
+- [ ] Complete remaining source anchors for domains, handlers, derives, triggers, binding
+      positions, suppressions, and every diagnostic family.
 - [ ] Add safe trusted-boundary cause taxonomy, correlation ID, remediation, and source/config
       anchors while retaining secret-redacted raw causes server-side.
 - [ ] Complete open devtool unit/browser/CLI parity and live-overlay work.
@@ -65,9 +70,14 @@ compiler/runtime facts; none may become a second analyzer.
 ## Latest verification
 
 - `pnpm exec vitest --run site/scripts/api-ref.test.mjs site/src/content-api-manifest.test.ts
-  --reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
+--reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
 - `node scripts/build-component-catalog.mjs && node scripts/package-front-door.mjs && node
-  site/scripts/golden-recipes.mjs` plus the four focused suites passed (4 files, 10 tests; 44
+site/scripts/golden-recipes.mjs` plus the four focused suites passed (4 files, 10 tests; 44
   components, 1,737 icons, 14 package front doors, 16 recipe sources).
 - `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
   1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.
+- `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
+packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
+packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
+packages/cli/src/source-anchors.test.ts --reporter=dot` passed (6 files, 120 tests); the focused
+  registry subset passed (8 tests).

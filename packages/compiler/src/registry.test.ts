@@ -172,13 +172,13 @@ export const ContactStatsRegion = component({
           mutableLocalState: true,
           name: 'components/interaction-lab/triage-island',
         }),
-        {
+        expect.objectContaining({
           domName: 'contact-stats-region',
           exportName: 'ContactStatsRegion',
           fragments: ['components/interaction-lab/contact-stats-region'],
           name: 'components/interaction-lab/contact-stats-region',
           queries: ['contacts', 'contactsQuery', 'queries/contacts-query'],
-        },
+        }),
       ]),
     );
     expect(registry).toContain(`interface FragmentTargets {
@@ -233,12 +233,12 @@ export const ContactStatsRegion = component({
 
     expect(result.componentGraphFacts).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           domName: 'contact-stats-region',
           exportName: 'ContactStatsRegion',
           name: 'components/interaction-lab/contact-stats-region',
           queries: ['contacts', 'contactsQuery', 'queries/contacts-query'],
-        },
+        }),
       ]),
     );
     expect(registry).not.toContain(`interface FragmentTargets {
@@ -550,7 +550,7 @@ export const admin = route('/admin', {
 
     const { graph, registryFacts } = deriveAppGraph({ routePages: [routes] });
 
-    expect(graph.pages).toEqual([
+    expect(graph.pages).toMatchObject([
       {
         layouts: [
           { name: 'AppLayout', queries: ['viewer', 'cart'] },
@@ -599,7 +599,7 @@ export const ProductGrid = component({
 `,
     });
 
-    expect(cartBadge.componentGraphFacts).toEqual([
+    expect(cartBadge.componentGraphFacts).toMatchObject([
       {
         domName: 'cart-badge',
         exportName: 'CartBadge',
@@ -629,7 +629,7 @@ export const ProductGrid = component({
       },
     });
 
-    expect(derived.graph.components).toEqual([
+    expect(derived.graph.components).toMatchObject([
       {
         domName: 'cart-badge',
         exportName: 'CartBadge',
@@ -718,7 +718,7 @@ export const cart = route('/cart', {
       routePages: [routes],
     });
 
-    expect(derived.graph.pages).toEqual([
+    expect(derived.graph.pages).toMatchObject([
       {
         meta: { title: 'Cart' },
         navigationSegments: [
@@ -769,7 +769,7 @@ export const cart = route('/cart', {
         ],
       }),
     ]);
-    expect(derived.graph.pages).toEqual([
+    expect(derived.graph.pages).toMatchObject([
       {
         navigationSegments: [
           {
@@ -787,9 +787,7 @@ export const cart = route('/cart', {
   });
 
   it('emits mutation form error binding facts for component explain', () => {
-    const result = compileComponentModule({
-      fileName: 'components/products/product-grid.tsx',
-      source: `
+    const source = `
 import { component, FieldError, FormError } from '@kovojs/core';
 import { mutation, s } from '@kovojs/server';
 
@@ -814,10 +812,13 @@ export const ProductGrid = component({
     </form>
   ),
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'components/products/product-grid.tsx',
+      source,
     });
 
-    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+    expect(result.componentGraphFacts[0]?.mutationForms).toMatchObject([
       {
         fieldErrors: [{ id: 'add-to-cart-quantity-error-p1', name: 'quantity' }],
         fields: ['productId', 'quantity'],
@@ -826,12 +827,17 @@ export const ProductGrid = component({
         slot: 'addToCart',
       },
     ]);
+    const form = result.componentGraphFacts[0]?.mutationForms?.[0];
+    expect(form?.generatedFrom).toEqual(form?.source);
+    expect(form?.source?.file).toBe('components/products/product-grid.tsx');
+    if (form?.source === undefined) throw new Error('Expected an authored mutation form anchor.');
+    expect(source.slice(form.source.start, form.source.end)).toContain(
+      '<form enhance mutation={addToCart}',
+    );
   });
 
   it('lowers object-form mutation values with source-derived keys', () => {
-    const result = compileComponentModule({
-      fileName: 'src/components/product-grid.tsx',
-      source: `
+    const source = `
 import { component, FieldError } from '@kovojs/core';
 import { mutation, s } from '@kovojs/server';
 
@@ -855,7 +861,10 @@ export const ProductGrid = component({
     </form>
   ),
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'src/components/product-grid.tsx',
+      source,
     });
 
     expect(result.loweredSource).toContain('__kovoAssignDerivedMutationKey(mutation({');
@@ -864,7 +873,7 @@ export const ProductGrid = component({
     expect(result.loweredSource).not.toContain('addToCart.queue =');
     expect(result.loweredSource).toContain('action="/_m/components/product-grid/add-to-cart"');
     expect(result.loweredSource).toContain('data-mutation="components/product-grid/add-to-cart"');
-    expect(result.componentGraphFacts[0]?.mutationForms).toEqual([
+    expect(result.componentGraphFacts[0]?.mutationForms).toMatchObject([
       {
         fieldErrors: [{ id: 'add-to-cart-productId-error-p1', name: 'productId' }],
         fields: ['productId'],
@@ -872,6 +881,11 @@ export const ProductGrid = component({
         slot: 'addToCart',
       },
     ]);
+    const authoredForm = result.componentGraphFacts[0]?.mutationForms?.[0]?.source;
+    if (authoredForm === undefined) throw new Error('Expected an authored mutation form anchor.');
+    expect(source.slice(authoredForm.start, authoredForm.end)).toContain(
+      '<form enhance mutation={addToCart}',
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

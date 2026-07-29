@@ -72,19 +72,36 @@ export function buildDataflowGraph(raw) {
   const nodes = new Map();
   const edges = [];
 
-  const ensure = (kind, name, label, data = {}) => {
+  const ensure = (kind, name, label, data = {}, anchor) => {
     const nid = id(kind, name);
     if (!nodes.has(nid)) {
-      nodes.set(nid, { id: nid, kind, name, label: label ?? name, data });
+      nodes.set(nid, {
+        id: nid,
+        kind,
+        name,
+        label: label ?? name,
+        data,
+        ...(anchor === undefined ? {} : { anchor }),
+      });
     } else {
       Object.assign(nodes.get(nid).data, data);
+      if (anchor !== undefined && nodes.get(nid).anchor === undefined) {
+        nodes.get(nid).anchor = anchor;
+      }
     }
     return nodes.get(nid);
   };
 
-  const link = (from, to, kind, data = {}) => {
+  const link = (from, to, kind, data = {}, anchor) => {
     if (!from || !to) return;
-    edges.push({ id: `${from.id}->${to.id}:${kind}`, from: from.id, to: to.id, kind, data });
+    edges.push({
+      id: `${from.id}->${to.id}:${kind}`,
+      from: from.id,
+      to: to.id,
+      kind,
+      data,
+      ...(anchor === undefined ? {} : { anchor }),
+    });
   };
 
   // --- domains (union of every mention) ---
@@ -94,56 +111,81 @@ export function buildDataflowGraph(raw) {
   const optByMutation = groupBy(raw.optimistic ?? [], (o) => o.mutation);
   for (const m of raw.mutations ?? []) {
     const writes = m.writes ?? m.invalidates ?? [];
-    const node = ensure('mutation', m.key, m.key, {
-      guards: m.guards ?? [],
-      writes,
-      invalidates: m.invalidates ?? writes,
-      inputFields: m.inputFields ?? [],
-      session: m.session,
-      optimistic: optByMutation.get(m.key) ?? [],
-      touch: raw.touchGraph?.[m.key] ?? findTouchByDomains(raw.touchGraph, writes),
-    });
-    for (const d of writes) link(node, domainNode(d), 'writes');
+    const node = ensure(
+      'mutation',
+      m.key,
+      m.key,
+      {
+        guards: m.guards ?? [],
+        writes,
+        invalidates: m.invalidates ?? writes,
+        inputFields: m.inputFields ?? [],
+        session: m.session,
+        optimistic: optByMutation.get(m.key) ?? [],
+        touch: raw.touchGraph?.[m.key] ?? findTouchByDomains(raw.touchGraph, writes),
+      },
+      m.source,
+    );
+    for (const d of writes) link(node, domainNode(d), 'writes', {}, m.source);
   }
 
   // --- queries (query → backing domains) ---
   for (const q of raw.queries ?? []) {
-    const node = ensure('query', q.query, q.query, {
-      domains: q.domains ?? [],
-      guards: q.guards ?? [],
-    });
-    for (const d of q.domains ?? []) link(domainNode(d), node, 'backs');
+    const node = ensure(
+      'query',
+      q.query,
+      q.query,
+      {
+        domains: q.domains ?? [],
+        guards: q.guards ?? [],
+      },
+      q.source,
+    );
+    for (const d of q.domains ?? []) link(domainNode(d), node, 'backs', {}, q.source);
   }
 
   // --- components (queries in, mutations out via forms) ---
   for (const c of raw.components ?? []) {
     const label = c.exportName ?? leaf(c.name);
-    const node = ensure('component', c.name, label, {
-      domName: c.domName,
-      exportName: c.exportName,
-      queries: c.queries ?? [],
-      fragments: c.fragments ?? [],
-      mutationForms: c.mutationForms ?? [],
-      handlers: c.handlers ?? [],
-    });
+    const node = ensure(
+      'component',
+      c.name,
+      label,
+      {
+        domName: c.domName,
+        exportName: c.exportName,
+        queries: c.queries ?? [],
+        fragments: c.fragments ?? [],
+        mutationForms: c.mutationForms ?? [],
+        handlers: c.handlers ?? [],
+      },
+      c.source,
+    );
     for (const qn of c.queries ?? []) {
       const qnode = nodes.get(id('query', qn));
-      if (qnode) link(qnode, node, 'feeds'); // query → component (data in)
+      if (qnode) link(qnode, node, 'feeds', {}, c.source); // query → component (data in)
     }
     for (const mf of c.mutationForms ?? []) {
       const mnode = nodes.get(id('mutation', mf.mutation));
-      if (mnode) link(node, mnode, 'emits', { slot: mf.slot, fields: mf.fields }); // component → mutation (action out)
+      if (mnode)
+        link(node, mnode, 'emits', { slot: mf.slot, fields: mf.fields }, mf.source ?? c.source); // component → mutation (action out)
     }
   }
 
   // --- pages (renders components, loads queries) ---
   for (const p of raw.pages ?? []) {
-    const node = ensure('page', p.route, p.route, {
-      meta: p.meta,
-      prefetch: p.prefetch,
-      guards: p.guards ?? [],
-      layouts: p.layouts ?? [],
-    });
+    const node = ensure(
+      'page',
+      p.route,
+      p.route,
+      {
+        meta: p.meta,
+        prefetch: p.prefetch,
+        guards: p.guards ?? [],
+        layouts: p.layouts ?? [],
+      },
+      p.source,
+    );
     const compExports = [];
     for (const seg of p.navigationSegments ?? [])
       for (const c of seg.components ?? []) compExports.push(c);
@@ -151,7 +193,7 @@ export function buildDataflowGraph(raw) {
       const match = [...nodes.values()].find(
         (n) => n.kind === 'component' && (n.data.exportName === exp || n.label === exp),
       );
-      if (match) link(node, match, 'renders');
+      if (match) link(node, match, 'renders', {}, p.source);
     }
   }
 

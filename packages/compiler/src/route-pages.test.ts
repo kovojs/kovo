@@ -21,7 +21,7 @@ export const home = route('/', {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.files).toHaveLength(1);
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [
           {
@@ -71,7 +71,7 @@ export const home = route('/', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [],
         fileName: 'src/routes.tsx',
@@ -89,6 +89,27 @@ export const home = route('/', {
     expect(result.files[0]?.source).toContain(
       `page: __kovoDefineCompiledRoutePage({"components":[],"fileName":"src/routes.tsx","navigationSegments":[{"components":[],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => <main>Home</main>)`,
     );
+  });
+
+  it('emits an exact authored route declaration anchor without adding it to runtime route IR', () => {
+    const source = `
+import { route } from '@kovojs/server';
+
+export const home = route('/anchored', {
+  page: () => <main>Anchored</main>,
+});
+`;
+    const result = compileRouteModule({ fileName: 'src/routes.tsx', source });
+    const start = source.indexOf("route('/anchored'");
+    const end = source.indexOf(');', start) + 1;
+
+    expect(result.routePageFacts[0]?.source).toEqual({
+      end,
+      file: 'src/routes.tsx',
+      start,
+    });
+    expect(source.slice(start, end)).toContain('<main>Anchored</main>');
+    expect(result.files[0]?.source).not.toContain('"source"');
   });
 
   it('records route response outcome facts through framework aliases', () => {
@@ -188,7 +209,7 @@ export const home = route('/', {
 `,
     });
 
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       expect.objectContaining({
         layouts: [
           { localName: 'AppLayout', queries: ['viewer', 'cart'] },
@@ -255,7 +276,7 @@ export const namespace = kovo.route('/namespace', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       expect.objectContaining({
         components: [expect.objectContaining({ localName: 'AliasPage' })],
         css: { sourceFileNames: ['src/components/alias-page.css'] },
@@ -653,7 +674,7 @@ export const guide = route('/guides/:slug', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       expect.objectContaining({
         components: [
           expect.objectContaining({ localName: 'DocsPage' }),
@@ -944,7 +965,7 @@ export const detail = route('/questions/:id', {
 `,
     });
 
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [
           {
@@ -996,7 +1017,7 @@ export const products = route('/products', {
 `,
     });
 
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [
           {
@@ -1055,7 +1076,7 @@ export const home = route('/', {
 `,
     });
 
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [
           {
@@ -1097,7 +1118,7 @@ export const home = route('/', {
 `,
     });
 
-    expect(result.routePageFacts).toEqual([
+    expect(result.routePageFacts).toMatchObject([
       {
         components: [
           {

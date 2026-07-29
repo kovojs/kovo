@@ -6,12 +6,12 @@ import { extractKovoStyles } from './style.js';
 
 describe('Kovo Style extraction', () => {
   it('lowers static style.create references to readable classes and atomic CSS', () => {
-    const result = compileComponentModule({
-      fileName: 'components/button.tsx',
-      source: `
+    const source = `
 import { component } from '@kovojs/core';
+import { href } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
+const target = href('/products/:id', { params: { id: 'p1' } });
 const base = style.create({
   root: {
     backgroundColor: 'black',
@@ -20,9 +20,12 @@ const base = style.create({
 });
 
 export const Button = component({
-  render: () => <button style={base.root}>Buy</button>,
+  render: () => <a href={target} style={base.root}>Buy</a>,
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'components/button.tsx',
+      source,
     });
 
     const serverSource = result.files.find((file) => file.kind === 'server')?.source;
@@ -55,6 +58,16 @@ export const Button = component({
         }),
       ]),
     );
+    const componentSource = result.componentGraphFacts[0]?.source;
+    const generatedFrom = result.componentGraphFacts[0]?.styleRules?.[0]?.generatedFrom;
+    expect(componentSource?.file).toBe('components/button.tsx');
+    if (componentSource === undefined) throw new Error('Expected an authored component anchor.');
+    expect(source.slice(componentSource.start, componentSource.end)).toContain(
+      'Button = component(',
+    );
+    expect(generatedFrom?.file).toBe('components/button.tsx');
+    if (generatedFrom === undefined) throw new Error('Expected authored style provenance.');
+    expect(source.slice(generatedFrom.start, generatedFrom.end)).toContain('base = style.create(');
     expect(result.files.find((file) => file.kind === 'registry')?.source).toContain(
       'export interface ComponentStyleRules',
     );

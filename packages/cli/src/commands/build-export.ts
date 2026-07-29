@@ -2509,7 +2509,12 @@ async function staticBuildCheckGraph(
   ) as readonly QueryShapeFact[];
   const revealed = mergeBuildRevealFacts(drizzleFacts.revealed ?? [], runtimeReveals);
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
-    queryCheckFact(query, drizzleFacts.queries, options.execution),
+    queryCheckFact(
+      query,
+      drizzleFacts.queries,
+      options.execution,
+      registryDeclarationSource(sourceGraphFacts.registryDeclarationAnchors, 'query', query.key),
+    ),
   );
   const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
     app.queries,
@@ -2538,7 +2543,20 @@ async function staticBuildCheckGraph(
       })),
   );
   const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', (endpoint) =>
-    endpointCheckFact(endpoint, options.execution),
+    endpointCheckFact(
+      endpoint,
+      options.execution,
+      registryDeclarationSource(
+        sourceGraphFacts.registryDeclarationAnchors,
+        'endpoint',
+        endpoint.path,
+      ) ??
+        registryDeclarationSource(
+          sourceGraphFacts.registryDeclarationAnchors,
+          'webhook',
+          endpoint.path,
+        ),
+    ),
   );
   for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
     buildSecurityArrayAppend(
@@ -2548,7 +2566,16 @@ async function staticBuildCheckGraph(
     );
   }
   const mutations = buildMapDense(app.mutations, 'Build app mutations', (mutation) =>
-    mutationCheckFact(mutation, queryReadSets, options.execution),
+    mutationCheckFact(
+      mutation,
+      queryReadSets,
+      options.execution,
+      registryDeclarationSource(
+        sourceGraphFacts.registryDeclarationAnchors,
+        'mutation',
+        mutation.key,
+      ),
+    ),
   );
   const trustEscapes = completeBuildTrustEscapes(staticTrustEscapes, mutations);
   const optimistic = buildFlatMapDense(
@@ -2557,7 +2584,11 @@ async function staticBuildCheckGraph(
     mutationOptimisticCheckFacts,
   );
   const pages = buildMapDense(app.routes, 'Build app routes', (route) =>
-    routeCheckFact(route, options.execution),
+    routeCheckFact(
+      route,
+      options.execution,
+      registryDeclarationSource(sourceGraphFacts.registryDeclarationAnchors, 'page', route.path),
+    ),
   );
   const authorizationCorrespondence =
     drizzleFacts.runtimeTableSecurityManifest === undefined
@@ -3218,6 +3249,13 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       );
       for (let factIndex = 0; factIndex < routePageFacts.length; factIndex += 1) {
         const fact = routePageFacts[factIndex]!;
+        if (fact.source !== undefined) {
+          collectRegistryDeclarationAnchor(
+            registryDeclarationAnchors,
+            `page\0${fact.route}`,
+            fact.source,
+          );
+        }
         if (fact.outcome !== undefined && !buildMapHas(routeOutcomes, fact.route)) {
           buildMapSet(routeOutcomes, fact.route, fact.outcome.kind);
         }
@@ -3248,17 +3286,21 @@ function collectRegistryDeclarationAnchors(
   const snapshot = buildSnapshotDenseArray(calls, `Registry declaration calls for ${fileName}`);
   for (let index = 0; index < snapshot.length; index += 1) {
     const call = snapshot[index]!;
-    if (call.frameworkFactory !== 'query') continue;
-    const name = sourceQueryDeclarationName(fileName, call);
-    if (name === undefined) continue;
-    const key = `query\0${name}`;
-    if (buildMapHas(target, key)) {
-      // Duplicate declarations are invalid at runtime. Do not guess which authored range owns a
-      // diagnostic if malformed source reaches this preflight; an unanchored finding is safer.
-      buildMapSet(target, key, null);
+    const kind = call.frameworkFactory;
+    if (
+      kind !== 'agent' &&
+      kind !== 'endpoint' &&
+      kind !== 'mutation' &&
+      kind !== 'query' &&
+      kind !== 'task' &&
+      kind !== 'tool' &&
+      kind !== 'webhook'
+    ) {
       continue;
     }
-    buildMapSet(target, key, {
+    const name = sourceRegistryDeclarationName(fileName, call);
+    if (name === undefined) continue;
+    collectRegistryDeclarationAnchor(target, `${kind}\0${name}`, {
       end: call.end,
       file: fileName,
       start: call.start,
@@ -3266,26 +3308,51 @@ function collectRegistryDeclarationAnchors(
   }
 }
 
-function sourceQueryDeclarationName(
+function collectRegistryDeclarationAnchor(
+  target: Map<string, KovoDiagnosticSourceAnchor | null>,
+  key: string,
+  source: KovoDiagnosticSourceAnchor,
+): void {
+  if (buildMapHas(target, key)) {
+    // Duplicate declarations are invalid at runtime. Do not guess which authored range owns a
+    // diagnostic if malformed source reaches this preflight; an unanchored finding is safer.
+    buildMapSet(target, key, null);
+    return;
+  }
+  buildMapSet(target, key, source);
+}
+
+function sourceRegistryDeclarationName(
   fileName: string,
   call: ReturnType<typeof parseComponentModule>['calls'][number],
 ): string | undefined {
   const argumentsSnapshot = buildSnapshotDenseArray(
     call.arguments,
-    `Query declaration arguments for ${fileName}`,
+    `Registry declaration arguments for ${fileName}`,
   );
   const firstStaticValue = buildOwnDataProperty(
     call.argumentStaticValues,
     0,
-    `Query declaration values for ${fileName}`,
+    `Registry declaration values for ${fileName}`,
   );
   if (argumentsSnapshot.length > 0 && !firstStaticValue.present) {
-    throw new TypeError(`Query declaration values for ${fileName}[0] must be a dense own value.`);
+    throw new TypeError(
+      `Registry declaration values for ${fileName}[0] must be a dense own value.`,
+    );
   }
   const explicit = firstStaticValue.present ? firstStaticValue.value : undefined;
   if (typeof explicit === 'string' && explicit.length > 0) return explicit;
   if (argumentsSnapshot.length !== 1 || call.exportedConstName === undefined) return undefined;
   return deriveRegistryIdentity(fileName, call.exportedConstName).key;
+}
+
+function registryDeclarationSource(
+  anchors: ReadonlyMap<string, KovoDiagnosticSourceAnchor | null>,
+  kind: 'agent' | 'endpoint' | 'mutation' | 'page' | 'query' | 'task' | 'tool' | 'webhook',
+  name: string,
+): KovoDiagnosticSourceAnchor | undefined {
+  const source = buildMapGet(anchors, `${kind}\0${name}`);
+  return source === null ? undefined : source;
 }
 
 function queryDiagnosticSourceCatalog(
@@ -3323,6 +3390,72 @@ export function snapshotBuildCompilerDiagnosticsForTests(
   );
 }
 
+/** Internal test seam for compiler-emitted declaration/node provenance in built graph artifacts. */
+export function snapshotBuildCompilerSourceAnchorsForTests(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+  declarations: readonly {
+    readonly kind:
+      | 'agent'
+      | 'endpoint'
+      | 'mutation'
+      | 'page'
+      | 'query'
+      | 'task'
+      | 'tool'
+      | 'webhook';
+    readonly name: string;
+  }[],
+): {
+  components: CompileResult['componentGraphFacts'];
+  declarations: readonly (CoreGraph.SourceAnchor | undefined)[];
+  routes: CompileRouteModuleResult['routePageFacts'];
+} {
+  const anchors = buildCreateMap<string, KovoDiagnosticSourceAnchor | null>();
+  const sourceFiles = buildSnapshotDenseArray(files, 'Build compiler source-anchor files');
+  const components = buildFlatMapDense(
+    sourceFiles,
+    'Build compiler source-anchor component files',
+    (file) => {
+      const parsed = parseComponentModule(file.fileName, file.source);
+      collectRegistryDeclarationAnchors(anchors, file.fileName, parsed.calls);
+      return buildSnapshotDenseArray(
+        compileComponentModule({
+          fileName: file.fileName,
+          source: file.source,
+          sourceProvenance: 'app',
+        }).componentGraphFacts,
+        'Build compiler source-anchor components',
+      );
+    },
+  );
+  const routes = buildFlatMapDense(
+    sourceFiles,
+    'Build compiler source-anchor route files',
+    (file) => {
+      const routeFacts = buildSnapshotDenseArray(
+        compileRouteModule({ fileName: file.fileName, source: file.source }).routePageFacts,
+        'Build compiler source-anchor routes',
+      );
+      for (let index = 0; index < routeFacts.length; index += 1) {
+        const route = routeFacts[index]!;
+        if (route.source !== undefined) {
+          collectRegistryDeclarationAnchor(anchors, `page\0${route.route}`, route.source);
+        }
+      }
+      return routeFacts;
+    },
+  );
+  return {
+    components,
+    declarations: buildMapDense(
+      declarations,
+      'Build compiler source-anchor declarations',
+      (declaration) => registryDeclarationSource(anchors, declaration.kind, declaration.name),
+    ),
+    routes,
+  };
+}
+
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
   return {
     grants: [],
@@ -3341,6 +3474,7 @@ function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
   execution: BuildExecutionModule,
+  source?: CoreGraph.SourceAnchor,
 ): CoreGraph.QueryReadSet {
   const access = accessDecisionGraphFact(execution.accessDecisionFor(query), execution);
   const fact = buildFindDense(
@@ -3376,6 +3510,7 @@ function queryCheckFact(
     ...(readProvenance !== undefined && readProvenance.length > 0 ? { readProvenance } : {}),
     ...(readOnlyDomains.length > 0 ? { readOnlyDomains: uniqueSorted(readOnlyDomains) } : {}),
     ...(query.guard === undefined ? {} : { guards: ['query.guard'] }),
+    ...(source === undefined ? {} : { source }),
   };
 }
 
@@ -3383,6 +3518,7 @@ function mutationCheckFact(
   mutation: KovoApp['mutations'][number],
   queryReadSets: readonly CoreGraph.QueryReadSet[],
   execution: BuildExecutionModule,
+  source?: CoreGraph.SourceAnchor,
 ): CoreGraph.MutationExplain {
   const access = accessDecisionGraphFact(execution.accessDecisionFor(mutation), execution);
   const guards = uniqueSorted(
@@ -3429,6 +3565,7 @@ function mutationCheckFact(
     ...(invalidates.length === 0 ? {} : { invalidates }),
     ...(fileFields.length === 0 ? {} : { enctype: 'multipart/form-data' as const, fileFields }),
     key: mutation.key,
+    ...(source === undefined ? {} : { source }),
     ...(writes.length === 0 && inferredWrites.length === 0
       ? {}
       : {
@@ -3597,6 +3734,7 @@ function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
 function routeCheckFact(
   route: KovoApp['routes'][number],
   execution: BuildExecutionModule,
+  source?: CoreGraph.SourceAnchor,
 ): CoreGraph.PageExplain {
   const access = routeEndpointAccessFact(route, execution);
   const layoutQueryRecord = route.layout?.queries ?? {};
@@ -3627,6 +3765,7 @@ function routeCheckFact(
       buildMapDense(layoutQueries, `Layout query values for ${route.path}`, (query) => query.key),
     ),
     route: route.path,
+    ...(source === undefined ? {} : { source }),
   };
 }
 
@@ -3713,6 +3852,7 @@ function isGuardAccessDecisionValue(access: AccessDecision): access is readonly 
 function endpointCheckFact(
   endpoint: KovoApp['endpoints'][number],
   execution: BuildExecutionModule,
+  source?: CoreGraph.SourceAnchor,
 ): CoreGraph.EndpointExplain {
   const access = accessDecisionGraphFact(execution.accessDecisionFor(endpoint), execution);
   const csrf = endpointSafeMethod(endpoint.method)
@@ -3753,6 +3893,7 @@ function endpointCheckFact(
     ...(name === undefined ? {} : { name }),
     path: endpoint.path,
     reason: endpoint.reason,
+    ...(source === undefined ? {} : { source }),
     surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
     ...endpointWrites(endpoint),
   };

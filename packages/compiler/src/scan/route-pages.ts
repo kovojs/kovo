@@ -319,15 +319,23 @@ function routePageFromCall(
     ...(outcome === undefined ? {} : { outcome }),
     ...(regionCount > 0 ? { regions } : {}),
     route: pathArg.text,
+    source: {
+      end: node.getEnd(),
+      file: fileName,
+      start: node.getStart(sourceFile),
+    },
   };
+  // Source provenance belongs to the compiler/check graph, not the executable route ABI. Keeping
+  // it out of the lowered helper argument avoids making runtime evaluation a source-map carrier.
+  const runtimeFact = { ...fact, source: undefined };
 
   return {
     fact,
     pageReplacement: {
       end: pageHandler?.replacementEnd ?? definitionArg.properties.pos,
       replacement: pageHandler
-        ? `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${jsonRouteValue(fact)}, ${pageHandler.sourceExpression})`
-        : `page: __kovoDefineCompiledRoutePage(${jsonRouteValue(fact)}, () => null),\n`,
+        ? `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${jsonRouteValue(runtimeFact)}, ${pageHandler.sourceExpression})`
+        : `page: __kovoDefineCompiledRoutePage(${jsonRouteValue(runtimeFact)}, () => null),\n`,
       start: pageHandler?.replacementStart ?? definitionArg.properties.pos,
     },
   };

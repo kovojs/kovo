@@ -550,6 +550,16 @@ export type AccessDecisionFact =
   | { kind: 'public'; reason: string }
   | { kind: 'verified-machine-auth' };
 
+/**
+ * @internal Exact compiler-owned authored-source range. Offsets are zero-based UTF-16 code-unit
+ * positions and `end` is exclusive, matching `kovo-diagnostic/v1` (SPEC.md §5.2/§11).
+ */
+export interface SourceAnchor {
+  end: number;
+  file: string;
+  start: number;
+}
+
 /** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
@@ -568,6 +578,7 @@ export interface ComponentExplain {
   queries?: readonly string[];
   securitySemanticGraph?: SecuritySemanticGraph;
   securityOperations?: readonly SecurityOperationIr[];
+  source?: SourceAnchor;
   styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];
 }
@@ -583,8 +594,11 @@ export interface MutationFormExplain {
   fieldErrors?: readonly MutationFormFieldErrorExplain[];
   fields?: readonly string[];
   formErrors?: readonly MutationFormErrorExplain[];
+  /** Authored JSX range that owns the compiler-generated form transport helpers. */
+  generatedFrom?: SourceAnchor;
   mutation: string;
   slot: string;
+  source?: SourceAnchor;
 }
 
 /** @internal */
@@ -600,6 +614,8 @@ export interface MutationFormErrorExplain {
 
 /** @internal */
 export interface StyleRuleExplain {
+  /** Authored style declaration from which the atomic CSS rule was generated. */
+  generatedFrom?: SourceAnchor;
   className: string;
   source: string;
   styleRef: string;
@@ -626,9 +642,11 @@ export interface SqlSafetyExplainFact {
 
 /** @internal */
 export interface DeriveExplain {
+  generatedFrom?: SourceAnchor;
   inputs: readonly string[];
   name: string;
   ref: string;
+  source?: SourceAnchor;
   target: string;
 }
 
@@ -637,8 +655,10 @@ export interface HandlerExplain {
   captures?: readonly CaptureChannel[];
   event: string;
   exportName: string;
+  generatedFrom?: SourceAnchor;
   params?: readonly string[];
   ref: string;
+  source?: SourceAnchor;
   substitution?: string;
 }
 
@@ -649,8 +669,10 @@ export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
 export interface TriggerExplain {
   deps?: readonly string[];
   exportName: string;
+  generatedFrom?: SourceAnchor;
   justification?: string;
   ref: string;
+  source?: SourceAnchor;
   trigger: 'idle' | 'load' | 'visible';
 }
 
@@ -685,6 +707,7 @@ export interface MutationExplain {
   key: string;
   manualInvalidates?: readonly string[];
   session?: string;
+  source?: SourceAnchor;
   writes?: readonly string[];
 }
 
@@ -729,6 +752,7 @@ export interface PageExplain {
   prefetch?: 'conservative' | 'moderate' | false;
   queries?: readonly string[];
   route: string;
+  source?: SourceAnchor;
   stylesheets?: readonly string[];
   viewTransitions?: readonly string[];
 }
@@ -758,6 +782,7 @@ export interface EndpointExplain {
   rateLimit?: string;
   reason?: string;
   runMutations?: readonly string[];
+  source?: SourceAnchor;
   surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }
@@ -1200,6 +1225,7 @@ export interface UpdateCoverageFact {
   detail?: string;
   position: string;
   query: string;
+  sourceAnchor?: SourceAnchor;
   source?: 'query' | 'state';
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
@@ -1243,6 +1269,7 @@ export interface QueryReadSet {
   query: string;
   readProvenance?: readonly QueryReadProvenance[];
   readOnlyDomains?: readonly string[];
+  source?: SourceAnchor;
 }
 
 /** @internal */

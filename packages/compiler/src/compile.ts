@@ -16,6 +16,7 @@ import {
   registerFrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import type { SourceAnchor } from '@kovojs/core/internal/graph';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
   browserPostureManifestSchema,
@@ -59,6 +60,7 @@ import {
   dedupeCss,
   emitCssModule,
   type ComponentCssAsset,
+  type StyleRuleUsage,
 } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
@@ -390,6 +392,69 @@ interface EmitServerPhaseResult {
   readonly serverRenderedSource: string;
 }
 
+function authoredComponentSourceAnchor(
+  model: ComponentModuleModel,
+  fileName: string,
+  localName: string | undefined,
+): SourceAnchor | undefined {
+  const components = compilerSnapshotDenseArray(
+    model.components,
+    `Authored component declarations for ${fileName}`,
+  );
+  for (let index = 0; index < components.length; index += 1) {
+    const component = components[index]!;
+    if (
+      (localName === undefined ? components.length !== 1 : component.localName !== localName) ||
+      component.localNameSpan === undefined
+    ) {
+      continue;
+    }
+    return {
+      end: component.declarationEnd,
+      file: fileName,
+      start: component.localNameSpan.start,
+    };
+  }
+  return undefined;
+}
+
+function authoredStyleRuleUsages(
+  loweredUsages: readonly StyleRuleUsage[],
+  authoredUsages: readonly StyleRuleUsage[],
+): StyleRuleUsage[] {
+  const lowered = compilerSnapshotDenseArray(loweredUsages, 'Lowered style rule usages');
+  const authored = compilerSnapshotDenseArray(authoredUsages, 'Authored style rule usages');
+  const authoredByIdentity = compilerCreateMap<
+    string,
+    { count: number; generatedFrom: SourceAnchor | undefined }
+  >();
+  for (let index = 0; index < authored.length; index += 1) {
+    const usage = authored[index]!;
+    const identity = styleRuleUsageIdentity(usage);
+    const previous = compilerMapGet(authoredByIdentity, identity);
+    compilerMapSet(authoredByIdentity, identity, {
+      count: (previous?.count ?? 0) + 1,
+      generatedFrom: usage.generatedFrom,
+    });
+  }
+  return compilerMapDense(lowered, 'Source-anchored style rule usages', (usage) => {
+    const authoredMatch = compilerMapGet(authoredByIdentity, styleRuleUsageIdentity(usage));
+    return {
+      className: usage.className,
+      ...(authoredMatch?.count === 1 && authoredMatch.generatedFrom !== undefined
+        ? { generatedFrom: authoredMatch.generatedFrom }
+        : {}),
+      moduleFileName: usage.moduleFileName,
+      source: usage.source,
+      styleRef: usage.styleRef,
+    };
+  });
+}
+
+function styleRuleUsageIdentity(usage: StyleRuleUsage): string {
+  return canonicalJson([usage.className, usage.moduleFileName, usage.source, usage.styleRef]);
+}
+
 interface VerifyComponentPhaseResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
   readonly renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
@@ -651,12 +716,18 @@ function emitRegistryCssPhase(
         fact.component,
       ),
   );
-  const mutationForms = mutationFormExplainFacts(lowered.model, {
+  const styleRuleUsages = authoredStyleRuleUsages(
+    lowered.lowering.styleExtraction.ruleUsages,
+    lowered.lowering.styleSpanProbe.ruleUsages,
+  );
+  // Explain provenance is authored-source provenance. Derive it from the pinned original model so
+  // earlier lowering insertions cannot shift a form's offsets into generated source.
+  const mutationForms = mutationFormExplainFacts(parsed.originalModel, {
     fileName: parsed.options.fileName,
     ...(parsed.compileOptions.registryFacts
       ? { registryFacts: parsed.compileOptions.registryFacts }
       : {}),
-    source: lowered.source,
+    source: parsed.options.source,
   });
   const componentGraphFacts = compilerMapDense(
     componentNameFacts,
@@ -669,7 +740,7 @@ function emitRegistryCssPhase(
         fact.component && componentHasInferredFragmentTarget(fact.component)
           ? [fact.names.registryKey]
           : [],
-        index === 0 ? lowered.lowering.styleExtraction.ruleUsages : [],
+        index === 0 ? styleRuleUsages : [],
         fact.component?.localName,
         index === 0 ? mutationForms : [],
         fact.component,
@@ -683,6 +754,11 @@ function emitRegistryCssPhase(
           ? componentSecurityOperationFacts(parsed.originalModel, client.versionedHandlers)
           : [],
         index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
+        authoredComponentSourceAnchor(
+          parsed.originalModel,
+          parsed.options.fileName,
+          fact.component?.localName,
+        ),
       ),
   );
   const cssAssets = cssSource
@@ -695,9 +771,7 @@ function emitRegistryCssPhase(
             {},
             cssSource,
           ),
-          ...(lowered.lowering.styleExtraction.ruleUsages.length > 0
-            ? { styleRuleUsages: lowered.lowering.styleExtraction.ruleUsages }
-            : {}),
+          ...(styleRuleUsages.length > 0 ? { styleRuleUsages } : {}),
         },
       ]
     : [];
