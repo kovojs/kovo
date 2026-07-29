@@ -42,7 +42,11 @@ describe('inspectKovoDevDatabasePosture', () => {
           if (!liveTargetRegistryActive) {
             throw new Error('app loaded outside its generated live-target registry');
           }
-          return { default: app };
+          return {
+            get default() {
+              return app;
+            },
+          };
         }
         if (id === OPTIONS.securityProfileModuleId) {
           return {

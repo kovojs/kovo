@@ -27,6 +27,7 @@ const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeReflectApply = NativeReflect.apply;
+const nativeReflectGet = NativeReflect.get;
 const nativeSetAdd = NativeSet.prototype.add;
 const nativeSetHas = NativeSet.prototype.has;
 const nativeStringSlice = globalThis.String.prototype.slice;
@@ -222,7 +223,17 @@ async function loadKovoDevtoolApp(
     undefined,
     [() => server.ssrLoadModule(options.appModuleId)],
   );
-  const app = ownDevtoolData(appModule, 'default');
+  if (
+    ((typeof appModule !== 'object' || appModule === null) &&
+      typeof appModule !== 'function') ||
+    buildArrayIsArray(appModule)
+  ) {
+    throw new TypeError('Kovo devtool app module must be an object.');
+  }
+  // Vite exposes SSR module bindings through accessor-backed module namespaces. Read the trusted
+  // module binding through the boot-captured intrinsic; the stricter authored-data helper below is
+  // intentionally reserved for app-owned registry records.
+  const app = nativeReflectApply(nativeReflectGet, NativeReflect, [appModule, 'default']);
   if (nativeReflectApply(isKovoApp, undefined, [app]) !== true) {
     throw new TypeError(
       'Kovo devtool requires the app module to default-export a closed createApp() aggregate.',
