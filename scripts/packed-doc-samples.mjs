@@ -501,9 +501,7 @@ export async function validateKovoInvocations(samples) {
           continue;
         }
         const options = readCreateKovoCliOptions(invocation.argv);
-        assertCreateKovoSqliteScaffoldAllowed(options, {
-          experimentalSqliteEnvironment: false,
-        });
+        assertCreateKovoSqliteScaffoldAllowed(options);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw sampleError(

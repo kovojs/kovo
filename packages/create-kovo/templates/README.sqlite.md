@@ -11,7 +11,10 @@ variant.
 
 SQLite is a single-principal local-development scaffold. It does not provide
 Kovo authorization/confidentiality guarantees because SQLite has no engine role,
-RLS, or column-privilege layer.
+RLS, or column-privilege layer. `kovo dev`, `kovo check`, and `kovo build` surface
+KV447 for every owner-annotated SQLite table: those annotations remain useful audit
+metadata, but they are not engine-enforced access control. Use the default
+Postgres/PGlite starter for multi-principal applications.
 
 ```sh
 pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite

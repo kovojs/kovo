@@ -177,7 +177,7 @@ export const CREATE_KOVO_REFERENCE = {
       flag: '--experimental-sqlite',
       description: 'Allow SQLite scaffold generation for single-principal local development.',
       docsDescription:
-        'Required for `--sqlite` or `--dialect sqlite` unless `KOVO_EXPERIMENTAL_SQLITE=1` is set. SQLite is a single-principal local-development scaffold and does not provide Kovo authorization/confidentiality guarantees.',
+        'Required for every non-interactive `--sqlite` or `--dialect sqlite` scaffold. SQLite is a single-principal local-development scaffold, and KV447 reports that owner annotations are audit metadata rather than an engine-enforced authorization boundary.',
     },
     {
       flag: '--git, --no-git',
@@ -251,7 +251,7 @@ export const CREATE_KOVO_REFERENCE = {
       body: [
         'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
         'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholders visible and documents the required production `BETTER_AUTH_URL`, generated-Node public-origin posture, Postgres runtime/admin URL split, PGlite data dir, and driver overrides. Framework bootstrap loads and pins that environment before generated app modules run, and the Better Auth constructors fail closed when required secrets or production origin are missing or invalid.',
-        'SQLite scaffolds are explicit opt-in: pass `--experimental-sqlite` with `--sqlite` or `--dialect sqlite`, or set `KOVO_EXPERIMENTAL_SQLITE=1`. The generated SQLite README repeats that it is a single-principal local-development scaffold, not the Postgres authorization/confidentiality posture.',
+        'SQLite scaffolds are explicit opt-in: pass `--experimental-sqlite` with `--sqlite` or `--dialect sqlite`. The generated SQLite README repeats the KV447 single-principal posture: owner annotations remain visible to audits, but only Postgres/PGlite supplies the engine authorization/confidentiality boundary.',
       ],
     },
     {
@@ -1425,6 +1425,7 @@ function renderSuccess(
           '',
           '  WARNING SQLite is experimental and single-principal/local-dev only.',
           '  It does not provide Kovo authorization or confidentiality guarantees.',
+          '  KV447: owner annotations are audit metadata, not engine-enforced access control.',
         ]
       : []),
     '',
@@ -1523,8 +1524,17 @@ function renderCliError(error: unknown): string {
       '',
       'Choose a new directory path and try again.',
     );
+  } else if (message.startsWith('SQLite scaffold is experimental')) {
+    lines.push(
+      '',
+      'No files were written and no install or Git process was started.',
+      '',
+      'To continue with the local-only SQLite posture:',
+      '  create-kovo <target-directory> --sqlite --experimental-sqlite',
+      '',
+      'Use the default Postgres/PGlite starter for engine-enforced authorization.',
+    );
   } else if (
-    message.startsWith('SQLite scaffold is experimental') ||
     message.startsWith('Unsupported value for ') ||
     message.startsWith('Option ') ||
     message.startsWith('Unknown option: ') ||

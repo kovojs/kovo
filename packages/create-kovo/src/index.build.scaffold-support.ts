@@ -39,9 +39,10 @@ export function addSqliteDurableTaskRegistration(root: string): void {
   writeFileSync(
     join(root, 'src/sqlite-durable-task-proof.ts'),
     [
-      "import { s } from '@kovojs/server'\nimport { task } from '@kovojs/server/tasks';",
+      "import { s } from '@kovojs/server';",
+      "import { app } from './kovo.js';",
       '',
-      "export const sqliteDurableTaskProof = task('sqlite-durable-task-proof', {",
+      'export const sqliteDurableTaskProof = app.task({',
       '  input: s.object({}),',
       '  run() {},',
       '});',

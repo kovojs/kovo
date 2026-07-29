@@ -83,7 +83,6 @@ cannot use a non-local managed Postgres URL.
 | `KOVO_PARANOID`             | build/dev diagnostics                                                         | Turns on advisory extra security auditing.                                                  |
 | `KOVO_SQL_GUARD`            | raw SQL migration escape hatch                                                | Temporary fail-open escape for unmanaged raw SQL sinks.                                     |
 | `KOVO_DEVTOOL_BASE`         | devtool mount                                                                 | Prefixes emitted devtool URLs when you serve it under a subpath.                            |
-| `KOVO_EXPERIMENTAL_SQLITE`  | `create-kovo`                                                                 | Required to scaffold the experimental SQLite starter.                                       |
 
 Two more names matter even though they are not `KOVO_*`:
 

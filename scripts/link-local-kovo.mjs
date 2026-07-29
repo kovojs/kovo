@@ -13,6 +13,7 @@ const kovoPackageNames = [
   '@kovojs/icons',
   '@kovojs/server',
   '@kovojs/style',
+  '@kovojs/test',
   '@kovojs/ui',
 ];
 

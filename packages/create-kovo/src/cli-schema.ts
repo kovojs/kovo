@@ -383,17 +383,12 @@ export function readCreateKovoCliOptions(args: readonly string[]): CreateKovoCli
   };
 }
 
-export function assertCreateKovoSqliteScaffoldAllowed(
-  options: CreateKovoCliOptions,
-  {
-    experimentalSqliteEnvironment = process.env.KOVO_EXPERIMENTAL_SQLITE === '1',
-  }: { experimentalSqliteEnvironment?: boolean } = {},
-): void {
+export function assertCreateKovoSqliteScaffoldAllowed(options: CreateKovoCliOptions): void {
   if (options.dialect !== 'sqlite') return;
-  if (options.experimentalSqlite || experimentalSqliteEnvironment) return;
+  if (options.experimentalSqlite) return;
 
   throw new Error(
-    'SQLite scaffold is experimental and single-principal/local-dev only; it does not provide Kovo authorization/confidentiality guarantees. Pass --experimental-sqlite with --sqlite (or set KOVO_EXPERIMENTAL_SQLITE=1) before create-kovo writes the target directory.',
+    'SQLite scaffold is experimental and single-principal/local-dev only; it does not provide Kovo authorization/confidentiality guarantees. Re-run with --sqlite --experimental-sqlite to acknowledge KV447 before create-kovo writes the target directory.',
   );
 }
 

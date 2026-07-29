@@ -41,11 +41,12 @@ create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlit
 ```
 
 `--postgres` and `--sqlite` are accepted aliases. `--sqlite` still requires
-`--experimental-sqlite` unless `KOVO_EXPERIMENTAL_SQLITE=1` is set. The target directory must be
-empty when it already exists; the command refuses to merge into a non-empty app. By default,
-`create-kovo` initializes a Git repository after writing the scaffold. Pass `--disable-git` to skip
-that. If the target is already inside a Git or Mercurial repository, the command does not create a
-nested Git repository.
+`--experimental-sqlite`. This acknowledgement must be on the command line; ambient environment
+state cannot select the weaker single-principal posture. The target directory must be empty when it
+already exists; the command refuses to merge into a non-empty app. By default, `create-kovo`
+initializes a Git repository after writing the scaffold. Pass `--disable-git` to skip that. If the
+target is already inside a Git or Mercurial repository, the command does not create a nested Git
+repository.
 
 > **Pre-v1:** not on npm yet. These commands describe the intended flow and work today inside the
 > [Kovo repository](https://github.com/kovojs/kovo) as workspace packages - clone the repo and work

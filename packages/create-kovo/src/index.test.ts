@@ -1484,20 +1484,36 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 
-  it('refuses a SQLite dialect flag without an explicit experimental opt-in', () => {
+  it('refuses SQLite before any filesystem or process mutation and prints the exact opt-in', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-'));
     const root = join(parent, 'Hello SQLite');
+    const sentinel = join(parent, 'sentinel.txt');
+    writeFileSync(sentinel, 'unchanged\n', 'utf8');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const processMutation = vi.spyOn(createKovoCommandShell, 'execFileSync');
+    const previousOptIn = process.env.KOVO_EXPERIMENTAL_SQLITE;
 
     try {
+      process.env.KOVO_EXPERIMENTAL_SQLITE = '1';
       expect(main([root, '--dialect', 'sqlite'])).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('single-principal/local-dev'));
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('KOVO_EXPERIMENTAL_SQLITE=1'));
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('--experimental-sqlite'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('No files were written'));
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('create-kovo <target-directory> --sqlite --experimental-sqlite'),
+      );
+      expect(processMutation).not.toHaveBeenCalled();
       expect(existsSync(root)).toBe(false);
+      expect(readdirSync(parent)).toEqual(['sentinel.txt']);
+      expect(readFileSync(sentinel, 'utf8')).toBe('unchanged\n');
     } finally {
+      if (previousOptIn === undefined) {
+        delete process.env.KOVO_EXPERIMENTAL_SQLITE;
+      } else {
+        process.env.KOVO_EXPERIMENTAL_SQLITE = previousOptIn;
+      }
+      processMutation.mockRestore();
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(parent, { force: true, recursive: true });
@@ -1517,6 +1533,11 @@ describe('create-kovo starter (CLI)', () => {
           'WARNING SQLite is experimental and single-principal/local-dev only.',
         ),
       );
+      expect(stdout).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'KV447: owner annotations are audit metadata, not engine-enforced access control.',
+        ),
+      );
       expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain(
         'const authBindings = createAppAuthBindings({',
       );
@@ -1529,29 +1550,26 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 
-  it('accepts SQLite when KOVO_EXPERIMENTAL_SQLITE=1 is set', () => {
+  it('does not accept SQLite through ambient KOVO_EXPERIMENTAL_SQLITE state', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-env-'));
     const root = join(parent, 'Hello SQLite');
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const previousOptIn = process.env.KOVO_EXPERIMENTAL_SQLITE;
 
     try {
       process.env.KOVO_EXPERIMENTAL_SQLITE = '1';
-      expect(main([root, '--dialect=sqlite'])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
-      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain(
-        'const authBindings = createAppAuthBindings({',
+      expect(main([root, '--dialect=sqlite'])).toBe(1);
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('--sqlite --experimental-sqlite'),
       );
-      expect(readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8')).toContain(
-        'createBetterAuthSqliteAppBindings(appDatabase, {',
-      );
+      expect(existsSync(root)).toBe(false);
     } finally {
       if (previousOptIn === undefined) {
         delete process.env.KOVO_EXPERIMENTAL_SQLITE;
       } else {
         process.env.KOVO_EXPERIMENTAL_SQLITE = previousOptIn;
       }
-      stdout.mockRestore();
+      stderr.mockRestore();
       rmSync(parent, { force: true, recursive: true });
     }
   });

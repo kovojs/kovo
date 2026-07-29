@@ -84,18 +84,15 @@ describe('create-kovo command schema', () => {
     );
   });
 
-  it('requires the explicit SQLite preview posture independently of ambient CI state', () => {
+  it('requires the explicit SQLite preview posture with no environment bypass', () => {
     const options = readCreateKovoCliOptions(['my-app', '--sqlite']);
-    expect(() =>
-      assertCreateKovoSqliteScaffoldAllowed(options, {
-        experimentalSqliteEnvironment: false,
-      }),
-    ).toThrow('SQLite scaffold is experimental');
+    expect(() => assertCreateKovoSqliteScaffoldAllowed(options)).toThrow(
+      'SQLite scaffold is experimental',
+    );
 
     expect(() =>
       assertCreateKovoSqliteScaffoldAllowed(
         readCreateKovoCliOptions(['my-app', '--sqlite', '--experimental-sqlite']),
-        { experimentalSqliteEnvironment: false },
       ),
     ).not.toThrow();
   });

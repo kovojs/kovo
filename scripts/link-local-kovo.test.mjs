@@ -36,9 +36,10 @@ describe('link-local-kovo', () => {
       },
       devDependencies: {
         '@kovojs/core': 'workspace:*',
+        '@kovojs/test': 'workspace:*',
       },
     });
-    for (const leaf of ['core', 'headless-ui', 'icons', 'ui']) {
+    for (const leaf of ['core', 'headless-ui', 'icons', 'test', 'ui']) {
       writeJson(path.join(kovoRoot, 'packages', leaf, 'package.json'), {
         name: `@kovojs/${leaf}`,
       });
@@ -68,6 +69,9 @@ describe('link-local-kovo', () => {
     );
     expect(appPackage.devDependencies['@kovojs/core']).toMatch(
       /^link:\.\.\/kovo-link-local-repo-.*\/packages\/core$/,
+    );
+    expect(appPackage.devDependencies['@kovojs/test']).toMatch(
+      /^link:\.\.\/kovo-link-local-repo-.*\/packages\/test$/,
     );
   });
 });
