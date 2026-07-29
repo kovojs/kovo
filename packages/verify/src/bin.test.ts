@@ -76,7 +76,19 @@ describe('kovo-verify CLI', () => {
         result: {
           command: 'verify',
           exitCode: 0,
+          findings: [],
+          ok: true,
           protocol: 'kovo.verify-report/v1',
+          schema: 'kovo.verify-report/v1',
+          stats: {
+            artifacts: 1,
+            capabilities: 0,
+            doors: 0,
+            edges: 0,
+            opaque: 0,
+            roots: 0,
+          },
+          status: 'verified',
           text: 'kovo-verify/v1 PASS artifacts=1 edges=0 roots=0 doors=0 opaque=0 capabilities=0 findings=0\n',
         },
         version: 'kovo-diagnostic/v1',
@@ -102,14 +114,49 @@ describe('kovo-verify CLI', () => {
     expect(json.stderr).toBe('');
     const payload = JSON.parse(json.stdout) as {
       diagnostics: { code: string; message: string; version: string }[];
-      result: { exitCode: number; protocol: string; text: string };
+      result: {
+        exitCode: number;
+        findings: { code: string; message: string; obligation: string }[];
+        ok: boolean;
+        protocol: string;
+        schema: string;
+        stats: {
+          artifacts: number;
+          capabilities: number;
+          doors: number;
+          edges: number;
+          opaque: number;
+          roots: number;
+        };
+        status: string;
+        text: string;
+      };
       version: string;
     };
     expect(payload.version).toBe('kovo-diagnostic/v1');
     expect(payload.result).toEqual({
       command: 'verify',
       exitCode: 1,
+      findings: [
+        {
+          code: 'local-capability-missing',
+          message:
+            '@kovojs/server/dist/index.mjs imports raw capability filesystem absent from cap summary',
+          obligation: 'stability',
+        },
+      ],
+      ok: false,
       protocol: 'kovo.verify-report/v1',
+      schema: 'kovo.verify-report/v1',
+      stats: {
+        artifacts: 1,
+        capabilities: 0,
+        doors: 0,
+        edges: 0,
+        opaque: 0,
+        roots: 0,
+      },
+      status: 'findings',
       text: human.stdout,
     });
     expect(payload.diagnostics).toEqual([
@@ -126,6 +173,7 @@ describe('kovo-verify CLI', () => {
     expect(findingsFromHuman(human.stdout).map(({ code, message }) => ({ code, message }))).toEqual(
       payload.diagnostics.map(({ code, message }) => ({ code, message })),
     );
+    expect(findingsFromHuman(human.stdout)).toEqual(payload.result.findings);
 
     const github = await runWithIo([...args, '--format', 'github']);
     expect(github.exitCode).toBe(1);
@@ -218,7 +266,10 @@ describe('kovo-verify CLI', () => {
       result: {
         command: 'verify',
         exitCode: 2,
+        message: 'certificate path is required',
         protocol: 'kovo.verify-command-error/v1',
+        schema: 'kovo.verify-command-error/v1',
+        status: 'indeterminate',
       },
       version: 'kovo-diagnostic/v1',
     });
@@ -284,6 +335,8 @@ describe('kovo-verify CLI', () => {
       result: {
         exitCode: 2,
         protocol: 'kovo.verify-command-error/v1',
+        schema: 'kovo.verify-command-error/v1',
+        status: 'indeterminate',
       },
       version: 'kovo-diagnostic/v1',
     });

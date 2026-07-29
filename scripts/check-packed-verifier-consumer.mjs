@@ -69,10 +69,14 @@ export function assertPackedVerifierManifest(manifest) {
 
 export function findingsFromHumanVerifierReport(report) {
   const lines = report.trimEnd().split('\n');
-  if (!/^kovo-verify\/v1 (?:PASS|FAIL) /u.test(lines[0] ?? '')) {
+  const header =
+    /^kovo-verify\/v1 (PASS|FAIL) artifacts=(\d+) edges=(\d+) roots=(\d+) doors=(\d+) opaque=(\d+) capabilities=(\d+) findings=(\d+)$/u.exec(
+      lines[0] ?? '',
+    );
+  if (header === null) {
     throw new Error('Human verifier report is not kovo-verify/v1');
   }
-  return lines.slice(1).map((line) => {
+  const findings = lines.slice(1).map((line) => {
     const match = /^(CLOSURE|COVERAGE|SCHEMA|STABILITY) (\S+) (.*)$/u.exec(line);
     if (match === null) throw new Error(`Human verifier finding is malformed: ${line}`);
     return {
@@ -81,6 +85,32 @@ export function findingsFromHumanVerifierReport(report) {
       obligation: match[1].toLowerCase(),
     };
   });
+  if (Number(header[8]) !== findings.length) {
+    throw new Error('Human verifier report finding count does not match its records');
+  }
+  return findings;
+}
+
+function parseHumanVerifierReport(report) {
+  const header =
+    /^kovo-verify\/v1 (PASS|FAIL) artifacts=(\d+) edges=(\d+) roots=(\d+) doors=(\d+) opaque=(\d+) capabilities=(\d+) findings=(\d+)/u.exec(
+      report,
+    );
+  if (header === null) throw new Error('Human verifier report is not kovo-verify/v1');
+  const findings = findingsFromHumanVerifierReport(report);
+  return {
+    findings,
+    ok: header[1] === 'PASS',
+    stats: {
+      artifacts: Number(header[2]),
+      capabilities: Number(header[7]),
+      doors: Number(header[5]),
+      edges: Number(header[3]),
+      opaque: Number(header[6]),
+      roots: Number(header[4]),
+    },
+    status: header[1] === 'PASS' ? 'verified' : 'findings',
+  };
 }
 
 export function assertVerifierReportFindingParity(humanReport, jsonReport) {
@@ -95,25 +125,36 @@ export function assertVerifierReportFindingParity(humanReport, jsonReport) {
     !Array.isArray(envelope.diagnostics) ||
     envelope.result?.command !== 'verify' ||
     envelope.result?.protocol !== 'kovo.verify-report/v1' ||
+    envelope.result?.schema !== 'kovo.verify-report/v1' ||
     ![0, 1].includes(envelope.result?.exitCode) ||
+    typeof envelope.result?.ok !== 'boolean' ||
+    !['findings', 'verified'].includes(envelope.result?.status) ||
+    !Array.isArray(envelope.result?.findings) ||
+    typeof envelope.result?.stats !== 'object' ||
+    envelope.result.stats === null ||
     typeof envelope.result?.text !== 'string'
   ) {
     throw new Error('JSON verifier report does not match kovo-diagnostic/v1');
   }
-  const humanFindings = findingsFromHumanVerifierReport(humanReport);
-  const resultFindings = findingsFromHumanVerifierReport(envelope.result.text);
+  const human = parseHumanVerifierReport(humanReport);
+  const resultText = parseHumanVerifierReport(envelope.result.text);
   const diagnosticFindings = envelope.diagnostics.map(({ code, message }) => ({ code, message }));
-  const expectedDiagnostics = humanFindings.map(({ code, message }) => ({ code, message }));
+  const expectedDiagnostics = human.findings.map(({ code, message }) => ({ code, message }));
   if (
     envelope.result.text !== humanReport ||
-    JSON.stringify(resultFindings) !== JSON.stringify(humanFindings) ||
+    JSON.stringify(resultText) !== JSON.stringify(human) ||
+    JSON.stringify(envelope.result.findings) !== JSON.stringify(human.findings) ||
+    JSON.stringify(envelope.result.stats) !== JSON.stringify(human.stats) ||
+    envelope.result.ok !== human.ok ||
+    envelope.result.status !== human.status ||
+    envelope.result.exitCode !== (human.ok ? 0 : 1) ||
     JSON.stringify(diagnosticFindings) !== JSON.stringify(expectedDiagnostics)
   ) {
     throw new Error('Human and JSON verifier reports carry different findings');
   }
   return {
     envelope,
-    findings: humanFindings,
+    findings: human.findings,
     ok: envelope.result.exitCode === 0,
   };
 }
@@ -233,7 +274,13 @@ function assertPackedVerificationContract(bin, fixture, cwd) {
       payload.diagnostics.length !== 0 ||
       payload.result?.command !== 'verify' ||
       payload.result?.exitCode !== 0 ||
+      !Array.isArray(payload.result?.findings) ||
+      payload.result.findings.length !== 0 ||
+      payload.result?.ok !== true ||
       payload.result?.protocol !== 'kovo.verify-report/v1' ||
+      payload.result?.schema !== 'kovo.verify-report/v1' ||
+      payload.result?.status !== 'verified' ||
+      typeof payload.result?.stats !== 'object' ||
       !payload.result.text?.startsWith('kovo-verify/v1 PASS ')
     ) {
       throw new Error('Packed kovo-verify did not emit a valid verified JSON report');
@@ -295,6 +342,8 @@ function assertPackedVerificationContract(bin, fixture, cwd) {
   if (
     missingPayload?.version !== 'kovo-diagnostic/v1' ||
     missingPayload.result?.protocol !== 'kovo.verify-command-error/v1' ||
+    missingPayload.result?.schema !== 'kovo.verify-command-error/v1' ||
+    missingPayload.result?.status !== 'indeterminate' ||
     missingPayload.result?.exitCode !== 2 ||
     !Array.isArray(missingPayload.diagnostics) ||
     missingPayload.diagnostics.length !== 1

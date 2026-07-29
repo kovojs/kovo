@@ -30,8 +30,11 @@ pnpm exec kovo-verify \
 
 The certificate argument and the `--policy`, `--artifacts`, and `--format` flag
 groups may appear in any order. Human output is `kovo-verify/v1`. JSON uses the
-shared `kovo-diagnostic/v1` envelope and preserves that report under the
-`kovo.verify-report/v1` result protocol. Both carry the same ordered findings.
+shared `kovo-diagnostic/v1` envelope. Its result has
+`schema: "kovo.verify-report/v1"`, `status`, `ok`, stats, and the exact ordered
+`{ obligation, code, message }` findings; `result.text` preserves the unchanged
+human report. A JSON indeterminate error instead uses
+`kovo.verify-command-error/v1` and has no completed-verification fields.
 Use `--format github` to emit the same records as GitHub workflow annotations
 followed by the unchanged human report.
 

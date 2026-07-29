@@ -59,9 +59,11 @@ pnpm exec kovo-verify \
   --policy ./kovo-certificate-policy-v1.json
 ```
 
-The JSON envelope is `kovo-diagnostic/v1`. Its `result.protocol` is
-`kovo.verify-report/v1`, and its `result.text` preserves the exact human proof
-report. The diagnostic records carry the same finding codes and messages.
+The JSON envelope is `kovo-diagnostic/v1`. Its result has
+`schema: "kovo.verify-report/v1"`, `status`, `ok`, the same stats, and the exact
+ordered `{ obligation, code, message }` findings. `result.text` preserves the
+unchanged human proof report, while the shared diagnostic records make the same
+finding codes and messages available to generic tooling.
 
 Use `--format github` in GitHub Actions. It renders those same records as
 workflow annotations and then prints the unchanged human proof report:

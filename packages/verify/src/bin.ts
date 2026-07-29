@@ -223,7 +223,12 @@ function formatVerification(
   return formatDiagnosticEnvelope(diagnostics, {
     command: 'verify',
     exitCode: result.ok ? 0 : 1,
+    findings: result.findings,
+    ok: result.ok,
     protocol: REPORT_SCHEMA,
+    schema: REPORT_SCHEMA,
+    stats: result.stats,
+    status: result.ok ? 'verified' : 'findings',
     text,
   });
 }
@@ -244,7 +249,10 @@ function formatCommandError(message: string, format: KovoVerifyFormat): string {
   return formatDiagnosticEnvelope([diagnostic], {
     command: 'verify',
     exitCode: 2,
+    message: normalizedMessage,
     protocol: COMMAND_ERROR_SCHEMA,
+    schema: COMMAND_ERROR_SCHEMA,
+    status: 'indeterminate',
     text,
   });
 }
@@ -258,12 +266,29 @@ interface KovoVerifyDiagnostic {
   version: typeof DIAGNOSTIC_SCHEMA;
 }
 
-interface KovoVerifyDiagnosticResult {
+interface KovoVerifyCompletedResult {
   command: 'verify';
-  exitCode: 0 | 1 | 2;
-  protocol: typeof COMMAND_ERROR_SCHEMA | typeof REPORT_SCHEMA;
+  exitCode: 0 | 1;
+  findings: KovoCertificateVerificationResult['findings'];
+  ok: boolean;
+  protocol: typeof REPORT_SCHEMA;
+  schema: typeof REPORT_SCHEMA;
+  stats: KovoCertificateVerificationResult['stats'];
+  status: 'findings' | 'verified';
   text: string;
 }
+
+interface KovoVerifyCommandErrorResult {
+  command: 'verify';
+  exitCode: 2;
+  message: string;
+  protocol: typeof COMMAND_ERROR_SCHEMA;
+  schema: typeof COMMAND_ERROR_SCHEMA;
+  status: 'indeterminate';
+  text: string;
+}
+
+type KovoVerifyDiagnosticResult = KovoVerifyCommandErrorResult | KovoVerifyCompletedResult;
 
 function formatDiagnosticEnvelope(
   diagnostics: readonly KovoVerifyDiagnostic[],
