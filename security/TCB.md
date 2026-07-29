@@ -268,6 +268,7 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "analysis.vite-plus",
       "analysis.vitest",
       "dep.argon2.password-hashing",
+      "dep.better-auth.drizzle-adapter-isolation",
       "dep.better-auth.password-hashing",
       "dep.drizzle.sql-generation-parameterization",
       "dep.node-pg.query-parameterization",
@@ -744,6 +745,16 @@ reviewer honesty remain in the TCB or residual boundary described by SPEC §6.6 
       "integrity": "sha512-BT+pf+qoiYHqltoA88Jmf6ilGMXPlpfE0hEJKc2adRtMCAl25Swk/t5gXcWxZNAwdtf3F5gCd2FpeOyP/pT0Hw==",
       "guarantee": "Drizzle query builders emit parameterized SQL with placeholders for every interpolated value, keeping Kovo's managed-DB query surface injection-safe.",
       "reviewTrigger": "Any bump of drizzle-orm must re-confirm the SQL generator still parameterizes interpolated values and that the sql`` template escaping contract is unchanged."
+    },
+    {
+      "id": "dep.better-auth.drizzle-adapter-isolation",
+      "surface": "Better Auth schema and Drizzle-adapter implementation boundary",
+      "dependency": "drizzle-orm",
+      "packageJson": "packages/better-auth/package.json",
+      "pinnedVersion": "0.45.2",
+      "integrity": "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==",
+      "guarantee": "Kovo's Better Auth package owns the exact Drizzle implementation expected by the pinned provider and keeps it isolated from the application's reviewed Drizzle 1 runtime, so strict installs have one intentional implementation on each side of the adapter boundary.",
+      "reviewTrigger": "Any bump of Better Auth's private drizzle-orm pin must re-run the strict packed consumer for both Postgres and SQLite, the schema materialization suites, and the cross-version adapter fixtures before confirming that generated tables and system-write bindings remain compatible."
     },
     {
       "id": "dep.pglite.set-local-role-rls",

@@ -51,11 +51,15 @@
   },
   "dependencies": {
     "@kovojs/core": "workspace:*",
-    "@kovojs/server": "workspace:*",
-    "better-auth": "1.6.17"
+    "better-auth": "1.6.17",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
+    "@kovojs/server": "workspace:*",
     "vitest": "4.1.8"
+  },
+  "peerDependencies": {
+    "@kovojs/server": "workspace:*"
   },
   "kovoPublish": {
     "extraEntries": [

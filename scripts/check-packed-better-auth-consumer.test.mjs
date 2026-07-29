@@ -15,7 +15,7 @@ describe('packed Better Auth consumer proof', () => {
   it('accepts only the reviewed human/generated topology', () => {
     expect(() =>
       assertPackedBetterAuthManifest({
-        dependencies: { '@kovojs/server': '0.2.0', 'better-auth': '1.6.17' },
+        dependencies: { 'better-auth': '1.6.17', 'drizzle-orm': '0.45.2' },
         exports: {
           '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
           './generated': {
@@ -32,6 +32,7 @@ describe('packed Better Auth consumer proof', () => {
           },
         },
         name: '@kovojs/better-auth',
+        peerDependencies: { '@kovojs/server': '0.2.0' },
         version: '0.2.0',
       }),
     ).not.toThrow();

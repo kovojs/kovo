@@ -104,8 +104,10 @@ export function assertPackedBetterAuthManifest(manifest) {
   }
   if (
     manifest.dependencies?.['better-auth'] !== '1.6.17' ||
+    manifest.dependencies?.['drizzle-orm'] !== '0.45.2' ||
     manifest.peerDependencies?.['better-auth'] !== undefined ||
-    manifest.dependencies?.[SERVER_PACKAGE] === undefined
+    manifest.dependencies?.[SERVER_PACKAGE] !== undefined ||
+    manifest.peerDependencies?.[SERVER_PACKAGE] !== manifest.version
   ) {
     throw new Error('Packed Better Auth dependencies drifted from the reviewed adapter boundary');
   }
