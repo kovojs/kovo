@@ -155,7 +155,7 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G8"]
       },
-      "state": "executable",
+      "state": "retired",
       "probe": {
         "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
@@ -171,7 +171,11 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched."
+      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched.",
+      "retirement": {
+        "evidence": "The authenticated packed transactional-build probe completes one good build, forces a deterministic KV417 failure, and proves the last-good dist digest is byte-identical with no failed graph promoted beneath dist/.kovo.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-006",

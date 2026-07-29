@@ -405,8 +405,8 @@ and generated examples.
       failing packed test. "Known failures are represented by failing tests" gates against this
       register, not an open-ended set.
   - Evidence: `pnpm run test:devex-known-failures-available` exercises all ten authenticated
-    packed/artifact probes: eight retired behaviors pass and KF-DEVEX-005/007 remain explicit
-    expected failures; schema validation reports `pending-repro=0`.
+    packed/artifact probes: nine retired behaviors pass and nightly KF-DEVEX-007 remains the sole
+    explicit expected failure; schema validation reports `pending-repro=0`.
 
 ### Track 1 — First ten minutes and a trustworthy loop (starts immediately)
 
@@ -472,13 +472,16 @@ granularity).
   - Evidence: `packages/cli/src/index.source-check.test.ts`, both packed starter source-check
     fixtures, and KF-DEVEX-004/006 prove current-source re-derivation, non-vacuous missing input,
     deployment-only KV417 enforcement, and both generated quick-check paths.
-- [ ] (M) Adversarial graph-truth and transactional-build suite (G7, G8): checks and explanations
+- [x] (M) Adversarial graph-truth and transactional-build suite (G7, G8): checks and explanations
       derive from source or a verified content-addressed cache; stamp every graph with source-set
       digest, compiler version, config digest, app build token, completion state, and posture
       profile; require `--artifact <path>` to inspect a built graph; builds emit into a unique
       staging directory and promote atomically; a failed build leaves the last good `dist`
       untouched and stores opt-in redacted debug facts under `.kovo/debug/<build-id>`, never
       `dist/.kovo`.
+  - Evidence: source-set/config/compiler/build-token stamps, explicit artifact grammar, unique
+    staging/promotion tests, and retired packed KF-DEVEX-005 prove source-backed truth,
+    byte-identical last-good output after failure, and no failed graph promotion.
 - [ ] (S) Standardize `--format human|json|github` across check/build/explain/doctor/verify,
       backed by `kovo-diagnostic/v1`; formatters may not re-derive severity, help, or source
       ranges. Preserve `kovo-explain/v1` and `kovo-check/v1` facts byte-for-byte or via an
@@ -573,7 +576,7 @@ batches, review canonical homes, and pin the benchmark environment. Only what th
 consumes lives here; everything else moved next to the work it proves. Seeds child ledger
 `devex-gates.md`.
 
-- [ ] (L) Packed-consumer golden-journey runner that creates both the default Postgres/PGlite-dev
+- [x] (L) Packed-consumer golden-journey runner that creates both the default Postgres/PGlite-dev
       app and experimental SQLite app in temporary directories, installs with the supported
       package manager, and records create/install/ready/first-200/login/CRUD/test/check/build
       timings (G1, G2).
@@ -581,6 +584,10 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
   - Preserve failed app directories as CI artifacts with secrets redacted.
   - Also capture: styled-UI screenshot + a11y check (G10), concept census (G14), cold-install
     time and install size (G16), and the agent-journey fixture (G12, with Track 3).
+  - Evidence: exact authenticated Postgres/PGlite and SQLite reports at `273f19723` pass all nine
+    phases with enhanced CRUD, zero two-state axe violations, screenshot digests, concept census,
+    install metrics, redacted failure preservation, and an explicit controlled SPEC §14 build
+    posture.
 - [ ] (M) Add `scripts/devex-benchmark.mjs` and `devex-budgets.json`: report cold, warm, and
       one-file-incremental timings plus peak RSS and browser bootstrap bytes (G3, G4). Record
       baselines _first_, then ratify each budget with a recorded derivation (baseline, target

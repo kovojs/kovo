@@ -39,17 +39,29 @@ reproducer, while the named implementation work item owns retirement.
       coupling, full-catalog OOM, starter internal mock, placeholder-doc success, and opaque-500
       defects through packed or artifact-level probes.
   - Evidence: `pnpm run test:devex-known-failures-available` returns retired-pass for
-    KF-DEVEX-001/002/003/004/006/008/009/010 and expected-fail for KF-DEVEX-005/007.
+    KF-DEVEX-001-006 and KF-DEVEX-008-010; only nightly KF-DEVEX-007 remains expected-failing.
 
 ## Packed journeys
 
-- [ ] Build deterministic packed tarballs for the framework and both starter variants.
-- [ ] Run default Postgres/PGlite-dev create→install→ready→first-200→login→CRUD→test→check→build.
-- [ ] Run the corresponding explicitly experimental SQLite journey.
-- [ ] Preserve failed apps as redacted CI artifacts.
-- [ ] Capture styled-UI screenshot and terminal-state accessibility results.
-- [ ] Capture concepts encountered before first authenticated CRUD.
-- [ ] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
+- [x] Build deterministic packed tarballs for the framework and both starter variants.
+  - Evidence: `node scripts/pack-public-packages.mjs` authenticated all 14 packages before the
+    two exact journey runs.
+- [x] Run default Postgres/PGlite-dev create→install→ready→first-200→login→CRUD→test→check→build.
+  - Evidence: the packed Postgres report at commit `273f19723` passes all nine phases.
+- [x] Run the corresponding explicitly experimental SQLite journey.
+  - Evidence: the packed SQLite report at commit `273f19723` passes all nine phases.
+- [x] Preserve failed apps as redacted CI artifacts.
+  - Evidence: diagnosed journey failures produced bounded, redacted failure manifests;
+    `scripts/golden-journey/artifacts.test.mjs` proves the preservation contract.
+- [x] Capture styled-UI screenshot and terminal-state accessibility results.
+  - Evidence: both exact reports contain authenticated screenshots and zero axe violations across
+    login and authenticated-CRUD states.
+- [x] Capture concepts encountered before first authenticated CRUD.
+  - Evidence: both exact reports separate imports, bindings, config keys, creator flags, prompts,
+    and environment edits; both record zero environment edits.
+- [x] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
+  - Evidence: both exact reports record install time/RSS, physical bytes/files, and direct plus
+    transitive production dependency counts.
 - [ ] Integrate the offline agent journey owned by `plans/devex-agent-loop.md`.
   - The authenticated packed runner and adversarial fixture are present; the child ledger records
     the remaining structured-diagnostic integration dependency and proving command.
@@ -102,8 +114,10 @@ reproducer, while the named implementation work item owns retirement.
 
 - `pnpm run test:devex-foundation-schema` passed (4 files, 51 tests), reporting 1,839 public
   subpaths, 1,849 exported declarations, 47 excluded directories, and a complete ten-ID register.
-- `pnpm run test:devex-known-failures-available` passed: eight retired behaviors pass,
-  KF-DEVEX-005/007 remain expected failures, and executable closure is complete.
+- `pnpm run test:devex-known-failures-available` passed: nine retired behaviors pass,
+  nightly KF-DEVEX-007 remains the sole expected failure, and executable closure is complete.
+- Exact authenticated packed journeys at `273f19723` passed for Postgres/PGlite and SQLite,
+  including login, enhanced CRUD, test, check, controlled-retention build, screenshot, and a11y.
 - `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
 - `node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1`
   authenticated commit `f65c080ac`: cold 10,069.35 ms / 2,173,337,600 bytes; warm 9,548.86 ms /
