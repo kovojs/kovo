@@ -189,7 +189,6 @@ import {
   buildMapHas,
   buildMapSet,
   buildObjectKeys,
-  buildObservePromise,
   buildOwnDataProperty,
   buildOwnDataValue,
   buildPromiseAll,
@@ -692,64 +691,38 @@ export async function runSourceCheckCommand(
       );
     }
 
-    const projectQualityPreflight = strictLifecyclePolicy
-      ? runProjectQualityCheck(invocationRoot, security.invocationEnv, 'kovo-check/v1')
-      : undefined;
-    if (projectQualityPreflight !== undefined) {
-      buildObservePromise(
-        projectQualityPreflight,
-        () => {},
-        () => {},
-      );
-    }
-    const soundSubsetPreflight = strictLifecyclePolicy
-      ? runSoundSubsetCheck(invocationRoot, security.invocationEnv, 'kovo-check/v1')
-      : undefined;
-    if (soundSubsetPreflight !== undefined) {
-      buildObservePromise(
-        soundSubsetPreflight,
-        () => {},
-        () => {},
-      );
-    }
-    const typeScriptPreflight = runTypeScriptBuildPreflight(
+    // Keep the independent whole-project analyzers sequential. A copied catalog is deliberately
+    // outside the entry-reachable compiler closure, but TypeScript, formatting, and lint still
+    // inspect it. Overlapping all four processes made valid 44-component apps exceed 2 GiB even
+    // though each phase stayed comfortably below that ceiling on its own.
+    await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
       security.invocationEnv,
       'check',
     );
-    buildObservePromise(
-      typeScriptPreflight,
-      () => {},
-      () => {},
-    );
-
-    let sourceCheck: { ok: true; value: KovoCheckResult } | { error: unknown; ok: false };
-    try {
-      sourceCheck = {
-        ok: true,
-        value: await deriveCurrentSourceCheck(
-          resolvedAppModulePath,
-          options.cache,
-          reachableSessionAuthorityFacts,
-          security,
-          invocationRoot,
-        ),
-      };
-    } catch (error) {
-      sourceCheck = { error, ok: false };
+    if (strictLifecyclePolicy) {
+      const projectQuality = await runProjectQualityCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-check/v1',
+      );
+      if (projectQuality.exitCode !== 0) return projectQuality;
+      const soundSubset = await runSoundSubsetCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-check/v1',
+      );
+      if (soundSubset.exitCode !== 0) return soundSubset;
     }
 
-    // Preserve build's fail-closed, type-error-first ordering. No deploy artifact has been written:
-    // the only persistent output allowed here is content-invalidated analysis/typegen cache state.
-    await typeScriptPreflight;
-    const projectQuality =
-      projectQualityPreflight === undefined ? undefined : await projectQualityPreflight;
-    if (projectQuality !== undefined && projectQuality.exitCode !== 0) return projectQuality;
-    const soundSubset = soundSubsetPreflight === undefined ? undefined : await soundSubsetPreflight;
-    if (soundSubset !== undefined && soundSubset.exitCode !== 0) return soundSubset;
-    if (!sourceCheck.ok) throw sourceCheck.error;
-    return sourceCheck.value;
+    return await deriveCurrentSourceCheck(
+      resolvedAppModulePath,
+      options.cache,
+      reachableSessionAuthorityFacts,
+      security,
+      invocationRoot,
+    );
   } catch (error) {
     return sourceCheckErrorResult(error);
   }
@@ -888,41 +861,28 @@ export async function runBuildCommand(
     const selectedPreset = configurationBoundary(() =>
       selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
     );
-    // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
-    // let it overlap the vite app load below AND the kovo-check security preflight, instead of
-    // running it sequentially first (~1.7s cold / ~0.7s warm saved, no correctness change). The
-    // no-op `.catch` prevents an unhandled rejection if the load/check throws before we reach the
-    // fail-closed join below; we still `await typeScriptPreflight` there, so its error is never
-    // swallowed and ZERO artifacts are emitted on any preflight failure.
-    const typeScriptPreflight = runTypeScriptBuildPreflight(
+    // Run independent whole-project analyzers before entry-reachable loading. Copy-in source still
+    // participates in TypeScript, formatting, lint, and sound-subset proof; overlapping those
+    // processes with Vite/security analysis made otherwise valid catalogs exceed the 2 GiB first-
+    // loop ceiling. TypeScript remains first so the established type-error-first contract holds.
+    await runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
       security.invocationEnv,
     );
-    buildObservePromise(
-      typeScriptPreflight,
-      () => {},
-      () => {},
-    );
-    const projectQualityPreflight = strictLifecyclePolicy
-      ? runProjectQualityCheck(invocationRoot, security.invocationEnv, 'kovo-build/v1')
-      : undefined;
-    if (projectQualityPreflight !== undefined) {
-      buildObservePromise(
-        projectQualityPreflight,
-        () => {},
-        () => {},
+    if (strictLifecyclePolicy) {
+      const projectQuality = await runProjectQualityCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-build/v1',
       );
-    }
-    const soundSubsetPreflight = strictLifecyclePolicy
-      ? runSoundSubsetCheck(invocationRoot, security.invocationEnv, 'kovo-build/v1')
-      : undefined;
-    if (soundSubsetPreflight !== undefined) {
-      buildObservePromise(
-        soundSubsetPreflight,
-        () => {},
-        () => {},
+      if (projectQuality.exitCode !== 0) return projectQuality;
+      const soundSubset = await runSoundSubsetCheck(
+        invocationRoot,
+        security.invocationEnv,
+        'kovo-build/v1',
       );
+      if (soundSubset.exitCode !== 0) return soundSubset;
     }
     // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
@@ -931,42 +891,13 @@ export async function runBuildCommand(
     // below — costing ~9s of duplicate ts-morph work cold. Flag the entire (concurrent) load span so
     // the plugin skips it; the production client/server build passes run with the flag cleared, so
     // their fail-closed gate still fires.
-    // plans/fast-kovo-check3.md: capture the ENTIRE load + appFromModule + kovo-check span (not just
-    // the check) so the fail-closed join below can surface a tsc type error FIRST — exactly as the old
-    // sequential order did — before re-throwing ANY of these failures (a load error, a not-a-KovoApp
-    // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
-    // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
-    let loadAndCheck:
-      | {
-          ok: true;
-          value: Awaited<ReturnType<typeof loadAndCheckBuildApp>>;
-        }
-      | { error: unknown; ok: false };
-    try {
-      loadAndCheck = {
-        ok: true,
-        value: await loadAndCheckBuildApp(
-          resolvedAppModulePath,
-          options,
-          reachableSessionAuthorityFacts,
-          security,
-          invocationRoot,
-        ),
-      };
-    } catch (error) {
-      loadAndCheck = { error, ok: false };
-    }
-    // Fail-closed join BEFORE any artifact-emitting step: surface a tsc type error FIRST
-    // (tsc-error-first ordering), then re-throw any captured load/check failure. Every
-    // artifact-emitting step below (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit,
-    // writeKovoBuildGraphArtifact) stays strictly after this join, so any failure emits ZERO artifacts.
-    await typeScriptPreflight;
-    const projectQuality =
-      projectQualityPreflight === undefined ? undefined : await projectQualityPreflight;
-    if (projectQuality !== undefined && projectQuality.exitCode !== 0) return projectQuality;
-    const soundSubset = soundSubsetPreflight === undefined ? undefined : await soundSubsetPreflight;
-    if (soundSubset !== undefined && soundSubset.exitCode !== 0) return soundSubset;
-    if (!loadAndCheck.ok) throw loadAndCheck.error;
+    const loadAndCheck = await loadAndCheckBuildApp(
+      resolvedAppModulePath,
+      options,
+      reachableSessionAuthorityFacts,
+      security,
+      invocationRoot,
+    );
     const {
       app,
       approvedClientEntry,
@@ -982,7 +913,7 @@ export async function runBuildCommand(
       resolveKovoBuildPreset,
       vercel,
       writeKovoNeutralBuild,
-    } = loadAndCheck.value;
+    } = loadAndCheck;
     const graphWithProvenance: CoreGraph.KovoCheckInput = {
       ...checkGraph,
       analysisInputs: buildAnalysisInputs({
@@ -1012,7 +943,7 @@ export async function runBuildCommand(
     // workflow exceed 6 GiB process-tree RSS. The preflight-derived registry is both narrower and
     // stronger: Vite below rejects any later module load outside the same immutable snapshot
     // (SPEC §5.2 rules 6/9; §11.4).
-    const staticRuntimeRegistry = loadAndCheck.value.runtimeRegistry;
+    const staticRuntimeRegistry = loadAndCheck.runtimeRegistry;
     if (app.document.csp !== undefined) {
       assertDocumentCspConfigMatchesBrowserPosture(
         app.document.csp,
