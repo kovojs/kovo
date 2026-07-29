@@ -185,6 +185,15 @@ export function renderRegistry(input: ComponentRegistryInput): ComponentRegistry
  * offending keys) and an unknown tag renders its children with the wrapper dropped (SPEC §4.10).
  *
  * @example
+ * import {
+ *   parseComponentXml,
+ *   renderTree,
+ *   type ComponentRegistry,
+ * } from '@kovojs/server/render-tree';
+ *
+ * declare const registry: ComponentRegistry;
+ * declare const llmResponse: string;
+ *
  * const html = await renderTree(registry, parseComponentXml(llmResponse));
  */
 export async function renderTree(

@@ -463,7 +463,10 @@ export interface RouteFactory<Request = unknown> {
  *   page({ params }) {
  *     const product = catalog.get(params.id);
  *     if (!product) return notFound();
- *     return trustedHtml(`<h1>${product.name}</h1>`);
+ *     return trustedHtml(`<h1>${product.name}</h1>`, {
+ *       reason: 'catalog names are escaped by the reviewed route renderer',
+ *       source: 'routes/product.ts',
+ *     });
  *   },
  * });
  */

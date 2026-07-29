@@ -658,7 +658,7 @@ export interface MutationFactory<Request = unknown> {
  *   },
  *   handler(input, request: CartRequest, context) {
  *     if (input.quantity > 10) return context.fail('OUT_OF_STOCK', { available: 10 });
- *     request.db.add(input.productId);
+ *     request.db.add(input.productId, input.quantity);
  *     return { productId: input.productId };
  *   },
  * });
