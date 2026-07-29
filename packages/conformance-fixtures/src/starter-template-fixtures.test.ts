@@ -145,29 +145,17 @@ describe('@kovojs/test starter template fixtures', () => {
 
   it('executes the starter browser client template and records loader behavior', async () => {
     const fixture = await executeStarterClientTemplate(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';
 
 const store = createQueryStore();
 const queryPlans = {};
-const root = {
-  findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
-    return element ? {
-      appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
-      readHtml() { return element.innerHTML; },
-      replaceWithHtml(html) { element.innerHTML = html; },
-    } : null;
-  },
-  querySelectorAll(selector) {
-    return document.querySelectorAll(selector);
-  },
-};
+const root = createBrowserKovoRoot({ documentRoot: document });
 
 installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
-    fetch: (url, options) => fetch(url, options),
+    fetch: defaultEnhancedFetch,
     queryPlans,
     root,
     store,
@@ -219,29 +207,17 @@ export function applyKovoDeferredStreamResponse(body) {
   it('projects starter browser client behavior into kovo-check facts', async () => {
     await expect(
       starterClientTemplateBehaviorFact(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';
 
 const store = createQueryStore();
 const queryPlans = {};
-const root = {
-  findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
-    return element ? {
-      appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
-      readHtml() { return element.innerHTML; },
-      replaceWithHtml(html) { element.innerHTML = html; },
-    } : null;
-  },
-  querySelectorAll(selector) {
-    return document.querySelectorAll(selector);
-  },
-};
+const root = createBrowserKovoRoot({ documentRoot: document });
 
 installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
-    fetch: (url, options) => fetch(url, options),
+    fetch: defaultEnhancedFetch,
     queryPlans,
     root,
     store,
@@ -359,29 +335,17 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
     };
     const appSource = 'export const App = component({ render: () => <main /> });';
     const clientSource = `
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';
 
 const store = createQueryStore();
 const queryPlans = {};
-const root = {
-  findFragmentTarget(target) {
-    const element = document.getElementById(target) ?? document.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
-    return element ? {
-      appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
-      readHtml() { return element.innerHTML; },
-      replaceWithHtml(html) { element.innerHTML = html; },
-    } : null;
-  },
-  querySelectorAll(selector) {
-    return document.querySelectorAll(selector);
-  },
-};
+const root = createBrowserKovoRoot({ documentRoot: document });
 
 installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
-    fetch: (url, options) => fetch(url, options),
+    fetch: defaultEnhancedFetch,
     queryPlans,
     root,
     store,

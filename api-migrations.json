@@ -752,6 +752,224 @@
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node scripts/migrate-ui-headless-icons-v1.mjs --check scripts/fixtures/api-migrations/ui-headless-icons-v1"
       }
+    },
+    {
+      "id": "browser-client-installer-v1",
+      "state": "removed",
+      "owner": "browser-runtime",
+      "decisions": [
+        "@kovojs/browser/client#BrowserEnhancedMutationOptions",
+        "@kovojs/browser/client#BrowserKovoRoot",
+        "@kovojs/browser/client#createBrowserKovoRoot",
+        "@kovojs/browser/client#CreateBrowserKovoRootOptions",
+        "@kovojs/browser/client#createQueryStore",
+        "@kovojs/browser/client#defaultEnhancedFetch",
+        "@kovojs/browser/client#EnhancedMutationFetch",
+        "@kovojs/browser/client#EnhancedMutationFetchOptions",
+        "@kovojs/browser/client#EnhancedMutationResponseLike",
+        "@kovojs/browser/client#installKovoLoader",
+        "@kovojs/browser/client#KovoLoader",
+        "@kovojs/browser/client#KovoLoaderOptions",
+        "@kovojs/browser/client#QueryIdentity",
+        "@kovojs/browser/client#QuerySnapshot",
+        "@kovojs/browser/client#QueryStore",
+        "@kovojs/browser/client#QueryUpdatePlan",
+        "@kovojs/browser/client#UploadProgress"
+      ],
+      "tool": {
+        "path": "scripts/migrate-browser-client-installer-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
+      },
+      "releaseNote": "docs/releases/browser-client-installer-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the client bootstrap import and call edits listed by the structured migration result.",
+      "rules": [
+        {
+          "id": "browser-enhanced-mutation-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "BrowserEnhancedMutationOptions"
+          },
+          "category": "app-context",
+          "reason": "The installer now owns mutation assembly; extracting an app-local replacement type depends on the shell boundary."
+        },
+        {
+          "id": "browser-kovo-root-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "BrowserKovoRoot"
+          },
+          "category": "app-context",
+          "reason": "The morph root is framework-owned; preserving a named app carrier would retain retired assembly authority."
+        },
+        {
+          "id": "create-browser-kovo-root-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "CreateBrowserKovoRootOptions"
+          },
+          "category": "app-context",
+          "reason": "The custom-shell root is passed directly to installKovoClient and the adapter options no longer exist."
+        },
+        {
+          "id": "enhanced-mutation-fetch-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "EnhancedMutationFetch"
+          },
+          "category": "trust-decision",
+          "reason": "A replacement transport could weaken framework-owned Request posture; custom shells may only observe the bounded fetch hook."
+        },
+        {
+          "id": "enhanced-mutation-fetch-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "EnhancedMutationFetchOptions"
+          },
+          "category": "trust-decision",
+          "reason": "Request initialization is framework-owned and no app-authored replacement options carrier is safe to select mechanically."
+        },
+        {
+          "id": "enhanced-mutation-response-like-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "EnhancedMutationResponseLike"
+          },
+          "category": "trust-decision",
+          "reason": "The custom observer must return the exact native Response from next; a structural response carrier cannot be preserved."
+        },
+        {
+          "id": "kovo-loader-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "KovoLoader"
+          },
+          "category": "app-context",
+          "reason": "KovoClient has async lifecycle semantics; changing an explicitly named loader handle requires caller review."
+        },
+        {
+          "id": "kovo-loader-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "KovoLoaderOptions"
+          },
+          "category": "app-context",
+          "reason": "Most loader options are intentionally internalized; mapping an options carrier would silently discard application behavior."
+        },
+        {
+          "id": "query-identity-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "QueryIdentity"
+          },
+          "category": "app-context",
+          "reason": "The installer owns query state; an app-local identity model depends on its custom-shell contract."
+        },
+        {
+          "id": "query-snapshot-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "QuerySnapshot"
+          },
+          "category": "app-context",
+          "reason": "Mutable optimistic snapshots are internal runtime state and have no public installer equivalent."
+        },
+        {
+          "id": "query-store-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "QueryStore"
+          },
+          "category": "app-context",
+          "reason": "The installer owns the store; preserving an app-visible store would defeat the assembly cut."
+        },
+        {
+          "id": "query-update-plan-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "QueryUpdatePlan"
+          },
+          "category": "app-context",
+          "reason": "Update plans are compiler-generated ABI and cannot be moved into app-authored custom-shell code mechanically."
+        },
+        {
+          "id": "upload-progress-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "UploadProgress"
+          },
+          "category": "app-context",
+          "reason": "The onUploadProgress callback is inferred; choosing a named local alias is an application type-boundary decision."
+        },
+        {
+          "id": "create-browser-kovo-root-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "createBrowserKovoRoot"
+          },
+          "category": "app-context",
+          "reason": "installKovoClient creates the root adapter internally; callers using the value elsewhere require manual redesign."
+        },
+        {
+          "id": "create-query-store-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "createQueryStore"
+          },
+          "category": "app-context",
+          "reason": "installKovoClient creates and clears its store internally; app-owned store reads or writes have no direct replacement."
+        },
+        {
+          "id": "default-enhanced-fetch-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "defaultEnhancedFetch"
+          },
+          "category": "trust-decision",
+          "reason": "The default transport is internal; custom code must use the bounded observer without selecting arbitrary URL or init authority."
+        },
+        {
+          "id": "install-kovo-loader-to-client",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "installKovoLoader"
+          },
+          "to": {
+            "specifier": "@kovojs/browser/client",
+            "symbol": "installKovoClient"
+          }
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/browser-client-installer-v1/install.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/browser-client-installer-v1/manual-assembly.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-browser-client-installer-v1.mjs --check scripts/fixtures/api-migrations/browser-client-installer-v1"
+      }
     }
   ]
 }

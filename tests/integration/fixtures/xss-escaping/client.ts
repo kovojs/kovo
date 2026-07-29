@@ -1,4 +1,4 @@
-import { createQueryStore } from '@kovojs/browser/client';
+import { createQueryStore } from '@kovojs/browser/generated';
 import { installInlineQueryEventHydration } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 installInlineQueryEventHydration({

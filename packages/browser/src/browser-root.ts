@@ -65,31 +65,13 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = async (url, options) 
 };
 
 /**
- * Build the browser root that `installKovoLoader` and
- * `applyKovoDeferredStreamResponse` consume: a live-DOM fragment-target lookup
- * plus target collector (SPEC §9.1). This is the single helper an app entry needs
- * to wire the runtime root; it replaces hand-building the low-level morph/target
- * objects. Pair it with {@link defaultEnhancedFetch} for the mutation `fetch`.
+ * Build the generated-runtime browser root: a live-DOM fragment-target lookup
+ * plus target collector (SPEC §9.1). Compiler-emitted bootstraps consume this
+ * through `@kovojs/browser/generated`; custom shells use `installKovoClient`,
+ * which creates the adapter internally.
  *
  * @param options - Optional `documentRoot` (defaults to `document`).
- * @returns A {@link BrowserKovoRoot} to pass as the loader/stream `root`.
- * @example
- * import {
- *   createBrowserKovoRoot,
- *   createQueryStore,
- *   defaultEnhancedFetch,
- *   installKovoLoader,
- * } from '@kovojs/browser/client';
- *
- * const store = createQueryStore();
- * const root = createBrowserKovoRoot();
- *
- * installKovoLoader({
- *   importModule: (specifier) => import(specifier),
- *   root: document,
- *   queryStore: store,
- *   enhancedMutations: { fetch: defaultEnhancedFetch, root, store },
- * });
+ * @returns A generated-runtime {@link BrowserKovoRoot}.
  */
 export function createBrowserKovoRoot(options: CreateBrowserKovoRootOptions = {}): BrowserKovoRoot {
   const documentRoot =

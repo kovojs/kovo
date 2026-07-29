@@ -152,21 +152,22 @@ needs. See [styling with StyleX](/guides/styling/).
 
 ## The client side
 
-On a server-rendered stream the inline loader handles this. The lower-level client primitive is
-exported from `@kovojs/browser/client` for custom shells, and it is still marked experimental:
+On a server-rendered stream the inline loader handles this. A custom shell installs the same
+document-scoped runtime with one experimental API:
 
 ```ts
-import { createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { installKovoClient } from '@kovojs/browser/client';
 
-const store = createQueryStore();
-installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
-
-// Server-rendered documents install the stream and mutation fragment runtime.
-// Compiler-emitted modules own deferred stream application details.
+const client = installKovoClient({
+  importModule: (url) => import(url),
+  root: document,
+});
+await client.ready;
 ```
 
 Each applied chunk behaves exactly like a mutation response landing: query values update their
-bindings, fragments morph into their targets.
+bindings, fragments morph into their targets. Kovo owns the store, morph adapter, request settings,
+and module allowlist. When the shell goes away, call `await client.dispose()`.
 
 ## When to reach for it
 
@@ -289,7 +290,7 @@ server truth or to a visible failure state.
 - [Styling with StyleX](/guides/styling/) — the stylesheet contract these chunks use.
 - [Mutations](/guides/mutations/) — the typed form lifecycle streaming mutations preserve.
 - [Queries & invalidation](/guides/queries/) — the query values deferred chunks deliver.
-- [Stability & Versioning](/getting-started/stability/#import-boundaries) — when an app entry should import
+- [Stability & Versioning](/getting-started/stability/#import-boundaries) — when a custom shell should import
   `@kovojs/browser/client`.
 
 <details>

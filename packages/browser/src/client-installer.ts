@@ -17,6 +17,7 @@ import {
   applySecurityIntrinsic,
   securityArrayAppend,
   securityGetOwnPropertyDescriptor,
+  securityGetPrototypeOf,
   securitySet,
   securitySetAdd,
   securitySetDelete,
@@ -26,6 +27,7 @@ import {
   securityWeakMapGet,
   securityWeakMapSet,
 } from './security-witness-intrinsics.js';
+import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';
 
 const IntrinsicAbortController = globalThis.AbortController;
 const IntrinsicAbortSignal = globalThis.AbortSignal;
@@ -33,7 +35,6 @@ const IntrinsicEventTarget = globalThis.EventTarget;
 const IntrinsicHeaders = globalThis.Headers;
 const IntrinsicPromise = Promise;
 const IntrinsicRequest = globalThis.Request;
-const IntrinsicURL = globalThis.URL;
 const intrinsicAbort = IntrinsicAbortController
   ? securityGetOwnPropertyDescriptor(IntrinsicAbortController.prototype, 'abort')?.value
   : undefined;
@@ -85,6 +86,8 @@ const intrinsicRequestUrl = IntrinsicRequest
   ? capturedGetter(IntrinsicRequest.prototype, 'url')
   : undefined;
 const platformFetch = globalThis.fetch;
+const clientBrowserSecurity = createBrowserNavigationSecurityControls();
+const clientLoadedWithDocument = globalThis.document !== undefined && globalThis.document !== null;
 
 type ClientRoot = EventTarget & ParentNode;
 type DisposeMode = 'abort' | 'drain';
@@ -135,7 +138,7 @@ export interface InstallKovoClientOptions {
   /**
    * Observe one framework-constructed mutation request. `next()` is zero-argument,
    * single-use, and always dispatches that exact request through the boot-pinned
-   * platform fetch. Returning any other response is rejected.
+   * platform fetch. Returning a different response is rejected.
    */
   fetch?: (
     request: Request,
@@ -148,10 +151,7 @@ export interface InstallKovoClientOptions {
     phase: 'disposed' | 'disposing' | 'ready' | 'session-transition';
     reason?: 'session-transition' | 'user';
   }) => void;
-  onUploadProgress?: (
-    progress: { loaded: number; total?: number },
-    form: unknown,
-  ) => void;
+  onUploadProgress?: (progress: { loaded: number; total?: number }, form: unknown) => void;
   /** Delegation and live-fragment root. Defaults to the current `document`. */
   root?: EventTarget & ParentNode;
 }
@@ -175,19 +175,31 @@ export interface KovoClient {
  * @experimental
  */
 export function installKovoClient(options: InstallKovoClientOptions = {}): KovoClient {
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError('Kovo client options must be an object.');
+  }
   const root = resolveClientRoot(options);
   if (securityWeakMapGet(activeClients, root) !== undefined) {
     throw new TypeError('Kovo client is already installed on this root.');
   }
 
+  const fetchObserver = ownDataOption(options, 'fetch');
+  const onError = ownDataOption(options, 'onError');
+  const onLifecycle = ownDataOption(options, 'onLifecycle');
+  const onUploadProgress = ownDataOption(options, 'onUploadProgress');
+  assertOptionalClientFunction(fetchObserver, 'fetch');
+  assertOptionalClientFunction(onError, 'onError');
+  assertOptionalClientFunction(onLifecycle, 'onLifecycle');
+  assertOptionalClientFunction(onUploadProgress, 'onUploadProgress');
+
   const state: ClientState = {
     accepting: true,
     aborting: false,
     controllers: securitySet(),
-    fetchObserver: ownDataOption(options, 'fetch'),
-    onError: ownDataOption(options, 'onError'),
-    onLifecycle: ownDataOption(options, 'onLifecycle'),
-    onUploadProgress: ownDataOption(options, 'onUploadProgress'),
+    fetchObserver,
+    onError,
+    onLifecycle,
+    onUploadProgress,
     operations: securitySet(),
     root,
     store: createQueryStore(),
@@ -236,6 +248,9 @@ export function installKovoClient(options: InstallKovoClientOptions = {}): KovoC
   notifyLifecycle(state, 'ready');
   return {
     dispose(mode: DisposeMode = 'drain') {
+      if (mode !== 'abort' && mode !== 'drain') {
+        throw new TypeError('Kovo client dispose mode must be "abort" or "drain".');
+      }
       return beginClientDispose(state, mode, 'user');
     },
     ready,
@@ -249,8 +264,8 @@ function resolveClientRoot(options: InstallKovoClientOptions): ClientRoot {
     resolved === undefined ||
     resolved === null ||
     typeof resolved !== 'object' ||
-    typeof (resolved as { addEventListener?: unknown }).addEventListener !== 'function' ||
-    typeof (resolved as { querySelectorAll?: unknown }).querySelectorAll !== 'function'
+    stableClientMethod(resolved, 'addEventListener') === undefined ||
+    stableClientMethod(resolved, 'querySelectorAll') === undefined
   ) {
     throw new TypeError('Kovo client requires a DOM root with event and query-selector support.');
   }
@@ -386,9 +401,7 @@ async function dispatchClientMutationRequest(
   try {
     const observer = configuration.observe;
     const response =
-      observer === undefined
-        ? await next()
-        : await observer(request, next, reportProgress);
+      observer === undefined ? await next() : await observer(request, next, reportProgress);
     if (nextCalls !== 1 || response !== dispatchedResponse) {
       discardForeignResponse(response);
       throw new TypeError(
@@ -480,10 +493,7 @@ function assertRequestUnchanged(request: Request, expected: RequestWitness): voi
   }
 }
 
-function readRequestField<Value>(
-  getter: (...args: any[]) => unknown,
-  request: Request,
-): Value {
+function readRequestField<Value>(getter: (...args: any[]) => unknown, request: Request): Value {
   return applySecurityIntrinsic<Value>(getter, request, []);
 }
 
@@ -526,14 +536,22 @@ function abortController(controller: AbortController, reason?: unknown): void {
 }
 
 function absoluteClientUrl(url: string): string {
-  const base =
-    typeof location === 'object' && location !== null && typeof location.href === 'string'
-      ? location.href
-      : 'http://localhost/';
-  return new IntrinsicURL(url, base).href;
+  const current = clientBrowserSecurity.currentUrl();
+  const base = current?.href ?? (clientLoadedWithDocument ? undefined : 'http://localhost/');
+  if (base === undefined) {
+    throw new TypeError('Kovo client refused an unverified browser location.');
+  }
+  const parsed = clientBrowserSecurity.parseUrl(url, base);
+  if (parsed === undefined) {
+    throw new TypeError('Kovo client mutation URL is invalid.');
+  }
+  return parsed.href;
 }
 
-function trackClientOperation<Value>(state: ClientState, operation: Promise<Value>): Promise<Value> {
+function trackClientOperation<Value>(
+  state: ClientState,
+  operation: Promise<Value>,
+): Promise<Value> {
   if (!intrinsicPromiseThen) {
     throw new TypeError('Kovo client Promise controls are unavailable.');
   }
@@ -589,12 +607,21 @@ async function drainClientOperations(state: ClientState): Promise<void> {
       securityArrayAppend(pending, operation, 'Kovo client drain operation snapshot');
     });
     if (pending.length === 0) return;
-    const settled = pending.map((operation) =>
-      operation.then(
-        () => undefined,
-        () => undefined,
-      ),
-    );
+    const settled: Promise<unknown>[] = [];
+    for (let index = 0; index < pending.length; index += 1) {
+      const operation = pending[index];
+      if (operation === undefined || !intrinsicPromiseThen) {
+        throw new TypeError('Kovo client Promise controls are unavailable.');
+      }
+      securityArrayAppend(
+        settled,
+        applySecurityIntrinsic<Promise<unknown>>(intrinsicPromiseThen, operation, [
+          () => undefined,
+          () => undefined,
+        ]),
+        'Kovo client drain settlement snapshot',
+      );
+    }
     await applySecurityIntrinsic<Promise<unknown[]>>(intrinsicPromiseAll, IntrinsicPromise, [
       settled,
     ]);
@@ -675,9 +702,7 @@ function assertUploadProgress(progress: UploadProgress): void {
     !Number.isFinite(progress.loaded) ||
     progress.loaded < 0 ||
     (progress.total !== undefined &&
-      (!Number.isFinite(progress.total) ||
-        progress.total < 0 ||
-        progress.loaded > progress.total))
+      (!Number.isFinite(progress.total) || progress.total < 0 || progress.loaded > progress.total))
   ) {
     throw new TypeError('Kovo client upload progress must contain bounded non-negative numbers.');
   }
@@ -697,10 +722,10 @@ function discardForeignResponse(response: unknown): void {
   }
 }
 
-function ownDataOption<
-  Options extends object,
-  Key extends keyof Options,
->(options: Options, key: Key): Options[Key] | undefined {
+function ownDataOption<Options extends object, Key extends keyof Options>(
+  options: Options,
+  key: Key,
+): Options[Key] | undefined {
   const descriptor = securityGetOwnPropertyDescriptor(options, key);
   if (descriptor === undefined || ('value' in descriptor && descriptor.value === undefined)) {
     return undefined;
@@ -709,6 +734,26 @@ function ownDataOption<
     throw new TypeError(`Kovo client option ${String(key)} must be an own-data property.`);
   }
   return descriptor.value as Options[Key];
+}
+
+function assertOptionalClientFunction(value: unknown, name: string): void {
+  if (value !== undefined && typeof value !== 'function') {
+    throw new TypeError(`Kovo client option ${name} must be a function.`);
+  }
+}
+
+function stableClientMethod(value: object, property: PropertyKey): Function | undefined {
+  let owner: object | null = value;
+  for (let depth = 0; owner !== null && depth < 16; depth += 1) {
+    const descriptor = securityGetOwnPropertyDescriptor(owner, property);
+    if (descriptor !== undefined) {
+      return 'value' in descriptor && typeof descriptor.value === 'function'
+        ? descriptor.value
+        : undefined;
+    }
+    owner = securityGetPrototypeOf(owner);
+  }
+  return undefined;
 }
 
 function clientDisposedError(): TypeError {

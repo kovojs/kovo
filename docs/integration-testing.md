@@ -108,10 +108,10 @@ selected from the generated live-target registry and re-rendered from server tru
 
 The document shell always includes the small inline loader. It owns delegated `on:*`
 handlers, enhanced form submission, mutation response parsing, fragment morphing, query
-chunk event dispatch, and island abort scopes. Heavier production-loader behavior must
-be exercised by importing `installKovoLoader(...)` from `@kovojs/browser/client` in the fixture
-client module, as `fixtures/query-refetch`, `fixtures/broadcast-channel-sync`, and the
-runtime `loader-*` tests do. That installed-loader path owns query-store hydration,
+chunk event dispatch, and island abort scopes. Heavier generated-runtime behavior must be
+exercised through compiler-emitted `@kovojs/browser/generated` bootstraps in fixture client
+modules, as `fixtures/query-refetch`, `fixtures/broadcast-channel-sync`, and the runtime
+`loader-*` tests do. That generated path owns query-store hydration,
 typed-read visible-return refetch, default BroadcastChannel replay, optimistic cleanup,
 and loader disposal hooks.
 

@@ -1,12 +1,8 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import { installKovoClient } from './client.js';
+import { installKovoClient } from '@kovojs/browser/client';
 import { createKovoClientMutationTransport } from './client-installer.js';
-import {
-  FakeElement,
-  FakeRoot,
-  installTestClientModuleManifest,
-} from './runtime-test-fakes.js';
+import { FakeElement, FakeRoot, installTestClientModuleManifest } from './runtime-test-fakes.js';
 
 const restoreClientModuleManifest = installTestClientModuleManifest([
   '/c/allowed.client.js',
@@ -57,9 +53,7 @@ describe('custom-shell client installer', () => {
   it('drains already-started module work before clearing the installation', async () => {
     const root = new FakeRoot();
     const run = vi.fn();
-    let resolveImport:
-      | ((module: Record<string, unknown>) => void)
-      | undefined;
+    let resolveImport: ((module: Record<string, unknown>) => void) | undefined;
     const importModule = vi.fn(
       () =>
         new Promise<Record<string, unknown>>((resolve) => {
@@ -93,9 +87,7 @@ describe('custom-shell client installer', () => {
     const root = new FakeRoot();
     const run = vi.fn();
     const onError = vi.fn();
-    let resolveImport:
-      | ((module: Record<string, unknown>) => void)
-      | undefined;
+    let resolveImport: ((module: Record<string, unknown>) => void) | undefined;
     const client = installKovoClient({
       importModule: () =>
         new Promise<Record<string, unknown>>((resolve) => {
@@ -140,6 +132,30 @@ describe('custom-shell client installer', () => {
 
     expect(() => installKovoClient(options)).toThrow('fetch must be an own-data property');
     expect(getter).not.toHaveBeenCalled();
+  });
+
+  it('validates option callbacks, roots, and disposal modes at the public boundary', async () => {
+    const root = new FakeRoot();
+    expect(() => installKovoClient({ onLifecycle: 'not-a-function', root } as never)).toThrow(
+      'onLifecycle must be a function',
+    );
+
+    const addEventListener = vi.fn();
+    const accessorRoot = {
+      querySelectorAll() {
+        return [];
+      },
+    };
+    Object.defineProperty(accessorRoot, 'addEventListener', {
+      configurable: true,
+      get: addEventListener,
+    });
+    expect(() => installKovoClient({ root: accessorRoot as never })).toThrow('requires a DOM root');
+    expect(addEventListener).not.toHaveBeenCalled();
+
+    const client = installKovoClient({ root });
+    expect(() => client.dispose('wait' as never)).toThrow('dispose mode');
+    await client.dispose('abort');
   });
 });
 
@@ -274,11 +290,9 @@ describe('custom-shell framework-owned request transport', () => {
       (request: Request) =>
         new Promise<Response>((_resolve, reject) => {
           expect(request.keepalive).toBe(false);
-          request.signal.addEventListener(
-            'abort',
-            () => reject(request.signal.reason),
-            { once: true },
-          );
+          request.signal.addEventListener('abort', () => reject(request.signal.reason), {
+            once: true,
+          });
         }),
     );
     const fetch = createKovoClientMutationTransport({

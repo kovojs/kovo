@@ -1038,6 +1038,14 @@ export type CsrfOptions<Request = any> = any;
 export type SigningKeyRing = any;
 export type AppResponseHeaderName = 'Cache-Control' | 'Last-Modified' | 'Vary';
 export type AppResponseHeaders = Partial<Record<AppResponseHeaderName, string | string[]>>;
+export interface InstallKovoClientOptions {
+  importModule?: (url: string) => Promise<Record<string, unknown>>;
+  root?: EventTarget & ParentNode;
+}
+export interface KovoClient {
+  readonly ready: Promise<void>;
+  dispose(mode?: 'abort' | 'drain'): Promise<void>;
+}
 
 export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
@@ -1085,6 +1093,7 @@ export const handler: <State = unknown>(
   fn: (event: Event, context: { state: State }) => void,
 ) => unknown;
 export const hmacSignature: any;
+export const installKovoClient: (options?: InstallKovoClientOptions) => KovoClient;
 export const installKovoLoader: any;
 export const layout: <Request = any, Params = any, Page = any, Regions = any>(
   ...args: any[]
@@ -1202,6 +1211,7 @@ export const exportStaticApp = anyFn;
 export const form = anyFn;
 export const guard = anyFn;
 export const hmacSignature = anyFn;
+export const installKovoClient = anyFn;
 export const installKovoLoader = anyFn;
 export const layout = anyFn as <Request = any, Params = any, Page = any, Regions = any>(
   ...args: any[]

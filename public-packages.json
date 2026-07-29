@@ -1918,7 +1918,7 @@
           {
             "path": "./client",
             "slug": "browser-client",
-            "description": "Browser bootstrap helpers for installing Kovo's client loader in app-owned entry files."
+            "description": "One experimental, lifecycle-aware Kovo client installer for custom application shells."
           }
         ]
       }

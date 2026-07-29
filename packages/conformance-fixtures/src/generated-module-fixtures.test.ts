@@ -830,8 +830,14 @@ export function renderSource() {
           .replaceWithHtml('<cart-badge><span data-bind="cart.count">9</span></cart-badge>');
         return { appliedFragments: body.includes('cart-badge') ? ['cart-badge'] : [] };
       },
+      createBrowserKovoRoot(options: { documentRoot: unknown }) {
+        return options.documentRoot;
+      },
       createQueryStore() {
         return store;
+      },
+      defaultEnhancedFetch() {
+        return { ok: true };
       },
       installKovoLoader() {
         return { dispose() {}, events: ['click'] };

@@ -708,11 +708,9 @@ export async function executeStarterClientTemplate(
     },
     module,
     require(specifier: string) {
-      // The starter client template imports its bootstrap surface from the public
-      // `@kovojs/browser/client` facade and the deferred-stream applier from the
-      // public `@kovojs/browser/generated` subpath (post facade-shrink). Both map
-      // to the single white-box runtime shim above.
-      if (specifier === '@kovojs/browser/client' || specifier === '@kovojs/browser/generated') {
+      // Compiler-emitted starter bootstrap internals use the generated-runtime ABI.
+      // Custom shells use the narrow `@kovojs/browser/client` installer instead.
+      if (specifier === '@kovojs/browser/generated') {
         return runtime;
       }
       assert.fail(`unexpected starter client import ${specifier}`);
