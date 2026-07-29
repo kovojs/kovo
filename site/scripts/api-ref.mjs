@@ -978,11 +978,11 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
     packages: resolvedPackages.map(({ pkg }) => `packages/${pkg.dir}/package.json`),
     publicManifest: 'public-packages.json',
     sources: collected.flatMap(({ subpaths }) =>
-        subpaths.flatMap((subpath) => [
-          subpath.entryRel,
-          ...subpath.entries.map((entry) => entry.sourcePath),
-        ]),
-      ),
+      subpaths.flatMap((subpath) => [
+        subpath.entryRel,
+        ...subpath.entries.map((entry) => entry.sourcePath),
+      ]),
+    ),
   };
   const manifest = await sealApiReferenceManifest({ inputPaths, outDir });
   process.stdout.write(
