@@ -901,23 +901,26 @@ export const save = mutation('cart/save', {
   });
 
   it('prints executable guard names for access decisions, not relabeled audit steps', async () => {
-    const [{ accessFactsFromApp }, { createApp, guard, guards, route }] = await Promise.all([
-      import('@kovojs/server/internal/execution'),
-      import('@kovojs/server'),
-    ]);
+    const [{ resolveKovoAppToken }, { accessFactsFromApp }, { defineKovo, guard, guards }] =
+      await Promise.all([
+        import('@kovojs/server/internal/build'),
+        import('@kovojs/server/internal/execution'),
+        import('@kovojs/server'),
+      ]);
+    const app = defineKovo({});
     const adminOnly = guards.role<{
       session?: { user?: { id?: string; roles: readonly string[] } | null } | null;
     }>('admin');
-    const app = createApp({
-      routes: [
-        route('/admin', {
-          access: [guard('admin-only', adminOnly)],
-          page: () => '<main>admin</main>',
-        }),
-      ],
+    const adminRoute = app.route('/admin', {
+      access: [guard('admin-only', adminOnly)],
+      page: () => '<main>admin</main>',
     });
+    const runtimeApp = resolveKovoAppToken(
+      app.assemble({ routes: [adminRoute] }),
+      'kovo explain access fixture',
+    );
 
-    expect(kovoExplain({ access: accessFactsFromApp(app) }, { view: 'access' })).toEqual({
+    expect(kovoExplain({ access: accessFactsFromApp(runtimeApp) }, { view: 'access' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
