@@ -105,16 +105,16 @@
       "sha512": "sha512-w4rYH4YbzDl2NJ8skmeN5KDEfBOGIPC98g9cL3QjpvVbtmFjYICvB4CONL/rBECluA4crZnrjxvPHga7FuV3zw=="
     },
     {
-      "path": "@kovojs/compiler/dist/app-graph-DaSXLrx9.mjs",
-      "sha512": "sha512-18gUMhAd8JuHm9SeRK4o7Xnv3EKotohspXion79oNDAcXvk1smx5RfHYL5HzTn9CvlDmp8goSQIbSweP/DTm8g=="
+      "path": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
+      "sha512": "sha512-ccNRHBQTRJ2cR41RFVNfWVndgLaF1Rkty8QVymT7p4+ayqxowL5V9q8c84/6L6jCHMMcGXszmzLr5EZ1/j4Jgg=="
     },
     {
-      "path": "@kovojs/compiler/dist/compile-00Cu2_lW.mjs",
-      "sha512": "sha512-quZ/RMditv3wYlYsp1E6k+L6SBr1ztPt8mKiWcIx4wFt12JvjRmnk/mVUHx6v3oFtkD1Amd2b9sjHOSwBUEvQA=="
+      "path": "@kovojs/compiler/dist/compile-CH_GGlTW.mjs",
+      "sha512": "sha512-UNLEveKuwVg32MEbpudSc3HXCxGbMKRmUTESgDXZ9dGlx14yCUjyS8tDPYpoHs8TdoQv2N3+Pnu8TNDzr+VG6Q=="
     },
     {
       "path": "@kovojs/compiler/dist/compile.mjs",
-      "sha512": "sha512-An2AAEKgAuOPqnhX4CiCrl82hrj+iJfFXVapYSIrLH16hieCA+aj/ZnNOElPTbQmIYeXTijYwok8yczTjp1UhQ=="
+      "sha512": "sha512-lGaCpMsR6Tv7aRjNcrOn0kF14bnV0Sh5/Nqk0c2YEEqyZAx96cAJ+a72etzKk+2ZFOV78KBJST70VEj8zVlJUw=="
     },
     {
       "path": "@kovojs/compiler/dist/compiler-security-intrinsics-C3ijR_YZ.mjs",
@@ -122,31 +122,31 @@
     },
     {
       "path": "@kovojs/compiler/dist/graph.mjs",
-      "sha512": "sha512-2jiwgi68drduQRyeyGQSwPBTBTTaP/lW/qC1zWLXfS+4JX0V953Z8c/jgOBvFEoB7Cwzwi+rkf1ixTBFs04a6w=="
+      "sha512": "sha512-ijyKclqVv4yQlDZWjJcdaz+iELY8JMDZFV+M9PVvhs6jhQ+QXeUnfq0mZKcrywg4x7FHJKgZv2W7J2g+QCb0NQ=="
     },
     {
       "path": "@kovojs/compiler/dist/index.mjs",
-      "sha512": "sha512-L0YQwID4sfsmqDW5VFka7QFC55RBe6VZ1e7rKQblK/ixKxa3IkG7feW+GbPR1VQerCM6FbjetKBhGmEudczpwA=="
+      "sha512": "sha512-lPDeLrZWugvqr5z1Ml54nJU6G+mvaGOQMy4huZarvPjmn16x9IDetAHEgPPoJ/FnlEHtV9eiDsLBvOjiYLu13w=="
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-mHIwposjYSe2NvFI6HjB2DibHtPh6dgfKcevTtD9Jy73RX4+LBI2ovh+H5zxRBCXrfM3N9hcVtupB6YrkN56zw=="
+      "sha512": "sha512-3j2rNd95Y4VM1UzgwhX15l9171Qj+gAJ5TSShhWa9uiLtqkzpwJ62RrNCf3ZT1TeqCrr8TFPUQ/mxgF7kukRnw=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
-      "sha512": "sha512-kkYkGYPcYZZfh/UFMOONw2Ki/tDbFaJupEA5g8Fm5SdRBblXk0YBmXlYItTTNoTXvuEXz2QwlyjzbXwYGiH+ZA=="
+      "sha512": "sha512-l65hjAdeM0hDrwE2RO8nvDejzGwN37mECUP+I6j9RUBWAacdMC2jzydJXCesENAzxoMouKv6hzejPm3/Tw50sg=="
     },
     {
-      "path": "@kovojs/compiler/dist/package-prefixes-1HX2fqe9.mjs",
-      "sha512": "sha512-lVmvPPKL9bEciObF26mW3i0yKfNTkwQbrRYv1CDILYoWj6rZUaFFFX/wHqIdEiZxKGh7bLMWWFzms9ac9Limfg=="
-    },
-    {
-      "path": "@kovojs/compiler/dist/package-styles-DDbV1ciX.mjs",
-      "sha512": "sha512-sNY5yYWdIC91FzOElM4n6nEQzkA5F1RiN60ntoXzjB4zFfr8nh0cVT6G3bg7fLWLiVsUxAHyLU0LThljjEk3CA=="
+      "path": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
+      "sha512": "sha512-ZRlKbuU+IpadqIZjx55ft59gFQgoGj2RbIf+LQGdM6Jb5R3vSH1wSF40C1Gl3np74vm+5TSv5npjW5Y3R8OSMw=="
     },
     {
       "path": "@kovojs/compiler/dist/package-styles.mjs",
-      "sha512": "sha512-8PgI8xWcOGIRUcFAsLzIO6cdhBfT14Ws2DQA2diaee5IE+F8BkFK3YwWx0jJCa8MkTPEI3WV86w+qyHb8rIzdQ=="
+      "sha512": "sha512-XUNzgPYdhQ02WWDg4qV0K9NbfIGobQTa2tGlPH5k0BL1+xZF9p1BR5PK18liAiO0K8+LlYqSzKMMbAHtRPeogw=="
+    },
+    {
+      "path": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
+      "sha512": "sha512-6uFi+ddzrIUn3troI63FE+BF1nzgQs6ptwDLzJRveVVBKDkwx+YuOubXJqCE3RJ+7RgpsB0ggMuHqVRA8N1hDA=="
     },
     {
       "path": "@kovojs/compiler/dist/security-bootstrap.mjs",
@@ -157,12 +157,12 @@
       "sha512": "sha512-BFX10CjIFBUkRVPDwsxYUYoJp7ZiPW9D2/APEW/Jv/a0S7RKh0lOw7Fdc0TR6Jm+xguzvQCIOVeReP13crHhFw=="
     },
     {
-      "path": "@kovojs/compiler/dist/vite-Db9VB7DF.mjs",
-      "sha512": "sha512-mdaqdnX+Wk/dk4brjuyBTZdPpSDiIZCeV5O8xIg2QMYB7Yg3f3AzQVIl4sin1H6CHG3AMqyXnWo+ypvJUbSNtw=="
+      "path": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
+      "sha512": "sha512-3AyEU0zgFMaHwWHZEs+QMFzFKEm0AareRls7Jl2UDjij5HNSMBxkJmKYLiULD87WJ+YgqlpClLlqRCdX3p3E1A=="
     },
     {
       "path": "@kovojs/compiler/dist/vite-config.mjs",
-      "sha512": "sha512-PIeO5vZeUiMCAyHzNpWkJ2d3jgQq7wjqmMCnXOmSK78JHgOYAtkdJKyvczC6BHoZIOIVpJqB3W2F31OJcot75g=="
+      "sha512": "sha512-AZ+Nku9LH8aB7Oq3WcLV6PdbNdqmt5Gx3JLuui2/DkeF9Og5d5mUO0J9mOjHMFE6CkIQBPEG/kH6qqPG0dpJzg=="
     },
     {
       "path": "@kovojs/core/dist/audit-text-CmsLNB8H.mjs",
@@ -1357,19 +1357,19 @@
       "reason": "contains computed dynamic import; runtime-selected dependency loads require §4.6 lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DaSXLrx9.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
       "reason": "imports Node module-loader authority; runtime-selected dependency loads require lexical authority coverage"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DaSXLrx9.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/app-graph-DaSXLrx9.mjs",
+      "module": "@kovojs/compiler/dist/app-graph-DfY2wvHi.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/compile-00Cu2_lW.mjs",
+      "module": "@kovojs/compiler/dist/compile-CH_GGlTW.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1382,22 +1382,30 @@
     },
     {
       "module": "@kovojs/compiler/dist/internal.mjs",
-      "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
-    },
-    {
-      "module": "@kovojs/compiler/dist/package-prefixes-1HX2fqe9.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-prefixes-1HX2fqe9.mjs",
+      "module": "@kovojs/compiler/dist/internal.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-DDbV1ciX.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/package-styles-DDbV1ciX.mjs",
+      "module": "@kovojs/compiler/dist/package-prefixes-CtM9TNTZ.mjs",
+      "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/package-styles.mjs",
+      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
+      "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
+    },
+    {
+      "module": "@kovojs/compiler/dist/route-pages-CV1J_0Q6.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
@@ -1429,15 +1437,15 @@
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-Db9VB7DF.mjs",
+      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
       "reason": "imports external module \"node:path\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-Db9VB7DF.mjs",
+      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
       "reason": "imports external module \"node:url\" outside the nine-kind lexical capability domain"
     },
     {
-      "module": "@kovojs/compiler/dist/vite-Db9VB7DF.mjs",
+      "module": "@kovojs/compiler/dist/vite-BNrh-nLR.mjs",
       "reason": "imports external module \"typescript\" outside the nine-kind lexical capability domain"
     },
     {
