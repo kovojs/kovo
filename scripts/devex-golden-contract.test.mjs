@@ -82,31 +82,38 @@ describe('golden release evidence contract', () => {
     const baselineBytes = Buffer.from(`${JSON.stringify(baseline, null, 2)}\n`);
     const baselinePath = 'baselines/golden-release-fixture.json';
     const proposal = {
-      schema: 'kovo-devex-budget-proposal/v6',
+      schema: 'kovo-devex-budget-proposal/v7',
       runnerFingerprint: runner,
       metrics: {
         'create.install.cold.durationMs': {
           budget: 1_000,
-          noiseMultiplier: 2,
           targetRationale: 'Keep packed cold installation inside the reviewed evaluator budget.',
         },
         'create.install.installedBytes': {
           budget: 2_000,
-          noiseMultiplier: 0,
           targetRationale: 'Bound the exact installed dependency tree for both starter dialects.',
         },
         'dev.ready.cold.durationMs': {
           budget: 100,
-          noiseMultiplier: 2,
           targetRationale: 'Keep packed cold readiness inside the first-run evaluator target.',
         },
         'dev.ready.warm.durationMs': {
           budget: 50,
-          noiseMultiplier: 2,
           targetRationale: 'Keep packed warm readiness inside the ordinary edit-loop target.',
         },
       },
     };
+
+    const override = structuredClone(proposal);
+    override.metrics['dev.ready.cold.durationMs'].noiseMultiplier = 99;
+    expect(() =>
+      ratifyBudgets(budgets, baseline, override, {
+        baselineReportBytes: baselineBytes,
+        baselineReportPath: baselinePath,
+      }),
+    ).toThrow(
+      'proposal.metrics.dev.ready.cold.durationMs contains procedure-owned or unknown fields: noiseMultiplier',
+    );
 
     const ratified = ratifyBudgets(budgets, baseline, proposal, {
       baselineReportBytes: baselineBytes,
@@ -116,8 +123,10 @@ describe('golden release evidence contract', () => {
       baselineReports: new Map([[baselinePath, baselineBytes]]),
     };
 
-    expect(ratified.runner).toEqual({ status: 'unratified', fingerprint: null });
+    expect(ratified.runner).toMatchObject({ status: 'unratified', fingerprint: null });
     expect(ratified.workload).toEqual({ status: 'unratified', identity: null });
+    expect(ratified.metrics['create.install.cold.durationMs'].ratification.noiseMultiplier).toBe(3);
+    expect(ratified.metrics['create.install.installedBytes'].ratification.noiseMultiplier).toBe(0);
     expect(validateBudgets(ratified, provenance)).toEqual([]);
     expect(evaluateBudgets(ratified, baseline, provenance).pass).toBe(true);
 

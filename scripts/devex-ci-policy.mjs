@@ -6,7 +6,7 @@ import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './release-packages.mjs';
 
 export const DEVEX_CI_POLICY_SCHEMA = 'kovo-devex-ci-policy/v2';
-export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v2';
+export const DEVEX_BASELINE_POLICY_SCHEMA = 'kovo-devex-baseline-policy/v3';
 
 const CADENCES = new Set(['per-pr', 'nightly', 'manual']);
 const GATE_SCOPES = new Set(['job', 'step']);
@@ -28,6 +28,18 @@ const HOSTED_RUNNER_FINGERPRINT_INPUTS = Object.freeze([
   'os.cpus()[0].model',
   'packageManager',
 ]);
+const HOSTED_RUNNER_MACHINE_CLASS = Object.freeze({
+  kind: 'github-hosted-standard-public',
+  provider: 'github-actions',
+  repositoryVisibility: 'public',
+  label: 'ubuntu-24.04',
+  arch: 'x64',
+  vcpus: 4,
+  memoryBytes: 16 * 1024 * 1024 * 1024,
+  ephemeralStorageBytes: 14 * 1024 * 1024 * 1024,
+  specificationSource:
+    'https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories',
+});
 
 export function validateDevexCiPolicy(policy, options = {}) {
   const findings = [];
@@ -255,6 +267,10 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
       policy.referenceRunner.label !== 'ubuntu-24.04' ||
       policy.referenceRunner.runnerName !== 'github-hosted-ubuntu-24.04-accepted' ||
       policy.referenceRunner.mismatchPosture !== 'fail-closed' ||
+      JSON.stringify(policy.referenceRunner.machineClass) !==
+        JSON.stringify(HOSTED_RUNNER_MACHINE_CLASS) ||
+      JSON.stringify(policy.referenceRunner.machineClass) !==
+        JSON.stringify(budgets?.runner?.machineClass) ||
       JSON.stringify(policy.referenceRunner.fingerprintInputs) !==
         JSON.stringify(HOSTED_RUNNER_FINGERPRINT_INPUTS))
   ) {
@@ -268,12 +284,26 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
   ) {
     findings.push('referenceRunner.rationale must be substantive');
   }
-  const requiredSamples = budgets?.procedure?.minimumStatisticalSamples;
+  const requiredBaselineSamples = budgets?.procedure?.minimumBaselineStatisticalSamples;
+  const requiredEvaluationSamples = budgets?.procedure?.minimumEvaluationStatisticalSamples;
   if (
-    !Number.isSafeInteger(policy?.collection?.sampleCount) ||
-    policy.collection.sampleCount < requiredSamples
+    !Number.isSafeInteger(policy?.collection?.baselineSampleCount) ||
+    policy.collection.baselineSampleCount < requiredBaselineSamples
   ) {
-    findings.push(`collection.sampleCount must be at least ${String(requiredSamples)}`);
+    findings.push(
+      `collection.baselineSampleCount must be at least ${String(requiredBaselineSamples)}`,
+    );
+  }
+  if (
+    !Number.isSafeInteger(policy?.collection?.evaluationSampleCount) ||
+    policy.collection.evaluationSampleCount < requiredEvaluationSamples
+  ) {
+    findings.push(
+      `collection.evaluationSampleCount must be at least ${String(requiredEvaluationSamples)}`,
+    );
+  }
+  if (policy?.collection?.baselineSampleCount !== policy?.collection?.evaluationSampleCount) {
+    findings.push('collection must use one repeat count for retained baseline and evaluation data');
   }
   if (
     policy?.collection?.statistic !== budgets?.procedure?.statistic ||
@@ -283,7 +313,7 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
   }
   if (
     !String(policy?.collection?.command ?? '').includes(
-      `--samples ${String(policy?.collection?.sampleCount)}`,
+      `--samples ${String(policy?.collection?.evaluationSampleCount)}`,
     ) ||
     !String(policy?.collection?.command ?? '').includes('--evaluate') ||
     !String(policy?.collection?.command ?? '').includes('--output ')
@@ -311,14 +341,16 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
     findings.push('collection must map to the declared nightly CI gate and exact command');
   }
   if (
-    policy?.ratification?.proposalSchema !== 'kovo-devex-budget-proposal/v6' ||
+    policy?.ratification?.proposalSchema !== 'kovo-devex-budget-proposal/v7' ||
     policy?.ratification?.requiresExactRunnerFingerprint !== true ||
     policy?.ratification?.requiresHumanTargetRationale !== true ||
+    JSON.stringify(policy?.ratification?.noiseMultipliers) !==
+      JSON.stringify(budgets?.procedure?.noiseMultipliers) ||
     policy?.ratification?.thresholdFormula !== budgets?.procedure?.thresholdFormula ||
     !String(policy?.ratification?.command ?? '').includes('--ratify') ||
     !String(policy?.ratification?.command ?? '').includes('--proposal')
   ) {
-    findings.push('ratification must preserve the fail-closed reviewed v6 procedure');
+    findings.push('ratification must preserve the fail-closed reviewed v7 procedure');
   }
   if (
     !Array.isArray(policy?.blockers) ||
@@ -514,7 +546,7 @@ async function main() {
     return 1;
   }
   process.stdout.write(
-    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} baseline=${baseline.status} samples=${String(baseline.collection.sampleCount)}\n`,
+    `${DEVEX_CI_POLICY_SCHEMA} per-pr=${String(runnerMinutes(ci.gates, 'per-pr'))}/${String(ci.budgets.perPullRequestRunnerMinutes)} nightly=${String(runnerMinutes(ci.gates, 'nightly'))}/${String(ci.budgets.nightlyRunnerMinutes)} baseline=${baseline.status} baseline-samples=${String(baseline.collection.baselineSampleCount)} evaluation-samples=${String(baseline.collection.evaluationSampleCount)}\n`,
   );
   return 0;
 }

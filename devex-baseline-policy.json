@@ -1,11 +1,22 @@
 {
-  "schema": "kovo-devex-baseline-policy/v2",
+  "schema": "kovo-devex-baseline-policy/v3",
   "status": "unratified",
   "referenceRunner": {
     "kind": "github-hosted-accepted",
     "label": "ubuntu-24.04",
     "binding": true,
     "runnerName": "github-hosted-ubuntu-24.04-accepted",
+    "machineClass": {
+      "kind": "github-hosted-standard-public",
+      "provider": "github-actions",
+      "repositoryVisibility": "public",
+      "label": "ubuntu-24.04",
+      "arch": "x64",
+      "vcpus": 4,
+      "memoryBytes": 17179869184,
+      "ephemeralStorageBytes": 15032385536,
+      "specificationSource": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories"
+    },
     "fingerprintInputs": [
       "ImageOS",
       "ImageVersion",
@@ -22,7 +33,8 @@
   "collection": {
     "workflow": ".github/workflows/devex-nightly.yml",
     "gateId": "nightly-benchmark",
-    "sampleCount": 5,
+    "baselineSampleCount": 5,
+    "evaluationSampleCount": 5,
     "statistic": "metric-specific",
     "noiseStatistic": "median-absolute-deviation",
     "sampleUnit": "fresh-process phase over an authenticated packed workload with restored source revisions",
@@ -31,14 +43,18 @@
   },
   "ratification": {
     "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
-    "proposalSchema": "kovo-devex-budget-proposal/v6",
+    "proposalSchema": "kovo-devex-budget-proposal/v7",
     "requiresExactRunnerFingerprint": true,
     "requiresHumanTargetRationale": true,
+    "noiseMultipliers": {
+      "deterministic": 0,
+      "statistical": 3
+    },
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
   "blockers": [
     "Run the accepted GitHub-hosted ubuntu-24.04 collectors and commit their authenticated five-sample benchmark and dual-dialect journey reports before binding runner-scoped budgets.",
-    "Review product targets and noise multipliers against that measured baseline before writing any statistical ratification.",
+    "Review product targets against that measured baseline; the schema applies the fixed 3x median-absolute-deviation statistical noise allowance.",
     "Ratify golden-journey install and readiness metrics from the aggregate release-scorecard report; retain full-catalog RSS as non-binding until its own authenticated report schema lands."
   ]
 }

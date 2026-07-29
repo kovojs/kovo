@@ -151,7 +151,7 @@ describe('DevEx PR report', () => {
     baseline.provenance = { sourceCommit: 'f'.repeat(40) };
     const ratified = {
       ...budgets,
-      procedure: { minimumStatisticalSamples: 5 },
+      procedure: { minimumBaselineStatisticalSamples: 5 },
       runner: { status: 'ratified', fingerprint: baseline.runner },
       workload: {
         status: 'ratified',

@@ -49,12 +49,12 @@ import {
 import { repoRoot as defaultRepoRoot } from './public-packages.mjs';
 import { releasePackages } from './release-packages.mjs';
 
-export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v7';
+export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v8';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v4';
 export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
 export const DEVEX_DETERMINISTIC_ARTIFACT_REPORT_SCHEMA =
   'kovo-devex-deterministic-artifact-report/v1';
-export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v6';
+export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v7';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v2';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
@@ -79,6 +79,18 @@ const authenticatedProductionDocsEvidence = new WeakMap();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
+const GITHUB_HOSTED_STANDARD_PUBLIC_MACHINE_CLASS = Object.freeze({
+  kind: 'github-hosted-standard-public',
+  provider: 'github-actions',
+  repositoryVisibility: 'public',
+  label: 'ubuntu-24.04',
+  arch: 'x64',
+  vcpus: 4,
+  memoryBytes: 16 * 1024 * 1024 * 1024,
+  ephemeralStorageBytes: 14 * 1024 * 1024 * 1024,
+  specificationSource:
+    'https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories',
+});
 const BROWSER_BUILD_COMMAND = Object.freeze({
   command: Object.freeze(['node', 'build-browser.mjs']),
   cwd: '.',
@@ -2254,9 +2266,11 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   const samples = baselineMetric?.samples;
   const requiredSamples =
     metric.sampling === 'deterministic'
-      ? 1
-      : Number.isInteger(budgets.procedure?.minimumStatisticalSamples)
-        ? budgets.procedure.minimumStatisticalSamples
+      ? Number.isInteger(budgets.procedure?.deterministicSamples)
+        ? budgets.procedure.deterministicSamples
+        : Number.POSITIVE_INFINITY
+      : Number.isInteger(budgets.procedure?.minimumBaselineStatisticalSamples)
+        ? budgets.procedure.minimumBaselineStatisticalSamples
         : Number.POSITIVE_INFINITY;
   if (
     !Array.isArray(samples) ||
@@ -2288,10 +2302,25 @@ export function validateBudgets(budgets, options = {}) {
   if (budgets?.schema !== DEVEX_BUDGETS_SCHEMA) {
     findings.push(`schema must be ${DEVEX_BUDGETS_SCHEMA}`);
   }
-  if (!Number.isInteger(budgets?.procedure?.minimumStatisticalSamples)) {
-    findings.push('procedure.minimumStatisticalSamples must be an integer');
-  } else if (budgets.procedure.minimumStatisticalSamples < 5) {
-    findings.push('procedure.minimumStatisticalSamples must be at least 5');
+  if (!Number.isInteger(budgets?.procedure?.minimumBaselineStatisticalSamples)) {
+    findings.push('procedure.minimumBaselineStatisticalSamples must be an integer');
+  } else if (budgets.procedure.minimumBaselineStatisticalSamples < 5) {
+    findings.push('procedure.minimumBaselineStatisticalSamples must be at least 5');
+  }
+  if (!Number.isInteger(budgets?.procedure?.minimumEvaluationStatisticalSamples)) {
+    findings.push('procedure.minimumEvaluationStatisticalSamples must be an integer');
+  } else if (budgets.procedure.minimumEvaluationStatisticalSamples < 5) {
+    findings.push('procedure.minimumEvaluationStatisticalSamples must be at least 5');
+  }
+  if (budgets?.procedure?.deterministicSamples !== 1) {
+    findings.push('procedure.deterministicSamples must be exactly 1');
+  }
+  if (
+    !exactOwnKeys(budgets?.procedure?.noiseMultipliers, ['deterministic', 'statistical']) ||
+    budgets.procedure.noiseMultipliers.deterministic !== 0 ||
+    budgets.procedure.noiseMultipliers.statistical !== 3
+  ) {
+    findings.push('procedure.noiseMultipliers must fix deterministic=0 and statistical=3');
   }
   if (budgets?.procedure?.statistic !== 'metric-specific') {
     findings.push('procedure.statistic must be metric-specific');
@@ -2304,6 +2333,11 @@ export function validateBudgets(budgets, options = {}) {
   }
   if (!RUNNER_STATUSES.has(budgets?.runner?.status)) {
     findings.push('runner.status must be unratified or ratified');
+  }
+  if (!sameJson(budgets?.runner?.machineClass, GITHUB_HOSTED_STANDARD_PUBLIC_MACHINE_CLASS)) {
+    findings.push(
+      'runner.machineClass must bind the public GitHub-hosted ubuntu-24.04 4-vCPU/16-GiB/14-GiB class',
+    );
   }
   if (budgets?.runner?.status === 'unratified' && budgets.runner.fingerprint !== null) {
     findings.push('runner.fingerprint must be null until ratification');
@@ -2388,6 +2422,15 @@ export function validateBudgets(budgets, options = {}) {
     if (!finiteNonNegative(record.noiseMultiplier)) {
       findings.push(`${metricId}.ratification.noiseMultiplier invalid`);
     }
+    const expectedNoiseMultiplier = budgets.procedure?.noiseMultipliers?.[metric.sampling];
+    if (record.noiseMultiplier !== expectedNoiseMultiplier) {
+      findings.push(
+        `${metricId}.ratification.noiseMultiplier must match procedure.noiseMultipliers.${metric.sampling}`,
+      );
+    }
+    if (record.noiseStatistic !== budgets.procedure?.noiseStatistic) {
+      findings.push(`${metricId}.ratification.noiseStatistic must match the budget procedure`);
+    }
     if (!finiteNonNegative(record.threshold)) {
       findings.push(`${metricId}.ratification.threshold invalid`);
     } else {
@@ -2398,8 +2441,8 @@ export function validateBudgets(budgets, options = {}) {
     }
     const requiredSamples =
       metric.sampling === 'deterministic'
-        ? 1
-        : (budgets.procedure?.minimumStatisticalSamples ?? Number.POSITIVE_INFINITY);
+        ? (budgets.procedure?.deterministicSamples ?? Number.POSITIVE_INFINITY)
+        : (budgets.procedure?.minimumBaselineStatisticalSamples ?? Number.POSITIVE_INFINITY);
     if (!Number.isInteger(record.sampleCount) || record.sampleCount < requiredSamples) {
       findings.push(`${metricId}.ratification.sampleCount invalid`);
     }
@@ -2513,6 +2556,21 @@ function validateProposal(proposal, options = {}) {
     findings.push('proposal.metrics must be an object');
   } else if (Object.keys(proposal.metrics).length === 0) {
     findings.push('proposal.metrics must contain at least one metric');
+  } else {
+    for (const [metricId, metric] of Object.entries(proposal.metrics)) {
+      if (!metric || typeof metric !== 'object' || Array.isArray(metric)) {
+        findings.push(`proposal.metrics.${metricId} must be an object`);
+        continue;
+      }
+      const unknownFields = Object.keys(metric).filter(
+        (field) => !['budget', 'statistic', 'targetRationale'].includes(field),
+      );
+      if (unknownFields.length > 0) {
+        findings.push(
+          `proposal.metrics.${metricId} contains procedure-owned or unknown fields: ${unknownFields.join(', ')}`,
+        );
+      }
+    }
   }
   return findings;
 }
@@ -2605,6 +2663,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   const updated = structuredClone(budgets);
   if (runnerBoundProposal && reportSource === 'benchmark') {
     updated.runner = {
+      machineClass: structuredClone(updated.runner.machineClass),
       status: 'ratified',
       fingerprint: structuredClone(baselineReport.runner),
     };
@@ -2650,7 +2709,9 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
       throw new Error(`baseline report has no valid samples for ${metricId}`);
     }
     const requiredSamples =
-      metric.sampling === 'deterministic' ? 1 : updated.procedure.minimumStatisticalSamples;
+      metric.sampling === 'deterministic'
+        ? updated.procedure.deterministicSamples
+        : updated.procedure.minimumBaselineStatisticalSamples;
     if (samples.length < requiredSamples) {
       throw new Error(
         `${metricId} has ${samples.length} baseline samples; ${requiredSamples} required`,
@@ -2669,10 +2730,7 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     if (statistic !== metric.statistic) {
       throw new Error(`${metricId} statistic must remain ${metric.statistic}`);
     }
-    const noiseMultiplier = proposed.noiseMultiplier;
-    if (!finiteNonNegative(noiseMultiplier)) {
-      throw new Error(`${metricId} proposal noiseMultiplier must be non-negative`);
-    }
+    const noiseMultiplier = updated.procedure.noiseMultipliers[metric.sampling];
     const noise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
     const budget = proposed.budget;
     metric.ratification = {
@@ -2795,7 +2853,9 @@ export function evaluateBudgets(budgets, report, options = {}) {
       continue;
     }
     const requiredSamples =
-      metric.sampling === 'deterministic' ? 1 : budgets.procedure.minimumStatisticalSamples;
+      metric.sampling === 'deterministic'
+        ? budgets.procedure.deterministicSamples
+        : budgets.procedure.minimumEvaluationStatisticalSamples;
     if (samples.length < requiredSamples || samples.some((value) => !finiteNonNegative(value))) {
       results.push({
         metric: metricId,

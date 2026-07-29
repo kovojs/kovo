@@ -123,7 +123,7 @@ export function speedDeltas(current, baseline, budgets) {
   const statisticalBaseline =
     baseline?.schema === DEVEX_BENCHMARK_REPORT_SCHEMA &&
     Number.isSafeInteger(baseline.sampleCount) &&
-    baseline.sampleCount >= (budgets?.procedure?.minimumStatisticalSamples ?? 5);
+    baseline.sampleCount >= (budgets?.procedure?.minimumBaselineStatisticalSamples ?? 5);
   const ratifiedBaseline =
     statisticalBaseline &&
     budgets?.runner?.status === 'ratified' &&

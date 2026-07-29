@@ -1,7 +1,18 @@
 {
-  "schema": "kovo-devex-budgets/v7",
+  "schema": "kovo-devex-budgets/v8",
   "runner": {
     "status": "unratified",
+    "machineClass": {
+      "kind": "github-hosted-standard-public",
+      "provider": "github-actions",
+      "repositoryVisibility": "public",
+      "label": "ubuntu-24.04",
+      "arch": "x64",
+      "vcpus": 4,
+      "memoryBytes": 17179869184,
+      "ephemeralStorageBytes": 15032385536,
+      "specificationSource": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories"
+    },
     "fingerprint": null
   },
   "workload": {
@@ -9,9 +20,15 @@
     "identity": null
   },
   "procedure": {
-    "minimumStatisticalSamples": 5,
+    "minimumBaselineStatisticalSamples": 5,
+    "minimumEvaluationStatisticalSamples": 5,
+    "deterministicSamples": 1,
     "statistic": "metric-specific",
     "noiseStatistic": "median-absolute-deviation",
+    "noiseMultipliers": {
+      "deterministic": 0,
+      "statistical": 3
+    },
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
   "metrics": {

@@ -107,13 +107,30 @@ describe('DevEx CI and baseline policy', () => {
 
   it('requires N>=5, exact statistics, reviewed targets, and an exact accepted runner', () => {
     expect(validateDevexBaselinePolicy(baseline, budgets, ci)).toEqual([]);
+    expect(baseline.referenceRunner.machineClass).toMatchObject({
+      repositoryVisibility: 'public',
+      label: 'ubuntu-24.04',
+      vcpus: 4,
+      memoryBytes: 16 * 1024 * 1024 * 1024,
+      ephemeralStorageBytes: 14 * 1024 * 1024 * 1024,
+    });
+    expect(baseline.collection).toMatchObject({
+      baselineSampleCount: 5,
+      evaluationSampleCount: 5,
+    });
+    expect(baseline.ratification.noiseMultipliers).toEqual({
+      deterministic: 0,
+      statistical: 3,
+    });
 
     const tooSmall = structuredClone(baseline);
-    tooSmall.collection.sampleCount = 4;
+    tooSmall.collection.baselineSampleCount = 4;
+    tooSmall.collection.evaluationSampleCount = 4;
     tooSmall.collection.command = tooSmall.collection.command.replace('--samples 5', '--samples 4');
     expect(validateDevexBaselinePolicy(tooSmall, budgets, ci)).toEqual(
       expect.arrayContaining([
-        'collection.sampleCount must be at least 5',
+        'collection.baselineSampleCount must be at least 5',
+        'collection.evaluationSampleCount must be at least 5',
         'collection must map to the declared nightly CI gate and exact command',
       ]),
     );
@@ -135,6 +152,18 @@ describe('DevEx CI and baseline policy', () => {
       driftedRunner.referenceRunner.fingerprintInputs.slice(1);
     expect(validateDevexBaselinePolicy(driftedRunner, budgets, ci)).toContain(
       'accepted GitHub-hosted runner must bind the exact ubuntu-24.04 fingerprint and fail closed on drift',
+    );
+
+    const driftedMachine = structuredClone(baseline);
+    driftedMachine.referenceRunner.machineClass.vcpus = 8;
+    expect(validateDevexBaselinePolicy(driftedMachine, budgets, ci)).toContain(
+      'accepted GitHub-hosted runner must bind the exact ubuntu-24.04 fingerprint and fail closed on drift',
+    );
+
+    const driftedNoise = structuredClone(baseline);
+    driftedNoise.ratification.noiseMultipliers.statistical = 5;
+    expect(validateDevexBaselinePolicy(driftedNoise, budgets, ci)).toContain(
+      'ratification must preserve the fail-closed reviewed v7 procedure',
     );
   });
 });
