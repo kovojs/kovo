@@ -13,6 +13,8 @@ import {
   conceptCensus,
   requirePackedPhaseSuccess,
   rewriteScaffoldDependenciesToPackedTarballs,
+  sanitizeCapturedMutationResponse,
+  sanitizeMarkupPreview,
   validatePackedAppsReport,
 } from './packed-app.mjs';
 
@@ -25,6 +27,26 @@ afterEach(() => {
 describe('packed app golden journey', () => {
   it('runs every WCAG 2.2 A/AA axe tag available to the pinned engine', () => {
     expect(AXE_WCAG_22_AA_TAGS).toEqual(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  });
+
+  it('retains streamed response shape without persisting credential-bearing attributes', () => {
+    const captured = sanitizeCapturedMutationResponse({
+      chunks: ['<input value="csrf-secret"', ' data-live="attestation-secret">created</input>'],
+      complete: true,
+      error: null,
+      headers: { 'content-type': 'text/vnd.kovo.fragment+html' },
+      status: 200,
+      url: 'http://127.0.0.1/_m/mutations/add-contact',
+    });
+
+    expect(captured.chunks).toEqual([
+      { bytes: 26, index: 0 },
+      { bytes: 47, index: 1 },
+    ]);
+    expect(captured.bodyPreview).toContain('created');
+    expect(captured.bodyPreview).not.toContain('csrf-secret');
+    expect(captured.bodyPreview).not.toContain('attestation-secret');
+    expect(sanitizeMarkupPreview(`token=${'a'.repeat(64)}`, 1_024)).not.toContain('a'.repeat(64));
   });
 
   it('rewrites every direct and transitive Kovo edge to authenticated tarball files', () => {

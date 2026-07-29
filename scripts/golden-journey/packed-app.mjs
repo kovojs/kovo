@@ -665,9 +665,26 @@ async function runBrowserJourney({
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const browserEvents = [];
+    const recordBrowserEvent = (kind, detail) => {
+      if (browserEvents.length >= 128) return;
+      browserEvents.push({
+        kind,
+        detail: boundedText(String(detail), 1_024),
+      });
+    };
+    page.on('console', (message) => recordBrowserEvent('console', message.text()));
+    page.on('pageerror', (error) => recordBrowserEvent('pageerror', error.message));
+    page.on('requestfailed', (request) =>
+      recordBrowserEvent(
+        'requestfailed',
+        `${request.method()} ${request.url()} ${request.failure()?.errorText ?? '<unknown>'}`,
+      ),
+    );
     // Install through the browser's new-document hook before Kovo's Trusted Types policy exists.
     // A DOM <script>.text assignment is correctly rejected by the starter's CSP.
     await page.addInitScript({ content: axeSource });
+    await page.addInitScript(captureMutationFetchResponses);
     await page.goto(`${origin}/login`, { waitUntil: 'networkidle', timeout: READY_TIMEOUT_MS });
     const initialA11y = await axePage(page);
 
@@ -701,11 +718,19 @@ async function runBrowserJourney({
       ),
       page.getByRole('button', { name: /add contact/iu }).click(),
     ]);
-    const responseBody = await settledMutationResponseBody(mutationResponse, 15_000);
+    const streamedResponse = await capturedMutationResponse(page, mutationResponse.url(), 15_000);
     if (!mutationResponse.ok()) {
+      const diagnostics = await mutationFailureDiagnostics({
+        browserEvents,
+        email,
+        origin,
+        page,
+        response: mutationResponse,
+        streamedResponse,
+      });
       throw new JourneyPhaseError(
         'crud',
-        `add-contact mutation failed: status=${String(mutationResponse.status())} body=${boundedText(responseBody, 2_048)}`,
+        `add-contact mutation failed\n${JSON.stringify(diagnostics)}`,
         {
           durationMs: performance.now() - crudStarted,
           name: 'crud',
@@ -716,15 +741,22 @@ async function runBrowserJourney({
     try {
       await page.getByText(email, { exact: true }).waitFor({
         state: 'visible',
-        timeout: READY_TIMEOUT_MS,
+        timeout: 15_000,
       });
     } catch (error) {
+      const diagnostics = await mutationFailureDiagnostics({
+        browserEvents,
+        email,
+        origin,
+        page,
+        response: mutationResponse,
+        streamedResponse,
+      });
       throw new JourneyPhaseError(
         'crud',
         [
           `add-contact returned ${String(mutationResponse.status())} but did not render the created contact`,
-          `content-type=${mutationResponse.headers()['content-type'] ?? '<missing>'}`,
-          `body=${boundedText(responseBody, 4_096)}`,
+          JSON.stringify(diagnostics),
           error instanceof Error ? error.message : String(error),
         ].join('\n'),
         {
@@ -793,27 +825,193 @@ async function runBrowserJourney({
   }
 }
 
-async function settledMutationResponseBody(response, timeoutMs) {
-  const outcome = await Promise.race([
-    response.text().then(
-      (body) => ({ body, error: null, settled: true }),
-      (error) => ({
-        body: '',
+function captureMutationFetchResponses() {
+  const records = [];
+  Object.defineProperty(globalThis, '__kovoGoldenMutationResponses', {
+    configurable: false,
+    enumerable: false,
+    value: records,
+    writable: false,
+  });
+  const originalFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    let pathname = '';
+    try {
+      pathname = new URL(response.url).pathname;
+    } catch {
+      // A malformed URL cannot be the framework mutation endpoint under test.
+    }
+    if (pathname !== '/_m/mutations/add-contact') return response;
+    const record = {
+      chunks: [],
+      complete: false,
+      error: null,
+      headers: Object.fromEntries(response.headers.entries()),
+      status: response.status,
+      url: response.url,
+    };
+    records.push(record);
+    void (async () => {
+      try {
+        const reader = response.clone().body?.getReader();
+        if (!reader) {
+          record.complete = true;
+          return;
+        }
+        const decoder = new TextDecoder();
+        let bytes = 0;
+        for (;;) {
+          const next = await reader.read();
+          if (next.done) break;
+          bytes += next.value.byteLength;
+          if (record.chunks.length < 128 && bytes <= 64 * 1024) {
+            record.chunks.push(decoder.decode(next.value, { stream: true }).slice(0, 8 * 1024));
+          }
+        }
+        const tail = decoder.decode();
+        if (tail && record.chunks.length < 128 && bytes <= 64 * 1024) {
+          record.chunks.push(tail.slice(0, 8 * 1024));
+        }
+        record.complete = true;
+      } catch (error) {
+        record.error = error instanceof Error ? error.message.slice(0, 1_024) : String(error);
+      }
+    })();
+    return response;
+  };
+}
+
+async function capturedMutationResponse(page, responseUrl, timeoutMs) {
+  const deadline = performance.now() + timeoutMs;
+  let latest = null;
+  while (performance.now() < deadline) {
+    try {
+      latest = await page.evaluate((url) => {
+        const records = globalThis.__kovoGoldenMutationResponses;
+        if (!Array.isArray(records)) return null;
+        return structuredClone([...records].reverse().find((record) => record.url === url) ?? null);
+      }, responseUrl);
+    } catch (error) {
+      return {
+        chunks: [],
+        complete: false,
         error: error instanceof Error ? error.message : String(error),
-        settled: true,
-      }),
-    ),
-    delay(timeoutMs).then(() => ({ body: '', error: null, settled: false })),
-  ]);
-  if (!outcome.settled) {
-    throw new JourneyPhaseError(
-      'crud',
-      `add-contact response body did not settle within ${String(timeoutMs)}ms`,
-      { durationMs: timeoutMs, name: 'crud', status: null },
-    );
+        headers: {},
+        status: null,
+        url: responseUrl,
+      };
+    }
+    if (latest?.complete || latest?.error) return sanitizeCapturedMutationResponse(latest);
+    await delay(50);
   }
-  if (outcome.error !== null) return `<unavailable: ${boundedText(outcome.error, 512)}>`;
-  return boundedText(outcome.body, 16 * 1024);
+  return sanitizeCapturedMutationResponse(
+    latest ?? {
+      chunks: [],
+      complete: false,
+      error: 'fetch-clone capture was unavailable',
+      headers: {},
+      status: null,
+      url: responseUrl,
+    },
+  );
+}
+
+async function mutationFailureDiagnostics({
+  browserEvents,
+  email,
+  origin,
+  page,
+  response,
+  streamedResponse,
+}) {
+  const beforeReload = await browserPageSnapshot(page, email);
+  let independentGet;
+  try {
+    const result = await page.context().request.get(`${origin}/`, { timeout: 15_000 });
+    const body = sanitizeMarkupPreview(await result.text(), 8 * 1024);
+    independentGet = {
+      body,
+      containsEmail: body.includes(email),
+      headers: result.headers(),
+      status: result.status(),
+    };
+  } catch (error) {
+    independentGet = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  let afterReload;
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15_000 });
+    afterReload = await browserPageSnapshot(page, email);
+  } catch (error) {
+    afterReload = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return {
+    schema: 'kovo.golden-journey/crud-diagnostic/v1',
+    response: {
+      headers: response.headers(),
+      status: response.status(),
+      streamed: streamedResponse,
+      url: response.url(),
+    },
+    beforeReload,
+    independentGet,
+    afterReload,
+    browserEvents,
+  };
+}
+
+async function browserPageSnapshot(page, email) {
+  try {
+    return await page.evaluate((expectedEmail) => {
+      const clone = document.documentElement.cloneNode(true);
+      for (const element of clone.querySelectorAll('*')) {
+        for (const attribute of element.attributes) {
+          if (
+            ['class', 'id', 'name', 'role', 'type'].includes(attribute.name) ||
+            attribute.name.startsWith('aria-')
+          ) {
+            continue;
+          }
+          element.setAttribute(attribute.name, '[REDACTED]');
+        }
+      }
+      const html = clone.outerHTML;
+      return {
+        containsEmail: document.body?.textContent?.includes(expectedEmail) ?? false,
+        outerHTML: html.length > 8 * 1024 ? `${html.slice(0, 8 * 1024)}\n[TRUNCATED]` : html,
+        title: document.title.slice(0, 512),
+        url: location.href,
+      };
+    }, email);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export function sanitizeCapturedMutationResponse(response) {
+  const chunks = Array.isArray(response?.chunks) ? response.chunks.map(String) : [];
+  return {
+    ...response,
+    bodyPreview: sanitizeMarkupPreview(chunks.join(''), 16 * 1024),
+    chunks: chunks.map((chunk, index) => ({
+      bytes: Buffer.byteLength(chunk),
+      index,
+    })),
+  };
+}
+
+export function sanitizeMarkupPreview(value, maxBytes) {
+  const redacted = String(value)
+    .replace(/(\s+[A-Za-z_:][-A-Za-z0-9_:.]*\s*=\s*)(["'])[\s\S]*?\2/gu, '$1$2[REDACTED]$2')
+    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, '[REDACTED:TOKEN]');
+  return boundedText(redacted, maxBytes);
 }
 
 async function axePage(page) {
