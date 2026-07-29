@@ -99,6 +99,7 @@ export interface CssAssetManifestOptions {
  * and may identify their CSS by source file, href, or fragment target facts.
  */
 export interface CssSplitOptions {
+  /** Additional source files forced into the base chunk; shared route assets remain automatic. */
   baseSourceFileNames?: readonly string[];
   routes?: readonly CssRouteSplitTarget[];
 }
@@ -895,10 +896,19 @@ function computeCssSplitChunks(
     }
   }
 
-  const sharedAssets =
-    split.baseSourceFileNames === undefined
-      ? sharedRouteCssAssets(routeSelections)
-      : selectCssAssets(manifest as CssAssetManifest, split.baseSourceFileNames);
+  const sharedAssets: ComponentCssAsset[] = [];
+  if (split.baseSourceFileNames !== undefined) {
+    appendCssAssets(
+      sharedAssets,
+      selectCssAssets(manifest as CssAssetManifest, split.baseSourceFileNames),
+      'Compiler CSS explicit base assets',
+    );
+  }
+  appendCssAssets(
+    sharedAssets,
+    sharedRouteCssAssets(routeSelections),
+    'Compiler CSS shared base assets',
+  );
   const selectedRouteNames = compilerCreateSet<string>();
   let hasSelectedRouteAssets = false;
   compilerMapForEach(routeSelections, (assets) => {
@@ -913,8 +923,8 @@ function computeCssSplitChunks(
       hasSelectedRouteAssets = true;
     }
   });
-  const explicitBaseNames = compilerCreateSet<string>();
-  addCssAssetFileNames(explicitBaseNames, sharedAssets, 'Compiler CSS explicit base assets');
+  const selectedBaseNames = compilerCreateSet<string>();
+  addCssAssetFileNames(selectedBaseNames, sharedAssets, 'Compiler CSS selected base assets');
   const unownedAssets: ComponentCssAsset[] = [];
   if (hasSelectedRouteAssets) {
     const stylesheetCount = compilerArrayLength(
@@ -929,7 +939,7 @@ function computeCssSplitChunks(
       ) as ComponentCssAsset;
       if (
         !compilerSetHas(selectedRouteNames, asset.sourceFileName) &&
-        !compilerSetHas(explicitBaseNames, asset.sourceFileName)
+        !compilerSetHas(selectedBaseNames, asset.sourceFileName)
       ) {
         compilerArrayAppend(unownedAssets, asset, 'Compiler CSS unowned assets');
       }

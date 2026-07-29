@@ -621,6 +621,49 @@ export const Recommendations = component({
     });
   });
 
+  it('adds explicit base sources without disabling shared-route promotion', () => {
+    const shellCss = '.shell{min-height:100vh}';
+    const sharedCss = '.shared-card{display:grid}';
+    const homeCss = '.home-panel{color:teal}';
+    const loginCss = '.login-panel{color:purple}';
+    const routes = [
+      {
+        route: '/',
+        sourceFileNames: ['components/shared.css', 'routes/home.css'],
+      },
+      {
+        route: '/login',
+        sourceFileNames: ['components/shared.css', 'routes/login.css'],
+      },
+    ];
+    const manifest = collectCssAssetManifest(
+      {
+        cssAssets: [
+          cssAccountingAsset('app-shell.css', 'app-shell', shellCss),
+          cssAccountingAsset('components/shared.css', 'shared-card', sharedCss),
+          cssAccountingAsset('routes/home.css', 'home-panel', homeCss),
+          cssAccountingAsset('routes/login.css', 'login-panel', loginCss),
+        ],
+      },
+      {
+        split: {
+          baseSourceFileNames: ['app-shell.css'],
+          routes,
+        },
+      },
+    );
+
+    const baseCss = manifest.chunks?.base[0]?.criticalCss;
+    const homeRouteCss = manifest.chunks?.routes['/']?.[0]?.criticalCss;
+    const loginRouteCss = manifest.chunks?.routes['/login']?.[0]?.criticalCss;
+    expect(baseCss).toContain(shellCss);
+    expect(baseCss).toContain(sharedCss);
+    expect(baseCss).not.toContain(homeCss);
+    expect(baseCss).not.toContain(loginCss);
+    expect(homeRouteCss).toBe(homeCss);
+    expect(loginRouteCss).toBe(loginCss);
+  });
+
   it('does not alias distinct CSS chunks that collide under a 32-bit SHA-256 prefix', () => {
     // Fixed collision for the former eight-hex-character immutable asset identity (SPEC §5.2).
     const first = '.safe{color:teal}/*13ke8a61cbyy0kx7il87*/';
