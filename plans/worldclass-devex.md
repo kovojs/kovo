@@ -431,7 +431,7 @@ Sequenced so CLI work is written once: the command schema skeleton lands before 
 render through it. Seeds child ledger `devex-first-loop.md` at adoption (one-proof-one-box
 granularity).
 
-- [ ] (M) Land the semantic command AST + argv schema skeleton and the `kovo-diagnostic/v1`
+- [x] (M) Land the semantic command AST + argv schema skeleton and the `kovo-diagnostic/v1`
       record first, generating argv parsing, multiline help, shell completion, and command
       reference as adapters (G6); all subsequent Track 1 CLI and diagnostic output renders
       through them. The schema carries aliases, argument kind, enum,
@@ -439,10 +439,10 @@ granularity).
       programmatic API consumes the semantic discriminated union, not argv-shaped flag interfaces.
   - Group the 14 current capabilities into daily/build, inspect/security, and agent/operator
     sections without removing advanced commands.
-  - Partial evidence: the schema, generated argv/request union, help, completion, and command
-    reference pass the 67-test CLI semantic suite. `kovo-diagnostic/v1` now authenticates compiler
-    facts and parser-owned KV436 ranges through a private source catalog, including MCP; the parent
-    remains open until the other diagnostic producers project equally authoritative records.
+  - Evidence: the 67-test semantic suite proves one schema derives the exhaustive request union,
+    parsing, help, completion, and command reference; the diagnostic/command/doctor/verifier suite
+    proves each producer projects the authenticated `kovo-diagnostic/v1` record without re-deriving
+    severity, help, or source ranges.
 - [x] (S) Make `kovo`, `kovo --help`, `kovo help`, `kovo <command> --help`, and `kovo --version`
       write to stdout and exit 0; usage/config mistakes exit 2 and proof/build findings exit 1
       (G5).
@@ -487,17 +487,20 @@ granularity).
   - Evidence: source-set/config/compiler/build-token stamps, explicit artifact grammar, unique
     staging/promotion tests, and retired packed KF-DEVEX-005 prove source-backed truth,
     byte-identical last-good output after failure, and no failed graph promotion.
-- [ ] (S) Standardize `--format human|json|github` across check/build/explain/doctor/verify,
+- [x] (S) Standardize `--format human|json|github` across check/build/explain/doctor/verify,
       backed by `kovo-diagnostic/v1`; formatters may not re-derive severity, help, or source
       ranges. Preserve `kovo-explain/v1` and `kovo-check/v1` facts byte-for-byte or via an
       explicit versioned protocol migration, and update `rules/v1-acceptance.md` 16.3 in the same
       checkpoint.
-  - Partial evidence: check/build/explain accept the shared format enum; the exact KV436 packed
-    build and MCP fixtures prove prelude-free JSON plus authored range identity. Doctor/verify and
-    the non-KV436 producer census remain open.
-- [ ] (S) Normalize `kovo explain` on a subcommand/discriminant grammar such as
+  - Evidence: the diagnostic/command/doctor/standalone-verifier suite proves the shared enum,
+    prelude-free JSON, hostile GitHub escaping, authenticated envelopes, preserved versioned
+    command protocols, and field-level adapter parity for every producer.
+- [x] (S) Normalize `kovo explain` on a subcommand/discriminant grammar such as
       `kovo explain access` and `{ view: 'access', ... }`; replace flag-shaped interface families
       with one exhaustive union.
+  - Evidence: `packages/cli/src/explain-command-contract.test.ts` plus command-manifest and MCP
+    tests prove one AST-derived view set, reject flag-shaped selectors, and preserve
+    `kovo-explain/v1`.
 - [x] (L) Move lifecycle-policy enforcement, sound-subset analysis, endpoint-posture orchestration,
       and safe parallel scheduling out of the three copied starter scripts (1,413 lines) and into
       versioned Kovo commands built on the command AST; the generated app keeps compact
@@ -544,14 +547,19 @@ granularity).
     visibly in dev/check/build for every owner-annotated SQLite table.
   - Refusing SQLite without its explicit experimental flag must create no directory and exit
     non-zero with the limitation and correct invocation.
+  - Evidence: the 46-test creator contract suite proves installed, skipped-install, and
+    partial-install instructions. SQLite pre-write refusal and accepted experimental posture remain
+    tracked by the child ledger until their packed journey closes.
 - [ ] (S) Make the packed starter render a styled, WCAG-checked UI via the public
       component/style API — the implementation owner of G10; Track 2's journey runner owns the
       screenshot + a11y capture.
-- [ ] (M) Diagnostic empathy suite (G9): the first-run classes (missing/invalid origin, missing
+- [x] (M) Diagnostic empathy suite (G9): the first-run classes (missing/invalid origin, missing
       secret, missing DB, retention not configured, port collision, install refusal, migration not
       provisioned) plus the top-20 authoring diagnostics (access, CSRF, trusted output, Drizzle
       refs, optimism misuse) each produce one safe cause, one source/config anchor, and an
       executable next step.
+  - Evidence: the 61-test diagnostic-empathy/explain acceptance slice proves the exact seven
+    first-run and top-20 authoring matrices through shared human, JSON, and GitHub projections.
 - [ ] (M) One blessed deploy-to-URL journey (G11): create→build→deploy→200 on one named Node host
       with artifact retention solved by the preset; the scaffold's deployment-target prompt emits
       the matching config so the prompt pays off.
