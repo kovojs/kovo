@@ -986,7 +986,7 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
                 fileName: 'user.queries.ts',
                 source: [
                   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-                  'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
+                  'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core/security";',
                   '',
                   'export const users = pgTable("users", {',
                   '  id: text("id").primaryKey(),',
@@ -996,10 +996,8 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
                   'export const userDetail = query("user", {',
                   '  load(_input, db: PgAsyncDatabase<any, any>) {',
                   '    return db.select({',
-                  '      publicId: trustedReveal(users.id, DeclassifyPolicy.create({',
-                  '        door: "trustedReveal",',
+                  '      publicId: trustedReveal(users.id, DeclassifyPolicy.forTrustedReveal({',
                   '        ownerScope: "application",',
-                  '        purpose: "public-projection",',
                   '      })),',
                   '    }).from(users);',
                   '  },',
@@ -1009,9 +1007,9 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
               {
                 fileName: 'payment.ts',
                 source: [
-                  'import { DeclassifyPolicy as Policy, revealSecret as reveal, type SecretValue } from "@kovojs/core";',
+                  'import { DeclassifyPolicy as Policy, revealSecret as reveal, type SecretValue } from "@kovojs/core/security";',
                   'export function createPaymentClient(key: SecretValue<string>) {',
-                  '  const raw = reveal(key, Policy.create({ door: "revealSecret", ownerScope: "application", purpose: "credential-use" }));',
+                  '  const raw = reveal(key, Policy.forRevealSecret({ ownerScope: "application", purpose: "credential-use" }));',
                   '  return new PaymentClient(raw);',
                   '}',
                 ].join('\n'),
@@ -1077,8 +1075,8 @@ export const constructed = mutation({ handler() { return new RawResponse('raw');
             {
               fileName: 'payment.ts',
               source: [
-                'import { DeclassifyPolicy, trustedReveal as reveal } from "@kovojs/core";',
-                'const policy = DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" });',
+                'import { DeclassifyPolicy, trustedReveal as reveal } from "@kovojs/core/security";',
+                'const policy = DeclassifyPolicy.forTrustedReveal({ ownerScope: "application" });',
                 'reveal(app.env.PAYMENT_API_KEY, policy);',
               ].join('\n'),
             },

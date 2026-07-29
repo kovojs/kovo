@@ -34408,7 +34408,7 @@ function requestCallIsExactTrustedOutput(call: Node): boolean {
 function requestCallIsExactSecretOutput(call: Node): boolean {
   if (!Node.isCallExpression(call) || call.getArguments().length !== 1) return false;
   return !!(
-    requestExactPristineDirectImport(call.getExpression(), '@kovojs/core', 'secret') ||
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/core/security', 'secret') ||
     requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'secret')
   );
 }
@@ -34423,7 +34423,7 @@ function requestCallIsExactTrustedReveal(call: Node): boolean {
     !Node.isIdentifier(callee) ||
     callee.getText() !== 'trustedReveal' ||
     call.getArguments().length !== 2 ||
-    !requestExactPristineDirectImport(callee, '@kovojs/core', 'trustedReveal')
+    !requestExactPristineDirectImport(callee, '@kovojs/core/security', 'trustedReveal')
   ) {
     return false;
   }
@@ -34456,22 +34456,29 @@ function requestExactDeclassifyPolicy(
   const call = unwrapStaticExpression(expression);
   if (!Node.isCallExpression(call) || call.getArguments().length !== 1) return undefined;
   const callee = unwrapStaticExpression(call.getExpression());
+  const expectedConstructor =
+    expectedDoor === 'trustedReveal' ? 'forTrustedReveal' : 'forRevealSecret';
   if (
     !Node.isPropertyAccessExpression(callee) ||
-    staticMemberName(callee.getNameNode()) !== 'create'
+    staticMemberName(callee.getNameNode()) !== expectedConstructor
   ) {
     return undefined;
   }
   const receiver = unwrapStaticExpression(callee.getExpression());
   const exactIdentity = requireExactPristineName
-    ? requestExactPristineDirectImport(receiver, '@kovojs/core', 'DeclassifyPolicy') !== undefined
-    : requestExpressionIsDirectImportedExport(receiver, '@kovojs/core', 'DeclassifyPolicy');
+    ? requestExactPristineDirectImport(receiver, '@kovojs/core/security', 'DeclassifyPolicy') !==
+      undefined
+    : requestExpressionIsDirectImportedExport(
+        receiver,
+        '@kovojs/core/security',
+        'DeclassifyPolicy',
+      );
   if (!exactIdentity) return undefined;
 
   const options = unwrapStaticExpression(call.getArguments()[0]!);
   if (!Node.isObjectLiteralExpression(options)) return undefined;
   const properties = options.getProperties();
-  if (properties.length !== 3) return undefined;
+  if (properties.length !== (expectedDoor === 'trustedReveal' ? 1 : 2)) return undefined;
   const fields = new Map<string, string>();
   for (const property of properties) {
     if (
@@ -34485,7 +34492,9 @@ function requestExactDeclassifyPolicy(
     if (
       !name ||
       !value ||
-      !['door', 'ownerScope', 'purpose'].includes(name) ||
+      !(expectedDoor === 'trustedReveal' ? ['ownerScope'] : ['ownerScope', 'purpose']).includes(
+        name,
+      ) ||
       fields.has(name) ||
       !isStringLiteralLike(value)
     ) {
@@ -34493,14 +34502,13 @@ function requestExactDeclassifyPolicy(
     }
     fields.set(name, value.getLiteralText());
   }
-  const door = fields.get('door');
-  const purpose = fields.get('purpose');
+  const door = expectedDoor;
+  const purpose = expectedDoor === 'trustedReveal' ? 'public-projection' : fields.get('purpose');
   const ownerScope = fields.get('ownerScope');
   if (
-    door !== expectedDoor ||
-    (expectedDoor === 'trustedReveal'
-      ? purpose !== 'public-projection'
-      : purpose !== 'credential-use' && purpose !== 'server-computation') ||
+    (expectedDoor === 'revealSecret' &&
+      purpose !== 'credential-use' &&
+      purpose !== 'server-computation') ||
     (ownerScope !== 'application' &&
       ownerScope !== 'current-principal' &&
       ownerScope !== 'current-tenant' &&
@@ -40820,10 +40828,10 @@ function runtimeRevealCallDoor(
   call: import('ts-morph').CallExpression,
 ): RequestExactDeclassifyDoor | undefined {
   const callee = unwrapStaticExpression(call.getExpression());
-  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'revealSecret')) {
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core/security', 'revealSecret')) {
     return 'revealSecret';
   }
-  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core', 'trustedReveal')) {
+  if (requestExpressionIsDirectImportedExport(callee, '@kovojs/core/security', 'trustedReveal')) {
     return 'trustedReveal';
   }
   return undefined;
@@ -40840,7 +40848,7 @@ function runtimeRevealAuditDiagnostic(
     'KV426',
     { site: siteFor(file, call) },
     {
-      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.create tuple for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain --revealed (SPEC §6.6).`,
+      detail: `${door}(...) must use exactly two arguments and an inline validated DeclassifyPolicy.${door === 'trustedReveal' ? 'forTrustedReveal' : 'forRevealSecret'}({ ownerScope${door === 'trustedReveal' ? '' : ', purpose'} }) policy for the ${door}/${purposes} door; dynamic policy cannot be recorded by kovo explain --revealed (SPEC §6.6).`,
     },
   );
 }

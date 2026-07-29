@@ -2250,7 +2250,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core/security";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2260,10 +2260,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.create({',
-            '        door: "trustedReveal",',
+            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.forTrustedReveal({',
             '        ownerScope: "application",',
-            '        purpose: "public-projection",',
             '      })),',
             '    }).from(users);',
             '  },',
@@ -2315,7 +2313,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import * as core from "@kovojs/core";',
+            'import * as core from "@kovojs/core/security";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2325,9 +2323,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userStats = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      publicId: core.trustedReveal(users.id, core.DeclassifyPolicy.create({',
-            '        purpose: "public-projection",',
-            '        door: "trustedReveal",',
+            '      publicId: core.trustedReveal(users.id, core.DeclassifyPolicy.forTrustedReveal({',
             '        ownerScope: "application",',
             '      })),',
             '    }).from(users);',
@@ -2373,12 +2369,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'core-barrel.ts',
           source:
-            'export { DeclassifyPolicy as BarrelPolicy, trustedReveal as barrelReveal } from "@kovojs/core";',
+            'export { DeclassifyPolicy as BarrelPolicy, trustedReveal as barrelReveal } from "@kovojs/core/security";',
         },
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { DeclassifyPolicy as Policy, trustedReveal as reveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy as Policy, trustedReveal as reveal } from "@kovojs/core/security";',
             'import { BarrelPolicy, barrelReveal } from "./core-barrel";',
             '',
             'const localReveal = reveal;',
@@ -2391,9 +2387,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      aliasDigest: reveal(users.passwordHash, Policy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
-            '      localDigest: localReveal(users.passwordHash, LocalPolicy.create({ door: "trustedReveal", ownerScope: "current-principal", purpose: "public-projection" })),',
-            '      barrelDigest: barrelReveal(users.passwordHash, BarrelPolicy.create({ door: "trustedReveal", ownerScope: "current-tenant", purpose: "public-projection" })),',
+            '      aliasDigest: reveal(users.passwordHash, Policy.forTrustedReveal({ ownerScope: "application" })),',
+            '      localDigest: localReveal(users.passwordHash, LocalPolicy.forTrustedReveal({ ownerScope: "current-principal" })),',
+            '      barrelDigest: barrelReveal(users.passwordHash, BarrelPolicy.forTrustedReveal({ ownerScope: "current-tenant" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2424,7 +2420,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core/security";',
             '',
             'function trustedReveal<T>(value: T): T { return value; }',
             'export const users = pgTable("users", {',
@@ -2436,7 +2432,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      fakePublic: trustedReveal(users.id),',
-            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
+            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.forTrustedReveal({ ownerScope: "application" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2476,7 +2472,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import * as core from "@kovojs/core";',
+            'import * as core from "@kovojs/core/security";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2486,10 +2482,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userStats = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, core.DeclassifyPolicy.create({',
-            '        door: "trustedReveal",',
+            '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, core.DeclassifyPolicy.forTrustedReveal({',
             '        ownerScope: "application",',
-            '        purpose: "public-projection",',
             '      })),',
             '    }).from(users);',
             '  },',
@@ -2577,7 +2571,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal as realReveal } from "@kovojs/core/security";',
             '',
             'function reveal<T>(value: T): T { return value; }',
             '',
@@ -2590,7 +2584,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      fakeDigest: reveal(users.passwordHash),',
-            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
+            '      realDigest: realReveal(users.passwordHash, DeclassifyPolicy.forTrustedReveal({ ownerScope: "application" })),',
             '    }).from(users);',
             '  },',
             '});',
@@ -2632,7 +2626,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import type { Secret } from "@kovojs/core";',
+            'import type { Secret } from "@kovojs/core/security";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2681,7 +2675,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'user.queries.ts',
           source: [
-            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal } from "@kovojs/core/security";',
             '',
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
@@ -2691,7 +2685,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const userDetail = query("user", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
-            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "server-computation" })),',
+            '      passwordDigest: trustedReveal(users.passwordHash, DeclassifyPolicy.forRevealSecret({ ownerScope: "application", purpose: "server-computation" })),',
             '    }).from(users);',
             '  },',
             '});',

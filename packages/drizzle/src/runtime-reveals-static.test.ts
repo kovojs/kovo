@@ -14,10 +14,9 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
           {
             fileName: 'payment.ts',
             source: [
-              `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';`,
+              `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core/security';`,
               `export function createPaymentClient(key: SecretValue<string>) {`,
-              `  const raw = revealSecret(key, DeclassifyPolicy.create({`,
-              `    door: 'revealSecret',`,
+              `  const raw = revealSecret(key, DeclassifyPolicy.forRevealSecret({`,
               `    ownerScope: 'application',`,
               `    purpose: 'credential-use',`,
               `  }));`,
@@ -41,18 +40,16 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
     ]);
   });
 
-  it('records a direct import alias regardless of literal option-property order', () => {
+  it('records direct import aliases with an exact door-specific policy', () => {
     expect(
       collectRuntimeRevealFactsFromProject({
         files: [
           {
             fileName: 'alias.ts',
             source: [
-              `import { DeclassifyPolicy as Policy, trustedReveal as reveal } from '@kovojs/core';`,
-              `reveal(secretValue, Policy.create({`,
-              `  purpose: 'public-projection',`,
+              `import { DeclassifyPolicy as Policy, trustedReveal as reveal } from '@kovojs/core/security';`,
+              `reveal(secretValue, Policy.forTrustedReveal({`,
               `  ownerScope: 'current-tenant',`,
-              `  door: 'trustedReveal',`,
               `}));`,
             ].join('\n'),
           },
@@ -86,7 +83,7 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
       {
         fileName: 'dynamic.ts',
         source: [
-          `import { trustedReveal as reveal } from '@kovojs/core';`,
+          `import { trustedReveal as reveal } from '@kovojs/core/security';`,
           `reveal(secretValue, options);`,
         ].join('\n'),
       },
@@ -109,7 +106,7 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
         {
           fileName: 'dynamic-namespace.ts',
           source: [
-            `import * as core from '@kovojs/core';`,
+            `import * as core from '@kovojs/core/security';`,
             `core.trustedReveal(secretValue, options);`,
           ].join('\n'),
         },
@@ -128,11 +125,9 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
         {
           fileName: 'wrong-door.ts',
           source: [
-            `import { DeclassifyPolicy, revealSecret } from '@kovojs/core';`,
-            `revealSecret(secretValue, DeclassifyPolicy.create({`,
-            `  door: 'trustedReveal',`,
+            `import { DeclassifyPolicy, revealSecret } from '@kovojs/core/security';`,
+            `revealSecret(secretValue, DeclassifyPolicy.forTrustedReveal({`,
             `  ownerScope: 'application',`,
-            `  purpose: 'public-projection',`,
             `}));`,
           ].join('\n'),
         },
@@ -152,9 +147,8 @@ describe('runtime declassification fact collector (SPEC §6.6, audit-only)', () 
       {
         fileName: 'payment.ts',
         source: [
-          `import { DeclassifyPolicy, revealSecret } from '@kovojs/core';`,
-          `revealSecret(app.env.PAYMENT_API_KEY, DeclassifyPolicy.create({`,
-          `  door: 'revealSecret',`,
+          `import { DeclassifyPolicy, revealSecret } from '@kovojs/core/security';`,
+          `revealSecret(app.env.PAYMENT_API_KEY, DeclassifyPolicy.forRevealSecret({`,
           `  ownerScope: 'application',`,
           `  purpose: 'credential-use',`,
           `}));`,

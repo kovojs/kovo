@@ -1310,9 +1310,9 @@ export const save = mutation('cart/save', {
         {
           fileName: 'payment.ts',
           source: [
-            `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core';`,
+            `import { DeclassifyPolicy, revealSecret, type SecretValue } from '@kovojs/core/security';`,
             `export function createPaymentClient(key: SecretValue<string>) {`,
-            `  const raw = revealSecret(key, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));`,
+            `  const raw = revealSecret(key, DeclassifyPolicy.forRevealSecret({ ownerScope: 'application', purpose: 'credential-use' }));`,
             `  return new PaymentClient(raw);`,
             `}`,
           ].join('\n'),

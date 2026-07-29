@@ -2975,7 +2975,9 @@ function exactTrustedRevealPolicy(
   const call = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(call) || call.arguments.length !== 1) return undefined;
   const callee = unwrappedTsExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'create') return undefined;
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'forTrustedReveal') {
+    return undefined;
+  }
   if (
     !expressionResolvesToFrameworkExport(
       ts as FrameworkIdentityTypeScript,
@@ -2987,7 +2989,7 @@ function exactTrustedRevealPolicy(
     return undefined;
   }
   const options = unwrappedTsExpression(call.arguments[0]!);
-  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 3) return undefined;
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) return undefined;
   const fields = new Map<string, string>();
   for (const property of options.properties) {
     if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
@@ -2995,22 +2997,15 @@ function exactTrustedRevealPolicy(
     }
     const name = projectionPropertyName(property.name);
     const value = unwrappedTsExpression(property.initializer);
-    if (
-      !name ||
-      !['door', 'ownerScope', 'purpose'].includes(name) ||
-      fields.has(name) ||
-      !ts.isStringLiteralLike(value)
-    ) {
+    if (!name || name !== 'ownerScope' || fields.has(name) || !ts.isStringLiteralLike(value)) {
       return undefined;
     }
     fields.set(name, value.text);
   }
-  const door = fields.get('door');
+  const door = 'trustedReveal';
   const ownerScope = fields.get('ownerScope');
-  const purpose = fields.get('purpose');
+  const purpose = 'public-projection';
   if (
-    door !== 'trustedReveal' ||
-    purpose !== 'public-projection' ||
     !ownerScope ||
     !['application', 'current-principal', 'current-tenant', 'framework'].includes(ownerScope)
   ) {
