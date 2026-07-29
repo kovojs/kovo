@@ -388,7 +388,7 @@ export const users = pgTable(
 Project only the fields the UI needs:
 
 ```ts
-import { domain, guards, query, s } from '@kovojs/server';
+import { domain, guards, query } from '@kovojs/server';
 
 interface SupportRequest {
   session?: { user?: { roles: readonly string[] } | null } | null;
@@ -396,16 +396,11 @@ interface SupportRequest {
 
 const user = domain('user');
 declare const users: any;
-declare const eq: any;
 
-export const supportUser = query({
+export const supportUsers = query({
   guard: guards.role<SupportRequest>('support'),
-  args: s.object({ userId: s.string() }),
-  load: (args, context: { db?: any }) =>
-    context?.db
-      ?.select({ id: users.id, email: users.email })
-      .from(users)
-      .where(eq(users.id, args.userId)) ?? [],
+  load: (_input, context: { db?: any }) =>
+    context?.db?.select({ id: users.id, email: users.email }).from(users) ?? [],
   reads: [user],
 });
 ```

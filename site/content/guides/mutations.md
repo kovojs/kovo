@@ -193,7 +193,7 @@ Optimism is keyed to queries:
 ```ts
 import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
 
-declare const cartCsrf: Readonly<CsrfOptions>;
+declare const cartCsrf: Readonly<CsrfOptions<unknown>>;
 declare const addToCartHandler: (input: {
   productId: string;
   quantity: number;
