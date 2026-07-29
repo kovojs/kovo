@@ -11,9 +11,10 @@ pnpm add @kovojs/server
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
+import { defineKovo, tag } from '@kovojs/server';
 
 const app = defineKovo({});
+export const cartItem = tag();
 
 const home = app.route('/', {
   access: app.publicAccess('public homepage'),
@@ -24,7 +25,9 @@ export default app.assemble({ routes: [home] });
 ```
 
 The root is the daily declaration surface: app assembly, routes, layouts, guards, schemas, queries,
-mutations, responses, and document primitives. Advanced work has one semantic home:
+mutations, responses, invalidation domains/tags, and document primitives. The compiler derives the
+exported `cartItem` tag's stable identity; pass an explicit name only for shared external
+vocabulary. Advanced work has one semantic home:
 
 | Task                                | Import path                                                                                        |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------- |
