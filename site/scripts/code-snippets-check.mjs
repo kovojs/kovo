@@ -1042,6 +1042,30 @@ export type CsrfOptions<Request = any> = any;
 export type SigningKeyRing = any;
 export type AppResponseHeaderName = 'Cache-Control' | 'Last-Modified' | 'Vary';
 export type AppResponseHeaders = Partial<Record<AppResponseHeaderName, string | string[]>>;
+export interface SnippetSchema<Value> {
+  parse(input: unknown): Value;
+}
+export interface SnippetFileSchema extends SnippetSchema<File> {
+  accept(values: readonly string[]): SnippetFileSchema;
+  maxBytes(value: number): SnippetFileSchema;
+  store(options: unknown): SnippetSchema<unknown>;
+}
+export interface SnippetNumberSchema extends SnippetSchema<number> {
+  default(value: number): SnippetNumberSchema;
+  int(): SnippetNumberSchema;
+  max(value: number): SnippetNumberSchema;
+  min(value: number): SnippetNumberSchema;
+  optional(): SnippetSchema<number | undefined>;
+}
+export interface SnippetStringSchema extends SnippetSchema<string> {
+  default(value: string): SnippetStringSchema;
+  email(): SnippetStringSchema;
+  max(value: number): SnippetStringSchema;
+  min(value: number): SnippetStringSchema;
+  optional(): SnippetSchema<string | undefined>;
+  pattern(source: RegExp | string): SnippetStringSchema;
+  url(): SnippetStringSchema;
+}
 export interface InstallKovoClientOptions {
   importModule?: (url: string) => Promise<Record<string, unknown>>;
   root?: EventTarget & ParentNode;
@@ -1141,7 +1165,19 @@ export const respond: {
   ): any;
 };
 export const route: any;
-export const s: any;
+export const s: {
+  array<Value>(schema: SnippetSchema<Value>): SnippetSchema<Value[]>;
+  boolean(): SnippetSchema<boolean>;
+  file(): SnippetFileSchema;
+  json<Value = unknown>(): SnippetSchema<Value>;
+  number(): SnippetNumberSchema;
+  object<const Shape extends Record<string, SnippetSchema<unknown>>>(
+    shape: Shape,
+  ): SnippetSchema<{ [Key in keyof Shape]: Shape[Key] extends SnippetSchema<infer Value> ? Value : never }>;
+  optional<Value>(schema: SnippetSchema<Value>): SnippetSchema<Value | undefined>;
+  secret<Value>(schema: SnippetSchema<Value>): SnippetSchema<Value>;
+  string(): SnippetStringSchema;
+};
 export const scopedKey: any;
 export const safeRichHtml: any;
 export const serverValue: any;

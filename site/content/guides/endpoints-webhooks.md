@@ -42,7 +42,7 @@ request when the protocol needs it.
 Use `webhook()` for third-party POSTs that write Kovo-owned data:
 
 ```ts
-import { hmacSignature } from '@kovojs/core';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import { domain, s } from '@kovojs/server';
 import { webhook, webhookReplayIdentity } from '@kovojs/server/webhooks';
 

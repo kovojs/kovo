@@ -26,11 +26,7 @@ export const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo((columns) => ({
-    domain: 'team-membership',
-    key: columns.id,
-    owner: columns.userId,
-  })),
+  kovo((columns) => ({ domain: 'team-membership', key: columns.id, owner: columns.userId })),
 );
 ```
 
