@@ -25,6 +25,7 @@ describe('packed documentation sample inventory', () => {
         '```',
         '',
         '<!-- kovo-sample: type-error -->',
+        '',
         '```ts',
         "import { missing } from '@kovojs/core';",
         '```',
@@ -34,6 +35,7 @@ describe('packed documentation sample inventory', () => {
         '```',
         '',
         '<!-- kovo-sample: illustrative reason="Requires an app-owned schema." -->',
+        '',
         '```sql',
         'select * from app_table;',
         '```',
@@ -65,7 +67,14 @@ describe('packed documentation sample inventory', () => {
     },
     {
       message: 'orphan or malformed sample directive',
-      source: ['<!-- kovo-sample: output -->', '', '```text', 'OK', '```'].join('\n'),
+      source: [
+        '<!-- kovo-sample: output -->',
+        '',
+        'This prose breaks ownership.',
+        '```text',
+        'OK',
+        '```',
+      ].join('\n'),
     },
     {
       message: 'sample directive must be the first code line',

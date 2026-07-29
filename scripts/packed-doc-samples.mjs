@@ -79,7 +79,7 @@ export function scanMarkdownSamples(
       if (!/^[A-Za-z0-9_-]+$/u.test(info)) {
         throw sampleError(sourcePath, index + 1, 'code fences require one policy-owned language');
       }
-      const directiveIndex = index - 1;
+      const directiveIndex = previousNonblankIndex(lines, index - 1);
       let directive;
       if (directiveIndex >= 0 && lines[directiveIndex].includes(DIRECTIVE_TOKEN)) {
         directive = parseHtmlDirective(lines[directiveIndex], sourcePath, directiveIndex + 1);
@@ -91,7 +91,7 @@ export function scanMarkdownSamples(
         fenceLength: fence[2].length,
         language: info.toLowerCase(),
         line: index + 1,
-        previous: previousNonblankLine(lines, index - (directive ? 2 : 1)),
+        previous: previousNonblankLine(lines, (directive ? directiveIndex : index) - 1),
       };
       continue;
     }
@@ -243,11 +243,15 @@ function validatorFor(language, classification, policy) {
 }
 
 function previousNonblankLine(lines, start) {
+  const index = previousNonblankIndex(lines, start);
+  return index >= 0 ? lines[index].trim() : '';
+}
+
+function previousNonblankIndex(lines, start) {
   for (let index = start; index >= 0; index -= 1) {
-    const value = lines[index].trim();
-    if (value !== '') return value;
+    if (lines[index].trim() !== '') return index;
   }
-  return '';
+  return -1;
 }
 
 function sampleError(sourcePath, line, message) {
@@ -799,6 +803,7 @@ function parseArgs(argv) {
   let keep = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === '--') continue;
     if (arg === '--keep') keep = true;
     else if (arg === '--packed-manifest') {
       const value = argv[index + 1];
