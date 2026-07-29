@@ -3,6 +3,7 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import { isRenderedHtml, renderedHtmlContent, renderHtmlValue } from './html.js';
 import { isKovoComponentDescriptor } from './component-authority.js';
 import type { MutationFail } from './mutation.js';
@@ -67,9 +68,10 @@ export function renderComponent<
   if (!isKovoComponentDescriptor(component)) {
     throw new TypeError('Kovo refused a component descriptor without framework provenance.');
   }
-  const state = options.state ?? (component.definition.state?.() as State | undefined);
+  const definition = componentDefinitionForFramework(component);
+  const state = options.state ?? (definition.state?.() as State | undefined);
   const slots = options.slots ?? {};
-  const render = component.definition.render as (
+  const render = definition.render as (
     queries: Queries,
     state: State | undefined,
     slots: ComponentRenderSlots,

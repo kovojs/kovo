@@ -6,6 +6,7 @@ import type {
   JsonValue,
 } from '@kovojs/core';
 import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import {
   componentMutationFailureSlots,
   renderComponent,
@@ -139,7 +140,7 @@ export function componentLiveTargetRenderer<
   } = {
     component: componentId,
     ...componentLiveTargetErrorBoundary(
-      explicitErrorBoundary ?? componentDefinitionValue(component, 'errorBoundary'),
+      explicitErrorBoundary ?? componentDefinitionForFramework(component).errorBoundary,
     ),
     mutationKeys: witnessFreeze(mutationKeys),
     queries: witnessFreeze(queryKeys),
@@ -280,12 +281,13 @@ function renderBoundaryFallback(fallback: ComponentRenderResult): string {
 function componentLiveTargetQueryBindings<Request>(
   component: Component<any>,
 ): ComponentLiveTargetQueryBinding<Request>[] {
-  if (!isRecord(component.definition.queries)) return [];
+  const definition = componentDefinitionForFramework(component);
+  if (!isRecord(definition.queries)) return [];
   const bindings: ComponentLiveTargetQueryBinding<Request>[] = [];
-  const names = witnessObjectKeys(component.definition.queries);
+  const names = witnessObjectKeys(definition.queries);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
-    const descriptor = witnessGetOwnPropertyDescriptor(component.definition.queries, name);
+    const descriptor = witnessGetOwnPropertyDescriptor(definition.queries, name);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`Component live-target query ${name} must be an own data property.`);
     }
@@ -439,7 +441,7 @@ interface ComponentLiveTargetMutationBinding {
 function componentLiveTargetMutationBindings(
   component: Component<any>,
 ): readonly ComponentLiveTargetMutationBinding[] {
-  const mutations = componentDefinitionValue(component, 'mutations');
+  const mutations = componentDefinitionForFramework(component).mutations;
   if (!isRecord(mutations)) return witnessFreeze([]);
 
   const bindings: ComponentLiveTargetMutationBinding[] = [];
@@ -463,18 +465,6 @@ function componentLiveTargetMutationBindings(
     );
   }
   return witnessFreeze(bindings);
-}
-
-function componentDefinitionValue(component: Component<any>, property: PropertyKey): unknown {
-  const definition = requiredOwnRendererValue<object>(
-    component,
-    'definition',
-    'Live-target component',
-  );
-  if (!isRecord(definition)) {
-    throw new TypeError('Live-target component definition must be a stable object.');
-  }
-  return optionalOwnRendererValue(definition, property, 'Live-target component definition');
 }
 
 function requiredOwnRendererValue<Value>(

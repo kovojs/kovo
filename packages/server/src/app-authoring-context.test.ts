@@ -187,7 +187,7 @@ describe('defineKovo provider-typed authoring context', () => {
     expect(app.queries.map((candidate) => candidate.key)).toEqual(['cart']);
     expect(app.mutations.map((candidate) => candidate.key)).toEqual(['cart/add']);
     expect(app.routes.map((candidate) => candidate.path)).toEqual(['/cart']);
-    expect(AddToCartForm.definition.mutations?.add).toBe(add);
+    expect(AddToCartForm).toEqual(expect.any(Function));
     expect(typedFailure.payload).toEqual({ available: 0 });
     expect(assertRenamedFailure).toBeTypeOf('function');
   });

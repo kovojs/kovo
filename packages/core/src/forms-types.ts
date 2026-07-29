@@ -17,42 +17,29 @@ export interface FormValidationFailure {
   fieldErrors: Record<string, string>;
 }
 
-interface SchemaLike<Value = unknown> {
-  parse(input: unknown): Value;
-}
-
-type InferSchemaLike<Schema> =
-  Schema extends SchemaLike<infer Value> ? Value : never;
-
-type MutationErrorFailures<Errors> =
-  Errors extends Record<string, SchemaLike>
-    ? {
-        [Code in Extract<keyof Errors, string>]: {
-          code: Code;
-          payload: InferSchemaLike<Errors[Code]>;
-        };
-      }[Extract<keyof Errors, string>]
-    : never;
-
-type ComponentMutationInput<Definition> =
-  Definition extends { input: infer InputSchema }
-    ? InputSchema extends SchemaLike
-      ? InferSchemaLike<InputSchema> extends infer Input
-        ? Input extends Record<string, unknown>
-          ? Input
-          : Record<string, unknown>
-        : Record<string, unknown>
-      : Definition extends Form<string, infer Input, unknown>
-        ? Input
-        : Record<string, unknown>
-    : Definition extends Form<string, infer Input, unknown>
-      ? Input
-      : Record<string, unknown>;
-
 /** Extract a form or declaration-handle failure union, including validation failure. */
 export type FormFailure<Definition> =
-  Definition extends { input: SchemaLike; errors?: infer Errors }
-    ? MutationErrorFailures<NonNullable<Errors>> | FormValidationFailure
+  Definition extends {
+    input: { parse(input: unknown): unknown };
+    errors?: infer Errors;
+  }
+    ?
+        | (NonNullable<Errors> extends Record<
+            string,
+            { parse(input: unknown): unknown }
+          >
+            ? {
+                [Code in Extract<keyof NonNullable<Errors>, string>]: {
+                  code: Code;
+                  payload: NonNullable<Errors>[Code] extends {
+                    parse(input: unknown): infer Payload;
+                  }
+                    ? Payload
+                    : never;
+                };
+              }[Extract<keyof NonNullable<Errors>, string>]
+            : never)
+        | FormValidationFailure
     : Definition extends Form<string, any, infer Failure>
       ? Failure | FormValidationFailure
       : FormValidationFailure;
@@ -78,7 +65,15 @@ export type ComponentMutationForms<Mutations> = {
   [Name in keyof Mutations]: Mutations[Name] extends { key: string }
     ? ComponentMutationFormState<
         FormFailure<Mutations[Name]>,
-        ComponentMutationInput<Mutations[Name]>
+        Mutations[Name] extends {
+          input: { parse(input: unknown): infer Input };
+        }
+          ? Input extends Record<string, unknown>
+            ? Input
+            : Record<string, unknown>
+          : Mutations[Name] extends Form<string, infer Input, unknown>
+            ? Input
+            : Record<string, unknown>
       >
     : never;
 };

@@ -1,4 +1,5 @@
 import type { Component } from '@kovojs/core';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import {
   decodeFrameworkQueryDependencyToken,
   encodeFrameworkQueryDependencyToken,
@@ -246,10 +247,7 @@ function requiredStampAuthority(
 function componentRootStampMetadata<Request>(
   options: SnapshottedComponentRootStampOptions<Request>,
 ): ComponentRootStampMetadata | null {
-  const definition = ownDataValue(options.component, 'definition', 'Component descriptor');
-  if (!isRecord(definition)) {
-    throw new TypeError('Component descriptor definition must be an object record.');
-  }
+  const definition = componentDefinitionForFramework(options.component);
   const disableServerRefresh = optionalOwnDataValue(
     definition,
     'disableServerRefresh',

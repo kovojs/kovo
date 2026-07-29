@@ -46,7 +46,7 @@ const auditedPublishExtraEntries = [
 const componentConsumer = `
 import { component } from '@kovojs/core';
 const UsedComponent = component({ render() { return 'KOVO_USED_COMPONENT_INITIALIZER'; } });
-globalThis.__kovoTreeShakeProbe = UsedComponent.definition.render();
+globalThis.__kovoTreeShakeProbe = UsedComponent();
 `;
 
 const namespaceConsumer = `

@@ -1,4 +1,5 @@
 import type { Component } from '@kovojs/core';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
 import { escapeText, renderedHtml, renderHtmlValue } from './html.js';
@@ -487,14 +488,7 @@ function validationIssueKeys(error: object): string[] {
 }
 
 function componentIsIsomorphic(component: Component<any>): boolean {
-  const definition = stableOwnDataValue(component, 'definition', 'Kovo component definition');
-  if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
-    throw new TypeError('Kovo component definition must be a stable own-data record.');
-  }
-  return (
-    stableOwnDataValue(definition, 'isomorphic', 'Kovo component definition.isomorphic', false) ===
-    true
-  );
+  return componentDefinitionForFramework(component).isomorphic === true;
 }
 
 function stableObjectKeys(value: object, label: string): string[] {
