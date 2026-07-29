@@ -1,8 +1,14 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseGoldenJourneyArgs } from './golden-journey.mjs';
+import {
+  packedTarballPath,
+  parseGoldenJourneyArgs,
+  validateExternalPackedJourneyManifest,
+} from './golden-journey.mjs';
 import { offlineAgentScenario } from './golden-journey/offline-agent.mjs';
 import { packedAppsScenario } from './golden-journey/packed-app.mjs';
 import { manifestPath, repoRoot } from './release-packages.mjs';
@@ -72,5 +78,54 @@ describe('golden journey command', () => {
     expect(() =>
       parseGoldenJourneyArgs(['--scenario', packedAppsScenario, '--samples', '0']),
     ).toThrow(/integer from 1 through 20/u);
+  });
+
+  it('authenticates an external manifest against its own release tarball root', () => {
+    const externalRoot = mkdtempSync(path.join(tmpdir(), 'kovo-external-packed-manifest-'));
+    try {
+      const tarballRoot = path.join(externalRoot, '.release', 'tarballs');
+      mkdirSync(tarballRoot, { recursive: true });
+      const tarball = path.join(tarballRoot, 'package.tgz');
+      writeFileSync(tarball, 'fixture');
+
+      expect(
+        packedTarballPath(
+          path.join(externalRoot, '.release', 'packed-packages.json'),
+          '.release/tarballs/package.tgz',
+        ),
+      ).toBe(realpathSync(tarball));
+      expect(() =>
+        packedTarballPath(
+          path.join(externalRoot, '.release', 'packed-packages.json'),
+          '../outside.tgz',
+        ),
+      ).toThrow(/must stay inside/u);
+    } finally {
+      rmSync(externalRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps external manifest admission bound to the exact release inventory', () => {
+    const expected = [{ name: '@kovojs/ui', version: '0.2.0' }];
+    const manifest = {
+      schema: 'kovo.packed-public-packages/v2',
+      packages: [
+        {
+          files: ['package/package.json'],
+          manifest: { name: '@kovojs/ui', version: '0.2.0' },
+          name: '@kovojs/ui',
+          sha512: 'sha512-YQ==',
+          tarball: '.release/tarballs/kovojs-ui-0.2.0.tgz',
+          version: '0.2.0',
+        },
+      ],
+    };
+
+    expect(validateExternalPackedJourneyManifest(manifest, expected)).toBe(manifest.packages);
+    const substituted = structuredClone(manifest);
+    substituted.packages[0].name = '@kovojs/icons';
+    expect(() => validateExternalPackedJourneyManifest(substituted, expected)).toThrow(
+      /package 0 is invalid/u,
+    );
   });
 });
