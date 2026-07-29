@@ -100,7 +100,7 @@ jobs:
       - name: Authored docs snippets
         run: vp exec pnpm run check:docs-snippets
 
-  docs-snippets-dist:
+  docs-samples-packed:
     runs-on: ubuntu-latest
     needs:
       - publish-readiness
@@ -113,10 +113,10 @@ jobs:
           path: ${{ runner.temp }}/kovo-package-dist
       - name: Restore package dist artifact
         run: tar -xzf "$RUNNER_TEMP/kovo-package-dist/kovo-package-dist.tgz" -C .
-      - name: Authored docs snippets against dist types
-        env:
-          KOVO_DOC_SNIPPETS_USE_DIST: '1'
-        run: vp exec node site/scripts/code-snippets-check.mjs
+      - name: Pack the restored public packages
+        run: vp exec node scripts/pack-public-packages.mjs
+      - name: Compile all documented samples against packed exports
+        run: vp exec pnpm run check:docs-samples:packed
 
   sql-safety:
     runs-on: ubuntu-latest

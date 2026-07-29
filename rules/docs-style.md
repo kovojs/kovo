@@ -233,3 +233,37 @@ Before publishing a docs change, scan the page for these failure signs:
 - A paragraph uses more framework nouns than app nouns.
 
 If any are true, revise toward the task-first structure.
+
+## Code-sample honesty
+
+Every fenced sample in an authored guide or package README must name a language covered by
+`site/code-sample-policy.json`. The packed sample gate classifies each fence as `executable`,
+`type-error`, `output`, or `illustrative`. TypeScript and JavaScript examples resolve Kovo imports
+only from the packed public-package tarballs. Shell examples containing the `kovo` executable must
+parse through the CLI command schema.
+
+Use an explicit directive immediately before a fence only when its policy default is wrong:
+
+````markdown
+<!-- kovo-sample: type-error -->
+
+```ts
+import { removedApi } from '@kovojs/core';
+```
+````
+
+An illustrative sample is a reviewed skip and must say why:
+
+````markdown
+<!-- kovo-sample: illustrative reason="Requires an app-owned database schema." -->
+
+```sql
+select * from app_table;
+```
+````
+
+Do not leave a fence unlabeled, use an unknown language, put optional CLI syntax such as
+`[--flag]` in an executable shell sample, or move a directive away from the fence it owns.
+`pnpm run check:docs-samples:packed` fails closed on malformed directives, unclosed fences,
+unknown languages, unresolved/removed packed exports, source-workspace fallback, and CLI-schema
+drift.

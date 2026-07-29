@@ -95,6 +95,7 @@
     "check:supply-chain": "node scripts/supply-chain-gates.mjs",
     "check:kovo": "vp run kovo-check",
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",
+    "check:docs-samples:packed": "node --disable-warning=ExperimentalWarning --experimental-transform-types scripts/packed-doc-samples.mjs",
     "check:docs-snippets": "node site/scripts/code-snippets-check.mjs",
     "check:docs-snippets:dist": "pnpm --filter @kovojs/better-auth --filter @kovojs/browser --filter @kovojs/core --filter @kovojs/headless-ui --filter @kovojs/icons --filter @kovojs/server --filter @kovojs/style --filter @kovojs/ui run build:dist && KOVO_DOC_SNIPPETS_USE_DIST=1 node site/scripts/code-snippets-check.mjs",
     "check:vp": "vp check >/tmp/kovo-vp-check.log 2>&1 || { code=$?; cat /tmp/kovo-vp-check.log; exit $code; }",

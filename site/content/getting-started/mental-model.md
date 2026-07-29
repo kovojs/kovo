@@ -162,7 +162,7 @@ keep consistent and no reconciliation protocol — the server's HTML wins, every
 If you want the full picture of authoring-to-runtime, here it is. You write the left column; the
 compiler produces the middle; the browser runs the right:
 
-```
+```text
 AUTHORING                 COMPILED IR                   RUNTIME
 cart.tsx          ──►     cart.server.js        ──►     Self-describing HTML
 (JSX, inline              (render fns, queries)         • on:click="/c/cart.js#Cart$remove"

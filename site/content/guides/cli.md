@@ -156,6 +156,8 @@ kovo explain page /products/:id --layouts     # the page's resolved layout chain
 **Run a review mode** — these are mutually-exclusive modes that scan the whole app. The blocking
 access modes accept `--fail-on-findings` so CI can fail on results:
 
+<!-- kovo-sample: illustrative reason="Bracketed tokens show optional CLI arguments; this block is a usage synopsis, not literal shell input." -->
+
 ```sh
 kovo explain --unguarded [--fail-on-findings] [graph.json]   # everything reachable without authentication
 kovo explain --unscoped  [--fail-on-findings] [graph.json]   # rows not tied to a principal via the owner: annotation
@@ -289,6 +291,8 @@ Emits lowered IR and graph facts without importing `@kovojs/compiler` directly �
 dev server and build use, exposed as a command (useful for tooling, fixtures, and the fixpoint gate).
 It takes a target subcommand:
 
+<!-- kovo-sample: illustrative reason="Bracketed tokens show optional CLI arguments; this block is a usage synopsis, not literal shell input." -->
+
 ```sh
 kovo compile component src/cart-badge.tsx --out cart-badge.kovo.tsx [--check] [--fixpoint] [--render-equivalence]
 kovo compile route src/app.tsx --out app.route.tsx [--check]
@@ -307,6 +311,8 @@ byte-identically to source.
 
 Runs the security and access audits over the app graph as one command:
 
+<!-- kovo-sample: illustrative reason="Bracketed tokens show optional CLI arguments; this block is a usage synopsis, not literal shell input." -->
+
 ```sh
 kovo audit [--fail-on-findings] [graph.json]
 ```
@@ -318,6 +324,8 @@ modes surface, in a form CI can block on with `--fail-on-findings`.
 
 Statically exports an app module to disk — replaying synthetic GET requests through the same handler,
 so there is no second render path:
+
+<!-- kovo-sample: illustrative reason="Bracketed tokens show optional CLI arguments; this block is a usage synopsis, not literal shell input." -->
 
 ```sh
 kovo export ./src/app.ts --out dist [--origin https://example.com] [--skip-non-exportable]
@@ -386,7 +394,7 @@ or transport internals.
 
 ## How they compose
 
-```
+```text
 npm script  →  vp  →  kovo
 ─────────────────────────────────────────────
 npm run check        →  vp check                       (typecheck + lint, regenerates registries)

@@ -479,13 +479,16 @@ function sanitize(name) {
   return name.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '') || 'snippet';
 }
 
-async function writeSupportFiles(outDir) {
+export async function writeAuthoredSnippetSupportFiles(
+  outDir,
+  { includeNodeModuleStubs = true } = {},
+) {
   const stubsDir = path.join(outDir, 'stubs');
   await mkdir(stubsDir, { recursive: true });
   await writeFile(path.join(outDir, 'snippet-prelude.d.ts'), `${PRELUDE}\n`, 'utf8');
   await writeFile(path.join(stubsDir, 'external.ts'), `${EXTERNAL_STUBS}\n`, 'utf8');
   await writeFile(path.join(stubsDir, 'kovo.ts'), `${KOVO_STUBS}\n`, 'utf8');
-  await writeNodeModuleStubs(outDir);
+  if (includeNodeModuleStubs) await writeNodeModuleStubs(outDir);
   await writeFile(path.join(outDir, 'app.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'db.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'domains.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
@@ -496,6 +499,10 @@ async function writeSupportFiles(outDir) {
   await writeFile(path.join(outDir, 'theme.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await mkdir(path.join(outDir, 'components/ui'), { recursive: true });
   await writeFile(path.join(outDir, 'components/ui/button.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
+}
+
+async function writeSupportFiles(outDir) {
+  await writeAuthoredSnippetSupportFiles(outDir);
 }
 
 async function writeNodeModuleStubs(outDir) {
