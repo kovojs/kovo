@@ -146,7 +146,14 @@ function completedGraph() {
       },
     },
   };
-  const graphWithProof = { ...graph, proof: createKovoGraphProof(graph, '5'.repeat(64)) };
+  const graphWithProof = {
+    ...graph,
+    proof: createKovoGraphProof(
+      graph,
+      '5'.repeat(64),
+      '11111111-1111-4111-8111-111111111111',
+    ),
+  };
   return {
     ...graphWithProof,
     runtimePosture: createKovoRuntimePostureManifest(graphWithProof),

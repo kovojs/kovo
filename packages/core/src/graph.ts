@@ -132,11 +132,13 @@ export interface KovoAnalysisInputs {
  */
 export interface KovoGraphProof {
   appBuildToken: `sha256:${string}`;
+  /** Canonical declared app identity, or null when the built app omitted one. */
+  appId: string | null;
   compilerVersion: string;
   completion: 'complete';
   configDigest: `sha256:${string}`;
   postureProfile: 'cloudflare' | 'node' | 'vercel';
-  schema: 'kovo.graph.proof/v1';
+  schema: 'kovo.graph.proof/v2';
   sourceSetDigest: `sha256:${string}`;
 }
 

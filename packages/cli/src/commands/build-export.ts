@@ -973,6 +973,7 @@ export async function runBuildCommand(
       checkGraph,
       cloudflare,
       dependencyCapabilities,
+      declaredKovoAppId,
       deriveClosedKovoApp,
       node,
       queryShapeFacts,
@@ -1075,7 +1076,11 @@ export async function runBuildCommand(
     );
     const graphWithProof: CoreGraph.KovoCheckInput = {
       ...graphWithProvenance,
-      proof: createKovoGraphProof(graphWithProvenance, appBuildToken),
+      proof: createKovoGraphProof(
+        graphWithProvenance,
+        appBuildToken,
+        declaredKovoAppId(app),
+      ),
     };
     const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
     const completedCheckGraph: CoreGraph.KovoCheckInput = {
@@ -1243,7 +1248,8 @@ async function loadAndCheckBuildApp(
   const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
   const { resolveKovoBuildPreset } = loadedBuildApp.serverBuildPresetModule;
   const execution = loadedBuildApp.serverExecutionModule;
-  const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
+  const { declaredKovoAppId, deriveClosedKovoApp, writeKovoNeutralBuild } =
+    loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
   const app = appFromModule(
     appModule,
@@ -1266,6 +1272,7 @@ async function loadAndCheckBuildApp(
     checkGraph: buildCheck.graph,
     cloudflare,
     dependencyCapabilities: preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+    declaredKovoAppId,
     deriveClosedKovoApp,
     node,
     queryShapeFacts: buildCheck.queryShapeFacts,

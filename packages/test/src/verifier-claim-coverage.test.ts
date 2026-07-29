@@ -9,7 +9,7 @@ import {
   expectedDiagnosticMessage,
   type FakeDb,
 } from './test-fixtures.js';
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 import { createDbVerifier } from './verifier.js';
 
 // SPEC.md §11.2 requires the runtime verifier to cross-check the touch graph in

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 import { createPageAssertion } from './page.js';
 
 describe('@kovojs/test page assertions', () => {

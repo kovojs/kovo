@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mutation, s } from '@kovojs/server';
 import { assertMutationError, propertyTest } from './assertions.js';
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 
 describe('@kovojs/test assertions', () => {
   it('property-tests optimistic predictions against eventual query truth', () => {

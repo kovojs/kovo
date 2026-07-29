@@ -13,7 +13,7 @@ import {
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/managed-db';
 
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';

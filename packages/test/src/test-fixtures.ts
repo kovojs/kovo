@@ -3,7 +3,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { HarnessOperationVerifier } from './harness-operations.js';
-import { createKovoTestHarness, type KovoTestContext } from './harness.js';
+import { createKovoTestHarness, type KovoTestContext } from './legacy-harness.js';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export interface FakeDb {

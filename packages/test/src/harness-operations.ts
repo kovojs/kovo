@@ -152,11 +152,18 @@ export async function executeHarnessQuery<Db>(
   db: Db,
   requestFixture: Record<string, unknown> | undefined,
   verifier: HarnessOperationVerifier | null,
+  artifactReadDomains?: readonly string[],
 ): Promise<unknown> {
   const queryKey = requiredOwnString(query, 'key', 'query fixture');
   const queryLoad = optionalOwnDataValue(query, 'load', 'query fixture');
   if (typeof queryLoad !== 'function') throw new Error(`Query fixture has no loader: ${queryKey}`);
-  const declaredReads = snapshotQueryReadDomains(query);
+  // SPEC §12: the public app-scoped harness supplies read facts from its verified build graph.
+  // Internal verifier tests may omit that artifact-only override and exercise this lower-level
+  // operation against a directly declared query.
+  const declaredReads =
+    artifactReadDomains === undefined
+      ? snapshotQueryReadDomains(query)
+      : snapshotDomains(artifactReadDomains);
   const output = optionalOwnDataValue(query, 'output', 'query fixture');
   const outputParse =
     typeof output === 'object' && output !== null

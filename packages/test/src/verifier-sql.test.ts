@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { domain, mutation, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 import { createDbVerifier } from './verifier.js';
 import {
   createFakeDb,

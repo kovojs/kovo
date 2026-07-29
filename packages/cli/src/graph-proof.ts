@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 
 const graphProofKeys = [
   'appBuildToken',
+  'appId',
   'compilerVersion',
   'completion',
   'configDigest',
@@ -30,7 +31,11 @@ const sha256Pattern = /^sha256:[0-9a-f]{64}$/u;
  * The record is deterministic and path-independent; `assertKovoArtifactGraphProof` independently
  * recomputes every derivable identity when an operator later selects the artifact (SPEC §5.2.4).
  */
-export function createKovoGraphProof(graph: KovoCheckInput, appBuildToken: string): KovoGraphProof {
+export function createKovoGraphProof(
+  graph: KovoCheckInput,
+  appBuildToken: string,
+  appId: string | undefined,
+): KovoGraphProof {
   const inputs = requiredAnalysisInputs(graph);
   const compilerVersion = requiredCompilerVersion(graph);
   const token: `sha256:${string}` = `sha256:${appBuildToken}`;
@@ -39,6 +44,7 @@ export function createKovoGraphProof(graph: KovoCheckInput, appBuildToken: strin
   }
   return Object.freeze({
     appBuildToken: token,
+    appId: appId ?? null,
     compilerVersion,
     completion: 'complete',
     configDigest: digestSources(
@@ -46,7 +52,7 @@ export function createKovoGraphProof(graph: KovoCheckInput, appBuildToken: strin
       'kovo-config-source-set/v1',
     ),
     postureProfile: inputs.runtimeTarget,
-    schema: 'kovo.graph.proof/v1',
+    schema: 'kovo.graph.proof/v2',
     sourceSetDigest: digestSources(inputs.sources, 'kovo-analyzed-source-set/v1'),
   });
 }
@@ -56,7 +62,7 @@ export function assertKovoArtifactGraphProof(graph: KovoCheckInput): KovoGraphPr
   const proof = graph.proof;
   if (!isRecord(proof)) {
     throw new TypeError(
-      'Kovo artifact graph is missing kovo.graph.proof/v1 completion; rebuild the artifact.',
+      'Kovo artifact graph is missing kovo.graph.proof/v2 completion; rebuild the artifact.',
     );
   }
   const keys = Object.keys(proof).sort();
@@ -66,7 +72,7 @@ export function assertKovoArtifactGraphProof(graph: KovoCheckInput): KovoGraphPr
   ) {
     throw new TypeError('Kovo artifact graph proof has an unknown or missing field.');
   }
-  if (proof.schema !== 'kovo.graph.proof/v1') {
+  if (proof.schema !== 'kovo.graph.proof/v2') {
     throw new TypeError('Kovo artifact graph proof schema is unsupported.');
   }
   if (proof.completion !== 'complete') {
@@ -78,6 +84,15 @@ export function assertKovoArtifactGraphProof(graph: KovoCheckInput): KovoGraphPr
     !sha256Pattern.test(proof.sourceSetDigest)
   ) {
     throw new TypeError('Kovo artifact graph proof contains an invalid SHA-256 identity.');
+  }
+  if (
+    proof.appId !== null &&
+    (typeof proof.appId !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+        proof.appId,
+      ))
+  ) {
+    throw new TypeError('Kovo artifact graph proof contains an invalid app identity.');
   }
 
   const inputs = requiredAnalysisInputs(graph);

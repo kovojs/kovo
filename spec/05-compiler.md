@@ -117,11 +117,12 @@ the artifact is safe or that the package contents match their version labels.
 #### 5.2.4 Proof-graph completion and transactional promotion (normative)
 
 A deploy graph is admissible only when its top-level `proof` record is the exact
-`kovo.graph.proof/v1` shape. The record binds the complete analyzed source set, config subset,
-executing compiler version, app build token, and selected posture profile. Its `completion` value is
-`complete`; a missing record, an unknown field, an invalid digest, an identity that does not
-recompute from the graph's own build-owned inputs, or any other completion value is not a partial
-success. Human CLI inspection of this graph requires `--artifact <path>` so a nearby
+`kovo.graph.proof/v2` shape. The record binds the complete analyzed source set, config subset,
+executing compiler version, app build token, canonical declared app identity (or `null` when the
+app omitted one), and selected posture profile. Its `completion` value is `complete`; a missing
+record, an unknown field, an invalid digest, an identity that does not recompute from the graph's
+own build-owned inputs, or any other completion value is not a partial success. Human CLI
+inspection of this graph requires `--artifact <path>` so a nearby
 `dist/.kovo/graph.json` cannot silently become source authority. Source-backed `kovo check` and
 `kovo explain` instead derive current facts or consume an explicitly selected non-deployment review
 graph; they never infer a deploy claim from directory layout.

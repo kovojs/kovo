@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './harness.js';
+import { createKovoTestHarness } from './legacy-harness.js';
 import {
   createFakeDb,
   expectedDiagnostic,
