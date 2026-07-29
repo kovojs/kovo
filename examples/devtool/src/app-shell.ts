@@ -2,6 +2,8 @@
 // emitted graphs into the reusable devtool; all the logic (graph derivation,
 // rendering, MCP, mount) lives in the package. This is what any host does to
 // inspect its own app — read its graph.json, hand it to createDevtoolApp.
+import '@kovojs/server/runtime-bootstrap';
+
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -18,24 +20,26 @@ const APPS = [
   { app: 'stackoverflow', label: 'Stack Overflow', blurb: 'questions · answers · votes' },
 ];
 
-const bundles = APPS.flatMap((a) => {
+const bundles = APPS.map((a) => {
   const graphPath = join(EXAMPLES, a.app, 'src', 'generated', 'graph.json');
-  if (!existsSync(graphPath)) return [];
+  if (!existsSync(graphPath)) {
+    return JSON.parse(readFileSync(join(HERE, '..', 'data', `${a.app}.json`), 'utf8'));
+  }
   const graph = JSON.parse(readFileSync(graphPath, 'utf8'));
-  return [
-    buildBundle({
-      app: a.app,
-      label: a.label,
-      blurb: a.blurb,
-      graph,
-      srcRoot: join(EXAMPLES, a.app, 'src'),
-    }),
-  ];
+  return buildBundle({
+    app: a.app,
+    label: a.label,
+    blurb: a.blurb,
+    graph,
+    srcRoot: join(EXAMPLES, a.app, 'src'),
+  });
 });
 
 const devtool = createDevtoolApp({ bundles });
 
 export const app = devtool.app;
+export const manifest = devtool.manifest;
 export const requestHandler = devtool.requestHandler;
+export const runtimeFrames = devtool.runtimeFrames;
 export const nodeHandler = devtool.nodeHandler;
 export default app;

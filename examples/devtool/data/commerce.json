@@ -93,8 +93,8 @@
     {
       "id": "domain:cart",
       "kind": "domain",
-      "name": "queries/cart-query",
-      "label": "queries/cart-query",
+      "name": "cart",
+      "label": "cart",
       "data": {},
       "source": {
         "file": "model.ts",

@@ -1153,7 +1153,10 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
     acceptance: {
       browsers: ['chromium', 'firefox', 'webkit'],
       headless: true,
-      include: ['packages/browser/src/**/*.browser.test.ts'],
+      include: [
+        'packages/browser/src/**/*.browser.test.ts',
+        'packages/devtool/src/**/*.browser.test.ts',
+      ],
       providerPackage: '@vitest/browser-playwright',
     },
     inputFacts: [
@@ -1161,6 +1164,7 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
       { base: 'workspace', pattern: 'vitest.browser.config.ts' },
       { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
       { base: 'workspace', pattern: 'packages/browser/src/**/*.browser.test.ts' },
+      { base: 'workspace', pattern: 'packages/devtool/src/**/*.browser.test.ts' },
     ],
     presentInAcceptance: true,
     presentInCi: true,

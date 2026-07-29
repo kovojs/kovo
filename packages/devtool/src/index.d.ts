@@ -79,6 +79,52 @@ export interface KindMeta {
   blurb: string;
 }
 
+export interface RuntimeFrameChange {
+  domain: string;
+  keyCount: number;
+}
+export interface RuntimeFrameQuery {
+  bytes: number;
+  delta: boolean;
+  keyed: boolean;
+  name: string;
+  settlesPendingWork: boolean;
+  value: 'redacted';
+}
+export interface RuntimeFrame {
+  app: string;
+  changes: readonly RuntimeFrameChange[];
+  mutation: string | null;
+  phase: 'pending' | 'settled';
+  queries: readonly RuntimeFrameQuery[];
+  schema: 'kovo-devtool-runtime-frame/v1';
+  sequence: number;
+  status?: number;
+  targets: {
+    count: number;
+    queryNames: readonly string[];
+    truncated: boolean;
+  };
+  truncated: boolean;
+}
+export interface RuntimeFrameStore {
+  readonly closed: boolean;
+  readonly limit: number;
+  close(): void;
+  recent(options?: { app?: string; limit?: number }): readonly RuntimeFrame[];
+  recordRoundTrip(input: {
+    app: string;
+    changesHeader?: string;
+    phase: 'pending' | 'settled';
+    queries?: readonly RuntimeFrameQuery[];
+    queriesTruncated?: boolean;
+    status?: number;
+    targetsHeader?: string;
+    url?: string;
+  }): RuntimeFrame | undefined;
+  subscribe(subscriber: (frame: RuntimeFrame) => void): () => void;
+}
+
 export function buildDataflowGraph(graph: GraphJson): DataflowGraph;
 export function buildBm25(nodes: DataflowNode[]): (query: string, limit?: number) => Bm25Hit[];
 export const KIND_META: Readonly<Record<string, Readonly<KindMeta>>>;
@@ -110,15 +156,30 @@ export function renderPage(opts: {
   sel?: string;
   q?: string;
   pzHref: string;
+  runtime?: {
+    frames: readonly RuntimeFrame[];
+    href: string;
+    moduleHref: string;
+  };
 }): string;
 
 // createDevtoolApp is declared in './app' (it imports @kovojs/server);
 // devtoolMountPlugin is declared in './vite'.
 
-export function createMcpServer(opts: { bundles: DataflowBundle[] }): {
+export function createMcpServer(opts: {
+  bundles: DataflowBundle[];
+  runtimeFrames?: RuntimeFrameStore;
+}): {
   server: unknown;
   explain: (args: { query: string; app?: string; limit?: number }) => unknown;
+  recentFrames: (args: { app?: string; limit?: number }) => {
+    app: string;
+    count: number;
+    frames: readonly RuntimeFrame[];
+    schema: 'kovo-devtool-runtime-frames/v1';
+  };
   TOOL: unknown;
+  RECENT_FRAMES_TOOL: unknown;
   appIds: string[];
   serveStdio: (
     input?: AsyncIterable<string | Uint8Array>,
@@ -126,3 +187,9 @@ export function createMcpServer(opts: { bundles: DataflowBundle[] }): {
     errorOutput?: { write(chunk: string): unknown },
   ) => Promise<void>;
 };
+
+export const RUNTIME_FRAME_SCHEMA: 'kovo-devtool-runtime-frame/v1';
+export function createRuntimeFrameStore(options?: {
+  limit?: number;
+  maxSubscribers?: number;
+}): RuntimeFrameStore;

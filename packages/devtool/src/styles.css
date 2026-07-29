@@ -332,6 +332,16 @@ body {
   stroke-dasharray: 4 6;
   animation: flow 0.7s linear infinite;
 }
+.edges path.runtime-hot {
+  stroke: var(--teal) !important;
+  stroke-opacity: 1 !important;
+  stroke-width: 2.5px;
+}
+.edges path.runtime-pending {
+  stroke: var(--amber) !important;
+  stroke-dasharray: 3 5;
+  animation: flow 0.6s linear infinite;
+}
 
 /* ---------- nodes ---------- */
 .node {
@@ -406,6 +416,20 @@ body {
 .node.hit {
   border-color: var(--teal);
   box-shadow: inset 0 0 0 1px var(--teal);
+}
+.node.runtime-hot {
+  opacity: 1 !important;
+  border-color: var(--teal);
+  box-shadow:
+    inset 0 0 0 1px var(--teal),
+    0 0 8px rgb(45 212 191 / 0.24);
+  z-index: 4;
+}
+.node.runtime-pending {
+  border-color: var(--amber);
+  box-shadow:
+    inset 0 0 0 1px var(--amber),
+    0 0 8px rgb(251 191 36 / 0.22);
 }
 
 .node--mutation {
@@ -810,6 +834,98 @@ pre.src .ln.anchor > .gut {
   border-radius: 1px;
 }
 
+/* ---------- bounded live replay ---------- */
+.runtime-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 7;
+  width: min(420px, calc(100% - 32px));
+  max-height: min(260px, calc(100% - 96px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  color: var(--ink);
+}
+.runtime-panel header,
+.runtime-panel footer {
+  flex: none;
+  font-family: var(--mono);
+}
+.runtime-panel header {
+  min-height: 34px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--edge-soft);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.runtime-panel header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.runtime-panel header i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 3px rgb(45 212 191 / 0.12);
+}
+.runtime-panel header small {
+  color: var(--teal);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+.runtime-panel ol {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.runtime-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--edge-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.runtime-row--pending {
+  background: rgb(251 191 36 / 0.06);
+}
+.runtime-phase {
+  color: var(--teal);
+  text-transform: uppercase;
+}
+.runtime-row--pending .runtime-phase {
+  color: var(--amber);
+}
+.runtime-summary {
+  min-width: 0;
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+.runtime-empty {
+  padding: 14px 10px;
+  color: var(--faint);
+  font: 11px/1.5 var(--mono);
+}
+.runtime-panel footer {
+  padding: 7px 10px;
+  border-top: 1px solid var(--edge-soft);
+  color: var(--faint);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 /* hover-highlight (pan/zoom island) */
 .node.hov {
   opacity: 1 !important;
@@ -820,4 +936,15 @@ pre.src .ln.anchor > .gut {
 .edges path.hov {
   stroke-opacity: 0.95 !important;
   stroke-width: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edges path.active.animated,
+  .edges path.runtime-pending {
+    animation: none;
+  }
+  .edges path,
+  .node {
+    transition: none;
+  }
 }

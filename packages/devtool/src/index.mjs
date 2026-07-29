@@ -6,6 +6,7 @@ export { buildBundle, resolveSource } from './source-slice.mjs';
 export { buildCard, cardToText } from './cards.mjs';
 export { renderPage } from './render.mjs';
 export { createMcpServer } from './mcp.mjs';
+export { createRuntimeFrameStore, RUNTIME_FRAME_SCHEMA } from './runtime-frames.mjs';
 // createDevtoolApp lives at '@kovojs/devtool/app' (it imports @kovojs/server, so
 // the root stays loadable in plain Node — scripts, the MCP bin, conformance).
 // devtoolMountPlugin lives at '@kovojs/devtool/vite'.

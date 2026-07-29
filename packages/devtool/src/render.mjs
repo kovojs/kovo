@@ -29,6 +29,7 @@ import {
   setAdd,
   setHas,
   stringSplit,
+  stringStartsWith,
   stringTrim,
 } from './output-security.mjs';
 import { snapshotRenderOptions } from './render-input.mjs';
@@ -191,7 +192,7 @@ function edgePath(a, b) {
 
 // ---------- main ----------
 export function renderPage(opts) {
-  const { manifest, bundle, app, sel, q, pzHref } = snapshotRenderOptions(opts);
+  const { manifest, bundle, app, sel, q, pzHref, runtime } = snapshotRenderOptions(opts);
   const byId = createMap();
   for (let index = 0; index < arrayLength(bundle.nodes, 'devtool graph nodes'); index += 1) {
     const node = arrayValue(bundle.nodes, index, 'devtool graph nodes');
@@ -201,6 +202,7 @@ export function renderPage(opts) {
 
   const selNode = sel ? mapGet(byId, sel) : undefined;
   const tr = selNode ? trace(bundle, selNode.id) : null;
+  const live = runtimeState(runtime);
 
   let results = '';
   let hits = createSet();
@@ -254,9 +256,15 @@ export function renderPage(opts) {
         if (!a || !b) return '';
         const col = accent(a.kind);
         const active = tr ? setHas(tr.edges, e.id) : false;
+        const runtimeActive = runtimeEdgeIsActive(live.nodes, e.from, e.to);
         const cls = joinStrings(
           arrayFilter(
-            ['edge', tr ? (active ? 'active animated' : 'dim') : ''],
+            [
+              'edge',
+              tr ? (active ? 'active animated' : 'dim') : '',
+              runtimeActive ? 'runtime-hot' : '',
+              live.pending && runtimeActive ? 'runtime-pending' : '',
+            ],
             (value) => value !== '',
           ),
           ' ',
@@ -280,6 +288,10 @@ export function renderPage(opts) {
           else arrayAppend(cls, 'dim', 'devtool node classes');
         }
         if (setHas(hits, n.id)) arrayAppend(cls, 'hit', 'devtool node classes');
+        if (setHas(live.nodes, n.id)) {
+          arrayAppend(cls, 'runtime-hot', 'devtool node classes');
+          if (live.pending) arrayAppend(cls, 'runtime-pending', 'devtool node classes');
+        }
         const sub = nodeSub(n);
         const href = queryHref({ app, sel: n.id, q });
         return (
@@ -348,9 +360,123 @@ export function renderPage(opts) {
       ? ''
       : `<div class="hint">Select a <b>component</b> to trace its <b>queries in</b> and <b>mutations out</b> · scroll to zoom · drag to pan</div>`) +
     `<div class="legend">${legend}</div>` +
+    (runtime === undefined ? '' : renderRuntimePanel(app, runtime)) +
     `<div class="zoom"><button type="button" data-zoom="out" title="Zoom out (−)">−</button><button type="button" data-zoom="fit" title="Fit (0)">⤢</button><button type="button" data-zoom="in" title="Zoom in (+)">+</button></div>` +
     `</div><aside class="inspector">${renderInspector(bundle, byId, selNode)}</aside></div></div>`
   );
+}
+
+function runtimeState(runtime) {
+  const nodes = createSet();
+  if (runtime === undefined || arrayLength(runtime.frames, 'runtime frames') === 0) {
+    return { nodes, pending: false };
+  }
+  const frame = arrayValue(
+    runtime.frames,
+    arrayLength(runtime.frames, 'runtime frames') - 1,
+    'runtime frames',
+  );
+  if (frame.mutation) setAdd(nodes, `mutation:${frame.mutation}`);
+  for (let index = 0; index < arrayLength(frame.changes, 'runtime changes'); index += 1) {
+    setAdd(nodes, `domain:${arrayValue(frame.changes, index, 'runtime changes').domain}`);
+  }
+  for (
+    let index = 0;
+    index < arrayLength(frame.targets.queryNames, 'runtime target queries');
+    index += 1
+  ) {
+    setAdd(nodes, `query:${arrayValue(frame.targets.queryNames, index, 'runtime target queries')}`);
+  }
+  for (let index = 0; index < arrayLength(frame.queries, 'runtime queries'); index += 1) {
+    setAdd(nodes, `query:${arrayValue(frame.queries, index, 'runtime queries').name}`);
+  }
+  return { nodes, pending: frame.phase === 'pending' };
+}
+
+function runtimeEdgeIsActive(nodes, from, to) {
+  if (!setHas(nodes, from)) return false;
+  return (
+    setHas(nodes, to) || stringStartsWith(from, 'mutation:') || stringStartsWith(from, 'query:')
+  );
+}
+
+function renderRuntimePanel(app, runtime) {
+  const streamHref = `${runtime.href}?app=${encodeQueryValue(app)}`;
+  const rows = joinStrings(
+    arrayMap(
+      arrayReverseCopy(runtime.frames, 'runtime frames'),
+      (frame) =>
+        `<li class="runtime-row runtime-row--${escAttr(frame.phase)}" data-runtime-sequence="${escAttr(frame.sequence)}">` +
+        `<span class="runtime-phase">${esc(frame.phase)}</span>` +
+        `<span class="runtime-summary">${esc(runtimeFrameSummary(frame))}</span></li>`,
+      'runtime frames',
+    ),
+    '',
+    'runtime frame rows',
+  );
+  return (
+    `<section class="runtime-panel" aria-label="Recent runtime frames" data-runtime-panel data-runtime-stream="${escAttr(streamHref)}" ` +
+    `kovo-c="dataflow-runtime" kovo-state="{}" on:visible="${escAttr(runtime.moduleHref)}#DevtoolRuntime$init">` +
+    `<header><span><i aria-hidden="true"></i> Runtime replay</span><small role="status" aria-live="polite" data-runtime-status>snapshot</small></header>` +
+    `<ol aria-live="polite" aria-relevant="additions text" data-runtime-list>${rows || '<li class="runtime-empty">No enhanced round-trips yet.</li>'}</ol>` +
+    `<footer>Values, keys, target identities, inputs, cookies, and bodies stay redacted.</footer>` +
+    `</section>`
+  );
+}
+
+function runtimeFrameSummary(frame) {
+  const parts = [`#${frame.sequence}`];
+  if (frame.mutation) arrayAppend(parts, frame.mutation, 'runtime frame summary');
+  if (arrayLength(frame.changes, 'runtime changes') > 0) {
+    arrayAppend(
+      parts,
+      `changes ${joinStrings(
+        arrayMap(frame.changes, (change) => change.domain, 'runtime changes'),
+        ', ',
+        'runtime change domains',
+      )}`,
+      'runtime frame summary',
+    );
+  }
+  const queryNames = createSet();
+  const names = [];
+  for (
+    let index = 0;
+    index < arrayLength(frame.targets.queryNames, 'runtime target queries');
+    index += 1
+  ) {
+    const name = arrayValue(frame.targets.queryNames, index, 'runtime target queries');
+    if (!setHas(queryNames, name)) {
+      setAdd(queryNames, name);
+      arrayAppend(names, name, 'runtime query names');
+    }
+  }
+  let queryBytes = 0;
+  for (let index = 0; index < arrayLength(frame.queries, 'runtime queries'); index += 1) {
+    const query = arrayValue(frame.queries, index, 'runtime queries');
+    if (!setHas(queryNames, query.name)) {
+      setAdd(queryNames, query.name);
+      arrayAppend(names, query.name, 'runtime query names');
+    }
+    queryBytes += query.bytes;
+  }
+  if (arrayLength(names, 'runtime query names') > 0) {
+    arrayAppend(
+      parts,
+      `queries ${joinStrings(names, ', ', 'runtime query names')}`,
+      'runtime frame summary',
+    );
+  }
+  if (arrayLength(frame.queries, 'runtime queries') > 0) {
+    arrayAppend(parts, `${queryBytes} B values redacted`, 'runtime frame summary');
+  }
+  if (frame.status !== undefined) {
+    arrayAppend(parts, `HTTP ${frame.status}`, 'runtime frame summary');
+  }
+  if (frame.truncated || frame.targets.truncated) {
+    arrayAppend(parts, 'truncated', 'runtime frame summary');
+  }
+  return joinStrings(parts, ' · ', 'runtime frame summary');
 }
 
 function nodeSub(n) {

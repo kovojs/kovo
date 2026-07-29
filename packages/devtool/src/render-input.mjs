@@ -10,6 +10,7 @@ import {
   isSafeInteger,
   mapHas,
   mapSet,
+  regexpTest,
   stableOwnData,
 } from './output-security.mjs';
 
@@ -44,6 +45,11 @@ const MAX_GRAPH_EDGES = 200_000;
 const MAX_LIST_ENTRIES = 50_000;
 const MAX_TEXT_LENGTH = 1_048_576;
 const MAX_SOURCE_LENGTH = 2_097_152;
+const MAX_RUNTIME_FRAMES = 8;
+const MAX_RUNTIME_FACTS = 64;
+const MAX_RUNTIME_BODY_BYTES = 512 * 1024;
+const MAX_RUNTIME_NAME_LENGTH = 256;
+const RUNTIME_GRAPH_NAME = /^[A-Za-z0-9_./:@-]+$/u;
 
 function required(record, key, label) {
   const entry = stableOwnData(record, key, label);
@@ -219,6 +225,140 @@ function positiveLine(value, label) {
   return value;
 }
 
+function boundedInteger(value, minimum, maximum, label) {
+  if (!isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new TypeError(`${label} must be an integer from ${minimum} to ${maximum}.`);
+  }
+  return value;
+}
+
+function runtimeGraphName(value, label) {
+  const candidate = text(value, label, MAX_RUNTIME_NAME_LENGTH);
+  if (!regexpTest(RUNTIME_GRAPH_NAME, candidate)) {
+    throw new TypeError(`${label} is not a safe graph name.`);
+  }
+  return candidate;
+}
+
+function boolean(value, label) {
+  if (typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean.`);
+  return value;
+}
+
+function snapshotRuntimeChange(value, label) {
+  const record = assertPlainCarrier(value, label);
+  return freeze({
+    domain: runtimeGraphName(required(record, 'domain', label), `${label}.domain`),
+    keyCount: boundedInteger(
+      required(record, 'keyCount', label),
+      0,
+      MAX_RUNTIME_FACTS,
+      `${label}.keyCount`,
+    ),
+  });
+}
+
+function snapshotRuntimeQuery(value, label) {
+  const record = assertPlainCarrier(value, label);
+  if (required(record, 'value', label) !== 'redacted') {
+    throw new TypeError(`${label}.value must stay redacted.`);
+  }
+  return freeze({
+    bytes: boundedInteger(
+      required(record, 'bytes', label),
+      0,
+      MAX_RUNTIME_BODY_BYTES,
+      `${label}.bytes`,
+    ),
+    delta: boolean(required(record, 'delta', label), `${label}.delta`),
+    keyed: boolean(required(record, 'keyed', label), `${label}.keyed`),
+    name: runtimeGraphName(required(record, 'name', label), `${label}.name`),
+    settlesPendingWork: boolean(
+      required(record, 'settlesPendingWork', label),
+      `${label}.settlesPendingWork`,
+    ),
+    value: 'redacted',
+  });
+}
+
+function snapshotRuntimeFrame(value, label) {
+  const record = assertPlainCarrier(value, label);
+  if (required(record, 'schema', label) !== 'kovo-devtool-runtime-frame/v1') {
+    throw new TypeError(`${label}.schema is invalid.`);
+  }
+  const mutationValue = required(record, 'mutation', label);
+  const phase = enumText(
+    required(record, 'phase', label),
+    freeze(['pending', 'settled']),
+    `${label}.phase`,
+  );
+  const statusValue = optional(record, 'status', label);
+  const targets = assertPlainCarrier(required(record, 'targets', label), `${label}.targets`);
+  return freeze({
+    app: runtimeGraphName(required(record, 'app', label), `${label}.app`),
+    changes: list(
+      required(record, 'changes', label),
+      `${label}.changes`,
+      MAX_RUNTIME_FACTS,
+      snapshotRuntimeChange,
+    ),
+    mutation: mutationValue === null ? null : runtimeGraphName(mutationValue, `${label}.mutation`),
+    phase,
+    queries: list(
+      required(record, 'queries', label),
+      `${label}.queries`,
+      MAX_RUNTIME_FACTS,
+      snapshotRuntimeQuery,
+    ),
+    schema: 'kovo-devtool-runtime-frame/v1',
+    sequence: positiveLine(required(record, 'sequence', label), `${label}.sequence`),
+    status:
+      statusValue === undefined
+        ? undefined
+        : boundedInteger(statusValue, 100, 599, `${label}.status`),
+    targets: freeze({
+      count: boundedInteger(
+        required(targets, 'count', `${label}.targets`),
+        0,
+        MAX_RUNTIME_FACTS,
+        `${label}.targets.count`,
+      ),
+      queryNames: list(
+        required(targets, 'queryNames', `${label}.targets`),
+        `${label}.targets.queryNames`,
+        MAX_RUNTIME_FACTS,
+        runtimeGraphName,
+      ),
+      truncated: boolean(
+        required(targets, 'truncated', `${label}.targets`),
+        `${label}.targets.truncated`,
+      ),
+    }),
+    truncated: boolean(required(record, 'truncated', label), `${label}.truncated`),
+  });
+}
+
+function snapshotRuntime(value) {
+  if (value === undefined) return undefined;
+  const record = assertPlainCarrier(value, 'renderPage options.runtime');
+  return freeze({
+    frames: list(
+      required(record, 'frames', 'renderPage options.runtime'),
+      'renderPage options.runtime.frames',
+      MAX_RUNTIME_FRAMES,
+      snapshotRuntimeFrame,
+    ),
+    href: text(
+      required(record, 'href', 'renderPage options.runtime'),
+      'renderPage options.runtime.href',
+    ),
+    moduleHref: text(
+      required(record, 'moduleHref', 'renderPage options.runtime'),
+      'renderPage options.runtime.moduleHref',
+    ),
+  });
+}
+
 function snapshotTouch(value, label) {
   const record = assertPlainCarrier(value, label);
   const keysValue = optional(record, 'keys', label);
@@ -378,13 +518,22 @@ export function snapshotRenderOptions(value) {
   if (!mapHas(ids, app)) throw new TypeError(`renderPage app ${app} is missing from the manifest.`);
   if (bundle.app !== app) throw new TypeError('renderPage bundle.app must match options.app.');
   const qValue = optional(options, 'q', 'renderPage options');
+  const runtime = snapshotRuntime(optional(options, 'runtime', 'renderPage options'));
   const selValue = optional(options, 'sel', 'renderPage options');
+  if (runtime !== undefined) {
+    for (let index = 0; index < arrayLength(runtime.frames, 'runtime frames'); index += 1) {
+      if (arrayValue(runtime.frames, index, 'runtime frames').app !== app) {
+        throw new TypeError('renderPage runtime frames must match options.app.');
+      }
+    }
+  }
   return freeze({
     app,
     bundle,
     manifest,
     pzHref: text(required(options, 'pzHref', 'renderPage options'), 'renderPage options.pzHref'),
     q: qValue === undefined ? undefined : text(qValue, 'renderPage options.q'),
+    runtime,
     sel: selValue === undefined ? undefined : text(selValue, 'renderPage options.sel'),
   });
 }

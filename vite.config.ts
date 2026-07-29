@@ -170,6 +170,7 @@ export default defineConfig({
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'packages/browser/src/**/*.browser.test.ts', base: 'workspace' },
+          { pattern: 'packages/devtool/src/**/*.browser.test.ts', base: 'workspace' },
         ],
       },
       'p10-perf': {

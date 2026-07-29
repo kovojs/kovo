@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createMcpServer } from './mcp.mjs';
+import { createRuntimeFrameStore } from './runtime-frames.mjs';
 
 function bundle() {
   return {
@@ -51,6 +52,24 @@ function lifecycle(...requests) {
 
 describe('devtool finite MCP transport', () => {
   it('serves list/call and returns invalid tool arguments as isError', async () => {
+    const runtimeFrames = createRuntimeFrameStore();
+    const runtimeFrame = runtimeFrames.recordRoundTrip({
+      app: 'demo',
+      phase: 'settled',
+      queries: [
+        {
+          bytes: 25,
+          delta: false,
+          keyed: false,
+          name: 'orders',
+          raw: '{"secret":"never-in-mcp"}',
+          settlesPendingWork: false,
+          value: 'redacted',
+        },
+      ],
+      status: 200,
+      url: '/_m/orders%2Frefresh',
+    });
     const messages = lifecycle(
       { id: 'list', jsonrpc: '2.0', method: 'tools/list' },
       {
@@ -65,10 +84,19 @@ describe('devtool finite MCP transport', () => {
         method: 'tools/call',
         params: { arguments: { limit: 21, query: 'orders' }, name: 'kovo_explain' },
       },
+      {
+        id: 'frames',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: { app: 'demo', limit: 1 },
+          name: 'kovo_graph_recent_frames',
+        },
+      },
     );
     let stdout = '';
     let stderr = '';
-    await createMcpServer({ bundles: [bundle()] }).serveStdio(
+    await createMcpServer({ bundles: [bundle()], runtimeFrames }).serveStdio(
       chunks(`${messages.map((message) => JSON.stringify(message)).join('\n')}\n`),
       { write: (chunk) => (stdout += chunk) },
       { write: (chunk) => (stderr += chunk) },
@@ -79,10 +107,15 @@ describe('devtool finite MCP transport', () => {
       .map((line) => JSON.parse(line));
 
     expect(stderr).toBe('kovo-dataflow MCP server ready (apps: demo)\n');
-    expect(responses).toHaveLength(4);
+    expect(responses).toHaveLength(5);
     expect(responses[1]).toMatchObject({
       id: 'list',
-      result: { tools: [expect.objectContaining({ name: 'kovo_explain' })] },
+      result: {
+        tools: [
+          expect.objectContaining({ name: 'kovo_explain' }),
+          expect.objectContaining({ name: 'kovo_graph_recent_frames' }),
+        ],
+      },
     });
     expect(responses[2]).toMatchObject({
       id: 'call',
@@ -101,6 +134,18 @@ describe('devtool finite MCP transport', () => {
         isError: true,
       },
     });
+    expect(responses[4]).toMatchObject({
+      id: 'frames',
+      result: {
+        structuredContent: {
+          app: 'demo',
+          count: 1,
+          frames: [runtimeFrame],
+          schema: 'kovo-devtool-runtime-frames/v1',
+        },
+      },
+    });
+    expect(JSON.stringify(responses[4])).not.toContain('never-in-mcp');
   });
 
   it('serves and exits cleanly through the spawned devtool binary', () => {
