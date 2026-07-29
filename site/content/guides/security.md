@@ -396,11 +396,13 @@ interface SupportRequest {
 
 const user = domain('user');
 declare const users: any;
+const supportRead = guards.role<SupportRequest>('support');
 
 export const supportUsers = query({
-  guard: guards.role<SupportRequest>('support'),
-  load: (_input, context: { db?: any }) =>
-    context?.db?.select({ id: users.id, email: users.email }).from(users) ?? [],
+  guard: supportRead,
+  async load(_input: unknown, context?: { db?: any }): Promise<{ email: string; id: string }[]> {
+    return context?.db?.select({ id: users.id, email: users.email }).from(users) ?? [];
+  },
   reads: [user],
 });
 ```
