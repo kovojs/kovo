@@ -1,23 +1,28 @@
 import { describe, expect, it } from 'vitest';
 
 import * as publicStyle from './index.js';
-import { attrs, create, defineTheme, createTheme, defineVars, keyframes, tokens } from './index.js';
 import {
-  type AtomicRule,
+  attrs,
+  create,
+  defineTheme,
+  defineVars,
+  keyframes,
+  tokens,
+  type StyleHandle,
+} from './index.js';
+import {
   createAtomicStyles,
   createKeyframes,
   defineConsts,
   defineThemeFromBase,
+  defineVarsWithCss,
   emitAtomicCss,
   getPriority,
   internalThemeTokens,
   raw,
+  rulesForStyle,
   themeFromSeed,
 } from './internal.js';
-
-function metadataRules(value: unknown): readonly AtomicRule[] {
-  return Array.isArray(value) ? (value as readonly AtomicRule[]) : [];
-}
 
 describe('@kovojs/style phase 1 runtime fork', () => {
   it('keeps CSS emission helpers on the internal subpath', () => {
@@ -42,7 +47,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     const result = attrs(base.root, override.root);
 
     expect(result.class).toMatch(/^kv-style-fg-[a-z0-9]+ kv-style-bg-[a-z0-9]+$/);
-    expect(result['data-style-src']).toBeUndefined();
+    expect(Reflect.get(result, 'data-style-src')).toBeUndefined();
   });
 
   it('flattens arrays and serializes the explicit raw inline escape hatch', () => {
@@ -68,7 +73,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       },
     });
 
-    expect(compiled.styles.root.__rules).toHaveLength(5);
+    expect(rulesForStyle(compiled.styles.root)).toHaveLength(5);
     expect(compiled.css).toContain('@layer kovo-style-1000');
     expect(compiled.css).toContain('@layer kovo-style-2000');
     expect(compiled.css).toContain('@layer kovo-style-4000');
@@ -139,7 +144,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       },
     });
 
-    expect(compiled.styles.root.__rules).toHaveLength(2);
+    expect(rulesForStyle(compiled.styles.root)).toHaveLength(2);
     expect(compiled.css).toContain('.kv-style-fg-');
     expect(compiled.css).toContain('[data-state=active]{color:black}');
   });
@@ -147,10 +152,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   it('keeps priority buckets independent of file/link order', () => {
     const firstFile = createAtomicStyles({ root: { paddingInline: 12 } });
     const secondFile = createAtomicStyles({ root: { padding: 8 } });
-    const css = emitAtomicCss([
-      ...(secondFile.styles.root.__rules ?? []),
-      ...(firstFile.styles.root.__rules ?? []),
-    ]);
+    const css = emitAtomicCss([...secondFile.rules, ...firstFile.rules]);
 
     expect(getPriority('padding')).toBeLessThan(getPriority('paddingInline'));
     expect(css.indexOf('@layer kovo-style-1000')).toBeLessThan(
@@ -170,17 +172,20 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(getPriority('scrollPaddingTop')).toBe(4000);
   });
 
-  it('defines typed token vars and theme override classes', () => {
+  it('defines typed token vars without leaking compiler rule metadata', () => {
     const tokens = defineVars({
       accent: '#2563eb',
       onAccent: 'white',
     });
-    const theme = createTheme(tokens, { accent: '#16a34a' });
+    const extracted = defineVarsWithCss(
+      { accent: '#2563eb', onAccent: 'white' },
+      { namespace: 'tokens' },
+    );
     const styles = create({ root: { backgroundColor: tokens.accent, color: tokens.onAccent } });
 
     expect(tokens.accent).toBe('var(--kovo-tokens-accent)');
-    expect(theme.className).toMatch(/^kv-theme-theme-[a-z0-9]+$/);
-    expect(metadataRules(theme.__rules)[0]?.rule).toContain('--kovo-tokens-accent:#16a34a');
+    expect(Reflect.ownKeys(tokens)).toEqual(['accent', 'onAccent']);
+    expect(extracted.rules[0]?.rule).toContain('--kovo-tokens-accent:#2563eb');
     expect(attrs(styles.root).class).toMatch(/^kv-style-bg-[a-z0-9]+ kv-style-fg-[a-z0-9]+$/);
   });
 
@@ -229,7 +234,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(result.css).toContain('transform:translateX(-100%)');
     expect(result.css).toContain('width:40px');
     // Parity: a `width: 40` atomic rule appends px the same way.
-    const atomic = createAtomicStyles({ root: { width: 40 } }).styles.root.__rules ?? [];
+    const atomic = createAtomicStyles({ root: { width: 40 } }).rules;
     expect(atomic[0]?.rule).toContain('width:40px');
   });
 
@@ -244,7 +249,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
 
   it('emits deduped @keyframes blocks outside any layer in emitAtomicCss', () => {
     const pulse = createKeyframes({ '0%': { opacity: 1 } }, { namespace: 'pulse' });
-    const rules = createAtomicStyles({ root: { padding: 8 } }).styles.root.__rules ?? [];
+    const rules = createAtomicStyles({ root: { padding: 8 } }).rules;
     const css = emitAtomicCss([...rules], { keyframes: [pulse, pulse] });
 
     // Keyframes lead, defined once, before the atomic @layer; not wrapped in @layer.
@@ -335,7 +340,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(Object.isFrozen(tokens.sys)).toBe(true);
     expect(Object.isFrozen(tokens.sys.color)).toBe(true);
     expect(Reflect.set(tokens.sys.color, 'primary', 'attacker-controlled')).toBe(false);
-    expect(metadataRules(styles.root.__rules).map((rule) => rule.value)).toContain(
+    expect(rulesForStyle(styles.root).map((rule) => rule.value)).toContain(
       'var(--kovo-theme-sys-color-primary)',
     );
   });
@@ -444,66 +449,65 @@ function linearize(channel: number): number {
   return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
 }
 
-describe('ported upstream StyleX runtime fixtures', () => {
-  it('snapshots supported upstream error handling for missing inputs', () => {
-    // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "error handling".
+describe('@kovojs/style opaque handle contract', () => {
+  it('keeps runtime handles fieldless while preserving atomic merge behavior', () => {
+    const first = create({
+      root: { backgroundColor: 'black', color: 'white', ':hover': { color: 'gray' } },
+    });
+    const second = create({ root: { backgroundColor: 'tomato' } });
+
+    expect(Reflect.ownKeys(first.root)).toEqual([]);
+    expect(Object.getPrototypeOf(first.root)).toBeNull();
+    expect(attrs(first.root, second.root).class).toMatch(
+      /^kv-style-fg-[a-z0-9]+ kv-style-fg-[a-z0-9]+ kv-style-bg-[a-z0-9]+$/,
+    );
+    expect(rulesForStyle(first.root)).toHaveLength(3);
+  });
+
+  it('uses the same opaque capability for the internal raw escape hatch', () => {
+    const inline = raw({ '--progress': '60%', marginTop: 2 });
+
+    expect(Reflect.ownKeys(inline)).toEqual([]);
+    expect(attrs(inline)).toEqual({ style: '--progress:60%;margin-top:2' });
+  });
+
+  it('rejects literal, spread-cloned, marker-shaped, and legacy tuple forgeries', () => {
+    const styles = create({ root: { color: 'red' } });
+    const literal = {} as StyleHandle;
+    const clone = { ...styles.root } as StyleHandle;
+    const legacyMarker = {
+      $$css: true,
+      color: 'attacker-class',
+      __rules: [],
+      __styleKey: 'root',
+      'data-style-src': 'attacker.tsx#root',
+    } as unknown as StyleHandle;
+
+    for (const forged of [literal, clone, legacyMarker]) {
+      expect(() => attrs(forged)).toThrow(/rejected an untrusted style value/u);
+      expect(() => rulesForStyle(forged)).toThrow(/framework-created/u);
+    }
+    expect(() => attrs([null, { color: 'red' }] as never)).toThrow(
+      /rejected an untrusted style value/u,
+    );
+  });
+
+  it('keeps private extraction helpers and the retired names off the root module', () => {
+    expect(publicStyle).not.toHaveProperty('createTheme');
+    expect(publicStyle).not.toHaveProperty('createVarsTheme');
+    expect(publicStyle).not.toHaveProperty('StyleRecord');
+    expect(publicStyle).not.toHaveProperty('Theme');
+    expect(publicStyle).not.toHaveProperty('raw');
+    expect(publicStyle).not.toHaveProperty('rulesForStyle');
+  });
+
+  it('guards missing inputs on the retained authoring APIs', () => {
     type RuntimeApi = (...args: readonly unknown[]) => unknown;
     const calls = [
       ['create', create as RuntimeApi],
-      ['createTheme', createTheme as RuntimeApi],
       ['defineConsts', defineConsts as RuntimeApi],
       ['defineVars', defineVars as RuntimeApi],
       ['keyframes', keyframes as RuntimeApi],
-    ] as const;
-
-    expect(
-      calls.map(([api, call]) => {
-        try {
-          call();
-          return { api, message: null, name: null };
-        } catch (error) {
-          return {
-            api,
-            message: error instanceof Error ? error.message : String(error),
-            name: error instanceof Error ? error.name : typeof error,
-          };
-        }
-      }),
-    ).toMatchInlineSnapshot(`
-      [
-        {
-          "api": "create",
-          "message": "style.create requires styles to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "createTheme",
-          "message": "style.createTheme requires baseTokens to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "defineConsts",
-          "message": "style.defineConsts requires constants to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "defineVars",
-          "message": "style.defineVars requires tokens to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "keyframes",
-          "message": "style.keyframes requires frames to be an object.",
-          "name": "TypeError",
-        },
-      ]
-    `);
-  });
-
-  it('snapshots Kovo-only missing input guards for style helpers', () => {
-    type RuntimeApi = (...args: readonly unknown[]) => unknown;
-    const calls = [
-      ['createAtomicStyles', createAtomicStyles as RuntimeApi],
       ['raw', raw as RuntimeApi],
     ] as const;
 
@@ -511,242 +515,17 @@ describe('ported upstream StyleX runtime fixtures', () => {
       calls.map(([api, call]) => {
         try {
           call();
-          return { api, message: null, name: null };
+          return { api, message: null };
         } catch (error) {
-          return {
-            api,
-            message: error instanceof Error ? error.message : String(error),
-            name: error instanceof Error ? error.name : typeof error,
-          };
+          return { api, message: error instanceof Error ? error.message : String(error) };
         }
       }),
-    ).toMatchInlineSnapshot(`
-      [
-        {
-          "api": "createAtomicStyles",
-          "message": "style.createAtomicStyles requires styles to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "raw",
-          "message": "style.raw requires style to be an object.",
-          "name": "TypeError",
-        },
-      ]
-    `);
-  });
-
-  it('matches upstream basic merge resolution', () => {
-    // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "basic resolve".
-    expect(attrs({ a: 'aaa', b: 'bbb', $$css: true }).class).toBe('aaa bbb');
-  });
-
-  it('matches upstream array merge order', () => {
-    // Ported from StyleX "merge order": classes keep first-seen property order unless replaced.
-    expect(
-      attrs([
-        { a: 'a', ':hover__aa': 'aa', $$css: true },
-        { b: 'b', $$css: true },
-        { c: 'c', ':hover__cc': 'cc', $$css: true },
-      ]).class,
-    ).toBe('a aa b c cc');
-  });
-
-  it('matches upstream same-property override behavior', () => {
-    // Ported from StyleX "top-level array of simple overridden classes".
-    expect(
-      attrs([
-        { backgroundColor: 'nu7423ey', $$css: true },
-        { backgroundColor: 'gh25dzvf', $$css: true },
-      ]).class,
-    ).toBe('gh25dzvf');
-  });
-
-  it('matches upstream merge resolution with just pseudoclasses', () => {
-    // Ported from StyleX "with just pseudoclasses".
-    expect(
-      attrs(
-        { ':hover__backgroundColor': 'rse6dlih', $$css: true },
-        { ':hover__color': 'gofk2cf1', $$css: true },
-      ).class,
-    ).toBe('rse6dlih gofk2cf1');
-  });
-
-  it('matches upstream merge resolution for a complicated nested argument set', () => {
-    // Ported from StyleX "with complicated set of arguments".
-    const styles = [
-      {
-        backgroundColor: 'nu7423ey',
-        borderColor: 'tpe1esc0',
-        borderStyle: 'gewhe1h2',
-        borderWidth: 'gcovof34',
-        boxSizing: 'bdao358l',
-        display: 'rse6dlih',
-        listStyle: 's5oniofx',
-        marginTop: 'm8h3af8h',
-        marginEnd: 'l7ghb35v',
-        marginBottom: 'kjdc1dyq',
-        marginStart: 'kmwttqpk',
-        paddingTop: 'srn514ro',
-        paddingEnd: 'oxkhqvkx',
-        paddingBottom: 'rl78xhln',
-        paddingStart: 'nch0832m',
-        WebkitTapHighlightColor: 'qi72231t',
-        textAlign: 'cr00lzj9',
-        textDecoration: 'rn8ck1ys',
-        whiteSpace: 'n3t5jt4f',
-        wordWrap: 'gh25dzvf',
-        zIndex: 'g4tp4svg',
-        $$css: true,
-      },
-      false,
-      false,
-      false,
-      false,
-      [
-        {
-          cursor: 'fsf7x5fv',
-          touchAction: 's3jn8y49',
-          $$css: true,
-        },
-        false,
-        {
-          outline: 'icdlwmnq',
-          $$css: true,
-        },
-        [
-          {
-            WebkitTapHighlightColor: 'oajrlxb2',
-            cursor: 'nhd2j8a9',
-            touchAction: 'f1sip0of',
-            $$css: true,
-          },
-          false,
-          false,
-          {
-            textDecoration: 'esuyzwwr',
-            ':hover__textDecoration': 'p8dawk7l',
-            $$css: true,
-          },
-          false,
-          [
-            {
-              backgroundColor: 'g5ia77u1',
-              border: 'e4t7hp5w',
-              color: 'gmql0nx0',
-              cursor: 'nhd2j8a9',
-              display: 'q9uorilb',
-              fontFamily: 'ihxqhq3m',
-              fontSize: 'l94mrbxd',
-              lineHeight: 'aenfhxwr',
-              marginTop: 'kvgmc6g5',
-              marginEnd: 'cxmmr5t8',
-              marginBottom: 'oygrvhab',
-              marginStart: 'hcukyx3x',
-              paddingTop: 'jb3vyjys',
-              paddingEnd: 'rz4wbd8a',
-              paddingBottom: 'qt6c0cv9',
-              paddingStart: 'a8nywdso',
-              textAlign: 'i1ao9s8h',
-              textDecoration: 'myohyog2',
-              ':hover__color': 'ksdfmwjs',
-              ':hover__textDecoration': 'gofk2cf1',
-              ':active__transform': 'lsqurvkf',
-              ':active__transition': 'bj9fd4vl',
-              $$css: true,
-            },
-            {
-              display: 'a8c37x1j',
-              width: 'k4urcfbm',
-              $$css: true,
-            },
-            [
-              {
-                ':active__transform': 'tm8avpzi',
-                $$css: true,
-              },
-            ],
-          ],
-        ],
-      ],
-    ] as const;
-
-    const value = attrs(styles).class ?? '';
-    const repeat = attrs(styles).class ?? '';
-
-    expect(value).toBe(repeat);
-    expect(value.split(' ').sort().join(' ')).toBe(
-      'g5ia77u1 tpe1esc0 gewhe1h2 gcovof34 bdao358l a8c37x1j s5oniofx kvgmc6g5 cxmmr5t8 oygrvhab hcukyx3x jb3vyjys rz4wbd8a qt6c0cv9 a8nywdso oajrlxb2 i1ao9s8h myohyog2 n3t5jt4f gh25dzvf g4tp4svg nhd2j8a9 f1sip0of icdlwmnq e4t7hp5w gmql0nx0 ihxqhq3m l94mrbxd aenfhxwr k4urcfbm gofk2cf1 ksdfmwjs tm8avpzi bj9fd4vl'
-        .split(' ')
-        .sort()
-        .join(' '),
-    );
-  });
-
-  it('matches upstream nested arrays and pseudo-class override behavior', () => {
-    // Ported from StyleX "nested arrays and pseudoClasses overriding things".
-    expect(
-      attrs([
-        { backgroundColor: 'nu7423ey', $$css: true },
-        [{ backgroundColor: 'abcdefg', ':hover__backgroundColor': 'ksdfmwjs', $$css: true }],
-        { color: 'gofk2cf1', ':hover__backgroundColor': 'rse6dlih', $$css: true },
-      ]).class,
-    ).toBe('abcdefg gofk2cf1 rse6dlih');
-  });
-
-  it('matches upstream data-style-src collection with the Kovo attrs shape', () => {
-    // Ported from StyleX "data prop for source map data"; Kovo keeps `class`, not `className`.
-    expect(
-      attrs([
-        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
-        { color: 'color-blue', $$css: 'components/Bar.react.js:3' },
-        [{ display: 'display-block', $$css: 'components/Baz.react.js:5' }],
-      ]),
-    ).toEqual({
-      class: 'backgroundColor-red color-blue display-block',
-      'data-style-src':
-        'components/Foo.react.js:1; components/Bar.react.js:3; components/Baz.react.js:5',
-    });
-  });
-
-  it('matches upstream attrs basic resolution', () => {
-    // Ported from StyleX attrs "basic resolve".
-    expect(attrs({ a: 'aaa', b: 'bbb', $$css: true }).class).toBe('aaa bbb');
-  });
-
-  it('ports upstream dynamic merge fixture through Kovo raw inline style', () => {
-    // Upstream accepts a bare inline object; Kovo requires the explicit `raw(...)` escape hatch.
-    expect(
-      attrs([
-        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
-        raw({ color: 'red' }),
-      ]),
-    ).toEqual({
-      class: 'backgroundColor-red',
-      'data-style-src': 'components/Foo.react.js:1',
-      style: 'color:red',
-    });
-  });
-
-  it('ports upstream dynamic attrs fixture through Kovo raw inline style', () => {
-    // Upstream accepts a bare inline object; Kovo requires the explicit `raw(...)` escape hatch.
-    expect(
-      attrs([
-        { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
-        raw({
-          color: 'red',
-          marginTop: '10px',
-          opacity: 0.5,
-          '--foo': 2,
-          MsTransition: 'none',
-          WebkitTapHighlightColor: 'transparent',
-        }),
-      ]),
-    ).toEqual({
-      class: 'backgroundColor-red',
-      'data-style-src': 'components/Foo.react.js:1',
-      style:
-        'color:red;margin-top:10px;opacity:0.5;--foo:2;-ms-transition:none;-webkit-tap-highlight-color:transparent',
-    });
+    ).toEqual([
+      { api: 'create', message: 'style.create requires styles to be an object.' },
+      { api: 'defineConsts', message: 'style.defineConsts requires constants to be an object.' },
+      { api: 'defineVars', message: 'style.defineVars requires tokens to be an object.' },
+      { api: 'keyframes', message: 'style.keyframes requires frames to be an object.' },
+      { api: 'raw', message: 'style.raw requires style to be an object.' },
+    ]);
   });
 });

@@ -133,7 +133,7 @@ export const Button = component({
     );
   });
 
-  it('extracts same-file defineVars and createTheme rules into CSS assets', () => {
+  it('extracts same-file defineVars rules into CSS assets', () => {
     const result = compileComponentModule({
       fileName: 'components/themed-button.tsx',
       source: `
@@ -144,11 +144,6 @@ const buttonVars = style.defineVars({
   accent: '#2563eb',
   onAccent: 'white',
 });
-
-const successTheme = style.createTheme(
-  buttonVars,
-  { accent: '#16a34a' },
-);
 
 const base = style.create({
   root: {
@@ -168,7 +163,6 @@ export const Button = component({
 
     expect(cssSource).toContain(':root{--kovo-button-accent:#2563eb}');
     expect(cssSource).toContain(':root{--kovo-button-on-accent:white}');
-    expect(cssSource).toContain('--kovo-button-accent:#16a34a');
     expect(cssSource).toContain('background-color:var(--kovo-button-accent)');
     expect(cssSource).toContain('color:var(--kovo-button-on-accent)');
     expect(serverSource).toContain('kv-themed-button-bg-');
@@ -178,11 +172,6 @@ export const Button = component({
           moduleFileName: 'components/themed-button.tsx',
           source: 'components/themed-button.tsx#accent',
           styleRef: 'buttonVars.accent',
-        }),
-        expect.objectContaining({
-          moduleFileName: 'components/themed-button.tsx',
-          source: 'components/themed-button.tsx#accent',
-          styleRef: 'successTheme.accent',
         }),
         expect.objectContaining({
           moduleFileName: 'components/themed-button.tsx',
@@ -354,7 +343,7 @@ export const WarningCallout = component({
         code: 'KV236',
         fileName: 'components/warning-callout.tsx',
         help: expect.stringContaining(
-          'the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references',
+          'the style extractor only accepts literals, same-file defineVars values, and public @kovojs/style theme token references',
         ),
         message: 'Static style extraction could not prove style.create values.',
       }),
@@ -471,7 +460,7 @@ export const Button = component({
         code: 'KV236',
         fileName: 'components/broken-token.tsx',
         help: expect.stringContaining(
-          'the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references',
+          'the style extractor only accepts literals, same-file defineVars values, and public @kovojs/style theme token references',
         ),
         message: 'Static style extraction could not prove style.create values.',
       }),
@@ -519,7 +508,7 @@ export const Button = component({
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('composes generated StyleX classes with same-element theme class writers', () => {
+  it('composes generated StyleX classes with same-element static class writers', () => {
     const result = compileComponentModule({
       fileName: 'components/panel.tsx',
       source: `
@@ -530,10 +519,6 @@ const vars = style.defineVars({
   surface: 'white',
 });
 
-const darkTheme = style.createTheme(vars, {
-  surface: '#111827',
-});
-
 const styles = style.create({
   shell: {
     backgroundColor: vars.surface,
@@ -542,18 +527,16 @@ const styles = style.create({
 });
 
 export const Panel = component({
-  render: () => <section class={darkTheme.className} style={styles.shell}>Settings</section>,
+  render: () => <section class="dark-panel" style={styles.shell}>Settings</section>,
 });
 `,
     });
 
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(serverSource).toMatch(
-      /class="kv-dark-theme-[a-z0-9]+ kv-panel-bg-[a-z0-9]+ kv-panel-pad-[a-z0-9]+"/,
-    );
+    expect(serverSource).toMatch(/class="dark-panel kv-panel-bg-[a-z0-9]+ kv-panel-pad-[a-z0-9]+"/);
     expect(serverSource).toContain('data-style-src="components/panel.tsx#shell"');
-    expect(serverSource).not.toContain('class={darkTheme.className}');
+    expect(serverSource).not.toContain('class="dark-panel" style=');
     expect(serverSource).not.toContain('style={styles.shell}');
     expect(result.diagnostics).toEqual([]);
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -860,12 +843,11 @@ export const Badge = component({ render: () => <span style={base.root}>Hi</span>
     expect(poisonHits).toBe(0);
   });
 
-  it('does not drop defineVars or createTheme rules through late Array.isArray replacement', () => {
+  it('does not drop defineVars rules through late Array.isArray replacement', () => {
     const source = `
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 const buttonVars = style.defineVars({ accent: '#2563eb', onAccent: 'white' });
-const successTheme = style.createTheme(buttonVars, { accent: '#16a34a' });
 const base = style.create({
   root: { backgroundColor: buttonVars.accent, color: buttonVars.onAccent },
 });
@@ -897,7 +879,6 @@ export const Button = component({
 
     const css = result?.files.find((file) => file.kind === 'css')?.source ?? '';
     expect(css).toContain(':root{--kovo-button-accent:#2563eb}');
-    expect(css).toContain('--kovo-button-accent:#16a34a');
     expect(css).toContain('background-color:var(--kovo-button-accent)');
     expect(poisonHits).toBe(0);
   });

@@ -1,6 +1,6 @@
 # Spike: Material Design 3 theming for `@kovojs/ui`
 
-**Status:** Design exploration (no code yet)
+**Status:** Superseded design exploration; the shipped public contract is `defineTheme({ seed })`
 **Author:** (handoff from design-space spike)
 **Related:** `packages/style` (StyleX fork), `packages/headless-ui/src/lib/token-sheet.ts`, `packages/ui/*`
 **Upstream:** [M3 design tokens](https://m3.material.io/foundations/design-tokens/overview), [material-color-utilities](https://github.com/material-foundation/material-color-utilities) (Apache-2.0)
@@ -24,7 +24,7 @@ There are three relevant pieces today, and they are **not connected**:
 
 | Piece                            | What it is                                                                                                                                                                                      | Theming role today                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `@kovojs/style`                  | The Kovo-owned StyleX fork. Has `create`, **`defineVars`** (typed `var(--kovo-*)` refs), **`createTheme`** (override class), `defineConsts`.                                                    | The _mechanism_ for typed, themeable CSS variables. Already perfect substrate.                           |
+| `@kovojs/style`                  | The Kovo-owned StyleX fork. Has `create`, `defineVars` (typed `var(--kovo-*)` refs), and the seed-based `defineTheme`.                                                                          | The mechanism for typed, themeable CSS variables and generated document themes.                          |
 | `headless-ui/.../token-sheet.ts` | A hand-authored **shadcn-style** semantic token set (`--kovo-color-primary`, `muted`, `accent`, `destructive`…) as light/dark **HSL** pairs, emitted to `:root` and `:root[data-theme="dark"]`. | A semantic token contract — but values are hand-tuned, single-accent, not seed-generated.                |
 | `@kovojs/ui` (97 components)     | Styled components built on `style.create`.                                                                                                                                                      | **Hardcode hex** (`#0a0a0a`, `#ffffff`, `#f5f5f5`). `var(--…)` token references: **0 of 97 components.** |
 
@@ -32,9 +32,9 @@ So the "change a theme in one place" promise is currently **unmet**: the token s
 component reads it, and components bake literal colors. This spike is greenfield — there are no
 `Material`/`HCT`/`tonal`/`seed-color` references anywhere in `packages/` or `SPEC.md`.
 
-The good news: the hard machinery (`defineVars`/`createTheme`, the light/dark `:root` emit pattern in
-`token-sheet.ts`) already exists. The work is (a) a color engine, (b) an M3 token contract, and
-(c) rewiring the 97 components to read tokens instead of hex.
+The good news identified by the spike was the existing CSS-variable and light/dark `:root` emission
+machinery. The implemented public API consolidated the seed generator into `defineTheme`; the
+representation-level variable override helper was not retained.
 
 ## 3. Material's 3-tier token model (the part to adopt)
 
@@ -123,10 +123,10 @@ app CSS). Output is a static `kovoUiTokenSheetCss` string, same as today.
 `var(--kovo-…)` refs with the right types; this is the bridge that makes the 97-component rewrite
 mechanical and type-checked.
 
-**(d) Multiple/override themes — `style.createTheme`.** Already supports an override class that
-re-binds a subset of vars under `.kv-…-theme-<hash>`. A second brand or a "high-contrast" theme
-becomes a `createTheme(tokens, themeFromSeed(otherSeed))` class applied to a subtree — no component
-changes.
+**(d) Multiple/override themes.** This proposal was not adopted as a public representation-level
+helper. Generate a document theme with `defineTheme({ seed, variant, contrast })` and select its CSS
+through document-owned selectors. A future subtree-theme API needs its own user story and cannot
+expose variable records or generated class internals.
 
 Why this fits Kovo specifically: light DOM means tokens are ordinary inherited custom properties (the
 styling guide already calls this out — "theming does not cross shadow boundaries"). Nothing here needs
@@ -179,8 +179,8 @@ retired into `plans/archive.md`.
       `kovoUiTokenSheetCss` shape (light `:root` + dark `[data-theme]`) is preserved.
 - [ ] Emit a typed `tokens` (`defineVars`) object; codemod the 97 `@kovojs/ui` components from hex to
       `tokens.*`; the `*.stylex.test.tsx` snapshots become the regression net.
-- [ ] Document the theming story in `site/content/guides/styling.md` (seed → tokens → components) and
-      add a `createTheme` multi-theme example.
+- [x] Document the theming story in `site/content/guides/styling.md` (seed → tokens → components)
+      around the retained `defineTheme` contract.
 - [ ] If runtime theming is approved later: a separate opt-in island that ships the trimmed engine.
 
 ## 10. Risks / notes

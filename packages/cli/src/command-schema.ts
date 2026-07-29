@@ -1248,7 +1248,11 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     async: true,
     category: 'agent-operator',
     compilerRealm: 'locked-before-dispatch',
-    examples: ['kovo fix src/components/cart.tsx', 'kovo fix --cost-report'],
+    examples: [
+      'kovo fix src/components/cart.tsx',
+      'kovo fix api-v1 --check',
+      'kovo fix --cost-report',
+    ],
     exits,
     name: 'fix',
     options: [
@@ -1268,6 +1272,17 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       {
         id: 'source',
         tokens: [argument('source', value('path', 'source.tsx|source.jsx')), option('check')],
+      },
+      {
+        id: 'api-v1',
+        tokens: [
+          literal('api-v1', 'Migrate the checked public API v1 batch.'),
+          argument('sources', value('path', 'source-or-directory'), {
+            repeatable: true,
+            required: false,
+          }),
+          option('check'),
+        ],
       },
       { id: 'cost-report', tokens: [option('costReport', true)] },
     ],

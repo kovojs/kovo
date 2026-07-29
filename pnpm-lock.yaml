@@ -488,9 +488,6 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@kovojs/style':
-        specifier: workspace:*
-        version: link:../style
       '@kovojs/verify':
         specifier: workspace:*
         version: link:../verify
@@ -507,6 +504,9 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../style
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))
@@ -626,10 +626,10 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
+    devDependencies:
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
-    devDependencies:
       lucide-static:
         specifier: 1.21.0
         version: 1.21.0
@@ -654,9 +654,6 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
-      '@kovojs/style':
-        specifier: workspace:*
-        version: link:../style
       '@node-rs/argon2':
         specifier: 2.0.2
         version: 2.0.2
@@ -676,6 +673,9 @@ importers:
       '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../better-auth
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../style
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -756,13 +756,13 @@ importers:
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
-      '@kovojs/style':
-        specifier: workspace:*
-        version: link:../style
     devDependencies:
       '@kovojs/browser':
         specifier: workspace:*
         version: link:../browser
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../style
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))

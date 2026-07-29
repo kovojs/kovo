@@ -9,14 +9,25 @@ import {
 // Repo-internal style ABI re-exports. These symbols are not part of the
 // app-facing public surface; the compiler and conformance tests consume them
 // through `@kovojs/style/internal` (SPEC.md §13.1, rules/api-surface.md).
-export { createAtomicStyles, createKeyframes, defineConsts, emitAtomicCss, raw } from './engine.js';
+export {
+  attrsWithProvenance,
+  createAtomicStyles,
+  createKeyframes,
+  defineConsts,
+  defineVarsWithCss,
+  emitAtomicCss,
+  isStyleHandle,
+  raw,
+  rulesForStyle,
+} from './engine.js';
 export type {
   AtomicCssResult,
   AtomicRule,
-  CompiledStyle,
+  AttrsWithProvenanceResult,
   Consts,
   CssEmitOptions,
   KeyframesResult,
+  VarsCssResult,
 } from './engine.js';
 export { defineThemeFromBase, internalThemeTokens, themeFromSeed } from './theme.js';
 export type {

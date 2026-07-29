@@ -174,6 +174,12 @@ export type {
   SafeComponentFixEdit,
   SafeComponentFixResult,
 } from './scan/safe-fixes.js';
+export { analyzeStyleApiV1Migration } from './style-api-v1-migration.js';
+export type {
+  StyleApiV1MigrationAnalysis,
+  StyleApiV1MigrationEdit,
+  StyleApiV1MigrationRefusal,
+} from './style-api-v1-migration.js';
 export {
   agentAuthoredCostToGreenCorpus,
   measureAgentAuthoredCostToGreenCorpus,

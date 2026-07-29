@@ -44,60 +44,193 @@ import {
   styleStringSplit,
 } from './style-security-intrinsics.js';
 
-/** Seed color accepted by Kovo's build-time theme generator. */
-export type ThemeSeed = string | number;
-
-/** Material dynamic-color scheme variants supported by Kovo's public adapter. */
-export type ThemeVariant =
-  | 'content'
-  | 'expressive'
-  | 'fidelity'
-  | 'fruit-salad'
-  | 'monochrome'
-  | 'neutral'
-  | 'rainbow'
-  | 'tonal-spot'
-  | 'vibrant';
-
-/** Named semantic color to harmonize with the seed color. */
-export interface ThemeCustomColorInput {
-  readonly blend?: boolean;
-  readonly value: ThemeSeed;
-}
-
-/** Custom semantic color map, such as `{ success: '#16a34a' }`. */
-export type ThemeCustomColorsInput = Readonly<Record<string, ThemeSeed | ThemeCustomColorInput>>;
-
-/** Shape tokens emitted beside color tokens for copied UI components. */
-export interface ThemeShapeInput {
-  readonly cornerFull?: string;
-  readonly cornerLarge?: string;
-  readonly cornerMedium?: string;
-  readonly cornerSmall?: string;
-}
-
-/** Theme options for seed-generated Kovo themes. */
-export interface ThemeFromSeedOptions {
-  /** Additional semantic colors generated through Material custom-color groups. */
-  readonly colors?: ThemeCustomColorsInput;
+/** App-facing options for generating one Kovo theme from a seed color. */
+export interface DefineThemeOptions {
+  /** Additional semantic colors harmonized with the seed. */
+  readonly colors?: Readonly<
+    Record<
+      string,
+      | string
+      | number
+      | {
+          readonly blend?: boolean;
+          readonly value: string | number;
+        }
+    >
+  >;
   /** Material contrast level from -1 to 1. Defaults to 0. */
   readonly contrast?: number;
   /** Selector that receives dark system-token overrides. Defaults to `:root[data-theme="dark"]`. */
   readonly darkSelector?: string;
   /** Emit reference palette tone variables. Defaults to true. */
   readonly emitRef?: boolean;
+  /** Seed color accepted as a CSS color string or finite ARGB number. */
+  readonly seed: string | number;
   /** Shape token overrides. */
-  readonly shape?: ThemeShapeInput;
+  readonly shape?: {
+    readonly cornerFull?: string;
+    readonly cornerLarge?: string;
+    readonly cornerMedium?: string;
+    readonly cornerSmall?: string;
+  };
   /** Selector that receives light/default variables. Defaults to `:root`. */
   readonly selector?: string;
   /** Material dynamic scheme variant. Defaults to `tonal-spot`. */
-  readonly variant?: ThemeVariant;
+  readonly variant?:
+    | 'content'
+    | 'expressive'
+    | 'fidelity'
+    | 'fruit-salad'
+    | 'monochrome'
+    | 'neutral'
+    | 'rainbow'
+    | 'tonal-spot'
+    | 'vibrant';
 }
+
+/** Typed public `var(...)` references for app-authored `style.create(...)` objects (SPEC.md §13.1). */
+export interface ThemeTokens {
+  readonly customColor: (name: string) => {
+    readonly color: string;
+    readonly colorContainer: string;
+    readonly onColor: string;
+    readonly onColorContainer: string;
+  };
+  readonly ref: {
+    readonly palette: Readonly<
+      Record<
+        'error' | 'neutral' | 'neutralVariant' | 'primary' | 'secondary' | 'tertiary',
+        Readonly<Record<number, string>>
+      >
+    >;
+  };
+  readonly sys: {
+    readonly color: Readonly<
+      Record<
+        | 'background'
+        | 'error'
+        | 'errorContainer'
+        | 'inverseOnSurface'
+        | 'inversePrimary'
+        | 'inverseSurface'
+        | 'onBackground'
+        | 'onError'
+        | 'onErrorContainer'
+        | 'onPrimary'
+        | 'onPrimaryContainer'
+        | 'onPrimaryFixed'
+        | 'onPrimaryFixedVariant'
+        | 'onSecondary'
+        | 'onSecondaryContainer'
+        | 'onSecondaryFixed'
+        | 'onSecondaryFixedVariant'
+        | 'onSurface'
+        | 'onSurfaceVariant'
+        | 'onTertiary'
+        | 'onTertiaryContainer'
+        | 'onTertiaryFixed'
+        | 'onTertiaryFixedVariant'
+        | 'outline'
+        | 'outlineVariant'
+        | 'primary'
+        | 'primaryContainer'
+        | 'primaryFixed'
+        | 'primaryFixedDim'
+        | 'scrim'
+        | 'secondary'
+        | 'secondaryContainer'
+        | 'secondaryFixed'
+        | 'secondaryFixedDim'
+        | 'shadow'
+        | 'surface'
+        | 'surfaceBright'
+        | 'surfaceContainer'
+        | 'surfaceContainerHigh'
+        | 'surfaceContainerHighest'
+        | 'surfaceContainerLow'
+        | 'surfaceContainerLowest'
+        | 'surfaceDim'
+        | 'surfaceTint'
+        | 'surfaceVariant'
+        | 'tertiary'
+        | 'tertiaryContainer'
+        | 'tertiaryFixed'
+        | 'tertiaryFixedDim',
+        string
+      >
+    >;
+    readonly shape: Readonly<
+      Record<'cornerFull' | 'cornerLarge' | 'cornerMedium' | 'cornerSmall', string>
+    >;
+  };
+}
+
+/** Generated theme values and CSS produced by `defineTheme`. */
+export interface KovoTheme {
+  readonly css: string;
+  readonly custom: Readonly<Record<string, ReturnType<ThemeTokens['customColor']>>>;
+  readonly dark: {
+    readonly custom: Readonly<Record<string, ReturnType<ThemeTokens['customColor']>>>;
+    readonly sys: ThemeTokens['sys'];
+  };
+  readonly light: {
+    readonly custom: Readonly<Record<string, ReturnType<ThemeTokens['customColor']>>>;
+    readonly sys: ThemeTokens['sys'];
+  };
+  readonly ref: ThemeTokens['ref']['palette'];
+  readonly seed: string;
+  readonly sys: ThemeTokens['sys'];
+  readonly variant: NonNullable<DefineThemeOptions['variant']>;
+}
+
+/** @internal Seed color accepted by Kovo's build-time theme generator. */
+export type ThemeSeed = DefineThemeOptions['seed'];
+
+/** @internal Material dynamic-color scheme variants supported by Kovo's adapter. */
+export type ThemeVariant = NonNullable<DefineThemeOptions['variant']>;
+
+/** @internal Named semantic color to harmonize with the seed color. */
+export interface ThemeCustomColorInput {
+  readonly blend?: boolean;
+  readonly value: ThemeSeed;
+}
+
+/** @internal Custom semantic color map. */
+export type ThemeCustomColorsInput = NonNullable<DefineThemeOptions['colors']>;
+
+/** @internal Shape tokens emitted beside color tokens. */
+export type ThemeShapeInput = NonNullable<DefineThemeOptions['shape']>;
+
+/** @internal Theme options after the required seed has been separated. */
+export type ThemeFromSeedOptions = Omit<DefineThemeOptions, 'seed'>;
+
+/** @internal Material reference palette groups exposed by Kovo themes. */
+export type ThemeReferencePaletteName = keyof ThemeTokens['ref']['palette'];
+
+/** @internal Material system color role names. */
+export type ThemeSystemColorName = keyof ThemeTokens['sys']['color'];
+
+/** @internal System shape token names. */
+export type ThemeShapeTokenName = keyof ThemeTokens['sys']['shape'];
+
+/** @internal Four-role Material custom color group. */
+export type ThemeCustomColorGroup = ReturnType<ThemeTokens['customColor']>;
+
+/** @internal Concrete Material reference palette values by tone. */
+export type ThemeReferencePalettes = ThemeTokens['ref']['palette'];
+
+/** @internal Concrete Material system color role values. */
+export type ThemeSystemColorValues = ThemeTokens['sys']['color'];
+
+/** @internal Concrete Kovo shape token values. */
+export type ThemeShapeValues = ThemeTokens['sys']['shape'];
+
+/** @internal Actual generated values for one light or dark scheme. */
+export type ThemeSchemeValues = KovoTheme['light'];
 
 /**
  * @internal Override form for deriving one app theme from a generated base
- * theme. Not part of the v1 public surface: `defineTheme` advertises the
- * seed form (SPEC.md §13.1); the base-derivation arm is repo-internal.
+ * theme. Not part of the v1 public surface.
  */
 export interface DefineThemeFromBaseOptions {
   readonly base: KovoTheme;
@@ -108,135 +241,13 @@ export interface DefineThemeFromBaseOptions {
   readonly sys?: ThemeSystemOverrides;
 }
 
-/** App-facing theme definition. The v1 public surface is the seed form (SPEC.md §13.1). */
-export type DefineThemeOptions = { readonly seed: ThemeSeed } & ThemeFromSeedOptions;
-
-/** Material reference palette groups exposed by Kovo themes. */
-export type ThemeReferencePaletteName =
-  | 'error'
-  | 'neutral'
-  | 'neutralVariant'
-  | 'primary'
-  | 'secondary'
-  | 'tertiary';
-
-/** Material system color role names exposed as Kovo's semantic color contract. */
-export type ThemeSystemColorName =
-  | 'background'
-  | 'error'
-  | 'errorContainer'
-  | 'inverseOnSurface'
-  | 'inversePrimary'
-  | 'inverseSurface'
-  | 'onBackground'
-  | 'onError'
-  | 'onErrorContainer'
-  | 'onPrimary'
-  | 'onPrimaryContainer'
-  | 'onPrimaryFixed'
-  | 'onPrimaryFixedVariant'
-  | 'onSecondary'
-  | 'onSecondaryContainer'
-  | 'onSecondaryFixed'
-  | 'onSecondaryFixedVariant'
-  | 'onSurface'
-  | 'onSurfaceVariant'
-  | 'onTertiary'
-  | 'onTertiaryContainer'
-  | 'onTertiaryFixed'
-  | 'onTertiaryFixedVariant'
-  | 'outline'
-  | 'outlineVariant'
-  | 'primary'
-  | 'primaryContainer'
-  | 'primaryFixed'
-  | 'primaryFixedDim'
-  | 'scrim'
-  | 'secondary'
-  | 'secondaryContainer'
-  | 'secondaryFixed'
-  | 'secondaryFixedDim'
-  | 'shadow'
-  | 'surface'
-  | 'surfaceBright'
-  | 'surfaceContainer'
-  | 'surfaceContainerHigh'
-  | 'surfaceContainerHighest'
-  | 'surfaceContainerLow'
-  | 'surfaceContainerLowest'
-  | 'surfaceDim'
-  | 'surfaceTint'
-  | 'surfaceVariant'
-  | 'tertiary'
-  | 'tertiaryContainer'
-  | 'tertiaryFixed'
-  | 'tertiaryFixedDim';
-
-/** System shape token names for Kovo UI components. */
-export type ThemeShapeTokenName = 'cornerFull' | 'cornerLarge' | 'cornerMedium' | 'cornerSmall';
-
-/** Four-role Material custom color group generated from one semantic color. */
-export interface ThemeCustomColorGroup {
-  readonly color: string;
-  readonly colorContainer: string;
-  readonly onColor: string;
-  readonly onColorContainer: string;
-}
-
-/** Actual generated values for one light or dark scheme. */
-export interface ThemeSchemeValues {
-  readonly custom: Readonly<Record<string, ThemeCustomColorGroup>>;
-  readonly sys: {
-    readonly color: ThemeSystemColorValues;
-    readonly shape: ThemeShapeValues;
-  };
-}
-
-/** Generated Kovo theme object. Values are concrete CSS values; `tokens` exports `var(...)` refs. */
-export interface KovoTheme {
-  readonly css: string;
-  readonly custom: Readonly<Record<string, ThemeCustomColorGroup>>;
-  readonly dark: ThemeSchemeValues;
-  readonly light: ThemeSchemeValues;
-  readonly ref: ThemeReferencePalettes;
-  readonly seed: string;
-  readonly sys: {
-    readonly color: ThemeSystemColorValues;
-    readonly shape: ThemeShapeValues;
-  };
-  readonly variant: ThemeVariant;
-}
-
-/** Concrete Material reference palette values by tone. */
-export type ThemeReferencePalettes = Readonly<
-  Record<ThemeReferencePaletteName, Readonly<Record<number, string>>>
->;
-
-/** Concrete Material system color role values. */
-export type ThemeSystemColorValues = Readonly<Record<ThemeSystemColorName, string>>;
-
-/** Concrete Kovo shape token values. */
-export type ThemeShapeValues = Readonly<Record<ThemeShapeTokenName, string>>;
-
-/** @internal Concrete component token values emitted as `--kovo-theme-component-*` (base-derivation only). */
+/** @internal Concrete component token values emitted as `--kovo-theme-component-*`. */
 export type ThemeComponentTokensInput = Readonly<Record<string, string | number>>;
 
-/** @internal Concrete system-token overrides for derived themes (base-derivation only). */
+/** @internal Concrete system-token overrides for derived themes. */
 export interface ThemeSystemOverrides {
   readonly color?: Partial<ThemeSystemColorValues>;
   readonly shape?: Partial<ThemeShapeValues>;
-}
-
-/** Typed public `var(...)` references for app-authored `style.create(...)` objects (SPEC.md §13.1). */
-export interface ThemeTokens {
-  readonly customColor: (name: string) => ThemeCustomColorGroup;
-  readonly ref: {
-    readonly palette: ThemeReferencePalettes;
-  };
-  readonly sys: {
-    readonly color: ThemeSystemColorValues;
-    readonly shape: ThemeShapeValues;
-  };
 }
 
 /** @internal Typed theme token refs that also expose derived component tokens. */
@@ -334,7 +345,7 @@ const publicThemeTokens = deepFreezeData({
 }) satisfies ThemeTokens;
 
 /** Typed public token refs for app-authored source (SPEC.md §13.1). */
-export const tokens = publicThemeTokens;
+export const tokens: ThemeTokens = publicThemeTokens;
 
 /** @internal Internal theme tokens include derived component vars for generated/repo-owned code only. */
 export const internalThemeTokens = deepFreezeData({

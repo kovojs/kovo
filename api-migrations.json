@@ -12,5 +12,206 @@
     "sql-semantics",
     "trust-decision"
   ],
-  "batches": []
+  "batches": [
+    {
+      "id": "style-opaque-handles",
+      "state": "removed",
+      "owner": "style",
+      "decisions": [
+        "@kovojs/style#AttrsResult",
+        "@kovojs/style#createTheme",
+        "@kovojs/style#Keyframes",
+        "@kovojs/style#Style",
+        "@kovojs/style#StyleNamespaces",
+        "@kovojs/style#StylePrimitive",
+        "@kovojs/style#StyleRecord",
+        "@kovojs/style#Theme",
+        "@kovojs/style#ThemeCustomColorGroup",
+        "@kovojs/style#ThemeCustomColorInput",
+        "@kovojs/style#ThemeCustomColorsInput",
+        "@kovojs/style#ThemeFromSeedOptions",
+        "@kovojs/style#ThemeReferencePaletteName",
+        "@kovojs/style#ThemeReferencePalettes",
+        "@kovojs/style#ThemeSchemeValues",
+        "@kovojs/style#ThemeSeed",
+        "@kovojs/style#ThemeShapeInput",
+        "@kovojs/style#ThemeShapeTokenName",
+        "@kovojs/style#ThemeShapeValues",
+        "@kovojs/style#ThemeSystemColorName",
+        "@kovojs/style#ThemeSystemColorValues",
+        "@kovojs/style#ThemeVariant"
+      ],
+      "tool": {
+        "path": "scripts/migrate-style-api-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
+      },
+      "releaseNote": "docs/releases/style-api-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
+      "rules": [
+        {
+          "id": "attrs-result-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "AttrsResult" },
+          "category": "app-context",
+          "reason": "The function return shape is inferred now; preserving a named public carrier requires an app-owned type design."
+        },
+        {
+          "id": "create-theme-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "createTheme" },
+          "category": "app-context",
+          "reason": "Variable overrides and seed-generated themes have different semantics, so selecting defineTheme requires app intent."
+        },
+        {
+          "id": "keyframes-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "Keyframes" },
+          "category": "app-context",
+          "reason": "The keyframes argument is inferred now; preserving a named public carrier requires an app-owned type design."
+        },
+        {
+          "id": "style-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "Style" },
+          "category": "app-context",
+          "reason": "Choosing between one opaque handle and the recursive StyleInput aggregate depends on the application field contract."
+        },
+        {
+          "id": "style-namespaces-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "StyleNamespaces" },
+          "category": "app-context",
+          "reason": "The create return type is inferred from its input now; a replacement named alias depends on the application schema."
+        },
+        {
+          "id": "style-primitive-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "StylePrimitive" },
+          "category": "app-context",
+          "reason": "Choosing CssValue or an application-specific scalar alias depends on whether nullable style values are intended."
+        },
+        {
+          "id": "style-record-to-handle",
+          "action": "rewrite",
+          "from": { "specifier": "@kovojs/style", "symbol": "StyleRecord" },
+          "to": { "specifier": "@kovojs/style", "symbol": "StyleHandle" }
+        },
+        {
+          "id": "theme-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "Theme" },
+          "category": "app-context",
+          "reason": "The retired variable override carrier has no equivalent in the supported seed-generated theme contract."
+        },
+        {
+          "id": "theme-custom-color-group-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorGroup" },
+          "category": "app-context",
+          "reason": "Use-site inference from ThemeTokens replaces this helper; exporting a local alias is an application design choice."
+        },
+        {
+          "id": "theme-custom-color-input-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorInput" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions owns this input shape now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-custom-colors-input-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorsInput" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions owns this input map now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-from-seed-options-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeFromSeedOptions" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions is the supported aggregate, but removing or requiring its seed field changes caller intent."
+        },
+        {
+          "id": "theme-reference-palette-name-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeReferencePaletteName" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns the palette keys now; extracting a local key alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-reference-palettes-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeReferencePalettes" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns the palette map now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-scheme-values-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSchemeValues" },
+          "category": "app-context",
+          "reason": "KovoTheme owns generated scheme values now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-seed-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSeed" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions owns seed validation now; choosing a local scalar alias depends on application intent."
+        },
+        {
+          "id": "theme-shape-input-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeInput" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions owns shape input now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-shape-token-name-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeTokenName" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns shape keys now; extracting a local key alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-shape-values-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeValues" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns shape values now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-system-color-name-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSystemColorName" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns system color keys now; extracting a local key alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-system-color-values-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSystemColorValues" },
+          "category": "app-context",
+          "reason": "ThemeTokens owns system color values now; extracting a local alias depends on the application's boundary."
+        },
+        {
+          "id": "theme-variant-refusal",
+          "action": "refuse",
+          "from": { "specifier": "@kovojs/style", "symbol": "ThemeVariant" },
+          "category": "app-context",
+          "reason": "DefineThemeOptions owns variant selection now; extracting a local alias depends on the application's boundary."
+        }
+      ],
+      "fixtures": {
+        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node --experimental-strip-types scripts/migrate-style-api-v1.mjs --check scripts/fixtures/api-migrations/style-opaque-handles"
+      }
+    }
+  ]
 }

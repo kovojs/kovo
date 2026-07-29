@@ -35,6 +35,7 @@ function readyLedger(decision) {
     modes: ['check', 'write'],
     refusalCategories: [...API_MIGRATION_REFUSAL_CATEGORIES],
     batches: [
+      ...committedLedger.batches,
       {
         id: 'sample-move',
         state: 'ready',
@@ -79,7 +80,7 @@ function readyLedger(decision) {
 }
 
 describe('API migration protocol', () => {
-  it('accepts the checked empty opening ledger before the first breaking batch', () => {
+  it('accepts the committed checked migration batches', () => {
     expect(
       validateApiMigrationLedger({ ledger: committedLedger, decisions, repoRoot }).findings,
     ).toEqual([]);
@@ -98,10 +99,11 @@ describe('API migration protocol', () => {
   it('fails closed when a ready batch lacks refusal fixtures', () => {
     const decision = decisions.symbols.find((row) => row.decision === 'move');
     const ledger = readyLedger(decision);
-    ledger.batches[0].fixtures.refusals = [];
+    const batchIndex = ledger.batches.length - 1;
+    ledger.batches[batchIndex].fixtures.refusals = [];
     const result = validateApiMigrationLedger({ ledger, decisions, repoRoot });
     expect(result.findings).toContain(
-      'batches[0].fixtures.refusals must be non-empty before removal',
+      `batches[${batchIndex}].fixtures.refusals must be non-empty before removal`,
     );
   });
 

@@ -31,6 +31,16 @@ const cardStyles = style.create({
 });
 ```
 
+Each property of `cardStyles` is an opaque `StyleHandle`, not a record of generated classes or CSS
+rules. Pass handles directly to `style={...}` or `style.attrs(...)`; nested arrays and falsy
+conditions compose without exposing compiler metadata. A literal, object spread, type cast, legacy
+`$$css` record, or handle from a second installed copy of `@kovojs/style` fails the runtime
+provenance check.
+
+The public `style.attrs(...)` result contains ordinary `class` and optional inline `style`
+attributes. Kovo may also emit `data-style-src` in rendered HTML for `kovo explain`, but that
+provenance is build-owned output and is not a field applications read or construct.
+
 ## Seed themes
 
 Use `defineTheme` when an app wants one seed color to drive the UI token system. The generated theme
@@ -78,7 +88,8 @@ export const theme = defineTheme({
 });
 ```
 
-`base`/`sys` theme derivation is an internal maintenance form, not an app-facing API.
+`defineTheme({ seed, ... })` is the one app-facing theme constructor. `base`/`sys` theme derivation
+and variable-override classes are internal maintenance mechanisms, not app-facing APIs.
 
 ## Run it
 

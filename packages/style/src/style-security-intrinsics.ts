@@ -11,6 +11,7 @@ const NativeReflect = globalThis.Reflect;
 const NativeRegExp = globalThis.RegExp;
 const NativeSet = globalThis.Set;
 const NativeString = globalThis.String;
+const NativeWeakMap = globalThis.WeakMap;
 const NativeWeakSet = globalThis.WeakSet;
 
 const nativeApply = NativeReflect.apply;
@@ -55,6 +56,9 @@ const nativeStringSplit = NativeString.prototype.split;
 const nativeStringStartsWith = NativeString.prototype.startsWith;
 const nativeStringToLowerCase = NativeString.prototype.toLowerCase;
 const nativeStringTrim = NativeString.prototype.trim;
+const nativeWeakMapGet = NativeWeakMap.prototype.get;
+const nativeWeakMapHas = NativeWeakMap.prototype.has;
+const nativeWeakMapSet = NativeWeakMap.prototype.set;
 const nativeWeakSetAdd = NativeWeakSet.prototype.add;
 const nativeWeakSetHas = NativeWeakSet.prototype.has;
 
@@ -280,6 +284,29 @@ export function styleSetHas<T>(set: ReadonlySet<T>, value: T): boolean {
 
 export function styleWeakSet<T extends object>(): WeakSet<T> {
   return new NativeWeakSet<T>();
+}
+
+export function styleWeakMap<Key extends object, Value>(): WeakMap<Key, Value> {
+  return new NativeWeakMap<Key, Value>();
+}
+
+export function styleWeakMapGet<Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+): Value | undefined {
+  return styleApply(nativeWeakMapGet, map, [key]);
+}
+
+export function styleWeakMapHas<Key extends object>(map: WeakMap<Key, unknown>, key: Key): boolean {
+  return styleApply(nativeWeakMapHas, map, [key]);
+}
+
+export function styleWeakMapSet<Key extends object, Value>(
+  map: WeakMap<Key, Value>,
+  key: Key,
+  value: Value,
+): void {
+  styleApply(nativeWeakMapSet, map, [key, value]);
 }
 
 export function styleWeakSetAdd<T extends object>(set: WeakSet<T>, value: T): void {

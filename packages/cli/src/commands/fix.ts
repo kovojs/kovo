@@ -15,10 +15,16 @@ import {
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import type { CliCommandResult } from '../shared.js';
+import { runApiV1Migration } from './api-v1-migration.js';
 
 /** @internal Parsed options for the source-rewrite and corpus-report modes. */
 export type FixCommandOptions =
   | { readonly check: boolean; readonly sourcePath: string }
+  | {
+      readonly apiV1: true;
+      readonly check: boolean;
+      readonly sourcePaths: readonly string[];
+    }
   | { readonly costReport: true };
 
 /** @internal Closed parse result for `kovo fix`. */
@@ -32,6 +38,16 @@ export function parseFixArgs(args: readonly string[]): FixArgParseResult {
   if (!parsed.ok) return { message: parsed.message, ok: false };
   if (parsed.value.form === 'cost-report') {
     return { ok: true, options: { costReport: true } };
+  }
+  if (parsed.value.form === 'api-v1') {
+    return {
+      ok: true,
+      options: {
+        apiV1: true,
+        check: parsed.value.options.check,
+        sourcePaths: parsed.value.arguments.sources ?? [],
+      },
+    };
   }
 
   return {
@@ -55,6 +71,15 @@ export async function runFixCommand(
 ): Promise<CliCommandResult> {
   try {
     if ('costReport' in options) return costReportResult();
+    if ('apiV1' in options) {
+      return runApiV1Migration(
+        {
+          mode: options.check ? 'check' : 'write',
+          sourcePaths: options.sourcePaths,
+        },
+        invocationCwd,
+      );
+    }
     const source = await readAuthoredSource(invocationCwd, options.sourcePath);
     const analysis = analyzeSafeComponentFixes({
       fileName: source.relativePath,

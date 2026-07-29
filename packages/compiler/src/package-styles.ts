@@ -142,7 +142,7 @@ export function extractPackageComponentCss(
  * Extract the StyleX CSS for authored app source files under the app entry's
  * directory. This covers app/layout modules that use `style.create(...)` but are
  * not themselves compiled component modules, so build-owned CSS does not depend
- * on hand-authored `emitAtomicCss(... __rules ...)` exports.
+ * on hand-authored rule-metadata exports.
  */
 export function extractAppComponentCss(
   options: PackageComponentPrefixDiscoveryOptions,
@@ -156,7 +156,6 @@ export function extractAppComponentCss(
     defaultStyleIdentity: {
       keyframes: 'keyframes',
       styles: 'style',
-      theme: 'theme',
       vars: 'tokens',
     },
     fileSystem,
@@ -222,7 +221,6 @@ interface ExtractComponentCssFromFilesOptions {
   readonly defaultStyleIdentity?: {
     readonly keyframes?: string;
     readonly styles?: string;
-    readonly theme?: string;
     readonly vars?: string;
   };
   readonly fileSystem: CompilerSourceFileSystem;

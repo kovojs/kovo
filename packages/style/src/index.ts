@@ -1,35 +1,5 @@
-export { create, attrs, defineVars, createTheme, keyframes } from './engine.js';
-export type {
-  AttrsResult,
-  CssValue,
-  Keyframes,
-  Style,
-  StyleInput,
-  StyleNamespaces,
-  StyleObject,
-  StylePrimitive,
-  StyleRecord,
-  Theme,
-  Vars,
-} from './engine.js';
+export { create, attrs, defineVars, keyframes } from './engine.js';
+export type { CssValue, StyleHandle, StyleInput, StyleObject, Vars } from './engine.js';
 
 export { defineTheme, tokens } from './theme.js';
-export type {
-  DefineThemeOptions,
-  KovoTheme,
-  ThemeCustomColorGroup,
-  ThemeCustomColorInput,
-  ThemeCustomColorsInput,
-  ThemeFromSeedOptions,
-  ThemeReferencePaletteName,
-  ThemeReferencePalettes,
-  ThemeSchemeValues,
-  ThemeSeed,
-  ThemeShapeInput,
-  ThemeShapeTokenName,
-  ThemeShapeValues,
-  ThemeSystemColorName,
-  ThemeSystemColorValues,
-  ThemeTokens,
-  ThemeVariant,
-} from './theme.js';
+export type { DefineThemeOptions, KovoTheme, ThemeTokens } from './theme.js';

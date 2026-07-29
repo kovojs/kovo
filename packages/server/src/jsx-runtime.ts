@@ -33,7 +33,8 @@ import {
   kovoStyleProperty,
   kovoTrustedHtmlContent,
 } from '@kovojs/browser/internal/output';
-import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
+import type { StyleInput } from '@kovojs/style';
+import { attrsWithProvenance as kovoStyleAttrs, isStyleHandle } from '@kovojs/style/internal';
 
 import { componentMutationFailureSlots } from './component-render.js';
 import { isKovoComponentDescriptor } from './component-authority.js';
@@ -94,6 +95,7 @@ import {
   witnessGetOwnPropertyDescriptor,
   witnessObjectIs,
   witnessObjectKeys,
+  witnessOwnKeys,
 } from './security-witness-intrinsics.js';
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
@@ -563,19 +565,38 @@ function kovoStyleInputAttributes(value: unknown):
       readonly style?: string;
     }
   | undefined {
-  if (!isKovoStyleInput(value)) return undefined;
-  return kovoStyleAttrs(value as StyleInput);
+  if (hasRetiredStyleRepresentation(value)) {
+    throw new TypeError(
+      'JSX style rejected a retired or forged @kovojs/style representation; pass a StyleHandle returned by the installed @kovojs/style instance.',
+    );
+  }
+  if (isStyleHandle(value) || formHelperIsArray(value)) {
+    return kovoStyleAttrs(value as StyleInput);
+  }
+  if (typeof value === 'object' && value !== null && witnessOwnKeys(value).length === 0) {
+    throw new TypeError(
+      'JSX style rejected a fieldless style object; pass a StyleHandle returned by the installed @kovojs/style instance (handles from a different installed copy are not valid).',
+    );
+  }
+  return undefined;
 }
 
-function isKovoStyleInput(value: unknown): boolean {
-  if (!value) return false;
-  if (formHelperIsArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
-      if (isKovoStyleInput(formHelperOwnDataValue(value, index))) return true;
+function hasRetiredStyleRepresentation(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || formHelperIsArray(value)) return false;
+  const retiredKeys = [
+    '$$css',
+    'data-style-src',
+    '__rules',
+    '__styleKey',
+    '__theme',
+    '__vars',
+  ] as const;
+  for (let index = 0; index < retiredKeys.length; index += 1) {
+    if (witnessGetOwnPropertyDescriptor(value, retiredKeys[index] as string) !== undefined) {
+      return true;
     }
-    return false;
   }
-  return typeof value === 'object' && value !== null && '$$css' in value;
+  return false;
 }
 
 function renderMutationFormAttributes(key: string, props: JsxProps): string {

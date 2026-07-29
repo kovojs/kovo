@@ -185,9 +185,8 @@ export const AvatarImage = component({
 
     return (
       <img
+        {...styleAttrs}
         alt={attrs.alt}
-        class={styleAttrs.class ?? ''}
-        data-style-src={styleAttrs['data-style-src'] ?? ''}
         data-state={attrs['data-state']}
         decoding={attrs.decoding}
         hidden={attrs.hidden}

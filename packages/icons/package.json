@@ -35,11 +35,14 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
-    "@kovojs/server": "workspace:*",
-    "@kovojs/style": "workspace:*"
+    "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
+    "@kovojs/style": "workspace:*",
     "lucide-static": "1.21.0",
     "vitest": "4.1.8"
+  },
+  "peerDependencies": {
+    "@kovojs/style": "workspace:*"
   }
 }

@@ -315,6 +315,12 @@ export function installVisualBaselineStyles(): void {
       color: #475569;
     }
 
+    [data-demo-skeleton-shape] > [aria-hidden="true"] {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;

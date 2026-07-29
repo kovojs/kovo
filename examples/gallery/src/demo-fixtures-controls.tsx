@@ -600,8 +600,8 @@ export function SeparatorDemo(): string {
         Separator emits decorative and semantic separator variants with orientation data.
       </p>
       <div style="display:grid;gap:1rem" data-ui-demo="separator">
-        <span data-fixture-state="decorative">
-          {Separator.definition.render({ style: [null, { width: 256 }] })}
+        <span style="display:block;width:256px" data-fixture-state="decorative">
+          {Separator.definition.render({})}
         </span>
         <span
           style="display:flex;height:4rem;align-items:stretch;gap:1rem"
@@ -686,12 +686,31 @@ export function SkeletonDemo(): string {
       </p>
       <div data-ui-demo="skeleton">
         <div style={{ alignItems: 'center', columnGap: 12, display: 'flex' }}>
-          {Skeleton.definition.render({
-            style: [null, { borderRadius: '50%', height: 48, width: 48 }],
-          })}
+          <span
+            style={{
+              borderRadius: '50%',
+              display: 'block',
+              height: 48,
+              overflow: 'hidden',
+              width: 48,
+            }}
+            data-demo-skeleton-shape="avatar"
+          >
+            {Skeleton.definition.render({})}
+          </span>
           <div style={{ display: 'grid', rowGap: 8 }}>
-            {Skeleton.definition.render({ style: [null, { height: 16, width: 220 }] })}
-            {Skeleton.definition.render({ style: [null, { height: 16, width: 160 }] })}
+            <span
+              style={{ display: 'block', height: 16, overflow: 'hidden', width: 220 }}
+              data-demo-skeleton-shape="line"
+            >
+              {Skeleton.definition.render({})}
+            </span>
+            <span
+              style={{ display: 'block', height: 16, overflow: 'hidden', width: 160 }}
+              data-demo-skeleton-shape="line"
+            >
+              {Skeleton.definition.render({})}
+            </span>
           </div>
         </div>
       </div>

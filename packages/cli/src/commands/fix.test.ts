@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from '../index.js';
+import { runApiV1Migration } from './api-v1-migration.js';
 import { parseFixArgs, runFixCommand } from './fix.js';
 
 describe('kovo fix', () => {
@@ -28,6 +29,14 @@ describe('kovo fix', () => {
     expect(parseFixArgs(['--cost-report'])).toEqual({
       ok: true,
       options: { costReport: true },
+    });
+    expect(parseFixArgs(['api-v1', 'src', 'packages/app/theme.ts', '--check'])).toEqual({
+      ok: true,
+      options: {
+        apiV1: true,
+        check: true,
+        sourcePaths: ['src', 'packages/app/theme.ts'],
+      },
     });
     expect(parseFixArgs(['src/cart.tsx', '--cost-report'])).toMatchObject({ ok: false });
     expect(parseFixArgs(['--unknown'])).toMatchObject({ ok: false });
@@ -158,6 +167,74 @@ export const Link = component({
     const linked = await runFixCommand({ check: false, sourcePath: 'linked.tsx' }, root);
     expect(linked).toMatchObject({ exitCode: 1 });
     expect(readFileSync(sourcePath, 'utf8')).toBe(source);
+  });
+
+  it('runs the api-v1 batch in read-only check mode and fail-closed refusal mode', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-api-v1-'));
+    const rewritePath = join(root, 'button.tsx');
+    const refusalPath = join(root, 'theme.ts');
+    const rewriteSource = `
+import type { StyleRecord } from '@kovojs/style';
+export interface ButtonProps { style?: StyleRecord }
+`;
+    const refusalSource = `
+// unicode proves byte anchors: 🧭
+import { createTheme, defineVars } from '@kovojs/style';
+const vars = defineVars({ accent: 'red' });
+export const dark = createTheme(vars, { accent: 'black' });
+`;
+    try {
+      writeFileSync(rewritePath, rewriteSource);
+      writeFileSync(refusalPath, refusalSource);
+
+      const checked = await runApiV1Migration(
+        { mode: 'check', sourcePaths: ['button.tsx', 'theme.ts'] },
+        root,
+      );
+      expect(checked).toMatchObject({ exitCode: 1 });
+      const result = JSON.parse(checked.output ?? '') as {
+        files: {
+          path: string;
+          refusals?: { anchor: { end: number; start: number }; category: string }[];
+          state: string;
+        }[];
+        schema: string;
+        summary: { refused: number; rewritten: number; unchanged: number };
+      };
+      expect(result).toMatchObject({
+        schema: 'kovo-api-migration-result/v1',
+        summary: { refused: 1, rewritten: 1, unchanged: 0 },
+      });
+      expect(result.files[0]).toEqual({ path: 'button.tsx', state: 'rewritten' });
+      expect(result.files[1]).toMatchObject({
+        path: 'theme.ts',
+        refusals: [{ category: 'app-context' }],
+        state: 'refused',
+      });
+      const refusalStart = refusalSource.indexOf('createTheme');
+      expect(result.files[1]?.refusals?.[0]?.anchor.start).toBe(
+        Buffer.byteLength(refusalSource.slice(0, refusalStart), 'utf8'),
+      );
+      expect(readFileSync(rewritePath, 'utf8')).toBe(rewriteSource);
+      expect(readFileSync(refusalPath, 'utf8')).toBe(refusalSource);
+
+      const refusedWrite = await runApiV1Migration(
+        { mode: 'write', sourcePaths: ['button.tsx', 'theme.ts'] },
+        root,
+      );
+      expect(refusedWrite).toMatchObject({ exitCode: 1 });
+      expect(readFileSync(rewritePath, 'utf8')).toBe(rewriteSource);
+      expect(readFileSync(refusalPath, 'utf8')).toBe(refusalSource);
+
+      const written = await runApiV1Migration({ mode: 'write', sourcePaths: ['button.tsx'] }, root);
+      expect(written).toMatchObject({ exitCode: 0 });
+      expect(readFileSync(rewritePath, 'utf8')).toContain(
+        "import type { StyleHandle } from '@kovojs/style';",
+      );
+      expect(readFileSync(rewritePath, 'utf8')).toContain('style?: StyleHandle');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('prints the measured corpus with an owner on every framework defect', async () => {

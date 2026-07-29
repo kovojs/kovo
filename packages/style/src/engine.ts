@@ -3,7 +3,6 @@ import {
   assertCssCustomPropertyNameSafe,
   assertCssSyntaxFragmentSafe,
   assertCssValueSafe,
-  assertCssVarReferenceSafe,
   cssPrimitiveText,
 } from './css-security.js';
 import {
@@ -22,6 +21,7 @@ import {
   styleMapSet,
   styleMapValues,
   styleMathImul,
+  styleNullRecord,
   styleNumber,
   styleNumberIsFinite,
   styleNumberToBase36,
@@ -40,12 +40,15 @@ import {
   styleStringSplit,
   styleStringStartsWith,
   styleStringTrim,
+  styleWeakMap,
+  styleWeakMapGet,
+  styleWeakMapHas,
+  styleWeakMapSet,
   styleWeakSet,
   styleWeakSetAdd,
   styleWeakSetHas,
 } from './style-security-intrinsics.js';
 
-const CSS_MARKER = '$$css';
 const STYLE_SRC = 'data-style-src';
 const DEFAULT_LAYER_NAME = 'kovo-style';
 const trustedAtomicRules = styleWeakSet<AtomicRule>();
@@ -56,73 +59,66 @@ export type StylePrimitive = string | number;
 
 /**
  * Explicit raw inline style payload used only through the internal `raw(...)`
- * escape hatch. Not part of the public `@kovojs/style` surface; the raw tuple
- * form is inlined into `StyleInput` so the public type does not name this alias
- * (rules/api-surface.md recursive publicness).
+ * escape hatch. Not part of the public `@kovojs/style` surface.
  * @internal
  */
 export type InlineStyle = Readonly<Record<string, StylePrimitive>>;
 
 /** Values accepted in a Kovo static style object. */
-export type CssValue = StylePrimitive | null | undefined;
+export type CssValue = string | number | null | undefined;
 
 /** Static style object accepted by `style.create`, including nested pseudos and at-rules. */
 export interface StyleObject {
   readonly [property: string]: CssValue | StyleObject;
 }
 
-/** Opaque compiled style record that may be passed to `style.attrs`. */
-export interface StyleRecord {
-  readonly [CSS_MARKER]: true | string;
-  readonly [STYLE_SRC]?: string;
-  readonly __rules?: unknown;
-  readonly __styleKey?: string;
-  readonly [property: string]: unknown;
+declare const styleHandleIdentity: unique symbol;
+declare const varsIdentity: unique symbol;
+
+/**
+ * Framework-created style capability accepted by `style.attrs`.
+ *
+ * The runtime representation has no public fields. Type assertions can bypass
+ * TypeScript, but `attrs` still requires module-private WeakMap provenance.
+ */
+export interface StyleHandle {
+  readonly [styleHandleIdentity]: true;
 }
 
-/** Opaque compiled style object that may be passed to `style.attrs`. */
-export type Style = StyleRecord | null | false | undefined;
+/** A style argument accepted by `attrs`, including nested arrays of opaque handles. */
+export type StyleInput = StyleHandle | null | false | undefined | ReadonlyArray<StyleInput>;
 
-/** A style argument accepted by `attrs`, including arrays and raw inline tuples. */
-export type StyleInput =
-  | Style
-  | ReadonlyArray<StyleInput>
-  | readonly [Style, Readonly<Record<string, StylePrimitive>>];
-
-/** Compiler-produced atomic style record keyed by CSS-property conflict group. */
-export interface CompiledStyle {
-  readonly [CSS_MARKER]: true | string;
-  readonly [STYLE_SRC]?: string;
-  readonly __rules?: readonly AtomicRule[];
-  readonly __styleKey?: string;
-  readonly [property: string]: string | true | readonly AtomicRule[] | undefined;
-}
-
-/** Result shape of `style.create`: one opaque style record per named namespace key. */
+/** Result shape of `style.create`: one opaque handle per named namespace key. */
 export type StyleNamespaces<Styles extends Record<string, StyleObject>> = {
-  readonly [Key in keyof Styles]: StyleRecord;
+  readonly [Key in keyof Styles]: StyleHandle;
 };
 
 /** Typed CSS variable group returned by `defineVars`; token values are `var(--kovo-*)` strings. */
 export type Vars<Tokens extends Record<string, CssValue>> = {
   readonly [Key in keyof Tokens]: string;
 } & {
-  readonly [CSS_MARKER]: true | string;
-  readonly __vars: true;
-  readonly __rules?: unknown;
+  readonly [varsIdentity]: true;
 };
 
 /** @internal Compile-time constants returned unchanged for use inside static style objects. */
 export type Consts<Constants extends Record<string, StylePrimitive>> = Readonly<Constants>;
 
-/** Theme class returned by `createTheme`, with extracted custom-property override rules. */
-export interface Theme {
-  readonly [CSS_MARKER]: true | string;
-  readonly [STYLE_SRC]?: string;
-  readonly __rules?: unknown;
-  readonly __theme: true;
-  readonly className: string;
+interface AtomicHandleMetadata {
+  readonly kind: 'atomic';
+  readonly classes: readonly (readonly [string, string])[];
+  readonly rules: readonly AtomicRule[];
+  readonly source?: string;
+  readonly styleKey: string;
 }
+
+interface InlineHandleMetadata {
+  readonly kind: 'inline';
+  readonly style: InlineStyle;
+}
+
+type StyleHandleMetadata = AtomicHandleMetadata | InlineHandleMetadata;
+
+const styleHandleMetadata = styleWeakMap<StyleHandle, StyleHandleMetadata>();
 
 /** A single extracted atomic CSS rule plus source/provenance metadata for compiler manifests. */
 export interface AtomicRule {
@@ -152,9 +148,15 @@ interface StyleCallSite {
  * and extracted CSS. The compiler ABI consumes this through `@kovojs/style/internal`.
  */
 export interface AtomicCssResult<Styles extends Record<string, StyleObject>> {
-  readonly styles: { readonly [Key in keyof Styles]: CompiledStyle };
+  readonly styles: { readonly [Key in keyof Styles]: StyleHandle };
   readonly rules: readonly AtomicRule[];
   readonly css: string;
+}
+
+/** @internal Structured variable result for compiler extraction. */
+export interface VarsCssResult<Tokens extends Record<string, CssValue>> {
+  readonly value: Vars<Tokens>;
+  readonly rules: readonly AtomicRule[];
 }
 
 /** Options for serializing extracted atom rules into CSS text. */
@@ -172,8 +174,12 @@ export interface CssEmitOptions {
 /** Kovo JSX-shaped merge result returned by `style.attrs`. */
 export interface AttrsResult {
   readonly class?: string;
-  readonly [STYLE_SRC]?: string;
   readonly style?: string;
+}
+
+/** @internal JSX attributes including compiler/runtime provenance. */
+export interface AttrsWithProvenanceResult extends AttrsResult {
+  readonly [attribute: string]: string | undefined;
 }
 
 /** Keyframes object accepted by the deterministic `keyframes` name helper. */
@@ -198,20 +204,16 @@ export interface KeyframesResult {
 /**
  * Compiles static Kovo style objects into opaque atomic style records. This is the
  * TS-native fork point for StyleX-style authoring: authored TSX stays source-like,
- * while the compiler can inspect `__rules` and lower to ordinary class attributes
- * for SPEC.md §5.2 fixpoint output.
+ * while the compiler consumes a separate internal extraction result and lowers
+ * to ordinary class attributes for SPEC.md §5.2 fixpoint output.
  */
 export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
-): StyleNamespaces<Styles>;
-export function create<const Styles extends Record<string, StyleObject>>(
-  styles: Styles,
-  identity: { readonly namespace?: string; readonly source?: string },
-): StyleNamespaces<Styles>;
+): { readonly [Key in keyof Styles]: StyleHandle };
 export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
   identity: { readonly namespace?: string; readonly source?: string } = {},
-): StyleNamespaces<Styles> {
+): { readonly [Key in keyof Styles]: StyleHandle } {
   assertObjectInput(styles, 'style.create', 'styles');
   return createAtomicStylesInternal(
     styles,
@@ -251,7 +253,7 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
   const resolvedIdentity = resolveStyleIdentity(styles, identity);
   const namespace = slug(resolvedIdentity.namespace ?? resolvedIdentity.source ?? 'style');
   const rulesByKey = styleMap<string, AtomicRule>();
-  const compiled: Record<string, CompiledStyle> = {};
+  const compiled: Record<string, StyleHandle> = {};
 
   const styleEntries = styleOwnDataEntries(styles, 'style.create styles');
   for (let styleIndex = 0; styleIndex < styleEntries.length; styleIndex += 1) {
@@ -272,10 +274,26 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
 
   const rules = styleArraySort(styleMapValues(rulesByKey), compareRules);
   return styleFreeze({
-    styles: styleFreeze(compiled) as { readonly [Key in keyof Styles]: CompiledStyle },
+    styles: styleFreeze(compiled) as { readonly [Key in keyof Styles]: StyleHandle },
     rules: styleFreeze(rules),
     css: emitAtomicCss(rules),
   });
+}
+
+/**
+ * @internal Read the extracted rules associated with a framework-created atomic
+ * handle. The compiler uses this capability instead of inspecting app-visible
+ * object fields.
+ */
+export function rulesForStyle(handle: StyleHandle): readonly AtomicRule[] {
+  if (!handle || typeof handle !== 'object') {
+    throw new TypeError('style.rulesForStyle requires a framework-created style handle.');
+  }
+  const metadata = styleWeakMapGet(styleHandleMetadata, handle);
+  if (metadata?.kind !== 'atomic') {
+    throw new TypeError('style.rulesForStyle requires a framework-created atomic style handle.');
+  }
+  return metadata.rules;
 }
 
 function snapshotStyleIdentity(
@@ -461,7 +479,15 @@ function mergeToResult(styles: readonly StyleInput[]): MergeResult {
  * serialized inline `style` escape. Kovo examples should prefer this shape outside
  * React because the emitted HTML remains plain and inspectable (SPEC.md §4.2).
  */
-export function attrs(...styles: readonly StyleInput[]): AttrsResult {
+export function attrs(...styles: readonly StyleInput[]): {
+  readonly class?: string;
+  readonly style?: string;
+} {
+  return attrsWithProvenance(...styles);
+}
+
+/** @internal Merge style handles while retaining build-owned provenance. */
+export function attrsWithProvenance(...styles: readonly StyleInput[]): AttrsWithProvenanceResult {
   const merged = mergeToResult(styles);
   const attrsResult: { class?: string; [STYLE_SRC]?: string; style?: string } = {};
   if (merged.className.length > 0) attrsResult.class = merged.className;
@@ -469,6 +495,11 @@ export function attrs(...styles: readonly StyleInput[]): AttrsResult {
   if (styleOwnDataEntries(merged.inlineStyle, 'style.attrs inline style').length > 0)
     attrsResult.style = serializeInlineStyle(merged.inlineStyle);
   return styleFreeze(attrsResult);
+}
+
+/** @internal Runtime classifier backed by the same module-private capability map as `attrs`. */
+export function isStyleHandle(value: unknown): value is StyleHandle {
+  return typeof value === 'object' && value !== null && styleWeakMapHas(styleHandleMetadata, value);
 }
 
 /**
@@ -483,13 +514,21 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
   tokens: Tokens,
   identity: { readonly namespace?: string; readonly source?: string } = {},
 ): Vars<Tokens> {
+  return defineVarsWithCss(tokens, identity).value;
+}
+
+/**
+ * @internal Define typed custom properties and return the compiler-owned CSS
+ * rules without exposing extraction metadata through the app value.
+ */
+export function defineVarsWithCss<const Tokens extends Record<string, CssValue>>(
+  tokens: Tokens,
+  identity: StyleIdentityOptions = {},
+): VarsCssResult<Tokens> {
   assertObjectInput(tokens, 'style.defineVars', 'tokens');
   const stableIdentity = snapshotStyleIdentity(identity, 'style.defineVars identity');
   const namespace = slug(stableIdentity.namespace ?? stableIdentity.source ?? 'tokens');
-  const result: Record<string, string | true | readonly AtomicRule[]> = {
-    [CSS_MARKER]: true,
-    __vars: true,
-  };
+  const result: Record<string, string> = {};
   const rules: AtomicRule[] = [];
 
   const tokenEntries = styleOwnDataEntries(tokens, 'style.defineVars tokens');
@@ -519,8 +558,9 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
     }
   }
 
-  result.__rules = styleFreeze(rules);
-  return styleFreeze(result) as Vars<Tokens>;
+  const stableRules = styleFreeze(rules);
+  const value = styleFreeze(result) as Vars<Tokens>;
+  return styleFreeze({ rules: stableRules, value });
 }
 
 /**
@@ -544,78 +584,12 @@ export function defineConsts<const Constants extends Record<string, StylePrimiti
 }
 
 /**
- * Create a theme class that overrides a `defineVars` group. Apps apply the class
- * at document scope, and components keep referencing the original typed tokens.
- */
-export function createTheme<Tokens extends Record<string, CssValue>>(
-  baseTokens: Vars<Tokens>,
-  overrides: Partial<Record<keyof Tokens, CssValue>>,
-): Theme;
-export function createTheme<Tokens extends Record<string, CssValue>>(
-  baseTokens: Vars<Tokens>,
-  overrides: Partial<Record<keyof Tokens, CssValue>>,
-  identity: { readonly namespace?: string; readonly source?: string } = {},
-): Theme {
-  assertObjectInput(baseTokens, 'style.createTheme', 'baseTokens');
-  assertObjectInput(overrides, 'style.createTheme', 'overrides');
-  const stableIdentity = snapshotStyleIdentity(identity, 'style.createTheme identity');
-  const overrideEntries = styleOwnDataEntries(overrides, 'style.createTheme overrides');
-  const namespace = slug(stableIdentity.namespace ?? stableIdentity.source ?? 'theme');
-  const className = `kv-${namespace}-theme-${hash(canonicalStyleData(overrides, 'style.createTheme overrides'))}`;
-  const rules: AtomicRule[] = [];
-
-  for (let overrideIndex = 0; overrideIndex < overrideEntries.length; overrideIndex += 1) {
-    const [token, value] = overrideEntries[overrideIndex] as readonly [string, unknown];
-    assertCssPrimitive(value, 'style.createTheme', token, true);
-    if (value == null) continue;
-    assertCssNameSafe(token, 'style.createTheme', 'token');
-    assertCssCustomPropertyNameSafe(
-      `--kovo-token-${toKebabCase(token)}`,
-      'style.createTheme',
-      token,
-    );
-    assertCssValueSafe(value, 'style.createTheme', token);
-    const tokenValue = styleOwnDataValue(baseTokens, token, 'style.createTheme baseTokens');
-    const cssProperty = assertCssVarReferenceSafe(tokenValue, 'style.createTheme', token);
-    styleArrayPush(
-      rules,
-      registerAtomicRule({
-        atRules: [],
-        className,
-        cssProperty,
-        property: token,
-        priority: getPriority(cssProperty),
-        rule: `.${className}{${cssProperty}:${cssPrimitiveText(value)}}`,
-        selectorSuffix: '',
-        source: `${stableIdentity.source ?? namespace}#${token}`,
-        value,
-      }),
-    );
-  }
-
-  const theme: {
-    [CSS_MARKER]: true;
-    [STYLE_SRC]?: string;
-    __rules: readonly AtomicRule[];
-    __theme: true;
-    className: string;
-  } = {
-    [CSS_MARKER]: true,
-    __rules: styleFreeze(rules),
-    __theme: true,
-    className,
-  };
-  if (stableIdentity.source) theme[STYLE_SRC] = stableIdentity.source;
-  return styleFreeze(theme);
-}
-
-/**
  * @internal Explicit raw inline-style escape hatch for truly dynamic values. Keep
  * this rare: the normal `style` prop is for typed atomic style objects, per the
  * Phase 0 decision in plans/claude-stylex.md and SPEC.md §13.1. Not part of the
  * v1 public surface.
  */
-export function raw(style: InlineStyle): readonly [null, InlineStyle] {
+export function raw(style: InlineStyle): StyleHandle {
   assertObjectInput(style, 'style.raw', 'style');
   const snapshot: Record<string, StylePrimitive> = {};
   const rawEntries = styleOwnDataEntries(style, 'style.raw style');
@@ -626,7 +600,7 @@ export function raw(style: InlineStyle): readonly [null, InlineStyle] {
     assertCssValueSafe(value, 'style.raw', property, { allowBackslash: true });
     snapshot[property] = value;
   }
-  return styleFreeze([null, styleFreeze(snapshot)] as const);
+  return createStyleHandle({ kind: 'inline', style: styleFreeze(snapshot) });
 }
 
 /**
@@ -636,9 +610,9 @@ export function raw(style: InlineStyle): readonly [null, InlineStyle] {
  * name, and emits the matching `@keyframes` block into the served CSS asset
  * (SPEC.md §13.1); see `createKeyframes` for the engine's structured result.
  */
-export function keyframes(frames: Keyframes): string;
+export function keyframes(frames: Readonly<Record<string, StyleObject>>): string;
 export function keyframes(
-  frames: Keyframes,
+  frames: Readonly<Record<string, StyleObject>>,
   identity: { readonly namespace?: string; readonly source?: string } = {},
 ): string {
   return createKeyframes(frames, identity).name;
@@ -907,18 +881,22 @@ function styleRecord(
   rules: readonly AtomicRule[],
   ruleEntries: readonly (readonly [string, string])[],
   source?: string,
-): CompiledStyle {
-  const record: Record<string, string | true | readonly AtomicRule[] | undefined> = {
-    [CSS_MARKER]: true,
-    __rules: rules,
-    __styleKey: styleKey,
-  };
-  if (source) record[STYLE_SRC] = `${source}#${styleKey}`;
-  for (let index = 0; index < ruleEntries.length; index += 1) {
-    const [property, className] = ruleEntries[index] as readonly [string, string];
-    record[property] = className;
-  }
-  return styleFreeze(record) as CompiledStyle;
+): StyleHandle {
+  return createStyleHandle({
+    classes: styleFreeze(ruleEntries),
+    kind: 'atomic',
+    rules: styleFreeze(rules),
+    ...(source ? { source: `${source}#${styleKey}` } : {}),
+    styleKey,
+  });
+}
+
+function createStyleHandle(metadata: StyleHandleMetadata): StyleHandle {
+  // This is the only nominal construction site; the runtime capability is the
+  // WeakMap registration immediately below, not a structural brand field.
+  const handle = styleFreeze(styleNullRecord()) as unknown as StyleHandle;
+  styleWeakMapSet(styleHandleMetadata, handle, styleFreeze(metadata));
+  return handle;
 }
 
 function atomicRule(
@@ -983,59 +961,45 @@ function uniqueMapKeys(map: Map<string, true>): string[] {
 }
 
 function mergeStyleInput(style: StyleInput, state: MergeState): void {
-  if (!style) return;
+  if (style === null || style === undefined || style === false) return;
   if (styleArrayIsArray(style)) {
     const stableStyles = styleDenseArraySnapshot(
       style,
       'style.attrs style array',
       (entry) => entry,
     );
-    if (
-      stableStyles.length === 2 &&
-      isStyleOrFalsy(stableStyles[0]) &&
-      isInlineStyle(stableStyles[1])
-    ) {
-      mergeStyleInput(stableStyles[0] as StyleInput, state);
-      const inlineEntries = styleOwnDataEntries(
-        stableStyles[1] as object,
-        'style.attrs inline style',
-      );
-      for (let index = 0; index < inlineEntries.length; index += 1) {
-        const [property, value] = inlineEntries[index] as readonly [string, unknown];
-        assertCssPrimitive(value, 'style.attrs inline style', property);
-        assertCssSyntaxFragmentSafe(property, 'style.attrs', 'inline property', true);
-        assertCssValueSafe(value, 'style.attrs', property, { allowBackslash: true });
-        state.inlineStyle[property] = value;
-      }
-      return;
-    }
     for (let index = 0; index < stableStyles.length; index += 1) {
       mergeStyleInput(stableStyles[index] as StyleInput, state);
     }
     return;
   }
-  if (isCompiledStyle(style)) {
-    const styleSource = styleOwnDataValue(style, STYLE_SRC, 'style.attrs compiled style');
-    if (typeof styleSource === 'string' && styleSource.length > 0)
-      styleArrayPush(state.styleSources, styleSource);
-    const cssMarker = styleOwnDataValue(style, CSS_MARKER, 'style.attrs compiled style');
-    if (typeof cssMarker === 'string' && cssMarker.length > 0) {
-      styleArrayPush(state.styleSources, cssMarker);
+
+  if (typeof style !== 'object') {
+    throw new TypeError('style.attrs accepts only framework-created style handles.');
+  }
+  const metadata = styleWeakMapGet(styleHandleMetadata, style);
+  if (!metadata) {
+    throw new TypeError(
+      'style.attrs rejected an untrusted style value; use a handle returned by this @kovojs/style instance (a forged value or a different installed copy was supplied).',
+    );
+  }
+  if (metadata.kind === 'inline') {
+    const inlineEntries = styleOwnDataEntries(metadata.style, 'style.attrs inline style');
+    for (let index = 0; index < inlineEntries.length; index += 1) {
+      const [property, value] = inlineEntries[index] as readonly [string, unknown];
+      assertCssPrimitive(value, 'style.attrs inline style', property);
+      assertCssSyntaxFragmentSafe(property, 'style.attrs', 'inline property', true);
+      assertCssValueSafe(value, 'style.attrs', property, { allowBackslash: true });
+      state.inlineStyle[property] = value;
     }
-    const compiledEntries = styleOwnDataEntries(style, 'style.attrs compiled style');
-    for (let index = 0; index < compiledEntries.length; index += 1) {
-      const [property, className] = compiledEntries[index] as readonly [string, unknown];
-      if (
-        property === CSS_MARKER ||
-        property === STYLE_SRC ||
-        styleStringStartsWith(property, '__')
-      )
-        continue;
-      if (typeof className !== 'string') continue;
-      assertCssCustomPropertyNameSafe(`--${className}`, 'style.attrs', property);
-      styleMapDelete(state.classesByProperty, property);
-      styleMapSet(state.classesByProperty, property, className);
-    }
+    return;
+  }
+
+  if (metadata.source) styleArrayPush(state.styleSources, metadata.source);
+  for (let index = 0; index < metadata.classes.length; index += 1) {
+    const [property, className] = metadata.classes[index] as readonly [string, string];
+    styleMapDelete(state.classesByProperty, property);
+    styleMapSet(state.classesByProperty, property, className);
   }
 }
 
@@ -1065,22 +1029,6 @@ function serializeInlineStyle(style: InlineStyle): string {
     styleArrayPush(declarations, `${toKebabCase(property)}:${cssPrimitiveText(value)}`);
   }
   return styleArrayJoin(declarations, ';');
-}
-
-function isCompiledStyle(value: unknown): value is CompiledStyle {
-  if (!value || typeof value !== 'object') return false;
-  const marker = styleOwnDataValue(value, CSS_MARKER, 'style.attrs compiled style');
-  return marker === true || (typeof marker === 'string' && marker.length > 0);
-}
-
-function isStyleOrFalsy(value: unknown): value is Style {
-  return value == null || value === false || isCompiledStyle(value);
-}
-
-function isInlineStyle(value: unknown): value is InlineStyle {
-  return Boolean(
-    value && typeof value === 'object' && !styleArrayIsArray(value) && !isCompiledStyle(value),
-  );
 }
 
 function isNestedStyle(value: unknown): value is StyleObject {

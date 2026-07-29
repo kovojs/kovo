@@ -7,6 +7,7 @@ import {
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
 import * as style from '@kovojs/style';
+import { raw as rawStyle } from '@kovojs/style/internal';
 
 import { renderGeneratedMutationFormFields, validateCsrfToken } from './csrf.js';
 import { escapeText, kovoSafeJsxSpread, renderHtmlValue } from './html.js';
@@ -1608,7 +1609,7 @@ describe('server jsx runtime', () => {
     expect(rendered).not.toContain('javascript:');
   });
 
-  it('renders Kovo style records passed through style= in direct server JSX', () => {
+  it('renders opaque Kovo style handles passed through style= in direct server JSX', () => {
     const styles = style.create({
       root: {
         backgroundColor: 'black',
@@ -1626,13 +1627,40 @@ describe('server jsx runtime', () => {
       html(
         jsx('button', {
           class: 'manual',
-          style: [styles.root, [styles.inline, { opacity: 0.8 }]],
+          style: [styles.root, [styles.inline, rawStyle({ opacity: 0.8 })]],
           children: 'Buy',
         }),
       ),
     ).toMatch(
       /^<button class="manual kv-style-bg-[^ ]+ kv-style-fg-[^ ]+ kv-style-m-[^"]+" style="opacity:0.8">Buy<\/button>$/,
     );
+  });
+
+  it('rejects retired and forged Kovo style representations in direct server JSX', () => {
+    const styles = style.create({ root: { color: 'white' } });
+
+    expect(() =>
+      jsx('button', {
+        style: [{ $$css: true, color: 'forged' }] as unknown as style.StyleInput,
+      }),
+    ).toThrow(/untrusted style value/);
+    expect(() =>
+      jsx('button', {
+        style: [styles.root, { __styleKey: 'root' }] as unknown as style.StyleInput,
+      }),
+    ).toThrow(/untrusted style value/);
+    expect(() =>
+      jsx('button', {
+        style: { $$css: true, color: 'forged' },
+      }),
+    ).toThrow(/retired or forged/);
+    for (const fieldless of [Object.freeze({}), Object.freeze(Object.create(null))]) {
+      expect(() =>
+        jsx('button', {
+          style: fieldless as unknown as style.StyleInput,
+        }),
+      ).toThrow(/different installed copy/);
+    }
   });
 
   it('lowers viewTransitionName to sanitized CSS in direct server JSX', () => {

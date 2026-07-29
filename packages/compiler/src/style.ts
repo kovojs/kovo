@@ -2,18 +2,18 @@ import * as ts from 'typescript';
 
 import {
   attrs,
-  createTheme,
-  defineVars,
   tokens as publicThemeTokens,
   type CssValue,
+  type StyleHandle,
   type StyleObject,
 } from '@kovojs/style';
 import {
   createAtomicStyles,
   createKeyframes,
+  defineVarsWithCss,
   emitAtomicCss,
+  rulesForStyle,
   type AtomicRule,
-  type CompiledStyle,
   type KeyframesResult,
 } from '@kovojs/style/internal';
 import {
@@ -83,9 +83,7 @@ const objectIdentifierName = 'Object';
 const objectFreezeMemberName = 'freeze';
 const styleCreateMemberName = 'create';
 const styleDefineVarsMemberName = 'defineVars';
-const styleCreateThemeMemberName = 'createTheme';
 const styleKeyframesMemberName = 'keyframes';
-const themeClassNameMemberName = 'className';
 const undefinedIdentifierName = 'undefined';
 
 /**
@@ -109,7 +107,7 @@ export interface KovoStyleExtraction {
 export type StyleStaticImportResolver = (fromFileName: string, specifier: string) => string | null;
 
 interface StyleBinding {
-  readonly style: CompiledStyle;
+  readonly style: StyleHandle;
   readonly styleRef: string;
 }
 
@@ -120,7 +118,6 @@ interface StyleEnvironment {
   readonly keyframes: readonly KeyframesResult[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
-  readonly themeClassBindings: ReadonlyMap<string, string>;
 }
 
 interface StyleIdentityOptions {
@@ -131,7 +128,6 @@ interface StyleIdentityOptions {
 interface StyleIdentityDefaults {
   readonly keyframes?: string;
   readonly styles?: string;
-  readonly theme?: string;
   readonly vars?: string;
 }
 
@@ -150,13 +146,8 @@ function createAtomicStylesWithIdentity(
 function defineVarsWithIdentity(
   tokens: Record<string, CssValue>,
   identity: StyleIdentityOptions,
-): ReturnType<typeof defineVars<Record<string, CssValue>>> {
-  return (
-    defineVars as (
-      tokens: Record<string, CssValue>,
-      identity: StyleIdentityOptions,
-    ) => ReturnType<typeof defineVars<Record<string, CssValue>>>
-  )(tokens, identity);
+): ReturnType<typeof defineVarsWithCss<Record<string, CssValue>>> {
+  return defineVarsWithCss(tokens, identity);
 }
 
 function createKeyframesWithIdentity(
@@ -169,24 +160,6 @@ function createKeyframesWithIdentity(
       identity: StyleIdentityOptions,
     ) => KeyframesResult
   )(frames, identity);
-}
-
-function createThemeWithIdentity<Tokens extends Record<string, CssValue>>(
-  baseTokens: Parameters<typeof createTheme<Tokens>>[0],
-  overrides: Parameters<typeof createTheme<Tokens>>[1],
-  identity: StyleIdentityOptions,
-): ReturnType<typeof createTheme<Tokens>> {
-  return (
-    createTheme as (
-      baseTokens: Parameters<typeof createTheme<Tokens>>[0],
-      overrides: Parameters<typeof createTheme<Tokens>>[1],
-      identity: StyleIdentityOptions,
-    ) => ReturnType<typeof createTheme<Tokens>>
-  )(baseTokens, overrides, identity);
-}
-
-function atomicRulesFromMetadata(value: unknown): readonly AtomicRule[] {
-  return compilerArrayIsArray(value) ? (value as readonly AtomicRule[]) : [];
 }
 
 interface ImportedStaticValue {
@@ -210,7 +183,7 @@ interface DynamicStyleLowering {
 
 interface StyleClassVariant {
   readonly conditions: readonly string[];
-  readonly styles: readonly CompiledStyle[];
+  readonly styles: readonly StyleHandle[];
 }
 
 interface StyleConditionFactCursor {
@@ -256,7 +229,6 @@ export function extractKovoStyles(
     ...options,
     fileName,
     source,
-    themeClassBindings: environment.themeClassBindings,
   });
   if (
     compilerMapSize(environment.bindings) === 0 &&
@@ -463,7 +435,6 @@ function collectStyleEnvironment(
   defaultStyleIdentity: StyleIdentityDefaults = {},
 ): StyleEnvironment {
   const bindings = compilerCreateMap<string, StyleBinding>();
-  const themeClassBindings = compilerCreateMap<string, string>();
   const diagnostics: CompilerDiagnostic[] = [];
   const provenanceReplacements: SourceReplacement[] = [];
   const rules: AtomicRule[] = [];
@@ -540,41 +511,8 @@ function collectStyleEnvironment(
             derivedStyleNamespace(fileName, node.name.text),
           source: vars.options.source ?? fileName,
         });
-        const resultRules = atomicRulesFromMetadata(result.__rules);
-        compilerMapSet(staticValues, node.name.text, result);
-        appendStyleValues(rules, resultRules, 'Style atomic rules');
-        pushRuleUsages(usages, fileName, node.name.text, resultRules);
-        continue;
-      }
-
-      const theme = styleCreateThemeCall(node.initializer, styleImports.namespaces);
-      if (theme) {
-        const baseTokens = ts.isIdentifier(theme.baseTokens)
-          ? compilerMapGet(staticValues, theme.baseTokens.text)
-          : undefined;
-        const overrides = tokenValuesFromObject(theme.overrides, staticValues, styleImports);
-        if (!baseTokens || !overrides) {
-          compilerArrayAppend(
-            diagnostics,
-            staticStyleDiagnostic(fileName, source, node, 'style.createTheme'),
-            'Style diagnostics',
-          );
-          continue;
-        }
-        const result = createThemeWithIdentity(
-          baseTokens as Parameters<typeof createTheme>[0],
-          overrides,
-          {
-            namespace:
-              theme.options.namespace ??
-              defaultStyleIdentity.theme ??
-              derivedStyleNamespace(fileName, node.name.text),
-            source: theme.options.source ?? fileName,
-          },
-        );
-        const resultRules = atomicRulesFromMetadata(result.__rules);
-        compilerMapSet(staticValues, node.name.text, result);
-        compilerMapSet(themeClassBindings, `${node.name.text}.className`, result.className);
+        const resultRules = result.rules;
+        compilerMapSet(staticValues, node.name.text, result.value);
         appendStyleValues(rules, resultRules, 'Style atomic rules');
         pushRuleUsages(usages, fileName, node.name.text, resultRules);
         continue;
@@ -619,10 +557,10 @@ function collectStyleEnvironment(
             result.styles,
             styleKey,
             'Style result',
-          ) as CompiledStyle;
+          ) as StyleHandle;
           const styleRef = `${node.name.text}.${styleKey}`;
           compilerMapSet(bindings, styleRef, { style, styleRef });
-          const styleRules = style.__rules ?? [];
+          const styleRules = rulesForStyle(style);
           const ruleCount = compilerArrayLength(styleRules, 'Style compiled rules');
           for (let ruleIndex = 0; ruleIndex < ruleCount; ruleIndex += 1) {
             const rule = compilerOwnDataValue(
@@ -658,7 +596,6 @@ function collectStyleEnvironment(
     keyframes,
     provenanceReplacements,
     rules,
-    themeClassBindings,
     usages,
   };
 }
@@ -988,44 +925,6 @@ function styleDefineVarsCall(
   return { options: styleIdentityOptionsFromObject(optionsArgument), tokens: tokensArgument };
 }
 
-function styleCreateThemeCall(
-  initializer: ts.Expression | undefined,
-  styleNamespaces: ReadonlySet<string>,
-): {
-  readonly baseTokens: ts.Expression;
-  readonly options: StyleIdentityOptions;
-  readonly overrides: ts.ObjectLiteralExpression;
-} | null {
-  if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
-  if (initializer.expression.name.text !== styleCreateThemeMemberName) return null;
-  if (!ts.isIdentifier(initializer.expression.expression)) return null;
-  if (!compilerSetHas(styleNamespaces, initializer.expression.expression.text)) return null;
-  const baseTokens = compilerOwnDataValue(
-    initializer.arguments,
-    0,
-    'Style createTheme arguments',
-  ) as ts.Expression | undefined;
-  const overridesArgument = compilerOwnDataValue(
-    initializer.arguments,
-    1,
-    'Style createTheme arguments',
-  ) as ts.Expression | undefined;
-  const optionsArgument = compilerOwnDataValue(
-    initializer.arguments,
-    2,
-    'Style createTheme arguments',
-  ) as ts.Expression | undefined;
-  if (!baseTokens || !overridesArgument || !ts.isObjectLiteralExpression(overridesArgument)) {
-    return null;
-  }
-  return {
-    baseTokens,
-    options: styleIdentityOptionsFromObject(optionsArgument),
-    overrides: overridesArgument,
-  };
-}
-
 function styleKeyframesCall(
   initializer: ts.Expression | undefined,
   styleImports: StyleImports,
@@ -1337,9 +1236,7 @@ function styleAttributeReplacements(
   options: Pick<
     CompileComponentOptions,
     'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
-  > & {
-    readonly themeClassBindings: ReadonlyMap<string, string>;
-  },
+  >,
 ): {
   readonly diagnostics: readonly CompilerDiagnostic[];
   readonly dynamic: readonly DynamicStyleLowering[];
@@ -1402,7 +1299,7 @@ function styleAttributeReplacements(
         compilerArrayAppend(replacements, lowered.replacement, 'Style replacements');
         continue;
       }
-      const resolvedStyles: CompiledStyle[] = [];
+      const resolvedStyles: StyleHandle[] = [];
       const resolvedCount = compilerArrayLength(resolved, 'Resolved style bindings');
       for (let index = 0; index < resolvedCount; index += 1) {
         const binding = compilerOwnDataValue(
@@ -1456,7 +1353,6 @@ function staticInlineStyleAttributeReplacement(
     {
       fileName: expression.sourceFile.fileName,
       source: expression.sourceFile.text,
-      themeClassBindings: compilerCreateMap(),
     },
   );
 }
@@ -1503,9 +1399,7 @@ function staticStyleAttributeReplacement(
   element: ComponentModuleModel['jsxElements'][number],
   styleAttribute: JsxAttributeModel,
   attributes: ReturnType<typeof attrs>,
-  options: Pick<CompileComponentOptions, 'fileName' | 'source'> & {
-    readonly themeClassBindings: ReadonlyMap<string, string>;
-  },
+  options: Pick<CompileComponentOptions, 'fileName' | 'source'>,
 ): {
   diagnostics: readonly CompilerDiagnostic[];
   extraReplacements: readonly SourceReplacement[];
@@ -1546,7 +1440,7 @@ function staticStyleAttributeReplacement(
   }
 
   if (remaining.class && classAttribute) {
-    const existingClass = staticAttributeString(classAttribute, options.themeClassBindings);
+    const existingClass = staticAttributeString(classAttribute);
     if (existingClass === null) {
       compilerArrayAppend(
         diagnostics,
@@ -1574,7 +1468,7 @@ function staticStyleAttributeReplacement(
   }
 
   if (remaining['data-style-src'] && styleSrcAttribute) {
-    const existingStyleSrc = staticAttributeString(styleSrcAttribute, options.themeClassBindings);
+    const existingStyleSrc = staticAttributeString(styleSrcAttribute);
     if (existingStyleSrc !== remaining['data-style-src']) {
       compilerArrayAppend(
         diagnostics,
@@ -1603,10 +1497,15 @@ function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string
   if (attributes.class) {
     compilerArrayAppend(parts, `class="${escapeAttribute(attributes.class)}"`, 'Style attributes');
   }
-  if (attributes['data-style-src']) {
+  const styleSource = compilerOwnDataValue(
+    attributes,
+    'data-style-src',
+    'Style lowered attributes',
+  );
+  if (typeof styleSource === 'string') {
     compilerArrayAppend(
       parts,
-      `data-style-src="${escapeAttribute(attributes['data-style-src'])}"`,
+      `data-style-src="${escapeAttribute(styleSource)}"`,
       'Style attributes',
     );
   }
@@ -1616,31 +1515,11 @@ function styleAttributeReplacement(attributes: ReturnType<typeof attrs>): string
   return compilerArrayLength(parts, 'Style attributes') > 0 ? compilerArrayJoin(parts, ' ') : null;
 }
 
-function staticAttributeString(
-  attribute: JsxAttributeModel,
-  themeClassBindings: ReadonlyMap<string, string>,
-): string | null {
+function staticAttributeString(attribute: JsxAttributeModel): string | null {
   if (attribute.value !== undefined) return attribute.value;
-  if (attribute.expression) {
-    const expression = parseExpression(attribute.expression);
-    if (expression) {
-      const themeClass = staticThemeClassName(expression.expression, themeClassBindings);
-      if (themeClass !== null) return themeClass;
-    }
-  }
   return typeof attribute.expressionStaticValue === 'string'
     ? attribute.expressionStaticValue
     : null;
-}
-
-function staticThemeClassName(
-  expression: ts.Expression,
-  themeClassBindings: ReadonlyMap<string, string>,
-): string | null {
-  if (!ts.isPropertyAccessExpression(expression)) return null;
-  if (!ts.isIdentifier(expression.expression)) return null;
-  if (expression.name.text !== themeClassNameMemberName) return null;
-  return compilerMapGet(themeClassBindings, `${expression.expression.text}.className`) ?? null;
 }
 
 function mergeClassNames(first: string, second: string): string {
@@ -1936,7 +1815,7 @@ function styleClassVariants(
             'Dynamic style right variants',
           ) as StyleClassVariant;
           const conditions: string[] = [];
-          const styles: CompiledStyle[] = [];
+          const styles: StyleHandle[] = [];
           appendStyleValues(conditions, left.conditions, 'Dynamic style variant conditions');
           appendStyleValues(conditions, right.conditions, 'Dynamic style variant conditions');
           appendStyleValues(styles, left.styles, 'Dynamic style variant styles');
@@ -2033,7 +1912,7 @@ function styleJsonString(value: string): string {
   return serialized;
 }
 
-function classNameForStyles(styles: readonly CompiledStyle[]): string {
+function classNameForStyles(styles: readonly StyleHandle[]): string {
   return attrs(styles).class ?? '';
 }
 
@@ -2137,7 +2016,7 @@ function staticStyleDiagnostic(
       help: compilerArrayJoin(
         [
           `Would lower to: static CSS rules extracted from ${api}.`,
-          'Blocked reason: the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references.',
+          'Blocked reason: the style extractor only accepts literals, same-file defineVars values, and public @kovojs/style theme token references.',
           'Fixes: move the value into a static object literal, import the public tokens object from @kovojs/style, or keep dynamic styling behind an explicit raw style escape.',
           'SPEC §5.2 requires post-parse compiler decisions to use typed facts; SPEC §13.1 requires StyleX-authored component styles to extract into CSS assets.',
         ],

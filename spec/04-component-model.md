@@ -602,17 +602,28 @@ on first interaction through the §4.4 loader.
 
 Kovo component styles are authored as TSX/JSX source with `@kovojs/style`
 objects. The compiler may extract static `style.create(...)`, `style.defineVars(...)`,
-`style.createTheme(...)`, `style.keyframes(...)`, and compiler-known imported token
+`style.keyframes(...)`, and compiler-known imported token
 references into ordinary CSS assets, but it may not turn lowered style IR into a
 second app-authoring surface (§5.2). Extracted rules are global atomic CSS with
 stable provenance, not shadow-DOM scoped rules; components remain light DOM so
 form participation, IDREFs, and accessibility relationships cross component
 boundaries. Static keyframes resolve to deterministic animation names and are emitted once.
 
+`style.create(...)` returns module-provenance `StyleHandle` capabilities, not public rule records.
+The public runtime representation is fieldless and opaque: `style.attrs(...)` accepts only handles
+minted by the same installed `@kovojs/style` instance, falsy entries, or nested arrays of those
+values. Type assertions, object spreads, marker-shaped records, raw representation tuples, and
+handles from a second package instance MUST fail the runtime provenance check. Compiler-owned rule,
+style-key, and source-attribution metadata is available only through internal build capabilities;
+it MUST NOT appear in app-public declarations. Rendered HTML may still carry `data-style-src`
+provenance because that is inspectable output, not an app-authoring input.
+
 Theme tokens are document CSS custom properties. Components may reference typed public tokens from
 `@kovojs/style`, but the runtime value is still resolved by the document. No core runtime theme
-store, hydration graph, or shadow boundary is introduced for theme selection. Expanded StyleX,
-stylesheet, and theme-token guidance lives in `site/content/guides/styling.md`.
+store, hydration graph, or shadow boundary is introduced for theme selection. The one app-facing
+theme constructor is `defineTheme({ seed, ...options })`; variable-override classes and base-theme
+derivation are not public APIs. Expanded StyleX, stylesheet, and theme-token guidance lives in
+`site/content/guides/styling.md`.
 
 ### 13.2 `kovo-key` runtime-identity contract (normative)
 

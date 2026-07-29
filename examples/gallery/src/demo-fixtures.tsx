@@ -1376,7 +1376,7 @@ export function KbdDemo(): string {
       </p>
       <div data-ui-demo="kbd">
         {Kbd.definition.render({ children: 'Ctrl' })}
-        {Kbd.definition.render({ children: 'K', style: [null, { textTransform: 'uppercase' }] })}
+        {Kbd.definition.render({ children: 'K' })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

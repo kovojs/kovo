@@ -14509,7 +14509,7 @@ export const report = query('report', {
     const facts = sinksFor(`
       import { query } from '@kovojs/server';
       import * as style from '@kovojs/style';
-      const styles = style.create({ root: { color: 'rebeccapurple' } }, { namespace: 'card' });
+      const styles = style.create({ root: { color: 'rebeccapurple' } });
       export const styled = query({ load() {
         return <div {...style.attrs(styles.root)}>Card</div>;
       } });
