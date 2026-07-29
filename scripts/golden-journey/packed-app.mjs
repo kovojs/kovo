@@ -213,21 +213,14 @@ export async function runPackedAppVariant({
       appRoot,
       artifactRoot,
       dialect,
+      recordPhase(phase) {
+        phases.push(phase);
+      },
       origin: devServer.origin,
       sampleIndex,
     });
     screenshot = browser.screenshot;
     accessibility = browser.accessibility;
-    phases.push({
-      durationMs: browser.loginDurationMs,
-      name: 'login',
-      status: 0,
-    });
-    phases.push({
-      durationMs: browser.crudDurationMs,
-      name: 'crud',
-      status: 0,
-    });
     await devServer.stop();
     transcripts.push({
       phase: 'dev',
@@ -647,7 +640,14 @@ function authoredSourceFiles(appRoot) {
   return files;
 }
 
-async function runBrowserJourney({ appRoot, artifactRoot, dialect, origin, sampleIndex }) {
+async function runBrowserJourney({
+  appRoot,
+  artifactRoot,
+  dialect,
+  origin,
+  recordPhase,
+  sampleIndex,
+}) {
   const { chromium } = await import('playwright');
   const requireFromIntegration = createRequire(
     path.join(repoRoot, 'tests/integration/package.json'),
@@ -680,6 +680,7 @@ async function runBrowserJourney({ appRoot, artifactRoot, dialect, origin, sampl
       timeout: READY_TIMEOUT_MS,
     });
     const loginDurationMs = performance.now() - loginStarted;
+    recordPhase({ durationMs: loginDurationMs, name: 'login', status: 0 });
 
     const email = `journey-${dialect}-${String(sampleIndex + 1)}@example.test`;
     const crudStarted = performance.now();
@@ -700,23 +701,41 @@ async function runBrowserJourney({ appRoot, artifactRoot, dialect, origin, sampl
       ),
       page.getByRole('button', { name: /add contact/iu }).click(),
     ]);
+    const responseBody = await settledMutationResponseBody(mutationResponse, 15_000);
     if (!mutationResponse.ok()) {
-      let responseBody = '<unavailable>';
-      try {
-        responseBody = await mutationResponse.text();
-      } catch {
-        // The status and URL remain authoritative even if navigation disposed the body stream.
-      }
       throw new JourneyPhaseError(
         'crud',
         `add-contact mutation failed: status=${String(mutationResponse.status())} body=${boundedText(responseBody, 2_048)}`,
+        {
+          durationMs: performance.now() - crudStarted,
+          name: 'crud',
+          status: null,
+        },
       );
     }
-    await page.getByText(email, { exact: true }).waitFor({
-      state: 'visible',
-      timeout: READY_TIMEOUT_MS,
-    });
+    try {
+      await page.getByText(email, { exact: true }).waitFor({
+        state: 'visible',
+        timeout: READY_TIMEOUT_MS,
+      });
+    } catch (error) {
+      throw new JourneyPhaseError(
+        'crud',
+        [
+          `add-contact returned ${String(mutationResponse.status())} but did not render the created contact`,
+          `content-type=${mutationResponse.headers()['content-type'] ?? '<missing>'}`,
+          `body=${boundedText(responseBody, 4_096)}`,
+          error instanceof Error ? error.message : String(error),
+        ].join('\n'),
+        {
+          durationMs: performance.now() - crudStarted,
+          name: 'crud',
+          status: null,
+        },
+      );
+    }
     const crudDurationMs = performance.now() - crudStarted;
+    recordPhase({ durationMs: crudDurationMs, name: 'crud', status: 0 });
 
     const styled = await page.evaluate(() => {
       const button = document.querySelector('button');
@@ -772,6 +791,29 @@ async function runBrowserJourney({ appRoot, artifactRoot, dialect, origin, sampl
   } finally {
     await browser.close();
   }
+}
+
+async function settledMutationResponseBody(response, timeoutMs) {
+  const outcome = await Promise.race([
+    response.text().then(
+      (body) => ({ body, error: null, settled: true }),
+      (error) => ({
+        body: '',
+        error: error instanceof Error ? error.message : String(error),
+        settled: true,
+      }),
+    ),
+    delay(timeoutMs).then(() => ({ body: '', error: null, settled: false })),
+  ]);
+  if (!outcome.settled) {
+    throw new JourneyPhaseError(
+      'crud',
+      `add-contact response body did not settle within ${String(timeoutMs)}ms`,
+      { durationMs: timeoutMs, name: 'crud', status: null },
+    );
+  }
+  if (outcome.error !== null) return `<unavailable: ${boundedText(outcome.error, 512)}>`;
+  return boundedText(outcome.body, 16 * 1024);
 }
 
 async function axePage(page) {
