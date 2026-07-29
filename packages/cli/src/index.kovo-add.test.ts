@@ -778,7 +778,7 @@ describe('kovo add', () => {
     }
   });
 
-  it('copies required sibling files for tabs and lands formatter-stable source', async () => {
+  it('lands formatter-stable tabs source with canonical public type imports', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-add-cli-'));
     const outDir = join(root, 'ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -789,11 +789,9 @@ describe('kovo add', () => {
 
       expect(stderr).not.toHaveBeenCalled();
       expect(readFileSync(join(outDir, 'tabs.tsx'), 'utf8')).toContain(
-        "from './navigation-types.js'",
+        "from '@kovojs/headless-ui/types'",
       );
-      expect(readFileSync(join(outDir, 'navigation-types.ts'), 'utf8')).toContain(
-        "export type TextDirection = 'ltr' | 'rtl';",
-      );
+      expect(existsSync(join(outDir, 'navigation-types.ts'))).toBe(false);
       expect(readFileSync(join(outDir, 'tabs.tsx'), 'utf8')).not.toContain('\n\n\n');
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `ADD tabs path=${JSON.stringify(join(outDir, 'tabs.tsx'))} source=tsx`,
