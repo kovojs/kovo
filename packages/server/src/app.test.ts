@@ -1863,6 +1863,11 @@ describe('server createApp request shell', () => {
     expect(body).toContain('<h1>Not Found</h1>');
     expect(body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
+      failure: expect.objectContaining({
+        code: 'KTB008',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'error-shell-render-failed',
+      }),
       operation: 'error-shell',
       request: expect.any(Request),
       status: 404,
@@ -3283,6 +3288,11 @@ describe('server createApp request shell', () => {
     expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
     expect(body).not.toContain('private endpoint detail');
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB001',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'request-dispatch-failed',
+      }),
       operation: 'app-request',
       request: expect.any(Request),
       url: '/status?check',
@@ -3309,7 +3319,9 @@ describe('server createApp request shell', () => {
       expect(response.status).toBe(500);
       await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[kovo] app-request failed url=/status?check'),
+        expect.stringMatching(
+          /^\[kovo\] KTB001 app-request failed cause=request-dispatch-failed correlation=ktb_[0-9a-f]{32} url=\/status\?check$/u,
+        ),
         'Error: private endpoint detail',
       );
     } finally {
@@ -3338,6 +3350,11 @@ describe('server createApp request shell', () => {
     expect(response.headers.get('content-type')).toBe('application/json');
     await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB001',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'request-dispatch-failed',
+      }),
       operation: 'app-request',
       request: expect.any(Request),
       url: '/status.json?check',

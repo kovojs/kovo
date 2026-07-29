@@ -19,6 +19,12 @@ describe('@kovojs/cli public API', () => {
     ]);
     expect(KOVO_DIAGNOSTIC_VERSION).toBe('kovo-diagnostic/v1');
     expectTypeOf<KovoDiagnosticRecord['version']>().toEqualTypeOf<'kovo-diagnostic/v1'>();
+    expectTypeOf<
+      NonNullable<KovoDiagnosticRecord['runtime']>['schema']
+    >().toEqualTypeOf<'kovo.trusted-boundary-failure/v1'>();
+    expectTypeOf<NonNullable<KovoDiagnosticRecord['runtime']>['sourceKind']>().toEqualTypeOf<
+      'config' | 'source' | undefined
+    >();
     expect('main' in PublicCli).toBe(false);
     expect('mainAsync' in PublicCli).toBe(false);
 

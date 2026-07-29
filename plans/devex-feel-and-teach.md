@@ -12,10 +12,18 @@ compiler/runtime facts; none may become a second analyzer.
       mutation/query/component/page nodes and directional edges.
   - Evidence: the focused source-anchor/compiler/devtool suites in Latest verification prove exact
     authored slices, node/edge propagation, and fail-closed root confinement.
-- [ ] Complete remaining source anchors for domains, handlers, derives, triggers, binding
-      positions, suppressions, and every diagnostic family.
-- [ ] Add safe trusted-boundary cause taxonomy, correlation ID, remediation, and source/config
+- [x] Complete source anchors for domains, handlers, derives, triggers, binding positions,
+      suppressions, imported/shared declarations, and fail-closed runtime-declaration
+      association.
+  - Evidence: the focused compiler and CLI source-anchor suites in Latest verification assert exact
+    authored slices and reject missing, duplicate, and endpoint/webhook-ambiguous associations.
+- [ ] Prove exact source/config anchors across every remaining diagnostic family and presentation
+      adapter.
+- [x] Add safe trusted-boundary cause taxonomy, correlation ID, remediation, and source/config
       anchors while retaining secret-redacted raw causes server-side.
+  - Evidence: the focused runtime-failure suites in Latest verification prove the finite KTB001–008
+    registry, unique bounded correlation IDs, relative source/config anchors, raw-cause exclusion,
+    and human/JSON/GitHub/MCP parity.
 - [ ] Complete open devtool unit/browser/CLI parity and live-overlay work.
 - [ ] Stream only bounded redacted mutation/query/target facts and reuse them for MCP.
 
@@ -78,6 +86,11 @@ site/scripts/golden-recipes.mjs` plus the four focused suites passed (4 files, 1
   1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.
 - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts
 packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
+packages/compiler/src/feedback-source-anchors.test.ts
 packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
-packages/cli/src/source-anchors.test.ts --reporter=dot` passed (6 files, 120 tests); the focused
+packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tests); the focused
   registry subset passed (8 tests).
+- `pnpm exec vitest --run packages/server/src/diagnostics.test.ts
+packages/cli/src/trusted-boundary-failure.test.ts packages/cli/src/diagnostic-empathy.test.ts
+packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5 files, 24 tests);
+  `node scripts/api-surface-gate.mjs` passed with zero publicness violations.

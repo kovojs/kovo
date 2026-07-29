@@ -2053,7 +2053,11 @@ function appWithDevDiagnostics(
 }
 
 function reportDevServerError(error: unknown, context: ServerErrorDiagnosticContext): void {
-  const details: string[] = [`[kovo dev] ${context.operation} failed`];
+  const details: string[] = [
+    `[kovo dev] ${context.failure.code} ${context.operation} failed`,
+    `cause=${context.failure.safeCause}`,
+    `correlation=${context.failure.correlationId}`,
+  ];
   if (context.routePath) securityArrayPush(details, `route=${context.routePath}`);
   if (context.mutationKey) securityArrayPush(details, `mutation=${context.mutationKey}`);
   if (context.queryKey) securityArrayPush(details, `query=${context.queryKey}`);

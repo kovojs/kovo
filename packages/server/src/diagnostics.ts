@@ -1,4 +1,8 @@
 import { isSecret } from '@kovojs/core/security';
+import {
+  trustedBoundaryFailureDefinition,
+  type TrustedBoundaryFailureFact,
+} from '@kovojs/core/internal/graph';
 
 import {
   loggingCharacterCodeAt,
@@ -64,10 +68,15 @@ const NativeUint8Array = Uint8Array;
 const NativeURIError = URIError;
 const NativeURL = URL;
 const NativeURLSearchParams = URLSearchParams;
+const nativeCrypto = globalThis.crypto;
+const nativeCryptoGetRandomValues =
+  nativeCrypto === undefined ? undefined : witnessReflectGet(nativeCrypto, 'getRandomValues');
 const nativeFunctionHasInstance = Function.prototype[Symbol.hasInstance];
 const nativeErrorStackDescriptor = witnessGetOwnPropertyDescriptor(new NativeError(), 'stack');
 const nativeObjectCreate = NativeObject.create;
+const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectPrototype = NativeObject.prototype;
+const nativeNumberIsSafeInteger = Number.isSafeInteger;
 const nativeErrorPrototypeNames = new Map<object, string>([
   [NativeError.prototype, 'Error'],
   [NativeEvalError.prototype, 'EvalError'],
@@ -85,6 +94,56 @@ const nativeErrorPrototypeNames = new Map<object, string>([
  * for that phase (SPEC.md §9.2).
  */
 export interface ServerErrorDiagnosticContext {
+  /**
+   * Stable, bounded failure fact safe for terminal, JSON, GitHub, MCP, editor, and devtool
+   * projection. The raw (secret-sanitized) exception remains the first server-only hook argument.
+   *
+   * The shape is written here rather than naming the core-internal carrier so this public
+   * observability seam does not require app authors to import an internal package subpath.
+   */
+  failure: {
+    readonly correlationId: string;
+    readonly code:
+      | 'KTB001'
+      | 'KTB002'
+      | 'KTB003'
+      | 'KTB004'
+      | 'KTB005'
+      | 'KTB006'
+      | 'KTB007'
+      | 'KTB008';
+    readonly operation:
+      | 'app-request'
+      | 'client-module'
+      | 'error-shell'
+      | 'mutation-handler'
+      | 'mutation-render'
+      | 'mutation-response-policy'
+      | 'mutation-stream'
+      | 'no-js-mutation-handler'
+      | 'query-endpoint'
+      | 'route-page'
+      | 'route-render'
+      | 'task-runner'
+      | 'task-runtime-startup';
+    readonly remediation: string;
+    readonly safeCause:
+      | 'client-module-resolution-failed'
+      | 'error-shell-render-failed'
+      | 'handler-execution-failed'
+      | 'request-dispatch-failed'
+      | 'response-policy-failed'
+      | 'response-render-failed'
+      | 'runtime-startup-failed'
+      | 'task-execution-failed';
+    readonly schema: 'kovo.trusted-boundary-failure/v1';
+    readonly source?: {
+      readonly end: number;
+      readonly file: string;
+      readonly start: number;
+    };
+    readonly sourceKind?: 'config' | 'source';
+  };
   mutationKey?: string;
   taskJobId?: string;
   taskKey?: string;
@@ -95,12 +154,13 @@ export interface ServerErrorDiagnosticContext {
     | 'mutation-handler'
     | 'mutation-render'
     | 'mutation-response-policy'
+    | 'mutation-stream'
     | 'no-js-mutation-handler'
     | 'query-endpoint'
-    | 'task-runner'
-    | 'task-runtime-startup'
     | 'route-page'
-    | 'route-render';
+    | 'route-render'
+    | 'task-runner'
+    | 'task-runtime-startup';
   queryKey?: string;
   request?: unknown;
   routePath?: string;
@@ -108,6 +168,16 @@ export interface ServerErrorDiagnosticContext {
   targets?: readonly string[];
   url?: string;
 }
+
+/** @internal Context accepted from framework call sites before the failure fact is minted. */
+export type ServerErrorDiagnosticInputContext = Omit<ServerErrorDiagnosticContext, 'failure'> & {
+  source?: {
+    readonly end: number;
+    readonly file: string;
+    readonly start: number;
+  };
+  sourceKind?: 'config' | 'source';
+};
 
 /**
  * Observability hook supplied to `createApp({ onError })`. Invoked when a
@@ -123,7 +193,7 @@ export type ServerErrorHandler = (
 export function reportServerError(
   onError: ServerErrorHandler | undefined,
   error: unknown,
-  context: ServerErrorDiagnosticContext,
+  context: ServerErrorDiagnosticInputContext,
 ): void {
   const prepared = safelyPrepareServerErrorDiagnostic(error, context);
   if (!onError) {
@@ -144,7 +214,7 @@ export function reportServerError(
 
 function safelyPrepareServerErrorDiagnostic(
   error: unknown,
-  context: ServerErrorDiagnosticContext,
+  context: ServerErrorDiagnosticInputContext,
 ): { context: ServerErrorDiagnosticContext; error: unknown } {
   try {
     return prepareServerErrorDiagnostic(error, context);
@@ -153,8 +223,9 @@ function safelyPrepareServerErrorDiagnostic(
     try {
       if (witnessSetHas(SERVER_ERROR_OPERATIONS, context.operation)) operation = context.operation;
     } catch {}
+    const failure = createTrustedBoundaryFailureFact({ operation });
     return {
-      context: { operation },
+      context: { failure, operation },
       error: new NativeError('Server operation failed.'),
     };
   }
@@ -167,6 +238,7 @@ const SERVER_ERROR_OPERATIONS = new Set<ServerErrorDiagnosticContext['operation'
   'mutation-handler',
   'mutation-render',
   'mutation-response-policy',
+  'mutation-stream',
   'no-js-mutation-handler',
   'query-endpoint',
   'route-page',
@@ -175,9 +247,146 @@ const SERVER_ERROR_OPERATIONS = new Set<ServerErrorDiagnosticContext['operation'
   'task-runtime-startup',
 ]);
 
+let fallbackCorrelationSequence = 0;
+const CORRELATION_ZEROES = '00000000000000000000000000000000';
+const HEX_DIGITS = '0123456789abcdef';
+
+/**
+ * Mint one bounded runtime fact at the last trusted diagnostic boundary.
+ *
+ * The correlation value is for incident joining only; it authenticates nothing. Raw exceptions,
+ * stack frames, request values, environment values, and payloads stay out of this record by shape.
+ */
+function createTrustedBoundaryFailureFact(
+  context: ServerErrorDiagnosticInputContext,
+): TrustedBoundaryFailureFact {
+  const definition = trustedBoundaryFailureDefinition(context.operation);
+  const sourceKind =
+    context.sourceKind === 'config' || context.sourceKind === 'source'
+      ? context.sourceKind
+      : undefined;
+  const source = sourceKind === undefined ? undefined : trustedBoundarySourceAnchor(context.source);
+  const base = {
+    correlationId: nextTrustedBoundaryCorrelationId(),
+    code: definition.code,
+    operation: context.operation,
+    remediation: definition.remediation,
+    safeCause: definition.safeCause,
+    schema: 'kovo.trusted-boundary-failure/v1',
+  } as const;
+  if (source === undefined || sourceKind === undefined) return nativeObjectFreeze(base);
+  return nativeObjectFreeze({
+    ...base,
+    source,
+    sourceKind,
+  });
+}
+
+function trustedBoundarySourceAnchor(
+  value: ServerErrorDiagnosticInputContext['source'],
+): TrustedBoundaryFailureFact['source'] {
+  if (value === undefined || value === null || typeof value !== 'object') return undefined;
+  const keys = witnessOwnKeys(value);
+  if (keys.length !== 3) return undefined;
+  let hasEnd = false;
+  let hasFile = false;
+  let hasStart = false;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === 'end') hasEnd = true;
+    else if (key === 'file') hasFile = true;
+    else if (key === 'start') hasStart = true;
+    else return undefined;
+  }
+  if (!hasEnd || !hasFile || !hasStart) return undefined;
+  const end = trustedBoundaryOwnData(value, 'end');
+  const file = trustedBoundaryOwnData(value, 'file');
+  const start = trustedBoundaryOwnData(value, 'start');
+  if (
+    typeof file !== 'string' ||
+    file.length === 0 ||
+    file.length > 4_096 ||
+    neutralizeLogValue(file) !== file ||
+    !trustedBoundaryRelativeSourceFile(file) ||
+    typeof start !== 'number' ||
+    typeof end !== 'number' ||
+    !nativeNumberIsSafeInteger(start) ||
+    !nativeNumberIsSafeInteger(end) ||
+    start < 0 ||
+    end < start
+  ) {
+    return undefined;
+  }
+  return nativeObjectFreeze({ end, file, start });
+}
+
+function trustedBoundaryRelativeSourceFile(file: string): boolean {
+  if (
+    file === '.' ||
+    file === '..' ||
+    file[0] === '/' ||
+    file[0] === '\\' ||
+    loggingStringIndexOf(file, './') === 0 ||
+    loggingStringIndexOf(file, '../') === 0 ||
+    loggingStringIncludes(file, '/./') ||
+    loggingStringIncludes(file, '/../') ||
+    loggingStringIncludes(file, '\\') ||
+    loggingStringIncludes(file, ':') ||
+    loggingStringEndsWith(file, '/.') ||
+    loggingStringEndsWith(file, '/..')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function trustedBoundaryOwnData(value: object, key: string): unknown {
+  const descriptor = witnessGetOwnPropertyDescriptor(value, key);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+function nextTrustedBoundaryCorrelationId(): string {
+  const bytes = new NativeUint8Array(16);
+  if (nativeCrypto !== undefined && typeof nativeCryptoGetRandomValues === 'function') {
+    try {
+      witnessReflectApply(nativeCryptoGetRandomValues, nativeCrypto, [bytes]);
+      // UUID-compatible variant/version bits make the random layout recognizable without making
+      // this incident key an authenticator.
+      bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+      bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+      return `ktb_${trustedBoundaryHex(bytes)}`;
+    } catch {
+      // Diagnostics must remain available when a host omits or breaks Web Crypto.
+    }
+  }
+
+  fallbackCorrelationSequence += 1;
+  let value = fallbackCorrelationSequence;
+  let suffix = '';
+  while (value > 0) {
+    const nibble = value % 16;
+    suffix = `${HEX_DIGITS[nibble]}${suffix}`;
+    value = (value - nibble) / 16;
+  }
+  return `ktb_${loggingStringSlice(
+    CORRELATION_ZEROES,
+    0,
+    CORRELATION_ZEROES.length - suffix.length,
+  )}${suffix}`;
+}
+
+function trustedBoundaryHex(bytes: Uint8Array): string {
+  let output = '';
+  for (let index = 0; index < bytes.length; index += 1) {
+    const value = bytes[index]!;
+    output += `${HEX_DIGITS[(value >>> 4) & 0x0f]}${HEX_DIGITS[value & 0x0f]}`;
+  }
+  return output;
+}
+
 function prepareServerErrorDiagnostic(
   error: unknown,
-  context: ServerErrorDiagnosticContext,
+  context: ServerErrorDiagnosticInputContext,
 ): { context: ServerErrorDiagnosticContext; error: unknown } {
   const requestInputs = diagnosticRequestInputs(context.request);
   if (context.url !== undefined)
@@ -210,12 +419,21 @@ function prepareServerErrorDiagnostic(
       }
     : context;
 
+  const projectedContext = sanitizeDiagnosticValue(
+    sanitizedContext,
+    requestInputs,
+    createWitnessWeakMap(),
+  ) as ServerErrorDiagnosticInputContext;
+  const failure = createTrustedBoundaryFailureFact(projectedContext);
+  const publicContext = { ...projectedContext };
+  delete publicContext.source;
+  delete publicContext.sourceKind;
+
   return {
-    context: sanitizeDiagnosticValue(
-      sanitizedContext,
-      requestInputs,
-      createWitnessWeakMap(),
-    ) as ServerErrorDiagnosticContext,
+    context: {
+      ...publicContext,
+      failure,
+    },
     error: sanitizedError,
   };
 }
@@ -688,7 +906,10 @@ function sanitizeDiagnosticString(value: string, inputs: DiagnosticRequestInputs
 
 function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosticContext): void {
   try {
-    let details = `[kovo] ${context.operation} failed`;
+    let details =
+      `[kovo] ${context.failure.code} ${context.operation} failed` +
+      ` cause=${context.failure.safeCause}` +
+      ` correlation=${context.failure.correlationId}`;
     if (context.url !== undefined) details += ` url=${context.url}`;
     if (context.routePath !== undefined) details += ` route=${context.routePath}`;
     if (context.queryKey !== undefined) details += ` query=${context.queryKey}`;
@@ -828,6 +1049,7 @@ function diagnosticHeadersIteratorNext(): Function | undefined {
       new NativeHeaders(),
       [],
     );
+    // oxlint-disable-next-line typescript/unbound-method -- Invoked with the iterator receiver through pinned Reflect.apply.
     return iterator.next;
   } catch {
     return undefined;

@@ -299,7 +299,7 @@ browser-bound and get a small named browser suite.
 packages/compiler/src/style.test.ts packages/compiler/src/stamps.test.ts
 packages/compiler/src/feedback-source-anchors.test.ts
 packages/devtool/src/graph-model.test.mjs packages/devtool/src/source-slice.security.test.mjs
-packages/cli/src/source-anchors.test.ts --reporter=dot` passed.
+packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tests).
 - `pnpm exec vitest --run packages/compiler/src/registry.test.ts -t 'emits
 live-target|honors disableServerRefresh|threads compiler-derived route layout|derives app graph
 component facts|derives page query facts|emits mutation form error binding facts|lowers

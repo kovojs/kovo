@@ -568,8 +568,11 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       status: 200,
     });
-    expect(productLoad).toHaveBeenCalledWith({ id: 'p1' }, { request: {} });
-    expect(productLoad).not.toHaveBeenCalledWith({ id: 'p2' }, { request: {} });
+    expect(productLoad).toHaveBeenCalledWith(
+      { id: 'p1' },
+      { request: {}, signal: expect.any(AbortSignal) },
+    );
+    expect(productLoad).not.toHaveBeenCalledWith({ id: 'p2' }, expect.anything());
   });
 
   it('does not match broad query deps for instance-specific live target invalidations', async () => {
@@ -680,8 +683,11 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       status: 200,
     });
-    expect(questionLoad).toHaveBeenCalledWith({ id: 'q1' }, { request: {} });
-    expect(questionLoad).not.toHaveBeenCalledWith({ id: 'a2' }, { request: {} });
+    expect(questionLoad).toHaveBeenCalledWith(
+      { id: 'q1' },
+      { request: {}, signal: expect.any(AbortSignal) },
+    );
+    expect(questionLoad).not.toHaveBeenCalledWith({ id: 'a2' }, expect.anything());
   });
 
   it('does not confuse coarse mutation input with generated live-target query arguments', async () => {
@@ -759,11 +765,17 @@ describe('server mutation primitives', () => {
     expect(response.body).not.toContain('undefined');
     expect(productLoad).toHaveBeenCalledWith(
       { label: 'Pen', productId: 'p1' },
-      { request: { args: { label: 'Pen', productId: 'p1' } } },
+      {
+        request: { args: { label: 'Pen', productId: 'p1' } },
+        signal: expect.any(AbortSignal),
+      },
     );
     expect(productLoad).toHaveBeenCalledWith(
       { label: 'Notebook', productId: 'p2' },
-      { request: { args: { label: 'Notebook', productId: 'p2' } } },
+      {
+        request: { args: { label: 'Notebook', productId: 'p2' } },
+        signal: expect.any(AbortSignal),
+      },
     );
     expect(instanceInputs).not.toContainEqual({ category: 'office', threshold: 10 });
   });
@@ -1377,6 +1389,11 @@ describe('server mutation primitives', () => {
       status: 422,
     });
     expect(context).toEqual({
+      failure: expect.objectContaining({
+        code: 'KTB004',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'response-render-failed',
+      }),
       mutationKey: 'cart/add',
       operation: 'mutation-render',
       request,
@@ -1617,6 +1634,11 @@ describe('server mutation primitives', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB004',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'response-render-failed',
+      }),
       mutationKey: 'cart/add',
       operation: 'mutation-render',
       request,
@@ -1652,6 +1674,11 @@ describe('server mutation primitives', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'handler-execution-failed',
+      }),
       mutationKey: 'cart/add',
       operation: 'mutation-handler',
       request,
@@ -2697,6 +2724,11 @@ describe('server mutation primitives', () => {
     expect(body).toContain('<kovo-done reason="error">');
 
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB004',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'response-render-failed',
+      }),
       mutationKey: 'chat/stream-error',
       operation: 'mutation-stream',
       request: {},

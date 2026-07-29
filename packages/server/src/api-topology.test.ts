@@ -30,6 +30,7 @@ import * as webhooksApi from '@kovojs/server/webhooks';
 import * as writeSafetyApi from '@kovojs/server/write-safety';
 import type { InferKovoAppTypes, KovoApp } from '@kovojs/server/custom-adapters';
 import type { AppDbProvider, Reader, Writer } from '@kovojs/server/data';
+import type { ServerErrorDiagnosticContext } from '@kovojs/server/diagnostics';
 import type { MutationReplayBody } from '@kovojs/server/replay';
 import type { EndpointDefinition } from '@kovojs/server/routing';
 import type { FileLike, FileSchema, StoredFileSchema, StoredFileUpload } from '@kovojs/server';
@@ -116,6 +117,12 @@ describe('@kovojs/server public topology', () => {
     expectTypeOf<InferKovoAppTypes<KovoApp<{ readonly request: Request }>>>().toEqualTypeOf<{
       readonly request: Request;
     }>();
+    expectTypeOf<
+      ServerErrorDiagnosticContext['failure']['schema']
+    >().toEqualTypeOf<'kovo.trusted-boundary-failure/v1'>();
+    expectTypeOf<ServerErrorDiagnosticContext['failure']['sourceKind']>().toEqualTypeOf<
+      'config' | 'source' | undefined
+    >();
     expectTypeOf<MutationReplayBody>().toMatchTypeOf<string>();
     expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().toHaveProperty('select');
     expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().not.toHaveProperty('insert');

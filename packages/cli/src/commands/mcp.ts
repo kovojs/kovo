@@ -34,7 +34,11 @@ import {
 import { readInstalledAgentDocsSnapshot } from '../docs-snapshot.js';
 import { searchInstalledAgentDocs } from '../docs-store.js';
 import { readCliPackageVersion } from '../package-version.js';
-import { projectKovoDiagnostic, type KovoDiagnosticRecord } from '../diagnostic.js';
+import {
+  projectKovoDiagnostic,
+  trustedBoundaryFailureDiagnostic,
+  type KovoDiagnosticRecord,
+} from '../diagnostic.js';
 import {
   byteLength,
   compileOutputVersion,
@@ -98,6 +102,34 @@ export type KovoMcpToolName =
   | 'kovo_docs'
   | 'kovo_explain'
   | 'list_diagnostics';
+
+/** @internal Shared structured-content version for live/runtime failure MCP adapters. */
+export const trustedBoundaryFailureMcpVersion = 'kovo-runtime-failure/v1' as const;
+
+/** @internal Bounded MCP projection consumed by the live runtime overlay. */
+export interface TrustedBoundaryFailureMcpResult {
+  readonly diagnostics: readonly KovoDiagnosticRecord[];
+  readonly failure: CoreGraph.TrustedBoundaryFailureFact;
+  readonly version: typeof trustedBoundaryFailureMcpVersion;
+}
+
+/**
+ * @internal Project the same authenticated CLI diagnostic record into MCP structured content.
+ * No MCP-specific cause parser or remediation registry exists.
+ */
+export function trustedBoundaryFailureForMcp(
+  failure: CoreGraph.TrustedBoundaryFailureFact,
+): TrustedBoundaryFailureMcpResult {
+  const diagnostic = trustedBoundaryFailureDiagnostic(failure);
+  if (diagnostic.runtime === undefined) {
+    throw new TypeError('Trusted-boundary diagnostic lost its runtime fact.');
+  }
+  return Object.freeze({
+    diagnostics: Object.freeze([diagnostic]),
+    failure: diagnostic.runtime,
+    version: trustedBoundaryFailureMcpVersion,
+  });
+}
 
 /** @internal Backs the internal `compile_component` MCP tool; not a public API. */
 export async function compileComponentV1(

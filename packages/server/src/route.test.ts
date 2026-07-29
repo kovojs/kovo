@@ -496,11 +496,21 @@ describe('route primitives', () => {
       ),
     ).resolves.toEqual(serverErrorResponse);
     expect(onError).toHaveBeenCalledWith(loadError, {
+      failure: expect.objectContaining({
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'handler-execution-failed',
+      }),
       operation: 'route-page',
       request,
       routePath: '/products/:id',
     });
     expect(onError).toHaveBeenCalledWith(renderError, {
+      failure: expect.objectContaining({
+        code: 'KTB004',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'response-render-failed',
+      }),
       operation: 'route-render',
       request,
       routePath: '/cart',
@@ -525,7 +535,9 @@ describe('route primitives', () => {
         status: 500,
       });
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[kovo] route-page failed route=/products/:id'),
+        expect.stringMatching(
+          /^\[kovo\] KTB003 route-page failed cause=handler-execution-failed correlation=ktb_[0-9a-f]{32} route=\/products\/:id$/u,
+        ),
         'Error: private route load detail',
       );
     } finally {

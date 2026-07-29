@@ -730,6 +730,11 @@ describe('query endpoints', () => {
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
+      failure: expect.objectContaining({
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'handler-execution-failed',
+      }),
       operation: 'query-endpoint',
       queryKey: 'product',
       request,
@@ -753,7 +758,9 @@ describe('query endpoints', () => {
         status: 500,
       });
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[kovo] query-endpoint failed query=product'),
+        expect.stringMatching(
+          /^\[kovo\] KTB003 query-endpoint failed cause=handler-execution-failed correlation=ktb_[0-9a-f]{32} query=product$/u,
+        ),
         expect.stringContaining('database password leaked in stack'),
       );
     } finally {

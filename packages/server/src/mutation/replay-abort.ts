@@ -1,6 +1,6 @@
 import {
   reportServerError,
-  type ServerErrorDiagnosticContext,
+  type ServerErrorDiagnosticInputContext,
   type ServerErrorHandler,
 } from '../diagnostics.js';
 
@@ -18,7 +18,7 @@ import type { MutationLifecycleReplayReservation } from './replay-policy.js';
 export async function abortFailedMutationReplay(
   reservation: MutationLifecycleReplayReservation<unknown> | undefined,
   onError: ServerErrorHandler | undefined,
-  context: ServerErrorDiagnosticContext,
+  context: ServerErrorDiagnosticInputContext,
 ): Promise<void> {
   try {
     await reservation?.abort?.();

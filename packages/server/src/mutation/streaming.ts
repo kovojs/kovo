@@ -1,6 +1,6 @@
 import { reportServerError } from '../diagnostics.js';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
-import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
+import type { ServerErrorDiagnosticInputContext, ServerErrorHandler } from '../diagnostics.js';
 import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
 import { frameworkWireBody } from '../response.js';
 import {
@@ -148,14 +148,13 @@ export const stream = {
 /**
  * L10-1 (SPEC §9): error-reporting context threaded into the streaming render so a
  * generator that throws mid-stream can report via `onError` and emit a failure
- * terminator. `'mutation-stream'` is not yet a member of the shared
- * `ServerErrorDiagnosticContext.operation` union, so the context is cast at the
- * reporting boundary; the runtime value the diagnostic hook observes is unchanged.
+ * terminator. The shared trusted-boundary operation vocabulary owns `mutation-stream`, so this
+ * path projects the same stable safe-cause fact as buffered mutation rendering.
  */
 export interface StreamingMutationErrorContext {
-  context: {
+  context: ServerErrorDiagnosticInputContext & {
     mutationKey: string;
-    operation: string;
+    operation: 'mutation-stream';
     request: unknown;
     targets?: readonly string[] | undefined;
   };
@@ -183,11 +182,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
 
     const reportStreamingError = (error: unknown): void => {
       if (!errorContext) return;
-      reportServerError(
-        errorContext.onError,
-        error,
-        errorContext.context as ServerErrorDiagnosticContext,
-      );
+      reportServerError(errorContext.onError, error, errorContext.context);
     };
 
     const closeSourceIterator = (): Promise<void> => {

@@ -1318,6 +1318,11 @@ describe('server app document boundary', () => {
     expect(response.body).toContain('<h1>Not Found</h1>');
     expect(response.body).not.toContain('private shell detail');
     expect(onError).toHaveBeenCalledWith(shellError, {
+      failure: expect.objectContaining({
+        code: 'KTB008',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        safeCause: 'error-shell-render-failed',
+      }),
       operation: 'error-shell',
       request: expect.any(Request),
       status: 404,

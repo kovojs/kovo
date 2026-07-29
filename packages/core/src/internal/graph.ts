@@ -92,6 +92,11 @@ export type {
   TouchGraph,
   TouchGraphEntry,
   TouchSite,
+  TrustedBoundaryFailureCode,
+  TrustedBoundaryFailureDefinition,
+  TrustedBoundaryFailureFact,
+  TrustedBoundaryOperation,
+  TrustedBoundarySafeCause,
   TriggerExplain,
   TrustEscapeExplain,
   UnregisteredSinkFact,
@@ -107,4 +112,5 @@ export {
   deriveSessionAuthorityFacts,
   ESCAPE_CENSUS_DOORS,
   validateKovoExplainInput,
+  trustedBoundaryFailureDefinition,
 } from '../graph.js';

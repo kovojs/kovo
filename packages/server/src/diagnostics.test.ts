@@ -32,7 +32,7 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     expect(JSON.stringify(onError.mock.calls)).not.toContain('sk_live_q5_report');
   });
 
-  it('preserves ordinary error and context identity when no secret tags are present', () => {
+  it('preserves ordinary error identity while adding the bounded runtime failure fact', () => {
     const onError = vi.fn();
     const error = new Error('ordinary failure');
     const request = { id: 'req_1' };
@@ -44,7 +44,99 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
 
     reportServerError(onError, error, context);
 
-    expect(onError).toHaveBeenCalledWith(error, context);
+    expect(onError).toHaveBeenCalledWith(error, {
+      ...context,
+      failure: expect.objectContaining({
+        code: 'KTB003',
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        operation: 'route-page',
+        safeCause: 'handler-execution-failed',
+        schema: 'kovo.trusted-boundary-failure/v1',
+      }),
+    });
+  });
+
+  it('projects one stable safe taxonomy with remediation, correlation, and exact anchors', () => {
+    const cases = [
+      ['app-request', 'KTB001', 'request-dispatch-failed'],
+      ['client-module', 'KTB002', 'client-module-resolution-failed'],
+      ['mutation-handler', 'KTB003', 'handler-execution-failed'],
+      ['no-js-mutation-handler', 'KTB003', 'handler-execution-failed'],
+      ['query-endpoint', 'KTB003', 'handler-execution-failed'],
+      ['route-page', 'KTB003', 'handler-execution-failed'],
+      ['mutation-render', 'KTB004', 'response-render-failed'],
+      ['mutation-stream', 'KTB004', 'response-render-failed'],
+      ['route-render', 'KTB004', 'response-render-failed'],
+      ['mutation-response-policy', 'KTB005', 'response-policy-failed'],
+      ['task-runner', 'KTB006', 'task-execution-failed'],
+      ['task-runtime-startup', 'KTB007', 'runtime-startup-failed'],
+      ['error-shell', 'KTB008', 'error-shell-render-failed'],
+    ] as const;
+    const correlations = new Set<string>();
+    const source = { end: 42, file: 'src/app.tsx', start: 17 } as const;
+
+    for (const [operation, code, safeCause] of cases) {
+      const onError = vi.fn();
+      reportServerError(onError, new Error('server-only raw cause'), {
+        operation,
+        source,
+        sourceKind: operation === 'task-runtime-startup' ? 'config' : 'source',
+      });
+
+      const [, context] = onError.mock.calls[0]!;
+      expect(context.failure).toEqual({
+        code,
+        correlationId: expect.stringMatching(/^ktb_[0-9a-f]{32}$/u),
+        operation,
+        remediation: expect.stringMatching(/\S/u),
+        safeCause,
+        schema: 'kovo.trusted-boundary-failure/v1',
+        source,
+        sourceKind: operation === 'task-runtime-startup' ? 'config' : 'source',
+      });
+      expect(JSON.stringify(context.failure)).not.toContain('server-only raw cause');
+      expect(context).not.toHaveProperty('source');
+      expect(context).not.toHaveProperty('sourceKind');
+      correlations.add(context.failure.correlationId);
+    }
+
+    expect(correlations.size).toBe(cases.length);
+  });
+
+  it('omits malformed or non-relative anchors instead of guessing or leaking a location', () => {
+    const cases = [
+      {
+        source: {
+          end: 1,
+          file: 'src/route.tsx',
+          start: 0,
+          surplus: 'forged',
+        },
+        sourceKind: 'source',
+      },
+      {
+        source: { end: 1, file: '/Users/operator/private/route.tsx', start: 0 },
+        sourceKind: 'source',
+      },
+      { source: { end: 1, file: '../private/route.tsx', start: 0 }, sourceKind: 'config' },
+      { source: { end: 1, file: 'src/route.tsx', start: 0 }, sourceKind: undefined },
+    ] as const;
+
+    for (const forged of cases) {
+      const onError = vi.fn();
+      reportServerError(onError, new Error('failed'), {
+        operation: 'route-render',
+        ...forged,
+      } as Parameters<typeof reportServerError>[2]);
+
+      const context = onError.mock.calls[0]?.[1];
+      const failure = context.failure;
+      expect(failure).not.toHaveProperty('source');
+      expect(failure).not.toHaveProperty('sourceKind');
+      expect(context).not.toHaveProperty('source');
+      expect(context).not.toHaveProperty('sourceKind');
+      expect(JSON.stringify(context)).not.toContain('operator/private');
+    }
   });
 
   it('removes every request query value from onError context, Request views, and error text', () => {
@@ -496,10 +588,18 @@ describe('reportServerError secret lifecycle (SPEC §6.6 / DEC5)', () => {
     }
 
     expect(thrown).toBeUndefined();
-    expect(onError).toHaveBeenCalledWith(error, {
-      operation: 'app-request',
-      url: '/safe',
-    });
+    expect(onError).toHaveBeenCalledWith(
+      error,
+      expect.objectContaining({
+        failure: expect.objectContaining({
+          code: 'KTB001',
+          operation: 'app-request',
+          safeCause: 'request-dispatch-failed',
+        }),
+        operation: 'app-request',
+        url: '/safe',
+      }),
+    );
   });
 
   it('applies the same URL sanitization before default stderr', () => {

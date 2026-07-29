@@ -284,7 +284,9 @@ describe('server app shell Vite dev seam', () => {
 
       expect(response.status).toBe(500);
       expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[kovo dev] route-page failed route=/throws'),
+        expect.stringMatching(
+          /^\[kovo dev\] KTB003 route-page failed cause=handler-execution-failed correlation=ktb_[0-9a-f]{32} route=\/throws$/u,
+        ),
         expect.any(Error),
       );
       expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(oauthCode);

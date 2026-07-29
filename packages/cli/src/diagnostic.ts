@@ -9,6 +9,11 @@ import {
   diagnosticDefinitions,
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
+import {
+  trustedBoundaryFailureDefinition,
+  type TrustedBoundaryFailureFact,
+  type TrustedBoundaryOperation,
+} from '@kovojs/core/internal/graph';
 
 /** Stable wire version accepted by Kovo's public human, JSON, and GitHub renderers. */
 export const KOVO_DIAGNOSTIC_VERSION = 'kovo-diagnostic/v1' as const;
@@ -125,6 +130,11 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
     help: 'Resolve the reported runtime finding and rerun the command.',
     severity: 'error',
   },
+  KOVO_TRUSTED_BOUNDARY: {
+    category: 'runtime',
+    help: 'Use the stable runtime remediation and correlation fields to investigate the server-only cause.',
+    severity: 'error',
+  },
   KOVO_SOUND_SUBSET: {
     category: 'proof',
     help: 'Remove the unsafe TypeScript shape at the cited source span, then rerun `kovo check`.',
@@ -169,6 +179,54 @@ export interface KovoDiagnosticRecord {
   readonly code: DiagnosticCode | KovoCliDiagnosticCode;
   readonly help?: string;
   readonly message: string;
+  /**
+   * Stable redacted runtime fact; raw server causes are deliberately absent.
+   *
+   * The public wire shape is declared here so consumers never need a core-internal import.
+   */
+  readonly runtime?: {
+    readonly correlationId: string;
+    readonly code:
+      | 'KTB001'
+      | 'KTB002'
+      | 'KTB003'
+      | 'KTB004'
+      | 'KTB005'
+      | 'KTB006'
+      | 'KTB007'
+      | 'KTB008';
+    readonly operation:
+      | 'app-request'
+      | 'client-module'
+      | 'error-shell'
+      | 'mutation-handler'
+      | 'mutation-render'
+      | 'mutation-response-policy'
+      | 'mutation-stream'
+      | 'no-js-mutation-handler'
+      | 'query-endpoint'
+      | 'route-page'
+      | 'route-render'
+      | 'task-runner'
+      | 'task-runtime-startup';
+    readonly remediation: string;
+    readonly safeCause:
+      | 'client-module-resolution-failed'
+      | 'error-shell-render-failed'
+      | 'handler-execution-failed'
+      | 'request-dispatch-failed'
+      | 'response-policy-failed'
+      | 'response-render-failed'
+      | 'runtime-startup-failed'
+      | 'task-execution-failed';
+    readonly schema: 'kovo.trusted-boundary-failure/v1';
+    readonly source?: {
+      readonly end: number;
+      readonly file: string;
+      readonly start: number;
+    };
+    readonly sourceKind?: 'config' | 'source';
+  };
   readonly severity: DiagnosticSeverity;
   readonly source?: KovoDiagnosticSourceAnchor;
   readonly version: typeof KOVO_DIAGNOSTIC_VERSION;
@@ -200,9 +258,14 @@ const nativeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
 const nativeObjectGetPrototypeOf = Object.getPrototypeOf;
 const nativeObjectKeys = Object.keys;
 const nativeObjectPrototype = Object.prototype;
+const nativeRegExpTest = RegExp.prototype.test;
 const nativeReflectApply = Reflect.apply;
+const nativeStringCharacterCodeAt = String.prototype.charCodeAt;
 const nativeWeakSetAdd = WeakSet.prototype.add;
 const nativeWeakSetHas = WeakSet.prototype.has;
+const trustedBoundaryCorrelationPattern = /^ktb_[0-9a-f]{32}$/u;
+const trustedBoundaryRelativeSourcePattern =
+  /^(?!\/|\\|\.\.?(?:\/|$)|[A-Za-z]:)(?!.*\/\.\.?(?:\/|$))[^\\:]+$/u;
 const diagnosticRegistry = new WeakSet<object>();
 const envelopeRegistry = new WeakSet<object>();
 
@@ -353,6 +416,30 @@ export function commandFindingDiagnostic(
           ? 'KOVO_RUNTIME_FINDING'
           : 'KOVO_PROOF_FINDING';
   return createCliDiagnostic(code, message);
+}
+
+/**
+ * @internal Project one redacted server trusted-boundary fact through `kovo-diagnostic/v1`.
+ *
+ * The finite core registry owns code/cause/remediation parity. This adapter rejects surplus fields
+ * so exception text, stacks, request bodies, environment values, and raw payloads cannot hitchhike
+ * into terminal, JSON, GitHub, or MCP output.
+ */
+export function trustedBoundaryFailureDiagnostic(
+  failureValue: TrustedBoundaryFailureFact,
+): KovoDiagnosticRecord {
+  const runtime = validateTrustedBoundaryFailureFact(failureValue);
+  const cliDefinition = CLI_DIAGNOSTIC_DEFINITIONS.KOVO_TRUSTED_BOUNDARY;
+  return enrollDiagnostic({
+    category: cliDefinition.category,
+    code: 'KOVO_TRUSTED_BOUNDARY',
+    help: runtime.remediation,
+    message: `Runtime boundary ${runtime.operation} failed safely.`,
+    runtime,
+    severity: cliDefinition.severity,
+    ...(runtime.source === undefined ? {} : { source: runtime.source }),
+    version: KOVO_DIAGNOSTIC_VERSION,
+  });
 }
 
 /** @internal Mint one doctor finding from the finite doctor registry. */
@@ -514,6 +601,111 @@ function validateSourceAnchor(value: unknown, label: string): KovoDiagnosticSour
   return nativeObjectFreeze({ end, file, start });
 }
 
+function validateTrustedBoundaryFailureFact(value: unknown): TrustedBoundaryFailureFact {
+  const fields = exactOwnDataFields(value, {
+    allowed: [
+      'code',
+      'correlationId',
+      'operation',
+      'remediation',
+      'safeCause',
+      'schema',
+      'source',
+      'sourceKind',
+    ],
+    label: 'Kovo trusted-boundary failure',
+    required: ['code', 'correlationId', 'operation', 'remediation', 'safeCause', 'schema'],
+  });
+  if (fields.schema !== 'kovo.trusted-boundary-failure/v1') {
+    throw new TypeError('Kovo trusted-boundary failure schema is invalid.');
+  }
+  const operation = trustedBoundaryOperation(fields.operation);
+  const definition = trustedBoundaryFailureDefinition(operation);
+  if (
+    fields.code !== definition.code ||
+    fields.safeCause !== definition.safeCause ||
+    fields.remediation !== definition.remediation
+  ) {
+    throw new TypeError(
+      'Kovo trusted-boundary failure code, cause, and remediation must match the core registry.',
+    );
+  }
+  const correlationId = nonEmptyString(
+    fields.correlationId,
+    'Kovo trusted-boundary correlation ID',
+  );
+  if (!nativeReflectApply(nativeRegExpTest, trustedBoundaryCorrelationPattern, [correlationId])) {
+    throw new TypeError('Kovo trusted-boundary correlation ID is invalid.');
+  }
+  const source =
+    fields.source === undefined
+      ? undefined
+      : validateSourceAnchor(fields.source, 'trusted-boundary source');
+  if (
+    source !== undefined &&
+    (source.file.length > 4_096 || !trustedBoundaryRelativeSourceFile(source.file))
+  ) {
+    throw new TypeError('Kovo trusted-boundary source file must be a bounded relative path.');
+  }
+  let sourceKind: 'config' | 'source' | undefined;
+  if (fields.sourceKind !== undefined) {
+    if (fields.sourceKind !== 'config' && fields.sourceKind !== 'source') {
+      throw new TypeError('Kovo trusted-boundary source kind is invalid.');
+    }
+    sourceKind = fields.sourceKind;
+  }
+  if ((source === undefined) !== (sourceKind === undefined)) {
+    throw new TypeError(
+      'Kovo trusted-boundary source and source kind must be present or absent together.',
+    );
+  }
+  const base = {
+    code: definition.code,
+    correlationId,
+    operation,
+    remediation: definition.remediation,
+    safeCause: definition.safeCause,
+    schema: 'kovo.trusted-boundary-failure/v1',
+  } as const;
+  if (source === undefined) return nativeObjectFreeze(base);
+  if (sourceKind === undefined) {
+    throw new TypeError('Kovo trusted-boundary source kind is missing.');
+  }
+  return nativeObjectFreeze({ ...base, source, sourceKind });
+}
+
+function trustedBoundaryRelativeSourceFile(file: string): boolean {
+  if (!nativeReflectApply(nativeRegExpTest, trustedBoundaryRelativeSourcePattern, [file])) {
+    return false;
+  }
+  for (let index = 0; index < file.length; index += 1) {
+    const code = nativeReflectApply(nativeStringCharacterCodeAt, file, [index]) as number;
+    if (code <= 0x1f || code === 0x7f) return false;
+  }
+  return true;
+}
+
+function trustedBoundaryOperation(value: unknown): TrustedBoundaryOperation {
+  switch (value) {
+    case 'app-request':
+    case 'client-module':
+    case 'error-shell':
+    case 'mutation-handler':
+    case 'mutation-render':
+    case 'mutation-response-policy':
+    case 'mutation-stream':
+    case 'no-js-mutation-handler':
+    case 'query-endpoint':
+    case 'route-page':
+    case 'route-render':
+    case 'task-runner':
+    case 'task-runtime-startup':
+      return value;
+    default:
+      throw new TypeError('Kovo trusted-boundary operation is invalid.');
+  }
+}
+
 function diagnosticCategory(value: unknown): KovoDiagnosticCategory {
   if (
     value !== 'build' &&
@@ -582,7 +774,13 @@ function sourceLabel(source: KovoDiagnosticSourceAnchor | undefined): string {
 function formatHumanDiagnostic(diagnostic: KovoDiagnosticRecord): string {
   assertKovoDiagnosticRecord(diagnostic, 'diagnostic');
   const header = `${diagnostic.severity.toUpperCase()} ${diagnostic.code}${sourceLabel(diagnostic.source)} ${diagnostic.message}\n`;
-  return diagnostic.help === undefined ? header : `${header}HELP ${diagnostic.help}\n`;
+  const runtime =
+    diagnostic.runtime === undefined
+      ? ''
+      : `CAUSE ${diagnostic.runtime.code} ${diagnostic.runtime.safeCause}\nCORRELATION ${diagnostic.runtime.correlationId}\n`;
+  return diagnostic.help === undefined
+    ? `${header}${runtime}`
+    : `${header}${runtime}HELP ${diagnostic.help}\n`;
 }
 
 function formatGithubDiagnostic(diagnostic: KovoDiagnosticRecord): string {
@@ -601,8 +799,12 @@ function formatGithubDiagnostic(diagnostic: KovoDiagnosticRecord): string {
     diagnostic.source === undefined ? '' : ` [${diagnostic.source.start}:${diagnostic.source.end}]`;
   const title = githubProperty(`${diagnostic.code} ${diagnostic.category}${range}`);
   properties.push(`title=${title}`);
+  const runtime =
+    diagnostic.runtime === undefined
+      ? ''
+      : ` ${diagnostic.runtime.code} cause=${diagnostic.runtime.safeCause} correlation=${diagnostic.runtime.correlationId}.`;
   const body = githubMessage(
-    `${diagnostic.message}${diagnostic.help === undefined ? '' : ` ${diagnostic.help}`}`,
+    `${diagnostic.message}${runtime}${diagnostic.help === undefined ? '' : ` ${diagnostic.help}`}`,
   );
   return `::${level} ${properties.join(',')}::${body}\n`;
 }

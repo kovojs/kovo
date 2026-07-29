@@ -561,6 +561,158 @@ export interface SourceAnchor {
   start: number;
 }
 
+/**
+ * @internal Finite trusted-boundary operation vocabulary shared by server observability and
+ * presentation adapters. These names classify framework phases, never raw exception text.
+ */
+export type TrustedBoundaryOperation =
+  | 'app-request'
+  | 'client-module'
+  | 'error-shell'
+  | 'mutation-handler'
+  | 'mutation-render'
+  | 'mutation-response-policy'
+  | 'mutation-stream'
+  | 'no-js-mutation-handler'
+  | 'query-endpoint'
+  | 'route-page'
+  | 'route-render'
+  | 'task-runner'
+  | 'task-runtime-startup';
+
+/** @internal Stable, secret-safe runtime cause classes for failed trusted boundaries. */
+export type TrustedBoundarySafeCause =
+  | 'client-module-resolution-failed'
+  | 'error-shell-render-failed'
+  | 'handler-execution-failed'
+  | 'request-dispatch-failed'
+  | 'response-policy-failed'
+  | 'response-render-failed'
+  | 'runtime-startup-failed'
+  | 'task-execution-failed';
+
+/** @internal Stable code vocabulary paired one-to-one with {@link TrustedBoundarySafeCause}. */
+export type TrustedBoundaryFailureCode =
+  | 'KTB001'
+  | 'KTB002'
+  | 'KTB003'
+  | 'KTB004'
+  | 'KTB005'
+  | 'KTB006'
+  | 'KTB007'
+  | 'KTB008';
+
+/** @internal One finite safe-cause registry row. */
+export interface TrustedBoundaryFailureDefinition {
+  readonly code: TrustedBoundaryFailureCode;
+  readonly remediation: string;
+  readonly safeCause: TrustedBoundarySafeCause;
+}
+
+const trustedBoundaryFailureDefinitionRows = freezeSecurityValue({
+  KTB001: freezeSecurityValue({
+    code: 'KTB001',
+    remediation:
+      'Inspect the request-dispatch boundary and adapter configuration using this correlation ID.',
+    safeCause: 'request-dispatch-failed',
+  }),
+  KTB002: freezeSecurityValue({
+    code: 'KTB002',
+    remediation:
+      'Verify the active build token and immutable client-module inventory, then retry the request.',
+    safeCause: 'client-module-resolution-failed',
+  }),
+  KTB003: freezeSecurityValue({
+    code: 'KTB003',
+    remediation:
+      'Inspect the named handler or loader at the source anchor and retry with a non-secret reproduction.',
+    safeCause: 'handler-execution-failed',
+  }),
+  KTB004: freezeSecurityValue({
+    code: 'KTB004',
+    remediation:
+      'Inspect the anchored render path and its output values; the client received only the stable server-error shell.',
+    safeCause: 'response-render-failed',
+  }),
+  KTB005: freezeSecurityValue({
+    code: 'KTB005',
+    remediation:
+      'Inspect the response-observation policy and committed-change projection for this mutation.',
+    safeCause: 'response-policy-failed',
+  }),
+  KTB006: freezeSecurityValue({
+    code: 'KTB006',
+    remediation:
+      'Inspect the named task and job correlation in server-only task observability, then retry according to its policy.',
+    safeCause: 'task-execution-failed',
+  }),
+  KTB007: freezeSecurityValue({
+    code: 'KTB007',
+    remediation:
+      'Verify the task runtime configuration and queue dependencies before accepting more jobs.',
+    safeCause: 'runtime-startup-failed',
+  }),
+  KTB008: freezeSecurityValue({
+    code: 'KTB008',
+    remediation:
+      'Inspect the configured error-shell source; Kovo used the fixed fallback response.',
+    safeCause: 'error-shell-render-failed',
+  }),
+} as const satisfies Readonly<
+  Record<TrustedBoundaryFailureCode, TrustedBoundaryFailureDefinition>
+>);
+
+/**
+ * @internal Resolve one operation through the shared finite registry. Runtime and presentation
+ * adapters call this instead of maintaining parallel cause/remediation policy.
+ */
+export function trustedBoundaryFailureDefinition(
+  operation: TrustedBoundaryOperation,
+): TrustedBoundaryFailureDefinition {
+  switch (operation) {
+    case 'client-module':
+      return trustedBoundaryFailureDefinitionRows.KTB002;
+    case 'mutation-handler':
+    case 'no-js-mutation-handler':
+    case 'query-endpoint':
+    case 'route-page':
+      return trustedBoundaryFailureDefinitionRows.KTB003;
+    case 'mutation-render':
+    case 'mutation-stream':
+    case 'route-render':
+      return trustedBoundaryFailureDefinitionRows.KTB004;
+    case 'mutation-response-policy':
+      return trustedBoundaryFailureDefinitionRows.KTB005;
+    case 'task-runner':
+      return trustedBoundaryFailureDefinitionRows.KTB006;
+    case 'task-runtime-startup':
+      return trustedBoundaryFailureDefinitionRows.KTB007;
+    case 'error-shell':
+      return trustedBoundaryFailureDefinitionRows.KTB008;
+    case 'app-request':
+      return trustedBoundaryFailureDefinitionRows.KTB001;
+  }
+}
+
+/**
+ * @internal Redacted runtime failure fact emitted at the server's final diagnostic boundary.
+ *
+ * `correlationId` is an opaque incident-join key, not a credential or security principal.
+ * Exception objects, stacks, request bodies, environment values, and raw payloads are deliberately
+ * absent. The server retains the separately sanitized cause for its `onError` hook while terminal,
+ * JSON, GitHub, MCP, editor, and devtool adapters project only this bounded fact (SPEC §2/§9.2).
+ */
+export interface TrustedBoundaryFailureFact {
+  readonly correlationId: string;
+  readonly code: TrustedBoundaryFailureCode;
+  readonly operation: TrustedBoundaryOperation;
+  readonly remediation: string;
+  readonly safeCause: TrustedBoundarySafeCause;
+  readonly schema: 'kovo.trusted-boundary-failure/v1';
+  readonly source?: Readonly<SourceAnchor>;
+  readonly sourceKind?: 'config' | 'source';
+}
+
 /** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
