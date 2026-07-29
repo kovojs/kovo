@@ -179,10 +179,12 @@ Bridges "what _can_ flow" (static graph) with "what _did_ flow" (runtime). The
 SPEC makes this unusually cheap because the wire is already self-describing
 (§9.1): a dev-only debug SSE endpoint streams each enhanced round-trip's
 `Kovo-Changes`, `Kovo-Targets`, and `<kovo-query>` frames. The UI replays them by
-lighting the corresponding static edges and showing live query values + pending
-optimistic state (`kovo-pending`, §10.3). No client instrumentation — it reads the
-frames the framework already emits. MCP gets a parallel `kovo_graph_recent_frames`
-tool so an agent can correlate a static edge with the last real traffic over it.
+lighting the corresponding static edges and showing redacted query-size summaries
+plus pending optimistic state (`kovo-pending`, §10.3). No client instrumentation —
+it reads the frames the framework already emits. MCP gets a parallel
+`kovo_graph_recent_frames` tool so an agent can correlate a static edge with the
+last real traffic over it. Values, keys, target identities, inputs, cookies, and
+bodies never enter the recent-frame store.
 
 ---
 
@@ -220,7 +222,9 @@ surface ships before the MCP tools, which then drop onto the same model.
 
 - [x] `DataflowGraph` pure derivation with stable node IDs + typed edges (`examples/devtool/src/graph-model.mjs`: `buildDataflowGraph`). Host-agnostic (node bundle script + browserless server both import it).
 - [x] `invalidates` join (mutation writes/touch-domains × query read-sets, §11.1) + `componentInflow`/`componentOutflow` reverse indices. Verified: commerce ProductGrid → queries-in `productGrid`, mutations-out `cart/add`; cart/add → invalidates cart/productGrid/orderHistory (screenshots 02/03).
-- [ ] Automated unit tests over example fixtures (currently verified visually via the running app, not by a committed test).
+- [x] Automated unit tests over all three committed example fixtures.
+  - Evidence: `packages/devtool/src/graph-model.fixtures.test.mjs` proves stable unique
+    node/edge identities, closed endpoints, exact counts, card/edge equality, and trace closure.
 
 ### Phase 1 — Source anchoring & previews (shared bedrock)
 
@@ -247,20 +251,34 @@ surface ships before the MCP tools, which then drop onto the same model.
 - [x] Layered swimlane render (barycenter ordering, SVG edges + HTML node cards) over the static graph (`src/render.ts`).
 - [x] Select-and-trace + inspector with code previews. Refresh coverage shows optimistic §10.6 status (`derived`/`hand-written`/`await-fragment`/`punted`). **Open:** KV311 update-coverage gaps inline (those facts are absent from current `graph.json` exports).
 - [x] Pan / zoom / hover enhancement island (`src/devtool-pz.client.js`), registered as a versioned `/c/` client module and bootstrapped via `on:visible` (SPEC §4.7), cleanup on `ctx.signal`. Pure progressive enhancement — selection stays real `<a href>` navigation with the island absent. Verified in-browser (fit-on-load, wheel-zoom-to-cursor, drag-pan, 1-hop hover highlight; no console errors).
-- [ ] Browser suite for render/interaction (Playwright drives `scratch/devtool-interact.mjs` green; no committed assertion suite yet).
+- [x] Browser suite for JS-off navigation, pan/zoom/hover, live replay, safe DOM rendering, and
+      lifecycle cleanup.
+  - Evidence: `packages/devtool/src/devtool-render.browser.test.ts` is registered in the
+    three-engine browser acceptance matrix; its three assertions pass locally in Chromium.
 
 ### Phase 3 — MCP: BM25 retrieval over graph cards (agent parity over the same model) — shipped
 
 - [x] `buildCard(node, bundle)` renders each node to a self-contained card (traced neighborhood + source slice) — the shared fact source (`src/cards.mjs`); `cardToText` is the stable `kovo-explain/v1` text.
 - [x] Deterministic BM25 index over the cards; `kovo_explain({query, app?, limit?})` MCP tool returns top-`k` cards (exact node name/id resolves precisely first), as text + `structuredContent` (`scripts/mcp-server.mjs`). Verified via stdio round-trip (`scripts/test-mcp.mjs`).
 - [x] Returns matched terms + scores (auditable ranking).
-- [x] Same-artifact conformance: `scripts/conformance.mjs` asserts MCP card facts ≡ the graph edges the UI renders, across all apps (green). **Open:** also diff against the CLI's `kovo explain` text for the third leg.
+- [x] Same-artifact conformance: UI graph edges ≡ MCP card facts ≡ public CLI `kovo explain`
+      text across commerce, CRM, and Stack Overflow.
+  - Evidence: `examples/devtool/scripts/conformance.test.mjs` and direct
+    `node examples/devtool/scripts/conformance.mjs` pass from the committed bundles.
 - [x] Documented the single tool + connection in the README.
 
 ### Phase 4 — Live runtime overlay
 
-- [ ] Dev-only SSE debug endpoint streaming `Kovo-Changes`/`Kovo-Targets`/`<kovo-query>` frames (§9.1); never present in prod/export.
-- [ ] UI replay (light edges, show live values + `kovo-pending`); MCP `kovo_graph_recent_frames`.
+- [x] Dev-only SSE debug endpoint streams bounded redacted
+      `Kovo-Changes`/`Kovo-Targets`/`<kovo-query>` routing summaries (§9.1); production mode
+      emits no live module, markup, store, or endpoint, and the Vite plugin has no build hook.
+  - Evidence: `runtime-frames.test.mjs`, `runtime-frame-capture.test.mjs`, `vite.test.mjs`, and
+    `mount.test.mjs` prove streaming redaction, finite history/subscribers/concurrency,
+    coalescing backpressure, cleanup, same-origin access, and production/static absence.
+- [x] UI replays recent frames over precise static edges with pending/settled state and redacted
+      value-size summaries; MCP `kovo_graph_recent_frames` returns the exact same immutable frames.
+  - Evidence: the Chromium browser suite and `mcp.test.mjs` prove replay, lifecycle cleanup,
+    hostile-shape rejection, exact structured frame equality, and secret absence.
 
 ---
 
@@ -283,15 +301,15 @@ surface ships before the MCP tools, which then drop onto the same model.
   projection proof before fallback symbol heuristics can be declared absent.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
   the MCP side avoids this by being navigational (neighbors, not dumps).
-- **Live overlay & deploy skew**: frames carry the render-plan version token
-  (§5.1); the overlay must show skew rather than mislabel edges.
+- **Live overlay & deploy skew**: current capture is deliberately same-process and development-only.
+  Any future remote replay must add the §5.1 render-plan token and reject skew rather than
+  mislabeling edges.
 
 ## Verification surface
 
-Per §11.4, the whole devtool is checkable without a browser: the graph derivation,
-source slices, and MCP tools are pure functions over committed facts, tested over
-the example fixtures; only the Phase 4 live overlay and Phase 3 render are
-browser-bound and get a small named browser suite.
+Per §11.4, graph derivation, source slices, MCP tools, runtime redaction, production
+absence, bounds, and parity are browserless tests over committed facts. A small
+named browser suite covers the remaining render and interaction contract.
 
 ## Latest verification
 
@@ -304,3 +322,13 @@ packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tes
 live-target|honors disableServerRefresh|threads compiler-derived route layout|derives app graph
 component facts|derives page query facts|emits mutation form error binding facts|lowers
 object-form mutation values' --reporter=dot` passed (8 tests).
+- `pnpm exec vp check packages/devtool examples/devtool plans/devtools.md
+plans/devex-feel-and-teach.md tests/browser-acceptance.mjs
+tests/kovo-check.server-browser.node.mjs vite.config.ts` passed (54 formatted files, 37
+  lint/typechecked files).
+- The focused devtool/parity run passed 11 files and 52 tests; direct same-artifact conformance
+  passed across three apps.
+- `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/devtool/src/devtool-render.browser.test.ts --browser.name chromium --reporter=dot`
+  passed (3 tests). Firefox/WebKit remain CI-covered but were unavailable in the local Playwright
+  cache.

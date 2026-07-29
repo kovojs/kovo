@@ -24,8 +24,14 @@ compiler/runtime facts; none may become a second analyzer.
   - Evidence: the focused runtime-failure suites in Latest verification prove the finite KTB001–008
     registry, unique bounded correlation IDs, relative source/config anchors, raw-cause exclusion,
     and human/JSON/GitHub/MCP parity.
-- [ ] Complete open devtool unit/browser/CLI parity and live-overlay work.
-- [ ] Stream only bounded redacted mutation/query/target facts and reuse them for MCP.
+- [x] Complete open devtool unit/browser/CLI parity and live-overlay work.
+  - Evidence: committed three-app fixtures now prove graph/card/CLI equality; the named Chromium
+    browser suite proves JS-off interaction and live replay, with all three engines wired in CI.
+- [x] Stream only bounded redacted mutation/query/target facts and reuse them for MCP.
+  - Evidence: one finite summary store feeds SSE, server/browser replay, and
+    `kovo_graph_recent_frames`; focused tests prove no raw values/keys/identities/bodies, bounded
+    history/subscribers/concurrency/backpressure, cleanup, same-origin access, and production
+    absence.
 
 ## Editor decision and parity
 
@@ -94,3 +100,6 @@ packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tes
 packages/cli/src/trusted-boundary-failure.test.ts packages/cli/src/diagnostic-empathy.test.ts
 packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5 files, 24 tests);
   `node scripts/api-surface-gate.mjs` passed with zero publicness violations.
+- Devtool unit/parity verification passed 11 files and 52 tests; direct conformance proved UI
+  edges ≡ MCP cards ≡ CLI text across three committed apps; the Chromium browser suite passed 3
+  interaction/replay tests and is registered for Chromium, Firefox, and WebKit in CI.
