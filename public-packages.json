@@ -2132,12 +2132,13 @@
       "apiBoundary": {
         "public": [
           "./assertions",
+          "./csrf",
           "./headers",
           "./harness",
           "./html-fragment",
           "./pglite",
-          "./sqlite",
-          "./test-case"
+          "./postgres",
+          "./sqlite"
         ],
         "generated": [],
         "internal": [
@@ -2149,6 +2150,7 @@
           "./internal/integration/optimistic-client",
           "./internal/harness-operations",
           "./internal/html-wire",
+          "./internal/legacy-harness",
           "./internal/page",
           "./internal/sql-observer",
           "./internal/verifier",
@@ -2159,12 +2161,17 @@
       "apiRef": {
         "order": 4,
         "slug": "test",
-        "description": "Test harness: PGlite-backed databases, db verification against the touch graph, and mutation/property testing.",
+        "description": "App-scoped test harness, digest-verified graph checks, and explicit database-engine helpers.",
         "entries": [
           {
             "path": "./assertions",
             "slug": "test-assertions",
             "description": "Mutation failure assertions and optimistic property testing helpers."
+          },
+          {
+            "path": "./csrf",
+            "slug": "test-csrf",
+            "description": "Mutation-bound CSRF tokens for focused synthetic request tests."
           },
           {
             "path": "./headers",
@@ -2174,7 +2181,7 @@
           {
             "path": "./harness",
             "slug": "test-harness",
-            "description": "Database-backed mutation, query, page, and verification harness."
+            "description": "App-inferred mutation, query, route, request, and DB harness bound to a verified build artifact."
           },
           {
             "path": "./html-fragment",
@@ -2187,14 +2194,14 @@
             "description": "PGlite-backed test database helpers."
           },
           {
+            "path": "./postgres",
+            "slug": "test-postgres",
+            "description": "PGlite-backed Postgres RLS helpers with owner, admin, and system postures."
+          },
+          {
             "path": "./sqlite",
             "slug": "test-sqlite",
             "description": "SQLite-backed test database helpers."
-          },
-          {
-            "path": "./test-case",
-            "slug": "test-case",
-            "description": "Named Kovo test case registration helpers."
           }
         ]
       }

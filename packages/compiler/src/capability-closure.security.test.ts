@@ -2970,7 +2970,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.ts',
         source: `
           import { route } from '@kovojs/server';
-          import { createPostgresTestRuntime } from '@kovojs/server/testing';
+          import { createPostgresTestRuntime } from '@kovojs/test/postgres';
           import { kovo } from '@kovojs/server/vite';
           export const page = route('/tooling-doors', { render() {
             return [createPostgresTestRuntime, kovo];

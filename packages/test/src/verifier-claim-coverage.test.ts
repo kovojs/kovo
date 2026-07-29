@@ -9,7 +9,7 @@ import {
   expectedDiagnosticMessage,
   type FakeDb,
 } from './test-fixtures.js';
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createDbVerifier } from './verifier.js';
 
 // SPEC.md §11.2 requires the runtime verifier to cross-check the touch graph in
@@ -309,7 +309,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
   describe('page-render (route.page) read verification', () => {
     it('verifies page-render reads against the declared read set (covered)', async () => {
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/cart': {
@@ -329,7 +329,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     });
 
     it('fails page-render verification when the loader reads an undeclared domain (KV407)', async () => {
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/cart': {
@@ -360,7 +360,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
           return '<main></main>';
         },
       };
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: { '/cart': fixture },
         touchGraph: {},
@@ -371,7 +371,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     });
 
     it('C166 rejects writes performed by an object page fixture', async () => {
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/product': {
@@ -393,7 +393,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
     it('C166 rejects writes performed by a thunk page fixture', async () => {
       let wrappedDb!: FakeDb;
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/product': () => {
@@ -412,7 +412,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     });
 
     it('fails page-render verification on a row-key mismatch (KV408)', async () => {
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/product': {
@@ -434,7 +434,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
 
     it('C158 captures database reads made by a thunk page fixture', async () => {
       let wrappedDb!: FakeDb;
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/thunk': () => {
@@ -451,7 +451,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
     });
 
     it('still serves string and thunk page fixtures unchanged', async () => {
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db: createFakeDb(),
         pages: {
           '/static': '<main id="static"></main>',

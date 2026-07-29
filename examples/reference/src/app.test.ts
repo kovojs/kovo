@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 

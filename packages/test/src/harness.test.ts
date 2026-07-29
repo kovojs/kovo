@@ -1,13 +1,12 @@
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { KovoCheckInput } from '@kovojs/core/internal/graph';
 import { defineKovo } from '../../server/src/app-contract.js';
-import {
-  assignDerivedMutationKey,
-} from '../../server/src/mutation/definition.js';
+import { assignDerivedMutationKey } from '../../server/src/mutation/definition.js';
 import { assignDerivedQueryKey } from '../../server/src/query.js';
 import { s } from '../../server/src/schema.js';
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
@@ -126,25 +125,47 @@ describe('@kovojs/test app-scoped harness', () => {
   it('executes only imported app handles and obtains graph facts from the verified artifact', async () => {
     const fixture = testApp();
     const artifact = await writeArtifact(APP_ID);
+    const pageServer = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end('<main><h1>Cart</h1></main>');
+    });
+    await new Promise<void>((resolve, reject) => {
+      pageServer.once('error', reject);
+      pageServer.listen(0, '127.0.0.1', resolve);
+    });
+    const address = pageServer.address();
+    if (address === null || typeof address === 'string') {
+      throw new TypeError('Harness test server did not bind a TCP port.');
+    }
     const harness = await createKovoTestHarness(fixture.app, {
       artifact: artifact.path,
+      baseUrl: `http://127.0.0.1:${String(address.port)}`,
       db: fixture.db,
       projectRoot: artifact.root,
       verification: { domainByTable: { cart_items: 'cart' } },
     });
 
-    await expect(harness.exec(fixture.addToCart, { productId: 'p1' })).resolves.toMatchObject({
-      ok: true,
-      value: { count: 1 },
-    });
-    await expect(harness.query(fixture.cartQuery, { cartId: 'c1' })).resolves.toEqual({
-      cartId: 'c1',
-      items: ['p1'],
-    });
-    expect(harness.db).toBeDefined();
-    expect(harness.verificationDiagnostics()).toEqual([
-      expect.objectContaining({ code: 'KV403', domain: 'cart' }),
-    ]);
+    try {
+      await expect(harness.exec(fixture.addToCart, { productId: 'p1' })).resolves.toMatchObject({
+        ok: true,
+        value: { count: 1 },
+      });
+      await expect(harness.query(fixture.cartQuery, { cartId: 'c1' })).resolves.toEqual({
+        cartId: 'c1',
+        items: ['p1'],
+      });
+      await expect(harness.page('/cart')).resolves.toMatchObject({
+        html: expect.stringContaining('<h1>Cart</h1>'),
+      });
+      expect(harness.db).toBeDefined();
+      expect(harness.verificationDiagnostics()).toEqual([
+        expect.objectContaining({ code: 'KV403', domain: 'cart' }),
+      ]);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        pageServer.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
 
     const rejectWrongInput = () => {
       // @ts-expect-error Mutation input is inferred from the app-owned handle.
@@ -295,11 +316,7 @@ async function writeArtifact(
       },
     },
   };
-  graph.proof = createKovoGraphProof(
-    graph,
-    'b'.repeat(64),
-    appId === null ? undefined : appId,
-  );
+  graph.proof = createKovoGraphProof(graph, 'b'.repeat(64), appId === null ? undefined : appId);
   graph.runtimePosture = createKovoRuntimePostureManifest(graph);
   mutate?.(graph);
   const path = join(root, 'graph.json');

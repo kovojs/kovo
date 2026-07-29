@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { domain, mutation, query, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createFakeDb, createVerifiedFakeHarness, deferred, type FakeDb } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';
 
@@ -410,7 +410,7 @@ describe('@kovojs/test capture lifetime security', () => {
       },
       reads: [product],
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: rawDb,
       pages: {
         '/products': {
@@ -446,7 +446,7 @@ describe('@kovojs/test capture lifetime security', () => {
       },
       write() {},
     };
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: rawDb,
       pages: {
         '/products': {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { domain, mutation, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createDbVerifier } from './verifier.js';
 import {
   createFakeDb,
@@ -39,7 +39,7 @@ describe('@kovojs/test SQL verifier integration', () => {
         return 'ok';
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'product.import': {
@@ -123,7 +123,7 @@ describe('@kovojs/test SQL verifier integration', () => {
         return 'ok';
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'product.import': {
@@ -176,7 +176,7 @@ describe('@kovojs/test SQL verifier integration', () => {
         return 'ok';
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'product.import': {
@@ -235,7 +235,7 @@ describe('@kovojs/test SQL verifier integration', () => {
         return 'ok';
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'product/import': {

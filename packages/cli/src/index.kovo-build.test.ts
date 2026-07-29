@@ -32,7 +32,7 @@ import {
   encodeFrameworkIdentityToken,
   encodeFrameworkTargetHeader,
 } from '@kovojs/core/internal/wire-input-grammar';
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 

@@ -11,7 +11,7 @@ import {
   type KovoDeclaredWriteDbCapable,
 } from '@kovojs/server/internal/managed-db';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
@@ -144,7 +144,7 @@ describe('@kovojs/test SQLite harness integration', () => {
           return request.db.read<{ product_id: string; qty: number }>('cart_items');
         },
       });
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -273,7 +273,7 @@ describe('@kovojs/test SQLite harness integration', () => {
 
     try {
       db.exec('create table audit_log (product_id text not null)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -314,7 +314,7 @@ describe('@kovojs/test SQLite harness integration', () => {
 
     try {
       db.exec('create table audit_log (product_id text primary key)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -363,7 +363,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       `);
       db.exec("insert into products (id) values ('p1')");
       db.exec("insert into cart_items (product_id) values ('p1')");
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'product.delete': {
@@ -416,7 +416,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       `);
       db.exec("insert into products (id, price) values ('p1', 10)");
       db.exec("insert into inventory (product_id, refreshed_at) values ('p1', 'v1')");
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'product.reprice': {
@@ -467,7 +467,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       `);
       db.exec("insert into products (id, price) values ('p1', 10)");
       db.exec("insert into inventory (product_id, refreshed_at) values ('p1', 'v1')");
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'product.reprice': {

@@ -1,8 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type {
-  DiagnosticCode,
-  RegisteredDiagnostic,
-} from '@kovojs/core/diagnostics';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
 import type {
   InferSchema,
   MutationFail,
@@ -12,21 +9,13 @@ import type {
   RouteHandle,
   ValidationFailurePayload,
 } from '@kovojs/server';
-import { createRequestHandler } from '@kovojs/server/custom-adapters';
-import type {
-  InferKovoAppTypes,
-  KovoApp,
-} from '@kovojs/server/custom-adapters';
+import type { InferKovoAppTypes, KovoApp } from '@kovojs/server/custom-adapters';
 import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
-} from '@kovojs/server/internal/managed-db';
-import { resolveKovoAppToken } from '@kovojs/server/internal/build';
+} from '@kovojs/server/internal/managed-db-capabilities';
 import type { CsrfOptions } from '@kovojs/server/security';
-import {
-  executeHarnessMutation,
-  executeHarnessQuery,
-} from './harness-operations.js';
+import { executeHarnessMutation, executeHarnessQuery } from './harness-operations.js';
 import { loadKovoTestArtifact } from './harness-artifact.js';
 import { createPageAssertion } from './page.js';
 import { createDbVerifier, type DbVerifier } from './verifier.js';
@@ -135,10 +124,7 @@ export type KovoTestMutationError<Mutation> =
     infer _Optimistic
   >
     ? {
-        [Code in Extract<keyof Errors, string>]: MutationFail<
-          Code,
-          InferSchema<Errors[Code]>
-        >;
+        [Code in Extract<keyof Errors, string>]: MutationFail<Code, InferSchema<Errors[Code]>>;
       }[Extract<keyof Errors, string>]
     : never;
 
@@ -158,23 +144,13 @@ export type KovoTestMutationResult<Mutation> =
 
 /** Input inferred from one app-scoped query handle. */
 export type KovoTestQueryInput<Query> =
-  Query extends QueryHandle<
-    infer Input,
-    infer _Value,
-    infer _Request,
-    infer _Delta
-  >
+  Query extends QueryHandle<infer Input, infer _Value, infer _Request, infer _Delta>
     ? Input
     : never;
 
 /** Result inferred from one app-scoped query handle. */
 export type KovoTestQueryResult<Query> =
-  Query extends QueryHandle<
-    infer _Input,
-    infer Value,
-    infer _Request,
-    infer _Delta
-  >
+  Query extends QueryHandle<infer _Input, infer Value, infer _Request, infer _Delta>
     ? Awaited<Value>
     : never;
 
@@ -195,7 +171,10 @@ export interface KovoTestHarnessOptions<App extends KovoApp> {
   artifact: string | URL;
   /** Absolute project root used to re-hash every analyzed source/config input. */
   projectRoot: string | URL;
-  /** Origin used by `page(routeKey)`; defaults to `https://kovo.test`. */
+  /**
+   * Explicit origin of a separately bootstrapped app used by `page()` and `request()`.
+   * Direct `query()` and `exec()` tests do not require it.
+   */
   baseUrl?: string | URL;
   /** Optional test DB whose type is inferred from the imported app contract. */
   db?: KovoTestDb<App>;
@@ -222,10 +201,7 @@ export interface KovoTestContext<App extends KovoApp> {
     input: KovoTestMutationInput<Mutation>,
     options?: KovoTestExecOptions<App>,
   ): Promise<KovoTestMutationResult<Mutation>>;
-  page(
-    path: KovoTestRouteKey<App>,
-    init?: Omit<RequestInit, 'method'>,
-  ): Promise<PageAssertion>;
+  page(path: KovoTestRouteKey<App>, init?: Omit<RequestInit, 'method'>): Promise<PageAssertion>;
   query<Query extends KovoTestQuery<App>>(
     query: Query,
     ...input: [KovoTestQueryInput<Query>] extends [undefined]
@@ -252,10 +228,7 @@ export async function createKovoTestHarness<App extends KovoApp>(
   const verifier =
     options.verification === undefined
       ? null
-      : createDbVerifier(
-          artifact.touchGraph,
-          options.verification as InternalDbVerificationConfig,
-        );
+      : createDbVerifier(artifact.touchGraph, options.verification as InternalDbVerificationConfig);
   const rawDb = options.db;
   const db =
     rawDb === undefined
@@ -271,13 +244,9 @@ export async function createKovoTestHarness<App extends KovoApp>(
       : verifier
         ? lifecycleMutationDb(rawDb, db, verifier)
         : db;
-  const runtimeApp = resolveKovoAppToken(app, '@kovojs/test/harness request dispatcher');
-  let requestHandler: ReturnType<typeof createRequestHandler> | undefined;
-  const dispatch = (request: globalThis.Request): Promise<Response> => {
-    requestHandler ??= createRequestHandler(runtimeApp);
-    return requestHandler(request);
-  };
   const baseUrl = normalizeBaseUrl(options.baseUrl);
+  const dispatch = (request: globalThis.Request): Promise<Response> =>
+    dispatchWireRequest(request, baseUrl);
   const queryDomains = queryDomainMap(artifact.graph);
 
   return {
@@ -302,11 +271,11 @@ export async function createKovoTestHarness<App extends KovoApp>(
             ? {}
             : { request: execOptions.request as Record<string, unknown> }),
           touchGraphKey: mutationKey(mutation),
-        },
+        } as never,
       ) as Promise<KovoTestMutationResult<Mutation>>;
     },
     async page(path, init) {
-      const request = new Request(new URL(path, baseUrl), {
+      const request = new Request(new URL(path, requiredBaseUrl(baseUrl)), {
         ...init,
         method: 'GET',
       });
@@ -331,7 +300,10 @@ export async function createKovoTestHarness<App extends KovoApp>(
       ) as Promise<KovoTestQueryResult<Query>>;
     },
     async request(request) {
-      return dispatch(request as globalThis.Request);
+      if (!(request instanceof Request)) {
+        throw new TypeError('Kovo harness request() requires a Web-standard Request.');
+      }
+      return dispatch(request);
     },
     verificationDiagnostics(): readonly DbVerificationDiagnostic[] {
       return verifier?.diagnostics() ?? [];
@@ -373,7 +345,11 @@ function mutationKey(value: unknown): string {
     throw new TypeError('Kovo harness exec() requires an app-scoped mutation handle.');
   }
   const descriptor = Object.getOwnPropertyDescriptor(value, 'key');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw new TypeError('Kovo harness mutation handle has no stable derived key.');
   }
   return descriptor.value;
@@ -384,14 +360,19 @@ function queryKey(value: unknown): string {
     throw new TypeError('Kovo harness query() requires an app-scoped query handle.');
   }
   const descriptor = Object.getOwnPropertyDescriptor(value, 'key');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw new TypeError('Kovo harness query handle has no stable derived key.');
   }
   return descriptor.value;
 }
 
-function normalizeBaseUrl(value: string | URL | undefined): URL {
-  const result = new URL(value ?? 'https://kovo.test');
+function normalizeBaseUrl(value: string | URL | undefined): URL | undefined {
+  if (value === undefined) return undefined;
+  const result = new URL(value);
   if (result.protocol !== 'http:' && result.protocol !== 'https:') {
     throw new TypeError('Kovo harness baseUrl must use http or https.');
   }
@@ -399,4 +380,24 @@ function normalizeBaseUrl(value: string | URL | undefined): URL {
   result.search = '';
   result.hash = '';
   return result;
+}
+
+function requiredBaseUrl(value: URL | undefined): URL {
+  if (value === undefined) {
+    throw new TypeError(
+      'Kovo harness page() and request() require options.baseUrl for a separately bootstrapped app.',
+    );
+  }
+  return value;
+}
+
+async function dispatchWireRequest(request: Request, baseUrl: URL | undefined): Promise<Response> {
+  const origin = requiredBaseUrl(baseUrl);
+  const requestUrl = new URL(request.url);
+  if (requestUrl.origin !== origin.origin) {
+    throw new TypeError(
+      `Kovo harness request origin ${requestUrl.origin} does not match options.baseUrl ${origin.origin}.`,
+    );
+  }
+  return fetch(request);
 }

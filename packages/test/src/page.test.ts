@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createPageAssertion } from './page.js';
 
 describe('@kovojs/test page assertions', () => {
@@ -14,7 +14,7 @@ describe('@kovojs/test page assertions', () => {
   });
 
   it('asserts fragments from rendered HTML without a browser', async () => {
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: {},
       pages: {
         '/cart':
@@ -31,7 +31,7 @@ describe('@kovojs/test page assertions', () => {
   });
 
   it('asserts runtime-style id and kovo-fragment-target fragments through harness pages', async () => {
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: {},
       pages: {
         '/cart': [

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@kovojs/server';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import {
   createFakeDb,
   expectedDiagnostic,
@@ -21,7 +21,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -52,7 +52,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -88,7 +88,7 @@ describe('@kovojs/test mutation verifier', () => {
         return request.db.read('products');
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/read-product': {
@@ -114,7 +114,7 @@ describe('@kovojs/test mutation verifier', () => {
         return request.db.read('products');
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/read-product': {
@@ -151,7 +151,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -183,7 +183,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {
@@ -216,7 +216,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -258,7 +258,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -298,7 +298,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart/add': {
@@ -334,7 +334,7 @@ describe('@kovojs/test mutation verifier', () => {
         return input.productId;
       },
     });
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: createFakeDb(),
       touchGraph: {
         'cart.addItem': {

@@ -11,6 +11,7 @@
   "type": "module",
   "exports": {
     "./assertions": "./src/assertions.ts",
+    "./csrf": "./src/csrf.ts",
     "./headers": "./src/headers.ts",
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",
@@ -22,20 +23,25 @@
     "./internal/integration/define": "./src/integration/define-fixture.ts",
     "./internal/integration/fixture-abi": "./src/integration/fixture-abi.ts",
     "./internal/integration/optimistic-client": "./src/integration/optimistic-client.ts",
+    "./internal/legacy-harness": "./src/legacy-harness.ts",
     "./internal/page": "./src/page.ts",
     "./internal/sql-observer": "./src/sql-observer.ts",
     "./internal/verifier": "./src/verifier.ts",
     "./internal/verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./internal/verifier-sql": "./src/verifier-sql.ts",
     "./pglite": "./src/pglite.ts",
-    "./sqlite": "./src/sqlite.ts",
-    "./test-case": "./src/test-case.ts"
+    "./postgres": "./src/postgres.ts",
+    "./sqlite": "./src/sqlite.ts"
   },
   "publishConfig": {
     "exports": {
       "./assertions": {
         "types": "./dist/assertions.d.mts",
         "default": "./dist/assertions.mjs"
+      },
+      "./csrf": {
+        "types": "./dist/csrf.d.mts",
+        "default": "./dist/csrf.mjs"
       },
       "./headers": {
         "types": "./dist/headers.d.mts",
@@ -81,6 +87,10 @@
         "types": "./dist/integration/optimistic-client.d.mts",
         "default": "./dist/integration/optimistic-client.mjs"
       },
+      "./internal/legacy-harness": {
+        "types": "./dist/legacy-harness.d.mts",
+        "default": "./dist/legacy-harness.mjs"
+      },
       "./internal/page": {
         "types": "./dist/page.d.mts",
         "default": "./dist/page.mjs"
@@ -105,21 +115,38 @@
         "types": "./dist/pglite.d.mts",
         "default": "./dist/pglite.mjs"
       },
+      "./postgres": {
+        "types": "./dist/postgres.d.mts",
+        "default": "./dist/postgres.mjs"
+      },
       "./sqlite": {
         "types": "./dist/sqlite.d.mts",
         "default": "./dist/sqlite.mjs"
-      },
-      "./test-case": {
-        "types": "./dist/test-case.d.mts",
-        "default": "./dist/test-case.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/boot-fixture-child.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/page.ts src/pglite.ts src/sql-observer.ts src/sqlite.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/csrf.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/boot-fixture-child.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/internal/html-wire.ts src/legacy-harness.ts src/page.ts src/pglite.ts src/postgres.ts src/sql-observer.ts src/sqlite.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "pgsql-ast-parser": "12.0.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.1",
+    "@kovojs/browser": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@playwright/test": "1.60.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "12.11.1",
+    "drizzle-orm": "1.0.0-rc.4",
+    "vite": "8.0.16",
+    "vitest": "4.1.8"
+  },
+  "peerDependencies": {
     "@electric-sql/pglite": "0.5.1",
     "@kovojs/browser": "workspace:*",
     "@kovojs/compiler": "workspace:*",
@@ -127,12 +154,26 @@
     "@kovojs/server": "workspace:*",
     "@playwright/test": "1.60.0",
     "better-sqlite3": "12.11.1",
-    "pgsql-ast-parser": "12.0.2",
     "vite": "8.0.16"
   },
-  "devDependencies": {
-    "@kovojs/drizzle": "workspace:*",
-    "@types/better-sqlite3": "^7.6.13",
-    "vitest": "4.1.8"
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    },
+    "@kovojs/browser": {
+      "optional": true
+    },
+    "@kovojs/compiler": {
+      "optional": true
+    },
+    "@playwright/test": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
   }
 }

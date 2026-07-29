@@ -1,11 +1,5 @@
 import type { CsrfOptions } from '@kovojs/server/security';
-import type {
-  MutationDefinition,
-  MutationResult,
-  QueryDefinition,
-  QueryLoadContext,
-  Schema,
-} from '@kovojs/server';
+import type { MutationDefinition, MutationResult, QueryDefinition, Schema } from '@kovojs/server';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { createPageAssertion, type PageAssertion } from './page.js';
 import { diagnosticMessage } from './verifier-diagnostics.js';
@@ -174,14 +168,22 @@ export async function executeHarnessQuery<Db>(
   // as mutation execution, so read verification observes loader data access.
   // SPEC §9.4 (MARQUEE): the harness threads its own db as `context.db` to mirror the framework's
   // managed-handle seam. The fixture db is not the read-only proxy here (the harness owns the
-  // verifier seam), so it is passed through the public `QueryLoadContext` shape.
+  // verifier seam), so request projections and a real signal are threaded through the same
+  // structural context as the runtime.
   const load = () => {
     const scopedDb = verifier?.bindAuthority(db) ?? db;
     const request = {
       ...requestFixture,
       db: scopedDb,
     };
-    const loadContext = { db: scopedDb, request } as QueryLoadContext<typeof request, Db>;
+    const requestSignal = requestFixture?.signal;
+    const loadContext = {
+      db: scopedDb,
+      request,
+      ...(requestFixture?.env === undefined ? {} : { env: requestFixture.env }),
+      ...(requestFixture?.session === undefined ? {} : { session: requestFixture.session }),
+      signal: requestSignal instanceof AbortSignal ? requestSignal : new AbortController().signal,
+    };
     return verifierApply(queryLoad, query, [input, loadContext]);
   };
   let result: unknown;

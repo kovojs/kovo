@@ -1,4 +1,4 @@
-import { createKovoTestHarness } from '@kovojs/test/harness';
+import { createLegacyKovoTestHarness } from '@kovojs/test/internal/legacy-harness';
 import {
   kovoExplainListField,
   kovoExplainOptimisticStatuses,
@@ -119,7 +119,7 @@ export async function commerceDeclaredQueriesHarnessFact<Db, QueryName extends s
   // harness DB seam and keeps verifier diagnostics attached to each observed query.
   const db = options.createDb();
   await options.setupDb?.(db);
-  const harness = createKovoTestHarness({
+  const harness = createLegacyKovoTestHarness({
     db,
     touchGraph: {},
     ...(options.request === undefined ? {} : { request: options.request }),
@@ -216,7 +216,7 @@ export async function commerceHarnessQueryFact<Db>(
     ...(options.request === undefined ? {} : { request: options.request }),
     ...(options.verification === undefined ? {} : { verification: options.verification }),
   };
-  const harness = createKovoTestHarness(harnessOptions);
+  const harness = createLegacyKovoTestHarness(harnessOptions);
   const result = await harness.query(options.query, options.input);
 
   return {
@@ -242,7 +242,7 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
   const optimisticStatuses = kovoExplainOptimisticStatuses(addToCartExplanation.output);
 
   const db = options.createDb();
-  const harness = createKovoTestHarness({
+  const harness = createLegacyKovoTestHarness({
     db,
     request: {
       session: { id: 's-commerce-acceptance', user: { id: 'u1' } },

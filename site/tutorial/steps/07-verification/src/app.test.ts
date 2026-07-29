@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { compileRouteModule } from '@kovojs/compiler';
 import { createApp } from '@kovojs/server';
 import { renderRouteHtml } from '@kovojs/server/rendering';
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import {
   accessFactsFromApp,
   runQuery,
@@ -21,7 +21,10 @@ import {
 } from '../../../../../packages/server/src/mutation-wire.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { encodeTutorialMutationHeaders } from '../../../mutation-wire-test-headers.js';
-import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
+import {
+  createLegacyKovoTestHarness,
+  type KovoTestHarnessOptions,
+} from '@kovojs/test/internal/legacy-harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs';
 
@@ -436,10 +439,11 @@ describe('tutorial step 07 — testing & verification', () => {
   });
   // /snippet
 
-  // snippet:harness-test
+  // Internal legacy regression for this pre-app-contract tutorial fixture. New apps use the
+  // app-scoped public harness shown in site/content/guides/testing.md.
   it('executes addToCart through the harness with write verification on', async () => {
     const shopDb = createShopDb();
-    const harness = createKovoTestHarness({
+    const harness = createLegacyKovoTestHarness({
       db: shopDb,
       pages: {
         '/': () =>
@@ -488,7 +492,6 @@ describe('tutorial step 07 — testing & verification', () => {
         .then((page: { fragment(target: string): string }) => page.fragment('cart-badge')),
     ).resolves.toContain('data-bind="cart.count"');
   });
-  // /snippet
 
   // snippet:parity-test
   it('matches the reference commerce app: wire vocabulary and optimistic statuses', async () => {

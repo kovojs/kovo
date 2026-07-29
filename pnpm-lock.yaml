@@ -713,6 +713,10 @@ importers:
 
   packages/test:
     dependencies:
+      pgsql-ast-parser:
+        specifier: 12.0.2
+        version: 12.0.2
+    devDependencies:
       '@electric-sql/pglite':
         specifier: 0.5.1
         version: 0.5.1
@@ -725,28 +729,27 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
+      '@kovojs/drizzle':
+        specifier: workspace:*
+        version: link:../drizzle
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
       '@playwright/test':
         specifier: 1.60.0
         version: 1.60.0
-      better-sqlite3:
-        specifier: 12.11.1
-        version: 12.11.1
-      pgsql-ast-parser:
-        specifier: 12.0.2
-        version: 12.0.2
-      vite:
-        specifier: 8.0.16
-        version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)
-    devDependencies:
-      '@kovojs/drizzle':
-        specifier: workspace:*
-        version: link:../drizzle
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+      better-sqlite3:
+        specifier: 12.11.1
+        version: 12.11.1
+      drizzle-orm:
+        specifier: 1.0.0-rc.4
+        version: 1.0.0-rc.4(@electric-sql/pglite@0.5.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)(zod@4.4.3)
+      vite:
+        specifier: 8.0.16
+        version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.1)(jiti@2.7.0))

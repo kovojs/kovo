@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { KovoApp } from '@kovojs/server/custom-adapters';
 import {
   type MutationErrorExpectation,
   type PropertyTestOptions,
@@ -295,6 +296,7 @@ import {
   setCookieValues,
   type HeaderRecord,
 } from '@kovojs/test/headers';
+import { mutationCsrfTokenForTesting } from '@kovojs/test/csrf';
 import {
   fragmentHtml,
   kovoQueryJsonValues,
@@ -353,6 +355,14 @@ import {
 } from '@kovojs/conformance-fixtures/mcp-fixtures';
 import { createPageAssertion } from '@kovojs/test/internal/page';
 import type { PgliteTestDb } from '@kovojs/test/pglite';
+import {
+  createPostgresTestRuntime,
+  type KovoPostgresTestAdminDb,
+  type KovoPostgresTestDb,
+  type KovoPostgresTestRuntime,
+  type KovoPostgresTestRuntimeOptions,
+  type KovoPostgresTestSystemDb,
+} from '@kovojs/test/postgres';
 import {
   enhancedMutationBehaviorFact,
   loaderSmokeBehaviorFact,
@@ -441,7 +451,6 @@ import {
   type StarterTemplateSources,
 } from '@kovojs/conformance-fixtures/starter-template-fixtures';
 import { observeSqlStatementArgument, sqlStatementText } from '@kovojs/test/internal/sql-observer';
-import type { KovoTestCase, KovoTestRunner } from '@kovojs/test/test-case';
 import {
   touchGraphProvenanceFact,
   touchGraphProvenanceHonestyFact,
@@ -1756,6 +1765,8 @@ describe('@kovojs/test package subpath exports', () => {
     expect(wireFixturesWithContentType(wireSources, 'text/event-stream')).toEqual([]);
     expect(runCapturedCliCommand).toBeTypeOf('function');
     expect(runCommandSequenceSync).toBeTypeOf('function');
+    expect(mutationCsrfTokenForTesting).toBeTypeOf('function');
+    expect(createPostgresTestRuntime).toBeTypeOf('function');
   });
 
   it('keeps harness exec options on the operation module surface', () => {
@@ -1844,13 +1855,16 @@ type _PublicSubpathTypes = [
   ProjectFileTreeOptions,
   ServerCommerceAdoptDontInventBehaviorFact,
   ServerCommerceAdoptDontInventRuntime,
-  KovoTestContext<{ cart: string[] }>,
-  KovoTestExecOptions<{ db: { cart: string[] } }>,
-  KovoTestHarnessOptions<{ cart: string[] }>,
+  KovoTestContext<KovoApp>,
+  KovoTestExecOptions<KovoApp>,
+  KovoTestHarnessOptions<KovoApp>,
   PageAssertion,
   PgliteTestDb,
-  KovoTestCase,
-  KovoTestRunner,
+  KovoPostgresTestAdminDb,
+  KovoPostgresTestDb,
+  KovoPostgresTestRuntime,
+  KovoPostgresTestRuntimeOptions,
+  KovoPostgresTestSystemDb,
   HarnessMutationOptions<{ db: { cart: string[] } }>,
   HarnessOperationVerifier,
   MarkdownFields,

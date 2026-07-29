@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mutation, s } from '@kovojs/server';
 import { assertMutationError, propertyTest } from './assertions.js';
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 
 describe('@kovojs/test assertions', () => {
   it('property-tests optimistic predictions against eventual query truth', () => {
@@ -231,7 +231,7 @@ describe('@kovojs/test assertions', () => {
         return { added: input.quantity };
       },
     });
-    const harness = createKovoTestHarness({ db: { stock: 0 } });
+    const harness = createLegacyKovoTestHarness({ db: { stock: 0 } });
 
     const result = await harness.exec(addToCart, { productId: 'p1', quantity: 2 });
     const payload = assertMutationError(addToCart, result, {
@@ -266,8 +266,8 @@ describe('@kovojs/test assertions', () => {
         return { added: input.quantity };
       },
     });
-    const failingHarness = createKovoTestHarness({ db: { stock: 0 } });
-    const successHarness = createKovoTestHarness({ db: { stock: 5 } });
+    const failingHarness = createLegacyKovoTestHarness({ db: { stock: 0 } });
+    const successHarness = createLegacyKovoTestHarness({ db: { stock: 5 } });
 
     const failure = await failingHarness.exec(addToCart, { quantity: 2 });
     expect(() => assertMutationError(addToCart, failure, 'PRICE_CHANGED')).toThrow(
@@ -300,7 +300,7 @@ describe('@kovojs/test assertions', () => {
         return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
       },
     });
-    const harness = createKovoTestHarness({ db: {} });
+    const harness = createLegacyKovoTestHarness({ db: {} });
     const failure = await harness.exec(addToCart, { quantity: 2 });
 
     expect(() =>

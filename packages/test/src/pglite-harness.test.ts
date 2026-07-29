@@ -13,7 +13,7 @@ import {
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/managed-db';
 
-import { createKovoTestHarness } from './legacy-harness.js';
+import { createLegacyKovoTestHarness } from './legacy-harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
@@ -231,7 +231,7 @@ describe('@kovojs/test PGlite harness integration', () => {
           return request.db.read<{ product_id: string; qty: number }>('cart_items');
         },
       });
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -403,7 +403,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -445,7 +445,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -501,7 +501,7 @@ describe('@kovojs/test PGlite harness integration', () => {
           "insert into orders (id, user_id, status) values ('o1', 'u1', 'open'), ('o2', 'u2', 'open')",
         ].join('; '),
       );
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         request: { session: { user: { id: 'u1' } } },
         touchGraph: {
@@ -571,7 +571,7 @@ describe('@kovojs/test PGlite harness integration', () => {
       );
       await db.exec("insert into products (id) values ('p1')");
       await db.exec("insert into cart_items (product_id) values ('p1')");
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'product.delete': {
@@ -613,7 +613,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {
@@ -653,7 +653,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
     try {
       await db.exec('create table audit_log (product_id text not null)');
-      const harness = createKovoTestHarness({
+      const harness = createLegacyKovoTestHarness({
         db,
         touchGraph: {
           'cart.addItem': {

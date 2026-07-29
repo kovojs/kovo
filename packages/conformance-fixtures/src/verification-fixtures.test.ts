@@ -4,7 +4,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { domain, mutation, query, s } from '@kovojs/server';
 import { csrfField, csrfToken } from '@kovojs/server/internal/csrf';
 
-import { createKovoTestHarness } from '@kovojs/test/harness';
+import { createLegacyKovoTestHarness } from '@kovojs/test/internal/legacy-harness';
 import { createDbVerifier } from '@kovojs/test/internal/verifier';
 import {
   createVerificationFakeDb,
@@ -29,7 +29,7 @@ describe('@kovojs/test verification fixtures', () => {
     await expect(
       verificationLayerBehaviorFact({
         createDbVerifier,
-        createKovoTestHarness,
+        createLegacyKovoTestHarness: createLegacyKovoTestHarness,
         csrfField,
         csrfToken,
         diagnosticDefinitions,

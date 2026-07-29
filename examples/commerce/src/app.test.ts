@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/server/testing';
+import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { cookiePair, enhancedMutationHeaders, firstSetCookiePair } from '@kovojs/test/headers';
 import {

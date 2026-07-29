@@ -2,7 +2,7 @@ import { kovoCheckAssertionFact, type KovoCheckAssertionFact } from './kovo-chec
 
 export interface VerificationLayerRuntime {
   createDbVerifier: (...args: any[]) => any;
-  createKovoTestHarness: (...args: any[]) => any;
+  createLegacyKovoTestHarness: (...args: any[]) => any;
   csrfField: (...args: any[]) => string;
   csrfToken: (...args: any[]) => string;
   domain: (...args: any[]) => any;
@@ -89,7 +89,7 @@ export async function verificationLayerBehaviorFact(
   const failures: Record<string, string> = {};
   const {
     createDbVerifier,
-    createKovoTestHarness,
+    createLegacyKovoTestHarness,
     csrfField,
     csrfToken,
     diagnosticDefinitions,
@@ -123,7 +123,7 @@ export async function verificationLayerBehaviorFact(
       return input.productId;
     },
   });
-  const csrfHarness = createKovoTestHarness({ db: {}, request: csrfRequest });
+  const csrfHarness = createLegacyKovoTestHarness({ db: {}, request: csrfRequest });
   const field = csrfField(csrfRequest, { ...csrf, audience: csrfMutation.key });
   const fieldToken = extractCsrfFieldValue(field, csrf.field);
   const validResult = await csrfHarness.exec(csrfMutation, {
@@ -141,7 +141,7 @@ export async function verificationLayerBehaviorFact(
       return input.productId;
     },
   });
-  const writeHarness = createKovoTestHarness({
+  const writeHarness = createLegacyKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {
       'cart.add': {
@@ -198,7 +198,7 @@ export async function verificationLayerBehaviorFact(
 
   const cart = domain('cart');
   const product = domain('product');
-  const queryHarness = createKovoTestHarness({
+  const queryHarness = createLegacyKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {},
     verification: {
@@ -234,7 +234,7 @@ export async function verificationLayerBehaviorFact(
   });
   failures.invalidOutput = await rejectedMessage(queryHarness.query(invalidOutputQuery));
 
-  const exemptRawSqlHarness = createKovoTestHarness({
+  const exemptRawSqlHarness = createLegacyKovoTestHarness({
     db: createVerificationFakeDb(),
     touchGraph: {},
     verification: { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
@@ -370,7 +370,7 @@ export async function verificationLayerBehaviorFact(
       });
     },
   };
-  const pgliteHarness = createKovoTestHarness({
+  const pgliteHarness = createLegacyKovoTestHarness({
     db: { pglite: pgliteHandle },
     touchGraph: {
       'cart.add': {

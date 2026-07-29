@@ -22,4 +22,10 @@ substitute for it. A stale, partial, failed-build, digest-mismatched, or wrong-a
 one handler runs. Public app tests do not inspect the token, call private aggregate constructors, or
 mock framework internals.
 
+Direct query and mutation tests run their declaration handles in the assertion process. Page and raw
+request assertions exercise HTTP against an explicit, separately bootstrapped app origin; they do
+not start an app request handler inside Vitest's mutable realm. The harness rejects a missing origin
+or a request whose origin differs from that configured base URL. This preserves the §6.6
+runtime-bootstrap boundary while keeping page assertions browser-free.
+
 ---

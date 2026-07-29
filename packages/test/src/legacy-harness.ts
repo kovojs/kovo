@@ -4,7 +4,7 @@ import type { MutationDefinition, MutationResult, QueryDefinition, Schema } from
 import {
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
-} from '@kovojs/server/internal/managed-db';
+} from '@kovojs/server/internal/managed-db-capabilities';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
@@ -77,10 +77,7 @@ export function createLegacyKovoTestHarness<Db>(
 ): LegacyKovoTestContext<Db> {
   const verifier =
     options.touchGraph && options.verification
-      ? createDbVerifier(
-          options.touchGraph,
-          options.verification as InternalDbVerificationConfig,
-        )
+      ? createDbVerifier(options.touchGraph, options.verification as InternalDbVerificationConfig)
       : null;
   const db = verifier
     ? (verifier.wrap(options.db) as Db)
@@ -121,9 +118,6 @@ export function createLegacyKovoTestHarness<Db>(
     },
   };
 }
-
-/** @internal Old name exists only on this private regression-test module. */
-export const createKovoTestHarness = createLegacyKovoTestHarness;
 
 function lifecycleMutationDb<Db>(raw: Db, wrapped: Db, verifier: DbVerifier): Db {
   if (typeof raw !== 'object' || raw === null || typeof wrapped !== 'object' || wrapped === null) {

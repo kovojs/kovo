@@ -133,6 +133,7 @@ describe('@kovojs/test harness operations', () => {
   it('passes query request fixtures and db through the captured loader context', async () => {
     const cart = domain('cart');
     const db = createFakeDb();
+    const signal = new AbortController().signal;
     const observed: ObservedDbOperation[] = [
       {
         branch: undefined,
@@ -148,12 +149,26 @@ describe('@kovojs/test harness operations', () => {
     const cartQuery = query('cart', {
       load(
         _input,
-        context?: { db: FakeDb; request: { db: FakeDb; session?: { cartId: string } } },
+        context?: {
+          db: FakeDb;
+          env: { region: string };
+          request: {
+            db: FakeDb;
+            env: { region: string };
+            session?: { cartId: string };
+            signal: AbortSignal;
+          };
+          session: { cartId: string };
+          signal: AbortSignal;
+        },
       ) {
         expect(context?.db).toBe(db);
         expect(context?.request.db).toBe(db);
+        expect(context?.env).toEqual({ region: 'test' });
+        expect(context?.session).toEqual({ cartId: 'c1' });
+        expect(context?.signal).toBe(signal);
         return {
-          cartId: context?.request.session?.cartId,
+          cartId: context?.session.cartId,
           items: context?.db.read('cart_items'),
         };
       },
@@ -163,7 +178,17 @@ describe('@kovojs/test harness operations', () => {
     db.write('cart_items', 'p1');
 
     await expect(
-      executeHarnessQuery(cartQuery, undefined, db, { session: { cartId: 'c1' } }, state.verifier),
+      executeHarnessQuery(
+        cartQuery,
+        undefined,
+        db,
+        {
+          env: { region: 'test' },
+          session: { cartId: 'c1' },
+          signal,
+        },
+        state.verifier,
+      ),
     ).resolves.toEqual({ cartId: 'c1', items: ['p1'] });
     expect(state.reads).toEqual(['cart']);
     expect(state.captured).toEqual([observed]);
