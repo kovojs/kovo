@@ -33,24 +33,23 @@ describe('runtime public export boundaries', () => {
     ]);
   });
 
-  it('keeps the client subpath to the browser bootstrap value helpers', () => {
-    // SPEC.md §§4.4, 9.1: an app entry installs the loader and query store and
-    // builds the browser root; the loader engine internals are no longer here.
-    expect(client.createQueryStore).toBe(generated.createQueryStore);
-    expect(typeof client.installKovoLoader).toBe('function');
-    expect(client.installKovoLoader).not.toBe(generated.installKovoLoader);
-    expect(typeof client.createBrowserKovoRoot).toBe('function');
-    expect(typeof client.defaultEnhancedFetch).toBe('function');
-
-    expect(Object.keys(client).sort()).toEqual([
-      'createBrowserKovoRoot',
-      'createQueryStore',
-      'defaultEnhancedFetch',
-      'installKovoLoader',
-    ]);
+  it('keeps the client subpath to one custom-shell installer', () => {
+    // SPEC.md §§4.4, 5.2, 9.1: generated bootstrap owns runtime assembly;
+    // a custom shell gets one installer rather than store/root/transport pieces.
+    expect(typeof client.installKovoClient).toBe('function');
+    expect(Object.keys(client)).toEqual(['installKovoClient']);
 
     expect(Object.hasOwn(root, 'installKovoLoader')).toBe(false);
     expect(Object.hasOwn(root, 'createQueryStore')).toBe(false);
+    expect(Object.hasOwn(client, 'installKovoLoader')).toBe(false);
+    expect(Object.hasOwn(client, 'createQueryStore')).toBe(false);
+    expect(Object.hasOwn(client, 'createBrowserKovoRoot')).toBe(false);
+    expect(Object.hasOwn(client, 'defaultEnhancedFetch')).toBe(false);
+
+    expect(typeof generated.installKovoLoader).toBe('function');
+    expect(typeof generated.createQueryStore).toBe('function');
+    expect(typeof generated.createBrowserKovoRoot).toBe('function');
+    expect(typeof generated.defaultEnhancedFetch).toBe('function');
   });
 
   it('keeps the structural-morph shape types on the generated ABI', () => {

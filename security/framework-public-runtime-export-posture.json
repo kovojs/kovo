@@ -550,34 +550,6 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
-          "id": "authority-free-bootstrap-wiring-render-browser-e140854cff",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "render-browser"
-          },
-          "members": {
-            "./client": ["createBrowserKovoRoot", "createQueryStore", "installKovoLoader"]
-          },
-          "review": {
-            "basis": "The browser/client wiring helpers in this group construct reviewed runtime objects but do not themselves mint raw network/loader authority; the subpath initializer is independently closed.",
-            "evidence": [
-              "packages/browser/src/index.ts",
-              "packages/browser/src/client.ts",
-              "packages/browser/src/browser-root.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "bootstrap-wiring"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
           "id": "authority-free-module-initializer-render-browser-fc19e0c422",
           "matrix": {
             "cells": {
@@ -744,9 +716,9 @@
           "securityRole": "trust-escape"
         },
         {
-          "capabilities": ["network"],
+          "capabilities": ["dynamic-loader", "network"],
           "disposition": "request-closed",
-          "id": "request-closed-request-closed-render-browser-network-7a3f2b86e1",
+          "id": "request-closed-request-closed-render-browser-dynamic-loader-network-client-installer-v1",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -757,23 +729,23 @@
             "surface": "render-browser"
           },
           "members": {
-            "./client": ["<module>", "defaultEnhancedFetch"]
+            "./client": ["<module>", "installKovoClient"]
           },
           "review": {
-            "basis": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers.",
+            "basis": "The custom-shell installer captures platform fetch and allowlisted dynamic-import authority while keeping their request and module-selection inputs framework-owned; it is unavailable inside serialized handlers.",
             "evidence": [
-              "packages/browser/src/index.ts",
               "packages/browser/src/client.ts",
-              "packages/browser/src/browser-root.ts"
+              "packages/browser/src/client-installer.ts",
+              "packages/browser/src/client-installer.test.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-18"
+            "id": "first-party-runtime-posture/2026-07-29"
           },
           "rootKind": "none",
           "securityRole": "request-closed",
-          "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
+          "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "3670f4d67a830526fbc8e1a136489abfbf7fd5b3b2f2221c3a2c56a3569b37fd"
+      "sourceTreeSha256": "335ea322605d93a8fa39a2eb08d9caaee7f5fa6a9b4e0f0fad9aa26c94f2d668"
     },
     {
       "manifestVariants": [

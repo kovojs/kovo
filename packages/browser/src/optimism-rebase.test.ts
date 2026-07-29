@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { OptimisticRebaser } from './optimism.js';
 
 // SPEC.md §10.4: the OptimisticRebaser replays pending predictions over arriving

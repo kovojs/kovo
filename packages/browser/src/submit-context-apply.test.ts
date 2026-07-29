@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { form, href, Link, redirect, type Route } from '@kovojs/core';
 
-import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
+import { createQueryStore, type EnhancedMutationFetchOptions } from './generated.js';
 import { createSubmitContext } from './submit-context.js';
 import {
   FakeMorphRoot,

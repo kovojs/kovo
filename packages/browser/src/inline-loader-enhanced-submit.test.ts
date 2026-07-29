@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
+import { createQueryStore, type EnhancedMutationFetchOptions } from './generated.js';
 import { submitEnhancedMutation } from './mutation-submit.js';
 import { inlineSourceInstallCases, InlineParityRoot } from './inline-loader-test-utils.js';
 

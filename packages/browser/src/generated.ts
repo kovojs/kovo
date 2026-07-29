@@ -9,6 +9,8 @@ export type { ClientHandler, ImportHandlerModule } from './handlers.js';
 export { installClockUpdatePlans } from './clock-tick-bus.js';
 export type { ClockUpdateContext, ClockUpdatePlan, ClockUpdateSpec } from './clock-tick-bus.js';
 export { installGeneratedKovoLoader as installKovoLoader } from './loader.js';
+export { createBrowserKovoRoot, defaultEnhancedFetch } from './browser-root.js';
+export type { BrowserKovoRoot, CreateBrowserKovoRootOptions } from './browser-root.js';
 export type {
   KovoGeneratedEnhancedMutationOptions,
   KovoGeneratedLoader as KovoLoader,

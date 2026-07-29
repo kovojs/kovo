@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import {

@@ -46,9 +46,12 @@ export interface CreateBrowserKovoRootOptions {
  */
 export const defaultEnhancedFetch: EnhancedMutationFetch = async (url, options) => {
   const init: RequestInit = {
+    credentials: 'same-origin',
     headers: options.headers,
     keepalive: options.keepalive,
     method: options.method,
+    redirect: options.redirect,
+    referrerPolicy: options.referrerPolicy,
     ...definedProps({ signal: options.signal }),
   };
 

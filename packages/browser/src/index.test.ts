@@ -1,37 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader } from './client.js';
+import { installKovoClient } from './client.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime barrel loader smoke', () => {
-  it('registers delegated capture listeners without importing handler modules', () => {
-    // SPEC.md §4.4: the public runtime barrel exposes the always-loaded loader path.
+  it('installs and asynchronously disposes the custom-shell client', async () => {
+    // SPEC.md §4.4: the custom-shell surface installs the always-loaded loader
+    // while keeping its store, morph root, and transport framework-owned.
     const root = new FakeRoot();
     const importModule = vi.fn();
 
-    const loader = installKovoLoader({ importModule, root });
+    const client = installKovoClient({
+      importModule,
+      root,
+    });
+    await client.ready;
 
     // SPEC.md §4.4: delegate every on:* event, plus pointerover/pointerout to synthesize
     // pointerenter/pointerleave.
-    expect(loader.events).toEqual([
-      'click',
-      'submit',
-      'input',
-      'change',
-      'keydown',
-      'keyup',
-      'contextmenu',
-      'paste',
-      'cancel',
-      'beforetoggle',
-      'animationend',
-      'scroll',
-      'focus',
-      'blur',
-      'pointerdown',
-      'pointermove',
-      'pointerup',
-    ]);
     expect([...root.listeners.keys()]).toEqual([
       'click',
       'submit',
@@ -52,7 +38,11 @@ describe('runtime barrel loader smoke', () => {
       'pointerup',
       'pointerover',
       'pointerout',
+      'kovo:query',
     ]);
     expect(importModule).not.toHaveBeenCalled();
+
+    await client.dispose();
+    expect(root.listeners.size).toBe(0);
   });
 });

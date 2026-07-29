@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader as installKovoLoaderFromBarrel } from './client.js';
-import { installKovoLoader, type KovoLoaderOptions } from './loader.js';
+import { installKovoLoader as installKovoLoaderFromBarrel } from './generated.js';
+import {
+  installGeneratedKovoLoader as installKovoLoader,
+  type KovoGeneratedLoaderOptions as KovoLoaderOptions,
+} from './loader.js';
 import { FakeElement, FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime loader module', () => {

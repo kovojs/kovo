@@ -4,7 +4,7 @@ import {
   createQueryStore,
   installKovoLoader,
   type EnhancedMutationFetchOptions,
-} from './client.js';
+} from './generated.js';
 import {
   FakeElement,
   FakeFormElement,

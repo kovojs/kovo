@@ -4,7 +4,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import { createBrowserNavigationSecurityControls } from './navigation-security-intrinsics.js';

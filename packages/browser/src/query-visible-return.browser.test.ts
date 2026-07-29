@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { installKovoLoader } from './generated.js';
 import { browserTransportTestBuild, queryTestResponse } from './runtime-test-fakes.js';
 
