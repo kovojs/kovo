@@ -42,6 +42,12 @@ reference material; `SPEC.md` remains normative.
 
 - [ ] Add an offline scaffold→edit→check→fix journey using only JSON diagnostics and installed
       local docs.
+  - Integration-ready evidence: `pnpm run test:devex-offline-agent` passes 20 runner, JSON-only,
+    authenticated-docs, packed-input, and deny-all-network adversarial assertions. A real
+    authenticated-tarball run completes scaffold, strict offline install, and `update-docs`, then
+    stops at the exact open dependency: packed `kovo build --check --format json` must emit one
+    `kovo-diagnostic/v1` KV436 record with an authored `src/queries.ts` source anchor and no stderr
+    prelude. Keep this item open until that packed run reaches the fixed empty envelope.
 - [ ] Regenerate and verify the snapshot in every breaking public-API batch.
 - [ ] Track 3 exit: the packed offline journey passes and no placeholder snapshot can report
       success.

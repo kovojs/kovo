@@ -47,6 +47,8 @@ reproducer, while the named implementation work item owns retirement.
 - [ ] Capture concepts encountered before first authenticated CRUD.
 - [ ] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
 - [ ] Integrate the offline agent journey owned by `plans/devex-agent-loop.md`.
+  - The authenticated packed runner and adversarial fixture are present; the child ledger records
+    the remaining structured-diagnostic integration dependency and proving command.
 
 ## Benchmark and budgets
 

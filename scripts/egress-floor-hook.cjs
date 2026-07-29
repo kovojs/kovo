@@ -7,6 +7,7 @@ const tls = require('node:tls');
 
 const MODE = process.env.KOVO_EGRESS_MODE ?? 'deny';
 const ALLOWLIST = parseAllowlist(process.env.KOVO_EGRESS_ALLOWLIST ?? '');
+const ALLOW_LOOPBACK = process.env.KOVO_EGRESS_ALLOW_LOOPBACK !== '0';
 const LOCAL_HOSTNAMES = new Set(['localhost']);
 
 function parseAllowlist(text) {
@@ -38,7 +39,7 @@ function isLoopbackHost(host) {
 function isAllowedHost(host, allowlist = ALLOWLIST) {
   const normalized = normalizeHost(host);
   if (!normalized) return false;
-  if (isLoopbackHost(normalized)) return true;
+  if (ALLOW_LOOPBACK && isLoopbackHost(normalized)) return true;
   return allowlist.some((entry) => {
     if (entry.startsWith('*.')) {
       const suffix = entry.slice(1);
@@ -201,6 +202,7 @@ patchConnect(
 patchConnect('dgram.Socket', targetFromDgramArgs, dgram.Socket?.prototype, ['send', 'connect']);
 
 module.exports = {
+  ALLOW_LOOPBACK,
   MODE,
   assertAllowed,
   blockedError,

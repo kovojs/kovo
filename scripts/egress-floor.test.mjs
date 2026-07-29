@@ -49,6 +49,21 @@ describe('egress floor wrapper', () => {
     expect(env.NODE_OPTIONS).toContain('--require=');
     expect(env.NODE_OPTIONS).toContain('scripts/egress-floor-hook.cjs');
   });
+
+  it('can close loopback for fully offline journeys without changing the default build policy', () => {
+    const strict = applyEgressFloorEnv(
+      { KOVO_EGRESS_ALLOW_LOOPBACK: '0' },
+      { allowlist: [], mode: 'deny' },
+    );
+    const result = spawnSync(
+      process.execPath,
+      ['-e', "require('node:net').connect({ host: '127.0.0.1', port: 9 });"],
+      { encoding: 'utf8', env: strict },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('KOVO egress floor blocked net.connect to 127.0.0.1:9');
+  });
 });
 
 describe('egress floor policy', () => {
