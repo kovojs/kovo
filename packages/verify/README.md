@@ -29,8 +29,11 @@ pnpm exec kovo-verify \
 ```
 
 The certificate argument and the `--policy`, `--artifacts`, and `--format` flag
-groups may appear in any order. Human output is `kovo-verify/v1`; JSON output is
-`kovo.verify-report/v1`. Both carry the same ordered findings.
+groups may appear in any order. Human output is `kovo-verify/v1`. JSON uses the
+shared `kovo-diagnostic/v1` envelope and preserves that report under the
+`kovo.verify-report/v1` result protocol. Both carry the same ordered findings.
+Use `--format github` to emit the same records as GitHub workflow annotations
+followed by the unchanged human report.
 
 Run `kovo-verify --help` for the complete command contract or
 `kovo-verify --version` for the installed version. `-h`, `--help`, and

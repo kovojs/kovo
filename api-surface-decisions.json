@@ -1291,6 +1291,17 @@
       "evidence": "cli-contract"
     },
     {
+      "id": "@kovojs/cli#KovoDiagnosticCommandResult",
+      "package": "@kovojs/cli",
+      "specifier": "@kovojs/cli",
+      "symbol": "KovoDiagnosticCommandResult",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/cli",
+      "story": "cli-automation",
+      "evidence": "cli-contract"
+    },
+    {
       "id": "@kovojs/cli#KovoDiagnosticEnvelope",
       "package": "@kovojs/cli",
       "specifier": "@kovojs/cli",
@@ -16653,6 +16664,7 @@
       "@kovojs/cli#KovoCliDiagnosticCode",
       "@kovojs/cli#KovoCommandExitCode",
       "@kovojs/cli#KovoDiagnosticCategory",
+      "@kovojs/cli#KovoDiagnosticCommandResult",
       "@kovojs/cli#KovoDiagnosticEnvelope",
       "@kovojs/cli#KovoDiagnosticFormat",
       "@kovojs/cli#KovoDiagnosticRecord",

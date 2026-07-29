@@ -46,6 +46,7 @@ describe('kovo-verify CLI', () => {
       expect(output.exitCode).toBe(0);
       expect(output.stderr).toBe('');
       expect(output.stdout).toContain('Usage:\n  kovo-verify <certificate.json>');
+      expect(output.stdout).toContain('--format <human|json|github>');
       expect(output.stdout).toContain('0  Certificate verified.');
       expect(output.stdout).toContain('2  Usage, I/O, or parse error');
     }
@@ -71,18 +72,14 @@ describe('kovo-verify CLI', () => {
       expect(output.exitCode).toBe(0);
       expect(output.stderr).toBe('');
       expect(JSON.parse(output.stdout)).toEqual({
-        schema: 'kovo.verify-report/v1',
-        status: 'verified',
-        ok: true,
-        stats: {
-          artifacts: 1,
-          capabilities: 0,
-          doors: 0,
-          edges: 0,
-          opaque: 0,
-          roots: 0,
+        diagnostics: [],
+        result: {
+          command: 'verify',
+          exitCode: 0,
+          protocol: 'kovo.verify-report/v1',
+          text: 'kovo-verify/v1 PASS artifacts=1 edges=0 roots=0 doors=0 opaque=0 capabilities=0 findings=0\n',
         },
-        findings: [],
+        version: 'kovo-diagnostic/v1',
       });
     }
   });
@@ -104,21 +101,38 @@ describe('kovo-verify CLI', () => {
     expect(human.stderr).toBe('');
     expect(json.stderr).toBe('');
     const payload = JSON.parse(json.stdout) as {
-      findings: { code: string; message: string; obligation: string }[];
-      schema: string;
-      status: string;
+      diagnostics: { code: string; message: string; version: string }[];
+      result: { exitCode: number; protocol: string; text: string };
+      version: string;
     };
-    expect(payload.schema).toBe('kovo.verify-report/v1');
-    expect(payload.status).toBe('findings');
-    expect(findingsFromHuman(human.stdout)).toEqual(payload.findings);
-    expect(payload.findings).toEqual([
+    expect(payload.version).toBe('kovo-diagnostic/v1');
+    expect(payload.result).toEqual({
+      command: 'verify',
+      exitCode: 1,
+      protocol: 'kovo.verify-report/v1',
+      text: human.stdout,
+    });
+    expect(payload.diagnostics).toEqual([
       {
+        category: 'proof',
         code: 'local-capability-missing',
+        help: 'Inspect the certificate, independent policy, and exact artifact bytes, then rerun `kovo-verify`.',
         message:
           '@kovojs/server/dist/index.mjs imports raw capability filesystem absent from cap summary',
-        obligation: 'stability',
+        severity: 'error',
+        version: 'kovo-diagnostic/v1',
       },
     ]);
+    expect(findingsFromHuman(human.stdout).map(({ code, message }) => ({ code, message }))).toEqual(
+      payload.diagnostics.map(({ code, message }) => ({ code, message })),
+    );
+
+    const github = await runWithIo([...args, '--format', 'github']);
+    expect(github.exitCode).toBe(1);
+    expect(github.stderr).toBe('');
+    expect(github.stdout).toContain('::error title=local-capability-missing proof::');
+    expect(github.stdout).toContain(payload.diagnostics[0]!.message);
+    expect(github.stdout).toContain(human.stdout);
   });
 
   it('rejects a vacuous certificate instead of ignoring an installed artifact tree', async () => {
@@ -193,8 +207,20 @@ describe('kovo-verify CLI', () => {
     expect(jsonUsage.exitCode).toBe(2);
     expect(jsonUsage.stdout).toBe('');
     expect(JSON.parse(jsonUsage.stderr)).toMatchObject({
-      schema: 'kovo.verify-command-error/v1',
-      status: 'indeterminate',
+      diagnostics: [
+        {
+          category: 'usage',
+          code: 'KOVO_VERIFY_INDETERMINATE',
+          severity: 'error',
+          version: 'kovo-diagnostic/v1',
+        },
+      ],
+      result: {
+        command: 'verify',
+        exitCode: 2,
+        protocol: 'kovo.verify-command-error/v1',
+      },
+      version: 'kovo-diagnostic/v1',
     });
   });
 
@@ -249,9 +275,17 @@ describe('kovo-verify CLI', () => {
     expect(output.exitCode).toBe(2);
     expect(output.stdout).toBe('');
     expect(JSON.parse(output.stderr)).toMatchObject({
-      schema: 'kovo.verify-command-error/v1',
-      status: 'indeterminate',
-      message: expect.any(String),
+      diagnostics: [
+        {
+          code: 'KOVO_VERIFY_INDETERMINATE',
+          message: expect.any(String),
+        },
+      ],
+      result: {
+        exitCode: 2,
+        protocol: 'kovo.verify-command-error/v1',
+      },
+      version: 'kovo-diagnostic/v1',
     });
   });
 });

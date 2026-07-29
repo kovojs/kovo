@@ -17,12 +17,13 @@ const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
 const MAX_POLICY_BYTES = 1024 * 1024;
 const REPORT_SCHEMA = 'kovo.verify-report/v1';
 const COMMAND_ERROR_SCHEMA = 'kovo.verify-command-error/v1';
+const DIAGNOSTIC_SCHEMA = 'kovo-diagnostic/v1';
 const COMMAND_VERSION = packageMetadata.version;
 const USAGE = 'kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>';
 const HELP = `Verify a Kovo release certificate against an independently obtained policy.
 
 Usage:
-  ${USAGE} [--format <human|json>]
+  ${USAGE} [--format <human|json|github>]
 
 Arguments:
   <certificate.json>  Certificate bytes to check.
@@ -30,7 +31,7 @@ Arguments:
 Options:
   --policy <path>     Independently obtained kovo.certificate-policy/v1 bytes.
   --artifacts <root>  Unpacked package tree containing the exact reviewed artifacts.
-  --format <format>   Report format: human (default) or json.
+  --format <format>   Report format: human (default), json, or github.
   -h, --help          Show this help.
   --version           Show the installed command version.
 
@@ -43,7 +44,7 @@ Exit codes:
   2  Usage, I/O, or parse error; verification was indeterminate.
 `;
 
-type KovoVerifyFormat = 'human' | 'json';
+type KovoVerifyFormat = 'github' | 'human' | 'json';
 
 interface KovoVerifyRequest {
   artifactRoot: string;
@@ -162,8 +163,8 @@ function parseArgs(args: readonly string[]): ParsedKovoVerifyArgs {
       } else {
         if (formatSeen) return usageError('--format may appear only once', errorFormat);
         formatSeen = true;
-        if (value !== 'human' && value !== 'json') {
-          return usageError('--format must be human or json', errorFormat);
+        if (value !== 'github' && value !== 'human' && value !== 'json') {
+          return usageError('--format must be human, json, or github', errorFormat);
         }
         format = value;
       }
@@ -190,9 +191,12 @@ function parseArgs(args: readonly string[]): ParsedKovoVerifyArgs {
 }
 
 function requestedErrorFormat(args: readonly string[]): KovoVerifyFormat {
-  return args.some((argument, index) => argument === '--format' && args[index + 1] === 'json')
-    ? 'json'
-    : 'human';
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== '--format') continue;
+    const value = args[index + 1];
+    if (value === 'github' || value === 'human' || value === 'json') return value;
+  }
+  return 'human';
 }
 
 function usageError(message: string, format: KovoVerifyFormat): ParsedKovoVerifyArgs {
@@ -203,33 +207,88 @@ function formatVerification(
   result: KovoCertificateVerificationResult,
   format: KovoVerifyFormat,
 ): string {
-  if (format === 'human') return formatCertificateVerification(result);
-  return `${JSON.stringify(
-    {
-      schema: REPORT_SCHEMA,
-      status: result.ok ? 'verified' : 'findings',
-      ok: result.ok,
-      stats: result.stats,
-      findings: result.findings,
-    },
-    null,
-    2,
-  )}\n`;
+  const text = formatCertificateVerification(result);
+  if (format === 'human') return text;
+  const diagnostics: KovoVerifyDiagnostic[] = result.findings.map((finding) => ({
+    category: 'proof',
+    code: finding.code,
+    help: 'Inspect the certificate, independent policy, and exact artifact bytes, then rerun `kovo-verify`.',
+    message: finding.message,
+    severity: 'error',
+    version: DIAGNOSTIC_SCHEMA,
+  }));
+  if (format === 'github') {
+    return `${diagnostics.map(formatGithubDiagnostic).join('')}${text}`;
+  }
+  return formatDiagnosticEnvelope(diagnostics, {
+    command: 'verify',
+    exitCode: result.ok ? 0 : 1,
+    protocol: REPORT_SCHEMA,
+    text,
+  });
 }
 
 function formatCommandError(message: string, format: KovoVerifyFormat): string {
-  if (format === 'json') {
-    return `${JSON.stringify(
-      {
-        schema: COMMAND_ERROR_SCHEMA,
-        status: 'indeterminate',
-        message: singleLine(message),
-      },
-      null,
-      2,
-    )}\n`;
-  }
-  return `kovo-verify/v1 ERROR ${singleLine(message)}\nRun "kovo-verify --help" for usage.\n`;
+  const normalizedMessage = singleLine(message);
+  const text = `kovo-verify/v1 ERROR ${normalizedMessage}\nRun "kovo-verify --help" for usage.\n`;
+  if (format === 'human') return text;
+  const diagnostic = {
+    category: 'usage',
+    code: 'KOVO_VERIFY_INDETERMINATE',
+    help: 'Run `kovo-verify --help`, correct the input or evidence path, and retry verification.',
+    message: normalizedMessage,
+    severity: 'error',
+    version: DIAGNOSTIC_SCHEMA,
+  } as const;
+  if (format === 'github') return `${formatGithubDiagnostic(diagnostic)}${text}`;
+  return formatDiagnosticEnvelope([diagnostic], {
+    command: 'verify',
+    exitCode: 2,
+    protocol: COMMAND_ERROR_SCHEMA,
+    text,
+  });
+}
+
+interface KovoVerifyDiagnostic {
+  category: 'proof' | 'usage';
+  code: string;
+  help: string;
+  message: string;
+  severity: 'error';
+  version: typeof DIAGNOSTIC_SCHEMA;
+}
+
+interface KovoVerifyDiagnosticResult {
+  command: 'verify';
+  exitCode: 0 | 1 | 2;
+  protocol: typeof COMMAND_ERROR_SCHEMA | typeof REPORT_SCHEMA;
+  text: string;
+}
+
+function formatDiagnosticEnvelope(
+  diagnostics: readonly KovoVerifyDiagnostic[],
+  result: KovoVerifyDiagnosticResult,
+): string {
+  return `${JSON.stringify({ diagnostics, result, version: DIAGNOSTIC_SCHEMA })}\n`;
+}
+
+function formatGithubDiagnostic(diagnostic: KovoVerifyDiagnostic): string {
+  const title = githubProperty(`${diagnostic.code} ${diagnostic.category}`);
+  const message = githubMessage(`${diagnostic.message} ${diagnostic.help}`);
+  return `::error title=${title}::${message}\n`;
+}
+
+function githubProperty(value: string): string {
+  return value
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A')
+    .replaceAll(':', '%3A')
+    .replaceAll(',', '%2C');
+}
+
+function githubMessage(value: string): string {
+  return value.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
 }
 
 function singleLine(message: string): string {

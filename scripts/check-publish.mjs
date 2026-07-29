@@ -29,15 +29,6 @@ export function checkPublish({ exec = execFileSync } = {}) {
   );
   exec(
     process.execPath,
-    [path.join(repoRoot, 'scripts', 'check-packed-verifier-consumer.mjs')],
-    {
-      cwd: repoRoot,
-      env: deterministicPackEnvironment(process.env),
-      stdio: 'inherit',
-    },
-  );
-  exec(
-    process.execPath,
     [path.join(repoRoot, 'scripts', 'verify-packed-release-certificate.mjs')],
     {
       cwd: repoRoot,
@@ -45,6 +36,11 @@ export function checkPublish({ exec = execFileSync } = {}) {
       stdio: 'inherit',
     },
   );
+  exec(process.execPath, [path.join(repoRoot, 'scripts', 'check-packed-verifier-consumer.mjs')], {
+    cwd: repoRoot,
+    env: deterministicPackEnvironment(process.env),
+    stdio: 'inherit',
+  });
   exec(
     process.execPath,
     [

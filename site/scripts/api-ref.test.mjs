@@ -451,7 +451,8 @@ describe('api-ref generator', () => {
     // Coverage must be meaningful, not the historical "0 documented". Floors are
     // the regenerated documented counts after the public-API cleanup narrowed the
     // surface (e.g. @kovojs/test dropped its internalized verifier subpaths and
-    // @kovojs/style grew its documented exports); they must not silently regress.
+    // @kovojs/style narrowed to its opaque-handle authoring contract); they must
+    // not silently regress.
     // The audit-driven cleanup removed @kovojs/core#formFields and folded
     // @kovojs/style#InlineStyle into StyleInput (audit-api-20260620 Definitely
     // Remove), so those packages' documented floors drop by one.
@@ -462,7 +463,7 @@ describe('api-ref generator', () => {
       '@kovojs/icons': 1,
       '@kovojs/browser': 39,
       '@kovojs/server': 150,
-      '@kovojs/style': 34,
+      '@kovojs/style': 14,
       '@kovojs/better-auth': 19,
       '@kovojs/cli': 11,
       '@kovojs/verify': 11,

@@ -1831,7 +1831,7 @@ export const save = mutation('cart/save', {
     expect(output).toContain('SUMMARY sinks=1 trustEscapes=1\n');
   });
 
-  it('accepts kovo explain --unguarded as a CLI audit mode', () => {
+  it('accepts kovo explain unguarded as a literal CLI audit view', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -1948,7 +1948,7 @@ export const save = mutation('cart/save', {
     `);
   });
 
-  it('fails kovo explain --unguarded when requested and findings exist', () => {
+  it('fails kovo explain unguarded when requested and findings exist', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';

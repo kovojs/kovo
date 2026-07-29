@@ -47,11 +47,21 @@ describe('packed standalone verifier consumer gate', () => {
       assertVerifierReportFindingParity(
         human,
         `${JSON.stringify({
-          schema: 'kovo.verify-report/v1',
-          status: 'findings',
-          ok: false,
-          stats: {},
-          findings,
+          diagnostics: findings.map(({ code, message }) => ({
+            category: 'proof',
+            code,
+            help: 'rerun',
+            message,
+            severity: 'error',
+            version: 'kovo-diagnostic/v1',
+          })),
+          result: {
+            command: 'verify',
+            exitCode: 1,
+            protocol: 'kovo.verify-report/v1',
+            text: human,
+          },
+          version: 'kovo-diagnostic/v1',
         })}\n`,
       ),
     ).toMatchObject({ findings, ok: false });
@@ -59,10 +69,14 @@ describe('packed standalone verifier consumer gate', () => {
       assertVerifierReportFindingParity(
         human,
         JSON.stringify({
-          schema: 'kovo.verify-report/v1',
-          status: 'findings',
-          ok: false,
-          findings: [],
+          diagnostics: [],
+          result: {
+            command: 'verify',
+            exitCode: 1,
+            protocol: 'kovo.verify-report/v1',
+            text: human,
+          },
+          version: 'kovo-diagnostic/v1',
         }),
       ),
     ).toThrow(/different findings/u);

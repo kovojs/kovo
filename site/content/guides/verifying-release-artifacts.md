@@ -59,8 +59,20 @@ pnpm exec kovo-verify \
   --policy ./kovo-certificate-policy-v1.json
 ```
 
-The output schema is `kovo.verify-report/v1`. It contains the same ordered
-`obligation`, `code`, and `message` findings as the human report.
+The JSON envelope is `kovo-diagnostic/v1`. Its `result.protocol` is
+`kovo.verify-report/v1`, and its `result.text` preserves the exact human proof
+report. The diagnostic records carry the same finding codes and messages.
+
+Use `--format github` in GitHub Actions. It renders those same records as
+workflow annotations and then prints the unchanged human proof report:
+
+```sh
+pnpm exec kovo-verify \
+  --format github \
+  --artifacts ./unpacked-packages \
+  ./kovo-certificate-v1.json \
+  --policy ./kovo-certificate-policy-v1.json
+```
 
 ## Handle the exit code
 

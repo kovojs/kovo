@@ -84,25 +84,38 @@ export function findingsFromHumanVerifierReport(report) {
 }
 
 export function assertVerifierReportFindingParity(humanReport, jsonReport) {
-  let payload;
+  let envelope;
   try {
-    payload = JSON.parse(jsonReport);
+    envelope = JSON.parse(jsonReport);
   } catch {
     throw new Error('JSON verifier report is not valid JSON');
   }
   if (
-    payload?.schema !== 'kovo.verify-report/v1' ||
-    !['verified', 'findings'].includes(payload.status) ||
-    typeof payload.ok !== 'boolean' ||
-    !Array.isArray(payload.findings)
+    envelope?.version !== 'kovo-diagnostic/v1' ||
+    !Array.isArray(envelope.diagnostics) ||
+    envelope.result?.command !== 'verify' ||
+    envelope.result?.protocol !== 'kovo.verify-report/v1' ||
+    ![0, 1].includes(envelope.result?.exitCode) ||
+    typeof envelope.result?.text !== 'string'
   ) {
-    throw new Error('JSON verifier report does not match kovo.verify-report/v1');
+    throw new Error('JSON verifier report does not match kovo-diagnostic/v1');
   }
   const humanFindings = findingsFromHumanVerifierReport(humanReport);
-  if (JSON.stringify(humanFindings) !== JSON.stringify(payload.findings)) {
+  const resultFindings = findingsFromHumanVerifierReport(envelope.result.text);
+  const diagnosticFindings = envelope.diagnostics.map(({ code, message }) => ({ code, message }));
+  const expectedDiagnostics = humanFindings.map(({ code, message }) => ({ code, message }));
+  if (
+    envelope.result.text !== humanReport ||
+    JSON.stringify(resultFindings) !== JSON.stringify(humanFindings) ||
+    JSON.stringify(diagnosticFindings) !== JSON.stringify(expectedDiagnostics)
+  ) {
     throw new Error('Human and JSON verifier reports carry different findings');
   }
-  return payload;
+  return {
+    envelope,
+    findings: humanFindings,
+    ok: envelope.result.exitCode === 0,
+  };
 }
 
 export function checkPackedVerifierConsumer(args = process.argv.slice(2)) {
@@ -215,11 +228,13 @@ function assertPackedVerificationContract(bin, fixture, cwd) {
     assertProcess(result, 'kovo-verify verified JSON report', 0, 'stdout');
     const payload = JSON.parse(result.stdout);
     if (
-      payload?.schema !== 'kovo.verify-report/v1' ||
-      payload.status !== 'verified' ||
-      payload.ok !== true ||
-      !Array.isArray(payload.findings) ||
-      payload.findings.length !== 0
+      payload?.version !== 'kovo-diagnostic/v1' ||
+      !Array.isArray(payload.diagnostics) ||
+      payload.diagnostics.length !== 0 ||
+      payload.result?.command !== 'verify' ||
+      payload.result?.exitCode !== 0 ||
+      payload.result?.protocol !== 'kovo.verify-report/v1' ||
+      !payload.result.text?.startsWith('kovo-verify/v1 PASS ')
     ) {
       throw new Error('Packed kovo-verify did not emit a valid verified JSON report');
     }
@@ -247,6 +262,18 @@ function assertPackedVerificationContract(bin, fixture, cwd) {
   if (findingPayload.findings.length === 0 || findingPayload.ok !== false) {
     throw new Error('Packed verifier findings report did not contain a finding');
   }
+  const findingsGithub = captureNode(
+    bin,
+    ['--format', 'github', ...common, fixture.findingCertificatePath],
+    cwd,
+  );
+  assertProcess(findingsGithub, 'kovo-verify GitHub findings', 1, 'stdout');
+  if (
+    !findingsGithub.stdout.includes('::error title=') ||
+    !findingsGithub.stdout.includes(findingsHuman.stdout)
+  ) {
+    throw new Error('Packed verifier GitHub report lost its diagnostic or human proof facts');
+  }
 
   const usage = captureNode(bin, ['--unknown'], cwd);
   assertProcess(usage, 'kovo-verify usage failure', 2, 'stderr');
@@ -266,8 +293,11 @@ function assertPackedVerificationContract(bin, fixture, cwd) {
   assertProcess(missing, 'kovo-verify I/O failure', 2, 'stderr');
   const missingPayload = JSON.parse(missing.stderr);
   if (
-    missingPayload?.schema !== 'kovo.verify-command-error/v1' ||
-    missingPayload.status !== 'indeterminate'
+    missingPayload?.version !== 'kovo-diagnostic/v1' ||
+    missingPayload.result?.protocol !== 'kovo.verify-command-error/v1' ||
+    missingPayload.result?.exitCode !== 2 ||
+    !Array.isArray(missingPayload.diagnostics) ||
+    missingPayload.diagnostics.length !== 1
   ) {
     throw new Error('Packed verifier JSON I/O error is not versioned and indeterminate');
   }
