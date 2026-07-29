@@ -5,4 +5,8 @@
  * not expose a marker or branding function that authored code could use to bless structural HMAC
  * lookalikes (SPEC §9.1 verifier-before-parse).
  */
-export { isFrameworkHmacSignatureVerifier } from '../verifier.js';
+export {
+  inspectFrameworkHmacSignatureVerifier,
+  isFrameworkHmacSignatureVerifier,
+} from '../verifier.js';
+export type { HmacSignatureInspectionConfig, ResolvedHmacSignatureConfig } from '../verifier.js';

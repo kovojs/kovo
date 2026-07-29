@@ -58,7 +58,7 @@ describe('DEC7 off-wire prover fail-closed inversion', () => {
 
 function sourceForQueries(loadBodies: readonly string[]): string {
   return [
-    'import { declareOffWire } from "@kovojs/core";',
+    'import { declareOffWire } from "@kovojs/core/security";',
     '',
     'export const users = pgTable("users", {',
     '  id: text("id").primaryKey(),',

@@ -9,7 +9,6 @@ import {
   createFileSystemStorage as createFileSystemStorageCapability,
   createMemoryStorage as createMemoryStorageCapability,
   createS3CompatibleStorage as createS3CompatibleStorageCapability,
-  publicScopedKey,
   type S3CompatibleDeleteObjectInput,
   type S3CompatibleGetObjectInput,
   type S3CompatibleGetObjectOutput,
@@ -21,9 +20,9 @@ import {
   type S3CompatiblePutObjectInput,
   type S3CompatiblePutObjectOutput,
   type StorageCapability,
-  type ScopedKey,
   type StorageReadCapability,
-} from './index.js';
+} from './storage.js';
+import { publicScopedKey, type ScopedKey } from './index.js';
 import {
   createReadOnlyStorageCapability,
   countPrincipalStorageObjects,

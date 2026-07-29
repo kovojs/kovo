@@ -6416,7 +6416,7 @@ function classifyServerCall(
       appendViolation(
         call,
         'computed-security-operation',
-        'trustedReveal declassification requires an exact named import and inline validated DeclassifyPolicy.create tuple',
+        'trustedReveal declassification requires exact @kovojs/core/security named imports and an inline DeclassifyPolicy.forTrustedReveal({ ownerScope }) policy',
       );
     } else if (!serverDeclassifyProvenanceIsRobust(releaseProvenance)) {
       appendViolation(
@@ -6849,7 +6849,9 @@ function serverExactDeclassifyPolicy(
   expectedDoor: 'trustedReveal',
 ): ServerExactDeclassifyPolicy | undefined {
   const callee = unwrapExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'create') return undefined;
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'forTrustedReveal') {
+    return undefined;
+  }
   const receiver = unwrapExpression(callee.expression);
   if (
     !ts.isIdentifier(receiver) ||
@@ -6869,10 +6871,8 @@ function serverExactDeclassifyPolicy(
     return undefined;
   }
   const options = unwrapExpression(call.arguments[0]!);
-  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 3) return undefined;
-  let door: string | undefined;
+  if (!ts.isObjectLiteralExpression(options) || options.properties.length !== 1) return undefined;
   let ownerScope: string | undefined;
-  let purpose: string | undefined;
   const seen = compilerCreateSet<string>();
   const properties = compilerSnapshotDenseArray(
     options.properties,
@@ -6887,27 +6887,25 @@ function serverExactDeclassifyPolicy(
     const value = unwrapExpression(property.initializer);
     if (
       !name ||
-      (name !== 'door' && name !== 'ownerScope' && name !== 'purpose') ||
+      name !== 'ownerScope' ||
       compilerSetHas(seen, name) ||
       !ts.isStringLiteralLike(value)
     ) {
       return undefined;
     }
     compilerSetAdd(seen, name);
-    if (name === 'door') door = value.text;
-    else if (name === 'ownerScope') ownerScope = value.text;
-    else purpose = value.text;
+    ownerScope = value.text;
   }
   if (
-    door !== expectedDoor ||
-    purpose !== 'public-projection' ||
-    (ownerScope !== 'application' &&
-      ownerScope !== 'current-principal' &&
-      ownerScope !== 'current-tenant' &&
-      ownerScope !== 'framework')
+    ownerScope !== 'application' &&
+    ownerScope !== 'current-principal' &&
+    ownerScope !== 'current-tenant' &&
+    ownerScope !== 'framework'
   ) {
     return undefined;
   }
+  const door = expectedDoor;
+  const purpose = 'public-projection';
   return {
     door,
     label: `${purpose}:${door}:${ownerScope}`,

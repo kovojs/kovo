@@ -592,7 +592,7 @@ describe('@kovojs/drizzle static analysis context', () => {
         {
           fileName: 'src/session.mutations.ts',
           source: [
-            'import { DeclassifyPolicy, trustedReveal, type Secret } from "@kovojs/core";',
+            'import { DeclassifyPolicy, trustedReveal, type Secret } from "@kovojs/core/security";',
             '',
             'export const sessions = pgTable("sessions", {',
             '  id: text("id").primaryKey(),',
@@ -618,7 +618,7 @@ describe('@kovojs/drizzle static analysis context', () => {
             '  async handler(_input, request) {',
             '    const rows = await request.db.select({',
             '      id: sessions.id,',
-            '      digest: trustedReveal(sessions.token as unknown as Secret<string>, DeclassifyPolicy.create({ door: "trustedReveal", ownerScope: "application", purpose: "public-projection" })),',
+            '      digest: trustedReveal(sessions.token as unknown as Secret<string>, DeclassifyPolicy.forTrustedReveal({ ownerScope: "application" })),',
             '    }).from(sessions);',
             '    return { rows };',
             '  },',

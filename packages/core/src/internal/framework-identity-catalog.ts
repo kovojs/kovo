@@ -53,7 +53,9 @@ const SERVER_WRITE_GOVERNANCE_SPECIFIERS = [
   '@kovojs/server/write-governance',
 ] as const;
 const SERVER_COMMAND_SPECIFIERS = ['@kovojs/server'] as const;
-const CORE_STORAGE_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
+const CORE_STORAGE_SPECIFIERS = ['@kovojs/core/storage', '@kovojs/server'] as const;
+const CORE_SCOPED_KEY_SPECIFIERS = ['@kovojs/core', '@kovojs/server'] as const;
+const CORE_SECURITY_SPECIFIERS = ['@kovojs/core/security'] as const;
 
 const serverDataSourceFiles = [
   'agent',
@@ -179,9 +181,19 @@ function coreStorage(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/core',
-    packageSourceFiles: ['index', 'scoped-key', 'storage'],
+    packageSourceFiles: ['index', 'scoped-key', 'storage', 'storage-public'],
     scopes: ['authoring', 'data-plane'],
     specifiers: CORE_STORAGE_SPECIFIERS,
+  };
+}
+
+function coreScopedKey(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/core',
+    packageSourceFiles: ['index', 'scoped-key'],
+    scopes: ['authoring', 'data-plane'],
+    specifiers: CORE_SCOPED_KEY_SPECIFIERS,
   };
 }
 
@@ -189,9 +201,19 @@ function coreAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/core',
-    packageSourceFiles: ['index', 'secret'],
+    packageSourceFiles: ['index'],
     scopes: ['authoring'],
     specifiers: ['@kovojs/core'],
+  };
+}
+
+function coreSecurity(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/core',
+    packageSourceFiles: ['secret', 'security'],
+    scopes: ['authoring'],
+    specifiers: CORE_SECURITY_SPECIFIERS,
   };
 }
 
@@ -313,13 +335,14 @@ appendCatalogEntry(catalogEntries, serverData('stream'));
 appendCatalogFactories(catalogEntries, ['cmd', 'commandAllowlist', 'runCommand'], serverCommand);
 appendCatalogFactories(
   catalogEntries,
-  ['createFileSystemStorage', 'createS3CompatibleStorage', 'publicScopedKey'],
+  ['createFileSystemStorage', 'createS3CompatibleStorage'],
   coreStorage,
 );
+appendCatalogEntry(catalogEntries, coreScopedKey('publicScopedKey'));
+appendCatalogFactories(catalogEntries, ['component'], coreAuthoring);
 appendCatalogFactories(
   catalogEntries,
   [
-    'component',
     'DeclassifyPolicy',
     'declareOffWire',
     'publishToClient',
@@ -328,7 +351,7 @@ appendCatalogFactories(
     'secret',
     'trustedReveal',
   ],
-  coreAuthoring,
+  coreSecurity,
 );
 for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; index += 1) {
   const entry = securityOwnArrayEntry(generatedHeadlessClientExecutableIdentities, index);

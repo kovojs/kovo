@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DeclassifyPolicy,
   declareOffWire,
-  drainSecretRevealAuditFacts,
   isRedacted,
   isSecret,
   isUntrusted,
@@ -16,40 +15,33 @@ import {
   secret,
   trustedReveal,
   untrusted,
-  type JsonValue,
   type Redacted,
   type RedactedValue,
   type Secret,
   type SecretValue,
   type Untrusted,
   type UntrustedValue,
-} from './index.js';
+} from '@kovojs/core/security';
+import type { JsonValue } from './index.js';
+import { drainSecretRevealAuditFacts } from './internal/security.js';
 
 const MARKER = '[secret]';
-const SECRET_REVEAL_POLICY = DeclassifyPolicy.create({
-  door: 'secret.reveal',
+const SECRET_REVEAL_POLICY = DeclassifyPolicy.forSecretValue({
   ownerScope: 'application',
   purpose: 'server-computation',
 });
-const REVEAL_SECRET_POLICY = DeclassifyPolicy.create({
-  door: 'revealSecret',
+const REVEAL_SECRET_POLICY = DeclassifyPolicy.forRevealSecret({
   ownerScope: 'application',
   purpose: 'server-computation',
 });
-const TRUSTED_REVEAL_POLICY = DeclassifyPolicy.create({
-  door: 'trustedReveal',
+const TRUSTED_REVEAL_POLICY = DeclassifyPolicy.forTrustedReveal({
   ownerScope: 'application',
-  purpose: 'public-projection',
 });
-const UNTRUSTED_REVEAL_POLICY = DeclassifyPolicy.create({
-  door: 'untrusted.reveal',
+const UNTRUSTED_REVEAL_POLICY = DeclassifyPolicy.forUntrustedValue({
   ownerScope: 'application',
-  purpose: 'request-validation',
 });
-const REVEAL_UNTRUSTED_POLICY = DeclassifyPolicy.create({
-  door: 'revealUntrusted',
+const REVEAL_UNTRUSTED_POLICY = DeclassifyPolicy.forRevealUntrusted({
   ownerScope: 'application',
-  purpose: 'request-validation',
 });
 
 describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
@@ -188,23 +180,24 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(() => value.reveal(REVEAL_SECRET_POLICY as never)).toThrow(/exact door/u);
 
     let reads = 0;
-    const options = Object.defineProperty({}, 'door', {
+    const options = Object.defineProperty({}, 'ownerScope', {
       get() {
         reads += 1;
-        return 'secret.reveal';
+        return 'application';
       },
     });
-    Object.defineProperties(options, {
-      ownerScope: { enumerable: true, value: 'application' },
-      purpose: { enumerable: true, value: 'server-computation' },
+    Object.defineProperty(options, 'purpose', {
+      enumerable: true,
+      value: 'server-computation',
     });
-    expect(() => DeclassifyPolicy.create(options as never)).toThrow(/exactly|own data property/u);
+    expect(() => DeclassifyPolicy.forSecretValue(options as never)).toThrow(
+      /exactly|own data property/u,
+    );
     expect(reads).toBe(0);
   });
 
-  it('accepts only the closed door, purpose, and owner-scope registries', () => {
-    const policy = DeclassifyPolicy.create({
-      door: 'revealSecret',
+  it('accepts only the closed purpose and owner-scope registries for each fixed door', () => {
+    const policy = DeclassifyPolicy.forRevealSecret({
       ownerScope: 'current-tenant',
       purpose: 'credential-use',
     });
@@ -216,18 +209,24 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(Object.isFrozen(policy)).toBe(true);
 
     for (const options of [
-      { door: 'unknown', ownerScope: 'application', purpose: 'credential-use' },
-      { door: 'trustedReveal', ownerScope: 'application', purpose: 'credential-use' },
-      { door: 'revealSecret', ownerScope: 'anyone', purpose: 'credential-use' },
+      { ownerScope: 'application', purpose: 'public-projection' },
+      { ownerScope: 'anyone', purpose: 'credential-use' },
       {
-        door: 'revealSecret',
         ownerScope: 'application',
         purpose: 'credential-use',
         reason: 'structural extension',
       },
     ]) {
-      expect(() => DeclassifyPolicy.create(options as never)).toThrow(/declassif|exactly/iu);
+      expect(() => DeclassifyPolicy.forRevealSecret(options as never)).toThrow(
+        /declassif|exactly/iu,
+      );
     }
+    expect(() =>
+      DeclassifyPolicy.forTrustedReveal({
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      } as never),
+    ).toThrow(/exactly/u);
   });
 
   it('makes string reasons and structurally forged policies fail typechecking', () => {
@@ -248,6 +247,19 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
         ownerScope: 'application',
         purpose: 'server-computation',
       });
+      // @ts-expect-error fixed-purpose doors do not accept caller-authored purposes.
+      DeclassifyPolicy.forTrustedReveal({
+        ownerScope: 'application',
+        purpose: 'public-projection',
+      });
+      // @ts-expect-error one door's policy cannot authorize another reveal API.
+      revealSecret(
+        value,
+        DeclassifyPolicy.forSecretValue({
+          ownerScope: 'application',
+          purpose: 'server-computation',
+        }),
+      );
     };
     expect(compileOnly).toBeTypeOf('function');
   });

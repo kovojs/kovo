@@ -895,20 +895,25 @@ framework identity: `trustedSql` and `trustedHtml` require a static justificatio
 justification. App spelling, a same-named local, a cast, or a generated manifest cannot mint a door.
 
 **Typed declassification door (normative).** A secret or untrusted value may be unboxed only with an
-exact nominal `DeclassifyPolicy` constructed by `DeclassifyPolicy.create({ door, purpose,
-ownerScope })`. The policy vocabulary is closed. `door` is one of `revealSecret`,
-`revealUntrusted`, `secret.reveal`, `trustedReveal`, or `untrusted.reveal`; `ownerScope` is one of
-`application`, `current-principal`, `current-tenant`, or `framework`; and `purpose` is constrained
-by the door: `request-validation` only for the two untrusted-value doors, `public-projection` only
-for `trustedReveal`, and `credential-use` or `server-computation` only for the two secret-value
-doors. Free-form strings, structural object literals, copied fields, casts, subclasses, an unknown
-tuple, or a policy created for another door MUST NOT authorize release. TypeScript's nominal shape
-is an author-time guardrail; the module-private constructor token, exact runtime registry membership,
-closed tuple validation, and exact-door check own the runtime floor.
+exact nominal `DeclassifyPolicy` constructed by the door-specific static constructor exported from
+`@kovojs/core/security`: `forRevealSecret({ purpose, ownerScope })`,
+`forSecretValue({ purpose, ownerScope })`, `forTrustedReveal({ ownerScope })`,
+`forRevealUntrusted({ ownerScope })`, or `forUntrustedValue({ ownerScope })`. There is no generic
+public constructor that accepts a caller-selected door. The policy vocabulary is closed.
+`ownerScope` is one of `application`, `current-principal`, `current-tenant`, or `framework`.
+`forTrustedReveal` fixes purpose to `public-projection`; the two untrusted-value constructors fix it
+to `request-validation`; and the two secret-value constructors accept only `credential-use` or
+`server-computation`. Free-form strings, structural object literals, copied fields, casts,
+subclasses, surplus fields, an unknown tuple, or a policy created for another door MUST NOT
+authorize release. TypeScript's nominal shape is an author-time guardrail; the module-private
+constructor token, exact runtime registry membership, closed option validation, and exact-door
+check own the runtime floor.
 
-The finite compiler IR admits `trustedReveal` as `server.data.declassify` only for its exact direct
-named framework import and an inline exact `DeclassifyPolicy.create` tuple. The released expression
-and every finite enclosing enabling condition MUST both have integrity strictly above request input.
+The finite compiler IR admits `trustedReveal` as `server.data.declassify` only for exact direct
+named imports of `trustedReveal` and `DeclassifyPolicy` from `@kovojs/core/security` and the inline
+exact spelling `DeclassifyPolicy.forTrustedReveal({ ownerScope: <closed literal> })`. The released
+expression and every finite enclosing enabling condition MUST both have integrity strictly above
+request input.
 If either is request-derived, foreign executable, unresolved, or otherwise unknown, the operation
 MUST fail closed with KV449; an attacker-chosen condition may not select release of an otherwise
 constant secret. This is a robustness judgment over the existing normalized provenance relation,
@@ -1092,8 +1097,9 @@ type-only `Secret<T>` cast, so interpolation, template/string coercion, JSON and
 structured cloning, SSR output, and artifact capture encounter the existing fail-closed
 confidentiality doors. The box's module-private runtime registration owns this invariant; its type
 is author-time ergonomics only. A dependency credential should be revealed exactly once inside its
-boot-time credential factory through `revealSecret(value, DeclassifyPolicy.create({ door:
-'revealSecret', purpose: 'credential-use', ownerScope: 'application' }))`; the static call site
+boot-time credential factory through `revealSecret(value,
+DeclassifyPolicy.forRevealSecret({ purpose: 'credential-use', ownerScope: 'application' }))`; the
+static call site
 remains an audit-grade row in the existing
 `kovo explain --revealed` fact graph (and therefore also in its folded `--capabilities` view), while
 the bounded runtime reveal collector is observational evidence, not a complete process-lifetime

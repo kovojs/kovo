@@ -6,8 +6,22 @@ import {
   diagnosticDefinitionText,
   isDiagnosticCode,
 } from './diagnostics.js';
+import type {
+  DiagnosticCode,
+  DiagnosticSeverity,
+  RegisteredDiagnostic,
+} from '@kovojs/core/diagnostics';
 
 describe('diagnostic registry', () => {
+  it('publishes stable diagnostic carrier types from the task entrypoint', () => {
+    const code = 'KV201' satisfies DiagnosticCode;
+    const severity = 'error' satisfies DiagnosticSeverity;
+    const diagnostic = diagnosticDefinitions[code] satisfies RegisteredDiagnostic;
+
+    expect(diagnostic.code).toBe(code);
+    expect(diagnostic.severity).toBe(severity);
+  });
+
   it('does not expose mutable diagnostic severity or teaching authority', () => {
     const severity = diagnosticDefinitions.KV414.severity;
     const loweredForm = compilerDiagnosticTeachingSchemas.KV201.loweredForm;

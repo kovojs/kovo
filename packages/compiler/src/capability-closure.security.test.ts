@@ -409,7 +409,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core';
+          import { DeclassifyPolicy, trustedReveal } from '@kovojs/core/security';
           import { route } from '@kovojs/server';
           export const page = route('/closed-declassification', { render() {
             return [DeclassifyPolicy, trustedReveal];
@@ -446,11 +446,9 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'projection.ts',
         source: `
-          import { DeclassifyPolicy } from '@kovojs/core';
-          export const publicProjectionPolicy = DeclassifyPolicy.create({
-            door: 'trustedReveal',
+          import { DeclassifyPolicy } from '@kovojs/core/security';
+          export const publicProjectionPolicy = DeclassifyPolicy.forTrustedReveal({
             ownerScope: 'application',
-            purpose: 'public-projection',
           });
         `,
       },
@@ -470,11 +468,9 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'projection.ts',
         source: `
-          import { DeclassifyPolicy } from '@kovojs/core';
-          export const publicProjectionPolicy = DeclassifyPolicy.create({
-            door: 'trustedReveal',
+          import { DeclassifyPolicy } from '@kovojs/core/security';
+          export const publicProjectionPolicy = DeclassifyPolicy.forTrustedReveal({
             ownerScope: 'application',
-            purpose: 'public-projection',
           });
         `,
       },
@@ -487,17 +483,17 @@ describe('SPEC §6.6 capability-closed module graph', () => {
   it('closes every functional reveal door and namespace access from reachable code', () => {
     for (const source of [
       `
-        import { revealSecret, revealUntrusted } from '@kovojs/core';
+        import { revealSecret, revealUntrusted } from '@kovojs/core/security';
         import { route } from '@kovojs/server';
         export const page = route('/functional-declassification', {
           render() { return [revealSecret, revealUntrusted]; },
         });
       `,
       `
-        import * as core from '@kovojs/core';
+        import * as security from '@kovojs/core/security';
         import { route } from '@kovojs/server';
         export const page = route('/namespace-declassification', {
-          render() { return core.trustedReveal; },
+          render() { return security.trustedReveal; },
         });
       `,
     ]) {
@@ -524,7 +520,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       },
       {
         fileName: 'projection.ts',
-        source: `export { revealSecret as reveal } from '@kovojs/core';`,
+        source: `export { revealSecret as reveal } from '@kovojs/core/security';`,
       },
     ]);
 

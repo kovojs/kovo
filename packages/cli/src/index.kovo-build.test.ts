@@ -1936,11 +1936,11 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core';",
+          "import { DeclassifyPolicy, revealSecret, secret } from '@kovojs/core/security';",
           "import { createApp } from '@kovojs/server';",
           '',
           "const configSecret = secret('build-only-payment-key');",
-          "const credential = revealSecret(configSecret, DeclassifyPolicy.create({ door: 'revealSecret', ownerScope: 'application', purpose: 'credential-use' }));",
+          "const credential = revealSecret(configSecret, DeclassifyPolicy.forRevealSecret({ ownerScope: 'application', purpose: 'credential-use' }));",
           'void credential;',
           '',
           'export default createApp({ routes: [] });',
@@ -2161,7 +2161,7 @@ export default createApp({
       writeFileSync(
         appPath,
         [
-          "import { secret, trustedReveal as reveal } from '@kovojs/core';",
+          "import { secret, trustedReveal as reveal } from '@kovojs/core/security';",
           "import { createApp } from '@kovojs/server';",
           '',
           "const options = { justification: 'hidden behind a binding' };",

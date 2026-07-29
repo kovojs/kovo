@@ -1,7 +1,10 @@
 {
   "schema": "kovo-api-migration-ledger/v1",
   "resultSchema": "kovo-api-migration-result/v1",
-  "modes": ["check", "write"],
+  "modes": [
+    "check",
+    "write"
+  ],
   "refusalCategories": [
     "ambiguous-binding",
     "app-context",
@@ -13,6 +16,1282 @@
     "trust-decision"
   ],
   "batches": [
+    {
+      "id": "core-task-topology-v1",
+      "state": "removed",
+      "owner": "core-api",
+      "decisions": [
+        "@kovojs/core#AnyFunction",
+        "@kovojs/core#CheckedComponentDefinition",
+        "@kovojs/core#CheckedComponentPropsMetadata",
+        "@kovojs/core#CheckedComponentQueryBindings",
+        "@kovojs/core#ComponentCallArgs",
+        "@kovojs/core#ComponentCallSiteAttributes",
+        "@kovojs/core#ComponentPropMetadataType",
+        "@kovojs/core#ComponentPropMetadataValue",
+        "@kovojs/core#ComponentQueryBindingProps",
+        "@kovojs/core#ComponentQueryKeys",
+        "@kovojs/core#ComponentRenderInput",
+        "@kovojs/core#ComponentRenderSlots",
+        "@kovojs/core#createFileSystemStorage",
+        "@kovojs/core#createMemoryStorage",
+        "@kovojs/core#createS3CompatibleStorage",
+        "@kovojs/core#customVerifier",
+        "@kovojs/core#CustomWebhookVerifier",
+        "@kovojs/core#declareOffWire",
+        "@kovojs/core#DeclareOffWireOptions",
+        "@kovojs/core#DeclassifyDoorId",
+        "@kovojs/core#DeclassifyOwnerScope",
+        "@kovojs/core#DeclassifyPolicy",
+        "@kovojs/core#DeclassifyPolicyOptions",
+        "@kovojs/core#DeclassifyPurpose",
+        "@kovojs/core#DeclassifyPurposeFor",
+        "@kovojs/core#DiagnosticCode",
+        "@kovojs/core#DiagnosticSeverity",
+        "@kovojs/core#drainSecretRevealAuditFacts",
+        "@kovojs/core#ExactProps",
+        "@kovojs/core#FileSystemStorageOptions",
+        "@kovojs/core#HmacMultiSignature",
+        "@kovojs/core#HmacSecret",
+        "@kovojs/core#hmacSignature",
+        "@kovojs/core#HmacSignatureEncoding",
+        "@kovojs/core#HmacSignatureInspectionConfig",
+        "@kovojs/core#HmacSignatureOptions",
+        "@kovojs/core#HmacSignaturePayload",
+        "@kovojs/core#HmacSignaturePayloadContext",
+        "@kovojs/core#HmacSignatureTolerance",
+        "@kovojs/core#HmacSignatureVerifier",
+        "@kovojs/core#InvalidationSets",
+        "@kovojs/core#IsAny",
+        "@kovojs/core#isRedacted",
+        "@kovojs/core#isSecret",
+        "@kovojs/core#isUntrusted",
+        "@kovojs/core#MemoryStorageOptions",
+        "@kovojs/core#MutationRegistry",
+        "@kovojs/core#OptimisticDerivationSets",
+        "@kovojs/core#publishToClient",
+        "@kovojs/core#PublishToClientOptions",
+        "@kovojs/core#QueryArgsBinding",
+        "@kovojs/core#QueryRegistry",
+        "@kovojs/core#redacted",
+        "@kovojs/core#Redacted",
+        "@kovojs/core#RedactedOptions",
+        "@kovojs/core#RedactedValue",
+        "@kovojs/core#RegisteredDiagnostic",
+        "@kovojs/core#RequiredKeys",
+        "@kovojs/core#ResolvedHmacSignatureConfig",
+        "@kovojs/core#revealRedacted",
+        "@kovojs/core#revealSecret",
+        "@kovojs/core#revealUntrusted",
+        "@kovojs/core#RouteRegistry",
+        "@kovojs/core#S3CompatibleDeleteObjectInput",
+        "@kovojs/core#S3CompatibleGetObjectInput",
+        "@kovojs/core#S3CompatibleGetObjectOutput",
+        "@kovojs/core#S3CompatibleHeadObjectInput",
+        "@kovojs/core#S3CompatibleListedObject",
+        "@kovojs/core#S3CompatibleListObjectsInput",
+        "@kovojs/core#S3CompatibleListObjectsOutput",
+        "@kovojs/core#S3CompatibleObjectClient",
+        "@kovojs/core#S3CompatibleObjectMetadata",
+        "@kovojs/core#S3CompatiblePutObjectInput",
+        "@kovojs/core#S3CompatiblePutObjectOutput",
+        "@kovojs/core#S3CompatibleStorageOptions",
+        "@kovojs/core#secret",
+        "@kovojs/core#Secret",
+        "@kovojs/core#SecretRevealAuditFact",
+        "@kovojs/core#SecretValue",
+        "@kovojs/core#standardWebhooks",
+        "@kovojs/core#StandardWebhooksOptions",
+        "@kovojs/core#StorageBody",
+        "@kovojs/core#StorageCapability",
+        "@kovojs/core#StorageDeleteCapability",
+        "@kovojs/core#StorageGetResult",
+        "@kovojs/core#StorageObjectInfo",
+        "@kovojs/core#StoragePutCapability",
+        "@kovojs/core#StoragePutOptions",
+        "@kovojs/core#StoragePutResult",
+        "@kovojs/core#StorageReadCapability",
+        "@kovojs/core#StorageStreamResult",
+        "@kovojs/core#trustedReveal",
+        "@kovojs/core#TrustedRevealValue",
+        "@kovojs/core#untrusted",
+        "@kovojs/core#Untrusted",
+        "@kovojs/core#UntrustedValue",
+        "@kovojs/core#WebhookHeaders",
+        "@kovojs/core#WebhookHeaderValue",
+        "@kovojs/core#WebhookPayload",
+        "@kovojs/core#WebhookVerificationRequest",
+        "@kovojs/core#WebhookVerifier"
+      ],
+      "tool": {
+        "path": "scripts/migrate-core-api-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
+      },
+      "releaseNote": "docs/releases/core-task-topology-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured core migration result.",
+      "rules": [
+        {
+          "id": "internalize-any-function",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "AnyFunction"
+          },
+          "category": "app-context",
+          "reason": "AnyFunction was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-checked-component-definition",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "CheckedComponentDefinition"
+          },
+          "category": "app-context",
+          "reason": "CheckedComponentDefinition was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-checked-component-props-metadata",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "CheckedComponentPropsMetadata"
+          },
+          "category": "app-context",
+          "reason": "CheckedComponentPropsMetadata was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-checked-component-query-bindings",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "CheckedComponentQueryBindings"
+          },
+          "category": "app-context",
+          "reason": "CheckedComponentQueryBindings was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-call-args",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentCallArgs"
+          },
+          "category": "app-context",
+          "reason": "ComponentCallArgs was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-call-site-attributes",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentCallSiteAttributes"
+          },
+          "category": "app-context",
+          "reason": "ComponentCallSiteAttributes was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-prop-metadata-type",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentPropMetadataType"
+          },
+          "category": "app-context",
+          "reason": "ComponentPropMetadataType was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-prop-metadata-value",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentPropMetadataValue"
+          },
+          "category": "app-context",
+          "reason": "ComponentPropMetadataValue was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-query-binding-props",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentQueryBindingProps"
+          },
+          "category": "app-context",
+          "reason": "ComponentQueryBindingProps was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-query-keys",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentQueryKeys"
+          },
+          "category": "app-context",
+          "reason": "ComponentQueryKeys was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-render-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentRenderInput"
+          },
+          "category": "app-context",
+          "reason": "ComponentRenderInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-render-slots",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentRenderSlots"
+          },
+          "category": "app-context",
+          "reason": "ComponentRenderSlots was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-create-file-system-storage",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "createFileSystemStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createFileSystemStorage"
+          }
+        },
+        {
+          "id": "move-create-memory-storage",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "createMemoryStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createMemoryStorage"
+          }
+        },
+        {
+          "id": "move-create-s3-compatible-storage",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "createS3CompatibleStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createS3CompatibleStorage"
+          }
+        },
+        {
+          "id": "move-custom-verifier",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "customVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "customVerifier"
+          }
+        },
+        {
+          "id": "move-custom-webhook-verifier",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "CustomWebhookVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "CustomWebhookVerifier"
+          }
+        },
+        {
+          "id": "move-declare-off-wire",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "declareOffWire"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "declareOffWire"
+          }
+        },
+        {
+          "id": "move-declare-off-wire-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclareOffWireOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclareOffWireOptions"
+          }
+        },
+        {
+          "id": "move-declassify-door-id",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyDoorId"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyDoorId"
+          }
+        },
+        {
+          "id": "move-declassify-owner-scope",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyOwnerScope"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyOwnerScope"
+          }
+        },
+        {
+          "id": "move-declassify-policy",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyPolicy"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPolicy"
+          }
+        },
+        {
+          "id": "move-declassify-policy-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyPolicyOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPolicyOptions"
+          }
+        },
+        {
+          "id": "move-declassify-purpose",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyPurpose"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPurpose"
+          }
+        },
+        {
+          "id": "move-declassify-purpose-for",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DeclassifyPurposeFor"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "DeclassifyPurposeFor"
+          }
+        },
+        {
+          "id": "move-diagnostic-code",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DiagnosticCode"
+          },
+          "to": {
+            "specifier": "@kovojs/core/diagnostics",
+            "symbol": "DiagnosticCode"
+          }
+        },
+        {
+          "id": "move-diagnostic-severity",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "DiagnosticSeverity"
+          },
+          "to": {
+            "specifier": "@kovojs/core/diagnostics",
+            "symbol": "DiagnosticSeverity"
+          }
+        },
+        {
+          "id": "internalize-drain-secret-reveal-audit-facts",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "drainSecretRevealAuditFacts"
+          },
+          "category": "app-context",
+          "reason": "drainSecretRevealAuditFacts was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-exact-props",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ExactProps"
+          },
+          "category": "app-context",
+          "reason": "ExactProps was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-file-system-storage-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "FileSystemStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "FileSystemStorageOptions"
+          }
+        },
+        {
+          "id": "move-hmac-multi-signature",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacMultiSignature"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacMultiSignature"
+          }
+        },
+        {
+          "id": "move-hmac-secret",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSecret"
+          }
+        },
+        {
+          "id": "move-hmac-signature",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "hmacSignature"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "hmacSignature"
+          }
+        },
+        {
+          "id": "move-hmac-signature-encoding",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignatureEncoding"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureEncoding"
+          }
+        },
+        {
+          "id": "internalize-hmac-signature-inspection-config",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignatureInspectionConfig"
+          },
+          "category": "app-context",
+          "reason": "HmacSignatureInspectionConfig was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-hmac-signature-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignatureOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureOptions"
+          }
+        },
+        {
+          "id": "move-hmac-signature-payload",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignaturePayload"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignaturePayload"
+          }
+        },
+        {
+          "id": "move-hmac-signature-payload-context",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignaturePayloadContext"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignaturePayloadContext"
+          }
+        },
+        {
+          "id": "move-hmac-signature-tolerance",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignatureTolerance"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureTolerance"
+          }
+        },
+        {
+          "id": "move-hmac-signature-verifier",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "HmacSignatureVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "HmacSignatureVerifier"
+          }
+        },
+        {
+          "id": "internalize-invalidation-sets",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "InvalidationSets"
+          },
+          "category": "app-context",
+          "reason": "InvalidationSets was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-is-any",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "IsAny"
+          },
+          "category": "app-context",
+          "reason": "IsAny was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-is-redacted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "isRedacted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "isRedacted"
+          }
+        },
+        {
+          "id": "move-is-secret",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "isSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "isSecret"
+          }
+        },
+        {
+          "id": "move-is-untrusted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "isUntrusted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "isUntrusted"
+          }
+        },
+        {
+          "id": "move-memory-storage-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "MemoryStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "MemoryStorageOptions"
+          }
+        },
+        {
+          "id": "internalize-mutation-registry",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "MutationRegistry"
+          },
+          "category": "app-context",
+          "reason": "MutationRegistry was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-optimistic-derivation-sets",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "OptimisticDerivationSets"
+          },
+          "category": "app-context",
+          "reason": "OptimisticDerivationSets was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-publish-to-client",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "publishToClient"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "publishToClient"
+          }
+        },
+        {
+          "id": "move-publish-to-client-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "PublishToClientOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "PublishToClientOptions"
+          }
+        },
+        {
+          "id": "internalize-query-args-binding",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "QueryArgsBinding"
+          },
+          "category": "app-context",
+          "reason": "QueryArgsBinding was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-query-registry",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "QueryRegistry"
+          },
+          "category": "app-context",
+          "reason": "QueryRegistry was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-redacted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "redacted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "redacted"
+          }
+        },
+        {
+          "id": "move-redacted-type",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "Redacted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "Redacted"
+          }
+        },
+        {
+          "id": "move-redacted-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RedactedOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "RedactedOptions"
+          }
+        },
+        {
+          "id": "move-redacted-value",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RedactedValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "RedactedValue"
+          }
+        },
+        {
+          "id": "move-registered-diagnostic",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RegisteredDiagnostic"
+          },
+          "to": {
+            "specifier": "@kovojs/core/diagnostics",
+            "symbol": "RegisteredDiagnostic"
+          }
+        },
+        {
+          "id": "internalize-required-keys",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RequiredKeys"
+          },
+          "category": "app-context",
+          "reason": "RequiredKeys was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-resolved-hmac-signature-config",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ResolvedHmacSignatureConfig"
+          },
+          "category": "app-context",
+          "reason": "ResolvedHmacSignatureConfig was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-reveal-redacted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "revealRedacted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "revealRedacted"
+          }
+        },
+        {
+          "id": "move-reveal-secret",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "revealSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "revealSecret"
+          }
+        },
+        {
+          "id": "move-reveal-untrusted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "revealUntrusted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "revealUntrusted"
+          }
+        },
+        {
+          "id": "internalize-route-registry",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "RouteRegistry"
+          },
+          "category": "app-context",
+          "reason": "RouteRegistry was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-delete-object-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleDeleteObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleDeleteObjectInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-get-object-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleGetObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleGetObjectInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-get-object-output",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleGetObjectOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleGetObjectOutput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-head-object-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleHeadObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleHeadObjectInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-listed-object",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleListedObject"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListedObject was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-list-objects-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleListObjectsInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListObjectsInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-list-objects-output",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleListObjectsOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListObjectsOutput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-s3-compatible-object-client",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleObjectClient"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "S3CompatibleObjectClient"
+          }
+        },
+        {
+          "id": "internalize-s3-compatible-object-metadata",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleObjectMetadata"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleObjectMetadata was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-put-object-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatiblePutObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatiblePutObjectInput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-s3-compatible-put-object-output",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatiblePutObjectOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatiblePutObjectOutput was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-s3-compatible-storage-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "S3CompatibleStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "S3CompatibleStorageOptions"
+          }
+        },
+        {
+          "id": "move-secret",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "secret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "secret"
+          }
+        },
+        {
+          "id": "move-secret-type",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "Secret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "Secret"
+          }
+        },
+        {
+          "id": "internalize-secret-reveal-audit-fact",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "SecretRevealAuditFact"
+          },
+          "category": "app-context",
+          "reason": "SecretRevealAuditFact was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "move-secret-value",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "SecretValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "SecretValue"
+          }
+        },
+        {
+          "id": "move-standard-webhooks",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "standardWebhooks"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "standardWebhooks"
+          }
+        },
+        {
+          "id": "move-standard-webhooks-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StandardWebhooksOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "StandardWebhooksOptions"
+          }
+        },
+        {
+          "id": "move-storage-body",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageBody"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageBody"
+          }
+        },
+        {
+          "id": "move-storage-capability",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageCapability"
+          }
+        },
+        {
+          "id": "move-storage-delete-capability",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageDeleteCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageDeleteCapability"
+          }
+        },
+        {
+          "id": "move-storage-get-result",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageGetResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageGetResult"
+          }
+        },
+        {
+          "id": "move-storage-object-info",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageObjectInfo"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageObjectInfo"
+          }
+        },
+        {
+          "id": "move-storage-put-capability",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StoragePutCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutCapability"
+          }
+        },
+        {
+          "id": "move-storage-put-options",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StoragePutOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutOptions"
+          }
+        },
+        {
+          "id": "move-storage-put-result",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StoragePutResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutResult"
+          }
+        },
+        {
+          "id": "move-storage-read-capability",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageReadCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageReadCapability"
+          }
+        },
+        {
+          "id": "move-storage-stream-result",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "StorageStreamResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageStreamResult"
+          }
+        },
+        {
+          "id": "move-trusted-reveal",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "trustedReveal"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "trustedReveal"
+          }
+        },
+        {
+          "id": "move-trusted-reveal-value",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "TrustedRevealValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "TrustedRevealValue"
+          }
+        },
+        {
+          "id": "move-untrusted",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "untrusted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "untrusted"
+          }
+        },
+        {
+          "id": "move-untrusted-type",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "Untrusted"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "Untrusted"
+          }
+        },
+        {
+          "id": "move-untrusted-value",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "UntrustedValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "UntrustedValue"
+          }
+        },
+        {
+          "id": "move-webhook-headers",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "WebhookHeaders"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookHeaders"
+          }
+        },
+        {
+          "id": "move-webhook-header-value",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "WebhookHeaderValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookHeaderValue"
+          }
+        },
+        {
+          "id": "move-webhook-payload",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "WebhookPayload"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookPayload"
+          }
+        },
+        {
+          "id": "move-webhook-verification-request",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "WebhookVerificationRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookVerificationRequest"
+          }
+        },
+        {
+          "id": "move-webhook-verifier",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "WebhookVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookVerifier"
+          }
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-core-api-v1.mjs --check scripts/fixtures/api-migrations/core-task-topology-v1"
+      }
+    },
     {
       "id": "style-opaque-handles",
       "state": "removed",
@@ -44,8 +1323,12 @@
       "tool": {
         "path": "scripts/migrate-style-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": ["--check"],
-        "writeArgs": ["--write"]
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
       },
       "releaseNote": "docs/releases/style-api-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
@@ -274,8 +1557,12 @@
         }
       ],
       "fixtures": {
-        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
-        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
+        "rewrites": [
+          "scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"
+        ]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -331,8 +1618,12 @@
       "tool": {
         "path": "scripts/migrate-ui-headless-icons-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": ["--check"],
-        "writeArgs": ["--write"]
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
       },
       "rules": [
         {

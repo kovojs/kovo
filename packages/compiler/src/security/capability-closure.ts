@@ -308,7 +308,7 @@ const requestClosedDeclassificationPermission: FrameworkPermission = {
   capabilities: ['declassification'],
   disposition: 'request-closed',
   reason:
-    '@kovojs/core declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
+    '@kovojs/core/security declassification policy and reveal doors are unavailable to untrusted-data-reachable modules',
 };
 const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
   'agent-tool-callback',
@@ -1508,7 +1508,7 @@ function frameworkPackageVerdict(
     const id = frameworkMemberId(packageName, subpath, name);
     if (
       packageName === '@kovojs/core' &&
-      subpath === '.' &&
+      subpath === './security' &&
       requestClosedDeclassificationExports.has(name)
     ) {
       // SPEC §6.6: construction and use of a declassification door are both transitively closed

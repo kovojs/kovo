@@ -189,12 +189,15 @@ export interface ResolvedHmacSignatureConfig {
   toleranceSeconds?: number;
 }
 
-/** A configured HMAC-signature verifier: sanitized inspection metadata, resolved config, and async verification. */
+/**
+ * A configured HMAC-signature verifier.
+ *
+ * Provider signing material and resolved inspection records remain framework-internal. App code
+ * receives only the scheme identity and verify operation it can act on (SPEC §6.6/§9.1).
+ */
 export interface HmacSignatureVerifier {
-  config: HmacSignatureInspectionConfig;
   kind: 'hmac';
   name: string;
-  resolved: ResolvedHmacSignatureConfig;
   scheme: string;
   verify(request: WebhookVerificationRequest): Promise<boolean>;
 }
@@ -219,6 +222,13 @@ const maximumHmacSignatureCandidateCharacters = 256;
 const maximumHmacSignatureHeaderCharacters = 16_384;
 const maximumWebhookHeaderValues = 100;
 const frameworkHmacSignatureVerifiers = securityWeakSet<object>();
+const frameworkHmacSignatureVerifierInspections = securityMap<
+  HmacSignatureVerifier,
+  Readonly<{
+    config: HmacSignatureInspectionConfig;
+    resolved: ResolvedHmacSignatureConfig;
+  }>
+>();
 // Module-private authority used only by framework presets whose provider protocol fixes the
 // timestamp at a non-prefix position in the signed payload. App code cannot mint or import this
 // sentinel, so public hmacSignature() always owns timestamp binding when tolerance is configured.
@@ -240,6 +250,23 @@ export function isFrameworkHmacSignatureVerifier(value: unknown): value is HmacS
     value !== null &&
     securityWeakSetHas(frameworkHmacSignatureVerifiers, value)
   );
+}
+
+/**
+ * @internal Return the immutable, non-secret inspection record for one genuine verifier.
+ *
+ * This is an explain/audit bridge, not app authority. Public verifier values deliberately do not
+ * expose the record as mutable or recursively public object state.
+ */
+export function inspectFrameworkHmacSignatureVerifier(value: HmacSignatureVerifier): Readonly<{
+  config: HmacSignatureInspectionConfig;
+  resolved: ResolvedHmacSignatureConfig;
+}> {
+  const inspection = securityMapGet(frameworkHmacSignatureVerifierInspections, value);
+  if (inspection === undefined || !securityWeakSetHas(frameworkHmacSignatureVerifiers, value)) {
+    throw new TypeError('Expected a framework-created HMAC signature verifier.');
+  }
+  return inspection;
 }
 
 /**
@@ -299,17 +326,21 @@ function createHmacSignature(
   });
 
   const verifier: HmacSignatureVerifier = {
-    config,
     kind: 'hmac',
     name,
-    resolved,
     scheme,
     async verify(request: WebhookVerificationRequest) {
       return verifyHmacSignature(runtimeConfig, snapshot.authority, request, timestampBinding);
     },
   };
   securityWeakSetAdd(frameworkHmacSignatureVerifiers, verifier);
-  return freezeSecurityValue(verifier);
+  const frozenVerifier = freezeSecurityValue(verifier);
+  securityMapSet(
+    frameworkHmacSignatureVerifierInspections,
+    frozenVerifier,
+    freezeSecurityValue({ config, resolved }),
+  );
+  return frozenVerifier;
 }
 
 function snapshotHmacSignatureOptions(options: HmacSignatureOptions): SnapshotHmacSignatureOptions {

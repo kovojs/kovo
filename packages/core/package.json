@@ -34,7 +34,11 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./diagnostics": "./src/diagnostics-public.ts",
     "./generated": "./src/generated.ts",
+    "./security": "./src/security.ts",
+    "./storage": "./src/storage-public.ts",
+    "./webhooks": "./src/webhooks.ts",
     "./internal/component-render": "./src/internal/component-render.ts",
     "./internal/agent-docs": "./src/internal/agent-docs.ts",
     "./internal/client-module-url": "./src/internal/client-module-url.ts",
@@ -57,6 +61,7 @@
     "./internal/query-shape-source": "./src/internal/query-shape-source.ts",
     "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
     "./internal/route-pattern": "./src/internal/route-pattern.ts",
+    "./internal/security": "./src/internal/security.ts",
     "./internal/security-markers": "./src/internal/security-markers.ts",
     "./internal/security-operation-ir": "./src/internal/security-operation-ir.ts",
     "./internal/security-url": "./src/internal/security-url.ts",
@@ -75,9 +80,25 @@
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
       },
+      "./diagnostics": {
+        "types": "./dist/diagnostics-public.d.mts",
+        "default": "./dist/diagnostics-public.mjs"
+      },
       "./generated": {
         "types": "./dist/generated.d.mts",
         "default": "./dist/generated.mjs"
+      },
+      "./security": {
+        "types": "./dist/security.d.mts",
+        "default": "./dist/security.mjs"
+      },
+      "./storage": {
+        "types": "./dist/storage-public.d.mts",
+        "default": "./dist/storage-public.mjs"
+      },
+      "./webhooks": {
+        "types": "./dist/webhooks.d.mts",
+        "default": "./dist/webhooks.mjs"
       },
       "./internal/component-render": {
         "types": "./dist/internal/component-render.d.mts",
@@ -167,6 +188,10 @@
         "types": "./dist/internal/route-pattern.d.mts",
         "default": "./dist/internal/route-pattern.mjs"
       },
+      "./internal/security": {
+        "types": "./dist/internal/security.d.mts",
+        "default": "./dist/internal/security.mjs"
+      },
       "./internal/security-markers": {
         "types": "./dist/internal/security-markers.d.mts",
         "default": "./dist/internal/security-markers.mjs"
@@ -214,7 +239,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts --dts",
+    "build:dist": "vp pack src/diagnostics-public.ts src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/cache-influence.ts src/internal/classifier-verdict.ts src/internal/client-module-url-intrinsics.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/emission.ts src/internal/event.ts src/internal/filesystem-intrinsics.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/mcp-stdio.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token-intrinsics.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-operation-ir.ts src/internal/security-url.ts src/internal/security-witness-intrinsics.ts src/internal/security.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/verifier.ts src/internal/wire-input-grammar.ts src/internal/wire-json.ts src/security.ts src/storage-public.ts src/webhooks.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {
