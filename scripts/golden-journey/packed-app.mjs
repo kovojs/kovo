@@ -1,0 +1,1114 @@
+import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+import ts from 'typescript';
+
+import { measureProcessTreeCommand } from '../lib/process-tree-rss.mjs';
+import { repoRoot } from '../release-packages.mjs';
+import {
+  discoverEnvSecrets,
+  preserveRedactedFailureArtifact,
+  redactSecrets,
+} from './artifacts.mjs';
+
+export const packedAppsScenario = 'packed-apps';
+export const PACKED_APPS_REPORT_SCHEMA = 'kovo.golden-journey/packed-apps/v1';
+export const PACKED_APPS_VARIANT_SCHEMA = 'kovo.golden-journey/packed-app/v1';
+export const AXE_WCAG_22_AA_TAGS = Object.freeze([
+  'wcag2a',
+  'wcag2aa',
+  'wcag21a',
+  'wcag21aa',
+  'wcag22aa',
+]);
+
+const DIALECTS = Object.freeze(['postgres', 'sqlite']);
+const READY_TIMEOUT_MS = 90_000;
+const FIRST_200_TIMEOUT_MS = 90_000;
+const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
+export const PACKED_JOURNEY_PACKAGE_NAMES = Object.freeze([
+  '@kovojs/better-auth',
+  '@kovojs/browser',
+  '@kovojs/cli',
+  '@kovojs/compiler',
+  '@kovojs/core',
+  '@kovojs/drizzle',
+  '@kovojs/headless-ui',
+  '@kovojs/icons',
+  '@kovojs/server',
+  '@kovojs/style',
+  '@kovojs/ui',
+  '@kovojs/verify',
+  'create-kovo',
+]);
+
+export async function runPackedAppJourneys({
+  artifactRoot,
+  commandRunner = runMeasuredCommand,
+  dialects = DIALECTS,
+  packedPackages,
+  samples = 1,
+  temporaryParent = tmpdir(),
+} = {}) {
+  if (!(packedPackages instanceof Map)) {
+    throw new TypeError('packed app journey requires an authenticated package Map');
+  }
+  requirePackedPackages(packedPackages);
+  const normalizedDialects = normalizeDialects(dialects);
+  if (!Number.isSafeInteger(samples) || samples < 1 || samples > 20) {
+    throw new TypeError('packed app journey samples must be an integer from 1 through 20');
+  }
+  const resolvedArtifactRoot = path.resolve(artifactRoot ?? '.release/devex/golden-journey');
+  mkdirSync(resolvedArtifactRoot, { recursive: true });
+
+  const variants = [];
+  for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+    for (const dialect of normalizedDialects) {
+      variants.push(
+        await runPackedAppVariant({
+          artifactRoot: resolvedArtifactRoot,
+          commandRunner,
+          dialect,
+          packedPackages,
+          sampleIndex,
+          temporaryParent,
+        }),
+      );
+    }
+  }
+  const report = {
+    schema: PACKED_APPS_REPORT_SCHEMA,
+    scenario: packedAppsScenario,
+    sampleCount: samples,
+    packageSet: packageSetIdentity(packedPackages),
+    variants,
+    pass: variants.every((variant) => variant.pass),
+  };
+  const findings = validatePackedAppsReport(report);
+  if (findings.length > 0) {
+    throw new Error(`packed app journey produced an invalid report:\n- ${findings.join('\n- ')}`);
+  }
+  return Object.freeze(report);
+}
+
+export async function runPackedAppVariant({
+  artifactRoot,
+  commandRunner,
+  dialect,
+  packedPackages,
+  sampleIndex,
+  temporaryParent,
+}) {
+  const temporaryRoot = mkdtempSync(path.join(temporaryParent, `kovo-golden-${dialect}-`));
+  const creatorRoot = path.join(temporaryRoot, 'creator');
+  const appRoot = path.join(temporaryRoot, 'app');
+  const storeRoot = path.join(temporaryRoot, 'pnpm-store');
+  const transcripts = [];
+  const phases = [];
+  let devServer;
+  let secretInventory = Object.freeze({ keys: Object.freeze([]), values: Object.freeze([]) });
+  let screenshot = null;
+  let accessibility = null;
+  let concepts = null;
+  let install = null;
+
+  try {
+    mkdirSync(path.join(creatorRoot, 'node_modules', '@kovojs'), { recursive: true });
+    materializePackedPackage(
+      packedPackages.get('create-kovo'),
+      path.join(creatorRoot, 'node_modules/create-kovo'),
+    );
+    materializePackedPackage(
+      packedPackages.get('@kovojs/core'),
+      path.join(creatorRoot, 'node_modules/@kovojs/core'),
+    );
+    const creator = path.join(creatorRoot, 'node_modules/create-kovo/dist/index.mjs');
+    if (!existsSync(creator)) throw new Error('authenticated create-kovo tarball has no dist bin');
+    const createArgs = [
+      creator,
+      appRoot,
+      '--name',
+      `kovo-golden-${dialect}-${String(sampleIndex + 1)}`,
+      '--disable-git',
+      dialect === 'sqlite' ? '--sqlite' : '--postgres',
+      ...(dialect === 'sqlite' ? ['--experimental-sqlite'] : []),
+    ];
+    const create = commandRunner([process.execPath, ...createArgs], {
+      cwd: temporaryRoot,
+      phase: 'create',
+    });
+    transcripts.push(transcript('create', create));
+    phases.push(requirePackedPhaseSuccess('create', create));
+
+    secretInventory = discoverEnvSecrets(appRoot);
+    const scaffoldSnapshot = snapshotPreCrudState(appRoot, {
+      creatorArgs: createArgs.slice(1),
+      creatorOutput: `${create.stdout}\n${create.stderr}`,
+    });
+    rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPackages);
+
+    const installObservation = commandRunner(
+      ['pnpm', 'install', '--ignore-workspace', '--no-frozen-lockfile', '--store-dir', storeRoot],
+      {
+        cwd: appRoot,
+        phase: 'install',
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      },
+    );
+    transcripts.push(transcript('install', installObservation));
+    phases.push(requirePackedPhaseSuccess('install', installObservation));
+    install = collectInstalledDependencyMetrics(appRoot, commandRunner);
+    install.durationMs = installObservation.durationMs;
+    install.peakProcessTreeRssBytes = installObservation.peakRssBytes;
+
+    const port = await reserveLoopbackPort();
+    devServer = startDevServer({
+      appRoot,
+      port,
+      secretValues: secretInventory.values,
+    });
+    concepts = conceptCensus(appRoot, {
+      ...scaffoldSnapshot,
+      beforeCrudEnvDigest: digestFile(path.join(appRoot, '.env')),
+    });
+    const readyPromise = devServer.waitForReady(READY_TIMEOUT_MS);
+    const first200Promise = waitForFirst200(devServer, FIRST_200_TIMEOUT_MS).then(
+      (value) => ({ error: null, value }),
+      (error) => ({ error, value: null }),
+    );
+    const ready = await readyPromise;
+    phases.push({
+      durationMs: ready.durationMs,
+      name: 'ready',
+      status: 0,
+    });
+    const first200Outcome = await first200Promise;
+    if (first200Outcome.error !== null) throw first200Outcome.error;
+    const first200 = first200Outcome.value;
+    phases.push({
+      durationMs: first200.durationMs,
+      name: 'first-200',
+      status: 0,
+    });
+
+    const browser = await runBrowserJourney({
+      appRoot,
+      artifactRoot,
+      dialect,
+      origin: devServer.origin,
+      sampleIndex,
+    });
+    screenshot = browser.screenshot;
+    accessibility = browser.accessibility;
+    phases.push({
+      durationMs: browser.loginDurationMs,
+      name: 'login',
+      status: 0,
+    });
+    phases.push({
+      durationMs: browser.crudDurationMs,
+      name: 'crud',
+      status: 0,
+    });
+    await devServer.stop();
+    transcripts.push({
+      phase: 'dev',
+      signal: devServer.exit()?.signal ?? null,
+      status: devServer.exit()?.status ?? 0,
+      stderr: devServer.transcript().stderr,
+      stdout: devServer.transcript().stdout,
+    });
+    devServer = undefined;
+
+    for (const [name, command] of [
+      ['test', ['pnpm', 'run', 'test']],
+      ['check', ['pnpm', 'run', 'check']],
+      ['build', ['pnpm', 'run', 'build:prod']],
+    ]) {
+      const observation = commandRunner(command, {
+        cwd: appRoot,
+        phase: name,
+        timeoutMs: COMMAND_TIMEOUT_MS,
+      });
+      transcripts.push(transcript(name, observation));
+      phases.push(requirePackedPhaseSuccess(name, observation));
+    }
+
+    return Object.freeze({
+      schema: PACKED_APPS_VARIANT_SCHEMA,
+      dialect,
+      sampleIndex,
+      pass: true,
+      phases,
+      install,
+      concepts,
+      styledUi: screenshot,
+      accessibility,
+      failure: null,
+    });
+  } catch (error) {
+    if (error instanceof JourneyPhaseError && error.evidence !== null) {
+      phases.push(error.evidence);
+    }
+    if (devServer !== undefined) {
+      await devServer.stop();
+      transcripts.push({
+        phase: 'dev',
+        signal: devServer.exit()?.signal ?? null,
+        status: devServer.exit()?.status ?? null,
+        stderr: devServer.transcript().stderr,
+        stdout: devServer.transcript().stdout,
+      });
+    }
+    const redactedMessage = redactSecrets(
+      error instanceof Error ? error.message : String(error),
+      secretInventory.values,
+    );
+    const label = `${dialect}-${String(sampleIndex + 1)}`;
+    const artifact = existsSync(appRoot)
+      ? preserveRedactedFailureArtifact({
+          appRoot,
+          artifactRoot,
+          label,
+          transcripts,
+        })
+      : null;
+    return Object.freeze({
+      schema: PACKED_APPS_VARIANT_SCHEMA,
+      dialect,
+      sampleIndex,
+      pass: false,
+      phases,
+      install,
+      concepts,
+      styledUi: screenshot,
+      accessibility,
+      failure: {
+        artifact:
+          artifact === null
+            ? null
+            : {
+                directory: path
+                  .relative(artifactRoot, artifact.directory)
+                  .split(path.sep)
+                  .join('/'),
+                manifest: path.relative(artifactRoot, artifact.manifest).split(path.sep).join('/'),
+                sha256: artifact.sha256,
+              },
+        message: boundedText(redactedMessage, 4_096),
+        phase: error instanceof JourneyPhaseError ? error.phase : 'infrastructure',
+      },
+    });
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+export function rewriteScaffoldDependenciesToPackedTarballs(appRoot, packedPackages) {
+  const packageJsonPath = path.join(appRoot, 'package.json');
+  const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const overrides = { ...manifest.pnpm?.overrides };
+  for (const [name, pkg] of [...packedPackages].sort(([left], [right]) =>
+    compareUtf8(left, right),
+  )) {
+    const specifier = pathToFileURL(pkg.tarballPath).href;
+    for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+      if (manifest[field] && Object.hasOwn(manifest[field], name)) {
+        manifest[field][name] = specifier;
+      }
+    }
+    if (name.startsWith('@kovojs/')) overrides[name] = specifier;
+  }
+  manifest.pnpm = { ...manifest.pnpm, overrides };
+  writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
+export function conceptCensus(appRoot, snapshot) {
+  const imports = new Set();
+  const importedBindings = new Set();
+  for (const relative of authoredSourceFiles(appRoot)) {
+    const source = readFileSync(path.join(appRoot, ...relative.split('/')), 'utf8');
+    const sourceFile = ts.createSourceFile(
+      relative,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      relative.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    );
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+        continue;
+      }
+      const specifier = statement.moduleSpecifier.text;
+      if (!specifier.startsWith('@kovojs/')) continue;
+      imports.add(specifier);
+      const clause = statement.importClause;
+      if (clause?.name) importedBindings.add(`${specifier}#${clause.name.text}`);
+      const bindings = clause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          importedBindings.add(`${specifier}#${element.name.text}`);
+        }
+      } else if (bindings && ts.isNamespaceImport(bindings)) {
+        importedBindings.add(`${specifier}#*`);
+      }
+    }
+  }
+  const configKeys = configObjectPaths(path.join(appRoot, 'kovo.config.ts'));
+  const beforeCrudEnvDigest = snapshot.beforeCrudEnvDigest;
+  const envEdits =
+    beforeCrudEnvDigest === snapshot.scaffoldEnvDigest
+      ? []
+      : [{ kind: 'content-changed', path: '.env' }];
+  return Object.freeze({
+    schema: 'kovo.golden-journey/concept-census/v1',
+    frameworkImports: Object.freeze([...imports].sort(compareUtf8)),
+    frameworkBindings: Object.freeze([...importedBindings].sort(compareUtf8)),
+    configKeys: Object.freeze(configKeys),
+    creatorInputs: Object.freeze([...snapshot.creatorInputs]),
+    interactivePrompts: Object.freeze([...snapshot.interactivePrompts]),
+    environmentEdits: Object.freeze(envEdits),
+    counts: Object.freeze({
+      frameworkImports: imports.size,
+      frameworkBindings: importedBindings.size,
+      configKeys: configKeys.length,
+      creatorInputs: snapshot.creatorInputs.length,
+      interactivePrompts: snapshot.interactivePrompts.length,
+      environmentEdits: envEdits.length,
+    }),
+  });
+}
+
+export function validatePackedAppsReport(report) {
+  const findings = [];
+  if (report?.schema !== PACKED_APPS_REPORT_SCHEMA) {
+    findings.push(`schema must be ${PACKED_APPS_REPORT_SCHEMA}`);
+  }
+  if (report?.scenario !== packedAppsScenario) findings.push('scenario must be packed-apps');
+  if (!Number.isSafeInteger(report?.sampleCount) || report.sampleCount < 1) {
+    findings.push('sampleCount must be positive');
+  }
+  const packageNames = new Set();
+  if (!Array.isArray(report?.packageSet)) {
+    findings.push('packageSet must be an authenticated package identity array');
+  } else {
+    for (const [index, pkg] of report.packageSet.entries()) {
+      if (
+        typeof pkg?.name !== 'string' ||
+        typeof pkg?.version !== 'string' ||
+        !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(pkg?.sha512 ?? '')
+      ) {
+        findings.push(`packageSet[${String(index)}] has invalid identity evidence`);
+        continue;
+      }
+      if (packageNames.has(pkg.name)) findings.push(`packageSet duplicates ${pkg.name}`);
+      packageNames.add(pkg.name);
+    }
+    for (const packageName of PACKED_JOURNEY_PACKAGE_NAMES) {
+      if (!packageNames.has(packageName)) findings.push(`packageSet omits ${packageName}`);
+    }
+  }
+  if (!Array.isArray(report?.variants)) {
+    findings.push('variants must be an array');
+    return findings;
+  }
+  const variantKeys = new Set();
+  for (const [index, variant] of report.variants.entries()) {
+    const label = `variants[${index}]`;
+    if (variant?.schema !== PACKED_APPS_VARIANT_SCHEMA) {
+      findings.push(`${label}.schema is invalid`);
+    }
+    if (!DIALECTS.includes(variant?.dialect)) findings.push(`${label}.dialect is invalid`);
+    if (!Number.isSafeInteger(variant?.sampleIndex) || variant.sampleIndex < 0) {
+      findings.push(`${label}.sampleIndex is invalid`);
+    }
+    if (typeof variant?.pass !== 'boolean') findings.push(`${label}.pass must be boolean`);
+    if (!Array.isArray(variant?.phases)) {
+      findings.push(`${label}.phases must be an array`);
+    } else {
+      const phaseNames = new Set();
+      for (const [phaseIndex, phase] of variant.phases.entries()) {
+        if (
+          typeof phase?.name !== 'string' ||
+          !Number.isFinite(phase?.durationMs) ||
+          phase.durationMs < 0 ||
+          (phase.status !== null && !Number.isInteger(phase.status)) ||
+          (phase.peakProcessTreeRssBytes !== undefined &&
+            (!Number.isFinite(phase.peakProcessTreeRssBytes) || phase.peakProcessTreeRssBytes < 0))
+        ) {
+          findings.push(`${label}.phases[${String(phaseIndex)}] has invalid evidence`);
+        }
+        if (phaseNames.has(phase?.name)) {
+          findings.push(`${label}.phases duplicates ${String(phase?.name)}`);
+        }
+        phaseNames.add(phase?.name);
+      }
+    }
+    const variantKey = `${String(variant?.sampleIndex)}:${String(variant?.dialect)}`;
+    if (variantKeys.has(variantKey)) findings.push(`${label} duplicates ${variantKey}`);
+    variantKeys.add(variantKey);
+    if (variant?.pass === true) {
+      for (const required of [
+        'create',
+        'install',
+        'ready',
+        'first-200',
+        'login',
+        'crud',
+        'test',
+        'check',
+        'build',
+      ]) {
+        if (!variant.phases.some((phase) => phase.name === required && phase.status === 0)) {
+          findings.push(`${label} is missing successful phase ${required}`);
+        }
+      }
+      if (variant.failure !== null) findings.push(`${label}.failure must be null on success`);
+      if (variant.accessibility?.violations !== 0) {
+        findings.push(`${label} did not prove an axe-clean styled UI`);
+      }
+      if (variant.concepts?.counts?.environmentEdits !== 0) {
+        findings.push(`${label} required an undocumented environment edit`);
+      }
+    } else if (
+      typeof variant?.failure?.phase !== 'string' ||
+      typeof variant?.failure?.message !== 'string'
+    ) {
+      findings.push(`${label}.failure is invalid`);
+    }
+  }
+  if (Number.isSafeInteger(report.sampleCount) && report.sampleCount > 0) {
+    for (let sampleIndex = 0; sampleIndex < report.sampleCount; sampleIndex += 1) {
+      for (const dialect of DIALECTS) {
+        if (!variantKeys.has(`${String(sampleIndex)}:${dialect}`)) {
+          findings.push(`variants omit sample ${String(sampleIndex)} ${dialect}`);
+        }
+      }
+    }
+    if (report.variants.length !== report.sampleCount * DIALECTS.length) {
+      findings.push('variants do not contain exactly both dialects for every sample');
+    }
+  }
+  const expectedPass = report.variants.every((variant) => variant.pass);
+  if (report?.pass !== expectedPass) findings.push('pass does not match variant outcomes');
+  return findings;
+}
+
+export function collectInstalledDependencyMetrics(appRoot, commandRunner = runMeasuredCommand) {
+  const manifest = JSON.parse(readFileSync(path.join(appRoot, 'package.json'), 'utf8'));
+  const directNames = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {}),
+  ]);
+  const list = commandRunner(['pnpm', 'list', '--prod', '--depth', 'Infinity', '--json'], {
+    cwd: appRoot,
+    phase: 'dependency-census',
+    timeoutMs: 120_000,
+  });
+  if (list.exitCode !== 0 || list.signal || list.error) {
+    throw new JourneyPhaseError(
+      'dependency-census',
+      commandFailureMessage('dependency-census', list),
+    );
+  }
+  let roots;
+  try {
+    roots = JSON.parse(list.stdout);
+  } catch {
+    throw new JourneyPhaseError('dependency-census', 'pnpm list did not return JSON');
+  }
+  const transitiveIdentities = new Set();
+  const visit = (name, node, depth) => {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return;
+    if (depth > 0 && typeof node.version === 'string') {
+      transitiveIdentities.add(`${name}@${node.version}`);
+    }
+    for (const field of ['dependencies', 'optionalDependencies']) {
+      for (const [dependencyName, dependency] of Object.entries(node[field] ?? {})) {
+        visit(dependencyName, dependency, depth + 1);
+      }
+    }
+  };
+  for (const root of Array.isArray(roots) ? roots : [roots]) {
+    for (const [dependencyName, dependency] of Object.entries(root?.dependencies ?? {})) {
+      visit(dependencyName, dependency, 0);
+    }
+  }
+  const installTree = directoryPhysicalBytes(path.join(appRoot, 'node_modules'));
+  return {
+    directProductionDependencies: directNames.size,
+    transitiveProductionDependencies: transitiveIdentities.size,
+    installedBytes: installTree.bytes,
+    installedFiles: installTree.files,
+  };
+}
+
+export function packageSetIdentity(packedPackages) {
+  return [...packedPackages.values()]
+    .map((pkg) => ({ name: pkg.name, sha512: pkg.sha512, version: pkg.version }))
+    .sort((left, right) => compareUtf8(left.name, right.name));
+}
+
+function snapshotPreCrudState(appRoot, { creatorArgs, creatorOutput }) {
+  return {
+    creatorInputs: creatorArgs.filter((arg) => arg.startsWith('--')),
+    interactivePrompts: extractInteractivePrompts(creatorOutput),
+    scaffoldEnvDigest: digestFile(path.join(appRoot, '.env')),
+  };
+}
+
+function extractInteractivePrompts(output) {
+  return String(output)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => /\?\s*$/u.test(line))
+    .map((line) => boundedText(line, 160));
+}
+
+function configObjectPaths(configPath) {
+  const source = readFileSync(configPath, 'utf8');
+  const sourceFile = ts.createSourceFile(
+    configPath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const paths = new Set();
+  const propertyName = (node) => {
+    if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) {
+      return node.text;
+    }
+    return null;
+  };
+  const walkObject = (object, prefix = '') => {
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
+        continue;
+      }
+      const name = propertyName(property.name);
+      if (name === null) continue;
+      const next = prefix ? `${prefix}.${name}` : name;
+      paths.add(next);
+      if (ts.isPropertyAssignment(property) && ts.isObjectLiteralExpression(property.initializer)) {
+        walkObject(property.initializer, next);
+      }
+    }
+  };
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'defineConfig' &&
+      node.arguments[0] &&
+      ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      walkObject(node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return [...paths].sort(compareUtf8);
+}
+
+function authoredSourceFiles(appRoot) {
+  const files = [];
+  const walk = (relativeRoot) => {
+    const directory = path.join(appRoot, ...relativeRoot.split('/').filter(Boolean));
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
+      compareUtf8(left.name, right.name),
+    )) {
+      if (entry.isSymbolicLink()) continue;
+      const relative = relativeRoot ? `${relativeRoot}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(relative);
+      else if (entry.isFile() && /\.(?:[cm]?[jt]sx?)$/u.test(entry.name)) files.push(relative);
+    }
+  };
+  walk('src');
+  if (existsSync(path.join(appRoot, 'kovo.config.ts'))) files.push('kovo.config.ts');
+  return files;
+}
+
+async function runBrowserJourney({ appRoot, artifactRoot, dialect, origin, sampleIndex }) {
+  const { chromium } = await import('playwright');
+  const requireFromIntegration = createRequire(
+    path.join(repoRoot, 'tests/integration/package.json'),
+  );
+  const axeSource = readFileSync(requireFromIntegration.resolve('axe-core/axe.min.js'), 'utf8');
+  const env = readEnvFile(path.join(appRoot, '.env'));
+  const password = env.KOVO_DEMO_PASSWORD;
+  if (typeof password !== 'string' || password.length < 12) {
+    throw new JourneyPhaseError('login', 'generated app did not contain a strong demo password');
+  }
+  const evidenceDirectory = path.join(artifactRoot, 'evidence', `${dialect}-${sampleIndex + 1}`);
+  mkdirSync(evidenceDirectory, { recursive: true });
+  const screenshotPath = path.join(evidenceDirectory, 'styled-ui.png');
+  const accessibilityPath = path.join(evidenceDirectory, 'accessibility.json');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    // Install through the browser's new-document hook before Kovo's Trusted Types policy exists.
+    // A DOM <script>.text assignment is correctly rejected by the starter's CSP.
+    await page.addInitScript({ content: axeSource });
+    await page.goto(`${origin}/login`, { waitUntil: 'networkidle', timeout: READY_TIMEOUT_MS });
+    const initialA11y = await axePage(page);
+
+    const loginStarted = performance.now();
+    await page.locator('input[name="email"]').fill('demo@example.com');
+    await page.locator('input[name="password"]').fill(password);
+    await page.getByRole('button', { name: /sign in/iu }).click();
+    await page.getByText('New contact', { exact: true }).waitFor({
+      state: 'visible',
+      timeout: READY_TIMEOUT_MS,
+    });
+    const loginDurationMs = performance.now() - loginStarted;
+
+    const email = `journey-${dialect}-${String(sampleIndex + 1)}@example.test`;
+    const crudStarted = performance.now();
+    await page.locator('input[name="name"]').fill('Golden Journey');
+    await page.locator('input[name="email"]').fill(email);
+    const company = page.locator('input[name="company"]');
+    if ((await company.count()) === 1) await company.fill('Kovo');
+    const [mutationResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) => {
+          try {
+            return new URL(response.url()).pathname === '/_m/mutations/add-contact';
+          } catch {
+            return false;
+          }
+        },
+        { timeout: READY_TIMEOUT_MS },
+      ),
+      page.getByRole('button', { name: /add contact/iu }).click(),
+    ]);
+    if (!mutationResponse.ok()) {
+      let responseBody = '<unavailable>';
+      try {
+        responseBody = await mutationResponse.text();
+      } catch {
+        // The status and URL remain authoritative even if navigation disposed the body stream.
+      }
+      throw new JourneyPhaseError(
+        'crud',
+        `add-contact mutation failed: status=${String(mutationResponse.status())} body=${boundedText(responseBody, 2_048)}`,
+      );
+    }
+    await page.getByText(email, { exact: true }).waitFor({
+      state: 'visible',
+      timeout: READY_TIMEOUT_MS,
+    });
+    const crudDurationMs = performance.now() - crudStarted;
+
+    const styled = await page.evaluate(() => {
+      const button = document.querySelector('button');
+      const body = getComputedStyle(document.body);
+      const buttonStyle = button ? getComputedStyle(button) : null;
+      return {
+        buttonBackground: buttonStyle?.backgroundColor ?? '',
+        fontFamily: body.fontFamily,
+        styleSheets: document.styleSheets.length,
+        styledSourceElements: document.querySelectorAll('[data-style-src]').length,
+      };
+    });
+    if (
+      styled.styleSheets < 1 ||
+      styled.fontFamily.trim().length === 0 ||
+      styled.buttonBackground === 'rgba(0, 0, 0, 0)'
+    ) {
+      throw new JourneyPhaseError('styled-ui', 'starter did not render its public styled UI');
+    }
+    const terminalA11y = await axePage(page);
+    const violations = initialA11y.violations.length + terminalA11y.violations.length;
+    if (violations !== 0) {
+      throw new JourneyPhaseError(
+        'accessibility',
+        `styled starter has ${String(violations)} axe violations`,
+      );
+    }
+    await page.screenshot({ fullPage: true, path: screenshotPath });
+    const accessibility = {
+      schema: 'kovo.golden-journey/accessibility/v1',
+      engine: initialA11y.testEngine,
+      states: [
+        { name: 'login', violations: summarizeAxeViolations(initialA11y.violations) },
+        { name: 'authenticated-crud', violations: summarizeAxeViolations(terminalA11y.violations) },
+      ],
+      violations,
+    };
+    writeFileSync(accessibilityPath, `${JSON.stringify(accessibility, null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
+    return {
+      accessibility,
+      crudDurationMs,
+      loginDurationMs,
+      screenshot: {
+        bytes: statSync(screenshotPath).size,
+        path: path.relative(artifactRoot, screenshotPath).split(path.sep).join('/'),
+        sha256: digestFile(screenshotPath),
+        styled,
+      },
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+async function axePage(page) {
+  return await page.evaluate(async (wcagTags) => {
+    if (!globalThis.axe) throw new Error('axe-core failed to install');
+    return await globalThis.axe.run(document, {
+      resultTypes: ['violations'],
+      runOnly: { type: 'tag', values: wcagTags },
+    });
+  }, AXE_WCAG_22_AA_TAGS);
+}
+
+function summarizeAxeViolations(violations) {
+  return violations.map((violation) => ({
+    help: violation.help,
+    id: violation.id,
+    impact: violation.impact,
+    nodes: violation.nodes.length,
+  }));
+}
+
+function startDevServer({ appRoot, port, secretValues }) {
+  const started = performance.now();
+  const child = spawn(
+    'pnpm',
+    [
+      'exec',
+      'kovo',
+      'dev',
+      './src/app.tsx',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--strict-port',
+    ],
+    {
+      cwd: appRoot,
+      detached: process.platform !== 'win32',
+      env: { ...process.env, CI: '1', NO_COLOR: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  let stdout = '';
+  let stderr = '';
+  let exit = null;
+  const append = (current, chunk) =>
+    boundedText(`${current}${chunk.toString('utf8')}`, MAX_TRANSCRIPT_BYTES);
+  child.stdout.on('data', (chunk) => {
+    stdout = append(stdout, chunk);
+  });
+  child.stderr.on('data', (chunk) => {
+    stderr = append(stderr, chunk);
+  });
+  const exited = new Promise((resolve) => {
+    child.once('error', (error) => {
+      if (exit === null) exit = { error: error.message, signal: null, status: null };
+      resolve(exit);
+    });
+    child.once('exit', (status, signal) => {
+      if (exit === null) exit = { error: null, signal, status };
+      resolve(exit);
+    });
+  });
+  const origin = `http://127.0.0.1:${String(port)}`;
+  return {
+    assertRunning(phase) {
+      if (exit === null) return;
+      throw new JourneyPhaseError(
+        phase,
+        redactSecrets(
+          `dev exited status=${String(exit.status)} signal=${String(exit.signal)} ${
+            exit.error ?? stderr ?? stdout
+          }`,
+          secretValues,
+        ),
+      );
+    },
+    exit: () => exit,
+    origin,
+    transcript: () => ({ stderr, stdout }),
+    async waitForReady(timeoutMs) {
+      const deadline = performance.now() + timeoutMs;
+      for (;;) {
+        this.assertRunning('ready');
+        const match = /Kovo dev ready in (\d+)ms/u.exec(stdout);
+        if (match) {
+          for (const expected of [
+            `Local URL    ${origin}/`,
+            'Mode         development',
+            'App          src/app.tsx',
+            `Devtool      ${origin}/__kovo`,
+          ]) {
+            if (!stdout.includes(expected)) {
+              throw new JourneyPhaseError('ready', `ready report omitted ${expected}`);
+            }
+          }
+          return { durationMs: performance.now() - started, frameworkDurationMs: Number(match[1]) };
+        }
+        if (performance.now() >= deadline) {
+          throw new JourneyPhaseError(
+            'ready',
+            redactSecrets(`ready line timed out\n${stdout}\n${stderr}`, secretValues),
+          );
+        }
+        await delay(25);
+      }
+    },
+    async stop() {
+      if (exit !== null) return;
+      terminateProcessGroup(child.pid, 'SIGTERM');
+      const stopped = await Promise.race([exited.then(() => true), delay(5_000).then(() => false)]);
+      if (!stopped && exit === null) {
+        terminateProcessGroup(child.pid, 'SIGKILL');
+        await exited;
+      }
+    },
+  };
+}
+
+async function waitForFirst200(server, timeoutMs) {
+  const started = performance.now();
+  const deadline = started + timeoutMs;
+  let last = 'connection unavailable';
+  for (;;) {
+    server.assertRunning('first-200');
+    try {
+      const response = await fetch(`${server.origin}/api/health`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(2_000),
+      });
+      const body = await response.text();
+      if (response.status === 200 && body.includes('"ok":true')) {
+        return { durationMs: performance.now() - started };
+      }
+      if (response.status >= 500 && /\bKV\d{3}\b/u.test(body)) {
+        throw new JourneyPhaseError(
+          'first-200',
+          `first response failed with a stable Kovo diagnostic: status=${String(response.status)} body=${boundedText(body, 4_096)}`,
+        );
+      }
+      last = `status=${String(response.status)} body=${boundedText(body, 512)}`;
+    } catch (error) {
+      if (error instanceof JourneyPhaseError) throw error;
+      last = error instanceof Error ? error.message : String(error);
+    }
+    if (performance.now() >= deadline) {
+      throw new JourneyPhaseError('first-200', `first 200 timed out: ${last}`);
+    }
+    await delay(25);
+  }
+}
+
+function runMeasuredCommand(command, options) {
+  const observation = measureProcessTreeCommand(command, {
+    cwd: options.cwd,
+    env: { CI: '1', NO_COLOR: '1', npm_config_audit: 'false', npm_config_fund: 'false' },
+    maxBuffer: 128 * 1024 * 1024,
+    timeoutMs: options.timeoutMs ?? COMMAND_TIMEOUT_MS,
+  });
+  return observation;
+}
+
+export function requirePackedPhaseSuccess(name, observation) {
+  const evidence = {
+    durationMs: observation.durationMs,
+    name,
+    peakProcessTreeRssBytes: observation.peakRssBytes,
+    status: observation.exitCode,
+  };
+  if (observation.exitCode !== 0 || observation.signal !== null || observation.error !== null) {
+    throw new JourneyPhaseError(name, commandFailureMessage(name, observation), evidence);
+  }
+  return evidence;
+}
+
+function commandFailureMessage(name, observation) {
+  return boundedText(
+    [
+      `${name} failed: exit=${String(observation.exitCode)} signal=${String(observation.signal)}`,
+      observation.error ?? '',
+      observation.stderr ?? '',
+      observation.stdout ?? '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    16 * 1024,
+  );
+}
+
+function transcript(phase, observation) {
+  return {
+    phase,
+    signal: observation.signal,
+    status: observation.exitCode,
+    stderr: boundedText(observation.stderr ?? '', MAX_TRANSCRIPT_BYTES),
+    stdout: boundedText(observation.stdout ?? '', MAX_TRANSCRIPT_BYTES),
+  };
+}
+
+export function materializePackedPackage(pkg, destination) {
+  if (!pkg || !Array.isArray(pkg.entries)) {
+    throw new TypeError('authenticated packed package record is missing tar entries');
+  }
+  for (const entry of pkg.entries) {
+    if (!entry.name.startsWith('package/')) {
+      throw new TypeError(`${pkg.name} tarball entry is outside package/`);
+    }
+    const relative = entry.name.slice('package/'.length);
+    if (!relative || relative.split('/').some((segment) => segment === '..' || segment === '')) {
+      throw new TypeError(`${pkg.name} tarball contains an unsafe path`);
+    }
+    const target = path.join(destination, ...relative.split('/'));
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, entry.data, {
+      flag: 'wx',
+      mode: entry.executable ? 0o755 : 0o644,
+    });
+  }
+}
+
+function directoryPhysicalBytes(root) {
+  const resolved = realpathSync(root);
+  const seen = new Set();
+  let bytes = 0;
+  let files = 0;
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      const stat = lstatSync(file, { bigint: true });
+      if (stat.isSymbolicLink()) continue;
+      if (stat.isDirectory()) {
+        walk(file);
+      } else if (stat.isFile()) {
+        const identity = `${String(stat.dev)}:${String(stat.ino)}`;
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        bytes += Number(stat.size);
+        files += 1;
+      }
+    }
+  };
+  walk(resolved);
+  return { bytes, files };
+}
+
+function readEnvFile(file) {
+  const env = {};
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/u)) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/u.exec(line);
+    if (!match) continue;
+    env[match[1]] = match[2].trim().replace(/^(['"])(.*)\1$/u, '$2');
+  }
+  return env;
+}
+
+async function reserveLoopbackPort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  if (address === null || typeof address === 'string') {
+    throw new Error('could not reserve a loopback port');
+  }
+  return address.port;
+}
+
+function terminateProcessGroup(pid, signal) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return;
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, signal);
+  } catch (error) {
+    if (error?.code !== 'ESRCH') throw error;
+  }
+}
+
+function normalizeDialects(dialects) {
+  if (!Array.isArray(dialects) || dialects.length === 0) {
+    throw new TypeError('packed app journey requires at least one dialect');
+  }
+  const normalized = [...new Set(dialects)];
+  for (const dialect of normalized) {
+    if (!DIALECTS.includes(dialect)) throw new TypeError(`unsupported journey dialect ${dialect}`);
+  }
+  return normalized;
+}
+
+function requirePackedPackages(packages) {
+  for (const name of PACKED_JOURNEY_PACKAGE_NAMES) {
+    const pkg = packages.get(name);
+    if (
+      pkg?.name !== name ||
+      typeof pkg.version !== 'string' ||
+      typeof pkg.sha512 !== 'string' ||
+      typeof pkg.tarballPath !== 'string' ||
+      !Array.isArray(pkg.entries)
+    ) {
+      throw new TypeError(`packed app journey is missing authenticated ${name}`);
+    }
+  }
+}
+
+function digestFile(file) {
+  return `sha256:${createHash('sha256').update(readFileSync(file)).digest('hex')}`;
+}
+
+function boundedText(value, maxBytes) {
+  const text = String(value);
+  if (Buffer.byteLength(text) <= maxBytes) return text;
+  const marker = '\n[TRUNCATED]';
+  const contentBytes = Math.max(0, maxBytes - Buffer.byteLength(marker));
+  let truncated = Buffer.from(text).subarray(0, contentBytes).toString('utf8');
+  while (Buffer.byteLength(truncated) > contentBytes) truncated = truncated.slice(0, -1);
+  return `${truncated}${marker}`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function compareUtf8(left, right) {
+  return Buffer.compare(Buffer.from(left), Buffer.from(right));
+}
+
+class JourneyPhaseError extends Error {
+  constructor(phase, message, evidence = null) {
+    super(message);
+    this.name = 'JourneyPhaseError';
+    this.phase = phase;
+    this.evidence = evidence;
+  }
+}

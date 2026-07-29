@@ -82,6 +82,7 @@ const PROBE_DIRECTORY = 'scripts/known-failure-probes';
 const OWNERSHIP_LEDGER = 'plans/devex-gates.md';
 const STATES = new Set(['executable', 'pending-repro', 'retired']);
 const PROBE_OUTCOMES = new Set(['defect-reproduced', 'desired-behavior']);
+const PROBE_CADENCES = new Set(['per-pr', 'nightly']);
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -301,12 +302,15 @@ export function validateKnownFailureRegister(register, options = {}) {
         );
       }
     }
-    if (!Number.isInteger(probe.timeoutMs) || probe.timeoutMs < 1000 || probe.timeoutMs > 600000) {
-      findings.push(`${entry.id}: probe.timeoutMs must be between 1s and 10m`);
+    if (!Number.isInteger(probe.timeoutMs) || probe.timeoutMs < 1000 || probe.timeoutMs > 900000) {
+      findings.push(`${entry.id}: probe.timeoutMs must be between 1s and 15m`);
     }
     if (probe.packedInput !== true) findings.push(`${entry.id}: probe must use packed input`);
     if (probe.resultSchema !== KNOWN_FAILURE_PROBE_RESULT_SCHEMA) {
       findings.push(`${entry.id}: probe.resultSchema must be ${KNOWN_FAILURE_PROBE_RESULT_SCHEMA}`);
+    }
+    if (probe.cadence !== undefined && !PROBE_CADENCES.has(probe.cadence)) {
+      findings.push(`${entry.id}: probe.cadence must be per-pr or nightly`);
     }
     if (entry.state !== 'pending-repro' && probe.path.endsWith('/pending.mjs')) {
       findings.push(`${entry.id}: executable and retired rows cannot use the pending probe`);
@@ -452,6 +456,11 @@ export function runKnownFailureProbes(register, options = {}) {
       results.push({ id: entry.id, status: 'pending-repro', gap: entry.gap });
       continue;
     }
+    const cadence = entry.probe.cadence ?? 'per-pr';
+    if (options.cadence && options.cadence !== 'all' && cadence !== options.cadence) {
+      results.push({ id: entry.id, status: 'deferred', cadence });
+      continue;
+    }
     let command;
     try {
       command = substituteCommand(entry.probe.command, options);
@@ -472,10 +481,10 @@ export function runKnownFailureProbes(register, options = {}) {
   const executableClosureComplete = results.every(
     (result) =>
       !['pending-repro', 'infrastructure-error'].includes(result.status) &&
-      ['xfail', 'xpass', 'retired-pass', 'retired-regression'].includes(result.status),
+      ['deferred', 'xfail', 'xpass', 'retired-pass', 'retired-regression'].includes(result.status),
   );
   const executableOutcomesAccepted = results.every((result) =>
-    ['pending-repro', 'xfail', 'retired-pass'].includes(result.status),
+    ['deferred', 'pending-repro', 'xfail', 'retired-pass'].includes(result.status),
   );
   return {
     schemaValid: true,
@@ -509,6 +518,7 @@ function parseArgs(argv) {
     else if (arg === '--register') args.register = argv[++index];
     else if (arg === '--ownership-ledger') args.ownershipLedger = argv[++index];
     else if (arg === '--packed-manifest') args.packedManifest = argv[++index];
+    else if (arg === '--cadence') args.cadence = argv[++index];
     else if (arg === '--help' || arg === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -522,6 +532,7 @@ function usage() {
     '  --validate-schema        Validate data and mappings; does not claim executable closure.',
     '  --run-available          Gate runnable expected-failure probes; pending gaps remain closure debt.',
     '  --packed-manifest <file> Supply the packed-public-packages manifest to packed probes.',
+    '  --cadence <per-pr|nightly|all> Run only probes assigned to one CI cadence.',
     '  --ownership-ledger <file> Inject a ledger fixture; integration defaults to plans/devex-gates.md.',
     '  --require-executable     Fail while any entry still has a pending repro gap.',
     '  --json                   Emit machine-readable results.',
@@ -536,6 +547,9 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
     return 0;
   }
   const registerPath = path.resolve(args.register);
+  if (args.cadence !== undefined && !['per-pr', 'nightly', 'all'].includes(args.cadence)) {
+    throw new Error('--cadence must be per-pr, nightly, or all');
+  }
   const register = readJson(registerPath);
   const repoRoot = path.resolve(path.dirname(registerPath), '..');
   const ledgerResolver = args.ownershipLedger
@@ -562,6 +576,7 @@ export function runKnownFailureRegister(argv = process.argv.slice(2)) {
     const result = runKnownFailureProbes(register, {
       repoRoot,
       packedManifest: args.packedManifest,
+      cadence: args.cadence ?? 'all',
       ledgerResolver,
     });
     if (args.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

@@ -252,3 +252,35 @@ export function packedFirstLoopContractOutcome(mode, observation) {
   }
   return null;
 }
+
+/** Classify only the registered packed full-catalog RSS/OOM failure, never an unrelated error. */
+export function fullCatalogOutcome(sample) {
+  if (
+    sample?.functionalPass === true &&
+    sample?.budget?.withinThreshold === true &&
+    sample?.copiedComponents === 44 &&
+    sample?.unimportedDuringProof === true
+  ) {
+    return 'desired-behavior';
+  }
+  const message = sample?.failure?.message ?? '';
+  const recognizedOom = /\b(?:heap out of memory|allocation failed|ENOMEM|out of memory)\b/iu.test(
+    message,
+  );
+  if (
+    sample?.functionalPass === false &&
+    ['typecheck', 'check', 'build'].includes(sample?.failure?.phase) &&
+    (sample?.peakProcessTreeRssBytes > sample?.budget?.thresholdBytes || recognizedOom)
+  ) {
+    return 'defect-reproduced';
+  }
+  if (
+    sample?.functionalPass === true &&
+    sample?.budget?.withinThreshold === false &&
+    sample?.copiedComponents === 44 &&
+    sample?.unimportedDuringProof === true
+  ) {
+    return 'defect-reproduced';
+  }
+  return null;
+}

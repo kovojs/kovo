@@ -70,7 +70,7 @@ describe('known-failure register', () => {
           entry.probe.resultSchema === KNOWN_FAILURE_PROBE_RESULT_SCHEMA &&
           entry.probe.command.includes('{packedManifest}') &&
           entry.probe.timeoutMs >= 1000 &&
-          entry.probe.timeoutMs <= 600000,
+          entry.probe.timeoutMs <= 900000,
       ),
     ).toBe(true);
   });
@@ -103,12 +103,29 @@ describe('known-failure register', () => {
 
   it('publishes a packed-manifest-backed available-probe gate in CI', () => {
     expect(rootPackage.scripts['test:devex-known-failures-available']).toBe(
-      'node scripts/known-failure-register.mjs --run-available --packed-manifest .release/packed-packages.json',
+      'node scripts/known-failure-register.mjs --run-available --cadence per-pr --packed-manifest .release/packed-packages.json',
     );
     expect(rootPackage.scripts['devex:known-failures']).toBe(
       'pnpm run test:devex-known-failures-available',
     );
     expect(ciWorkflowSource).toContain('run: vp exec pnpm run test:devex-known-failures-available');
+  });
+
+  it('keeps the high-memory full-catalog probe nightly without weakening its result contract', () => {
+    const nightly = runKnownFailureProbes(register, {
+      repoRoot,
+      packedManifest: ownershipLedgerPath,
+      cadence: 'nightly',
+      ledgerResolver,
+      spawnSync: (_executable, args) => processResult(commandId(args), 'defect-reproduced'),
+    });
+    expect(nightly.results.find((result) => result.id === 'KF-DEVEX-007')).toMatchObject({
+      status: 'xfail',
+    });
+    expect(nightly.results.find((result) => result.id === 'KF-DEVEX-004')).toMatchObject({
+      status: 'deferred',
+      cadence: 'per-pr',
+    });
   });
 
   it('owns probe exit semantics in code and rejects a data-defined protocol', () => {

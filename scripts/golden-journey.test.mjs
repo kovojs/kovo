@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseGoldenJourneyArgs } from './golden-journey.mjs';
 import { offlineAgentScenario } from './golden-journey/offline-agent.mjs';
+import { packedAppsScenario } from './golden-journey/packed-app.mjs';
 import { manifestPath, repoRoot } from './release-packages.mjs';
 
 describe('golden journey command', () => {
@@ -37,5 +38,39 @@ describe('golden journey command', () => {
     expect(() =>
       parseGoldenJourneyArgs(['--scenario', offlineAgentScenario, '--keep-temp']),
     ).toThrow(/Unknown/);
+    expect(() =>
+      parseGoldenJourneyArgs(['--scenario', offlineAgentScenario, '--dialect', 'sqlite']),
+    ).toThrow(/apply only to packed-apps/u);
+  });
+
+  it('selects one or both packed starter dialects with bounded statistical samples', () => {
+    expect(
+      parseGoldenJourneyArgs([
+        '--scenario',
+        packedAppsScenario,
+        '--dialect',
+        'sqlite',
+        '--samples',
+        '5',
+        '--artifacts',
+        '.release/devex/journey-artifacts',
+        '--report',
+        '.release/devex/journey.json',
+      ]),
+    ).toEqual({
+      artifactRoot: path.join(repoRoot, '.release/devex/journey-artifacts'),
+      dialects: ['sqlite'],
+      packedManifest: manifestPath,
+      report: path.join(repoRoot, '.release/devex/journey.json'),
+      samples: 5,
+      scenario: packedAppsScenario,
+    });
+    expect(parseGoldenJourneyArgs(['--scenario', packedAppsScenario])).toMatchObject({
+      dialects: ['postgres', 'sqlite'],
+      samples: 1,
+    });
+    expect(() =>
+      parseGoldenJourneyArgs(['--scenario', packedAppsScenario, '--samples', '0']),
+    ).toThrow(/integer from 1 through 20/u);
   });
 });

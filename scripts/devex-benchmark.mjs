@@ -30,7 +30,7 @@ import {
   nonSymlinkRootDirectory,
 } from './lib/non-symlink-path.mjs';
 import { packWithoutLifecycleScripts } from './lib/pack-without-lifecycle.mjs';
-import { parseTimePeakRssBytes } from './lib/process-cost.mjs';
+import { measureProcessTreeCommand } from './lib/process-tree-rss.mjs';
 import {
   validatePackedReleaseManifest,
   verifyPackedAttestationBytes,
@@ -556,45 +556,19 @@ function observedEnvironmentFindings(scenario, observed) {
   return findings;
 }
 
-function timeInvocation(command, platform) {
-  if (!existsSync('/usr/bin/time')) return null;
-  if (platform === 'darwin') return ['/usr/bin/time', ['-l', ...command]];
-  if (platform === 'linux') return ['/usr/bin/time', ['-v', ...command]];
-  return null;
-}
-
 /**
- * Measure a command without a shell. `/usr/bin/time` owns peak RSS; the monotonic clock owns
- * duration so command stderr cannot forge either metric.
+ * Measure a command without a shell. The supervisor samples the root process and every live
+ * descendant, so fan-out cannot hide behind a direct-child high-water mark.
  */
 export function measureCommand(command, options = {}) {
   validateCommand(command, 'command');
-  const cwd = path.resolve(options.cwd ?? defaultRepoRoot);
-  const platform = options.platform ?? process.platform;
-  const invocation = timeInvocation(command, platform);
-  const executable = invocation?.[0] ?? command[0];
-  const args = invocation?.[1] ?? command.slice(1);
-  const spawn = options.spawnSync ?? spawnSync;
-  const started = process.hrtime.bigint();
-  const result = spawn(executable, args, {
-    cwd,
-    encoding: 'utf8',
+  return measureProcessTreeCommand(command, {
+    cwd: path.resolve(options.cwd ?? defaultRepoRoot),
     env: { ...process.env, ...options.env },
-    maxBuffer: 32 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer: options.maxBuffer ?? 32 * 1024 * 1024,
+    sampleIntervalMs: options.sampleIntervalMs,
+    timeoutMs: options.timeoutMs,
   });
-  const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
-  const peakRssBytes =
-    invocation === null ? null : (parseTimePeakRssBytes(result.stderr ?? '', platform) ?? null);
-  return {
-    durationMs,
-    peakRssBytes,
-    exitCode: result.status,
-    signal: result.signal ?? null,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    error: result.error?.message ?? null,
-  };
 }
 
 function resolveInsideRoot(root, relative, label) {
@@ -1435,9 +1409,8 @@ export function runBenchmarkScenario(scenario, options = {}) {
               revision,
               analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
               clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
-              durationMs: evidence?.durationMs ?? prime.durationMs,
-              peakRssBytes:
-                evidence === null ? (prime.peakRssBytes ?? null) : evidence.peakRssBytes,
+              durationMs: prime.durationMs,
+              peakRssBytes: prime.peakRssBytes ?? null,
               sampleIndex: index,
             });
           }
@@ -1460,12 +1433,12 @@ export function runBenchmarkScenario(scenario, options = {}) {
             revision,
             analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
             clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
-            durationMs: evidence?.durationMs ?? result.durationMs,
-            peakRssBytes: evidence === null ? (result.peakRssBytes ?? null) : evidence.peakRssBytes,
+            durationMs: result.durationMs,
+            peakRssBytes: result.peakRssBytes ?? null,
             sampleIndex: index,
           });
-          const measuredDuration = evidence?.durationMs ?? result.durationMs;
-          const measuredPeakRss = evidence === null ? result.peakRssBytes : evidence.peakRssBytes;
+          const measuredDuration = result.durationMs;
+          const measuredPeakRss = result.peakRssBytes;
           if (!finiteNonNegative(measuredDuration)) {
             throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
           }
