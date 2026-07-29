@@ -58,6 +58,22 @@ export function checkPublish({ exec = execFileSync } = {}) {
       'install',
       '--',
       process.execPath,
+      path.join(repoRoot, 'scripts', 'check-packed-server-consumer.mjs'),
+    ],
+    {
+      cwd: repoRoot,
+      env: deterministicPackEnvironment(process.env),
+      stdio: 'inherit',
+    },
+  );
+  exec(
+    process.execPath,
+    [
+      path.join(repoRoot, 'scripts', 'egress-floor.mjs'),
+      '--policy',
+      'install',
+      '--',
+      process.execPath,
       path.join(repoRoot, 'scripts', 'check-packed-cli-consumer.mjs'),
     ],
     {
