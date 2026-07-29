@@ -1,39 +1,6 @@
 {
   "arms": {
     "arm-a": {
-      "eligible": true,
-      "gates": {
-        "artifacts": {
-          "details": [],
-          "pass": true
-        },
-        "compilerAndGraph": {
-          "details": [],
-          "pass": true
-        },
-        "diagnostics": {
-          "details": [],
-          "pass": true
-        },
-        "matrix": {
-          "details": [],
-          "pass": true
-        },
-        "ownershipAndBindings": {
-          "details": [],
-          "pass": true
-        },
-        "performance": {
-          "details": [],
-          "pass": true
-        },
-        "publicForgery": {
-          "details": [],
-          "pass": true
-        }
-      }
-    },
-    "arm-b": {
       "eligible": false,
       "gates": {
         "artifacts": {
@@ -67,10 +34,43 @@
           "pass": true
         }
       }
+    },
+    "arm-b": {
+      "eligible": true,
+      "gates": {
+        "artifacts": {
+          "details": [],
+          "pass": true
+        },
+        "compilerAndGraph": {
+          "details": [],
+          "pass": true
+        },
+        "diagnostics": {
+          "details": [],
+          "pass": true
+        },
+        "matrix": {
+          "details": [],
+          "pass": true
+        },
+        "ownershipAndBindings": {
+          "details": [],
+          "pass": true
+        },
+        "performance": {
+          "details": [],
+          "pass": true
+        },
+        "publicForgery": {
+          "details": [],
+          "pass": true
+        }
+      }
     }
   },
   "criteria": "kovo.app-contract-d1-criteria/v6",
-  "decision": "arm-a",
+  "decision": "arm-b",
   "priorEvidenceDisposition": {
     "v1": "invalidated",
     "v2": "invalidated",
