@@ -43,15 +43,6 @@ export interface BetterAuthRoleRequest {
   session?: BetterAuthRoleSession | null;
 }
 
-type SessionFor<Request extends BetterAuthRoleRequest> = NonNullable<Request['session']>;
-type UserFor<Request extends BetterAuthRoleRequest> = NonNullable<SessionFor<Request>['user']>;
-type RoleNameFor<Request extends BetterAuthRoleRequest> =
-  UserFor<Request> extends {
-    roles?: readonly (infer Role)[] | null;
-  }
-    ? Extract<Role, string>
-    : string;
-
 /**
  * Guard that requires the session user to hold a given role. Denies with an
  * unauthenticated (→ login redirect) intent when there is no session user, and with a
@@ -59,7 +50,11 @@ type RoleNameFor<Request extends BetterAuthRoleRequest> =
  * against the request's own `roles` element type when known (SPEC.md §6.5).
  */
 export function role<Request extends BetterAuthRoleRequest>(
-  requiredRole: RoleNameFor<Request>,
+  requiredRole: NonNullable<NonNullable<Request['session']>['user']> extends {
+    roles?: readonly (infer Role)[] | null;
+  }
+    ? Extract<Role, string>
+    : string,
 ): Guard<Request>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest> {
