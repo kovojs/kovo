@@ -11,7 +11,6 @@ import {
   createStarterApp,
   fetchTextWhenReady,
   reservePort,
-  runStarterAppHttpTest,
   runStarterVpCheck,
   stopProcess,
   withStarterBinOnPath,
@@ -31,7 +30,9 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
 
     try {
       expectPackedKovoPackageShape(app.root);
-      runStarterAppHttpTest(app.root);
+      // The generated dev-server HTTP suite has its own starter-typecheck shard. Keep this packed
+      // acceptance path focused on the published production artifact: repeating the full PGlite
+      // and Vite dev bootstrap here can consume the real build's bounded test budget.
       runStarterVpCheck(app.root);
       buildReusableProductionArtifact(app.root);
       expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(

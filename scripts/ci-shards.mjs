@@ -284,7 +284,7 @@ const STARTER_ENTRIES = [
     id: 'starter-packed-runtime',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
     needsPacked: true,
-    seconds: 69,
+    seconds: 195,
   },
   {
     id: 'runtime-contract-artifacts',

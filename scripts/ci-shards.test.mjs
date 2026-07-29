@@ -386,7 +386,7 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([
-      399, 414, 405, 379, 378, 414, 374, 377, 417, 383,
+      404, 406, 421, 414, 387, 417, 388, 391, 422, 416,
     ]);
   });
 
@@ -402,6 +402,7 @@ describe('ci-shards', () => {
       'starter-packed-runtime',
       'starter-packed-sqlite',
     ]);
+    expect(packedEntries.find((entry) => entry.id === 'starter-packed-runtime')?.seconds).toBe(195);
     expect(unpackedEntries.every((entry) => !entry.needsPacked)).toBe(true);
     expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
       allEntries.map((entry) => entry.id).toSorted(compareStrings),
@@ -425,7 +426,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 9, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 10, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {
