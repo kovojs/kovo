@@ -957,7 +957,7 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
 // spread) — or an unprovable value — is the blocking KV438 finding (SPEC §10.3/§11.1).
 //
 // Governed columns: the table's `key` (instance/primary key), its `owner` principal
-// column (both AUTO-governed), and every column named in `kovo({ governed })`.
+// column (both AUTO-governed), and every column named in `kovo((columns) => ({ governed }))`.
 //
 // Two-tier escape (author-assertion, audit-grade):
 //   serverValue(value, reason)   — discharges only independently proven non-input provenance.
@@ -1055,7 +1055,7 @@ function extractMassAssignmentFromDeriveExtraction(
 interface GovernedTableInfo {
   /** The §10.1 domain (for the finding fact). */
   domain: string;
-  /** The governed column set, or `'*'` when `kovo({ governed: true })` governs all columns. */
+  /** The governed column set, or `'*'` when `kovo((columns) => ({ governed: true }))` governs all columns. */
   governed: ReadonlySet<string> | '*';
   /** OPP-04 columns that must flow through the authenticated-encryption sink before write. */
   confidentialAtRestColumns: ReadonlySet<string> | '*';

@@ -18,7 +18,11 @@ describe('runtime metadata extraction', () => {
         apiToken: text('api_token').notNull(),
         displayName: text('display_name').notNull(),
       },
-      kovo({ domain: 'user', key: 'id', secret: ['passwordHash', (t) => t.apiToken] }),
+      kovo((columns2) => ({
+        domain: 'user',
+        key: columns2.id,
+        secret: [columns2.passwordHash, columns2.apiToken],
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([users]);
@@ -64,7 +68,7 @@ describe('runtime metadata extraction', () => {
         id: text('id').primaryKey(),
         passwordHash: text('password_hash').notNull(),
       },
-      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+      kovo((columns2) => ({ domain: 'user', key: columns2.id, secret: [columns2.passwordHash] })),
     );
     Object.defineProperty(users, 'forgedAnnotation', {
       enumerable: true,
@@ -85,11 +89,11 @@ describe('runtime metadata extraction', () => {
         id: text('id').primaryKey(),
         passwordHash: text('password_hash').notNull(),
       },
-      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+      kovo((columns2) => ({ domain: 'user', key: columns2.id, secret: [columns2.passwordHash] })),
     );
     Object.defineProperty(users, 'unrelatedKovoAnnotation', {
       enumerable: true,
-      value: kovo({ domain: 'public', public: true }),
+      value: kovo((columns2) => ({ domain: 'public', public: true })),
     });
 
     const metadata = extractKovoRuntimeDbMetadata([users]);
@@ -106,7 +110,7 @@ describe('runtime metadata extraction', () => {
         id: text('id').primaryKey(),
         passwordHash: text('password_hash').notNull(),
       },
-      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+      kovo((columns2) => ({ domain: 'user', key: columns2.id, secret: [columns2.passwordHash] })),
     );
     const manifest = {
       tables: [
@@ -144,7 +148,7 @@ describe('runtime metadata extraction', () => {
         id: pgText('id').primaryKey(),
         ownerId: pgText('owner_id').notNull(),
       },
-      kovo({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: 'id' }),
+      kovo((columns2) => ({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: columns2.id })),
     );
     const manifest = {
       tables: [
@@ -176,7 +180,11 @@ describe('runtime metadata extraction', () => {
     const labels = sqliteTable(
       'labels',
       { id: text('id').primaryKey() },
-      kovo({ authzPolicy: 'writes require the labels mutation guard', domain: 'label', key: 'id' }),
+      kovo((columns2) => ({
+        authzPolicy: 'writes require the labels mutation guard',
+        domain: 'label',
+        key: columns2.id,
+      })),
     );
     const manifest = {
       tables: [
@@ -209,7 +217,7 @@ describe('runtime metadata extraction', () => {
         id: pgText('id').primaryKey(),
         ownerId: pgText('owner_id').notNull(),
       },
-      kovo({ authzPolicy: sql.raw(predicate), domain: 'share', key: 'id' }),
+      kovo((columns2) => ({ authzPolicy: sql.raw(predicate), domain: 'share', key: columns2.id })),
     );
     const manifest = {
       tables: [
@@ -233,7 +241,11 @@ describe('runtime metadata extraction', () => {
     Object.defineProperty(shares, Table.Symbol.ExtraConfigBuilder, {
       configurable: true,
       enumerable: true,
-      value: kovo({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: 'id' }),
+      value: kovo((columns2) => ({
+        authzPolicy: sql.raw('TRUE'),
+        domain: 'share',
+        key: columns2.id,
+      })),
       writable: true,
     });
 
@@ -251,7 +263,7 @@ describe('runtime metadata extraction', () => {
         id: pgText('id').primaryKey(),
         ownerId: pgText('owner_id').notNull(),
       },
-      kovo({ authzPolicy: sql.raw(predicate), domain: 'share', key: 'id' }),
+      kovo((columns2) => ({ authzPolicy: sql.raw(predicate), domain: 'share', key: columns2.id })),
     );
     const manifest = {
       tables: [
@@ -296,7 +308,7 @@ describe('runtime metadata extraction', () => {
         id: text('id').primaryKey(),
         contents: text('contents').notNull(),
       },
-      kovo({ domain: 'vault', key: 'id', secret: true }),
+      kovo((columns2) => ({ domain: 'vault', key: columns2.id, secret: true })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([vault]);
@@ -313,11 +325,11 @@ describe('runtime metadata extraction', () => {
         accessToken: pgText('accessToken'),
         providerId: pgText('providerId').notNull(),
       },
-      kovo({
+      kovo((columns2) => ({
         domain: 'auth',
-        key: 'id',
-        secret: ['accessToken'],
-      }),
+        key: columns2.id,
+        secret: [columns2.accessToken],
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([account]);
@@ -348,7 +360,7 @@ describe('runtime metadata extraction', () => {
         classified: pgText('classified').notNull(),
         id: pgText('id').primaryKey(),
       },
-      kovo({ domain: 'tenant-vault', key: 'id', secret: true }),
+      kovo((columns2) => ({ domain: 'tenant-vault', key: columns2.id, secret: true })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([vault]);
@@ -362,7 +374,7 @@ describe('runtime metadata extraction', () => {
     });
   });
 
-  it('extracts governed keys and physical names from selectors and column annotations', () => {
+  it('extracts governed keys and physical names from concrete column annotations', () => {
     const account = pgTable(
       'account',
       {
@@ -373,13 +385,13 @@ describe('runtime metadata extraction', () => {
         role: pgText('role').notNull(),
         displayName: pgText('display_name').notNull(),
       },
-      kovo({
-        confidentialAtRest: [(table) => table.recoveryCode],
+      kovo((columns2) => ({
+        confidentialAtRest: [columns2.recoveryCode],
         domain: 'account',
-        governed: [(table) => table.role],
-        key: (table) => table.id,
-        owner: 'owner_id',
-      }),
+        governed: [columns2.role],
+        key: columns2.id,
+        owner: columns2.ownerId,
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([account]);
@@ -414,7 +426,7 @@ describe('runtime metadata extraction', () => {
         actorId: text('actor_id').notNull(),
         event: text('event').notNull(),
       },
-      kovo({ domain: 'audit', governed: true, key: 'id' }),
+      kovo((columns2) => ({ domain: 'audit', governed: true, key: columns2.id })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([auditLog]);
@@ -437,7 +449,7 @@ describe('runtime metadata extraction', () => {
       {
         id: pgText('id').primaryKey(),
       },
-      kovo({ domain: 'user', key: 'id', reference: true }),
+      kovo((columns2) => ({ domain: 'user', key: columns2.id, reference: true })),
     );
     const orders = pgTable(
       'orders',
@@ -445,7 +457,7 @@ describe('runtime metadata extraction', () => {
         id: pgText('id').primaryKey(),
         userId: pgText('user_id').notNull(),
       },
-      kovo({ domain: 'order', key: 'id', owner: 'userId' }),
+      kovo((columns2) => ({ domain: 'order', key: columns2.id, owner: columns2.userId })),
     );
     const orderItems = pgTable(
       'order_items',
@@ -453,29 +465,29 @@ describe('runtime metadata extraction', () => {
         id: pgText('id').primaryKey(),
         orderId: pgText('order_id').notNull(),
       },
-      kovo({
+      kovo((columns2) => ({
         domain: 'orderItem',
-        key: 'id',
-        ownerVia: { fk: (table) => table.orderId, parent: orders, parentKey: 'id' },
-      }),
+        key: columns2.id,
+        ownerVia: { fk: columns2.orderId, parent: orders, parentKey: orders.id },
+      })),
     );
     const posts = pgTable(
       'posts',
       {
         id: pgText('id').primaryKey(),
       },
-      kovo({ domain: 'post', key: 'id', public: true }),
+      kovo((columns2) => ({ domain: 'post', key: columns2.id, public: true })),
     );
     const shares = pgTable(
       'shares',
       {
         id: pgText('id').primaryKey(),
       },
-      kovo({
+      kovo((columns2) => ({
         authzPolicy: sql`owner_id = current_setting('kovo.principal', true)`,
         domain: 'share',
-        key: 'id',
-      }),
+        key: columns2.id,
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([users, orders, orderItems, posts, shares]);

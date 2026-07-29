@@ -4425,7 +4425,7 @@ function runtimeManifestAuthzPolicy(
   const annotationCall = draft.initializer.getArguments().find(isKovoAnnotationCall);
   const annotationObject =
     annotationCall && Node.isCallExpression(annotationCall)
-      ? annotationCall.getArguments()[0]
+      ? kovoAnnotationObject(annotationCall)
       : undefined;
   const policy =
     annotationObject === undefined
@@ -4637,7 +4637,7 @@ function runtimeManifestOwnerVia(
   const annotationCall = draft.initializer.getArguments().find(isKovoAnnotationCall);
   const annotationObject =
     annotationCall && Node.isCallExpression(annotationCall)
-      ? annotationCall.getArguments()[0]
+      ? kovoAnnotationObject(annotationCall)
       : undefined;
   const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
   if (ownerVia === undefined) return undefined;
@@ -6498,6 +6498,35 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
   });
 }
 
+/**
+ * Resolve the one supported annotation grammar: an inline, one-parameter callback returning one
+ * statically visible object. The parameter is contextually typed from the owning Drizzle table;
+ * accepting a bare object here would reopen the string/unknown annotation surface removed by
+ * SPEC §10.1.
+ */
+function kovoAnnotationObject(
+  call: import('ts-morph').CallExpression,
+): ObjectLiteralExpression | undefined {
+  const [argument, ...extra] = call.getArguments();
+  if (
+    argument === undefined ||
+    extra.length > 0 ||
+    (!Node.isArrowFunction(argument) && !Node.isFunctionExpression(argument))
+  ) {
+    return undefined;
+  }
+  const parameters = argument.getParameters();
+  if (parameters.length !== 1 || !Node.isIdentifier(parameters[0]?.getNameNode())) {
+    return undefined;
+  }
+  const body = argument.getBody();
+  if (!Node.isBlock(body)) return staticObjectLiteralValue(body);
+  const statements = body.getStatements();
+  if (statements.length !== 1 || !Node.isReturnStatement(statements[0])) return undefined;
+  const expression = statements[0].getExpression();
+  return expression === undefined ? undefined : staticObjectLiteralValue(expression);
+}
+
 /** @internal */ export function tableAnnotation(
   initializer: Node,
 ): ExtractedTableAnnotation | null {
@@ -6510,10 +6539,7 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
       : { name: UNRESOLVED_READ_SOURCE_EXPRESSION, unmapped: true };
   }
   if (!Node.isCallExpression(annotationCall)) return null;
-  const annotationArgument = annotationCall.getArguments()[0];
-  const annotationObject = annotationArgument
-    ? staticObjectLiteralValue(annotationArgument)
-    : undefined;
+  const annotationObject = kovoAnnotationObject(annotationCall);
   if (!annotationObject) return null;
 
   const tableName = tableNameArgument(initializer) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
@@ -6564,7 +6590,7 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
   const annotationCall = rootCall.getArguments().find(isKovoAnnotationCall);
   if (!annotationCall || !Node.isCallExpression(annotationCall)) return null;
 
-  const annotationObject = annotationCall.getArguments()[0];
+  const annotationObject = kovoAnnotationObject(annotationCall);
   const viewObject = objectPropertyFromObject(annotationObject, 'view');
   if (!viewObject) return null;
 
@@ -6679,6 +6705,12 @@ function domainPropertyFromObject(object: Node, name: string): string | undefine
 function columnRefName(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
   if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  const direct = unwrappedStaticExpressionNode(initializer);
+  if (Node.isPropertyAccessExpression(direct)) return direct.getName();
+  if (Node.isElementAccessExpression(direct)) {
+    const argument = direct.getArgumentExpression();
+    if (argument && Node.isStringLiteral(argument)) return argument.getLiteralText();
+  }
   if (
     !Node.isArrowFunction(initializer) &&
     !Node.isFunctionExpression(initializer) &&
@@ -6711,7 +6743,16 @@ function columnNamePropertyFromObject(object: Node, name: string): string | unde
   for (const property of object.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.getNameNode()) !== name) continue;
-    return columnRefName(property.getInitializer());
+    const initializer = property.getInitializer();
+    if (name === 'key' && initializer && Node.isArrayLiteralExpression(initializer)) {
+      const elements = initializer.getElements();
+      if (elements.length === 0 || elements.some(Node.isSpreadElement)) return undefined;
+      const columns = elements.map((element) => columnRefName(element));
+      return columns.every((column): column is string => column !== undefined)
+        ? columns.join(',')
+        : undefined;
+    }
+    return columnRefName(initializer);
   }
   return undefined;
 }
@@ -7231,7 +7272,7 @@ function unresolvedConcurrencyAnnotationDiagnostics(
   const diagnostics: TouchGraphDiagnostic[] = [];
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isKovoAnnotationCall(call)) continue;
-    const annotation = call.getArguments()[0];
+    const annotation = kovoAnnotationObject(call);
     if (!annotation) continue;
     const unresolved = ['atomic', 'version']
       .map((name) => ({

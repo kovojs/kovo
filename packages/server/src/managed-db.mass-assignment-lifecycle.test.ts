@@ -1,6 +1,7 @@
 import { constants as nodeSqliteConstants } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
-import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
+import { kovo } from '@kovojs/drizzle';
+import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';

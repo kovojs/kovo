@@ -32508,6 +32508,70 @@ function requestTaggedTemplateIsReviewedDrizzleSql(
   );
 }
 
+function requestExactKovoCallForAnnotationObject(
+  config: import('ts-morph').ObjectLiteralExpression,
+): import('ts-morph').CallExpression | undefined {
+  let current: Node = config;
+  let callback: Node | undefined;
+  while (current.getParent()) {
+    const parent = current.getParent()!;
+    if (
+      Node.isParenthesizedExpression(parent) ||
+      Node.isAsExpression(parent) ||
+      Node.isSatisfiesExpression(parent) ||
+      Node.isTypeAssertion(parent) ||
+      Node.isNonNullExpression(parent) ||
+      Node.isReturnStatement(parent) ||
+      Node.isBlock(parent)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent)) {
+      callback = parent;
+    }
+    break;
+  }
+  if (!callback) return undefined;
+  const [parameter, ...extraParameters] = callback.getParameters();
+  const callable = requestCallableForFunctionNode(callback);
+  const outputs = callable ? requestWireOutputExpressions(callable) : [];
+  if (
+    !parameter ||
+    extraParameters.length > 0 ||
+    !Node.isIdentifier(parameter.getNameNode()) ||
+    outputs.length !== 1 ||
+    !requestNodesAreSame(unwrapStaticExpression(outputs[0]!), config)
+  ) {
+    return undefined;
+  }
+  current = callback;
+  while (
+    current.getParent() &&
+    (Node.isParenthesizedExpression(current.getParent()!) ||
+      Node.isAsExpression(current.getParent()!) ||
+      Node.isSatisfiesExpression(current.getParent()!) ||
+      Node.isTypeAssertion(current.getParent()!) ||
+      Node.isNonNullExpression(current.getParent()!))
+  ) {
+    current = current.getParent()!;
+  }
+  const call = current.getParent();
+  if (
+    !call ||
+    !Node.isCallExpression(call) ||
+    call.getQuestionDotTokenNode() ||
+    call.getArguments().length !== 1 ||
+    !call
+      .getArguments()
+      .some((argument) => requestNodesAreSame(unwrapStaticExpression(argument), callback!)) ||
+    !requestExpressionIsDirectImportedExport(call.getExpression(), '@kovojs/drizzle', 'kovo')
+  ) {
+    return undefined;
+  }
+  return call;
+}
+
 /**
  * SPEC §6.6 / §10.3: the compiler-bound table authorization policy admits an exact,
  * no-substitution Drizzle `sql` template. This is declaration metadata rather than a request DB
@@ -32528,7 +32592,7 @@ function requestTaggedTemplateIsExactDrizzleAuthzPolicy(
   }
   const property = tagged.getParentIfKind(SyntaxKind.PropertyAssignment);
   const config = property?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
-  const kovoCall = config?.getParentIfKind(SyntaxKind.CallExpression);
+  const kovoCall = config ? requestExactKovoCallForAnnotationObject(config) : undefined;
   const tableCall = kovoCall?.getParentIfKind(SyntaxKind.CallExpression);
   return !!(
     property &&
@@ -32540,7 +32604,6 @@ function requestTaggedTemplateIsExactDrizzleAuthzPolicy(
     kovoCall &&
     !kovoCall.getQuestionDotTokenNode() &&
     kovoCall.getArguments().length === 1 &&
-    requestNodesAreSame(unwrapStaticExpression(kovoCall.getArguments()[0]!), config) &&
     requestExpressionIsDirectImportedExport(kovoCall.getExpression(), '@kovojs/drizzle', 'kovo') &&
     requestExactImportedCarrierIsPristine(kovoCall.getExpression(), '@kovojs/drizzle', 'kovo') &&
     tableCall &&
@@ -32840,11 +32903,37 @@ function requestDrizzleExtraConfigIsClosed(
   if (!requestExpressionIsDirectImportedExport(node.getExpression(), '@kovojs/drizzle', 'kovo')) {
     return false;
   }
-  const [config, ...extra] = node.getArguments();
-  return !!(
-    config &&
-    extra.length === 0 &&
-    requestDrizzleKovoConfigValueIsClosed(config, columns, new Set(), seenTables, [])
+  const [configExpression, ...extra] = node.getArguments();
+  const config = configExpression ? unwrapStaticExpression(configExpression) : undefined;
+  if (
+    !config ||
+    extra.length > 0 ||
+    (!Node.isArrowFunction(config) && !Node.isFunctionExpression(config))
+  ) {
+    return false;
+  }
+  const [parameter, ...extraParameters] = config.getParameters();
+  const parameterName = parameter?.getNameNode();
+  if (
+    !parameterName ||
+    extraParameters.length > 0 ||
+    !Node.isIdentifier(parameterName) ||
+    !parameterName.getSymbol()
+  ) {
+    return false;
+  }
+  const callable = requestCallableForFunctionNode(config);
+  const outputs = callable ? requestWireOutputExpressions(callable) : [];
+  return (
+    outputs.length === 1 &&
+    requestDrizzleKovoConfigValueIsClosed(
+      outputs[0]!,
+      columns,
+      new Set(),
+      seenTables,
+      [],
+      requestSymbolKey(parameterName.getSymbol()!),
+    )
   );
 }
 
@@ -32854,13 +32943,23 @@ function requestDrizzleKovoConfigValueIsClosed(
   seen = new Set<string>(),
   seenTables = new Set<string>(),
   path: readonly string[] = [],
+  annotationParameterKey?: string,
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (path.length === 2 && path[0] === 'ownerVia' && path[1] === 'parent') {
     return requestDrizzleOwnerViaParentTableIsClosed(node, seenTables);
   }
+  if (path.length === 2 && path[0] === 'ownerVia' && path[1] === 'parentKey') {
+    return requestDrizzleOwnerViaParentKeyIsClosed(node, seenTables);
+  }
   if (path.length === 1 && path[0] === 'authzPolicy' && Node.isTaggedTemplateExpression(node)) {
     return requestTaggedTemplateIsExactDrizzleAuthzPolicy(node);
+  }
+  if (
+    annotationParameterKey &&
+    requestDrizzleAnnotationColumnIsClosed(node, columns, annotationParameterKey)
+  ) {
+    return true;
   }
   if (requestExpressionIsClosedStaticData(node)) return true;
   if (Node.isIdentifier(node)) {
@@ -32915,6 +33014,7 @@ function requestDrizzleKovoConfigValueIsClosed(
           new Set(seen),
           new Set(seenTables),
           path,
+          annotationParameterKey,
         ),
       )
     );
@@ -32922,8 +33022,6 @@ function requestDrizzleKovoConfigValueIsClosed(
   if (Node.isCallExpression(node) && requestCallIsExactClosedDomainDeclaration(node)) {
     return requestExactDomainResultIsPristine(node);
   }
-  const callable = requestCallableForFunctionNode(node);
-  if (callable) return requestDrizzleTableSelectorCallbackIsClosed(callable, columns);
   if (Node.isArrayLiteralExpression(node)) {
     return node
       .getElements()
@@ -32936,6 +33034,7 @@ function requestDrizzleKovoConfigValueIsClosed(
             new Set(seen),
             new Set(seenTables),
             path,
+            annotationParameterKey,
           ),
       );
   }
@@ -32955,9 +33054,54 @@ function requestDrizzleKovoConfigValueIsClosed(
         new Set(seen),
         new Set(seenTables),
         [...path, member],
+        annotationParameterKey,
       )
     );
   });
+}
+
+function requestDrizzleAnnotationColumnIsClosed(
+  expression: Node,
+  columns: import('ts-morph').ObjectLiteralExpression,
+  annotationParameterKey: string,
+): boolean {
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return false;
+  }
+  const receiver = unwrapStaticExpression(expression.getExpression());
+  const member = Node.isPropertyAccessExpression(expression)
+    ? staticMemberName(expression.getNameNode())
+    : staticMemberName(expression.getArgumentExpression());
+  return !!(
+    Node.isIdentifier(receiver) &&
+    receiver.getSymbol() &&
+    requestSymbolKey(receiver.getSymbol()!) === annotationParameterKey &&
+    member &&
+    columns
+      .getProperties()
+      .some(
+        (property) =>
+          Node.isPropertyAssignment(property) &&
+          staticMemberName(property.getNameNode()) === member,
+      )
+  );
+}
+
+function requestDrizzleOwnerViaParentKeyIsClosed(
+  expression: Node,
+  seenTables: Set<string>,
+): boolean {
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return false;
+  }
+  const member = Node.isPropertyAccessExpression(expression)
+    ? staticMemberName(expression.getNameNode())
+    : staticMemberName(expression.getArgumentExpression());
+  const table = requestReviewedDrizzleTableForDirectReference(
+    expression.getExpression(),
+    seenTables,
+  );
+  return !!member && !!table && requestReviewedDrizzleTableHasColumn(table, member);
 }
 
 /**
@@ -33247,7 +33391,11 @@ function requestDomainValueContainerIsReviewed(
       Node.isAsExpression(parent) ||
       Node.isSatisfiesExpression(parent) ||
       Node.isTypeAssertion(parent) ||
-      Node.isNonNullExpression(parent)
+      Node.isNonNullExpression(parent) ||
+      Node.isReturnStatement(parent) ||
+      Node.isBlock(parent) ||
+      Node.isArrowFunction(parent) ||
+      Node.isFunctionExpression(parent)
     ) {
       current = parent;
       continue;
@@ -33357,41 +33505,6 @@ function requestExactDomainResultIsPristine(
     }
   }
   return true;
-}
-
-function requestDrizzleTableSelectorCallbackIsClosed(
-  callable: RequestCallable,
-  columns: import('ts-morph').ObjectLiteralExpression,
-): boolean {
-  if (!Node.isArrowFunction(callable.declaration) || Node.isBlock(callable.declaration.getBody())) {
-    return false;
-  }
-  const [parameter, ...extra] = requestCallableParameters(callable.declaration);
-  if (!parameter || extra.length > 0 || !Node.isIdentifier(parameter.getNameNode())) return false;
-  const parameterSymbol = parameter.getNameNode().getSymbol();
-  const outputs = requestWireOutputExpressions(callable);
-  if (!parameterSymbol || outputs.length !== 1) return false;
-  const output = unwrapStaticExpression(outputs[0]!);
-  if (!Node.isPropertyAccessExpression(output) && !Node.isElementAccessExpression(output)) {
-    return false;
-  }
-  const receiver = unwrapStaticExpression(output.getExpression());
-  const member = Node.isPropertyAccessExpression(output)
-    ? staticMemberName(output.getNameNode())
-    : staticMemberName(output.getArgumentExpression());
-  return !!(
-    Node.isIdentifier(receiver) &&
-    receiver.getSymbol() &&
-    requestSymbolKey(receiver.getSymbol()!) === requestSymbolKey(parameterSymbol) &&
-    member &&
-    columns
-      .getProperties()
-      .some(
-        (property) =>
-          Node.isPropertyAssignment(property) &&
-          staticMemberName(property.getNameNode()) === member,
-      )
-  );
 }
 
 function requestExpressionIsClosedStaticData(expression: Node): boolean {
@@ -33738,6 +33851,7 @@ function requestReviewedDrizzleTableIsPristine(
         resolvesToTable(access.getExpression()) &&
         requestReviewedDrizzleTableHasColumn(table, member) &&
         !requestDrizzleColumnAccessIsExactReferenceCallback(access) &&
+        !requestDrizzleColumnAccessIsExactKovoParentKey(access) &&
         !requestNodeIsReviewedDrizzleDataArgument(access, callable) &&
         !requestNodeIsReviewedDrizzleDataArgumentInDeclaredRoot(access, context.provenance)
       ) {
@@ -33857,12 +33971,51 @@ function requestDrizzleColumnAccessIsExactReferenceCallback(access: Node): boole
   );
 }
 
+function requestDrizzleColumnAccessIsExactKovoParentKey(access: Node): boolean {
+  if (!Node.isPropertyAccessExpression(access) && !Node.isElementAccessExpression(access)) {
+    return false;
+  }
+  const property = access.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const ownerVia = property?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const ownerViaProperty = ownerVia?.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const config = ownerViaProperty?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  if (
+    !property ||
+    staticMemberName(property.getNameNode()) !== 'parentKey' ||
+    !ownerVia ||
+    !ownerViaProperty ||
+    staticMemberName(ownerViaProperty.getNameNode()) !== 'ownerVia' ||
+    !config ||
+    !requestExactKovoCallForAnnotationObject(config)
+  ) {
+    return false;
+  }
+  const parent = ownerVia
+    .getProperties()
+    .find(
+      (candidate): candidate is import('ts-morph').PropertyAssignment =>
+        Node.isPropertyAssignment(candidate) &&
+        staticMemberName(candidate.getNameNode()) === 'parent',
+    )
+    ?.getInitializer();
+  const parentTable = parent ? requestReviewedDrizzleTableForDirectReference(parent) : undefined;
+  const keyTable = requestReviewedDrizzleTableForDirectReference(access.getExpression());
+  return !!(
+    parentTable &&
+    keyTable &&
+    requestNodesAreSame(parentTable.declaration, keyTable.declaration)
+  );
+}
+
 function requestReviewedDrizzleTableReferenceIsClosed(
   reference: import('ts-morph').Identifier,
   callable: RequestCallable,
   session: RequestProvenanceSession,
 ): boolean {
   if (requestDrizzleOwnerViaParentReferenceIsClosed(reference)) return true;
+  if (requestDrizzleColumnAccessIsExactKovoParentKey(reference.getParent() ?? reference)) {
+    return true;
+  }
   const sqliteRuntimeData = reference.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
   const sqliteRuntimeName = sqliteRuntimeData?.getName();
   if (
@@ -33951,7 +34104,7 @@ function requestDrizzleOwnerViaParentReferenceIsClosed(
   const ownerViaObject = parentProperty?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
   const ownerViaProperty = ownerViaObject?.getParentIfKind(SyntaxKind.PropertyAssignment);
   const config = ownerViaProperty?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
-  const kovoCall = config?.getParentIfKind(SyntaxKind.CallExpression);
+  const kovoCall = config ? requestExactKovoCallForAnnotationObject(config) : undefined;
   const tableCall = kovoCall?.getParentIfKind(SyntaxKind.CallExpression);
   return !!(
     parentProperty &&

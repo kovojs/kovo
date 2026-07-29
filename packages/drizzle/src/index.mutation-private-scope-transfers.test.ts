@@ -21,7 +21,7 @@ describe('@kovojs/drizzle mutation private-scope transfers', () => {
           'import { kovo, kovoAnalyzerSummary } from "@kovojs/drizzle";',
           'import { mutation } from "@kovojs/server";',
           '',
-          'export const accounts = pgTable("accounts", { id: text("id").primaryKey(), tenantId: text("tenant_id").notNull() }, kovo({ domain: "account", key: "id" }));',
+          'export const accounts = pgTable("accounts", { id: text("id").primaryKey(), tenantId: text("tenant_id").notNull() }, kovo((columns) => ({ domain: "account", key: "id" })));',
           '',
           'function requestTenantId(request: { tenant: { id: string } }) { return request.tenant.id; }',
           'function unsummarizedTenantId(request: { tenant: { id: string } }) { return request.tenant.id; }',

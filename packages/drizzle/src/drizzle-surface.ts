@@ -12,6 +12,7 @@ import {
   runtimeSet,
   runtimeSetAdd,
 } from './runtime-security-intrinsics.js';
+import type { AnyColumn, SQL, Table } from 'drizzle-orm';
 
 export const DRIZZLE_TABLE_FACTORY_NAMES = immutablePolicySet(['pgTable', 'sqliteTable']);
 
@@ -50,23 +51,36 @@ export type KovoAnalyzerFunctionSummary = {
   returns: { kind: KovoAnalyzerPrivateScopeKind; path: string };
 };
 
+declare const kovoAnnotationColumnIdentity: unique symbol;
+
 /**
- * A column reference inside a Kovo annotation: either the column name as a
- * string, or a `(table) => table.column` selector (the Drizzle idiom, SPEC
- * §10.1). The selector is read statically by the compiler and is never called at
- * runtime — the compiler resolves and validates the referenced column — so
- * renaming the column surfaces at the annotation site.
+ * One exact column from the table currently being annotated.
+ *
+ * The private type witness is an author-time guardrail: only a property read from the `columns`
+ * argument of the enclosing {@link kovo} callback inhabits this type. Runtime extraction still
+ * verifies the concrete Drizzle table/column object identity and the compiler independently
+ * resolves the same source expression (SPEC §10.1).
  */
-export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknown);
+export type KovoColumnRef<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = {
+  readonly [Key in keyof Columns]: Columns[Key] & {
+    readonly [kovoAnnotationColumnIdentity]: {
+      readonly columns: Columns;
+      readonly key: Key;
+    };
+  };
+}[keyof Columns];
 
-/** Column-level confidentiality annotation consumed by the Phase 1 secret wire gate. */
-export type KovoSecretColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+/** Column-level confidentiality annotation consumed by the secret wire gate. */
+export type KovoSecretColumnAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = true | KovoColumnRef<Columns> | readonly KovoColumnRef<Columns>[];
 
-/** Column-level at-rest confidentiality annotation consumed by the OPP-04 write gate. */
-export type KovoConfidentialAtRestColumnAnnotation =
-  | true
-  | KovoColumnRef
-  | readonly KovoColumnRef[];
+/** Column-level at-rest confidentiality annotation consumed by the encrypted-write gate. */
+export type KovoConfidentialAtRestColumnAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = true | KovoColumnRef<Columns> | readonly KovoColumnRef<Columns>[];
 
 /**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
@@ -74,9 +88,11 @@ export type KovoConfidentialAtRestColumnAnnotation =
  * to a write `when` (`insert`/`update`/`delete`). The element type of `KovoTableAnnotation.fans`
  * and `KovoDomainTableAnnotation.fans` (SPEC §10.1 / KV413 declared engine-side-effect edges).
  */
-export interface KovoFanAnnotation {
+export interface KovoFanAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> {
   domain: string;
-  via: KovoColumnRef;
+  via: KovoColumnRef<Columns>;
   when?: 'delete' | 'insert' | 'update';
 }
 
@@ -93,7 +109,9 @@ export interface KovoViewAnnotation {
  * governs the rest (`role`/`balance`/`isAdmin`/…). `true` would govern every column
  * (rarely wanted); the usual form is a column ref or list.
  */
-export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoColumnRef[];
+export type KovoGovernedColumnAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = true | KovoColumnRef<Columns> | readonly KovoColumnRef<Columns>[];
 
 /**
  * Names columns whose single-row read-modify-write MUST fold the check and the act into
@@ -103,35 +121,43 @@ export type KovoGovernedColumnAnnotation = true | KovoColumnRef | readonly KovoC
  * is a lost-update race. `atomic` names the contended value column; `version` names an
  * optimistic-concurrency counter that, when guarded in the `where()`, discharges the gate.
  */
-export type KovoConcurrencyColumnAnnotation = KovoColumnRef | readonly KovoColumnRef[];
+export type KovoConcurrencyColumnAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = KovoColumnRef<Columns> | readonly KovoColumnRef<Columns>[];
 
 /** A domain annotation can use explicit external vocabulary or a source-derived Kovo domain value. */
 export type KovoDomainRef = string | { key: string };
 
-/** Declares ownership through a parent table relation (fundamental-fixes-followup-5 DEC-I/DEC-K). */
-export interface KovoOwnerViaAnnotation {
-  fk: KovoColumnRef;
-  parent: unknown;
-  parentKey: KovoColumnRef;
+/** Declares ownership through one concrete parent-table relation (SPEC §10.1). */
+export interface KovoOwnerViaAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+> {
+  fk: KovoColumnRef<Columns>;
+  parent: Parent;
+  parentKey: Parent['_']['columns'][keyof Parent['_']['columns']];
 }
 
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
-export type KovoTableAnnotation =
+export type KovoTableAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+> =
   | {
-      atomic?: KovoConcurrencyColumnAnnotation;
-      authzPolicy?: unknown;
-      confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
+      atomic?: KovoConcurrencyColumnAnnotation<Columns>;
+      authzPolicy?: SQL<boolean> | string;
+      confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation<Columns>;
       domain: KovoDomainRef;
-      fans?: readonly KovoFanAnnotation[];
-      governed?: KovoGovernedColumnAnnotation;
-      key?: KovoColumnRef;
-      owner?: KovoColumnRef;
-      ownerVia?: KovoOwnerViaAnnotation;
+      fans?: readonly KovoFanAnnotation<Columns>[];
+      governed?: KovoGovernedColumnAnnotation<Columns>;
+      key?: KovoColumnRef<Columns> | readonly [KovoColumnRef<Columns>, ...KovoColumnRef<Columns>[]];
+      owner?: KovoColumnRef<Columns>;
+      ownerVia?: KovoOwnerViaAnnotation<Columns, Parent>;
       public?: true;
       readOnly?: true;
       reference?: true;
-      secret?: KovoSecretColumnAnnotation;
-      version?: KovoConcurrencyColumnAnnotation;
+      secret?: KovoSecretColumnAnnotation<Columns>;
+      version?: KovoConcurrencyColumnAnnotation<Columns>;
     }
   | {
       exempt: true;
@@ -142,34 +168,41 @@ export interface KovoViewExtraConfigAnnotation {
   view: KovoViewAnnotation;
 }
 
-export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation;
+type KovoAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+> = KovoTableAnnotation<Columns, Parent> | KovoViewExtraConfigAnnotation;
 
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
-export interface KovoDomainTableAnnotation {
-  atomic?: KovoConcurrencyColumnAnnotation;
-  authzPolicy?: unknown;
-  confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
+export interface KovoDomainTableAnnotation<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+> {
+  atomic?: KovoConcurrencyColumnAnnotation<Columns>;
+  authzPolicy?: SQL<boolean> | string;
+  confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation<Columns>;
   domain: KovoDomainRef;
-  fans?: readonly KovoFanAnnotation[];
-  governed?: KovoGovernedColumnAnnotation;
-  key?: KovoColumnRef;
-  owner?: KovoColumnRef;
-  ownerVia?: KovoOwnerViaAnnotation;
+  fans?: readonly KovoFanAnnotation<Columns>[];
+  governed?: KovoGovernedColumnAnnotation<Columns>;
+  key?: KovoColumnRef<Columns> | readonly [KovoColumnRef<Columns>, ...KovoColumnRef<Columns>[]];
+  owner?: KovoColumnRef<Columns>;
+  ownerVia?: KovoOwnerViaAnnotation<Columns, Parent>;
   public?: true;
   readOnly?: true;
   reference?: true;
-  secret?: KovoSecretColumnAnnotation;
-  version?: KovoConcurrencyColumnAnnotation;
+  secret?: KovoSecretColumnAnnotation<Columns>;
+  version?: KovoConcurrencyColumnAnnotation<Columns>;
 }
 
-/** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
-export type KovoTableExtraConfig = KovoDomainTableAnnotation &
-  ((self: unknown) => []) & {
-    exempt?: true;
-  };
+/** The opaque Drizzle extra-config callback returned by {@link kovo}. */
+export type KovoTableExtraConfig<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = (self: Columns) => [];
 
-/** The value `kovo({ view })` returns for a Drizzle view/materialized-view declaration. */
-export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknown) => []);
+/** The opaque extra-config callback returned for a view/materialized-view annotation. */
+export type KovoViewExtraConfig<
+  Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
+> = (self: Columns) => [];
 
 /**
  * Annotate a Drizzle table with the invalidation domain it belongs to, mark it
@@ -178,8 +211,9 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key?, owner?, readOnly?, secret?, confidentialAtRest? }`
- *   binding (`owner` names the principal-owning column for the §10.3 IDOR audit and
+ * @param annotation - A callback receiving the concrete columns for the table being annotated.
+ *   It returns a `{ domain, key?, owner?, readOnly?, secret?, confidentialAtRest? }` binding
+ *   (`owner` names the principal-owning column for the §10.3 IDOR audit and
  *   `readOnly` marks externally-owned/CMS-style content read by the app but not invalidated by
  *   Kovo mutations (SPEC §4.10),
  *   `secret` names confidential columns for the Phase 1 wire gate; `confidentialAtRest`
@@ -189,21 +223,76 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * @example
  * import { kovo } from '@kovojs/drizzle';
  *
- * export const cartConfig = () => kovo({ domain: 'cart', key: (t) => t.id });
+ * export const cartConfig = () => kovo((columns) => ({
+ *   domain: 'cart',
+ *   key: columns.id,
+ * }));
  */
-export function kovo(annotation: KovoViewExtraConfigAnnotation): KovoViewExtraConfig;
-export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig;
-export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoViewExtraConfig {
-  const extraConfig = (() => []) as (self: unknown) => [];
-  const snapshot = snapshotKovoAnnotation(annotation);
-  for (let index = 0; index < kovoAnnotationKeys.length; index += 1) {
-    const key = kovoAnnotationKeys[index]!;
-    const value = runtimeOwnDataValue(snapshot, key);
-    if (value.found) {
-      runtimeDefineOwnData(extraConfig, key, value.value, 'Kovo Drizzle annotation');
-    }
+export function kovo<
+  Columns extends Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+>(
+  annotation: (columns: {
+    readonly [Key in keyof Columns]: Columns[Key] & {
+      readonly [kovoAnnotationColumnIdentity]: {
+        readonly columns: Columns;
+        readonly key: Key;
+      };
+    };
+  }) => KovoTableAnnotation<Columns, Parent>,
+): KovoTableExtraConfig<Columns>;
+export function kovo<Columns extends Readonly<Record<string, AnyColumn>>>(
+  annotation: (columns: {
+    readonly [Key in keyof Columns]: Columns[Key] & {
+      readonly [kovoAnnotationColumnIdentity]: {
+        readonly columns: Columns;
+        readonly key: Key;
+      };
+    };
+  }) => KovoViewExtraConfigAnnotation,
+): KovoViewExtraConfig<Columns>;
+export function kovo<
+  Columns extends Readonly<Record<string, AnyColumn>>,
+  Parent extends Table = Table,
+>(
+  annotation: (columns: {
+    readonly [Key in keyof Columns]: Columns[Key] & {
+      readonly [kovoAnnotationColumnIdentity]: {
+        readonly columns: Columns;
+        readonly key: Key;
+      };
+    };
+  }) => KovoAnnotation<Columns, Parent>,
+): KovoTableExtraConfig<Columns> | KovoViewExtraConfig<Columns> {
+  if (typeof annotation !== 'function') {
+    throw new TypeError('kovo() requires a direct annotation callback.');
   }
-  return runtimeFreeze(extraConfig) as KovoTableExtraConfig | KovoViewExtraConfig;
+  let initialized = false;
+  const extraConfig = ((self: Columns) => {
+    if (initialized) return [];
+    const snapshot = snapshotKovoAnnotation(
+      annotation(
+        self as {
+          readonly [Key in keyof Columns]: Columns[Key] & {
+            readonly [kovoAnnotationColumnIdentity]: {
+              readonly columns: Columns;
+              readonly key: Key;
+            };
+          };
+        },
+      ),
+    );
+    for (let index = 0; index < kovoAnnotationKeys.length; index += 1) {
+      const key = kovoAnnotationKeys[index]!;
+      const value = runtimeOwnDataValue(snapshot, key);
+      if (value.found) {
+        runtimeDefineOwnData(extraConfig, key, value.value, 'Kovo Drizzle annotation');
+      }
+    }
+    initialized = true;
+    return [];
+  }) as KovoTableExtraConfig<Columns>;
+  return extraConfig;
 }
 
 const kovoAnnotationKeys = [
@@ -225,9 +314,9 @@ const kovoAnnotationKeys = [
   'view',
 ] as const;
 
-function snapshotKovoAnnotation(annotation: KovoAnnotation): Readonly<Record<string, unknown>> {
+function snapshotKovoAnnotation(annotation: object): Readonly<Record<string, unknown>> {
   if (typeof annotation !== 'object' || annotation === null) {
-    throw new TypeError('kovo() requires an annotation object.');
+    throw new TypeError('kovo() annotation callback must return an annotation object.');
   }
   assertKnownKovoAnnotationFields(annotation, kovoAnnotationKeys, 'Kovo Drizzle annotation');
   const snapshot: Record<string, unknown> = {};
@@ -372,13 +461,13 @@ function immutablePolicySet(values: readonly string[]): ReadonlySet<string> {
 }
 
 export function isDomainTableAnnotation(
-  annotation: KovoTableAnnotation & { name?: string },
-): annotation is KovoDomainTableAnnotation & { name: string } {
+  annotation: KovoTableAnnotation<KovoDrizzleColumns> & { name?: string },
+): annotation is KovoDomainTableAnnotation<KovoDrizzleColumns> & { name: string } {
   return 'domain' in annotation;
 }
 
 export function isExemptTableAnnotation(
-  annotation: KovoTableAnnotation & { name?: string },
+  annotation: KovoTableAnnotation<KovoDrizzleColumns> & { name?: string },
 ): annotation is { exempt: true; name: string } {
   return 'exempt' in annotation && annotation.exempt === true;
 }

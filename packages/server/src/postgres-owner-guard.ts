@@ -1,4 +1,4 @@
-import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
+import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type AnyPgColumn, type AnyPgTable } from 'drizzle-orm/pg-core';
 

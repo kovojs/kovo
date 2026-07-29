@@ -245,7 +245,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
           'function kovo<T>(value: T): T { return value; }',
           'function query(_name: string, definition: unknown): unknown { return definition; }',
           'function trustedSql<T>(value: T): T { return value; }',
-          'export const accounts = pgTable("accounts", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), role: text("role").notNull() }, kovo({ domain: "account", key: "id", owner: "ownerId", governed: ["role"] }));',
+          'export const accounts = pgTable("accounts", { id: text("id").primaryKey(), ownerId: text("owner_id").notNull(), role: text("role").notNull() }, kovo((columns) => ({ domain: "account", key: "id", owner: "ownerId", governed: ["role"] })));',
           'export const fakeQuery = query("fake", {',
           '  load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
           '    return db.select({ id: accounts.id, role: accounts.role }).from(accounts).where(eq(accounts.id, input.id));',

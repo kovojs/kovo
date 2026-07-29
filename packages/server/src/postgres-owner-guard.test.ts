@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { kovo, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
+import { kovo } from '@kovojs/drizzle';
+import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { getTableColumns } from 'drizzle-orm';
 import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { sqliteTable, text as sqliteText } from 'drizzle-orm/sqlite-core';

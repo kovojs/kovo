@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
-import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
+import { kovo } from '@kovojs/drizzle';
+import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isSecret, revealSecret } from '@kovojs/core/security';
-import { extractKovoRuntimeDbMetadata, kovo } from '@kovojs/drizzle';
+import { kovo } from '@kovojs/drizzle';
+import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { PGlite } from '@electric-sql/pglite';
 import Database from 'better-sqlite3';
 import { defineRelations, sql as drizzleSql } from 'drizzle-orm';

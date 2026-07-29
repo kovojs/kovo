@@ -14,6 +14,9 @@ import {
   validateSqlIdentifier,
 } from '@kovojs/core/internal/sql-safety';
 
+declare const kovoSqlIdentity: unique symbol;
+declare const kovoSqlFragmentIdentity: unique symbol;
+
 const DrizzleNativeNumber = globalThis.Number;
 const DrizzleNativeObject = globalThis.Object;
 const DrizzleNativeReflect = globalThis.Reflect;
@@ -118,16 +121,6 @@ export type {
   KovoViewExtraConfigAnnotation,
 } from './drizzle-surface.js';
 export { kovo, kovoAnalyzerSummary } from './drizzle-surface.js';
-export { extractKovoRuntimeDbMetadata } from './runtime-metadata.js';
-export type {
-  KovoRuntimeAuthorizationClassification,
-  KovoRuntimeDbColumnSource,
-  KovoRuntimeDbMetadata,
-  KovoRuntimeDbTable,
-  KovoRuntimeKeySource,
-  KovoRuntimeOwnerSource,
-  KovoRuntimeOwnerViaSource,
-} from './runtime-metadata.js';
 // KV429 (SPEC §10.3/§11.1): compare-and-set helper — folds check+act into one UPDATE…WHERE
 // so a lost-update race is impossible by construction. Zero rowsAffected → CasConflict;
 // ≥1 rowsAffected → CasSuccess. Pair with StaleVersionError from @kovojs/server.
@@ -140,14 +133,7 @@ export type { CasConflict, CasResult, CasSuccess, DrizzleUpdateResult } from './
  * Produced by {@link sql}; scalar interpolations are bound parameters rather than SQL text.
  */
 export interface KovoParameterizedSql<T = unknown> extends SQL<T> {
-  /**
-   * Version-tolerant Drizzle `SQLWrapper` bridge. Apps may resolve a different
-   * Drizzle minor than this package's dev dependency; returning `any` keeps the
-   * wrapper structurally accepted by those sinks while runtime still returns the
-   * concrete Drizzle SQL object produced below.
-   */
-  getSQL(): any;
-  readonly __kovoSqlBrand?: 'parameterized';
+  readonly [kovoSqlIdentity]: 'parameterized';
 }
 
 /**
@@ -156,9 +142,7 @@ export interface KovoParameterizedSql<T = unknown> extends SQL<T> {
  * Produced by {@link staticSql}, {@link sql.identifier}, and {@link sql.allow}.
  */
 export interface KovoStaticSql<T = unknown> extends SQL<T> {
-  /** See {@link KovoParameterizedSql.getSQL}. */
-  getSQL(): any;
-  readonly __kovoSqlBrand?: 'static';
+  readonly [kovoSqlIdentity]: 'static';
 }
 
 /**
@@ -168,9 +152,7 @@ export interface KovoStaticSql<T = unknown> extends SQL<T> {
  * source-visible justification.
  */
 export interface KovoTrustedSql<T = unknown> extends SQL<T> {
-  /** See {@link KovoParameterizedSql.getSQL}. */
-  getSQL(): any;
-  readonly __kovoSqlBrand?: 'trusted';
+  readonly [kovoSqlIdentity]: 'trusted';
 }
 
 /**
@@ -180,7 +162,7 @@ export interface KovoTrustedSql<T = unknown> extends SQL<T> {
  * by an allowlist before the witness is minted.
  */
 export interface KovoSqlIdentifier<T = unknown> extends KovoStaticSql<T> {
-  readonly __kovoSqlIdentifierBrand?: 'identifier';
+  readonly [kovoSqlFragmentIdentity]: 'identifier';
 }
 
 /**
@@ -189,7 +171,7 @@ export interface KovoSqlIdentifier<T = unknown> extends KovoStaticSql<T> {
  * Produced by {@link sql.allow}; the value must match the supplied static allowlist.
  */
 export interface KovoSqlKeyword<T = unknown> extends KovoStaticSql<T> {
-  readonly __kovoSqlKeywordBrand?: 'keyword';
+  readonly [kovoSqlFragmentIdentity]: 'keyword';
 }
 
 type SqlTag = (<T = unknown>(
@@ -288,7 +270,7 @@ export function staticSql<T = unknown>(
     drizzleApply<SQL<T>>(drizzleRaw, drizzleSql, [text]),
     {},
     { kind: 'text', text },
-  );
+  ) as KovoStaticSql<T>;
 }
 
 /**
@@ -303,7 +285,7 @@ export function trustedSql<TResult = unknown, T extends SQL<TResult> = SQL<TResu
   if (typeof justification !== 'string') {
     throw new TypeError('trustedSql justification must be an own string data property.');
   }
-  return stampTrustedSql(statement, justification);
+  return stampTrustedSql(statement, justification) as T & KovoTrustedSql<TResult>;
 }
 
 function drizzleOwnDataOption(value: object, property: PropertyKey, label: string): unknown {

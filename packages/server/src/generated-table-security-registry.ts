@@ -1,5 +1,8 @@
-import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
-import { extractCompilerBoundKovoRuntimeDbMetadata as extractDrizzleCompilerBoundRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
+import {
+  extractCompilerBoundKovoRuntimeDbMetadata as extractDrizzleCompilerBoundRuntimeDbMetadata,
+  extractKovoRuntimeDbMetadata,
+  type KovoRuntimeDbMetadata,
+} from '@kovojs/drizzle/internal/runtime-metadata';
 
 import {
   runtimeRegistryTableSecurityFromFacts,

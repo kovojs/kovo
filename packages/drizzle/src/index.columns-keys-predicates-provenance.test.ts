@@ -28,7 +28,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'import { mutation } from "@kovojs/server";',
           '',
           'interface AppRequest { db: PgAsyncDatabase<any, any>; session: { id: string } }',
-          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
           '',
           'function requireSessionId(request: { session: { id: string } }) {',
           '  return request.session.id;',
@@ -87,7 +87,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
@@ -122,7 +122,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'import { and, eq } from "drizzle-orm";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
-          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
           '',
           'function requireSessionId(request: { session?: { id?: string } | null }) {',
           '  if (!request.session?.id) throw new Error("auth required");',
@@ -174,7 +174,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'declare function audit(value: string): void;',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
@@ -211,7 +211,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'declare function normalize(value: string): Promise<string>;',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
@@ -249,7 +249,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'import { mutation } from "@kovojs/server";',
           '',
           'interface AppRequest { db: PgAsyncDatabase<any, any>; tenant: { id: string } }',
-          'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
+          'export const tickets = pgTable("tickets", {}, kovo((columns) => ({ domain: "ticket", key: "tenantId,id" })));',
           '',
           'function tenantId(request: { tenant: { id: string } }) {',
           '  return request.tenant.id;',
@@ -307,7 +307,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  let sessionId = request.session?.id;',
@@ -343,7 +343,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  const sessionId = request.session?.id;',
@@ -377,7 +377,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { and, eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            'export const questions = pgTable("questions", {}, kovo((columns) => ({ domain: "question", key: "sessionId,id" })));',
             '',
             'export async function voteUp(db: PgAsyncDatabase<any, any>, request: { session?: { id?: string } | null }, targetId: string) {',
             '  let sessionId = request.session?.id;',
@@ -413,7 +413,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { eq } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'export async function syncProduct(db: PgAsyncDatabase<any, any>) {',
             '  const randomLocal = "p1";',
@@ -461,8 +461,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'import { gt } from "drizzle-orm";',
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: "id" })));',
+            'export const prices = pgTable("prices", {}, kovo((columns) => ({ domain: "price", key: "productId" })));',
             '',
             'export async function syncProduct(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(gt(products.id, productId));',
@@ -526,10 +526,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const prices = pgTable("prices", {',
             '  amount: integer("amount").notNull(),',
             '  productId: text("product_id").notNull(),',
-            '}, kovo({ domain: "price", key: "productId" }));',
+            '}, kovo((columns) => ({ domain: "price", key: "productId" })));',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             'const priceAlias = alias(prices, "pr");',
             'const productAlias = alias(products, "p");',
             '',
@@ -591,8 +591,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.schema.ts',
           source: `
-          const hiddenProducts = pgTable("hidden_products", {}, kovo({ domain: "hidden", key: "id" }));
-          export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
+          const hiddenProducts = pgTable("hidden_products", {}, kovo((columns) => ({ domain: "hidden", key: "id" })));
+          export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: "id" })));
         `,
         },
         {
@@ -635,7 +635,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'schema.ts',
           source: `
-            export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
+            export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: "id" })));
           `,
         },
         {
@@ -691,7 +691,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'schema.ts',
           source: `
-            export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
+            export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: "id" })));
           `,
         },
         {

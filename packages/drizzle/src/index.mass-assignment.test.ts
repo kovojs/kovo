@@ -10,7 +10,7 @@ import { pgDatabaseTypes } from './test-helpers.js';
 
 // @kovo-security-classifier-corpus drizzle-analyzer-provenance
 // SPEC §10.3/§11.1 — the §11.1 mass-assignment write-provenance gate (KV438).
-// Governed columns: the table `key` (PK) + `owner` (auto-governed) + `kovo({ governed })`.
+// Governed columns: the table `key` (PK) + `owner` (auto-governed) + `kovo((columns) => ({ governed }))`.
 
 const dbTypes = pgDatabaseTypes([
   'insert(table: unknown): { values(value: unknown): { onConflictDoUpdate(c: unknown): Promise<void> } & Promise<void> };',
@@ -30,7 +30,7 @@ function facts(domainSource: string) {
           '  role: text("role").notNull(),',
           '  balance: integer("balance").notNull(),',
           '  name: text("name").notNull(),',
-          '}, kovo({ domain: "account", key: "id", owner: "ownerId", governed: ["role", "balance"] }));',
+          '}, kovo((columns) => ({ domain: "account", key: "id", owner: "ownerId", governed: ["role", "balance"] })));',
         ].join('\n'),
       },
       { fileName: 'account.domain.ts', source: domainSource },
@@ -49,7 +49,7 @@ function passwordFacts(domainSource: string) {
           '  id: text("id").primaryKey(),',
           '  email: text("email").notNull(),',
           '  passwordHash: text("password_hash").notNull(),',
-          '}, kovo({ domain: "user" }));',
+          '}, kovo((columns) => ({ domain: "user" })));',
         ].join('\n'),
       },
       { fileName: 'user.domain.ts', source: domainSource },
@@ -68,7 +68,7 @@ function confidentialFacts(domainSource: string, annotation = 'confidentialAtRes
           '  id: text("id").primaryKey(),',
           '  ssn: text("ssn").notNull(),',
           '  nickname: text("nickname").notNull(),',
-          `}, kovo({ domain: "profile", key: "id", ${annotation} }));`,
+          `}, kovo((columns) => ({ domain: "profile", key: "id", ${annotation} })));`,
         ].join('\n'),
       },
       { fileName: 'profile.domain.ts', source: domainSource },
@@ -597,7 +597,7 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         {
           fileName: 'schema.ts',
           source:
-            'export const logs = pgTable("logs", { msg: text("msg") }, kovo({ domain: "log" }));',
+            'export const logs = pgTable("logs", { msg: text("msg") }, kovo((columns) => ({ domain: "log" })));',
         },
         {
           fileName: 'log.domain.ts',

@@ -74,7 +74,7 @@ function rawWriteSource({
   return [
     importLine,
     '',
-    `export const orders = ${tableFactory}("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));`,
+    `export const orders = ${tableFactory}("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));`,
     '',
     'export const order = domain({',
     `  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: ${dbType}, input: { id: string }) => {`,
@@ -93,7 +93,7 @@ function rawMutationSource({
   return [
     importLine,
     '',
-    `export const rawOwners = ${tableFactory}("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));`,
+    `export const rawOwners = ${tableFactory}("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "raw-owner", key: "id", owner: "userId" })));`,
     '',
     'export const addContact = mutation({',
     '  registry: { tables: ["raw_owners"] },',
@@ -115,7 +115,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
           source: [
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
             '',
             'export const order = domain({',
             '  cancel: write(async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -151,7 +151,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
           source: [
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
             '',
             'export const order = domain({',
             '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -227,7 +227,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
           source: [
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+            'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
             '',
             'export const order = domain({',
             '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -264,7 +264,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
           source: [
             'import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";',
             '',
-            'export const orders = sqliteTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+            'export const orders = sqliteTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
             '',
             'export const order = domain({',
             '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: SQLiteAsyncDatabase<any, any, any>, input: { id: string }) => {',
@@ -417,7 +417,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -453,7 +453,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { trustedSql } from "@kovojs/drizzle";',
               '',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -480,7 +480,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             'import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";',
             'import { trustedSql } from "@kovojs/drizzle";',
             '',
-            'export const orders = sqliteTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+            'export const orders = sqliteTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
             '',
             'export const order = domain({',
             '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: SQLiteAsyncDatabase<any, any, any>, input: { id: string }) => {',
@@ -507,7 +507,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
               'function trustedSql<T>(value: T, _options: { justification: string }): T { return value; }',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "order", key: "id", owner: "userId" })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string }) => {',
@@ -541,7 +541,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo({ domain: "order", key: "id", governed: ["status"] }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo((columns) => ({ domain: "order", key: "id", governed: ["status"] })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string; status: string }) => {',
@@ -578,7 +578,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               'import { trustedSql } from "@kovojs/drizzle";',
               '',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo({ domain: "order", key: "id", governed: ["status"] }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo((columns) => ({ domain: "order", key: "id", governed: ["status"] })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string; status: string }) => {',
@@ -605,7 +605,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
               'function trustedSql<T>(value: T, _options: { justification: string }): T { return value; }',
-              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo({ domain: "order", key: "id", governed: ["status"] }));',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo((columns) => ({ domain: "order", key: "id", governed: ["status"] })));',
               '',
               'export const order = domain({',
               '  cancel: write({ tables: ["orders"], touches: ["order"], run: async (db: PgAsyncDatabase<any, any>, input: { id: string; status: string }) => {',
@@ -641,7 +641,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
-              'export const rawOrders = pgTable("raw_orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo({ domain: "raw-order", key: "id", governed: ["status"] }));',
+              'export const rawOrders = pgTable("raw_orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo((columns) => ({ domain: "raw-order", key: "id", governed: ["status"] })));',
               '',
               'async function updateOrderStatus(input: { id: string; status: string }, db: PgAsyncDatabase<any, any>) {',
               '  await db.execute(sql`update raw_orders set status = ${input.status} where id = ${input.id}`);',
@@ -682,7 +682,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
-              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "raw-owner", key: "id", owner: "userId" })));',
               '',
               'export const addContact = mutation({',
               '  registry: { tables: ["raw_owners"] },',
@@ -719,7 +719,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
             source: [
               'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
               '',
-              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "raw-owner", key: "id", owner: "userId" })));',
               '',
               'async function addContactRow(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
               '  await db.execute(sql`update raw_owners set label = ${"x"} where id = ${input.id}`);',
@@ -757,7 +757,7 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
           {
             fileName: 'schema.ts',
             source:
-              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo((columns) => ({ domain: "raw-owner", key: "id", owner: "userId" })));',
           },
           {
             fileName: 'mutations.ts',

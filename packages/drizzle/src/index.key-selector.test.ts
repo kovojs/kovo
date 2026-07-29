@@ -11,7 +11,7 @@ const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 
-// SPEC §10.1: `kovo({ key })` accepts a column name OR a `(t) => t.col` selector
+// SPEC §10.1: `kovo((columns) => ({ key }))` accepts a column name OR a `(t) => t.col` selector
 // (the Drizzle idiom). The compiler reads the selector statically, so a keyed
 // read must derive the same `instanceKey` from either form. The annotation key
 // drives instance-keying (matched against the read's `where` predicate), so a
@@ -27,8 +27,8 @@ const factsForCartKey = (cartKey: string) =>
         source: [
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
-          `export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, kovo({ domain: "cart", key: ${cartKey} }));`,
-          'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));',
+          `export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, kovo((columns) => ({ domain: "cart", key: ${cartKey} })));`,
+          'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo((columns) => ({ domain: "product", key: "id" })));',
           '',
           'export const cartQuery = query("cart", {',
           '  output: s.object({ count: s.number() }),',
@@ -45,7 +45,7 @@ const factsForCartKey = (cartKey: string) =>
     ],
   });
 
-describe('@kovojs/drizzle kovo({ key }) column selector (SPEC §10.1)', () => {
+describe('@kovojs/drizzle kovo((columns) => ({ key })) column selector (SPEC §10.1)', () => {
   it('derives the same instanceKey from a (t) => t.col selector as from a string key', () => {
     const stringForm = factsForCartKey('"cartId"');
     const selectorForm = factsForCartKey('(t) => t.cartId');
@@ -76,11 +76,11 @@ describe('@kovojs/drizzle kovo({ key }) column selector (SPEC §10.1)', () => {
                 apiToken: text("api_token").notNull(),
                 id: text("id").primaryKey(),
                 passwordHash: text("password_hash").notNull(),
-              }, kovo({ domain: "user", key: "id", secret: ["passwordHash", (t) => t.apiToken] }));
+              }, kovo((columns) => ({ domain: "user", key: "id", secret: ["passwordHash", (t) => t.apiToken] })));
               export const vault = pgTable("vault", {
                 id: text("id").primaryKey(),
                 payload: text("payload").notNull(),
-              }, kovo({ domain: "vault", key: "id", secret: true }));
+              }, kovo((columns) => ({ domain: "vault", key: "id", secret: true })));
             `,
           },
         ],

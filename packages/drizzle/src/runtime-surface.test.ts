@@ -314,17 +314,32 @@ describe('@kovojs/drizzle runtime surface', () => {
     const runtimeSource = drizzleRuntimeSource();
     const staticSource = drizzleStaticSource();
 
-    expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
-    expect(runtime.kovo({ domain: 'note', key: 'id', readOnly: true }).readOnly).toBe(true);
-    expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
-      'passwordHash',
-    ]);
-    expect(
-      runtime.kovo({ confidentialAtRest: ['ssn'], domain: 'profile', key: 'id' })
-        .confidentialAtRest,
-    ).toEqual(['ssn']);
+    const cart = runtime.kovo((columns) => ({ domain: 'cart', key: columns.id }));
+    const note = runtime.kovo((columns) => ({
+      domain: 'note',
+      key: columns.id,
+      readOnly: true,
+    }));
+    const user = runtime.kovo((columns) => ({
+      domain: 'user',
+      key: columns.id,
+      secret: [columns.passwordHash],
+    }));
+    const profile = runtime.kovo((columns) => ({
+      confidentialAtRest: [columns.ssn],
+      domain: 'profile',
+      key: columns.id,
+    }));
+    const compatibilityCart = compatibilityBarrel.kovo((columns) => ({
+      domain: 'cart',
+      key: columns.id,
+    }));
+    expect(cart).toBeTypeOf('function');
+    expect(note).toBeTypeOf('function');
+    expect(user).toBeTypeOf('function');
+    expect(profile).toBeTypeOf('function');
+    expect(compatibilityCart).toBeTypeOf('function');
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
-    expect(compatibilityBarrel.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);
     // SPEC §11.1 (v1 scope): source-mode extraction was removed in v1-cleanup item 4; only the
     // project-mode ts-morph entry points remain on the static surface.
@@ -376,38 +391,50 @@ describe('@kovojs/drizzle runtime surface', () => {
     const runtime = await import('@kovojs/drizzle');
 
     expect(() =>
-      runtime.kovo({ domain: 'user', key: 'id', secrect: ['passwordHash'] } as never),
+      runtime.kovo(
+        () =>
+          ({
+            domain: 'user',
+            secrect: ['passwordHash'],
+          }) as never,
+      )({} as never),
     ).toThrow(/Unknown Kovo Drizzle annotation field "secrect"/u);
     expect(() =>
-      runtime.kovo({
-        domain: 'order',
-        key: 'id',
-        ownerVia: { fk: 'accountId', parrent: {}, parentKey: 'id' },
-      } as never),
+      runtime.kovo(
+        () =>
+          ({
+            domain: 'order',
+            ownerVia: { fk: 'accountId', parrent: {}, parentKey: 'id' },
+          }) as never,
+      )({} as never),
     ).toThrow(/Unknown Kovo Drizzle nested annotation field "parrent"/u);
     expect(() =>
-      runtime.kovo({
-        domain: 'post',
-        fans: [{ domain: 'comment', via: 'postId', whem: 'delete' }],
-        key: 'id',
-      } as never),
+      runtime.kovo(
+        () =>
+          ({
+            domain: 'post',
+            fans: [{ domain: 'comment', via: 'postId', whem: 'delete' }],
+          }) as never,
+      )({} as never),
     ).toThrow(/Unknown Kovo Drizzle nested annotation field "whem"/u);
 
-    const hidden = Object.defineProperty({ domain: 'user', key: 'id' }, 'secrect', {
+    const hidden = Object.defineProperty({ domain: 'user' }, 'secrect', {
       value: ['passwordHash'],
     });
-    expect(() => runtime.kovo(hidden as never)).toThrow(
+    expect(() => runtime.kovo(() => hidden as never)({} as never)).toThrow(
       /Unknown Kovo Drizzle annotation field "secrect"/u,
     );
     expect(() =>
-      runtime.kovo({ domain: 'user', key: 'id', [Symbol('secrect')]: ['passwordHash'] } as never),
+      runtime.kovo(() => ({ domain: 'user', [Symbol('secrect')]: ['passwordHash'] }) as never)(
+        {} as never,
+      ),
     ).toThrow(/must not contain symbol fields/u);
 
     const originalOwnKeys = Reflect.ownKeys;
     try {
       Reflect.ownKeys = () => ['domain', 'key'];
       expect(() =>
-        runtime.kovo({ domain: 'user', key: 'id', secrect: ['passwordHash'] } as never),
+        runtime.kovo(() => ({ domain: 'user', secrect: ['passwordHash'] }) as never)({} as never),
       ).toThrow(/Unknown Kovo Drizzle annotation field "secrect"/u);
     } finally {
       Reflect.ownKeys = originalOwnKeys;

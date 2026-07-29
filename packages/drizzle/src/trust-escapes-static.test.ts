@@ -8844,7 +8844,7 @@ export const report = query('report', {
           export const contacts = pgTable(
             'contacts',
             { classified: text('classified').notNull(), id: text('id').primaryKey() },
-            kovo({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] }),
+            kovo((columns) => ({ domain: 'contacts', key: 'id', readOnly: true, secret: ['classified'] })),
           );
         `,
       },
@@ -9113,11 +9113,15 @@ export const report = query('report', {
             export const contactNotes = sqliteTable(
               'contact_notes',
               { id: text('id').primaryKey(), contactId: text('contact_id').notNull() },
-              kovo({
+              kovo((columns) => ({
                 domain: 'contact-note',
-                key: 'id',
-                ownerVia: { parent: contacts, fk: 'contactId', parentKey: 'id' },
-              }),
+                key: columns.id,
+                ownerVia: {
+                  parent: contacts,
+                  fk: columns.contactId,
+                  parentKey: contacts.id,
+                },
+              })),
             );
           `,
       },
@@ -13150,12 +13154,12 @@ export const report = query('report', {
           count: integer('count').notNull(),
           lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
         },
-        kovo({
+        kovo((columns) => ({
           ${policy},
           domain: 'auth-rate-limit',
           key: 'id',
           secret: true,
-        }),
+        })),
       );
       export const byKey = query({ load(_input, context) {
         return context.db.select({ id: rateLimit.id }).from(rateLimit);
@@ -13210,7 +13214,7 @@ export const report = query('report', {
           export const users = pgTable(
             'users',
             { id: text('id').primaryKey() },
-            kovo({ domain: usersDomain, key: (table) => table.id }),
+            kovo((columns) => ({ domain: usersDomain, key: columns.id })),
           );
         `,
       },
@@ -13285,7 +13289,7 @@ export const report = query('report', {
         const users = pgTable(
           'users',
           { id: text('id').primaryKey() },
-          kovo({ domain: usersDomain }),
+          kovo((columns) => ({ domain: usersDomain })),
         );
         export const route = query({ load(_input, context) {
           return context.db.select({ id: users.id }).from(users);

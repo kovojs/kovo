@@ -131,11 +131,11 @@ describe('defineKovo request-authority provenance', () => {
               id: text('id').primaryKey(),
               email: text('email').notNull(),
             },
-            kovo({
+            kovo((columns) => ({
               authzPolicy: sql\`current_setting('kovo.principal', true) <> ''\`,
               domain: contact,
               key: (table) => table.id,
-            }),
+            })),
           );
         `,
       },
@@ -184,11 +184,11 @@ describe('defineKovo request-authority provenance', () => {
           const contacts = pgTable(
             'contacts',
             { id: text('id').primaryKey() },
-            kovo({
+            kovo((columns) => ({
               authzPolicy: sql\`\${policy}\`,
               domain: contact,
               key: (table) => table.id,
-            }),
+            })),
           );
           const app = { mutation(definition) { return definition; } };
           app.mutation({

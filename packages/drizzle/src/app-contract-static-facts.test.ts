@@ -235,7 +235,7 @@ function appContractAggregateSource(): string {
     '',
     'export const contacts = pgTable("contacts", {',
     '  id: text("id").primaryKey(),',
-    '}, kovo({ domain: "contact", key: "id", reference: true }));',
+    '}, kovo((columns) => ({ domain: "contact", key: "id", reference: true })));',
     '',
     'export const contactList = app.query("contacts/list", {',
     '  async load(_input: unknown, context: { db: ManagedDbCarrier }) {',

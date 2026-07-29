@@ -114,14 +114,14 @@ type KovoRuntimeTableFacts = {
   selectorView: Readonly<Record<string, unknown>>;
   table: KovoRuntimeDbTable;
 };
-type KovoRuntimeColumnRef = string | ((table: Record<string, unknown>) => unknown);
+type KovoRuntimeColumnRef = object;
 type KovoRuntimeColumnAnnotation = true | KovoRuntimeColumnRef | readonly unknown[];
 type KovoRuntimeDomainAnnotation = ((self: unknown) => unknown) & {
   authzPolicy?: unknown;
   confidentialAtRest?: KovoRuntimeColumnAnnotation;
   domain: unknown;
   governed?: KovoRuntimeColumnAnnotation;
-  key?: KovoRuntimeColumnRef;
+  key?: KovoRuntimeColumnRef | readonly KovoRuntimeColumnRef[];
   owner?: KovoRuntimeColumnRef;
   ownerVia?: {
     fk?: unknown;
@@ -1042,9 +1042,11 @@ function governedColumnKeysForTable(
   if (annotation === undefined) return governed;
   const governedAnnotation = annotationValue(annotation, 'governed');
   const confidentialAtRestAnnotation = annotationValue(annotation, 'confidentialAtRest');
-  const key = columnKeyForRef(annotationValue(annotation, 'key'), facts);
+  const keys = columnKeysForAnnotation(annotationValue(annotation, 'key'), facts);
   const owner = columnKeyForRef(annotationValue(annotation, 'owner'), facts);
-  if (key !== undefined) runtimeSetAdd(governed, key);
+  for (let index = 0; index < keys.length; index += 1) {
+    runtimeSetAdd(governed, runtimeArrayValue(keys, index, 'Kovo Drizzle row-key columns'));
+  }
   if (owner !== undefined) runtimeSetAdd(governed, owner);
   runtimeMapForEach(columnKeys, (columnKey) => {
     const dbName = dbNameForColumnKey(facts, columnKey);
@@ -1119,6 +1121,7 @@ function keySourceForTable(
 ): KovoRuntimeKeySource | undefined {
   const key = annotationValue(annotation, 'key');
   if (key === undefined) return undefined;
+  if (runtimeArrayIsArray(key)) return undefined;
   const columnKey = columnKeyForRef(key, facts);
   const column =
     columnKey === undefined ? undefined : runtimeMapGet(facts.columnObjectsByKey, columnKey);
@@ -1176,16 +1179,29 @@ function columnKeysForAnnotation(annotation: unknown, facts: KovoRuntimeTableFac
   if (annotation === true) {
     return mapValuesSnapshot(facts.columnKeys, 'Kovo Drizzle annotation columns');
   }
-  if (typeof annotation === 'string' || typeof annotation === 'function') {
+  if (runtimeArrayIsArray(annotation)) {
+    return columnKeysForRefs(annotation, facts, 'Kovo Drizzle column annotation');
+  }
+  if (
+    typeof annotation === 'string' ||
+    typeof annotation === 'function' ||
+    (typeof annotation === 'object' && annotation !== null)
+  ) {
     const key = columnKeyForRef(annotation, facts);
     return key === undefined ? [] : [key];
   }
-  if (!runtimeArrayIsArray(annotation)) return [];
-  return columnKeysForRefs(annotation, facts, 'Kovo Drizzle column annotation');
+  return [];
 }
 
 function columnKeyForRef(ref: unknown, facts: KovoRuntimeTableFacts): string | undefined {
   if (typeof ref === 'string') return runtimeMapGet(facts.columnKeys, ref) ?? ref;
+  if (typeof ref === 'object' && ref !== null) {
+    const table = runtimeOwnDataValue(ref, 'table');
+    const name = columnName(ref);
+    return table.found && table.value === facts.table && name !== undefined
+      ? runtimeMapGet(facts.columnKeys, name)
+      : undefined;
+  }
   if (typeof ref !== 'function') return undefined;
   try {
     // SPEC §6.6/§10.3: annotation selectors are app functions, not metadata authority. Give

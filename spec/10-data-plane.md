@@ -15,7 +15,7 @@ export const cartItems = pgTable(
   {
     /*…*/
   },
-  kovo({ domain: 'cart' }),
+  kovo(() => ({ domain: 'cart' })),
 );
 export const products = pgTable(
   'products',
@@ -23,13 +23,55 @@ export const products = pgTable(
     id: text('id').primaryKey(),
     stock: integer('stock').notNull(),
   },
-  kovo({ domain: 'product', key: (t) => t.id }),
+  kovo((columns) => ({ domain: 'product', key: columns.id })),
 ); // row-level invalidation key
 ```
 
-Tables default to a same-named domain; annotations group tables into logical domains and declare key granularity. App-authored `domain()`/`tag()` declarations derive their default stable names from their exported binding plus module path (§4.1); explicit domain annotation strings remain for shared schema vocabulary where several declarations intentionally speak the same invalidation currency. The reverse index (table → domain), the `DomainKey` type, and key extractors are all generated from this single file. An optional `owner:` annotation (`kovo({ domain: 'cart', owner: (t) => t.userId })`) names the column tying a table's rows to a principal — it powers the `--unscoped` audit (§10.3). An optional `governed:` annotation (`kovo({ domain: 'account', governed: [(t) => t.role, (t) => t.balance] })`) names columns that may only be written from a server-derived value — the declare-once mass-assignment fact (the primary `key:` and `owner:` columns are governed automatically); it powers the KV438 write-provenance gate (§10.3). Optional `atomic:`/`version:` annotations (`kovo({ domain: 'product', atomic: (t) => t.stock, version: (t) => t.lockVersion })`) name a contended value column and an optimistic-concurrency counter — the declare-once lost-update facts that power the KV429 TOCTOU gate (§10.3).
+Tables default to a same-named domain; annotations group tables into logical domains and declare key granularity. App-authored `domain()`/`tag()` declarations derive their default stable names from their exported binding plus module path (§4.1); explicit domain annotation strings remain for shared schema vocabulary where several declarations intentionally speak the same invalidation currency. The reverse index (table → domain), the `DomainKey` type, and key extractors are all generated from this single file. An optional `owner:` annotation (`kovo((columns) => ({ domain: 'cart', owner: columns.userId }))`) names the column tying a table's rows to a principal — it powers the `--unscoped` audit (§10.3). An optional `governed:` annotation (`kovo((columns) => ({ domain: 'account', governed: [columns.role, columns.balance] }))`) names columns that may only be written from a server-derived value — the declare-once mass-assignment fact (the primary `key:` and `owner:` columns are governed automatically); it powers the KV438 write-provenance gate (§10.3). Optional `atomic:`/`version:` annotations (`kovo((columns) => ({ domain: 'product', atomic: columns.stock, version: columns.lockVersion }))`) name a contended value column and an optimistic-concurrency counter — the declare-once lost-update facts that power the KV429 TOCTOU gate (§10.3).
 
-A table may opt out of domain mapping with `kovo({ exempt: true })` (silencing KV404 for writes — append-only logs, outbox tables), but **exemption is write-side only**. An exempt table has no domain, so no write can ever invalidate a query reading it; a query whose read set includes an exempt table is therefore error **KV411** — the silent-staleness bug §10.6 exists to kill, reintroduced through the exemption. The teaching error's fix is to map the table after all: for an append-only log this costs nothing — inserts then invalidate exactly the timelines reading it. `exempt` is reserved for tables nothing queries.
+`kovo` accepts exactly one inline annotation callback. Its parameter is the concrete Drizzle
+column record for the table being declared; every column-bearing field uses a direct identity from
+that record, never a string, an `unknown` selector, or a structurally forged column:
+
+```ts
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: text('id').notNull(),
+    orderId: text('order_id').notNull(),
+    revision: integer('revision').notNull(),
+  },
+  kovo((columns) => ({
+    atomic: columns.revision,
+    domain: 'order-item',
+    key: [columns.orderId, columns.id], // ordered composite row key
+    ownerVia: {
+      fk: columns.orderId,
+      parent: orders,
+      parentKey: orders.id,
+    },
+    version: columns.revision,
+  })),
+);
+```
+
+`key` is one concrete identity or a non-empty ordered list for a composite row key. `owner`,
+`governed`, `secret`, `confidentialAtRest`, `atomic`, `version`, and each fan-out `via` use the
+annotated table's callback identities. `ownerVia.fk` uses that same child identity,
+`ownerVia.parent` is one concrete Drizzle table, and `ownerVia.parentKey` must be a concrete column
+of that exact parent. The public types carry module-private witnesses so typo and wrong-table
+references fail during ordinary TypeScript authoring. Kovo SQL handles likewise use private
+witnesses over Drizzle's typed `SQL<T>` bridge; app-authored structural lookalikes are not valid
+handles.
+
+Those witnesses are ergonomics and defense-in-depth, not the security proof (§6.6). The compiler
+independently resolves the callback parameter, table binding, column member, and SQL construction
+from authored source. Runtime metadata extraction independently compares each concrete Drizzle
+column's owning-table identity and physical name against the exact table being registered, then
+binds the result to compiler-emitted security facts. Either layer fails closed on unresolved,
+cross-table, or structurally forged values.
+
+A table may opt out of domain mapping with `kovo(() => ({ exempt: true }))` (silencing KV404 for writes — append-only logs, outbox tables), but **exemption is write-side only**. An exempt table has no domain, so no write can ever invalidate a query reading it; a query whose read set includes an exempt table is therefore error **KV411** — the silent-staleness bug §10.6 exists to kill, reintroduced through the exemption. The teaching error's fix is to map the table after all: for an append-only log this costs nothing — inserts then invalidate exactly the timelines reading it. `exempt` is reserved for tables nothing queries.
 
 ### 10.2 Queries
 

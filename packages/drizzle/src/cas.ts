@@ -1,8 +1,8 @@
 /**
  * KV429 RUNTIME — Compare-And-Set (CAS) helper for optimistic concurrency control.
  *
- * SPEC §10.3/§11.1 (KV429): A single-row read-modify-write annotated with `kovo({
- * atomic })` or `kovo({ version })` MUST fold check+act into one atomic UPDATE…WHERE
+ * SPEC §10.3/§11.1 (KV429): A single-row read-modify-write annotated with `kovo((columns) => ({
+ * atomic }))` or `kovo((columns) => ({ version }))` MUST fold check+act into one atomic UPDATE…WHERE
  * statement so a lost-update race (TOCTOU) is impossible by construction. This helper
  * wraps a Drizzle update builder whose `.where()` carries the version/CAS predicate and
  * returns a typed result:
@@ -74,7 +74,8 @@ export interface DrizzleUpdateResult {
  * @example
  * ```ts
  * // kovo-sample: illustrative reason="The compare-and-set expression depends on an app-local Drizzle schema, database handle, and mutation input."
- * // In a mutation handler with kovo({ atomic: 'stock', version: 'ver' }):
+ * // In a mutation handler with
+ * // kovo((columns) => ({ atomic: columns.stock, version: columns.ver })):
  * const cas = await compareAndSet(
  *   db.update(products)
  *     .set({ stock: sql`${products.stock} - ${qty}`, ver: sql`${products.ver} + 1` })

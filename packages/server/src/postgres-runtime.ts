@@ -7,7 +7,7 @@ import {
   mintFrameworkDurableReplayStoreReceipt,
   mintFrameworkPrincipalEpochStoreReceipt,
 } from '@kovojs/core/internal/security-markers';
-import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle';
+import type { KovoRuntimeDbMetadata } from '@kovojs/drizzle/internal/runtime-metadata';
 import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';

@@ -10,12 +10,12 @@ describe('runtime metadata security intrinsics', () => {
     Object.assign = ((target: object) => target) as typeof Object.assign;
     let annotation;
     try {
-      annotation = kovo({
+      annotation = kovo((columns) => ({
         domain: 'account',
         key: 'id',
         owner: 'ownerId',
         secret: ['secret'],
-      });
+      }));
     } finally {
       Object.assign = originalAssign;
     }
@@ -43,7 +43,7 @@ describe('runtime metadata security intrinsics', () => {
     const accounts = pgTable(
       'accounts_filter',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo({ domain: 'account', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId' })),
     );
     const originalFilter = Array.prototype.filter;
     Array.prototype.filter = function () {
@@ -69,7 +69,7 @@ describe('runtime metadata security intrinsics', () => {
         passwordHash: text('password_hash').notNull(),
         secret: text('secret').notNull(),
       },
-      kovo({ domain: 'account', key: 'id', owner: 'ownerId', secret: ['secret'] }),
+      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId', secret: ['secret'] })),
     );
     const originals = {
       arrayFilter: Array.prototype.filter,
@@ -149,7 +149,7 @@ describe('runtime metadata security intrinsics', () => {
     const accounts = pgTable(
       'accounts_frozen',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo({ domain: 'account', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'account', key: 'id', owner: 'ownerId' })),
     );
     const metadata = extractKovoRuntimeDbMetadata([accounts]);
 
@@ -181,7 +181,7 @@ describe('runtime metadata security intrinsics', () => {
         ownerId: text('owner_id').notNull(),
         secret: text('secret').notNull(),
       },
-      kovo({
+      kovo((columns) => ({
         domain: 'account',
         key: 'id',
         owner(table) {
@@ -191,7 +191,7 @@ describe('runtime metadata security intrinsics', () => {
           return table.ownerId;
         },
         secret: ['secret'],
-      }),
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([accounts]);
@@ -210,13 +210,13 @@ describe('runtime metadata security intrinsics', () => {
           publicValue: text('public_value').notNull(),
           secret: text('secret').notNull(),
         },
-        kovo({ domain: 'vault', key: 'id', secret: ['secret'] }),
+        kovo((columns) => ({ domain: 'vault', key: 'id', secret: ['secret'] })),
       );
     let vault!: ReturnType<typeof createVault>;
     const trigger = pgTable(
       'selector_trigger',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo({
+      kovo((columns) => ({
         domain: 'trigger',
         key: 'id',
         owner(table) {
@@ -224,7 +224,7 @@ describe('runtime metadata security intrinsics', () => {
           (vault as typeof vault & { secret: unknown }).secret = vault.publicValue;
           return table.ownerId;
         },
-      }),
+      })),
     );
     vault = createVault();
     const originalSecretColumn = vault.secret;
@@ -241,17 +241,17 @@ describe('runtime metadata security intrinsics', () => {
     const parent = pgTable(
       'selector_parent',
       { id: text('id').primaryKey() },
-      kovo({ domain: 'parent', key: 'id', reference: true }),
+      kovo((columns) => ({ domain: 'parent', key: 'id', reference: true })),
     );
     const foreign = pgTable(
       'selector_foreign',
       { id: text('id').primaryKey() },
-      kovo({ domain: 'foreign', key: 'id', reference: true }),
+      kovo((columns) => ({ domain: 'foreign', key: 'id', reference: true })),
     );
     const child = pgTable(
       'selector_child',
       { id: text('id').primaryKey(), parentId: text('parent_id').notNull() },
-      kovo({
+      kovo((columns) => ({
         domain: 'child',
         key: 'id',
         ownerVia: {
@@ -259,7 +259,7 @@ describe('runtime metadata security intrinsics', () => {
           parent,
           parentKey: () => foreign.id,
         },
-      }),
+      })),
     );
 
     const metadata = extractKovoRuntimeDbMetadata([parent, foreign, child]);

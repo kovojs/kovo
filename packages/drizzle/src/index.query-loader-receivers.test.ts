@@ -53,7 +53,7 @@ function readerAliasQueryFacts(options: {
           '',
           'export const readerProofRows = pgTable("reader_proof_rows", {',
           '  id: text("id").primaryKey(),',
-          '}, kovo({ domain: "reader-proof", key: "id" }));',
+          '}, kovo((columns) => ({ domain: "reader-proof", key: "id" })));',
           '',
           'export const readerProofQuery = query("reader-proof", {',
           '  async load(_input: unknown, context?: LoadContext) {',
@@ -81,7 +81,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'const load = (_input, db) => {',
             '  db.update(products);',
@@ -108,7 +108,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -175,7 +175,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -261,7 +261,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: `
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             interface FakeDb {
               execute(query: unknown): Promise<void>;
@@ -349,7 +349,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'export const productQuery = query("product/with-read", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
@@ -510,7 +510,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             export const productQuery = query("product/fake-db", {
               load(_input, db: FakeDb) {
@@ -534,7 +534,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: `
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             export const productQuery = query("product/untyped-db", {
               load(_input, db) {
@@ -570,10 +570,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const auditLog = pgTable("audit_log", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ exempt: true }));',
+            '}, kovo((columns) => ({ exempt: true })));',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'export const productQuery = query("product/shadowed-db", {',
             '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
@@ -612,7 +612,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: `
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             declare function loadProducts(receiver: unknown): Promise<unknown[]>;
             declare function readCache(client: unknown): Promise<unknown[]>;
@@ -656,7 +656,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: `
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             declare const productServices: {
               loadProducts(receiver: unknown): Promise<unknown[]>;
@@ -708,7 +708,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
             export const products = pgTable("products", {
               id: text("id").primaryKey(),
-            }, kovo({ domain: "product", key: "id" }));
+            }, kovo((columns) => ({ domain: "product", key: "id" })));
 
             declare function loadProducts(context: unknown): Promise<unknown[]>;
 
@@ -896,7 +896,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '  name: text("name").notNull(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'function loadProducts(db: PgAsyncDatabase<any, any>) {',
             '  return db.select({ name: products.name }).from(products);',
@@ -934,7 +934,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const users = pgTable("users", {',
             '  id: text("id").primaryKey(),',
             '  passwordHash: text("password_hash").notNull(),',
-            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '}, kovo((columns) => ({ domain: "user", key: "id", secret: ["passwordHash"] })));',
             '',
             'export const userQuery = query("user/closure-helper", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
@@ -977,7 +977,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '  id: text("id").primaryKey(),',
             '  ownerId: text("owner_id").notNull(),',
             '  passwordHash: text("password_hash").notNull(),',
-            '}, kovo({ domain: "account", key: "id", owner: "ownerId", secret: ["passwordHash"] }));',
+            '}, kovo((columns) => ({ domain: "account", key: "id", owner: "ownerId", secret: ["passwordHash"] })));',
             '',
             'export async function auditAccount(db: PgAsyncDatabase<any, any>) {',
             '  const loadSecret = () => db.select({ passwordHash: accounts.passwordHash }).from(accounts);',
@@ -1023,7 +1023,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const accounts = pgTable("accounts", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "account", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "account", key: "id" })));',
             'declare function wrap<T>(callback: () => Promise<T>): () => Promise<T>;',
             '',
             'export const account = domain({',
@@ -1064,7 +1064,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '  name: text("name").notNull(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'function loadProducts({ db }: { db: PgAsyncDatabase<any, any> }) {',
             '  return db.select({ name: products.name }).from(products);',
@@ -1108,7 +1108,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             'export const todos = pgTable("todos", {',
             '  id: text("id").primaryKey(),',
             '  title: text("title").notNull(),',
-            '}, kovo({ domain: "todo", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "todo", key: "id" })));',
             '',
             'export const todosQuery = query("todos", {',
             '  async load(_input: unknown, context?: AppQueryLoadContext) {',
@@ -1275,7 +1275,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '  id: text("id").primaryKey(),',
           '  userId: text("user_id").notNull(),',
           '  title: text("title").notNull(),',
-          '}, kovo({ domain: "note", key: (t) => t.id, owner: (t) => t.userId }));',
+          '}, kovo((columns) => ({ domain: "note", key: (t) => t.id, owner: (t) => t.userId })));',
           '',
           'export const noteQuery = query("note/inline-context-db", {',
           '  load(input: { id: string }, context: AppQueryLoadContext) {',
@@ -1351,7 +1351,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '  id: text("id").primaryKey(),',
           '  userId: text("user_id").notNull(),',
           '  title: text("title").notNull(),',
-          '}, kovo({ domain: "note", key: (t) => t.id, owner: (t) => t.userId }));',
+          '}, kovo((columns) => ({ domain: "note", key: (t) => t.id, owner: (t) => t.userId })));',
           '',
           'export const noteQuery = query("note/non-null-context-db", {',
           '  load(input: { id: string }, context?: AppQueryLoadContext) {',
@@ -1426,7 +1426,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '  id: text("id").primaryKey(),',
           '  ownerId: text("owner_id").notNull(),',
           '  title: text("title").notNull(),',
-          '}, kovo({ domain: "note", key: "id", owner: "ownerId" }));',
+          '}, kovo((columns) => ({ domain: "note", key: "id", owner: "ownerId" })));',
           '',
           'export const noteQuery = query("note/unresolved-reader-context-db", {',
           '  load(input: { id: string }, context?: AppQueryLoadContext) {',
@@ -1497,7 +1497,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const todos = pgTable("todos", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "todo", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "todo", key: "id" })));',
             '',
             'export const todosQuery = query("todos/local-reader", {',
             '  load(_input: unknown) {',
@@ -1526,7 +1526,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '',
           'export const products = pgTable("products", {',
           '  id: text("id").primaryKey(),',
-          '}, kovo({ domain: "product", key: "id" }));',
+          '}, kovo((columns) => ({ domain: "product", key: "id" })));',
           '',
           'function loadProducts(db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: products.id }).from(products);',
@@ -1610,7 +1610,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'async function writeProducts(db: PgAsyncDatabase<any, any>) {',
             '  await db.update(products).set({ id: "p1" });',
@@ -1656,10 +1656,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const auditLog = pgTable("audit_log", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "audit", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "audit", key: "id" })));',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'export const productQuery = query("product/loader-helper", {',
             '  load(_input, db: PgAsyncDatabase<any, any>) {',
@@ -1700,10 +1700,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '',
             'export const auditLog = pgTable("audit_log", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "audit", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "audit", key: "id" })));',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
-            '}, kovo({ domain: "product", key: "id" }));',
+            '}, kovo((columns) => ({ domain: "product", key: "id" })));',
             '',
             'export const productQuery = query("product/nested-predicate", {',
             '  load(input, db: PgAsyncDatabase<any, any>) {',
@@ -1754,7 +1754,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '  id: text("id").primaryKey(),',
           '  userId: text("user_id").notNull(),',
           '  status: text("status").notNull(),',
-          '}, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+          '}, kovo((columns) => ({ domain: "order", key: (t) => t.id, owner: (t) => t.userId })));',
           '',
           'type QueryContext = { db: PgAsyncDatabase<any, any>; request: { guard: { userId: string; actorId: string } } };',
           'function currentGuardUser(context: QueryContext) { return context.request.guard.userId; }',
