@@ -23,6 +23,7 @@ const SAMPLE_CLASSES = new Set(['executable', 'illustrative', 'output', 'type-er
 const TYPESCRIPT_LANGUAGES = new Set(['js', 'ts', 'tsx']);
 const SHELL_LANGUAGES = new Set(['bash', 'sh']);
 const DIRECTIVE_TOKEN = 'kovo-sample:';
+const GENERATED_API_EXAMPLE_MARKER = '**Copyable example**';
 const HTML_DIRECTIVE =
   /^<!--\s*kovo-sample:\s*(executable|illustrative|output|type-error)(?:\s+reason="([^"]+)")?\s*-->$/u;
 const CODE_DIRECTIVE =
@@ -218,7 +219,9 @@ function classifyMarkdownFence({
     id: stableSampleId(sourcePath, line),
     language,
     origin:
-      origin === 'generated-api' && previous === '**Example**' ? 'generated-api/jsdoc' : origin,
+      origin === 'generated-api' && previous === GENERATED_API_EXAMPLE_MARKER
+        ? 'generated-api/jsdoc'
+        : origin,
     ...(policyRule.reason ? { reason: policyRule.reason } : {}),
     ...(inlineDirective ? { inlineDirectiveLine: line + firstContentIndex + 1 } : {}),
     sourcePath,
@@ -244,7 +247,8 @@ function classificationRule({
     return policy.reviewedSkips['source-provenance'];
   }
   if (origin === 'generated-api') {
-    if (previous !== '**Example**') return policy.reviewedSkips['generated-signature'];
+    if (previous !== GENERATED_API_EXAMPLE_MARKER)
+      return policy.reviewedSkips['generated-signature'];
   }
   const rule = policy.languages[language];
   if (!rule) throw sampleError(sourcePath, line, `unclassified code-fence language ${language}`);
@@ -826,7 +830,7 @@ async function generatedApiSamples(policy, outDir) {
     });
     const exampleMarkers = source
       .split('\n')
-      .filter((line) => line.trim() === '**Example**').length;
+      .filter((line) => line.trim() === GENERATED_API_EXAMPLE_MARKER).length;
     const examples = pageSamples.filter((sample) => sample.origin === 'generated-api/jsdoc').length;
     if (exampleMarkers !== examples) {
       throw new TypeError(

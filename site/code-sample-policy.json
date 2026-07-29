@@ -64,9 +64,5 @@
       "reason": "The excerpt is tied to a tracked repository source and intentionally omits surrounding declarations."
     }
   },
-  "readmeExclusions": {
-    "@kovojs/verify": {
-      "reason": "The standalone verifier intentionally ships a NOTICE and generated API reference instead of a package README."
-    }
-  }
+  "readmeExclusions": {}
 }

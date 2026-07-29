@@ -103,6 +103,34 @@ describe('packed documentation sample inventory', () => {
     });
   });
 
+  it('distinguishes generated API examples from declaration signatures', () => {
+    const samples = scanMarkdownSamples(
+      [
+        '**Copyable example**',
+        '',
+        '```ts',
+        "import { component } from '@kovojs/core';",
+        'void component;',
+        '```',
+        '',
+        '```ts',
+        'export declare const component: unknown;',
+        '```',
+      ].join('\n'),
+      { origin: 'generated-api', policy, sourcePath: 'generated-api/core.md' },
+    );
+
+    expect(samples[0]).toMatchObject({
+      class: 'executable',
+      origin: 'generated-api/jsdoc',
+    });
+    expect(samples[1]).toMatchObject({
+      class: 'illustrative',
+      origin: 'generated-api',
+      reason: policy.reviewedSkips['generated-signature'].reason,
+    });
+  });
+
   it('supports tilde fences and rejects source code disguised as text output', () => {
     const [sample] = scanMarkdownSamples(
       ['~~~ts', "import { component } from '@kovojs/core';", 'void component;', '~~~'].join('\n'),
