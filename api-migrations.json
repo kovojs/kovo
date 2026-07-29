@@ -2348,6 +2348,5545 @@
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node scripts/migrate-browser-client-installer-v1.mjs --check scripts/fixtures/api-migrations/browser-client-installer-v1"
       }
+    },
+    {
+      "id": "server-task-topology-v1",
+      "state": "removed",
+      "owner": "server-api",
+      "decisions": [
+        "@kovojs/server#accept",
+        "@kovojs/server#ActiveSigningKey",
+        "@kovojs/server#advancePrincipalEpoch",
+        "@kovojs/server#agent",
+        "@kovojs/server#agentContent",
+        "@kovojs/server#AgentContent",
+        "@kovojs/server#AgentDefinition",
+        "@kovojs/server#AgentIntegrity",
+        "@kovojs/server#AgentModelContext",
+        "@kovojs/server#AgentModelDecision",
+        "@kovojs/server#AgentOptions",
+        "@kovojs/server#AgentSession",
+        "@kovojs/server#AgentToolDefinition",
+        "@kovojs/server#AgentToolDescriptor",
+        "@kovojs/server#AgentToolFailure",
+        "@kovojs/server#AgentToolMutation",
+        "@kovojs/server#AgentToolOptions",
+        "@kovojs/server#AgentToolOutcome",
+        "@kovojs/server#AgentToolSuccess",
+        "@kovojs/server#AgentTurnResult",
+        "@kovojs/server#AppDiagnostic",
+        "@kovojs/server#AppDocumentOptions",
+        "@kovojs/server#AppEgressOptions",
+        "@kovojs/server#AppEgressOptOut",
+        "@kovojs/server#AppErrorShellOptions",
+        "@kovojs/server#AppMutationAdapter",
+        "@kovojs/server#AppRateLimitOptions",
+        "@kovojs/server#AppReadRequest",
+        "@kovojs/server#AppRequestLimitOptions",
+        "@kovojs/server#AppRequestRateLimitOptions",
+        "@kovojs/server#AppRouteRenderContext",
+        "@kovojs/server#AppTaskDeclaration",
+        "@kovojs/server#AuthenticatedRequest",
+        "@kovojs/server#AwaitableGeneratedFragmentRenderable",
+        "@kovojs/server#BlessedFormatName",
+        "@kovojs/server#CapabilityMethod",
+        "@kovojs/server#CapabilityReplayStore",
+        "@kovojs/server#ChangeRecord",
+        "@kovojs/server#checkPostgresAppDbPosture",
+        "@kovojs/server#ClientIpRequestLike",
+        "@kovojs/server#cmd",
+        "@kovojs/server#Command",
+        "@kovojs/server#commandAllowlist",
+        "@kovojs/server#CommandAllowlist",
+        "@kovojs/server#CommandOptions",
+        "@kovojs/server#CommandResult",
+        "@kovojs/server#CommandRunOptions",
+        "@kovojs/server#committedSecretWaiver",
+        "@kovojs/server#ComponentElementNode",
+        "@kovojs/server#ComponentNode",
+        "@kovojs/server#ComponentRegistry",
+        "@kovojs/server#ComponentRegistryEntry",
+        "@kovojs/server#ComponentRegistryInput",
+        "@kovojs/server#ComponentTextNode",
+        "@kovojs/server#ComponentXmlError",
+        "@kovojs/server#ConfidentialAtRestCipher",
+        "@kovojs/server#ConfidentialAtRestCipherOptions",
+        "@kovojs/server#CookieClass",
+        "@kovojs/server#CookieOptions",
+        "@kovojs/server#createAgentSession",
+        "@kovojs/server#CreateAgentSessionOptions",
+        "@kovojs/server#createApp",
+        "@kovojs/server#CreateAppOptions",
+        "@kovojs/server#createConfidentialAtRestCipher",
+        "@kovojs/server#createDelegationAuthority",
+        "@kovojs/server#CreateDelegationAuthorityOptions",
+        "@kovojs/server#createDurableTaskStatus",
+        "@kovojs/server#createFileSystemStorage",
+        "@kovojs/server#createMemoryMutationReplayStore",
+        "@kovojs/server#createMemoryPrincipalEpochStore",
+        "@kovojs/server#createMemoryStorage",
+        "@kovojs/server#createMemoryVersionedClientModuleRegistry",
+        "@kovojs/server#createMemoryWebhookReplayStore",
+        "@kovojs/server#createPostgresAppRuntimeDb",
+        "@kovojs/server#createRequestHandler",
+        "@kovojs/server#createS3CompatibleStorage",
+        "@kovojs/server#createSigningKeyRing",
+        "@kovojs/server#createStorageDownloadEndpoint",
+        "@kovojs/server#CredentialVerifyResult",
+        "@kovojs/server#CrossOwnerReadDeclaration",
+        "@kovojs/server#CrossOwnerReadPolicyOptions",
+        "@kovojs/server#CspAllowlist",
+        "@kovojs/server#CspAllowlistEntry",
+        "@kovojs/server#CspAllowlistOrigin",
+        "@kovojs/server#CspInlineMetadata",
+        "@kovojs/server#CspReportingConfig",
+        "@kovojs/server#CsrfAnonymousCookieOptions",
+        "@kovojs/server#CsrfOptions",
+        "@kovojs/server#customVerifier",
+        "@kovojs/server#DeclaredSecretReadCapability",
+        "@kovojs/server#DeclaredWriteSqliteAuthorizerConstants",
+        "@kovojs/server#DeclaredWriteSqliteAuthorizerDatabase",
+        "@kovojs/server#DeclaredWriteSqliteAuthorizerOptions",
+        "@kovojs/server#declarePublicRead",
+        "@kovojs/server#declarePublicRelation",
+        "@kovojs/server#declareSecretReadCapability",
+        "@kovojs/server#decryptAtRest",
+        "@kovojs/server#DecryptAtRestOptions",
+        "@kovojs/server#DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH",
+        "@kovojs/server#DelegationAuthority",
+        "@kovojs/server#DelegationRight",
+        "@kovojs/server#DelegationRightKind",
+        "@kovojs/server#derived",
+        "@kovojs/server#DerivedVectorDataset",
+        "@kovojs/server#DerivedVectorDatasetOptions",
+        "@kovojs/server#DerivedVectorQueryInput",
+        "@kovojs/server#DerivedVectorStoreAdapter",
+        "@kovojs/server#DerivedVectorUpsertInput",
+        "@kovojs/server#DiagnosticCode",
+        "@kovojs/server#DocumentAuthoringContext",
+        "@kovojs/server#DocumentCspConfig",
+        "@kovojs/server#DocumentShellAttributes",
+        "@kovojs/server#DocumentShellAttributeValue",
+        "@kovojs/server#DurableTaskObservedStatus",
+        "@kovojs/server#DurableTaskStatusFilters",
+        "@kovojs/server#DurableTaskStatusJob",
+        "@kovojs/server#DurableTaskStatusRecord",
+        "@kovojs/server#DurableTaskStatusSnapshotSource",
+        "@kovojs/server#DurableTaskStatusSqlExecutor",
+        "@kovojs/server#DurableTaskStatusSqlResult",
+        "@kovojs/server#DurableTaskStatusSqlStatement",
+        "@kovojs/server#DurableTaskStatusSurface",
+        "@kovojs/server#EgressBlockedError",
+        "@kovojs/server#EgressConfigError",
+        "@kovojs/server#EgressOptions",
+        "@kovojs/server#encryptAtRest",
+        "@kovojs/server#EncryptAtRestOptions",
+        "@kovojs/server#EncryptedAtRest",
+        "@kovojs/server#Endpoint",
+        "@kovojs/server#EndpointAuthDeclaration",
+        "@kovojs/server#EndpointCachePosture",
+        "@kovojs/server#EndpointCsrfExemption",
+        "@kovojs/server#EndpointDbContext",
+        "@kovojs/server#EndpointDbDefinitionBase",
+        "@kovojs/server#EndpointDbHandler",
+        "@kovojs/server#EndpointDbScope",
+        "@kovojs/server#EndpointDeclaration",
+        "@kovojs/server#EndpointHandler",
+        "@kovojs/server#EndpointLongLivedResponsePosture",
+        "@kovojs/server#EndpointMount",
+        "@kovojs/server#EndpointMountDefinition",
+        "@kovojs/server#EndpointResponseBody",
+        "@kovojs/server#EndpointResponseBodyPosture",
+        "@kovojs/server#EndpointSafeMethod",
+        "@kovojs/server#EnvValidationIssue",
+        "@kovojs/server#erasePrincipal",
+        "@kovojs/server#ErasePrincipalOptions",
+        "@kovojs/server#ErrorShellRenderer",
+        "@kovojs/server#exportStaticApp",
+        "@kovojs/server#FileSystemStorageOptions",
+        "@kovojs/server#ForbiddenContext",
+        "@kovojs/server#ForbiddenDenial",
+        "@kovojs/server#ForbiddenRenderer",
+        "@kovojs/server#FrameworkCsrfSigningSecret",
+        "@kovojs/server#FrameworkManagedDbProvider",
+        "@kovojs/server#FrameworkPostgresOwnerKeyColumn",
+        "@kovojs/server#FrameworkWireBody",
+        "@kovojs/server#GeneratedFragmentRenderable",
+        "@kovojs/server#GuardArgsRequest",
+        "@kovojs/server#GuardDenial",
+        "@kovojs/server#GuardParamsRequest",
+        "@kovojs/server#GuardResult",
+        "@kovojs/server#hashPassword",
+        "@kovojs/server#hmacSignature",
+        "@kovojs/server#href",
+        "@kovojs/server#I18nCatalog",
+        "@kovojs/server#initializePrincipalEpoch",
+        "@kovojs/server#InlineUnverifiedUploadError",
+        "@kovojs/server#InvalidateOptions",
+        "@kovojs/server#isArgon2idPasswordDigest",
+        "@kovojs/server#isKovoApp",
+        "@kovojs/server#JsonValue",
+        "@kovojs/server#KovoApp",
+        "@kovojs/server#KovoPostgresAppRuntimeDb",
+        "@kovojs/server#KovoPostgresAppRuntimeOptions",
+        "@kovojs/server#KovoPostgresMigrateOptions",
+        "@kovojs/server#KovoPostgresMigration",
+        "@kovojs/server#KovoPostgresMigrationPlan",
+        "@kovojs/server#KovoPostgresMigrationPlanOptions",
+        "@kovojs/server#KovoPostgresMigrationRunReport",
+        "@kovojs/server#KovoPostgresPostureIssue",
+        "@kovojs/server#KovoPostgresPostureReport",
+        "@kovojs/server#KovoPostgresProvisionOptions",
+        "@kovojs/server#KovoPostgresPublicRelationDeclaration",
+        "@kovojs/server#KovoPostgresPublicRelationDeclarationOptions",
+        "@kovojs/server#KovoPostgresResolvedRuntimeDriver",
+        "@kovojs/server#KovoPostgresRuntimeDb",
+        "@kovojs/server#KovoPostgresRuntimeDriver",
+        "@kovojs/server#KovoPostgresSystemDb",
+        "@kovojs/server#KovoReadonlyHandleError",
+        "@kovojs/server#LayoutDeclaration",
+        "@kovojs/server#LayoutFactory",
+        "@kovojs/server#LayoutQueryResults",
+        "@kovojs/server#LayoutRegionResults",
+        "@kovojs/server#LayoutRenderResult",
+        "@kovojs/server#LayoutRenderSlots",
+        "@kovojs/server#Link",
+        "@kovojs/server#LinkDescriptor",
+        "@kovojs/server#LiveTargetAttestationAuthority",
+        "@kovojs/server#MemoryStorageOptions",
+        "@kovojs/server#MemoryVersionedClientModuleRegistryOptions",
+        "@kovojs/server#migratePostgresAppDb",
+        "@kovojs/server#mintCsrfField",
+        "@kovojs/server#mintCsrfToken",
+        "@kovojs/server#MintedCsrfField",
+        "@kovojs/server#MintedCsrfToken",
+        "@kovojs/server#MutationContext",
+        "@kovojs/server#MutationCsrfDeclaration",
+        "@kovojs/server#MutationQueue",
+        "@kovojs/server#MutationReplayReservation",
+        "@kovojs/server#MutationReplayResponse",
+        "@kovojs/server#MutationReplayStore",
+        "@kovojs/server#MutationReplayStoreOptions",
+        "@kovojs/server#MutationRequestDb",
+        "@kovojs/server#MutationStreamChunk",
+        "@kovojs/server#MutationStreamContext",
+        "@kovojs/server#MutationStreamDoneChunk",
+        "@kovojs/server#MutationStreamFragmentChunk",
+        "@kovojs/server#MutationStreamFragmentHtml",
+        "@kovojs/server#MutationStreamQueryChunk",
+        "@kovojs/server#MutationStreamSource",
+        "@kovojs/server#MutationStreamTextChunk",
+        "@kovojs/server#MutationTextCoalescingPolicy",
+        "@kovojs/server#NodeHandlerOptions",
+        "@kovojs/server#NodeRequestHandler",
+        "@kovojs/server#NotFound",
+        "@kovojs/server#onBehalfOf",
+        "@kovojs/server#OnBehalfOfOptions",
+        "@kovojs/server#PageHintOptions",
+        "@kovojs/server#parseComponentXml",
+        "@kovojs/server#PASSWORD_ARGON2ID_DEFAULTS",
+        "@kovojs/server#PasswordDigest",
+        "@kovojs/server#PasswordHashOptions",
+        "@kovojs/server#PasswordVerifyResult",
+        "@kovojs/server#planPostgresAppDbMigration",
+        "@kovojs/server#postgresAppRuntimeOptions",
+        "@kovojs/server#PostgresPendingReplayReleaseOptions",
+        "@kovojs/server#PostgresPendingReplayTarget",
+        "@kovojs/server#PostgresReplaySurface",
+        "@kovojs/server#postgresSchemaModule",
+        "@kovojs/server#PreserveDefinitionInference",
+        "@kovojs/server#PreviousSigningKey",
+        "@kovojs/server#PrincipalEpochAdvanceReason",
+        "@kovojs/server#PrincipalEpochLookupOptions",
+        "@kovojs/server#PrincipalEpochMutationDeclaration",
+        "@kovojs/server#PrincipalEpochStaleError",
+        "@kovojs/server#PrincipalEpochState",
+        "@kovojs/server#PrincipalEpochStore",
+        "@kovojs/server#PrincipalEpochTombstoneReason",
+        "@kovojs/server#PrincipalEpochUnavailableError",
+        "@kovojs/server#PrincipalErasureIncompleteError",
+        "@kovojs/server#PrincipalErasureReceipt",
+        "@kovojs/server#PrincipalErasureStorageSet",
+        "@kovojs/server#PrivateAddressClass",
+        "@kovojs/server#provisionPostgresAppDb",
+        "@kovojs/server#PublicReadDeclaration",
+        "@kovojs/server#PublicReadRowsScope",
+        "@kovojs/server#publicScopedKey",
+        "@kovojs/server#QueryDeclarationBoundaryShape",
+        "@kovojs/server#QueryDeclarationDefinition",
+        "@kovojs/server#QueryDefinitionBoundary",
+        "@kovojs/server#QueryDefinitionParameterBoundary",
+        "@kovojs/server#QueryJsonBoundaryErrorUseJsonbTypeOrSRecord",
+        "@kovojs/server#QueryLoadContext",
+        "@kovojs/server#QueryReadConfig",
+        "@kovojs/server#QueryUnknownDefinitionFieldError",
+        "@kovojs/server#RateLimitedDenial",
+        "@kovojs/server#RateLimitOptions",
+        "@kovojs/server#RawReadDeclaration",
+        "@kovojs/server#RawReadPolicyOptions",
+        "@kovojs/server#Reader",
+        "@kovojs/server#readonlyDb",
+        "@kovojs/server#redirect",
+        "@kovojs/server#Redirect",
+        "@kovojs/server#RedirectLocationAllowlistEntry",
+        "@kovojs/server#RedosPatternError",
+        "@kovojs/server#RegionPriority",
+        "@kovojs/server#renderRegistry",
+        "@kovojs/server#renderRouteHtml",
+        "@kovojs/server#renderTree",
+        "@kovojs/server#RenderTreeOptions",
+        "@kovojs/server#replayMutationWireBody",
+        "@kovojs/server#ReplayMutationWireBodyOptions",
+        "@kovojs/server#RequestHandler",
+        "@kovojs/server#ResolvedAppRateLimitOptions",
+        "@kovojs/server#ResolvedAppRequestLimitOptions",
+        "@kovojs/server#ResolvedAppRequestRateLimitOptions",
+        "@kovojs/server#RevokedSigningKey",
+        "@kovojs/server#rewrapAtRest",
+        "@kovojs/server#rootedFiles",
+        "@kovojs/server#RootedFiles",
+        "@kovojs/server#RootedFileServeOptions",
+        "@kovojs/server#Route",
+        "@kovojs/server#RouteBoundaries",
+        "@kovojs/server#RouteBoundaryContext",
+        "@kovojs/server#RouteBoundaryRenderer",
+        "@kovojs/server#RouteDeclaration",
+        "@kovojs/server#RouteFileOptions",
+        "@kovojs/server#RouteMetaCallback",
+        "@kovojs/server#RouteMetaFactory",
+        "@kovojs/server#RouteMetaSource",
+        "@kovojs/server#RoutePageResponse",
+        "@kovojs/server#RoutePrefetch",
+        "@kovojs/server#RouteRegionDefinitions",
+        "@kovojs/server#RouteRegionResults",
+        "@kovojs/server#RouteRequestInput",
+        "@kovojs/server#RouteResponseStatus",
+        "@kovojs/server#RouteStoredFileOptions",
+        "@kovojs/server#RouteStreamOptions",
+        "@kovojs/server#runAgentTurn",
+        "@kovojs/server#runCommand",
+        "@kovojs/server#S3CompatibleGetObjectInput",
+        "@kovojs/server#S3CompatibleGetObjectOutput",
+        "@kovojs/server#S3CompatibleHeadObjectInput",
+        "@kovojs/server#S3CompatibleListedObject",
+        "@kovojs/server#S3CompatibleListObjectsInput",
+        "@kovojs/server#S3CompatibleListObjectsOutput",
+        "@kovojs/server#S3CompatibleObjectClient",
+        "@kovojs/server#S3CompatibleObjectMetadata",
+        "@kovojs/server#S3CompatiblePutObjectInput",
+        "@kovojs/server#S3CompatiblePutObjectOutput",
+        "@kovojs/server#S3CompatibleStorageOptions",
+        "@kovojs/server#SafeRichHtmlOptions",
+        "@kovojs/server#scopedKey",
+        "@kovojs/server#ScopedKey",
+        "@kovojs/server#Secret",
+        "@kovojs/server#ServerErrorDiagnosticContext",
+        "@kovojs/server#ServerErrorHandler",
+        "@kovojs/server#ServerFragmentRenderable",
+        "@kovojs/server#ServerRenderedHtml",
+        "@kovojs/server#ServerResponseBase",
+        "@kovojs/server#serverValue",
+        "@kovojs/server#SessionDefinition",
+        "@kovojs/server#SessionProviderResult",
+        "@kovojs/server#SessionRequestLike",
+        "@kovojs/server#SessionUserLike",
+        "@kovojs/server#SharedCacheExternalDataVersion",
+        "@kovojs/server#SharedCacheInfluenceDeclaration",
+        "@kovojs/server#SharedCacheKeyContribution",
+        "@kovojs/server#SignedUrl",
+        "@kovojs/server#SigningKey",
+        "@kovojs/server#SigningKeyRing",
+        "@kovojs/server#SigningKeyRingOptions",
+        "@kovojs/server#SigningKeyState",
+        "@kovojs/server#SigningSecret",
+        "@kovojs/server#SignUrlContext",
+        "@kovojs/server#SignUrlOptions",
+        "@kovojs/server#standardWebhooks",
+        "@kovojs/server#StaticExportCompileDiagnostic",
+        "@kovojs/server#StaticExportDiagnostic",
+        "@kovojs/server#StaticExportDiagnosticSeverity",
+        "@kovojs/server#StaticExportError",
+        "@kovojs/server#StaticExportNonExportablePolicy",
+        "@kovojs/server#StaticExportOptions",
+        "@kovojs/server#StaticExportResult",
+        "@kovojs/server#StorageBody",
+        "@kovojs/server#StorageCapability",
+        "@kovojs/server#StorageDeleteCapability",
+        "@kovojs/server#StorageDownloadEndpointOptions",
+        "@kovojs/server#StorageGetResult",
+        "@kovojs/server#StorageObjectInfo",
+        "@kovojs/server#StoragePutCapability",
+        "@kovojs/server#StoragePutOptions",
+        "@kovojs/server#StoragePutResult",
+        "@kovojs/server#StorageReadCapability",
+        "@kovojs/server#StorageStreamResult",
+        "@kovojs/server#task",
+        "@kovojs/server#TaskCronCatchUp",
+        "@kovojs/server#TaskDefinition",
+        "@kovojs/server#TaskFactory",
+        "@kovojs/server#TaskHandle",
+        "@kovojs/server#TaskInput",
+        "@kovojs/server#TaskPrincipalReadScope",
+        "@kovojs/server#TaskPrincipalScope",
+        "@kovojs/server#TaskPrincipalWriteScope",
+        "@kovojs/server#TaskRunContext",
+        "@kovojs/server#TaskRunnableMutation",
+        "@kovojs/server#TaskRunnableMutationInput",
+        "@kovojs/server#TaskRunnableQuery",
+        "@kovojs/server#TaskRunnableQueryInput",
+        "@kovojs/server#TaskScheduleOptions",
+        "@kovojs/server#TaskSchedulingRequest",
+        "@kovojs/server#tombstonePrincipalEpoch",
+        "@kovojs/server#toNodeHandler",
+        "@kovojs/server#tool",
+        "@kovojs/server#trustedAssign",
+        "@kovojs/server#TrustedAssignEvidence",
+        "@kovojs/server#TrustedAssignInvariant",
+        "@kovojs/server#TrustedAssignObligation",
+        "@kovojs/server#TrustedAssignWhy",
+        "@kovojs/server#trustedHtml",
+        "@kovojs/server#trustedUrl",
+        "@kovojs/server#UnauthenticatedContext",
+        "@kovojs/server#UnauthenticatedDenial",
+        "@kovojs/server#UnauthenticatedHandler",
+        "@kovojs/server#unsafeCookie",
+        "@kovojs/server#UnsafeCookieDowngrade",
+        "@kovojs/server#UnsafeCookieDowngradeInput",
+        "@kovojs/server#unsafeRegex",
+        "@kovojs/server#UnsafeRegexBrand",
+        "@kovojs/server#UnverifiedAcceptance",
+        "@kovojs/server#verifyCredential",
+        "@kovojs/server#verifyPassword",
+        "@kovojs/server#verifyPrincipalErasureReceipt",
+        "@kovojs/server#VersionedClientModuleActiveSnapshot",
+        "@kovojs/server#VersionedClientModuleInput",
+        "@kovojs/server#VersionedClientModuleRegistry",
+        "@kovojs/server#VersionedClientModuleStore",
+        "@kovojs/server#webhook",
+        "@kovojs/server#WebhookChangeOptions",
+        "@kovojs/server#WebhookDeclaration",
+        "@kovojs/server#WebhookDeclaredWriteDomain",
+        "@kovojs/server#WebhookDeclaredWriteKey",
+        "@kovojs/server#WebhookDeclaredWrites",
+        "@kovojs/server#WebhookDefinition",
+        "@kovojs/server#WebhookFail",
+        "@kovojs/server#WebhookFailureStatus",
+        "@kovojs/server#WebhookHandlerContext",
+        "@kovojs/server#WebhookPrincipalWriteScope",
+        "@kovojs/server#webhookReplayIdentity",
+        "@kovojs/server#WebhookReplayIdentity",
+        "@kovojs/server#WebhookReplayReservation",
+        "@kovojs/server#WebhookReplayStore",
+        "@kovojs/server#WebhookResponseStatus",
+        "@kovojs/server#WebhookRunnableMutation",
+        "@kovojs/server#WebhookRunnableMutationInput",
+        "@kovojs/server#WebhookSuccessStatus",
+        "@kovojs/server#WebhookTransactionContext",
+        "@kovojs/server#WebhookTxDb",
+        "@kovojs/server#WebhookVerifier",
+        "@kovojs/server#WebhookWireResponse",
+        "@kovojs/server#Writer"
+      ],
+      "tool": {
+        "path": "scripts/migrate-server-api-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
+      },
+      "releaseNote": "docs/releases/server-task-topology-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured server migration result.",
+      "rules": [
+        {
+          "id": "001-accept-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "accept"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "accept"
+          }
+        },
+        {
+          "id": "002-active-signing-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ActiveSigningKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "ActiveSigningKey"
+          }
+        },
+        {
+          "id": "003-advance-principal-epoch-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "advancePrincipalEpoch"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "advancePrincipalEpoch"
+          }
+        },
+        {
+          "id": "004-agent-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "agent"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "agent"
+          }
+        },
+        {
+          "id": "005-agent-content-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "agentContent"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "agentContent"
+          }
+        },
+        {
+          "id": "006-agent-content-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentContent"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentContent"
+          }
+        },
+        {
+          "id": "007-agent-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentDefinition"
+          }
+        },
+        {
+          "id": "008-agent-integrity-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentIntegrity"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentIntegrity"
+          }
+        },
+        {
+          "id": "009-agent-model-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentModelContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentModelContext"
+          }
+        },
+        {
+          "id": "010-agent-model-decision-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentModelDecision"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentModelDecision"
+          }
+        },
+        {
+          "id": "011-agent-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentOptions"
+          }
+        },
+        {
+          "id": "012-agent-session-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentSession"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentSession"
+          }
+        },
+        {
+          "id": "013-agent-tool-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolDefinition"
+          }
+        },
+        {
+          "id": "014-agent-tool-descriptor-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolDescriptor"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolDescriptor"
+          }
+        },
+        {
+          "id": "015-agent-tool-failure-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolFailure"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolFailure"
+          }
+        },
+        {
+          "id": "016-agent-tool-mutation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolMutation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolMutation"
+          }
+        },
+        {
+          "id": "017-agent-tool-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolOptions"
+          }
+        },
+        {
+          "id": "018-agent-tool-outcome-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolOutcome"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolOutcome"
+          }
+        },
+        {
+          "id": "019-agent-tool-success-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentToolSuccess"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentToolSuccess"
+          }
+        },
+        {
+          "id": "020-agent-turn-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AgentTurnResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "AgentTurnResult"
+          }
+        },
+        {
+          "id": "021-app-diagnostic-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppDiagnostic"
+          },
+          "to": {
+            "specifier": "@kovojs/server/diagnostics",
+            "symbol": "AppDiagnostic"
+          }
+        },
+        {
+          "id": "022-app-document-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppDocumentOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "AppDocumentOptions"
+          }
+        },
+        {
+          "id": "023-app-egress-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppEgressOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "AppEgressOptions"
+          }
+        },
+        {
+          "id": "024-app-egress-opt-out-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppEgressOptOut"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "AppEgressOptOut"
+          }
+        },
+        {
+          "id": "025-app-error-shell-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppErrorShellOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "AppErrorShellOptions"
+          }
+        },
+        {
+          "id": "026-app-mutation-adapter-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppMutationAdapter"
+          },
+          "to": {
+            "specifier": "@kovojs/server/custom-adapters",
+            "symbol": "AppMutationAdapter"
+          }
+        },
+        {
+          "id": "027-app-rate-limit-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppRateLimitOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "AppRateLimitOptions"
+          }
+        },
+        {
+          "id": "028-app-read-request-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppReadRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "AppReadRequest"
+          }
+        },
+        {
+          "id": "029-app-request-limit-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppRequestLimitOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "AppRequestLimitOptions"
+          }
+        },
+        {
+          "id": "030-app-request-rate-limit-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppRequestRateLimitOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "AppRequestRateLimitOptions"
+          }
+        },
+        {
+          "id": "031-app-route-render-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppRouteRenderContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "AppRouteRenderContext"
+          }
+        },
+        {
+          "id": "032-app-task-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AppTaskDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "AppTaskDeclaration"
+          }
+        },
+        {
+          "id": "033-authenticated-request-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AuthenticatedRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "AuthenticatedRequest"
+          }
+        },
+        {
+          "id": "034-awaitable-generated-fragment-renderable-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "AwaitableGeneratedFragmentRenderable"
+          },
+          "category": "app-context",
+          "reason": "AwaitableGeneratedFragmentRenderable is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "035-blessed-format-name-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "BlessedFormatName"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "BlessedFormatName"
+          }
+        },
+        {
+          "id": "036-capability-method-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CapabilityMethod"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "CapabilityMethod"
+          }
+        },
+        {
+          "id": "037-capability-replay-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CapabilityReplayStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "CapabilityReplayStore"
+          }
+        },
+        {
+          "id": "038-change-record-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ChangeRecord"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "ChangeRecord"
+          }
+        },
+        {
+          "id": "039-check-postgres-app-db-posture-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "checkPostgresAppDbPosture"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "checkPostgresAppDbPosture"
+          }
+        },
+        {
+          "id": "040-client-ip-request-like-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ClientIpRequestLike"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "ClientIpRequestLike"
+          }
+        },
+        {
+          "id": "041-cmd-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "cmd"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "cmd"
+          }
+        },
+        {
+          "id": "042-command-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Command"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "Command"
+          }
+        },
+        {
+          "id": "043-command-allowlist-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "commandAllowlist"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "commandAllowlist"
+          }
+        },
+        {
+          "id": "044-command-allowlist-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CommandAllowlist"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "CommandAllowlist"
+          }
+        },
+        {
+          "id": "045-command-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CommandOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "CommandOptions"
+          }
+        },
+        {
+          "id": "046-command-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CommandResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "CommandResult"
+          }
+        },
+        {
+          "id": "047-command-run-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CommandRunOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "CommandRunOptions"
+          }
+        },
+        {
+          "id": "048-committed-secret-waiver-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "committedSecretWaiver"
+          },
+          "category": "trust-decision",
+          "reason": "The discarded process-global waiver had no enforceable compiler evidence and has no replacement."
+        },
+        {
+          "id": "049-component-element-node-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentElementNode"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentElementNode"
+          }
+        },
+        {
+          "id": "050-component-node-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentNode"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentNode"
+          }
+        },
+        {
+          "id": "051-component-registry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentRegistry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentRegistry"
+          }
+        },
+        {
+          "id": "052-component-registry-entry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentRegistryEntry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentRegistryEntry"
+          }
+        },
+        {
+          "id": "053-component-registry-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentRegistryInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentRegistryInput"
+          }
+        },
+        {
+          "id": "054-component-text-node-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentTextNode"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentTextNode"
+          }
+        },
+        {
+          "id": "055-component-xml-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ComponentXmlError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "ComponentXmlError"
+          }
+        },
+        {
+          "id": "056-confidential-at-rest-cipher-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ConfidentialAtRestCipher"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "ConfidentialAtRestCipher"
+          }
+        },
+        {
+          "id": "057-confidential-at-rest-cipher-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ConfidentialAtRestCipherOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "ConfidentialAtRestCipherOptions"
+          }
+        },
+        {
+          "id": "058-cookie-class-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CookieClass"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CookieClass"
+          }
+        },
+        {
+          "id": "059-cookie-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CookieOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CookieOptions"
+          }
+        },
+        {
+          "id": "060-create-agent-session-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createAgentSession"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "createAgentSession"
+          }
+        },
+        {
+          "id": "061-create-agent-session-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CreateAgentSessionOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "CreateAgentSessionOptions"
+          }
+        },
+        {
+          "id": "062-create-app-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createApp"
+          },
+          "category": "app-context",
+          "reason": "createApp is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "063-create-app-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CreateAppOptions"
+          },
+          "category": "app-context",
+          "reason": "CreateAppOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "064-create-confidential-at-rest-cipher-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createConfidentialAtRestCipher"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "createConfidentialAtRestCipher"
+          }
+        },
+        {
+          "id": "065-create-delegation-authority-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createDelegationAuthority"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "createDelegationAuthority"
+          }
+        },
+        {
+          "id": "066-create-delegation-authority-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CreateDelegationAuthorityOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "CreateDelegationAuthorityOptions"
+          }
+        },
+        {
+          "id": "067-create-durable-task-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createDurableTaskStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "createDurableTaskStatus"
+          }
+        },
+        {
+          "id": "068-create-file-system-storage-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createFileSystemStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createFileSystemStorage"
+          }
+        },
+        {
+          "id": "069-create-memory-mutation-replay-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createMemoryMutationReplayStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "createMemoryMutationReplayStore"
+          }
+        },
+        {
+          "id": "070-create-memory-principal-epoch-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createMemoryPrincipalEpochStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "createMemoryPrincipalEpochStore"
+          }
+        },
+        {
+          "id": "071-create-memory-storage-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createMemoryStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createMemoryStorage"
+          }
+        },
+        {
+          "id": "072-create-memory-versioned-client-module-registry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createMemoryVersionedClientModuleRegistry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "createMemoryVersionedClientModuleRegistry"
+          }
+        },
+        {
+          "id": "073-create-memory-webhook-replay-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createMemoryWebhookReplayStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "createMemoryWebhookReplayStore"
+          }
+        },
+        {
+          "id": "074-create-postgres-app-runtime-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createPostgresAppRuntimeDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "createPostgresAppRuntimeDb"
+          }
+        },
+        {
+          "id": "075-create-request-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createRequestHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/custom-adapters",
+            "symbol": "createRequestHandler"
+          }
+        },
+        {
+          "id": "076-create-s3-compatible-storage-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createS3CompatibleStorage"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "createS3CompatibleStorage"
+          }
+        },
+        {
+          "id": "077-create-signing-key-ring-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createSigningKeyRing"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "createSigningKeyRing"
+          }
+        },
+        {
+          "id": "078-create-storage-download-endpoint-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "createStorageDownloadEndpoint"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "createStorageDownloadEndpoint"
+          }
+        },
+        {
+          "id": "079-credential-verify-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CredentialVerifyResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "CredentialVerifyResult"
+          }
+        },
+        {
+          "id": "080-cross-owner-read-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CrossOwnerReadDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "CrossOwnerReadDeclaration"
+          }
+        },
+        {
+          "id": "081-cross-owner-read-policy-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CrossOwnerReadPolicyOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "CrossOwnerReadPolicyOptions"
+          }
+        },
+        {
+          "id": "082-csp-allowlist-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CspAllowlist"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CspAllowlist"
+          }
+        },
+        {
+          "id": "083-csp-allowlist-entry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CspAllowlistEntry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CspAllowlistEntry"
+          }
+        },
+        {
+          "id": "084-csp-allowlist-origin-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CspAllowlistOrigin"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CspAllowlistOrigin"
+          }
+        },
+        {
+          "id": "085-csp-inline-metadata-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CspInlineMetadata"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CspInlineMetadata"
+          }
+        },
+        {
+          "id": "086-csp-reporting-config-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CspReportingConfig"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CspReportingConfig"
+          }
+        },
+        {
+          "id": "087-csrf-anonymous-cookie-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CsrfAnonymousCookieOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CsrfAnonymousCookieOptions"
+          }
+        },
+        {
+          "id": "088-csrf-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "CsrfOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "CsrfOptions"
+          }
+        },
+        {
+          "id": "089-custom-verifier-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "customVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "customVerifier"
+          }
+        },
+        {
+          "id": "090-declared-secret-read-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DeclaredSecretReadCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/server/secret-reading",
+            "symbol": "DeclaredSecretReadCapability"
+          }
+        },
+        {
+          "id": "091-declared-write-sqlite-authorizer-constants-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DeclaredWriteSqliteAuthorizerConstants"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "DeclaredWriteSqliteAuthorizerConstants"
+          }
+        },
+        {
+          "id": "092-declared-write-sqlite-authorizer-database-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DeclaredWriteSqliteAuthorizerDatabase"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "DeclaredWriteSqliteAuthorizerDatabase"
+          }
+        },
+        {
+          "id": "093-declared-write-sqlite-authorizer-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DeclaredWriteSqliteAuthorizerOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "DeclaredWriteSqliteAuthorizerOptions"
+          }
+        },
+        {
+          "id": "094-declare-public-read-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "declarePublicRead"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "declarePublicRead"
+          }
+        },
+        {
+          "id": "095-declare-public-relation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "declarePublicRelation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "declarePublicRelation"
+          }
+        },
+        {
+          "id": "096-declare-secret-read-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "declareSecretReadCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/server/secret-reading",
+            "symbol": "declareSecretReadCapability"
+          }
+        },
+        {
+          "id": "097-decrypt-at-rest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "decryptAtRest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "decryptAtRest"
+          }
+        },
+        {
+          "id": "098-decrypt-at-rest-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DecryptAtRestOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "DecryptAtRestOptions"
+          }
+        },
+        {
+          "id": "099-default-capability-download-base-path-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH"
+          }
+        },
+        {
+          "id": "100-delegation-authority-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DelegationAuthority"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "DelegationAuthority"
+          }
+        },
+        {
+          "id": "101-delegation-right-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DelegationRight"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "DelegationRight"
+          }
+        },
+        {
+          "id": "102-delegation-right-kind-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DelegationRightKind"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "DelegationRightKind"
+          }
+        },
+        {
+          "id": "103-derived-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "derived"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "derived"
+          }
+        },
+        {
+          "id": "104-derived-vector-dataset-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DerivedVectorDataset"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "DerivedVectorDataset"
+          }
+        },
+        {
+          "id": "105-derived-vector-dataset-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DerivedVectorDatasetOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "DerivedVectorDatasetOptions"
+          }
+        },
+        {
+          "id": "106-derived-vector-query-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DerivedVectorQueryInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "DerivedVectorQueryInput"
+          }
+        },
+        {
+          "id": "107-derived-vector-store-adapter-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DerivedVectorStoreAdapter"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "DerivedVectorStoreAdapter"
+          }
+        },
+        {
+          "id": "108-derived-vector-upsert-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DerivedVectorUpsertInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/derived-data",
+            "symbol": "DerivedVectorUpsertInput"
+          }
+        },
+        {
+          "id": "109-diagnostic-code-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DiagnosticCode"
+          },
+          "to": {
+            "specifier": "@kovojs/core/diagnostics",
+            "symbol": "DiagnosticCode"
+          }
+        },
+        {
+          "id": "110-document-authoring-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DocumentAuthoringContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "DocumentAuthoringContext"
+          }
+        },
+        {
+          "id": "111-document-csp-config-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DocumentCspConfig"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "DocumentCspConfig"
+          }
+        },
+        {
+          "id": "112-document-shell-attributes-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DocumentShellAttributes"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "DocumentShellAttributes"
+          }
+        },
+        {
+          "id": "113-document-shell-attribute-value-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DocumentShellAttributeValue"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "DocumentShellAttributeValue"
+          }
+        },
+        {
+          "id": "114-durable-task-observed-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskObservedStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskObservedStatus"
+          }
+        },
+        {
+          "id": "115-durable-task-status-filters-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusFilters"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusFilters"
+          }
+        },
+        {
+          "id": "116-durable-task-status-job-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusJob"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusJob"
+          }
+        },
+        {
+          "id": "117-durable-task-status-record-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusRecord"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusRecord"
+          }
+        },
+        {
+          "id": "118-durable-task-status-snapshot-source-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusSnapshotSource"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusSnapshotSource"
+          }
+        },
+        {
+          "id": "119-durable-task-status-sql-executor-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusSqlExecutor"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusSqlExecutor"
+          }
+        },
+        {
+          "id": "120-durable-task-status-sql-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusSqlResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusSqlResult"
+          }
+        },
+        {
+          "id": "121-durable-task-status-sql-statement-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusSqlStatement"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusSqlStatement"
+          }
+        },
+        {
+          "id": "122-durable-task-status-surface-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "DurableTaskStatusSurface"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "DurableTaskStatusSurface"
+          }
+        },
+        {
+          "id": "123-egress-blocked-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EgressBlockedError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "EgressBlockedError"
+          }
+        },
+        {
+          "id": "124-egress-config-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EgressConfigError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "EgressConfigError"
+          }
+        },
+        {
+          "id": "125-egress-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EgressOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "EgressOptions"
+          }
+        },
+        {
+          "id": "126-encrypt-at-rest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "encryptAtRest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "encryptAtRest"
+          }
+        },
+        {
+          "id": "127-encrypt-at-rest-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EncryptAtRestOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "EncryptAtRestOptions"
+          }
+        },
+        {
+          "id": "128-encrypted-at-rest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EncryptedAtRest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "EncryptedAtRest"
+          }
+        },
+        {
+          "id": "129-endpoint-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Endpoint"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "Endpoint"
+          }
+        },
+        {
+          "id": "130-endpoint-auth-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointAuthDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointAuthDeclaration"
+          }
+        },
+        {
+          "id": "131-endpoint-cache-posture-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointCachePosture"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointCachePosture"
+          }
+        },
+        {
+          "id": "132-endpoint-csrf-exemption-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointCsrfExemption"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointCsrfExemption"
+          }
+        },
+        {
+          "id": "133-endpoint-db-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointDbContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointDbContext"
+          }
+        },
+        {
+          "id": "134-endpoint-db-definition-base-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointDbDefinitionBase"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointDbDefinitionBase"
+          }
+        },
+        {
+          "id": "135-endpoint-db-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointDbHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointDbHandler"
+          }
+        },
+        {
+          "id": "136-endpoint-db-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointDbScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointDbScope"
+          }
+        },
+        {
+          "id": "137-endpoint-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointDeclaration"
+          }
+        },
+        {
+          "id": "138-endpoint-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointHandler"
+          }
+        },
+        {
+          "id": "139-endpoint-long-lived-response-posture-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointLongLivedResponsePosture"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointLongLivedResponsePosture"
+          }
+        },
+        {
+          "id": "140-endpoint-mount-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointMount"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointMount"
+          }
+        },
+        {
+          "id": "141-endpoint-mount-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointMountDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointMountDefinition"
+          }
+        },
+        {
+          "id": "142-endpoint-response-body-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointResponseBody"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointResponseBody"
+          }
+        },
+        {
+          "id": "143-endpoint-response-body-posture-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointResponseBodyPosture"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointResponseBodyPosture"
+          }
+        },
+        {
+          "id": "144-endpoint-safe-method-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EndpointSafeMethod"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "EndpointSafeMethod"
+          }
+        },
+        {
+          "id": "145-env-validation-issue-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "EnvValidationIssue"
+          },
+          "to": {
+            "specifier": "@kovojs/server/diagnostics",
+            "symbol": "EnvValidationIssue"
+          }
+        },
+        {
+          "id": "146-erase-principal-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "erasePrincipal"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "erasePrincipal"
+          }
+        },
+        {
+          "id": "147-erase-principal-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ErasePrincipalOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "ErasePrincipalOptions"
+          }
+        },
+        {
+          "id": "148-error-shell-renderer-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ErrorShellRenderer"
+          },
+          "to": {
+            "specifier": "@kovojs/server/diagnostics",
+            "symbol": "ErrorShellRenderer"
+          }
+        },
+        {
+          "id": "149-export-static-app-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "exportStaticApp"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "exportStaticApp"
+          }
+        },
+        {
+          "id": "150-file-system-storage-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "FileSystemStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "FileSystemStorageOptions"
+          }
+        },
+        {
+          "id": "151-forbidden-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ForbiddenContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "ForbiddenContext"
+          }
+        },
+        {
+          "id": "152-forbidden-denial-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ForbiddenDenial"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "ForbiddenDenial"
+          }
+        },
+        {
+          "id": "153-forbidden-renderer-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ForbiddenRenderer"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "ForbiddenRenderer"
+          }
+        },
+        {
+          "id": "154-framework-csrf-signing-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "FrameworkCsrfSigningSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "FrameworkCsrfSigningSecret"
+          }
+        },
+        {
+          "id": "155-framework-managed-db-provider-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "FrameworkManagedDbProvider"
+          },
+          "category": "app-context",
+          "reason": "FrameworkManagedDbProvider is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "156-framework-postgres-owner-key-column-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "FrameworkPostgresOwnerKeyColumn"
+          },
+          "category": "app-context",
+          "reason": "FrameworkPostgresOwnerKeyColumn is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "157-framework-wire-body-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "FrameworkWireBody"
+          },
+          "category": "app-context",
+          "reason": "FrameworkWireBody is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "158-generated-fragment-renderable-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "GeneratedFragmentRenderable"
+          },
+          "category": "app-context",
+          "reason": "GeneratedFragmentRenderable is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "159-guard-args-request-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "GuardArgsRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "GuardArgsRequest"
+          }
+        },
+        {
+          "id": "160-guard-denial-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "GuardDenial"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "GuardDenial"
+          }
+        },
+        {
+          "id": "161-guard-params-request-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "GuardParamsRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "GuardParamsRequest"
+          }
+        },
+        {
+          "id": "162-guard-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "GuardResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "GuardResult"
+          }
+        },
+        {
+          "id": "163-hash-password-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "hashPassword"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "hashPassword"
+          }
+        },
+        {
+          "id": "164-hmac-signature-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "hmacSignature"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "hmacSignature"
+          }
+        },
+        {
+          "id": "165-href-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "href"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "href"
+          }
+        },
+        {
+          "id": "166-i18n-catalog-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "I18nCatalog"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "I18nCatalog"
+          }
+        },
+        {
+          "id": "167-initialize-principal-epoch-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "initializePrincipalEpoch"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "initializePrincipalEpoch"
+          }
+        },
+        {
+          "id": "168-inline-unverified-upload-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "InlineUnverifiedUploadError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "InlineUnverifiedUploadError"
+          }
+        },
+        {
+          "id": "169-invalidate-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "InvalidateOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "InvalidateOptions"
+          }
+        },
+        {
+          "id": "170-is-argon2id-password-digest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "isArgon2idPasswordDigest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "isArgon2idPasswordDigest"
+          }
+        },
+        {
+          "id": "171-is-kovo-app-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "isKovoApp"
+          },
+          "category": "app-context",
+          "reason": "isKovoApp is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "172-json-value-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "JsonValue"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "JsonValue"
+          }
+        },
+        {
+          "id": "173-kovo-app-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoApp"
+          },
+          "to": {
+            "specifier": "@kovojs/server/custom-adapters",
+            "symbol": "KovoApp"
+          }
+        },
+        {
+          "id": "174-kovo-postgres-app-runtime-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresAppRuntimeDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresAppRuntimeDb"
+          }
+        },
+        {
+          "id": "175-kovo-postgres-app-runtime-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresAppRuntimeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresAppRuntimeOptions"
+          }
+        },
+        {
+          "id": "176-kovo-postgres-migrate-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresMigrateOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresMigrateOptions"
+          }
+        },
+        {
+          "id": "177-kovo-postgres-migration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresMigration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresMigration"
+          }
+        },
+        {
+          "id": "178-kovo-postgres-migration-plan-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresMigrationPlan"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresMigrationPlan"
+          }
+        },
+        {
+          "id": "179-kovo-postgres-migration-plan-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresMigrationPlanOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresMigrationPlanOptions"
+          }
+        },
+        {
+          "id": "180-kovo-postgres-migration-run-report-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresMigrationRunReport"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresMigrationRunReport"
+          }
+        },
+        {
+          "id": "181-kovo-postgres-posture-issue-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresPostureIssue"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresPostureIssue"
+          }
+        },
+        {
+          "id": "182-kovo-postgres-posture-report-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresPostureReport"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresPostureReport"
+          }
+        },
+        {
+          "id": "183-kovo-postgres-provision-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresProvisionOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresProvisionOptions"
+          }
+        },
+        {
+          "id": "184-kovo-postgres-public-relation-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresPublicRelationDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresPublicRelationDeclaration"
+          }
+        },
+        {
+          "id": "185-kovo-postgres-public-relation-declaration-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresPublicRelationDeclarationOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresPublicRelationDeclarationOptions"
+          }
+        },
+        {
+          "id": "186-kovo-postgres-resolved-runtime-driver-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresResolvedRuntimeDriver"
+          },
+          "category": "app-context",
+          "reason": "KovoPostgresResolvedRuntimeDriver is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "187-kovo-postgres-runtime-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresRuntimeDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresRuntimeDb"
+          }
+        },
+        {
+          "id": "188-kovo-postgres-runtime-driver-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresRuntimeDriver"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "KovoPostgresRuntimeDriver"
+          }
+        },
+        {
+          "id": "189-kovo-postgres-system-db-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoPostgresSystemDb"
+          },
+          "category": "app-context",
+          "reason": "KovoPostgresSystemDb is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "190-kovo-readonly-handle-error-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KovoReadonlyHandleError"
+          },
+          "category": "app-context",
+          "reason": "KovoReadonlyHandleError is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "191-layout-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "LayoutDeclaration"
+          }
+        },
+        {
+          "id": "192-layout-factory-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutFactory"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "LayoutFactory"
+          }
+        },
+        {
+          "id": "193-layout-query-results-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutQueryResults"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "LayoutQueryResults"
+          }
+        },
+        {
+          "id": "194-layout-region-results-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutRegionResults"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "LayoutRegionResults"
+          }
+        },
+        {
+          "id": "195-layout-render-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutRenderResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "LayoutRenderResult"
+          }
+        },
+        {
+          "id": "196-layout-render-slots-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LayoutRenderSlots"
+          },
+          "category": "app-context",
+          "reason": "LayoutRenderSlots is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "197-link-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Link"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "Link"
+          }
+        },
+        {
+          "id": "198-link-descriptor-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LinkDescriptor"
+          },
+          "category": "app-context",
+          "reason": "LinkDescriptor is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "199-live-target-attestation-authority-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "LiveTargetAttestationAuthority"
+          },
+          "category": "app-context",
+          "reason": "LiveTargetAttestationAuthority is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "200-memory-storage-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MemoryStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "MemoryStorageOptions"
+          }
+        },
+        {
+          "id": "201-memory-versioned-client-module-registry-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MemoryVersionedClientModuleRegistryOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "MemoryVersionedClientModuleRegistryOptions"
+          }
+        },
+        {
+          "id": "202-migrate-postgres-app-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "migratePostgresAppDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "migratePostgresAppDb"
+          }
+        },
+        {
+          "id": "203-mint-csrf-field-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "mintCsrfField"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "mintCsrfField"
+          }
+        },
+        {
+          "id": "204-mint-csrf-token-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "mintCsrfToken"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "mintCsrfToken"
+          }
+        },
+        {
+          "id": "205-minted-csrf-field-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MintedCsrfField"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "MintedCsrfField"
+          }
+        },
+        {
+          "id": "206-minted-csrf-token-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MintedCsrfToken"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "MintedCsrfToken"
+          }
+        },
+        {
+          "id": "207-mutation-context-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationContext"
+          },
+          "category": "app-context",
+          "reason": "MutationContext is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "208-mutation-csrf-declaration-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationCsrfDeclaration"
+          },
+          "category": "app-context",
+          "reason": "MutationCsrfDeclaration is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "209-mutation-queue-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationQueue"
+          },
+          "category": "app-context",
+          "reason": "MutationQueue is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "210-mutation-replay-reservation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationReplayReservation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "MutationReplayReservation"
+          }
+        },
+        {
+          "id": "211-mutation-replay-response-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationReplayResponse"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "MutationReplayResponse"
+          }
+        },
+        {
+          "id": "212-mutation-replay-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationReplayStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "MutationReplayStore"
+          }
+        },
+        {
+          "id": "213-mutation-replay-store-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationReplayStoreOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "MutationReplayStoreOptions"
+          }
+        },
+        {
+          "id": "214-mutation-request-db-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationRequestDb"
+          },
+          "category": "app-context",
+          "reason": "MutationRequestDb is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "215-mutation-stream-chunk-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamChunk"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamChunk is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "216-mutation-stream-context-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamContext"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamContext is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "217-mutation-stream-done-chunk-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamDoneChunk"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamDoneChunk is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "218-mutation-stream-fragment-chunk-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamFragmentChunk"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamFragmentChunk is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "219-mutation-stream-fragment-html-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamFragmentHtml"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamFragmentHtml is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "220-mutation-stream-query-chunk-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamQueryChunk"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamQueryChunk is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "221-mutation-stream-source-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamSource"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamSource is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "222-mutation-stream-text-chunk-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationStreamTextChunk"
+          },
+          "category": "app-context",
+          "reason": "MutationStreamTextChunk is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "223-mutation-text-coalescing-policy-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "MutationTextCoalescingPolicy"
+          },
+          "category": "app-context",
+          "reason": "MutationTextCoalescingPolicy is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "224-node-handler-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "NodeHandlerOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/node",
+            "symbol": "NodeHandlerOptions"
+          }
+        },
+        {
+          "id": "225-node-request-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "NodeRequestHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/node",
+            "symbol": "NodeRequestHandler"
+          }
+        },
+        {
+          "id": "226-not-found-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "NotFound"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "NotFound"
+          }
+        },
+        {
+          "id": "227-on-behalf-of-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "onBehalfOf"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "onBehalfOf"
+          }
+        },
+        {
+          "id": "228-on-behalf-of-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "OnBehalfOfOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/delegation",
+            "symbol": "OnBehalfOfOptions"
+          }
+        },
+        {
+          "id": "229-page-hint-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PageHintOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "PageHintOptions"
+          }
+        },
+        {
+          "id": "230-parse-component-xml-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "parseComponentXml"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "parseComponentXml"
+          }
+        },
+        {
+          "id": "231-password-argon2-id-defaults-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PASSWORD_ARGON2ID_DEFAULTS"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "PASSWORD_ARGON2ID_DEFAULTS"
+          }
+        },
+        {
+          "id": "232-password-digest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PasswordDigest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "PasswordDigest"
+          }
+        },
+        {
+          "id": "233-password-hash-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PasswordHashOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "PasswordHashOptions"
+          }
+        },
+        {
+          "id": "234-password-verify-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PasswordVerifyResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "PasswordVerifyResult"
+          }
+        },
+        {
+          "id": "235-plan-postgres-app-db-migration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "planPostgresAppDbMigration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "planPostgresAppDbMigration"
+          }
+        },
+        {
+          "id": "236-postgres-app-runtime-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "postgresAppRuntimeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "postgresAppRuntimeOptions"
+          }
+        },
+        {
+          "id": "237-postgres-pending-replay-release-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PostgresPendingReplayReleaseOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "PostgresPendingReplayReleaseOptions"
+          }
+        },
+        {
+          "id": "238-postgres-pending-replay-target-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PostgresPendingReplayTarget"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "PostgresPendingReplayTarget"
+          }
+        },
+        {
+          "id": "239-postgres-replay-surface-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PostgresReplaySurface"
+          },
+          "to": {
+            "specifier": "@kovojs/server/replay",
+            "symbol": "PostgresReplaySurface"
+          }
+        },
+        {
+          "id": "240-postgres-schema-module-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "postgresSchemaModule"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "postgresSchemaModule"
+          }
+        },
+        {
+          "id": "241-preserve-definition-inference-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PreserveDefinitionInference"
+          },
+          "category": "app-context",
+          "reason": "PreserveDefinitionInference is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "242-previous-signing-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PreviousSigningKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "PreviousSigningKey"
+          }
+        },
+        {
+          "id": "243-principal-epoch-advance-reason-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochAdvanceReason"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochAdvanceReason"
+          }
+        },
+        {
+          "id": "244-principal-epoch-lookup-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochLookupOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochLookupOptions"
+          }
+        },
+        {
+          "id": "245-principal-epoch-mutation-declaration-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochMutationDeclaration"
+          },
+          "category": "app-context",
+          "reason": "PrincipalEpochMutationDeclaration is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "246-principal-epoch-stale-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochStaleError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochStaleError"
+          }
+        },
+        {
+          "id": "247-principal-epoch-state-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochState"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochState"
+          }
+        },
+        {
+          "id": "248-principal-epoch-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochStore"
+          }
+        },
+        {
+          "id": "249-principal-epoch-tombstone-reason-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochTombstoneReason"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochTombstoneReason"
+          }
+        },
+        {
+          "id": "250-principal-epoch-unavailable-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalEpochUnavailableError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "PrincipalEpochUnavailableError"
+          }
+        },
+        {
+          "id": "251-principal-erasure-incomplete-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalErasureIncompleteError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "PrincipalErasureIncompleteError"
+          }
+        },
+        {
+          "id": "252-principal-erasure-receipt-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalErasureReceipt"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "PrincipalErasureReceipt"
+          }
+        },
+        {
+          "id": "253-principal-erasure-storage-set-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrincipalErasureStorageSet"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "PrincipalErasureStorageSet"
+          }
+        },
+        {
+          "id": "254-private-address-class-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PrivateAddressClass"
+          },
+          "to": {
+            "specifier": "@kovojs/server/egress",
+            "symbol": "PrivateAddressClass"
+          }
+        },
+        {
+          "id": "255-provision-postgres-app-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "provisionPostgresAppDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/postgres",
+            "symbol": "provisionPostgresAppDb"
+          }
+        },
+        {
+          "id": "256-public-read-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PublicReadDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "PublicReadDeclaration"
+          }
+        },
+        {
+          "id": "257-public-read-rows-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "PublicReadRowsScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "PublicReadRowsScope"
+          }
+        },
+        {
+          "id": "258-public-scoped-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "publicScopedKey"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "publicScopedKey"
+          }
+        },
+        {
+          "id": "259-query-declaration-boundary-shape-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryDeclarationBoundaryShape"
+          },
+          "category": "app-context",
+          "reason": "QueryDeclarationBoundaryShape is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "260-query-declaration-definition-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryDeclarationDefinition"
+          },
+          "category": "app-context",
+          "reason": "QueryDeclarationDefinition is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "261-query-definition-boundary-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryDefinitionBoundary"
+          },
+          "category": "app-context",
+          "reason": "QueryDefinitionBoundary is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "262-query-definition-parameter-boundary-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryDefinitionParameterBoundary"
+          },
+          "category": "app-context",
+          "reason": "QueryDefinitionParameterBoundary is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "263-query-json-boundary-error-use-jsonb-type-or-srecord-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryJsonBoundaryErrorUseJsonbTypeOrSRecord"
+          },
+          "category": "app-context",
+          "reason": "QueryJsonBoundaryErrorUseJsonbTypeOrSRecord is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "264-query-load-context-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryLoadContext"
+          },
+          "category": "app-context",
+          "reason": "QueryLoadContext is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "265-query-read-config-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryReadConfig"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "QueryReadConfig"
+          }
+        },
+        {
+          "id": "266-query-unknown-definition-field-error-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryUnknownDefinitionFieldError"
+          },
+          "category": "app-context",
+          "reason": "QueryUnknownDefinitionFieldError is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "267-rate-limited-denial-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RateLimitedDenial"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RateLimitedDenial"
+          }
+        },
+        {
+          "id": "268-rate-limit-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RateLimitOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RateLimitOptions"
+          }
+        },
+        {
+          "id": "269-raw-read-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RawReadDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "RawReadDeclaration"
+          }
+        },
+        {
+          "id": "270-raw-read-policy-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RawReadPolicyOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "RawReadPolicyOptions"
+          }
+        },
+        {
+          "id": "271-reader-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Reader"
+          },
+          "category": "app-context",
+          "reason": "Reader is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "272-readonly-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "readonlyDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "readonlyDb"
+          }
+        },
+        {
+          "id": "273-redirect-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "redirect"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "redirect"
+          }
+        },
+        {
+          "id": "274-redirect-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Redirect"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "Redirect"
+          }
+        },
+        {
+          "id": "275-redirect-location-allowlist-entry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RedirectLocationAllowlistEntry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RedirectLocationAllowlistEntry"
+          }
+        },
+        {
+          "id": "276-redos-pattern-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RedosPatternError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "RedosPatternError"
+          }
+        },
+        {
+          "id": "277-region-priority-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RegionPriority"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "RegionPriority"
+          }
+        },
+        {
+          "id": "278-render-registry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "renderRegistry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "renderRegistry"
+          }
+        },
+        {
+          "id": "279-render-route-html-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "renderRouteHtml"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "renderRouteHtml"
+          }
+        },
+        {
+          "id": "280-render-tree-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "renderTree"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "renderTree"
+          }
+        },
+        {
+          "id": "281-render-tree-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RenderTreeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/render-tree",
+            "symbol": "RenderTreeOptions"
+          }
+        },
+        {
+          "id": "282-replay-mutation-wire-body-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "replayMutationWireBody"
+          },
+          "category": "app-context",
+          "reason": "replayMutationWireBody is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "283-replay-mutation-wire-body-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ReplayMutationWireBodyOptions"
+          },
+          "category": "app-context",
+          "reason": "ReplayMutationWireBodyOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "284-request-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RequestHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/custom-adapters",
+            "symbol": "RequestHandler"
+          }
+        },
+        {
+          "id": "285-resolved-app-rate-limit-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ResolvedAppRateLimitOptions"
+          },
+          "category": "app-context",
+          "reason": "ResolvedAppRateLimitOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "286-resolved-app-request-limit-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ResolvedAppRequestLimitOptions"
+          },
+          "category": "app-context",
+          "reason": "ResolvedAppRequestLimitOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "287-resolved-app-request-rate-limit-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ResolvedAppRequestRateLimitOptions"
+          },
+          "category": "app-context",
+          "reason": "ResolvedAppRequestRateLimitOptions is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "288-revoked-signing-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RevokedSigningKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "RevokedSigningKey"
+          }
+        },
+        {
+          "id": "289-rewrap-at-rest-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "rewrapAtRest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/confidential",
+            "symbol": "rewrapAtRest"
+          }
+        },
+        {
+          "id": "290-rooted-files-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "rootedFiles"
+          },
+          "to": {
+            "specifier": "@kovojs/server/files",
+            "symbol": "rootedFiles"
+          }
+        },
+        {
+          "id": "291-rooted-files-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RootedFiles"
+          },
+          "to": {
+            "specifier": "@kovojs/server/files",
+            "symbol": "RootedFiles"
+          }
+        },
+        {
+          "id": "292-rooted-file-serve-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RootedFileServeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/files",
+            "symbol": "RootedFileServeOptions"
+          }
+        },
+        {
+          "id": "293-route-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Route"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "Route"
+          }
+        },
+        {
+          "id": "294-route-boundaries-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteBoundaries"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteBoundaries"
+          }
+        },
+        {
+          "id": "295-route-boundary-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteBoundaryContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteBoundaryContext"
+          }
+        },
+        {
+          "id": "296-route-boundary-renderer-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteBoundaryRenderer"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteBoundaryRenderer"
+          }
+        },
+        {
+          "id": "297-route-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteDeclaration"
+          }
+        },
+        {
+          "id": "298-route-file-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteFileOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteFileOptions"
+          }
+        },
+        {
+          "id": "299-route-meta-callback-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteMetaCallback"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "RouteMetaCallback"
+          }
+        },
+        {
+          "id": "300-route-meta-factory-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteMetaFactory"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "RouteMetaFactory"
+          }
+        },
+        {
+          "id": "301-route-meta-source-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteMetaSource"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "RouteMetaSource"
+          }
+        },
+        {
+          "id": "302-route-page-response-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RoutePageResponse"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RoutePageResponse"
+          }
+        },
+        {
+          "id": "303-route-prefetch-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RoutePrefetch"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "RoutePrefetch"
+          }
+        },
+        {
+          "id": "304-route-region-definitions-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteRegionDefinitions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteRegionDefinitions"
+          }
+        },
+        {
+          "id": "305-route-region-results-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteRegionResults"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteRegionResults"
+          }
+        },
+        {
+          "id": "306-route-request-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteRequestInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteRequestInput"
+          }
+        },
+        {
+          "id": "307-route-response-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteResponseStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteResponseStatus"
+          }
+        },
+        {
+          "id": "308-route-stored-file-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteStoredFileOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteStoredFileOptions"
+          }
+        },
+        {
+          "id": "309-route-stream-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "RouteStreamOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "RouteStreamOptions"
+          }
+        },
+        {
+          "id": "310-run-agent-turn-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "runAgentTurn"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "runAgentTurn"
+          }
+        },
+        {
+          "id": "311-run-command-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "runCommand"
+          },
+          "to": {
+            "specifier": "@kovojs/server/command",
+            "symbol": "runCommand"
+          }
+        },
+        {
+          "id": "312-s3-compatible-get-object-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleGetObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleGetObjectInput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "313-s3-compatible-get-object-output-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleGetObjectOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleGetObjectOutput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "314-s3-compatible-head-object-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleHeadObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleHeadObjectInput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "315-s3-compatible-listed-object-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleListedObject"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListedObject is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "316-s3-compatible-list-objects-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleListObjectsInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListObjectsInput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "317-s3-compatible-list-objects-output-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleListObjectsOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleListObjectsOutput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "318-s3-compatible-object-client-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleObjectClient"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "S3CompatibleObjectClient"
+          }
+        },
+        {
+          "id": "319-s3-compatible-object-metadata-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleObjectMetadata"
+          },
+          "category": "app-context",
+          "reason": "S3CompatibleObjectMetadata is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "320-s3-compatible-put-object-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatiblePutObjectInput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatiblePutObjectInput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "321-s3-compatible-put-object-output-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatiblePutObjectOutput"
+          },
+          "category": "app-context",
+          "reason": "S3CompatiblePutObjectOutput is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        },
+        {
+          "id": "322-s3-compatible-storage-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "S3CompatibleStorageOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "S3CompatibleStorageOptions"
+          }
+        },
+        {
+          "id": "323-safe-rich-html-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SafeRichHtmlOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/browser",
+            "symbol": "SafeRichHtmlOptions"
+          }
+        },
+        {
+          "id": "324-scoped-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "scopedKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-keys",
+            "symbol": "scopedKey"
+          }
+        },
+        {
+          "id": "325-scoped-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ScopedKey"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "ScopedKey"
+          }
+        },
+        {
+          "id": "326-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Secret"
+          },
+          "to": {
+            "specifier": "@kovojs/core/security",
+            "symbol": "Secret"
+          }
+        },
+        {
+          "id": "327-server-error-diagnostic-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ServerErrorDiagnosticContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/diagnostics",
+            "symbol": "ServerErrorDiagnosticContext"
+          }
+        },
+        {
+          "id": "328-server-error-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ServerErrorHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/diagnostics",
+            "symbol": "ServerErrorHandler"
+          }
+        },
+        {
+          "id": "329-server-fragment-renderable-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ServerFragmentRenderable"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "ServerFragmentRenderable"
+          }
+        },
+        {
+          "id": "330-server-rendered-html-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ServerRenderedHtml"
+          },
+          "to": {
+            "specifier": "@kovojs/server/rendering",
+            "symbol": "ServerRenderedHtml"
+          }
+        },
+        {
+          "id": "331-server-response-base-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "ServerResponseBase"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "ServerResponseBase"
+          }
+        },
+        {
+          "id": "332-server-value-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "serverValue"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "serverValue"
+          }
+        },
+        {
+          "id": "333-session-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SessionDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "SessionDefinition"
+          }
+        },
+        {
+          "id": "334-session-provider-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SessionProviderResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "SessionProviderResult"
+          }
+        },
+        {
+          "id": "335-session-request-like-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SessionRequestLike"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "SessionRequestLike"
+          }
+        },
+        {
+          "id": "336-session-user-like-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SessionUserLike"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "SessionUserLike"
+          }
+        },
+        {
+          "id": "337-shared-cache-external-data-version-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SharedCacheExternalDataVersion"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "SharedCacheExternalDataVersion"
+          }
+        },
+        {
+          "id": "338-shared-cache-influence-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SharedCacheInfluenceDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "SharedCacheInfluenceDeclaration"
+          }
+        },
+        {
+          "id": "339-shared-cache-key-contribution-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SharedCacheKeyContribution"
+          },
+          "to": {
+            "specifier": "@kovojs/server/data",
+            "symbol": "SharedCacheKeyContribution"
+          }
+        },
+        {
+          "id": "340-signed-url-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SignedUrl"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "SignedUrl"
+          }
+        },
+        {
+          "id": "341-signing-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SigningKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "SigningKey"
+          }
+        },
+        {
+          "id": "342-signing-key-ring-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SigningKeyRing"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "SigningKeyRing"
+          }
+        },
+        {
+          "id": "343-signing-key-ring-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SigningKeyRingOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "SigningKeyRingOptions"
+          }
+        },
+        {
+          "id": "344-signing-key-state-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SigningKeyState"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "SigningKeyState"
+          }
+        },
+        {
+          "id": "345-signing-secret-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SigningSecret"
+          },
+          "to": {
+            "specifier": "@kovojs/server/signing",
+            "symbol": "SigningSecret"
+          }
+        },
+        {
+          "id": "346-sign-url-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SignUrlContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "SignUrlContext"
+          }
+        },
+        {
+          "id": "347-sign-url-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "SignUrlOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "SignUrlOptions"
+          }
+        },
+        {
+          "id": "348-standard-webhooks-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "standardWebhooks"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "standardWebhooks"
+          }
+        },
+        {
+          "id": "349-static-export-compile-diagnostic-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportCompileDiagnostic"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportCompileDiagnostic"
+          }
+        },
+        {
+          "id": "350-static-export-diagnostic-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportDiagnostic"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportDiagnostic"
+          }
+        },
+        {
+          "id": "351-static-export-diagnostic-severity-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportDiagnosticSeverity"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportDiagnosticSeverity"
+          }
+        },
+        {
+          "id": "352-static-export-error-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportError"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportError"
+          }
+        },
+        {
+          "id": "353-static-export-non-exportable-policy-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportNonExportablePolicy"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportNonExportablePolicy"
+          }
+        },
+        {
+          "id": "354-static-export-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportOptions"
+          }
+        },
+        {
+          "id": "355-static-export-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StaticExportResult"
+          },
+          "to": {
+            "specifier": "@kovojs/server/static-export",
+            "symbol": "StaticExportResult"
+          }
+        },
+        {
+          "id": "356-storage-body-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageBody"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageBody"
+          }
+        },
+        {
+          "id": "357-storage-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageCapability"
+          }
+        },
+        {
+          "id": "358-storage-delete-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageDeleteCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageDeleteCapability"
+          }
+        },
+        {
+          "id": "359-storage-download-endpoint-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageDownloadEndpointOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/storage-downloads",
+            "symbol": "StorageDownloadEndpointOptions"
+          }
+        },
+        {
+          "id": "360-storage-get-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageGetResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageGetResult"
+          }
+        },
+        {
+          "id": "361-storage-object-info-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageObjectInfo"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageObjectInfo"
+          }
+        },
+        {
+          "id": "362-storage-put-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StoragePutCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutCapability"
+          }
+        },
+        {
+          "id": "363-storage-put-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StoragePutOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutOptions"
+          }
+        },
+        {
+          "id": "364-storage-put-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StoragePutResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StoragePutResult"
+          }
+        },
+        {
+          "id": "365-storage-read-capability-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageReadCapability"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageReadCapability"
+          }
+        },
+        {
+          "id": "366-storage-stream-result-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "StorageStreamResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core/storage",
+            "symbol": "StorageStreamResult"
+          }
+        },
+        {
+          "id": "367-task-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "task"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "task"
+          }
+        },
+        {
+          "id": "368-task-cron-catch-up-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskCronCatchUp"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskCronCatchUp"
+          }
+        },
+        {
+          "id": "369-task-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskDefinition"
+          }
+        },
+        {
+          "id": "370-task-factory-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskFactory"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskFactory"
+          }
+        },
+        {
+          "id": "371-task-handle-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskHandle"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskHandle"
+          }
+        },
+        {
+          "id": "372-task-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskInput"
+          }
+        },
+        {
+          "id": "373-task-principal-read-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskPrincipalReadScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskPrincipalReadScope"
+          }
+        },
+        {
+          "id": "374-task-principal-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskPrincipalScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskPrincipalScope"
+          }
+        },
+        {
+          "id": "375-task-principal-write-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskPrincipalWriteScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskPrincipalWriteScope"
+          }
+        },
+        {
+          "id": "376-task-run-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskRunContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskRunContext"
+          }
+        },
+        {
+          "id": "377-task-runnable-mutation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskRunnableMutation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskRunnableMutation"
+          }
+        },
+        {
+          "id": "378-task-runnable-mutation-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskRunnableMutationInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskRunnableMutationInput"
+          }
+        },
+        {
+          "id": "379-task-runnable-query-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskRunnableQuery"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskRunnableQuery"
+          }
+        },
+        {
+          "id": "380-task-runnable-query-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskRunnableQueryInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskRunnableQueryInput"
+          }
+        },
+        {
+          "id": "381-task-schedule-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskScheduleOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskScheduleOptions"
+          }
+        },
+        {
+          "id": "382-task-scheduling-request-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TaskSchedulingRequest"
+          },
+          "to": {
+            "specifier": "@kovojs/server/tasks",
+            "symbol": "TaskSchedulingRequest"
+          }
+        },
+        {
+          "id": "383-tombstone-principal-epoch-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "tombstonePrincipalEpoch"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-epochs",
+            "symbol": "tombstonePrincipalEpoch"
+          }
+        },
+        {
+          "id": "384-to-node-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "toNodeHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/node",
+            "symbol": "toNodeHandler"
+          }
+        },
+        {
+          "id": "385-tool-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "tool"
+          },
+          "to": {
+            "specifier": "@kovojs/server/agent",
+            "symbol": "tool"
+          }
+        },
+        {
+          "id": "386-trusted-assign-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "trustedAssign"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "trustedAssign"
+          }
+        },
+        {
+          "id": "387-trusted-assign-evidence-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TrustedAssignEvidence"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "TrustedAssignEvidence"
+          }
+        },
+        {
+          "id": "388-trusted-assign-invariant-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TrustedAssignInvariant"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "TrustedAssignInvariant"
+          }
+        },
+        {
+          "id": "389-trusted-assign-obligation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TrustedAssignObligation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "TrustedAssignObligation"
+          }
+        },
+        {
+          "id": "390-trusted-assign-why-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "TrustedAssignWhy"
+          },
+          "to": {
+            "specifier": "@kovojs/server/write-safety",
+            "symbol": "TrustedAssignWhy"
+          }
+        },
+        {
+          "id": "391-trusted-html-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "trustedHtml"
+          },
+          "to": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedHtml"
+          }
+        },
+        {
+          "id": "392-trusted-url-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "trustedUrl"
+          },
+          "to": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedUrl"
+          }
+        },
+        {
+          "id": "393-unauthenticated-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnauthenticatedContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "UnauthenticatedContext"
+          }
+        },
+        {
+          "id": "394-unauthenticated-denial-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnauthenticatedDenial"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "UnauthenticatedDenial"
+          }
+        },
+        {
+          "id": "395-unauthenticated-handler-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnauthenticatedHandler"
+          },
+          "to": {
+            "specifier": "@kovojs/server/routing",
+            "symbol": "UnauthenticatedHandler"
+          }
+        },
+        {
+          "id": "396-unsafe-cookie-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "unsafeCookie"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "unsafeCookie"
+          }
+        },
+        {
+          "id": "397-unsafe-cookie-downgrade-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnsafeCookieDowngrade"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "UnsafeCookieDowngrade"
+          }
+        },
+        {
+          "id": "398-unsafe-cookie-downgrade-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnsafeCookieDowngradeInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "UnsafeCookieDowngradeInput"
+          }
+        },
+        {
+          "id": "399-unsafe-regex-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "unsafeRegex"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "unsafeRegex"
+          }
+        },
+        {
+          "id": "400-unsafe-regex-brand-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnsafeRegexBrand"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "UnsafeRegexBrand"
+          }
+        },
+        {
+          "id": "401-unverified-acceptance-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "UnverifiedAcceptance"
+          },
+          "to": {
+            "specifier": "@kovojs/server/security",
+            "symbol": "UnverifiedAcceptance"
+          }
+        },
+        {
+          "id": "402-verify-credential-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "verifyCredential"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "verifyCredential"
+          }
+        },
+        {
+          "id": "403-verify-password-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "verifyPassword"
+          },
+          "to": {
+            "specifier": "@kovojs/server/password",
+            "symbol": "verifyPassword"
+          }
+        },
+        {
+          "id": "404-verify-principal-erasure-receipt-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "verifyPrincipalErasureReceipt"
+          },
+          "to": {
+            "specifier": "@kovojs/server/principal-erasure",
+            "symbol": "verifyPrincipalErasureReceipt"
+          }
+        },
+        {
+          "id": "405-versioned-client-module-active-snapshot-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "VersionedClientModuleActiveSnapshot"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "VersionedClientModuleActiveSnapshot"
+          }
+        },
+        {
+          "id": "406-versioned-client-module-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "VersionedClientModuleInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "VersionedClientModuleInput"
+          }
+        },
+        {
+          "id": "407-versioned-client-module-registry-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "VersionedClientModuleRegistry"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "VersionedClientModuleRegistry"
+          }
+        },
+        {
+          "id": "408-versioned-client-module-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "VersionedClientModuleStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/client-modules",
+            "symbol": "VersionedClientModuleStore"
+          }
+        },
+        {
+          "id": "409-webhook-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "webhook"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "webhook"
+          }
+        },
+        {
+          "id": "410-webhook-change-options-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookChangeOptions"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookChangeOptions"
+          }
+        },
+        {
+          "id": "411-webhook-declaration-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookDeclaration"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookDeclaration"
+          }
+        },
+        {
+          "id": "412-webhook-declared-write-domain-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookDeclaredWriteDomain"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookDeclaredWriteDomain"
+          }
+        },
+        {
+          "id": "413-webhook-declared-write-key-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookDeclaredWriteKey"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookDeclaredWriteKey"
+          }
+        },
+        {
+          "id": "414-webhook-declared-writes-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookDeclaredWrites"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookDeclaredWrites"
+          }
+        },
+        {
+          "id": "415-webhook-definition-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookDefinition"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookDefinition"
+          }
+        },
+        {
+          "id": "416-webhook-fail-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookFail"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookFail"
+          }
+        },
+        {
+          "id": "417-webhook-failure-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookFailureStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookFailureStatus"
+          }
+        },
+        {
+          "id": "418-webhook-handler-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookHandlerContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookHandlerContext"
+          }
+        },
+        {
+          "id": "419-webhook-principal-write-scope-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookPrincipalWriteScope"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookPrincipalWriteScope"
+          }
+        },
+        {
+          "id": "420-webhook-replay-identity-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "webhookReplayIdentity"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "webhookReplayIdentity"
+          }
+        },
+        {
+          "id": "421-webhook-replay-identity-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookReplayIdentity"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookReplayIdentity"
+          }
+        },
+        {
+          "id": "422-webhook-replay-reservation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookReplayReservation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookReplayReservation"
+          }
+        },
+        {
+          "id": "423-webhook-replay-store-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookReplayStore"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookReplayStore"
+          }
+        },
+        {
+          "id": "424-webhook-response-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookResponseStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookResponseStatus"
+          }
+        },
+        {
+          "id": "425-webhook-runnable-mutation-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookRunnableMutation"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookRunnableMutation"
+          }
+        },
+        {
+          "id": "426-webhook-runnable-mutation-input-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookRunnableMutationInput"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookRunnableMutationInput"
+          }
+        },
+        {
+          "id": "427-webhook-success-status-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookSuccessStatus"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookSuccessStatus"
+          }
+        },
+        {
+          "id": "428-webhook-transaction-context-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookTransactionContext"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookTransactionContext"
+          }
+        },
+        {
+          "id": "429-webhook-tx-db-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookTxDb"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookTxDb"
+          }
+        },
+        {
+          "id": "430-webhook-verifier-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookVerifier"
+          },
+          "to": {
+            "specifier": "@kovojs/core/webhooks",
+            "symbol": "WebhookVerifier"
+          }
+        },
+        {
+          "id": "431-webhook-wire-response-move",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "WebhookWireResponse"
+          },
+          "to": {
+            "specifier": "@kovojs/server/webhooks",
+            "symbol": "WebhookWireResponse"
+          }
+        },
+        {
+          "id": "432-writer-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "Writer"
+          },
+          "category": "app-context",
+          "reason": "Writer is framework-owned implementation or generated protocol state; selecting an app-local replacement requires application context."
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/server-task-topology-v1/task-imports.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/server-task-topology-v1/internal-carrier.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-server-api-v1.mjs --check scripts/fixtures/api-migrations/server-task-topology-v1"
+      }
     }
   ]
 }
