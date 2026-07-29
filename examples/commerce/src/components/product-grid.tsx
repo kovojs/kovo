@@ -1,8 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FieldError, FormError } from '@kovojs/core';
-import { Badge } from '@kovojs/ui/badge';
-import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
 import * as style from '@kovojs/style';
 
 import { addToCart, type ProductGridResult } from '../domain.js';
@@ -19,6 +16,44 @@ const productGridStyles = style.create({
     fontSize: 14,
     fontWeight: 500,
     textDecoration: 'none',
+  },
+  badge: {
+    borderRadius: style.tokens.sys.shape.cornerFull,
+    display: 'inline-flex',
+    fontSize: 12,
+    fontWeight: 600,
+    paddingBlock: 2,
+    paddingInline: 8,
+    width: 'fit-content',
+  },
+  badgeNeutral: {
+    backgroundColor: style.tokens.sys.color.surfaceContainer,
+    color: style.tokens.sys.color.onSurfaceVariant,
+  },
+  badgeSuccess: {
+    backgroundColor: style.tokens.sys.color.primaryContainer,
+    color: style.tokens.sys.color.onPrimaryContainer,
+  },
+  badgeWarning: {
+    backgroundColor: style.tokens.sys.color.errorContainer,
+    color: style.tokens.sys.color.onErrorContainer,
+  },
+  button: {
+    backgroundColor: style.tokens.sys.color.primary,
+    border: 0,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
+    color: style.tokens.sys.color.onPrimary,
+    fontWeight: 600,
+    paddingBlock: 8,
+    paddingInline: 14,
+  },
+  card: {
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outlineVariant,
+    borderRadius: style.tokens.sys.shape.cornerLarge,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    padding: 16,
   },
   errorText: {
     color: style.tokens.sys.color.error,
@@ -167,10 +202,19 @@ export function priceLabel(cents: number): string {
 
 /** Low stock reads as a warning badge; healthy stock as success. */
 function stockBadge(stock: number) {
-  if (stock === 0) return Badge.definition.render({ variant: 'warning', children: 'Sold out' });
+  if (stock === 0)
+    return <span style={[productGridStyles.badge, productGridStyles.badgeWarning]}>Sold out</span>;
   if (stock <= 2)
-    return Badge.definition.render({ variant: 'warning', children: `Only ${stock} left` });
-  return Badge.definition.render({ variant: 'success', children: `${stock} in stock` });
+    return (
+      <span style={[productGridStyles.badge, productGridStyles.badgeWarning]}>
+        Only {stock} left
+      </span>
+    );
+  return (
+    <span style={[productGridStyles.badge, productGridStyles.badgeSuccess]}>
+      {stock} in stock
+    </span>
+  );
 }
 
 function renderProductCard(item: ProductItem, signedIn: boolean) {
@@ -180,7 +224,9 @@ function renderProductCard(item: ProductItem, signedIn: boolean) {
         <span style={productGridStyles.productEmoji}>{item.emoji}</span>
         <div style={productGridStyles.stackSm}>
           <h2 style={productGridStyles.title}>{item.name}</h2>
-          {Badge.definition.render({ variant: 'neutral', children: item.category })}
+          <span style={[productGridStyles.badge, productGridStyles.badgeNeutral]}>
+            {item.category}
+          </span>
         </div>
       </div>
       <div style={productGridStyles.rowBetween}>
@@ -190,7 +236,11 @@ function renderProductCard(item: ProductItem, signedIn: boolean) {
       {renderAddToCartForm(item, signedIn)}
     </div>
   );
-  return <article key={item.id}>{Card.definition.render({ children: body })}</article>;
+  return (
+    <article key={item.id}>
+      <section style={productGridStyles.card}>{body}</section>
+    </article>
+  );
 }
 
 export function renderAddToCartForm(item: { id: string; stock: number }, signedIn = true) {
@@ -220,12 +270,9 @@ export function renderAddToCartForm(item: { id: string; stock: number }, signedI
         />
         <FieldError name="quantity" style={productGridStyles.errorText} />
       </label>
-      {Button.definition.render({
-        children: soldOut ? 'Sold out' : 'Add to cart',
-        disabled: soldOut,
-        type: 'submit',
-        variant: 'primary',
-      })}
+      <button disabled={soldOut} style={productGridStyles.button} type="submit">
+        {soldOut ? 'Sold out' : 'Add to cart'}
+      </button>
       <FormError
         code="OUT_OF_STOCK"
         style={productGridStyles.errorText}

@@ -1,8 +1,16 @@
 import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { csrfToken } from '@kovojs/server/internal/csrf';
-import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
-import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
+import {
+  createPostgresSystemDb,
+  usePostgresAppRuntimeDb,
+  usePostgresSystemDb,
+} from '@kovojs/server/internal/postgres-capability';
+import {
+  sqliteSystemDbForAppRuntime,
+  useSqliteSystemDb,
+} from '@kovojs/server/internal/sqlite-capability';
 import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
+import { declareSystemPrincipal } from '../../server/src/auth-principal.js';
 import { kovo } from '../../drizzle/src/index.js';
 import {
   postgresSystemDbForGeneratedIntegration,
@@ -344,11 +352,21 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
   const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema: postgresSchema });
   try {
     await runtime.ready;
-    const systemDb = postgresSystemDbForGeneratedIntegration(runtime, {
+    const systemDbPosture = {
       operation: 'write',
       reason: 'Prove Better Auth Postgres bootstrap-first intrinsic isolation',
       surface: 'packages/better-auth/src/intrinsic-boundary.security-fixture.ts#postgres',
-    });
+    } as const;
+    const systemDb = postgresSystemDbForGeneratedIntegration(runtime, systemDbPosture);
+    const inspectionSystemDb = createPostgresSystemDb(
+      usePostgresAppRuntimeDb(runtime, {
+        principalPosture: declareSystemPrincipal(systemDbPosture.reason, {
+          ingress: 'endpoint',
+          operation: systemDbPosture.operation,
+          surface: systemDbPosture.surface,
+        }),
+      }),
+    );
     const csrf = {
       field: 'csrf',
       secret: 'Kovo-Postgres-Intrinsic-Csrf-Secret-0a1B2c3D4e5F',
@@ -370,7 +388,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
       systemDb,
     });
     await bindings.seedDemoUser();
-    const accounts = await usePostgresSystemDb(systemDb, (db) =>
+    const accounts = await usePostgresSystemDb(inspectionSystemDb, (db) =>
       db.select({ password: postgresAccount.password }).from(postgresAccount),
     );
     const request = new Request('http://localhost:5173/_m/auth/sign-in', {
@@ -409,6 +427,7 @@ async function exercisePostgres(dataDir: string): Promise<IntrinsicExerciseResul
 async function exerciseSqlite(): Promise<IntrinsicExerciseResult['sqlite']> {
   const runtime = createSqliteAppRuntime({ tables: Object.values(sqliteSchema) });
   try {
+    const inspectionSystemDb = sqliteSystemDbForAppRuntime(runtime);
     const systemDb = sqliteSystemDbForGeneratedIntegration(runtime, {
       operation: 'write',
       reason: 'Prove Better Auth SQLite bootstrap-first intrinsic isolation',
@@ -435,7 +454,7 @@ async function exerciseSqlite(): Promise<IntrinsicExerciseResult['sqlite']> {
       systemDb,
     });
     await bindings.seedDemoUser();
-    const accounts = useSqliteSystemDb(systemDb, (db) =>
+    const accounts = useSqliteSystemDb(inspectionSystemDb, (db) =>
       db.select({ password: sqliteAccount.password }).from(sqliteAccount).all(),
     );
     const request = new Request('http://localhost:5173/_m/auth/sign-in', {

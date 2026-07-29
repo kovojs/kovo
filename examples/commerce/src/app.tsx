@@ -1,9 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { ErrorBoundary, type ComponentChild } from '@kovojs/core';
-import { createApp, layout, publicAccess, route, stylesheet } from '@kovojs/server';
+import { stylesheet } from '@kovojs/server';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import { type KovoApp } from '@kovojs/server/custom-adapters';
-import { type ServerErrorHandler } from '@kovojs/server/diagnostics';
 
 import {
   addToCart,
@@ -15,7 +14,12 @@ import {
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
-import { createCommerceAuth, type CommerceAuthBindings, type CommerceAuthRequest } from './auth.js';
+import {
+  createCommerceAuth,
+  signIn,
+  signOut,
+  type CommerceAuthBindings,
+} from './auth.js';
 import * as style from '@kovojs/style';
 import { LoginForm, LogoutForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
@@ -23,17 +27,21 @@ import { OrderHistory } from './components/order-history.js';
 import { renderOrderHistory } from './components/order-history-view.js';
 import { GuestProductGrid, ProductGrid, ProductGridError } from './components/product-grid.js';
 import { commerceTheme } from './theme.js';
+import { registerCommerceApplicationContext } from './commerce-context.js';
+import { app } from './kovo.js';
 
-export type CommerceRouteRequest = Request & CommerceAuthRequest;
+export type CommerceRouteRequest = Request & {
+  session?: CommerceSession | null;
+};
 
 export interface CommerceAppOptions {
   authFixture?: Parameters<typeof createCommerceAuth>[1];
   db?: CommerceDb;
-  onError?: ServerErrorHandler;
 }
 
 export interface CommerceApplication {
-  app: KovoApp<CommerceSession>;
+  app: KovoApp;
+  appContextId: string;
   auth: CommerceAuthBindings;
   db: CommerceDb;
 }
@@ -85,12 +93,13 @@ function CommerceCartPage({ request }: { request: CommerceRouteRequest }): strin
 // The storefront (home + cart) is public browsing — no auth wall on catalog/cart
 // reads. The layout carries the public access decision each child route inherits
 // (KV436, SPEC §10.2); checkout-class mutations stay guarded.
-const CommerceCartLayout = layout({
-  access: publicAccess('public storefront browsing'),
+const CommerceCartLayout = app.layout({
+  access: app.publicAccess('public storefront browsing'),
   render: (_queries, _state, { children }) => <CommerceCartShell>{children}</CommerceCartShell>,
 });
 
-export const commerceHomeRoute = route('/', {
+export const commerceHomeRoute = app.route('/', {
+  access: app.publicAccess('public storefront browsing'),
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
@@ -103,7 +112,8 @@ export const commerceHomeRoute = route('/', {
   stylesheets: commerceStylesheets,
 });
 
-export const commerceCartRoute = route('/cart', {
+export const commerceCartRoute = app.route('/cart', {
+  access: app.publicAccess('public storefront browsing'),
   i18n: commerceMessages,
   meta: {
     description: 'Browse products and checkout with verifiable cart state.',
@@ -116,9 +126,9 @@ export const commerceCartRoute = route('/cart', {
   stylesheets: commerceStylesheets,
 });
 
-export const commerceLoginRoute = route('/login', {
+export const commerceLoginRoute = app.route('/login', {
   // Sign-in page reachable before authentication — public by design (KV436, §10.2).
-  access: publicAccess('sign-in page reachable before authentication'),
+  access: app.publicAccess('sign-in page reachable before authentication'),
   meta: {
     description: 'Sign in to the Kovo commerce reference app.',
     title: 'Kovo Commerce Sign In',
@@ -137,26 +147,23 @@ export const commerceLoginRoute = route('/login', {
 export function createCommerceApplication(options: CommerceAppOptions = {}): CommerceApplication {
   const auth = createCommerceAuth(options.db ?? createCommerceDb(), options.authFixture);
   const db = auth.db;
-  const app: KovoApp<CommerceSession> = createApp<CommerceSession, CommerceDb>({
-    db: () => db,
-    document: { lang: 'en-US' },
-    mutations: [addToCart, auth.signIn, auth.signOut],
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    queries: [cartQuery, productGridQuery, orderHistoryQuery],
-    renderRoute(value) {
-      return routeValueToHtml(value);
-    },
-    routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
-    sessionProvider: auth.sessionProvider as NonNullable<
-      KovoApp<CommerceSession>['sessionProvider']
-    >,
+  const appContextId = registerCommerceApplicationContext({
+    db,
+    sessionProvider: auth.sessionProvider,
   });
-  return { app, auth, db };
+  return { app: commerceRuntimeApp, appContextId, auth, db };
 }
 
 export function routeValueToHtml(value: unknown): string {
   return renderRouteHtml(value);
 }
+
+export const commerceRuntimeApp = app.assemble({
+  layouts: [CommerceCartLayout],
+  mutations: [addToCart, signIn, signOut],
+  queries: [cartQuery, productGridQuery, orderHistoryQuery],
+  routes: [commerceHomeRoute, commerceCartRoute, commerceLoginRoute],
+});
 
 export const commerceApp = createCommerceApplication();
 

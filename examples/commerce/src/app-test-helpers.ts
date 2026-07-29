@@ -5,7 +5,6 @@ import {
   setCookieValues,
   type EnhancedMutationLiveTarget,
 } from '@kovojs/test/headers';
-import { readonlyDb } from '@kovojs/server/data';
 import { toNodeHandler } from '@kovojs/server/node';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 import { runWithCommerceGeneratedGraphs } from '../../../tests/example-generated-graphs.setup.js';
@@ -23,10 +22,19 @@ import {
   type CommerceAppOptions,
   type CommerceApplication,
 } from './app.js';
-import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
+import {
+  loadCartQuery as executeCartQuery,
+  loadOrderHistoryQuery as executeOrderHistoryQuery,
+  loadProductGridQuery as executeProductGridQuery,
+} from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
-import { createCommerceAuth, type CommerceAuthBindings } from './auth.js';
+import {
+  commerceSignIn,
+  createCommerceAuth,
+  type CommerceAuthBindings,
+} from './auth.js';
+import { bindCommerceApplicationRequest } from './commerce-context.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
 export type CartItemRow = { productId: string; qty: number; unitPrice: number };
@@ -116,22 +124,23 @@ export function queryContext(db = createCommerceDb()) {
   // SPEC §9.4 (MARQUEE): the loader reads the framework-threaded `context.db`. The request no longer
   // carries the db (the framework owns the handle); it carries only the session for per-user scope.
   return {
-    db: readonlyDb(db),
+    db,
     request: { session: { id: 's-query', user: { id: 'u-query' } } },
   };
 }
 
 // Test entrypoints pass a raw `CommerceDb`. Production loaders receive the framework-owned
-// read-only handle through `context.db`; these helpers mirror that by wrapping with `readonlyDb`.
+// read-only handle through `context.db`; the raw test DB structurally satisfies that narrower
+// reader surface while keeping fixture setup available to the surrounding test.
 export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
-  return cartQuery.load(undefined, { db: readonlyDb(db), request: {} });
+  return executeCartQuery(undefined, { db, request: {} });
 }
 
 export async function loadProductGrid(
   db: CommerceDb,
   input: ProductGridInput = {},
 ): Promise<ProductGridResult> {
-  return productGridQuery.load(input, { db: readonlyDb(db), request: {} });
+  return executeProductGridQuery(input, { db, request: {} });
 }
 
 export async function loadOrderHistory(
@@ -139,24 +148,33 @@ export async function loadOrderHistory(
   userId: string,
 ): Promise<OrderHistoryResult> {
   const session = { id: userId, user: { id: userId } };
-  return orderHistoryQuery.load(undefined, { db: readonlyDb(db), request: { session }, session });
+  return executeOrderHistoryQuery(undefined, {
+    db,
+    request: { session },
+    session,
+  });
 }
 
 export function commerceAuthRequest(
   cookie?: string,
   auth: CommerceAuthBindings = createCommerceAuth(createCommerceDb()),
   url = 'http://localhost/commerce-auth-test',
-) {
+): Parameters<typeof commerceSignIn.handler>[1] {
   const headers = new Headers({ 'user-agent': 'commerce-auth-test' });
   if (cookie) headers.set('cookie', cookie);
 
-  return {
+  const request = new Request(url, { headers });
+  return Object.assign(request, {
     authCsrfId: 'login-csrf',
+    cancel: async () => false,
     clientIp: nextCommerceTestIp(),
     db: auth.db,
-    headers,
-    url,
-  };
+    env: {},
+    schedule: async () => {
+      throw new Error('commerce auth unit requests do not configure a task scheduler');
+    },
+    session: null,
+  });
 }
 
 let commerceTestRequestCount = 0;
@@ -238,7 +256,9 @@ export interface CommerceTestApp extends CommerceApplication {
 export function createCommerceTestApp(options: CommerceAppOptions = {}): CommerceTestApp {
   return runWithCommerceGeneratedGraphs(() => {
     const application = createCommerceApplication(options);
-    const requestHandler = createExampleTestRequestHandler(application.app);
+    const dispatch = createExampleTestRequestHandler(application.app);
+    const requestHandler: ReturnType<typeof createExampleTestRequestHandler> = (request) =>
+      dispatch(bindCommerceApplicationRequest(request, application.appContextId));
     return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
   });
 }

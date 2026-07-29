@@ -3,14 +3,16 @@ import '../../../tests/example-generated-graphs.setup.js';
 import { describe, expect, it } from 'vitest';
 
 import {
-  addToCart,
-  cartQuery,
   commerceCsrf,
   createCommerceDb,
+  executeAddToCart,
   EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
-  orderHistoryQuery,
-  productGridQuery,
 } from './domain.js';
+import {
+  loadCartQuery as executeCartQuery,
+  loadOrderHistoryQuery as executeOrderHistoryQuery,
+  loadProductGridQuery as executeProductGridQuery,
+} from './queries.js';
 import { commerceAuthCsrf, EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET } from './auth.js';
 import {
   loadOrderHistory,
@@ -58,12 +60,9 @@ describe('commerce example queries', () => {
     const request = { db, session: { id: 's-direct', user: { id: 'u-direct' } } };
 
     await expect(
-      addToCart.handler({ productId: 'p1', quantity: 2 }, request, {
+      executeAddToCart({ productId: 'p1', quantity: 2 }, request, {
         fail(code, payload) {
           return { error: { code, payload }, ok: false, status: 422 };
-        },
-        invalidate(domain, options) {
-          return { domain: domain.key, ...options, manual: true };
         },
       }),
     ).resolves.toEqual({ productId: 'p1', quantity: 2 });
@@ -86,21 +85,20 @@ describe('commerce example queries', () => {
 
     // The mutation handler receives the read-write request (carries `db`); the query loaders below
     // read through the framework-threaded read-only `context.db` (SPEC §9.4 MARQUEE).
-    await addToCart.handler(
+    await executeAddToCart(
       { productId: 'p1', quantity: 2 },
       { db, ...context.request },
       {
         fail(code, payload) {
           return { error: { code, payload }, ok: false, status: 422 };
         },
-        invalidate(domain, options) {
-          return { domain: domain.key, ...options, manual: true };
-        },
       },
     );
 
-    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 2 });
-    await expect(Promise.resolve(productGridQuery.load({ limit: 1 }, context))).resolves.toEqual({
+    await expect(Promise.resolve(executeCartQuery({}, context))).resolves.toEqual({ count: 2 });
+    await expect(
+      Promise.resolve(executeProductGridQuery({ limit: 1 }, context)),
+    ).resolves.toEqual({
       items: [
         {
           id: 'p1',
@@ -113,7 +111,7 @@ describe('commerce example queries', () => {
       ],
       nextCursor: 'p1',
     });
-    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+    await expect(Promise.resolve(executeOrderHistoryQuery({}, context))).resolves.toEqual({
       items: [
         {
           id: 'order-1',
@@ -125,7 +123,7 @@ describe('commerce example queries', () => {
       ],
     });
 
-    await expect(productGridQuery.load({ limit: 1 })).rejects.toThrow(
+    await expect(executeProductGridQuery({ limit: 1 })).rejects.toThrow(
       'commerce query loaders require the framework-provided context.db',
     );
   });
@@ -149,8 +147,8 @@ describe('commerce example queries', () => {
     await seedOrders(db, customOrders);
 
     const context = queryContext(db);
-    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 10 });
-    await expect(Promise.resolve(productGridQuery.load({}, context))).resolves.toEqual({
+    await expect(Promise.resolve(executeCartQuery({}, context))).resolves.toEqual({ count: 10 });
+    await expect(Promise.resolve(executeProductGridQuery({}, context))).resolves.toEqual({
       items: [
         {
           id: 'custom',
@@ -166,7 +164,7 @@ describe('commerce example queries', () => {
 
     await expect(
       Promise.resolve(
-        orderHistoryQuery.load(
+        executeOrderHistoryQuery(
           {},
           {
             db: context.db,
@@ -176,7 +174,7 @@ describe('commerce example queries', () => {
         ),
       ),
     ).resolves.toEqual({ items: customOrders });
-    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
+    await expect(Promise.resolve(executeOrderHistoryQuery({}, context))).resolves.toEqual({
       items: [],
     });
   });
@@ -191,15 +189,12 @@ describe('commerce example queries', () => {
     expect(secondPage.items.map((item) => item.id)).toEqual(['p3']);
     expect(secondPage.nextCursor).toBeNull();
 
-    await addToCart.handler(
+    await executeAddToCart(
       { productId: 'p1', quantity: 2 },
       { db, session: { id: 's-history', user: { id: 'u-history' } } },
       {
         fail(code, payload) {
           return { error: { code, payload }, ok: false, status: 422 };
-        },
-        invalidate(domain, options) {
-          return { domain: domain.key, ...options, manual: true };
         },
       },
     );

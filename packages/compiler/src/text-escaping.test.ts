@@ -125,7 +125,7 @@ export const QuestionDetail = component({
 export const Composed = component({
   render: ({ card }) => (
     <section>
-      {Card.definition.render({ children: card.body })}
+      {Card({ children: card.body })}
     </section>
   ),
 });
@@ -133,7 +133,7 @@ export const Composed = component({
     });
     const serverSource = result.files[0]?.source ?? '';
 
-    expect(serverSource).toContain('{Card.definition.render({ children: card.body })}');
-    expect(serverSource).not.toContain('escapeText(Card.definition.render');
+    expect(serverSource).toContain('{Card({ children: card.body })}');
+    expect(serverSource).not.toContain('escapeText(Card(');
   });
 });

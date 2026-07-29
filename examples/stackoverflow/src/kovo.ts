@@ -1,4 +1,5 @@
-import { createMemoryVersionedClientModuleRegistry, defineKovo } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
+import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { eq } from 'drizzle-orm';
 
 import { createSoDb, type SoDb } from './db.js';

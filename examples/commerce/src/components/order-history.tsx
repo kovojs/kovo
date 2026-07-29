@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component, type ComponentRenderResult } from '@kovojs/core';
-import { Badge } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
 import type { OrderHistoryResult } from '../domain.js';
@@ -72,7 +71,7 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): ComponentRe
             <span style={orderHistoryStyles.mutedText}>Order {item.id}</span>
           </div>
           <div style={orderHistoryStyles.row}>
-            {Badge.definition.render({ children: `×${item.qty}`, variant: 'neutral' })}
+            <span>×{item.qty}</span>
             <span style={orderHistoryStyles.tabularStrong}>{priceLabel(item.total)}</span>
           </div>
         </li>

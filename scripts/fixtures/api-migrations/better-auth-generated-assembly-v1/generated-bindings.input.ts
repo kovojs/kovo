@@ -1,3 +1,4 @@
+// @ts-nocheck -- migration input intentionally imports the retired generated assembly surface.
 import {
   authed,
   type BetterAuthBindingRequest as GeneratedRequest,

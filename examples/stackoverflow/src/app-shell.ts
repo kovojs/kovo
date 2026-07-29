@@ -1,4 +1,5 @@
-import { createRequestHandler, toNodeHandler } from '@kovojs/server';
+import { createRequestHandler } from '@kovojs/server/custom-adapters';
+import { toNodeHandler } from '@kovojs/server/node';
 
 import { buildSoInteractiveApp } from './interactive-app.js';
 

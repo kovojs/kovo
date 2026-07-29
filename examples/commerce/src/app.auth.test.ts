@@ -12,7 +12,11 @@ import {
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
 import { runMutation } from '@kovojs/server/internal/execution';
 
-import { addToCart, commerceSession, createCommerceDb } from './domain.js';
+import {
+  commerceSession,
+  createCommerceDb,
+  executeAddToCart,
+} from './domain.js';
 import { commerceAuthCsrf, commerceSignIn, createCommerceAuth } from './auth.js';
 import {
   commerceAuthRequest,
@@ -36,12 +40,9 @@ describe('commerce example', () => {
 
     expect(commerceSession.parse(request)).toEqual({ id: 's1', user: { id: 'u1' } });
 
-    await addToCart.handler({ productId: 'p1', quantity: 1 }, request, {
+    await executeAddToCart({ productId: 'p1', quantity: 1 }, request, {
       fail(code, payload) {
         return { error: { code, payload }, ok: false, status: 422 };
-      },
-      invalidate(domain, options) {
-        return { domain: domain.key, ...options, manual: true };
       },
     });
 

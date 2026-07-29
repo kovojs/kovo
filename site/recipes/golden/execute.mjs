@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { createSigningKeyRing } from '@kovojs/server/signing';
+import { renderComponent } from '@kovojs/server/internal/html';
 import { publicScopedKey } from '@kovojs/core';
 
 import { accountRoute } from './auth.js';
@@ -32,11 +33,11 @@ const signingKeys = createSigningKeyRing({
 const csrf = { anonymousCookie: false, secret: signingKeys, sessionId: () => undefined };
 
 assert.equal(
-  String(SaveButton.definition.render({ label: 'Save' }, undefined, {})),
+  await renderComponent(SaveButton, { label: 'Save' }),
   '<button type="submit">Save</button>',
 );
 assert.equal(contactRoute.path, '/contacts/:contactId');
-assert.deepEqual(await contactQuery.load({ contactId: 'contact-1' }), {
+assert.deepEqual(contactQuery.load({ contactId: 'contact-1' }), {
   displayName: 'Ada Lovelace',
   id: 'contact-1',
 });
@@ -52,11 +53,9 @@ assert.deepEqual(created, [{ email: 'ada@example.test', name: 'Ada' }]);
 
 const ProfileForm = defineProfileForm(csrf);
 assert.equal(
-  String(
-    ProfileForm.definition.render({}, undefined, {
-      forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } },
-    }),
-  ),
+  await renderComponent(ProfileForm, {}, {
+    slots: { forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } } },
+  }),
   '<form><input name="name" value="Ada"><input name="email" type="email"><button type="submit">Save profile</button></form>',
 );
 

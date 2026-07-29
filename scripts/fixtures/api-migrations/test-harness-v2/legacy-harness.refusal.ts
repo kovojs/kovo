@@ -1,3 +1,4 @@
+// @ts-nocheck -- migration refusal intentionally imports the retired test harness surface.
 import {
   createKovoTestHarness,
   type HarnessPageFixture,

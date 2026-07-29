@@ -4,8 +4,8 @@
 // The stock `kovoVitePlugin` emits the `renderSource()` server module (a zero-arg
 // HTML string used for the render-equivalence gate), which drops the authored
 // `export const Foo = component(...)`. Fixtures instead need the *lowered* module
-// that preserves `component()` so a route page can call `Foo.definition.render(data)`
-// with live query results (SPEC §5.2).
+// that preserves opaque `component()` handles so route pages can compose `<Foo />`
+// with live query results (SPEC §4.1/§5.2).
 import { compileComponentModule } from '@kovojs/compiler';
 import {
   type ComponentCssAsset,

@@ -1,4 +1,5 @@
-import { domain, type JsonValue } from '@kovojs/server';
+import type { JsonValue } from '@kovojs/core';
+import { domain } from '@kovojs/server';
 
 // Shared demo facts: invalidation domains and query result shapes consumed across the
 // interactive example. Mutation input and request types are inferred by the app contract.

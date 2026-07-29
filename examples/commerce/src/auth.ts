@@ -1,4 +1,4 @@
-import { guard, guards, mutation, s, type Guard, type SessionProvider } from '@kovojs/server';
+import { guard, s, type Guard, type SessionProvider } from '@kovojs/server';
 
 import {
   commerceSession,
@@ -7,10 +7,17 @@ import {
   type CommerceRole,
   type CommerceSession,
 } from './domain.js';
+import { app, commerceAuthCsrf, type CommerceAppRequest } from './kovo.js';
 
-export interface CommerceAuthRequest extends CommerceRequest {
+export {
+  commerceAuthCsrf,
+  EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+} from './kovo.js';
+
+export interface CommerceAuthRequest extends Omit<CommerceRequest, 'db'> {
   authCsrfId?: string | null;
   clientIp?: string;
+  db: Omit<CommerceDb, 'transaction'>;
   headers: Headers;
   url: string;
 }
@@ -33,19 +40,6 @@ export interface CommerceAuthBindings {
   readonly signIn: typeof signIn;
   readonly signOut: typeof signOut;
 }
-
-export const EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET';
-
-export const commerceAuthCsrf = {
-  field: 'csrf',
-  secret: localFixtureCsrfSecret(
-    'KOVO_COMMERCE_AUTH_CSRF_SECRET',
-    EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
-  ),
-  sessionId(request: CommerceAuthRequest) {
-    return request.session?.id ?? request.authCsrfId ?? undefined;
-  },
-};
 
 const commerceAuthFixtureBinding: unique symbol = Symbol('commerce.auth.fixture');
 const commerceAuthFixtureCapacity = 4_096;
@@ -92,7 +86,7 @@ export function createCommerceAuthFixture(): CommerceAuthFixture {
   };
 }
 
-const localCommerceSignInGuard = guard<CommerceAuthRequest>(
+const localCommerceSignInGuard = guard<CommerceAppRequest>(
   'local commerce auth fixture with app-owned rate limit',
   (request) => {
     assertCommerceFixtureRequest(request);
@@ -101,10 +95,9 @@ const localCommerceSignInGuard = guard<CommerceAuthRequest>(
 );
 
 // SPEC §4.1/§10.3: `src/auth.ts` plus these direct exports derives the stable auth keys.
-export const signIn = mutation({
-  csrf: commerceAuthCsrf,
+export const signIn = app.mutation({
+  access: [localCommerceSignInGuard],
   errors: { INVALID_CREDENTIALS: s.object({}) },
-  guard: localCommerceSignInGuard,
   input: s.object({
     email: s.string(),
     next: optionalCommerceString,
@@ -113,10 +106,13 @@ export const signIn = mutation({
   redirectTo: (result: { value: { redirectTo: string } }) => result.value.redirectTo,
   // The local fixture writes only its bounded in-memory Map. Preserve the app-bound carrier
   // instead of substituting a Drizzle transaction handle that cannot own auth-fixture authority.
-  transaction(request: CommerceAuthRequest, run) {
+  transaction(
+    request: CommerceAuthRequest,
+    run: (request: CommerceAuthRequest) => Promise<unknown>,
+  ): Promise<unknown> {
     return run(request);
   },
-  handler(input, request: CommerceAuthRequest, context) {
+  handler(input, request, context) {
     const secure = assertCommerceFixtureRequest(request);
     const user = commerceAuthUsers.get(input.email);
     if (!user || input.password !== commerceFixturePassword()) {
@@ -132,21 +128,25 @@ export const signIn = mutation({
   },
 });
 
-export const signOut = mutation({
-  csrf: commerceAuthCsrf,
-  guard: guards.all(
-    guard<CommerceAuthRequest>('local commerce auth fixture', (request) => {
-      assertCommerceFixtureRequest(request);
-      return true;
-    }),
-    guards.authed<CommerceAuthRequest>(),
-  ),
+const localCommerceSignOutGuard = app.all(
+  guard<CommerceAppRequest>('local commerce auth fixture', (request) => {
+    assertCommerceFixtureRequest(request);
+    return true;
+  }),
+  app.authenticated,
+);
+
+export const signOut = app.mutation({
+  access: [localCommerceSignOutGuard],
   input: s.object({}),
   redirectTo: (result: { value: { redirectTo: string } }) => result.value.redirectTo,
-  transaction(request: CommerceAuthRequest, run) {
+  transaction(
+    request: CommerceAuthRequest,
+    run: (request: CommerceAuthRequest) => Promise<unknown>,
+  ): Promise<unknown> {
     return run(request);
   },
-  handler(_input, request: CommerceAuthRequest, context) {
+  handler(_input, request, context) {
     const secure = assertCommerceFixtureRequest(request);
     const token = readCommerceSessionCookie(request.headers, secure);
     if (token) commerceFixtureFromDb(request.db).sessions.delete(token);
@@ -195,7 +195,7 @@ export function createCommerceAuth(
   return { db, fixture, sessionProvider, signIn, signOut };
 }
 
-function commerceFixtureFromDb(db: CommerceDb): CommerceAuthFixture {
+function commerceFixtureFromDb(db: Omit<CommerceDb, 'transaction'>): CommerceAuthFixture {
   const fixtureId = Reflect.get(db, commerceAuthFixtureBinding);
   const fixture =
     typeof fixtureId === 'string' ? commerceAuthFixtures.get(fixtureId)?.deref() : undefined;
@@ -361,13 +361,4 @@ function readCookie(headers: Headers, name: string): string | undefined {
     if (rawName === name) return rawValue.join('=');
   }
   return undefined;
-}
-
-function localFixtureCsrfSecret(envName: string, fallback: string): string {
-  const secret = process.env[envName];
-  if (secret && secret !== fallback) return secret;
-  // Auth operations are denied outside test/explicit local development by
-  // assertCommerceFixtureIngress. Keep build-time imports side-effect free in production mode;
-  // this value never authorizes the disabled fixture there.
-  return fallback;
 }

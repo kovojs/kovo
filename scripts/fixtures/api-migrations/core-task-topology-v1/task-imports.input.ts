@@ -1,3 +1,4 @@
+// @ts-nocheck -- migration input intentionally imports symbols from their retired public homes.
 import {
   component,
   createMemoryStorage,

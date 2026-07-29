@@ -7,7 +7,7 @@
 // framework-owned suite: fixtures exercise framework public APIs end-to-end, not
 // app wiring.
 import type { KovoApp } from '@kovojs/server/custom-adapters';
-import type { Reader } from '@kovojs/server';
+import type { Reader } from '@kovojs/server/data';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 
 import type { PgliteTestDb } from '../pglite.js';

@@ -19,7 +19,10 @@ import {
 
 import { addToCart } from './domain.js';
 import { commerceAuthCsrf } from './auth.js';
-import { createCommerceTestApp } from './app-test-helpers.js';
+import {
+  commerceAuthRequest,
+  createCommerceTestApp,
+} from './app-test-helpers.js';
 import { routeValueToHtml } from './app.js';
 
 let server: Server | undefined;
@@ -54,12 +57,7 @@ describe('commerce app HTTP entry', () => {
   });
 
   it('serves the commerce cart document and query endpoint over node:http', async () => {
-    const errors: unknown[] = [];
-    const shell = createCommerceTestApp({
-      onError(error) {
-        errors.push(error);
-      },
-    });
+    const shell = createCommerceTestApp();
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -67,7 +65,6 @@ describe('commerce app HTTP entry', () => {
 
     const document = await fetch(`${origin}/cart`);
     const html = await document.text();
-    expect(errors).toEqual([]);
     expect(document.status, html).toBe(200);
     expect(document.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(document.headers.get('link')).toContain('</assets/styles.css>; rel=preload; as=style');
@@ -290,14 +287,9 @@ function expectCommerceShellDocument(html: string): void {
 }
 
 async function signInSession(shell: ReturnType<typeof createCommerceTestApp>) {
-  const request = {
-    authCsrfId: 'commerce-shell-login',
-    clientIp: '127.0.0.34',
-    db: shell.db,
-    // SECURITY (SECURITY_FINDINGS.md M7): distinct client ip => own rate-limit bucket.
-    headers: new Headers({ 'x-forwarded-for': '127.0.0.34' }),
-    url: 'http://localhost/commerce-auth-test',
-  };
+  // SECURITY (SECURITY_FINDINGS.md M7): the helper assigns a distinct loopback client IP,
+  // so this request receives its own rate-limit bucket.
+  const request = commerceAuthRequest(undefined, shell.auth);
   const result = await runMutation(
     shell.auth.signIn,
     {

@@ -963,7 +963,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
           function submittedFieldValue(value) { return typeof value === 'string' ? value : ''; }
           function renderContactCard(contact) { return contact.name; }
-          const Badge = { definition: { render(options) { return options.children; } } };
+          const Badge = (options) => options.children;
 
           export const ContactsRegion = component({
             mutations: { addContact },
@@ -972,7 +972,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
               const items = contacts.items;
               const submitted = submittedFieldValue(slots.submitted.name);
               return <section data-submitted={submittedFieldValue(submitted)}>
-                {Badge.definition.render({ children: items.length })}
+                {Badge({ children: items.length })}
                 <form {...mutationFormAttributes(addContact)}>
                   {items.map((contact) => <span>{renderContactCard(contact)}</span>)}
                 </form>

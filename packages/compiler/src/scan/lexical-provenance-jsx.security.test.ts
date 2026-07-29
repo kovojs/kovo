@@ -114,31 +114,31 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
       import { Button } from '@kovojs/ui/button';
       import { Card } from '@kovojs/ui/card';
       const view = (
-        <Card child={<><span>{Badge.definition.render({ children: 'B' })}</span></>}>
-          {Button.definition.render({ children: 'Save' })}
+        <Card child={<><span>{Badge({ children: 'B' })}</span></>}>
+          {Button({ children: 'Save' })}
         </Card>
       );
       void view;
     `);
 
-    expect(call('Badge.definition.render')).toEqual({
+    expect(call('Badge')).toEqual({
       candidates: [
         {
           exportName: 'Badge',
           kind: 'import',
-          members: ['definition', 'render'],
+          members: [],
           specifier: '@kovojs/ui/badge',
         },
       ],
       rootWideningRequired: false,
       uncertain: false,
     });
-    expect(call('Button.definition.render')).toEqual({
+    expect(call('Button')).toEqual({
       candidates: [
         {
           exportName: 'Button',
           kind: 'import',
-          members: ['definition', 'render'],
+          members: [],
           specifier: '@kovojs/ui/button',
         },
       ],
@@ -385,16 +385,16 @@ describe('SPEC §6.6 JSX lexical provenance', () => {
           import { addContact } from './mutations.js';
           import { contactsQuery } from './queries.js';
           function renderContactCard(contact) {
-            return <li>{Badge.definition.render({ children: contact.company })}</li>;
+            return <li>{Badge({ children: contact.company })}</li>;
           }
           export const Contacts = component({
             mutations: { addContact },
             queries: { contacts: contactsQuery },
             render: ({ contacts }) => (
               <div>
-                {Badge.definition.render({ children: String(contacts.items.length) })}
+                {Badge({ children: String(contacts.items.length) })}
                 <form {...mutationFormAttributes(addContact)}>
-                  {Button.definition.render({ children: 'Add', type: 'submit' })}
+                  {Button({ children: 'Add', type: 'submit' })}
                 </form>
                 <ul>{contacts.items.map((contact) => renderContactCard(contact))}</ul>
               </div>

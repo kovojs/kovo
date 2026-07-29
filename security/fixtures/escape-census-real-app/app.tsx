@@ -1,11 +1,14 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { createApp, guards, mutation, query, route, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 
-const allow = guards.rateLimit({ max: 100, per: 'global' });
+const app = defineKovo({
+  appId: '60b4fd00-2f6c-4cbc-b5bf-66e204ca3d62',
+});
+const allow = app.rateLimit({ max: 100, per: 'global' });
 
-export const adminQuery = query({
+export const adminQuery = app.query({
   access: [allow],
   args: s.object({ id: s.string() }),
   load(input: { id: string }) {
@@ -13,7 +16,7 @@ export const adminQuery = query({
   },
 });
 
-export const adminMutation = mutation({
+export const adminMutation = app.mutation({
   access: [allow],
   csrf: false,
   csrfJustification: 'non-browser Metric E representative app',
@@ -36,13 +39,13 @@ export const AdminPage = component({
   },
 });
 
-export default createApp({
+export const adminRoute = app.route('/admin', {
+  access: [allow],
+  page: () => <AdminPage />,
+});
+
+export default app.assemble({
   mutations: [adminMutation],
   queries: [adminQuery],
-  routes: [
-    route('/admin', {
-      access: [allow],
-      page: () => <AdminPage />,
-    }),
-  ],
+  routes: [adminRoute],
 });
