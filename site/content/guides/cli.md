@@ -30,6 +30,18 @@ runner implements a phase.
 files and runs `tsc`, so route renames, missing form fields, and dead links all surface as type
 errors (this is the propagation property from [routing](/guides/routing/)).
 
+For the 0.2 preview API cut, classify the whole app before changing package versions:
+
+```sh
+kovo fix api-v1 --check
+```
+
+Resolve every source-anchored refusal, then run `kovo fix api-v1 --write`. Both modes are explicit.
+One refusal leaves the selected source set unchanged, and a successful write is done only when the
+next `--check` reports zero rewrites. The
+[cumulative migration guide](https://github.com/kovojs/kovo/blob/main/docs/releases/api-v1.md)
+has task-by-task before/after source and security-posture decisions.
+
 The generated package scripts are intentionally thin:
 
 ```jsonc

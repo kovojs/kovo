@@ -242,6 +242,11 @@ Every fenced sample in an authored guide or package README must name a language 
 only from the packed public-package tarballs. Shell examples containing the `kovo` executable must
 parse through the CLI command schema.
 
+API migration samples must choose one explicit mode: `kovo fix api-v1 --check` for read-only
+classification or `kovo fix api-v1 --write` for the all-or-nothing rewrite. Do not teach an
+implicit write mode, a compatibility alias, or a standalone repository script as the app upgrade
+path.
+
 Use an explicit directive immediately before a fence only when its policy default is wrong:
 
 ````markdown

@@ -51,12 +51,18 @@ This is a support window, not a claim that private vulnerability response is ope
 [`SECURITY.md`](SECURITY.md) and the pending security-response readiness check before relying on the
 reporting targets.
 
-## Deprecation
+## Deprecation and technical-preview cuts
 
-A public symbol is removed only after a deprecation cycle: it is first marked
-`@deprecated` (with the replacement named) for at least one minor release on the `0.x`
-line (one major on `1.x`+), kept working for that window, then removed. Deprecations
-are listed in the release notes.
+On the technical-preview `0.x` line, a minor may remove a public symbol without a compatibility
+window when the replacement produces a cleaner API, stronger security default, or simpler
+invariant. The breaking minor must name the change, ship the checked rewrite/refusal batch before
+removal, and include the cumulative `kovo fix api-v1 --check|--write` path and rollback guidance.
+Kovo does not keep aliases, deprecated overloads, or compatibility barrels solely to preserve a
+preview-era shape.
+
+After `1.0.0`, a public symbol is removed only after a deprecation cycle: it is first marked
+`@deprecated` with the replacement named, kept working for at least one major release, then removed.
+Deprecations are listed in the release notes.
 
 ## Distribution
 

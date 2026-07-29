@@ -37,6 +37,19 @@ Every tool exposes exactly these modes:
 - `--write` applies only the rewrites that check mode classified as mechanical.
   It emits the same result shape after writing.
 
+Installed applications use the cumulative command:
+
+```sh
+kovo fix api-v1 [source-or-directory ...] --check
+kovo fix api-v1 [source-or-directory ...] --write
+```
+
+Both flags are explicit and mutually exclusive. The cumulative result keeps the same
+`kovo-api-migration-result/v1` schema with `batch: "api-v1"` and an exact
+`migrationBatches` array matching every removed batch in checked-ledger order. A file record may
+name the batches that rewrote it. A cumulative refusal additionally names its batch, reason, and
+actionable `manualAction`.
+
 The output uses `kovo-api-migration-result/v1`:
 
 ```json
@@ -74,6 +87,12 @@ The output uses `kovo-api-migration-result/v1`:
 Paths are canonical and repository-relative. Refusal anchors are source byte
 ranges, not line-number guesses. Summary counts must exactly equal the file
 records.
+
+The cumulative command captures and analyzes the complete selected source set before writing.
+One refusal leaves every file unchanged. A concurrent change during commit stops the transaction;
+already-written files are rolled back only while their bytes still match Kovo's rewrite, so the
+tool never overwrites a later author edit. A successful `--write` must be idempotent: the same
+selection immediately passes `--check` with zero rewrites and zero refusals.
 
 ## Refuse instead of guessing
 

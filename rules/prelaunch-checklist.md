@@ -36,12 +36,13 @@ Run these local checks before requesting external sign-off. They only prove the 
 is ready to review; they do not satisfy the trademark, domain, npm-scope, linguistic, or
 security-response requirements.
 
-| Step | Command or action                                                                        | Evidence to record                                  | Status  |
-| ---- | ---------------------------------------------------------------------------------------- | --------------------------------------------------- | ------- |
-| 1    | `pnpm run check`                                                                         | Passing command log and commit SHA.                 | pending |
-| 2    | Confirm every required check has a ledger section below.                                 | Reviewer initials and date in Dated Audit Ledger.   | pending |
-| 3    | Attach external search/control/review evidence to the relevant ledger row.               | Source, reviewer, date, findings, and disposition.  | pending |
-| 4    | Link completed pre-launch evidence from `docs/v1-acceptance-ledger.md` before v1 freeze. | Updated acceptance ledger row and clean diff check. | pending |
+| Step | Command or action                                                                        | Evidence to record                                                                                                          | Status  |
+| ---- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1    | `pnpm run check`                                                                         | Passing command log and commit SHA.                                                                                         | pending |
+| 2    | `pnpm run check:api-surface && pnpm run check:publish`                                   | Removed API rows have exercised batches; the packed CLI proves cumulative check, write, refusal atomicity, and idempotence. | pending |
+| 3    | Confirm every required check has a ledger section below.                                 | Reviewer initials and date in Dated Audit Ledger.                                                                           | pending |
+| 4    | Attach external search/control/review evidence to the relevant ledger row.               | Source, reviewer, date, findings, and disposition.                                                                          | pending |
+| 5    | Link completed pre-launch evidence from `docs/v1-acceptance-ledger.md` before v1 freeze. | Updated acceptance ledger row and clean diff check.                                                                         | pending |
 
 ## Trademark Evidence Ledger
 
