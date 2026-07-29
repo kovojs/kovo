@@ -90,14 +90,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./security",["default"]],
       ["./storage",["default"]],
       ["./webhooks",["default"]],
-    ], ["kovo-source-tree-sha256:d1fdbe77622e1611ee6c1d812de68fa4d6864f303677e48e8dbc67ccc54eba74"]],
+    ], ["kovo-source-tree-sha256:241f1d9ac5bf3348eb06ff190b91925fef361f33d57d117e9fe0699b260bb68c"]],
     ["sha256:457819560fb289eb0f382feb4635e42d2bd1711e0f11701031ba0d636b75f2f8", [
       [".",["default","types"]],
       ["./diagnostics",["default","types"]],
       ["./security",["default","types"]],
       ["./storage",["default","types"]],
       ["./webhooks",["default","types"]],
-    ], ["kovo-packed-tree-sha256:e2ecd1afee1e9b40cd47997fa000e618edd45318122e49b24d13bcbbf61ac75c"]],
+    ], ["kovo-packed-tree-sha256:2b223a3241f32c5197510586e169acbcc8f5787b25c1dda13e403c372f6cfb72"]],
   ], "exact-implementation"],
   ["@kovojs/drizzle", "0.2.0", [
     ["sha256:50b4ecab6c1cf42f9413a9fd115b04cffe9aa94046978130ca273b28c4083d6f", [
@@ -5481,7 +5481,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default"]],
       ["./webhooks",["default"]],
       ["./write-safety",["default"]],
-    ], ["kovo-source-tree-sha256:7cd3440aaad277ae0582efa1fdc252f01477106a6f2d4154b40af081d612ec28"]],
+    ], ["kovo-source-tree-sha256:47a676eaaf105224c775e0011771c7e00710a3a4a1da4e998c573d2569ad2060"]],
     ["sha256:7dfc7069e65be9b0ad53632a40f4bf7d259dad5866d191311d0b90306dcc20b3", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
@@ -5593,7 +5593,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./pglite",["default"]],
       ["./postgres",["default"]],
       ["./sqlite",["default"]],
-    ], ["kovo-source-tree-sha256:e84dc9e0eca72311b2bc33c8be67baa475c829d02091775a87e1ef6e52fb5854"]],
+    ], ["kovo-source-tree-sha256:ba0bbf274e6bc4e1470b6de1a58c6a42abb1905bb5d4b6b20b859997c437c9f2"]],
   ], "exact-implementation"],
   ["@kovojs/ui", "0.2.0", [
     ["sha256:017f1568b1680d64beb230c9a5f0bc2d514d60f6f471bd8a325bf5b76fba4c43", [
