@@ -141,7 +141,7 @@ describe('Postgres authorization production explain facts', () => {
     const documents = pgTable(
       'documents',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo({ domain: 'document', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'document', key: columns.id, owner: columns.ownerId })),
     );
     const tableSecurity = {
       tables: [

@@ -38,7 +38,7 @@ const documents = pgTable(
     // not execute this unrelated column, so the C9 execution snapshot must not carry it.
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({ domain: 'document:tenant', key: columns.id, owner: columns.ownerId })),
 );
 
 const manifest = {
@@ -182,26 +182,26 @@ describe('framework-derived Postgres owner guard', () => {
     const nonunique = pgTable(
       'nonunique_documents',
       { id: text('id').notNull(), ownerId: text('owner_id').notNull() },
-      kovo({ domain: 'nonunique', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'nonunique', key: columns.id, owner: columns.ownerId })),
     );
     const local = sqliteTable(
       'local_documents',
       { id: sqliteText('id').primaryKey(), ownerId: sqliteText('owner_id').notNull() },
-      kovo({ domain: 'local', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'local', key: columns.id, owner: columns.ownerId })),
     );
     const accounts = pgTable(
       'owner_guard_accounts',
       { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-      kovo({ domain: 'account', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({ domain: 'account', key: columns.id, owner: columns.ownerId })),
     );
     const entries = pgTable(
       'owner_guard_entries',
       { accountId: text('account_id').notNull(), id: text('id').primaryKey() },
-      kovo({
+      kovo((columns) => ({
         domain: 'entry',
-        key: 'id',
-        ownerVia: { fk: 'accountId', parent: accounts, parentKey: 'id' },
-      }),
+        key: columns.id,
+        ownerVia: { fk: columns.accountId, parent: accounts, parentKey: accounts.id },
+      })),
     );
     const release = installGeneratedTableSecurityManifestForCommand({
       tables: [
@@ -321,7 +321,11 @@ describe('framework-derived Postgres owner guard', () => {
           title: text('title').notNull(),
           createdAt: timestamp('created_at').notNull().defaultNow(),
         },
-        kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+        kovo((columns) => ({
+          domain: 'document:tenant',
+          key: columns.id,
+          owner: columns.ownerId,
+        })),
       );
       const lookalikeGuard = guards.owns<OwnerRequest, OwnerRequest, string>(
         (request) => request.args.id,

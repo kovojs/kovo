@@ -6,7 +6,7 @@ import { contact } from './model.js';
 
 // The app's data model. This is the part you change first.
 //
-// The `kovo({ domain, key })` annotation registers the `contact` domain and the
+// The `kovo((columns) => ({ domain, key: columns.id }))` annotation registers the `contact` domain and the
 // row key. The compiler reads it to prove which queries a write invalidates, so
 // renaming a column or forgetting to refresh a list becomes a build error
 // instead of stale UI (SPEC.md §10.1).
@@ -18,11 +18,11 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     company: text('company').notNull().default(''),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`current_setting('kovo.principal', true) <> ''`,
     domain: contact,
-    key: (table) => table.id,
-  }),
+    key: columns.id,
+  })),
 );
 
 // --- Auth infrastructure -------------------------------------------------------
@@ -42,7 +42,7 @@ export const user = pgTable(
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
-  kovo({ domain: 'auth', key: 'id', owner: (table) => table.id }),
+  kovo((columns) => ({ domain: 'auth', key: columns.id, owner: columns.id })),
 );
 
 export const session = pgTable(
@@ -59,12 +59,12 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'auth',
-    key: 'userId',
-    owner: 'userId',
-    secret: ['token'],
-  }),
+    key: columns.userId,
+    owner: columns.userId,
+    secret: [columns.token],
+  })),
 );
 
 export const account = pgTable(
@@ -86,12 +86,12 @@ export const account = pgTable(
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'auth',
-    key: 'userId',
-    owner: 'userId',
-    secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
-  }),
+    key: columns.userId,
+    owner: columns.userId,
+    secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken],
+  })),
 );
 
 export const verification = pgTable('verification', {
@@ -111,12 +111,12 @@ export const rateLimit = pgTable(
     count: integer('count').notNull(),
     lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`false`,
     domain: 'auth-rate-limit',
-    key: 'id',
+    key: columns.id,
     secret: true,
-  }),
+  })),
 );
 
 /** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */

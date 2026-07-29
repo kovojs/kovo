@@ -211,7 +211,9 @@ export type KovoViewExtraConfig<
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A callback receiving the concrete columns for the table being annotated.
+ * @param annotation - A callback receiving concrete Drizzle column identities for the table being
+ *   annotated. The private identity witness makes typo and wrong-table references fail to typecheck;
+ *   runtime and AST verification remain the security proof.
  *   It returns a `{ domain, key?, owner?, readOnly?, secret?, confidentialAtRest? }` binding
  *   (`owner` names the principal-owning column for the §10.3 IDOR audit and
  *   `readOnly` marks externally-owned/CMS-style content read by the app but not invalidated by

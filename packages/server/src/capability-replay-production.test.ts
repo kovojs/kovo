@@ -13,7 +13,7 @@ const runtimeRoot = mkdtempSync(join(tmpdir(), 'kovo-capability-production-'));
 const capabilityOwners = pgTable(
   'capability_production_owners',
   { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-  kovo({ domain: 'capability-production', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({ domain: 'capability-production', key: columns.id, owner: columns.ownerId })),
 );
 const postgresRuntime = postgresRuntimeApi.createPostgresAppRuntimeDb({
   dataDir: runtimeRoot,

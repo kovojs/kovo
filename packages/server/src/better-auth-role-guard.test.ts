@@ -19,11 +19,11 @@ const notes = pgTable(
     ownerId: text('ownerId').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'better-auth-note',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const schema = { notes };

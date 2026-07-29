@@ -143,7 +143,7 @@ export const orders = pgTable(
     userId: text('user_id').notNull(),
     total: integer('total').notNull(),
   },
-  kovo({ domain: 'order', owner: (t) => t.userId }),
+  kovo((columns) => ({ domain: 'order', owner: columns.userId })),
 );
 ```
 
@@ -384,7 +384,7 @@ export const users = pgTable(
     email: text('email').notNull(),
     passwordDigest: text('password_digest').notNull(),
   },
-  kovo({ domain: 'user', secret: (t) => [t.passwordDigest] }),
+  kovo((columns) => ({ domain: 'user', secret: [columns.passwordDigest] })),
 );
 ```
 
@@ -432,7 +432,7 @@ export const accounts = pgTable(
     displayName: text('display_name').notNull(),
     role: text('role').notNull(),
   },
-  kovo({ domain: 'account', governed: (t) => [t.role] }),
+  kovo((columns) => ({ domain: 'account', governed: [columns.role] })),
 );
 ```
 

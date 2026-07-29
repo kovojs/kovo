@@ -92,8 +92,8 @@ export const addToCart = mutation({
 ```
 
 The write still goes through a named helper. `kovo check` reads those helper writes, maps the tables
-through the schema's `kovo({ domain })` annotations, intersects them with visible query read sets,
-and reruns the stale queries after the transaction commits.
+through the schema's `kovo(() => ({ domain }))` annotations, intersects them with visible query read
+sets, and reruns the stale queries after the transaction commits.
 
 ## Declare opaque writes
 

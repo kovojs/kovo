@@ -26,12 +26,12 @@ const rateLimit = pgTable(
     key: text('key').notNull().unique(),
     lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`false`,
     domain: 'auth-rate-limit-test',
-    key: 'id',
+    key: columns.id,
     secret: true,
-  }),
+  })),
 );
 
 const input = {

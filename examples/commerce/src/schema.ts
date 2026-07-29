@@ -14,13 +14,13 @@ export const products = pgTable(
     stock: integer('stock').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     // SPEC §10.3: this demo catalog is deliberately shared and publicly readable. The literal
     // SQL predicate is an engine policy Kovo can install; prose is not Postgres authorization.
     authzPolicy: sql`true`,
     domain: product,
-    key: (t) => t.id,
-  }),
+    key: columns.id,
+  })),
 );
 
 export const cartItems = pgTable(
@@ -31,13 +31,13 @@ export const cartItems = pgTable(
     qty: integer('qty').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     // SPEC §10.3: the demo cart is deliberately global, including for anonymous storefront
     // reads. Mutation guards remain the finer app decision; this engine policy states the truth.
     authzPolicy: sql`true`,
     domain: cart,
-    key: (t) => t.id,
-  }),
+    key: columns.id,
+  })),
 );
 
 export const orders = pgTable(
@@ -51,5 +51,5 @@ export const orders = pgTable(
   },
   // SPEC §10.1: orders are principal-owned (the order's user); the §10.3 IDOR
   // audit checks that order reads are scoped to that owner.
-  kovo({ domain: order, key: (t) => t.id, owner: (t) => t.userId }),
+  kovo((columns) => ({ domain: order, key: columns.id, owner: columns.userId })),
 );

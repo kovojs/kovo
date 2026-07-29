@@ -55,12 +55,12 @@ const probeNotes = pgTable(
     ownerId: text('owner_id').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'external-postgres-probe-notes',
-    key: 'id',
-    owner: 'ownerId',
-    secret: ['classified'],
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+    secret: [columns.classified],
+  })),
 );
 
 const probeNotesV2 = pgTable(
@@ -72,12 +72,12 @@ const probeNotesV2 = pgTable(
     summary: text('summary'),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'external-postgres-probe-notes',
-    key: 'id',
-    owner: 'ownerId',
-    secret: ['classified'],
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+    secret: [columns.classified],
+  })),
 );
 
 const schema = { probeNotes };
@@ -89,11 +89,11 @@ const guardAssertionProbeNotes = pgTable(
     ownerId: text('owner_id').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: 'the request guard checks note ownership',
     domain: 'external-postgres-guard-assertion-notes',
-    key: 'id',
-  }),
+    key: columns.id,
+  })),
 );
 const guardAssertionSchema = { guardAssertionProbeNotes };
 const lostUpdateCounters = pgTable(
@@ -104,13 +104,13 @@ const lostUpdateCounters = pgTable(
     ownerId: text('owner_id').notNull(),
     version: integer('version').notNull(),
   },
-  kovo({
-    atomic: 'count',
+  kovo((columns) => ({
+    atomic: columns.count,
     domain: 'external-postgres-lost-update-counter',
-    key: 'id',
-    owner: 'ownerId',
-    version: 'version',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+    version: columns.version,
+  })),
 );
 const lostUpdateSchema = { lostUpdateCounters };
 const externalRateLimit = pgTable('rateLimit', {

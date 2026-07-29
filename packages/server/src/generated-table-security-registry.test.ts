@@ -28,7 +28,7 @@ describe('generated table-security registry', () => {
         id: pgText('id').primaryKey(),
         ownerId: pgText('ownerId').notNull(),
       },
-      kovo({ authzPolicy: sql.raw(predicate), domain: 'share', key: 'id' }),
+      kovo((columns) => ({ authzPolicy: sql.raw(predicate), domain: 'share', key: columns.id })),
     );
     const manifest = {
       tables: [
@@ -64,7 +64,11 @@ describe('generated table-security registry', () => {
       Object.defineProperty(shares, Table.Symbol.ExtraConfigBuilder, {
         configurable: true,
         enumerable: true,
-        value: kovo({ authzPolicy: sql.raw('TRUE'), domain: 'share', key: 'id' }),
+        value: kovo((columns) => ({
+          authzPolicy: sql.raw('TRUE'),
+          domain: 'share',
+          key: columns.id,
+        })),
         writable: true,
       });
       await runtime.ready;
@@ -135,7 +139,7 @@ describe('generated table-security registry', () => {
         id: text('id').primaryKey(),
         passwordHash: text('password_hash').notNull(),
       },
-      kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }),
+      kovo((columns) => ({ domain: 'user', key: columns.id, secret: [columns.passwordHash] })),
     );
 
     const release = installGeneratedTableSecurityManifestForCommand(manifest);

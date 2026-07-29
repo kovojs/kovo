@@ -288,7 +288,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const parent = sqliteTable(
       `${prefix}_parent`,
       { id: text('id').primaryKey() },
-      kovo({ domain: `${prefix}_parent`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_parent`, key: columns.id })),
     );
     let callbackHits = 0;
     const child = sqliteTable(
@@ -300,7 +300,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           throw new Error('foreign-key callback sentinel');
         }),
       },
-      kovo({ domain: `${prefix}_child`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_child`, key: columns.id })),
     );
     const manifest = manifestFor([
       { columns: [{ key: 'id', name: 'id' }], name: `${prefix}_parent` },
@@ -336,7 +336,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           publicValue: text('public_value').notNull(),
           secretValue: text('secret_value').notNull(),
         },
-        kovo({ domain: prefix, key: 'id', secret: ['secretValue'] }),
+        kovo((columns) => ({ domain: prefix, key: columns.id, secret: [columns.secretValue] })),
       );
       const original = table[Table.Symbol.ExtraConfigBuilder];
       expect(original).toBeTypeOf('function');
@@ -405,7 +405,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
       const parent = sqliteTable(
         `${prefix}_parent`,
         { id: text('id').primaryKey() },
-        kovo({ domain: `${prefix}_parent`, key: 'id' }),
+        kovo((columns) => ({ domain: `${prefix}_parent`, key: columns.id })),
       );
       const child = sqliteTable(
         `${prefix}_child`,
@@ -428,7 +428,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
             return parent.id;
           }),
         },
-        kovo({ domain: `${prefix}_child`, key: 'id' }),
+        kovo((columns) => ({ domain: `${prefix}_child`, key: columns.id })),
       );
       const release = installGeneratedTableSecurityManifestForCommand(
         manifestFor([
@@ -524,7 +524,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const parent = sqliteTable(
       `${prefix}_parent`,
       { id: text('id').primaryKey() },
-      kovo({ domain: `${prefix}_parent`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_parent`, key: columns.id })),
     );
     const child = sqliteTable(
       `${prefix}_child`,
@@ -535,7 +535,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           return parent.id;
         }),
       },
-      kovo({ domain: `${prefix}_child`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_child`, key: columns.id })),
     );
     const release = installGeneratedTableSecurityManifestForCommand(
       manifestFor([
@@ -612,7 +612,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const parent = sqliteTable(
       `${prefix}_parent`,
       { id: text('id').primaryKey() },
-      kovo({ domain: `${prefix}_parent`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_parent`, key: columns.id })),
     );
     const originals = [
       [Array.prototype, 'filter'],
@@ -647,7 +647,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           return parent.id;
         }),
       },
-      kovo({ domain: `${prefix}_child`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_child`, key: columns.id })),
     );
     const release = installGeneratedTableSecurityManifestForCommand(
       manifestFor([
@@ -706,7 +706,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const parent = sqliteTable(
       parentName,
       { id: text('id').primaryKey() },
-      kovo({ domain: parentName, key: 'id' }),
+      kovo((columns) => ({ domain: parentName, key: columns.id })),
     );
     const child = sqliteTable(
       childName,
@@ -735,7 +735,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
             { onDelete: 'cascade' },
           ),
       },
-      kovo({ domain: childName, key: 'id' }),
+      kovo((columns) => ({ domain: childName, key: columns.id })),
     );
     const release = installGeneratedTableSecurityManifestForCommand(
       manifestFor([
@@ -860,7 +860,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const parent = sqliteTable(
       `${prefix}_parent`,
       { id: text('id').primaryKey() },
-      kovo({ domain: `${prefix}_parent`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_parent`, key: columns.id })),
     );
     const child = sqliteTable(
       `${prefix}_child`,
@@ -882,7 +882,7 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
           return parent.id;
         }),
       },
-      kovo({ domain: `${prefix}_child`, key: 'id' }),
+      kovo((columns) => ({ domain: `${prefix}_child`, key: columns.id })),
     );
     const release = installGeneratedTableSecurityManifestForCommand(
       manifestFor([
@@ -1080,12 +1080,12 @@ describe('public SQLite runtime boundary (SPEC §6.6/§10.3)', () => {
     const allowed = sqliteTable(
       allowedName,
       { id: text('id').primaryKey(), name: text('name').notNull() },
-      kovo({ domain: allowedName, key: 'id' }),
+      kovo((columns) => ({ domain: allowedName, key: columns.id })),
     );
     const victim = sqliteTable(
       victimName,
       { id: text('id').primaryKey(), name: text('name').notNull() },
-      kovo({ domain: victimName, key: 'id' }),
+      kovo((columns) => ({ domain: victimName, key: columns.id })),
     );
     const release = installGeneratedTableSecurityManifestForCommand(
       manifestFor([
@@ -1239,7 +1239,7 @@ function runtimeSchema(prefix: string) {
   const parent = sqliteTable(
     parentName,
     { id: text('id').primaryKey(), name: text('name').notNull() },
-    kovo({ domain: parentName, key: 'id' }),
+    kovo((columns) => ({ domain: parentName, key: columns.id })),
   );
   const child = sqliteTable(
     childName,
@@ -1249,7 +1249,7 @@ function runtimeSchema(prefix: string) {
         .notNull()
         .references(() => parent.id),
     },
-    kovo({ domain: childName, key: 'id' }),
+    kovo((columns) => ({ domain: childName, key: columns.id })),
   );
   return {
     child,

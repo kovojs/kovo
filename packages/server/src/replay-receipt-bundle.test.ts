@@ -19,7 +19,7 @@ const vpBin = resolve(process.cwd(), 'node_modules/.bin/vp');
 const bundleReplayOwners = pgTable(
   'bundle_replay_owners',
   { id: text('id').primaryKey(), ownerId: text('owner_id').notNull() },
-  kovo({ domain: 'bundle-replay', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({ domain: 'bundle-replay', key: columns.id, owner: columns.ownerId })),
 );
 
 describe('built-bundle durable replay receipts (SPEC §10.3)', () => {

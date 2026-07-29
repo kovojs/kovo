@@ -27,7 +27,7 @@ const orders = pgTable(
     id: text('id').primaryKey(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'order', owner: (t) => t.userId }),
+  kovo((columns) => ({ domain: 'order', owner: columns.userId })),
 );
 ```
 
@@ -69,7 +69,7 @@ orders = pgTable(
   {
     /* … */
   },
-  kovo({ owner: (t) => t.userId }),
+  kovo((columns) => ({ owner: columns.userId })),
 );
 
 const orderHistory = query({
@@ -148,7 +148,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 const session = pgTable(
   'session',
   { id: text('id').primaryKey(), token: text('token').notNull() },
-  kovo({ domain: 'session', secret: ['token'] }),
+  kovo((columns) => ({ domain: 'session', secret: [columns.token] })),
 );
 ```
 

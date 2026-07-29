@@ -57,12 +57,12 @@ const notes = pgTable(
     secretNote: text('secretNote').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-notes',
-    key: 'id',
-    owner: 'ownerId',
-    secret: ['secretNote'],
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+    secret: [columns.secretNote],
+  })),
 );
 
 const labels = pgTable(
@@ -71,11 +71,11 @@ const labels = pgTable(
     id: text('id').primaryKey(),
     label: text('label').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-labels',
-    key: 'id',
+    key: columns.id,
     reference: true,
-  }),
+  })),
 );
 
 const guardAssertionNotes = pgTable(
@@ -85,11 +85,11 @@ const guardAssertionNotes = pgTable(
     ownerId: text('owner_id').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: 'the request guard checks note ownership',
     domain: 'runtime-guard-assertion-notes',
-    key: 'id',
-  }),
+    key: columns.id,
+  })),
 );
 
 const shadowNotes = pgTable(
@@ -99,11 +99,11 @@ const shadowNotes = pgTable(
     ownerId: text('ownerId').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-shadow-notes',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const serialNotes = pgTable(
@@ -113,11 +113,11 @@ const serialNotes = pgTable(
     ownerId: text('ownerId').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-serial-notes',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const bigintNotes = pgTable(
@@ -127,11 +127,11 @@ const bigintNotes = pgTable(
     ownerId: text('ownerId').notNull(),
     lastRequest: bigint('lastRequest', { mode: 'number' }).notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-bigint-notes',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const fkParents = pgTable(
@@ -140,11 +140,11 @@ const fkParents = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('ownerId').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-fk-parents',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const fkChildren = pgTable(
@@ -156,11 +156,11 @@ const fkChildren = pgTable(
       .notNull()
       .references(() => fkParents.id),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-fk-children',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const schema = { labels, notes };
@@ -194,11 +194,11 @@ const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-team-memberships',
-    key: 'id',
-    owner: 'userId',
-  }),
+    key: columns.id,
+    owner: columns.userId,
+  })),
 );
 
 const teamDocuments = pgTable(
@@ -208,15 +208,15 @@ const teamDocuments = pgTable(
     teamId: text('team_id').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`EXISTS (
       SELECT 1 FROM ${teamMemberships}
       WHERE ${teamMemberships.teamId} = "kovo_runtime_team_documents"."team_id"
         AND ${teamMemberships.userId} = current_setting('kovo.principal', true)
     )`,
     domain: 'runtime-team-documents',
-    key: 'id',
-  }),
+    key: columns.id,
+  })),
 );
 
 const teamSchema = { teamDocuments, teamMemberships };
@@ -238,11 +238,11 @@ const primordialPolicyNotes = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('ownerId').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: primordialPolicyPredicate,
     domain: 'runtime-primordial-policy-notes',
-    key: 'id',
-  }),
+    key: columns.id,
+  })),
 );
 
 const parameterizedPolicyDocuments = pgTable(
@@ -251,11 +251,11 @@ const parameterizedPolicyDocuments = pgTable(
     id: text('id').primaryKey(),
     teamId: text('team_id').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     authzPolicy: sql`team_id = ${'team-a'}`,
     domain: 'runtime-parameterized-policy-documents',
-    key: 'id',
-  }),
+    key: columns.id,
+  })),
 );
 
 const sharedContainers = pgTable(
@@ -263,11 +263,11 @@ const sharedContainers = pgTable(
   {
     id: text('id').primaryKey(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-shared-containers',
-    key: 'id',
+    key: columns.id,
     reference: true,
-  }),
+  })),
 );
 
 const orphanedContainerItems = pgTable(
@@ -276,11 +276,15 @@ const orphanedContainerItems = pgTable(
     id: text('id').primaryKey(),
     containerId: text('container_id').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-orphaned-container-items',
-    key: 'id',
-    ownerVia: { fk: (table) => table.containerId, parent: sharedContainers, parentKey: 'id' },
-  }),
+    key: columns.id,
+    ownerVia: {
+      fk: columns.containerId,
+      parent: sharedContainers,
+      parentKey: sharedContainers.id,
+    },
+  })),
 );
 
 const unresolvableOwnerViaSchema = { orphanedContainerItems, sharedContainers };
@@ -291,7 +295,11 @@ const ownedContainers = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('owner_id').notNull(),
   },
-  kovo({ domain: 'runtime-owned-containers', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({
+    domain: 'runtime-owned-containers',
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const ownedContainerItems = pgTable(
@@ -302,11 +310,11 @@ const ownedContainerItems = pgTable(
       .references(() => ownedContainers.id),
     id: text('id').primaryKey(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'runtime-owned-container-items',
-    key: 'id',
-    ownerVia: { fk: 'containerId', parent: ownedContainers, parentKey: 'id' },
-  }),
+    key: columns.id,
+    ownerVia: { fk: columns.containerId, parent: ownedContainers, parentKey: ownedContainers.id },
+  })),
 );
 
 const ownerViaSchema = { ownedContainerItems, ownedContainers };
@@ -935,12 +943,12 @@ describe('createPostgresAppRuntimeDb', () => {
         id: text('id').primaryKey(),
         ownerId: text('owner_id').notNull(),
       },
-      kovo({
+      kovo((columns) => ({
         domain: 'whole-secret-duplicate-records',
-        key: 'id',
-        owner: 'ownerId',
+        key: columns.id,
+        owner: columns.ownerId,
         secret: true,
-      }),
+      })),
     );
     const partialSecretRecords = partialSecretSchema.table(
       'duplicate_security_records',
@@ -950,12 +958,12 @@ describe('createPostgresAppRuntimeDb', () => {
         ownerId: text('owner_id').notNull(),
         publicLabel: text('public_label').notNull(),
       },
-      kovo({
+      kovo((columns) => ({
         domain: 'partial-secret-duplicate-records',
-        key: 'id',
-        owner: 'ownerId',
-        secret: ['classified'],
-      }),
+        key: columns.id,
+        owner: columns.ownerId,
+        secret: [columns.classified],
+      })),
     );
 
     for (const duplicateSchema of [

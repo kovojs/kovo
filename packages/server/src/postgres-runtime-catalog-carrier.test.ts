@@ -91,7 +91,7 @@ const carrierNotes = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('ownerId').notNull(),
   },
-  kovo({ domain: 'catalog-carrier-notes', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({ domain: 'catalog-carrier-notes', key: columns.id, owner: columns.ownerId })),
 );
 
 describe('Postgres security catalog carriers', () => {

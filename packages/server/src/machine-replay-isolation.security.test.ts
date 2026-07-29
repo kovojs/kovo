@@ -610,7 +610,11 @@ describe('csrf:false machine replay isolation (SPEC §6.6/§9.1/§10.3)', () => 
         id: text('id').primaryKey(),
         ownerId: text('owner_id').notNull(),
       },
-      kovo({ domain: 'machine-replay-isolation-tests', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({
+        domain: 'machine-replay-isolation-tests',
+        key: columns.id,
+        owner: columns.ownerId,
+      })),
     );
     const runtime = createPostgresAppRuntimeDb({
       dataDir,

@@ -26,18 +26,23 @@ export const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'team-membership', key: 'id', owner: 'userId' }),
+  kovo((columns) => ({
+    domain: 'team-membership',
+    key: columns.id,
+    owner: columns.userId,
+  })),
 );
 ```
 
-Use `owner: 'userId'` when each user may see and manage their own membership rows. If admins manage
-membership for other users, put an `authzPolicy` on this table instead. Do not use `reference: true`
-for membership graphs; `reference` is for immutable global lookup rows with no tenant data.
+Use `owner: columns.userId` when each user may see and manage their own membership rows. If admins
+manage membership for other users, put an `authzPolicy` on this table instead. Do not use
+`reference: true` for membership graphs; `reference` is for immutable global lookup rows with no
+tenant data.
 
 ## Add the document policy
 
-Annotate the document table with `kovo({ authzPolicy: sql.raw(...) })`. The predicate should answer:
-"does the current database principal have a membership row for this document's team?"
+Annotate the document table with `kovo(() => ({ authzPolicy: sql.raw(...) }))`. The predicate should
+answer: "does the current database principal have a membership row for this document's team?"
 
 ```ts
 import { kovo, sql } from '@kovojs/drizzle';
@@ -50,7 +55,11 @@ export const teamMemberships = pgTable(
     teamId: text('team_id').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'team-membership', key: 'id', owner: 'userId' }),
+  kovo((columns) => ({
+    domain: 'team-membership',
+    key: columns.id,
+    owner: columns.userId,
+  })),
 );
 
 export const teamDocuments = pgTable(
@@ -61,15 +70,15 @@ export const teamDocuments = pgTable(
     title: text('title').notNull(),
     body: text('body').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'team-document',
-    key: 'id',
+    key: columns.id,
     authzPolicy: sql.raw(`EXISTS (
       SELECT 1 FROM "team_memberships"
       WHERE "team_memberships"."team_id" = "team_documents"."team_id"
         AND "team_memberships"."user_id" = current_setting('kovo.principal', true)
     )`),
-  }),
+  })),
 );
 ```
 

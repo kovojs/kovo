@@ -42,7 +42,7 @@ export const products = pgTable(
     name: text('name').notNull(),
     stock: integer('stock').notNull(),
   },
-  kovo({ domain: 'product' }),
+  kovo(() => ({ domain: 'product' })),
 );
 ```
 

@@ -22,7 +22,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 export const products = pgTable(
   'products',
   { id: text('id').primaryKey(), name: text('name').notNull() },
-  kovo({ domain: 'product', key: (t) => t.id }),
+  kovo((columns) => ({ domain: 'product', key: columns.id })),
 );
 ```
 
@@ -33,7 +33,8 @@ for write-side tables that no query reads.
 ## Declare Domain values
 
 Table tags and mutation/query declarations use the same vocabulary, but they are not the same thing:
-`kovo({ domain: 'cart' })` is schema metadata on a table, while `domain('cart')` creates the runtime
+`kovo((columns) => ({ domain: 'cart' }))` is schema metadata on a table, while `domain('cart')`
+creates the runtime
 `Domain` value you pass to `registry.touches` or `reads`.
 
 ```ts

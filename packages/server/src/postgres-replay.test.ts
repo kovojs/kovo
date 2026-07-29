@@ -99,11 +99,11 @@ const replayOwners = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('owner_id').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'postgres-replay-tests',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 const schema = postgresSchemaModule({ replayOwners });
 

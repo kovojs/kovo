@@ -12,11 +12,11 @@ const notes = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('ownerId').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'testing-note',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const schema = { notes };

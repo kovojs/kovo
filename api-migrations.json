@@ -7887,6 +7887,135 @@
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node scripts/migrate-server-api-v1.mjs --check scripts/fixtures/api-migrations/server-task-topology-v1"
       }
+    },
+    {
+      "id": "drizzle-typed-annotations-v1",
+      "state": "removed",
+      "owner": "data-plane",
+      "decisions": [
+        "@kovojs/drizzle#extractKovoRuntimeDbMetadata",
+        "@kovojs/drizzle#KovoRuntimeAuthorizationClassification",
+        "@kovojs/drizzle#KovoRuntimeDbColumnSource",
+        "@kovojs/drizzle#KovoRuntimeDbMetadata",
+        "@kovojs/drizzle#KovoRuntimeDbTable",
+        "@kovojs/drizzle#KovoRuntimeKeySource",
+        "@kovojs/drizzle#KovoRuntimeOwnerSource",
+        "@kovojs/drizzle#KovoRuntimeOwnerViaSource"
+      ],
+      "tool": {
+        "path": "scripts/migrate-drizzle-api-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
+      },
+      "releaseNote": "docs/releases/drizzle-typed-annotations-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo and Drizzle package versions and reverse only files reported as rewritten by the structured Drizzle migration result.",
+      "rules": [
+        {
+          "id": "kovo-object-to-column-callback",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "kovo"
+          },
+          "to": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "kovo"
+          }
+        },
+        {
+          "id": "internalize-runtime-metadata-extractor",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "extractKovoRuntimeDbMetadata"
+          },
+          "category": "app-context",
+          "reason": "Runtime schema metadata is framework assembly authority; an application-owned replacement requires an adapter design decision."
+        },
+        {
+          "id": "internalize-runtime-authorization-classification",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeAuthorizationClassification"
+          },
+          "category": "app-context",
+          "reason": "Runtime authorization classifications are compiler-bound framework facts and have no supported app-authored replacement."
+        },
+        {
+          "id": "internalize-runtime-column-source",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeDbColumnSource"
+          },
+          "category": "app-context",
+          "reason": "Runtime physical-column source records belong to framework assembly and cannot be reconstructed mechanically in application code."
+        },
+        {
+          "id": "internalize-runtime-db-metadata",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeDbMetadata"
+          },
+          "category": "app-context",
+          "reason": "Runtime database metadata is an internal server boundary whose application uses require a deliberate adapter redesign."
+        },
+        {
+          "id": "internalize-runtime-db-table",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeDbTable"
+          },
+          "category": "app-context",
+          "reason": "The runtime table carrier is inferred from concrete Drizzle values and has no stable application-facing replacement type."
+        },
+        {
+          "id": "internalize-runtime-key-source",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeKeySource"
+          },
+          "category": "app-context",
+          "reason": "Runtime key-source facts are compiler-bound framework metadata and cannot be recreated from application intent mechanically."
+        },
+        {
+          "id": "internalize-runtime-owner-source",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeOwnerSource"
+          },
+          "category": "app-context",
+          "reason": "Runtime owner-source facts are security-sensitive framework metadata with no supported app-authored replacement."
+        },
+        {
+          "id": "internalize-runtime-owner-via-source",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/drizzle",
+            "symbol": "KovoRuntimeOwnerViaSource"
+          },
+          "category": "app-context",
+          "reason": "Runtime transitive-owner facts are security-sensitive framework metadata with no supported app-authored replacement."
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/drizzle-typed-annotations-v1/schema.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/drizzle-typed-annotations-v1/runtime-metadata.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-drizzle-api-v1.mjs --check scripts/fixtures/api-migrations/drizzle-typed-annotations-v1"
+      }
     }
   ]
 }

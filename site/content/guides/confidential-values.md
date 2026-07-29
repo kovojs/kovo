@@ -147,7 +147,11 @@ Column-level secrecy lives in the schema annotation, not in query prose:
 ```ts
 import { kovo } from '@kovojs/drizzle';
 
-kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] });
+kovo((columns) => ({
+  domain: 'user',
+  key: columns.id,
+  secret: [columns.passwordHash],
+}));
 ```
 
 For confidential-at-rest columns, encrypt before the write:

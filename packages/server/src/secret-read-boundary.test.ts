@@ -108,7 +108,11 @@ describe('secret read boundary', () => {
         id: text('id').primaryKey(),
         classified: text('classified').notNull(),
       },
-      kovo({ domain: 'facade-secret', key: 'id', secret: ['classified'] }),
+      kovo((columns) => ({
+        domain: 'facade-secret',
+        key: columns.id,
+        secret: [columns.classified],
+      })),
     );
     const declared = extractKovoRuntimeDbMetadata([secrets]);
     const db = createSecretBoxingReadDb(
@@ -333,7 +337,11 @@ describe('secret read boundary', () => {
         id: text('id').primaryKey(),
         name: text('name').notNull(),
       },
-      kovo({ domain: 'expression-contact', key: 'id', secret: ['company'] }),
+      kovo((columns) => ({
+        domain: 'expression-contact',
+        key: columns.id,
+        secret: [columns.company],
+      })),
     );
     const raw = drizzle({ client });
     const safe = wrapManagedDbForSqlSafety(
@@ -631,7 +639,11 @@ describe('secret read boundary', () => {
           label: text('label').notNull(),
           parentId: text('parent_id').references(() => parents.id),
         },
-        kovo({ domain: 'relational-secret', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'relational-secret',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const relations = defineRelations({ parents, secrets }, (r) => ({
         parents: { secrets: r.many.secrets() },
@@ -736,7 +748,11 @@ describe('secret read boundary', () => {
           id: pgText('id').primaryKey(),
           label: pgText('label').notNull(),
         },
-        kovo({ domain: 'pglite-relational-secret', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'pglite-relational-secret',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const relations = defineRelations({ secrets }, () => ({}));
       const db = createSecretBoxingReadDb(
@@ -785,7 +801,11 @@ describe('secret read boundary', () => {
           id: pgText('id').primaryKey(),
           label: pgText('label').notNull(),
         },
-        kovo({ domain: 'public-record', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'public-record',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const wholeSecretRecords = pgTable(
         'whole_secret_records',
@@ -793,7 +813,7 @@ describe('secret read boundary', () => {
           classified: pgText('classified').notNull(),
           id: pgText('id').primaryKey(),
         },
-        kovo({ domain: 'whole-secret-record', key: 'id', secret: true }),
+        kovo((columns) => ({ domain: 'whole-secret-record', key: columns.id, secret: true })),
       );
       const relations = defineRelations({ publicRecords, wholeSecretRecords }, () => ({}));
       const publicRecordView = pgTable('public_record_view', {
@@ -873,7 +893,11 @@ describe('secret read boundary', () => {
           classified: pgText('classified').notNull(),
           id: pgText('id').primaryKey(),
         },
-        kovo({ domain: 'registered-secret', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'registered-secret',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const unregisteredSecretView = pgTable('unregistered_secret_view', {
         id: pgText('id').notNull(),
@@ -947,7 +971,7 @@ describe('secret read boundary', () => {
           classified: pgText('classified').notNull(),
           id: pgText('id').primaryKey(),
         },
-        kovo({ domain: 'whole-scope-record', key: 'id', secret: true }),
+        kovo((columns) => ({ domain: 'whole-scope-record', key: columns.id, secret: true })),
       );
       const partialSecretRecords = partialScope.table(
         'records',
@@ -955,7 +979,11 @@ describe('secret read boundary', () => {
           classified: pgText('classified').notNull(),
           id: pgText('id').primaryKey(),
         },
-        kovo({ domain: 'partial-scope-record', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'partial-scope-record',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const relations = defineRelations({ partialSecretRecords, wholeSecretRecords }, () => ({}));
       const raw = drizzlePostgres({ client, relations });
@@ -1019,7 +1047,11 @@ describe('secret read boundary', () => {
           id: pgText('id').primaryKey(),
           label: pgText('label').notNull(),
         },
-        kovo({ domain: 'projection-secret', key: 'id', secret: ['classified'] }),
+        kovo((columns) => ({
+          domain: 'projection-secret',
+          key: columns.id,
+          secret: [columns.classified],
+        })),
       );
       const raw = drizzlePostgres({ client });
       const safe = wrapManagedDbForSqlSafety(

@@ -26,12 +26,12 @@ const fuzzerNotes = pgTable(
     secretNote: text('secretNote').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'fuzzer-notes',
-    key: 'id',
-    owner: 'ownerId',
-    secret: ['secretNote'],
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+    secret: [columns.secretNote],
+  })),
 );
 
 const fuzzerSerialNotes = pgTable(
@@ -41,11 +41,11 @@ const fuzzerSerialNotes = pgTable(
     ownerId: text('ownerId').notNull(),
     title: text('title').notNull(),
   },
-  kovo({
+  kovo((columns) => ({
     domain: 'fuzzer-serial-notes',
-    key: 'id',
-    owner: 'ownerId',
-  }),
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 
 const fuzzerSchema = { fuzzerNotes, fuzzerSerialNotes };

@@ -54,7 +54,11 @@ const erasureOwners = pgTable(
     id: text('id').primaryKey(),
     ownerId: text('owner_id').notNull(),
   },
-  kovo({ domain: 'principal-erasure-tests', key: 'id', owner: 'ownerId' }),
+  kovo((columns) => ({
+    domain: 'principal-erasure-tests',
+    key: columns.id,
+    owner: columns.ownerId,
+  })),
 );
 const schema = postgresSchemaModule({ erasureOwners });
 

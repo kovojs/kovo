@@ -4543,11 +4543,12 @@
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "extractKovoRuntimeDbMetadata",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#kovo",
@@ -4697,77 +4698,84 @@
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeAuthorizationClassification",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeDbColumnSource",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeDbColumnSource",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeDbMetadata",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeDbMetadata",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeDbTable",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeDbTable",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeKeySource",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeKeySource",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeOwnerSource",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeOwnerSource",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoRuntimeOwnerViaSource",
       "package": "@kovojs/drizzle",
       "specifier": "@kovojs/drizzle",
       "symbol": "KovoRuntimeOwnerViaSource",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/drizzle",
       "story": "drizzle-runtime",
-      "evidence": "drizzle-contract"
+      "evidence": "drizzle-contract",
+      "migrationBatch": "drizzle-typed-annotations-v1"
     },
     {
       "id": "@kovojs/drizzle#KovoSecretColumnAnnotation",

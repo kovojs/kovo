@@ -129,16 +129,20 @@ describe('finite Postgres authorization correspondence', () => {
     const accounts = pgTable(
       'correspondence_accounts',
       { id: text('id').primaryKey(), ownerId: text('owner_id') },
-      kovo({ domain: 'correspondence-accounts', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({
+        domain: 'correspondence-accounts',
+        key: columns.id,
+        owner: columns.ownerId,
+      })),
     );
     const entries = pgTable(
       'correspondence_entries',
       { accountId: text('account_id'), id: text('id').primaryKey() },
-      kovo({
+      kovo((columns) => ({
         domain: 'correspondence-entries',
-        key: 'id',
-        ownerVia: { fk: 'accountId', parent: accounts, parentKey: 'id' },
-      }),
+        key: columns.id,
+        ownerVia: { fk: columns.accountId, parent: accounts, parentKey: accounts.id },
+      })),
     );
     const metadata = extractKovoRuntimeDbMetadata([accounts, entries]);
 
@@ -367,7 +371,11 @@ describe('finite Postgres authorization correspondence', () => {
         id: text('id').primaryKey(),
         ownerId: text('owner_id').notNull(),
       },
-      kovo({ domain: 'document:tenant', key: 'id', owner: 'ownerId' }),
+      kovo((columns) => ({
+        domain: 'document:tenant',
+        key: columns.id,
+        owner: columns.ownerId,
+      })),
     );
     const term = postgresOwnerColumnPolicyTerm({
       columnName: 'owner_id',

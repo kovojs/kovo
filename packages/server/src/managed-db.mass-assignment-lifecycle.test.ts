@@ -19,14 +19,14 @@ const accounts = sqliteTable(
     ownerId: text('owner_id').notNull(),
     role: text('role').notNull(),
   },
-  kovo({
-    confidentialAtRest: ['apiKey'],
+  kovo((columns) => ({
+    confidentialAtRest: [columns.apiKey],
     domain: 'account',
-    governed: ['role'],
-    key: 'id',
-    owner: 'ownerId',
-    secret: ['apiKey'],
-  }),
+    governed: [columns.role],
+    key: columns.id,
+    owner: columns.ownerId,
+    secret: [columns.apiKey],
+  })),
 );
 const publicNotes = sqliteTable('public_notes', {
   message: text('message').notNull(),

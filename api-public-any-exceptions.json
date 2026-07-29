@@ -47,17 +47,6 @@
       "expires": "2026-10-31"
     },
     {
-      "id": "drizzle-sql-wrapper",
-      "package": "@kovojs/drizzle",
-      "declarationPattern": "@kovojs/drizzle/dist/runtime.d.mts",
-      "symbolPattern": "*",
-      "memberPattern": "getSQL",
-      "maximumMatches": 3,
-      "owner": "data-plane",
-      "reason": "Three public SQL wrappers mirror Drizzle's unparameterized getSQL return until concrete private-witness handles replace them.",
-      "expires": "2026-10-31"
-    },
-    {
       "id": "server-app-contract-generics",
       "package": "@kovojs/server",
       "declarationPattern": "@kovojs/server/dist/app-types-<chunk>.d.mts",
