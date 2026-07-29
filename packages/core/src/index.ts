@@ -1,4 +1,4 @@
-import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from './forms-types.js';
+import type { ComponentMutationFormState, Form, FormFailure } from './forms-types.js';
 import type { JsonValue } from './json.js';
 import { blessSink } from './internal/sink-policy.js';
 import { buildRoutePatternHref } from './internal/route-pattern.js';
@@ -18,101 +18,15 @@ import {
   securityWeakSetHas,
 } from './internal/security-witness-intrinsics.js';
 
-export type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from './diagnostics.js';
 export type { JsonValue } from './json.js';
-export {
-  declareOffWire,
-  DeclassifyPolicy,
-  drainSecretRevealAuditFacts,
-  isRedacted,
-  isSecret,
-  isUntrusted,
-  publishToClient,
-  redacted,
-  revealRedacted,
-  revealSecret,
-  revealUntrusted,
-  secret,
-  trustedReveal,
-  untrusted,
-} from './secret.js';
-export type {
-  DeclassifyDoorId,
-  DeclassifyOwnerScope,
-  DeclassifyPolicyOptions,
-  DeclassifyPurpose,
-  DeclassifyPurposeFor,
-  DeclareOffWireOptions,
-  PublishToClientOptions,
-  Redacted,
-  RedactedOptions,
-  RedactedValue,
-  Secret,
-  SecretRevealAuditFact,
-  SecretValue,
-  TrustedRevealValue,
-  Untrusted,
-  UntrustedValue,
-} from './secret.js';
 export type {
   ComponentMutationFormState,
   Form,
   FormFailure,
   FormValidationFailure,
 } from './forms-types.js';
-export type {
-  FileSystemStorageOptions,
-  MemoryStorageOptions,
-  S3CompatibleDeleteObjectInput,
-  S3CompatibleGetObjectInput,
-  S3CompatibleGetObjectOutput,
-  S3CompatibleHeadObjectInput,
-  S3CompatibleListedObject,
-  S3CompatibleListObjectsInput,
-  S3CompatibleListObjectsOutput,
-  S3CompatibleObjectClient,
-  S3CompatibleObjectMetadata,
-  S3CompatiblePutObjectInput,
-  S3CompatiblePutObjectOutput,
-  S3CompatibleStorageOptions,
-  StorageBody,
-  StorageCapability,
-  StorageDeleteCapability,
-  StorageGetResult,
-  StorageObjectInfo,
-  StoragePutCapability,
-  StoragePutOptions,
-  StoragePutResult,
-  StorageReadCapability,
-  StorageStreamResult,
-} from './storage.js';
 export type { ScopedKey } from './scoped-key.js';
-export {
-  createFileSystemStorage,
-  createMemoryStorage,
-  createS3CompatibleStorage,
-} from './storage.js';
 export { publicScopedKey } from './scoped-key.js';
-export type {
-  CustomWebhookVerifier,
-  HmacMultiSignature,
-  HmacSecret,
-  HmacSignatureEncoding,
-  HmacSignatureInspectionConfig,
-  HmacSignatureOptions,
-  HmacSignaturePayload,
-  HmacSignaturePayloadContext,
-  HmacSignatureTolerance,
-  HmacSignatureVerifier,
-  ResolvedHmacSignatureConfig,
-  StandardWebhooksOptions,
-  WebhookHeaders,
-  WebhookHeaderValue,
-  WebhookPayload,
-  WebhookVerificationRequest,
-  WebhookVerifier,
-} from './verifier.js';
-export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
 
 /** Opaque non-string result of a component's `render` — the compiler lowers TSX to HTML/IR (SPEC §4.1, §4.8). */
 export type ComponentRenderResult =
@@ -155,28 +69,6 @@ export interface ComponentErrorBoundary {
   target?: string;
 }
 
-type NoComponentMutations = Record<never, never>;
-type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
-  ? Mutations extends ComponentMutationDefinitions
-    ? Mutations
-    : NoComponentMutations
-  : NoComponentMutations;
-
-interface ComponentRenderSlotValues {
-  children?: ComponentChild;
-  [slot: string]: unknown;
-}
-
-type ComponentRenderFormsSlot<Mutations extends ComponentMutationDefinitions> =
-  keyof Mutations extends never
-    ? { forms?: ComponentMutationForms<Mutations> }
-    : { forms: ComponentMutationForms<Mutations> };
-
-/** Render-time composition values for `children`, named slots, and mutation form state (SPEC §4.5/§6.3). */
-export type ComponentRenderSlots<
-  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
-> = ComponentRenderSlotValues & ComponentRenderFormsSlot<Mutations>;
-
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
   /** Declared clock inputs for time-dependent rendered positions and derives (SPEC §4.8/§4.9). */
@@ -195,34 +87,30 @@ export interface ComponentDefinitionInput {
   /** Static prop metadata used by generated live-target renderers to serialize component props. */
   props?: Record<string, unknown>;
   queries?: unknown;
-  state?: (() => any) | undefined;
+  state?: (() => JsonValue) | undefined;
   render: (...args: never[]) => ComponentRenderResult;
 }
 
 /** Function type used by component type helpers for callable render slots and definitions. */
-export type AnyFunction = (...args: any[]) => any;
-/** Type-level predicate used by component prop inference to default-deny `any` render input. */
-export type IsAny<T> = 0 extends 1 & T ? true : false;
-/** First render-parameter input bag before query result keys are removed (SPEC §4.1/§6.2). */
-export type ComponentRenderInput<Definition> = Definition extends {
-  render: (input: infer Input, ...args: any[]) => any;
-}
-  ? IsAny<Input> extends true
-    ? Record<never, never>
-    : unknown extends Input
+/**
+ * Props accepted when calling or rendering a Kovo component descriptor. Per SPEC §4.1/§6.2,
+ * the render function's first parameter is the source of truth, and query result keys are
+ * supplied by the runtime rather than by call sites.
+ */
+export type ComponentProps<Definition> = Omit<
+  Definition extends {
+    render: (input: infer Input, ...args: never[]) => unknown;
+  }
+    ? 0 extends 1 & Input
       ? Record<never, never>
-      : Input extends object
-        ? Input
-        : Record<never, never>
-  : Record<never, never>;
-
-/** Query result property names supplied by the runtime rather than component call sites. */
-export type ComponentQueryKeys<Definition> = Definition extends { queries: infer Queries }
-  ? Extract<keyof Queries, string>
-  : never;
-
-/** Framework-level attributes accepted by component call sites in addition to rendered props. */
-export interface ComponentCallSiteAttributes {
+      : unknown extends Input
+        ? Record<never, never>
+        : Input extends object
+          ? Input
+          : Record<never, never>
+    : Record<never, never>,
+  Definition extends { queries: infer Queries } ? Extract<keyof Queries, string> : never
+> & {
   [attribute: `aria-${string}`]: unknown;
   [attribute: `data-${string}`]: unknown;
   [attribute: `on${string}`]: unknown;
@@ -242,110 +130,30 @@ export interface ComponentCallSiteAttributes {
   styles?: unknown;
   tabIndex?: unknown;
   value?: unknown;
-}
+};
 
 /**
- * Props accepted when calling or rendering a Kovo component descriptor. Per SPEC §4.1/§6.2,
- * the render function's first parameter is the source of truth, and query result keys are
- * supplied by the runtime rather than by call sites.
+ * Opaque callable component contract exposed to libraries and generated registries.
+ *
+ * `Props` is the call-site shape after query-owned render inputs are removed. Definition inference
+ * stays inside {@link component}; consumers do not name its conditional helper graph.
  */
-export type ComponentProps<Definition> = Omit<
-  ComponentRenderInput<Definition>,
-  ComponentQueryKeys<Definition>
-> &
-  ComponentCallSiteAttributes;
-
-/** Props consumed by a component query `args` binding. */
-export type ComponentQueryBindingProps<Binding> =
-  Binding extends QueryArgsBinding<string, unknown, infer Props, unknown> ? Props : never;
-
-/** Query binding consistency check against render-derived call-site props. */
-export type CheckedComponentQueryBindings<Definition> = Definition extends {
-  queries: infer Queries;
-}
-  ? {
-      [Key in keyof Queries]: ComponentQueryBindingProps<Queries[Key]> extends never
-        ? Queries[Key]
-        : ComponentQueryBindingProps<Queries[Key]> extends ComponentProps<Definition>
-          ? Queries[Key]
-          : never;
-    }
-  : unknown;
-
-/** Constructor values accepted in component `props` metadata. */
-export type ComponentPropMetadataValue =
-  | ArrayConstructor
-  | BooleanConstructor
-  | NumberConstructor
-  | ObjectConstructor
-  | StringConstructor;
-
-/** Runtime value type represented by a component `props` metadata constructor. */
-export type ComponentPropMetadataType<Value> = Value extends StringConstructor
-  ? string
-  : Value extends NumberConstructor
-    ? number
-    : Value extends BooleanConstructor
-      ? boolean
-      : Value extends ArrayConstructor
-        ? readonly JsonValue[]
-        : Value extends ObjectConstructor
-          ? Record<string, JsonValue>
-          : never;
-
-/** Props metadata consistency check against render-derived call-site props. */
-export type CheckedComponentPropsMetadata<Definition> = Definition extends { props: infer Metadata }
-  ? {
-      [Key in keyof Metadata]: Key extends keyof ComponentProps<Definition>
-        ? Metadata[Key] extends ComponentPropMetadataValue
-          ? ComponentPropMetadataType<Metadata[Key]> extends ComponentProps<Definition>[Key]
-            ? Metadata[Key]
-            : never
-          : never
-        : never;
-    }
-  : unknown;
-
-/** Definition-level consistency checks for query args and serializable props metadata. */
-export type CheckedComponentDefinition<Definition extends ComponentDefinitionInput> = Definition &
-  (Definition extends { queries: unknown }
-    ? { queries: CheckedComponentQueryBindings<Definition> }
-    : unknown) &
-  (Definition extends { props: unknown }
-    ? { props: CheckedComponentPropsMetadata<Definition> }
-    : unknown);
-
-/** Required keys of an object type, preserving `exactOptionalPropertyTypes` semantics. */
-export type RequiredKeys<T extends object> = {
-  [Key in keyof T]-?: {} extends Pick<T, Key> ? never : Key;
-}[keyof T];
-
-/** Exact object helper used to reject excess component call-site properties. */
-export type ExactProps<Shape extends object, Input extends Shape> = Input &
-  Record<Exclude<keyof Input, keyof Shape>, never>;
-
-/** Tuple form for component calls: props are optional only when no render-derived prop is required. */
-export type ComponentCallArgs<
-  Definition extends ComponentDefinitionInput,
-  Props extends ComponentProps<Definition>,
-> =
-  RequiredKeys<ComponentProps<Definition>> extends never
-    ? [props?: ExactProps<ComponentProps<Definition>, Props>]
-    : [props: ExactProps<ComponentProps<Definition>, Props>];
-
-/** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
-export interface Component<Definition extends ComponentDefinitionInput> {
-  <const Props extends ComponentProps<Definition>>(
-    ...args: ComponentCallArgs<Definition, Props>
-  ): any;
-  readonly definition: Definition;
+export interface Component<Props extends object = Record<never, never>> {
+  (
+    ...args: {
+      [Key in keyof Props]-?: {} extends Pick<Props, Key> ? never : Key;
+    }[keyof Props] extends never
+      ? [props?: Props]
+      : [props: Props]
+  ): ComponentRenderResult;
+  readonly definition: ComponentDefinitionInput;
   name?: string;
 }
 
 /** Recursive JSON-serializability guardrail for authored state/query payload types (SPEC §4.1). */
 export type Serializable<T> = T extends JsonValue
   ? T
-  : T extends (...args: any[]) => any
+  : T extends (...args: never[]) => unknown
     ? never
     : T extends readonly (infer Item)[]
       ? readonly Serializable<Item>[]
@@ -377,48 +185,157 @@ export type Serializable<T> = T extends JsonValue
  * });
  */
 export function component<
-  const State,
-  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render' | 'state'> & {
-    state: () => State;
-    mutations?: ComponentMutationDefinitions;
-    render: (...args: any[]) => ComponentRenderResult;
-  },
+  const RenderInput extends object,
+  const State extends JsonValue,
+  const Queries extends Record<string, unknown> = Record<never, never>,
+  const Mutations extends Record<string, Form<string, Record<string, JsonValue>, unknown>> = Record<
+    never,
+    never
+  >,
+  const Metadata extends Record<string, unknown> = Record<never, never>,
 >(
-  definition: CheckedComponentDefinition<Definition> &
-    (State extends Serializable<State> ? { state: () => State } : { state: () => never }) & {
-      render: (
-        queries: any,
-        state: any,
-        slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
-      ) => ComponentRenderResult;
-    },
-): Component<Definition>;
+  definition: Omit<
+    ComponentDefinitionInput,
+    'mutations' | 'props' | 'queries' | 'render' | 'state'
+  > & {
+    mutations?: Mutations;
+    props?: Metadata & {
+      [Key in keyof Metadata]: Key extends keyof RenderInput
+        ? Metadata[Key] extends StringConstructor
+          ? string extends RenderInput[Key]
+            ? Metadata[Key]
+            : never
+          : Metadata[Key] extends NumberConstructor
+            ? number extends RenderInput[Key]
+              ? Metadata[Key]
+              : never
+            : Metadata[Key] extends BooleanConstructor
+              ? boolean extends RenderInput[Key]
+                ? Metadata[Key]
+                : never
+              : Metadata[Key] extends ArrayConstructor
+                ? readonly JsonValue[] extends RenderInput[Key]
+                  ? Metadata[Key]
+                  : never
+                : Metadata[Key] extends ObjectConstructor
+                  ? Record<string, JsonValue> extends RenderInput[Key]
+                    ? Metadata[Key]
+                    : never
+                  : never
+        : never;
+    };
+    queries?: Queries & {
+      [Key in keyof Queries]: Queries[Key] extends {
+        args: (props: infer BoundProps) => unknown;
+      }
+        ? BoundProps extends Omit<RenderInput, Extract<keyof Queries, string>>
+          ? Queries[Key]
+          : never
+        : Queries[Key];
+    };
+    render: (
+      input: RenderInput,
+      state: State,
+      slots: {
+        children?: ComponentChild;
+        [slot: string]: unknown;
+      } & (keyof Mutations extends never
+        ? { forms?: Record<never, never> }
+        : {
+            forms: {
+              [Name in keyof Mutations]: Mutations[Name] extends Form<string, infer Input, unknown>
+                ? ComponentMutationFormState<FormFailure<Mutations[Name]>, Input>
+                : ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+            };
+          }),
+    ) => ComponentRenderResult;
+    state: () => State;
+  },
+): Component<
+  ComponentProps<{
+    queries: Queries;
+    render: (input: RenderInput) => ComponentRenderResult;
+  }>
+>;
 export function component<
-  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render' | 'state'> & {
-    mutations?: ComponentMutationDefinitions;
-    render: (...args: any[]) => ComponentRenderResult;
+  const RenderInput extends object,
+  const Queries extends Record<string, unknown> = Record<never, never>,
+  const Mutations extends Record<string, Form<string, Record<string, JsonValue>, unknown>> = Record<
+    never,
+    never
+  >,
+  const Metadata extends Record<string, unknown> = Record<never, never>,
+>(
+  definition: Omit<
+    ComponentDefinitionInput,
+    'mutations' | 'props' | 'queries' | 'render' | 'state'
+  > & {
+    mutations?: Mutations;
+    props?: Metadata & {
+      [Key in keyof Metadata]: Key extends keyof RenderInput
+        ? Metadata[Key] extends StringConstructor
+          ? string extends RenderInput[Key]
+            ? Metadata[Key]
+            : never
+          : Metadata[Key] extends NumberConstructor
+            ? number extends RenderInput[Key]
+              ? Metadata[Key]
+              : never
+            : Metadata[Key] extends BooleanConstructor
+              ? boolean extends RenderInput[Key]
+                ? Metadata[Key]
+                : never
+              : Metadata[Key] extends ArrayConstructor
+                ? readonly JsonValue[] extends RenderInput[Key]
+                  ? Metadata[Key]
+                  : never
+                : Metadata[Key] extends ObjectConstructor
+                  ? Record<string, JsonValue> extends RenderInput[Key]
+                    ? Metadata[Key]
+                    : never
+                  : never
+        : never;
+    };
+    queries?: Queries & {
+      [Key in keyof Queries]: Queries[Key] extends {
+        args: (props: infer BoundProps) => unknown;
+      }
+        ? BoundProps extends Omit<RenderInput, Extract<keyof Queries, string>>
+          ? Queries[Key]
+          : never
+        : Queries[Key];
+    };
+    render: (
+      input: RenderInput,
+      state: undefined,
+      slots: {
+        children?: ComponentChild;
+        [slot: string]: unknown;
+      } & (keyof Mutations extends never
+        ? { forms?: Record<never, never> }
+        : {
+            forms: {
+              [Name in keyof Mutations]: Mutations[Name] extends Form<string, infer Input, unknown>
+                ? ComponentMutationFormState<FormFailure<Mutations[Name]>, Input>
+                : ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+            };
+          }),
+    ) => ComponentRenderResult;
     state?: undefined;
   },
->(
-  definition: CheckedComponentDefinition<Definition> & {
-    render: (
-      queries: any,
-      state: any,
-      slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
-    ) => ComponentRenderResult;
-  },
-): Component<Definition>;
+): Component<
+  ComponentProps<{
+    queries: Queries;
+    render: (input: RenderInput) => ComponentRenderResult;
+  }>
+>;
 export function component(
   definition: ComponentDefinitionInput & {
-    render: (
-      queries: any,
-      state: any,
-      slots: ComponentRenderSlots<ComponentMutationDefinitions>,
-    ) => ComponentRenderResult;
+    render: (...args: any[]) => ComponentRenderResult;
   },
-): Component<any> {
+): Component<Record<string, unknown>> {
   assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
-  const descriptor = (() => undefined) as Component<any>;
+  const descriptor = (() => undefined) as Component<Record<string, unknown>>;
   securityDefineProperty(descriptor, 'name', {
     configurable: true,
     enumerable: true,
@@ -507,22 +424,6 @@ export function ErrorBoundary(props: ErrorBoundaryProps): ComponentRenderResult 
   return props.children;
 }
 
-/** A typed component query binding with args derived from serializable component props. */
-export interface QueryArgsBinding<
-  Key extends string,
-  Result,
-  Props extends Record<string, JsonValue>,
-  Args,
-> {
-  args: (props: Props) => Args;
-  key: Key;
-  refresh<PropsSpec extends QueryRefreshSpec<Result>>(
-    spec: PropsSpec,
-  ): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: PropsSpec };
-  refreshSpec?: QueryRefreshSpec<Result>;
-  result?: Result;
-}
-
 /** Per-use query freshness cadence for clock-like server values (SPEC §4.9). */
 export interface QueryRefreshSpec<Result> {
   at?: (value: Result) => unknown;
@@ -531,28 +432,26 @@ export interface QueryRefreshSpec<Result> {
   until?: (value: Result) => unknown;
 }
 
-/** A typed query binding with a per-use refresh cadence and optional prop args. */
-export interface QueryRefreshBinding<
+/** A typed query binding with a per-use refresh cadence. */
+export type QueryRefreshBinding<
   Key extends string,
   Result,
   Spec extends QueryRefreshSpec<Result>,
-> {
-  args<Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
-    mapper: (props: Props) => Args,
-  ): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: Spec };
-  key: Key;
-  refresh<PropsSpec extends QueryRefreshSpec<Result>>(
-    spec: PropsSpec,
-  ): QueryRefreshBinding<Key, Result, PropsSpec>;
-  refreshSpec: Spec;
-  result?: Result;
-}
+> = Query<Key, Result, never, never, Spec>;
 
 /** A typed query handle: a key and the result type it resolves to. */
-export interface Query<Key extends string, Result> {
-  args<Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
-    mapper: (props: Props) => Args,
-  ): QueryArgsBinding<Key, Result, Props, Args>;
+export interface Query<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue> = never,
+  Args = never,
+  Spec extends QueryRefreshSpec<Result> | undefined = undefined,
+> {
+  args: [Props] extends [never]
+    ? <NextProps extends Record<string, JsonValue>, NextArgs extends Record<string, JsonValue>>(
+        mapper: (props: NextProps) => NextArgs,
+      ) => Query<Key, Result, NextProps, NextArgs, Spec>
+    : (props: Props) => Args;
   key: Key;
   /**
    * Declarative per-query opt-out from refetch-on-focus (SPEC §9.3/§9.4). Refetch-on-focus
@@ -562,10 +461,10 @@ export interface Query<Key extends string, Result> {
    * when the query was declared with `queryRef(key, { refetchOnFocus: false })`.
    */
   refetchOnFocus?: false;
-  refresh<Spec extends QueryRefreshSpec<Result>>(
-    spec: Spec,
-  ): QueryRefreshBinding<Key, Result, Spec>;
-  refreshSpec?: undefined;
+  refresh<NextSpec extends QueryRefreshSpec<Result>>(
+    spec: NextSpec,
+  ): Query<Key, Result, Props, Args, NextSpec>;
+  refreshSpec?: Spec;
   result?: Result;
 }
 
@@ -594,32 +493,6 @@ export interface QueryConfig {
  * the SPEC §5.2/KV235-discouraged exception. Mirrors the `@generated` registries in
  * `core/src/generated.ts`, but stays here because `form`/`queryRef`/`href` typing resolves it.
  */
-export interface QueryRegistry {}
-
-/**
- * Augmentable registry mapping mutation keys to input/failure types.
- * @augmented Compiler-populated (see {@link QueryRegistry}).
- */
-export interface MutationRegistry {}
-
-/**
- * Augmentable registry mapping route paths to their `Route` descriptors.
- * @augmented Compiler-populated (see {@link QueryRegistry}).
- */
-export interface RouteRegistry {}
-
-/**
- * Augmentable registry mapping mutation keys to the query names they invalidate (drives `OptimisticFor`).
- * @augmented Compiler-populated (see {@link QueryRegistry}).
- */
-export interface InvalidationSets {}
-
-/**
- * Augmentable registry mapping mutation keys to invalidated query names covered by generated optimism.
- * @augmented Compiler-populated (see {@link QueryRegistry}).
- */
-export interface OptimisticDerivationSets {}
-
 /** Registry key helper that falls back to `string` until compiler-emitted registry facts exist. */
 export type RegistryKey<Registry> = keyof Registry extends never
   ? string
@@ -667,26 +540,6 @@ export interface RouteOptions<
   search?: Search;
 }
 
-type RouteFor<Path extends string> = Path extends keyof RouteRegistry
-  ? RouteRegistry[Path] extends Route<Path, infer Params, infer Search>
-    ? Route<Path, Params, Search>
-    : Route<Path>
-  : Route<Path>;
-
-type RouteParams<Definition> =
-  Definition extends Route<string, infer Params, Record<string, RouteSearchValue>> ? Params : never;
-
-type RouteSearch<Definition> =
-  Definition extends Route<string, Record<string, string>, infer Search> ? Search : never;
-
-type RouteHrefOptions<Definition> = keyof RouteParams<Definition> extends never
-  ? { params?: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> }
-  : { params: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> };
-
-type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
-  ? [options?: { params?: RouteParams<Definition> }]
-  : [options: { params: RouteParams<Definition> }];
-
 /**
  * Declare a route descriptor: a typed path plus its param/search shapes. This
  * is the registry-level seed used for typed links (`href`, `Link`, `redirect`);
@@ -725,10 +578,23 @@ export function routeRef<
  *
  * const url: string = href('/products/:id', { params: { id: 'p1' } });
  */
-export function href<const Path extends RegistryKey<RouteRegistry>>(
+export function href<const Path extends string>(
   path: Path,
-  options: RouteHrefOptions<RouteFor<Path>>,
+  ...args: PathParamNames<Path> extends never
+    ? [
+        options?: {
+          params?: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
+    : [
+        options: {
+          params: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
 ): string {
+  const options = args[0] ?? {};
   return buildHref(
     path,
     options as { params?: Record<string, string>; search?: Record<string, RouteSearchValue> },
@@ -740,7 +606,7 @@ export interface LinkProps {
   children?: ComponentChild;
   params?: Record<string, string>;
   search?: Record<string, RouteSearchValue>;
-  to: keyof RouteRegistry extends never ? string : Extract<keyof RouteRegistry, string>;
+  to: string;
   [attribute: string]: unknown;
 }
 
@@ -763,18 +629,40 @@ export interface LinkDescriptor {
  * const link = Link('/products/:id', { params: { id: 'p1' } });
  * const anchor = `<a href="${link.href}">View</a>`;
  */
-export function Link<const Path extends RegistryKey<RouteRegistry>>(
+export function Link<const Path extends string>(
   path: Path,
-  options: RouteHrefOptions<RouteFor<Path>>,
+  ...args: PathParamNames<Path> extends never
+    ? [
+        options?: {
+          params?: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
+    : [
+        options: {
+          params: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
 ): LinkDescriptor;
 export function Link(props: LinkProps): ComponentRenderResult;
-export function Link<const Path extends RegistryKey<RouteRegistry>>(
+export function Link<const Path extends string>(
   pathOrProps: Path | LinkProps,
-  options?: RouteHrefOptions<RouteFor<Path>>,
+  options?: {
+    params?: PathParams<Path>;
+    search?: Record<string, RouteSearchValue>;
+  },
 ): ComponentRenderResult | LinkDescriptor {
   const path = pathOrProps;
   if (typeof path === 'object' && path !== null) return undefined;
-  return { href: href(path, options as RouteHrefOptions<RouteFor<Path>>) };
+  return {
+    href: buildHref(path, {
+      ...(options?.params === undefined
+        ? {}
+        : { params: options.params as Record<string, string> }),
+      ...(options?.search === undefined ? {} : { search: options.search }),
+    }),
+  };
 }
 
 /** A 303 redirect outcome returned by `redirect()`. */
@@ -798,12 +686,28 @@ const ROUTE_REDIRECT_SINK = 'core:route-redirect';
  * const toProduct = redirect('/products/:id', { params: { id: 'p1' } });
  * // toProduct.status === 303
  */
-export function redirect<const Path extends RegistryKey<RouteRegistry>>(
+export function redirect<const Path extends string>(
   path: Path,
-  options: RouteHrefOptions<RouteFor<Path>>,
+  ...args: PathParamNames<Path> extends never
+    ? [
+        options?: {
+          params?: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
+    : [
+        options: {
+          params: PathParams<Path>;
+          search?: Record<string, RouteSearchValue>;
+        },
+      ]
 ): Redirect {
+  const options = args[0] ?? {};
   return blessSink(ROUTE_REDIRECT_SINK, {
-    location: href(path, options),
+    location: buildHref(path, {
+      ...(options.params === undefined ? {} : { params: options.params as Record<string, string> }),
+      ...(options.search === undefined ? {} : { search: options.search }),
+    }),
     status: 303,
   });
 }
@@ -831,10 +735,10 @@ function buildHref(
  * // SPEC §9.3/§9.4: opt a query out of refetch-on-focus at the declaration site.
  * export const ticker = queryRef('ticker', { refetchOnFocus: false });
  */
-export function queryRef<
-  const Key extends RegistryKey<QueryRegistry>,
-  Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
->(key: Key, config?: QueryConfig): Query<Key, Result> {
+export function queryRef<const Key extends string, Result = unknown>(
+  key: Key,
+  config?: QueryConfig,
+): Query<Key, Result> {
   const handle = queryBinding<Key, Result>(key);
   // SPEC §9.3/§9.4: record the declared refetch-on-focus opt-out on the handle so the runtime
   // refetch machinery can derive its opt-out set from declarations instead of an install-only
@@ -876,7 +780,7 @@ function queryArgsBinding<
   Result,
   Props extends Record<string, JsonValue>,
   Args extends Record<string, JsonValue>,
->(key: Key, mapper: (props: Props) => Args): QueryArgsBinding<Key, Result, Props, Args>;
+>(key: Key, mapper: (props: Props) => Args): Query<Key, Result, Props, Args>;
 function queryArgsBinding<
   Key extends string,
   Result,
@@ -887,7 +791,7 @@ function queryArgsBinding<
   key: Key,
   mapper: (props: Props) => Args,
   refreshSpec: Spec,
-): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: Spec };
+): Query<Key, Result, Props, Args, Spec>;
 function queryArgsBinding<
   Key extends string,
   Result,
@@ -897,9 +801,7 @@ function queryArgsBinding<
   key: Key,
   mapper: (props: Props) => Args,
   refreshSpec?: QueryRefreshSpec<Result>,
-):
-  | QueryArgsBinding<Key, Result, Props, Args>
-  | (QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: QueryRefreshSpec<Result> }) {
+): Query<Key, Result, Props, Args> | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>> {
   const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
     queryArgsBinding<Key, Result, Props, Args, Spec>(key, mapper, nextSpec);
   return {
@@ -908,8 +810,8 @@ function queryArgsBinding<
     ...(refreshSpec === undefined ? {} : { refreshSpec }),
     refresh,
   } as unknown as
-    | QueryArgsBinding<Key, Result, Props, Args>
-    | (QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: QueryRefreshSpec<Result> });
+    | Query<Key, Result, Props, Args>
+    | Query<Key, Result, Props, Args, QueryRefreshSpec<Result>>;
 }
 
 /** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */
@@ -997,28 +899,6 @@ interface SchemaLike<Value> {
 
 type InferSchemaLike<Schema> = Schema extends SchemaLike<infer Value> ? Value : never;
 
-type RegistryMutationInputSchema<Value> = Value extends { input: infer InputSchema }
-  ? InferSchemaLike<InputSchema> extends infer Input
-    ? Input extends Record<string, JsonValue>
-      ? Input
-      : Record<string, JsonValue>
-    : Record<string, JsonValue>
-  : Record<string, JsonValue>;
-
-type RegistryMutationInput<Key extends string> = Key extends keyof MutationRegistry
-  ? MutationRegistry[Key] extends Form<string, infer Input, unknown>
-    ? Input
-    : RegistryMutationInputSchema<MutationRegistry[Key]>
-  : Record<string, JsonValue>;
-
-type RegistryMutationFailure<Key extends string> = Key extends keyof MutationRegistry
-  ? MutationRegistry[Key] extends { errors: infer Errors }
-    ? MutationErrorFailures<Errors>
-    : MutationRegistry[Key] extends Form<string, any, infer Failure>
-      ? Failure
-      : JsonValue
-  : JsonValue;
-
 type MutationErrorFailures<Errors> =
   Errors extends Record<string, SchemaLike<unknown>>
     ? {
@@ -1052,9 +932,9 @@ export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
 
 function createMutationForm<
-  const Key extends RegistryKey<MutationRegistry>,
-  Input extends Record<string, JsonValue> = RegistryMutationInput<Key>,
-  Failure = RegistryMutationFailure<Key>,
+  const Key extends string,
+  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Failure = JsonValue,
 >(key: Key): Form<Key, Input, Failure>;
 function createMutationForm<const Definition extends MutationFormSource>(
   definition: Definition,
@@ -1064,7 +944,7 @@ function createMutationForm<const Definition extends MutationFormSource>(
   MutationFormSourceFailure<Definition>
 >;
 function createMutationForm(
-  keyOrDefinition: RegistryKey<MutationRegistry> | MutationFormSource,
+  keyOrDefinition: string | MutationFormSource,
 ): Form<string, Record<string, JsonValue>, JsonValue> {
   if (typeof keyOrDefinition !== 'string') {
     assertMutationFormSourceKey(keyOrDefinition);
@@ -1085,10 +965,15 @@ function assertMutationFormSourceKey(
   }
 }
 
-function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
+function getRouteForm<
+  const Path extends string,
+  Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
+>(
   path: Path,
-  ...args: RouteGetFormArgs<RouteFor<Path>>
-): GetForm<Path, RouteSearch<RouteFor<Path>>> {
+  ...args: PathParamNames<Path> extends never
+    ? [options?: { params?: PathParams<Path> }]
+    : [options: { params: PathParams<Path> }]
+): GetForm<Path, Search> {
   const options = args[0] ?? {};
   const params = (options as { params?: Record<string, string> }).params;
   const action = buildHref(path, {
@@ -1107,7 +992,7 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
     {
       [getRouteFormHelperKindKey]: 'input',
     },
-  ) as GetFormInputHelper<RouteSearch<RouteFor<Path>>>;
+  ) as GetFormInputHelper<Search>;
 
   return {
     action,

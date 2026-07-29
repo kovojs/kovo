@@ -879,13 +879,74 @@
       "manifestVariants": [
         {
           "exports": {
+            ".": "./src/index.ts",
+            "./diagnostics": "./src/diagnostics-public.ts",
+            "./generated": "./src/generated.ts",
+            "./security": "./src/security.ts",
+            "./storage": "./src/storage-public.ts",
+            "./webhooks": "./src/webhooks.ts",
+            "./internal/component-render": "./src/internal/component-render.ts",
+            "./internal/agent-docs": "./src/internal/agent-docs.ts",
+            "./internal/client-module-url": "./src/internal/client-module-url.ts",
+            "./internal/cache-influence": "./src/internal/cache-influence.ts",
+            "./internal/classifier-verdict": "./src/internal/classifier-verdict.ts",
+            "./internal/derivation": "./src/internal/derivation.ts",
+            "./internal/diagnostics": "./src/internal/diagnostics.ts",
+            "./internal/emission": "./src/internal/emission.ts",
+            "./internal/document-protocol": "./src/internal/document-protocol.ts",
+            "./internal/event": "./src/internal/event.ts",
+            "./internal/fragment-target": "./src/internal/fragment-target.ts",
+            "./internal/filesystem": "./src/internal/filesystem.ts",
+            "./internal/framework-identity": "./src/internal/framework-identity.ts",
+            "./internal/graph": "./src/internal/graph.ts",
+            "./internal/json": "./src/internal/json.ts",
+            "./internal/mcp-stdio": "./src/internal/mcp-stdio.ts",
+            "./internal/module-ref": "./src/internal/module-ref.ts",
+            "./internal/package-prefix": "./src/internal/package-prefix.ts",
+            "./internal/query-delta": "./src/internal/query-delta.ts",
+            "./internal/query-shape-source": "./src/internal/query-shape-source.ts",
+            "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
+            "./internal/route-pattern": "./src/internal/route-pattern.ts",
+            "./internal/security": "./src/internal/security.ts",
+            "./internal/security-markers": "./src/internal/security-markers.ts",
+            "./internal/security-operation-ir": "./src/internal/security-operation-ir.ts",
+            "./internal/security-url": "./src/internal/security-url.ts",
+            "./internal/semantic-attributes": "./src/internal/semantic-attributes.ts",
+            "./internal/sink-policy": "./src/internal/sink-policy.ts",
+            "./internal/source-sink-registry": "./src/internal/source-sink-registry.ts",
+            "./internal/sql-safety": "./src/internal/sql-safety.ts",
+            "./internal/storage": "./src/internal/storage.ts",
+            "./internal/verifier": "./src/internal/verifier.ts",
+            "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
+            "./internal/wire-json": "./src/internal/wire-json.ts"
+          },
+          "fingerprint": "sha256:21b4bb1e1be31c1055c7fbd72e4e0bcda97540498c819c1cef038ecdc89bc5f5"
+        },
+        {
+          "exports": {
             ".": {
               "types": "./dist/index.d.mts",
               "default": "./dist/index.mjs"
             },
+            "./diagnostics": {
+              "types": "./dist/diagnostics-public.d.mts",
+              "default": "./dist/diagnostics-public.mjs"
+            },
             "./generated": {
               "types": "./dist/generated.d.mts",
               "default": "./dist/generated.mjs"
+            },
+            "./security": {
+              "types": "./dist/security.d.mts",
+              "default": "./dist/security.mjs"
+            },
+            "./storage": {
+              "types": "./dist/storage-public.d.mts",
+              "default": "./dist/storage-public.mjs"
+            },
+            "./webhooks": {
+              "types": "./dist/webhooks.d.mts",
+              "default": "./dist/webhooks.mjs"
             },
             "./internal/component-render": {
               "types": "./dist/internal/component-render.d.mts",
@@ -975,6 +1036,10 @@
               "types": "./dist/internal/route-pattern.d.mts",
               "default": "./dist/internal/route-pattern.mjs"
             },
+            "./internal/security": {
+              "types": "./dist/internal/security.d.mts",
+              "default": "./dist/internal/security.mjs"
+            },
             "./internal/security-markers": {
               "types": "./dist/internal/security-markers.d.mts",
               "default": "./dist/internal/security-markers.mjs"
@@ -1020,81 +1085,12 @@
               "default": "./dist/internal/wire-json.mjs"
             }
           },
-          "fingerprint": "sha256:357b58eb71e2dacbb6d9976384102ddcb37f724abbed99a46725abfc1cd1e570"
-        },
-        {
-          "exports": {
-            ".": "./src/index.ts",
-            "./generated": "./src/generated.ts",
-            "./internal/component-render": "./src/internal/component-render.ts",
-            "./internal/agent-docs": "./src/internal/agent-docs.ts",
-            "./internal/client-module-url": "./src/internal/client-module-url.ts",
-            "./internal/cache-influence": "./src/internal/cache-influence.ts",
-            "./internal/classifier-verdict": "./src/internal/classifier-verdict.ts",
-            "./internal/derivation": "./src/internal/derivation.ts",
-            "./internal/diagnostics": "./src/internal/diagnostics.ts",
-            "./internal/emission": "./src/internal/emission.ts",
-            "./internal/document-protocol": "./src/internal/document-protocol.ts",
-            "./internal/event": "./src/internal/event.ts",
-            "./internal/fragment-target": "./src/internal/fragment-target.ts",
-            "./internal/filesystem": "./src/internal/filesystem.ts",
-            "./internal/framework-identity": "./src/internal/framework-identity.ts",
-            "./internal/graph": "./src/internal/graph.ts",
-            "./internal/json": "./src/internal/json.ts",
-            "./internal/mcp-stdio": "./src/internal/mcp-stdio.ts",
-            "./internal/module-ref": "./src/internal/module-ref.ts",
-            "./internal/package-prefix": "./src/internal/package-prefix.ts",
-            "./internal/query-delta": "./src/internal/query-delta.ts",
-            "./internal/query-shape-source": "./src/internal/query-shape-source.ts",
-            "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
-            "./internal/route-pattern": "./src/internal/route-pattern.ts",
-            "./internal/security-markers": "./src/internal/security-markers.ts",
-            "./internal/security-operation-ir": "./src/internal/security-operation-ir.ts",
-            "./internal/security-url": "./src/internal/security-url.ts",
-            "./internal/semantic-attributes": "./src/internal/semantic-attributes.ts",
-            "./internal/sink-policy": "./src/internal/sink-policy.ts",
-            "./internal/source-sink-registry": "./src/internal/source-sink-registry.ts",
-            "./internal/sql-safety": "./src/internal/sql-safety.ts",
-            "./internal/storage": "./src/internal/storage.ts",
-            "./internal/verifier": "./src/internal/verifier.ts",
-            "./internal/wire-input-grammar": "./src/internal/wire-input-grammar.ts",
-            "./internal/wire-json": "./src/internal/wire-json.ts"
-          },
-          "fingerprint": "sha256:a557db6f863519a0f770cd129dbfc1099134c6e9fdc2c1a3cdd491a0644cf7a8"
+          "fingerprint": "sha256:457819560fb289eb0f382feb4635e42d2bd1711e0f11701031ba0d636b75f2f8"
         }
       ],
       "packageName": "@kovojs/core",
       "packageVersion": "0.2.0",
       "postureGroups": [
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-audit-introspection-runtime-infra-10059fdb1b",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["drainSecretRevealAuditFacts"]
-          },
-          "review": {
-            "basis": "drainSecretRevealAuditFacts is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/core/src/index.ts",
-              "packages/core/src/secret.ts",
-              "packages/core/src/storage.ts",
-              "packages/core/src/verifier.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "audit-introspection"
-        },
         {
           "capabilities": [],
           "disposition": "request-closed",
@@ -1109,12 +1105,17 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["DeclassifyPolicy", "revealSecret", "revealUntrusted", "trustedReveal"]
+            "./security": [
+              "DeclassifyPolicy",
+              "revealSecret",
+              "revealUntrusted",
+              "trustedReveal"
+            ]
           },
           "review": {
             "basis": "SPEC §6.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
             "evidence": [
-              "packages/core/src/index.ts",
+              "packages/core/src/security.ts",
               "packages/core/src/secret.ts",
               "spec/06-type-system.md"
             ],
@@ -1138,7 +1139,12 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["publishToClient", "publicScopedKey"]
+            ".": [
+              "publicScopedKey"
+            ],
+            "./security": [
+              "publishToClient"
+            ]
           },
           "review": {
             "basis": "publishToClient and publicScopedKey expose explicit audited publication/cross-principal postures and remain tied to the capability-escape proof.",
@@ -1155,7 +1161,10 @@
           "securityRole": "capability-escape"
         },
         {
-          "capabilities": ["crypto-acquisition", "digest"],
+          "capabilities": [
+            "crypto-acquisition",
+            "digest"
+          ],
           "disposition": "framework-door",
           "id": "framework-door-module-initializer-core-crypto-digest",
           "matrix": {
@@ -1168,7 +1177,12 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["<module>"]
+            "./storage": [
+              "<module>"
+            ],
+            "./webhooks": [
+              "<module>"
+            ]
           },
           "review": {
             "basis": "The @kovojs/core root eagerly pins its verify-only crypto provider and non-secret storage digest controls; module initialization is classified separately from each named export.",
@@ -1198,13 +1212,23 @@
           },
           "members": {
             ".": [
+              "<module>",
               "component",
-              "createMemoryStorage",
               "ErrorBoundary",
               "FieldError",
               "FormError",
               "queryRef",
               "routeRef"
+            ],
+            "./diagnostics": [
+              "<module>"
+            ],
+            "./security": [
+              "<module>"
+            ],
+            "./storage": [
+              "S3CompatibleObjectClient",
+              "createMemoryStorage"
             ]
           },
           "review": {
@@ -1234,7 +1258,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["secret"]
+            "./security": [
+              "secret"
+            ]
           },
           "review": {
             "basis": "secret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1263,7 +1289,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["revealRedacted"]
+            "./security": [
+              "revealRedacted"
+            ]
           },
           "review": {
             "basis": "revealRedacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1292,7 +1320,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["isUntrusted"]
+            "./security": [
+              "isUntrusted"
+            ]
           },
           "review": {
             "basis": "isUntrusted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1321,7 +1351,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["declareOffWire"]
+            "./security": [
+              "declareOffWire"
+            ]
           },
           "review": {
             "basis": "declareOffWire is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1350,7 +1382,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["isSecret"]
+            "./security": [
+              "isSecret"
+            ]
           },
           "review": {
             "basis": "isSecret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1379,7 +1413,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["untrusted"]
+            "./security": [
+              "untrusted"
+            ]
           },
           "review": {
             "basis": "untrusted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1408,7 +1444,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["isRedacted"]
+            "./security": [
+              "isRedacted"
+            ]
           },
           "review": {
             "basis": "isRedacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1437,7 +1475,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["redacted"]
+            "./security": [
+              "redacted"
+            ]
           },
           "review": {
             "basis": "redacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1453,7 +1493,9 @@
           "securityRole": "secret-flow"
         },
         {
-          "capabilities": ["crypto-acquisition"],
+          "capabilities": [
+            "crypto-acquisition"
+          ],
           "disposition": "framework-door",
           "id": "framework-door-crypto-acquisition-standard-webhooks-core",
           "matrix": {
@@ -1466,7 +1508,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["standardWebhooks"]
+            "./webhooks": [
+              "standardWebhooks"
+            ]
           },
           "review": {
             "basis": "standardWebhooks constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
@@ -1482,7 +1526,9 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": ["crypto-acquisition"],
+          "capabilities": [
+            "crypto-acquisition"
+          ],
           "disposition": "framework-door",
           "id": "framework-door-crypto-acquisition-hmac-signature-core",
           "matrix": {
@@ -1495,7 +1541,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["hmacSignature"]
+            "./webhooks": [
+              "hmacSignature"
+            ]
           },
           "review": {
             "basis": "hmacSignature constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
@@ -1524,7 +1572,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["form"]
+            ".": [
+              "form"
+            ]
           },
           "review": {
             "basis": "form is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -1553,7 +1603,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["redirect"]
+            ".": [
+              "redirect"
+            ]
           },
           "review": {
             "basis": "redirect is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1582,7 +1634,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["href"]
+            ".": [
+              "href"
+            ]
           },
           "review": {
             "basis": "href is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1611,7 +1665,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["Link"]
+            ".": [
+              "Link"
+            ]
           },
           "review": {
             "basis": "Link is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1640,7 +1696,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["customVerifier"]
+            "./webhooks": [
+              "customVerifier"
+            ]
           },
           "review": {
             "basis": "customVerifier is an audited trust escape and remains tied to the trust-escape threat-matrix proof.",
@@ -1656,7 +1714,11 @@
           "securityRole": "trust-escape"
         },
         {
-          "capabilities": ["crypto-acquisition", "digest", "filesystem"],
+          "capabilities": [
+            "crypto-acquisition",
+            "digest",
+            "filesystem"
+          ],
           "disposition": "framework-door",
           "id": "framework-door-core-filesystem-crypto-digest",
           "matrix": {
@@ -1669,7 +1731,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createFileSystemStorage"]
+            "./storage": [
+              "createFileSystemStorage"
+            ]
           },
           "review": {
             "basis": "createFileSystemStorage is a constrained filesystem door whose returned put capability also uses cryptographic UUID entropy and a fixed non-secret SHA-256 digest; no primitive or wildcard authority escapes.",
@@ -1685,7 +1749,10 @@
           "securityRole": "framework-door"
         },
         {
-          "capabilities": ["digest", "network"],
+          "capabilities": [
+            "digest",
+            "network"
+          ],
           "disposition": "framework-door",
           "id": "framework-door-core-network-digest",
           "matrix": {
@@ -1698,7 +1765,9 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createS3CompatibleStorage"]
+            "./storage": [
+              "createS3CompatibleStorage"
+            ]
           },
           "review": {
             "basis": "createS3CompatibleStorage is a constrained network door whose returned capability uses only fixed non-secret SHA-256 digests; no generic crypto or wildcard authority escapes.",
@@ -1714,7 +1783,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "70af7e2b6eb1b19e60afc7a4f757fcb1094fa042f165ce588d33a888c65e209a"
+      "sourceTreeSha256": "4884939018d0844d2a5dd88e456417188621783215da1934090db56eb45a63cd"
     },
     {
       "manifestVariants": [

@@ -2,11 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   component,
-  createFileSystemStorage,
-  createMemoryStorage,
-  createS3CompatibleStorage,
-  DeclassifyPolicy,
-  declareOffWire,
   FieldError,
   form,
   FormError,
@@ -15,31 +10,34 @@ import {
   queryRef,
   redirect,
   routeRef,
-  type Component as KovoComponent,
-  type ComponentDefinitionInput,
   type FormFailure,
   type FormInput,
   type FormValidationFailure,
   type JsonValue,
-  type MemoryStorageOptions,
   type RouteSearchValue,
-  type S3CompatibleObjectClient,
-  type S3CompatibleStorageOptions,
-  type Secret,
   type Serializable,
+} from './index.js';
+import {
+  DeclassifyPolicy,
+  declareOffWire,
+  type Secret,
   trustedReveal,
   type TrustedRevealValue,
-} from './index.js';
+} from './security.js';
+import {
+  createFileSystemStorage,
+  createMemoryStorage,
+  createS3CompatibleStorage,
+  type MemoryStorageOptions,
+  type S3CompatibleObjectClient,
+  type S3CompatibleStorageOptions,
+} from './storage-public.js';
 import * as coreRoot from './index.js';
 import { event, type EventPayload } from './internal/event.js';
 import { fragmentTarget } from './internal/fragment-target.js';
 import * as internalQueryDelta from './internal/query-delta.js';
 
 interface TestSchema<Value> {
-  parse(input: unknown): Value;
-}
-
-interface ServerSchema<Value = unknown> {
   parse(input: unknown): Value;
 }
 
@@ -52,7 +50,7 @@ type PublicS3StorageOptions = S3CompatibleStorageOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public import assertion only.
 type PublicRouteSearchValue = RouteSearchValue;
 
-interface CartAddRegistryMutation {
+interface CartAddMutation {
   errors: {
     OUT_OF_STOCK: TestSchema<{ availableQuantity: number }>;
   };
@@ -60,49 +58,9 @@ interface CartAddRegistryMutation {
   key: 'cart/add';
 }
 
-interface PriceUpdateRegistryMutation {
-  errors: {
-    PRICE_CHANGED: ServerSchema<{ currentPrice: number }>;
-  };
-  input: ServerSchema<{ productId: string; price: number }>;
-  key: 'cart/price';
-}
-
-declare module './index.js' {
-  interface QueryRegistry {
-    cart: { count: number };
-    ticker: { price: number };
-  }
-
-  interface MutationRegistry {
-    'cart/add': CartAddRegistryMutation;
-    'cart/price': PriceUpdateRegistryMutation;
-  }
-
-  interface RouteRegistry {
-    '/cart': ReturnType<typeof routeRef<'/cart'>>;
-    '/products': ReturnType<typeof routeRef<'/products', {}, { max: number; sort: string }>>;
-    '/products/:id': ReturnType<
-      typeof routeRef<'/products/:id', { id: string }, { max: number; sort: string }>
-    >;
-    '/optional-search': ReturnType<
-      typeof routeRef<'/optional-search', {}, { next: string | undefined }>
-    >;
-    // H1 (bugs-part4 L6-1): param names use the same whole-segment grammar as the
-    // matcher (server match.ts) and the `PathParamNames` type extractor, so hyphen
-    // and dot characters belong to the param name.
-    '/users/:user-id': ReturnType<typeof routeRef<'/users/:user-id'>>;
-    '/files/:name.json': ReturnType<typeof routeRef<'/files/:name.json'>>;
-  }
-}
-
 declare module './generated.js' {
   interface FragmentTargets {
     'cart-row': { rowId: string };
-  }
-
-  interface ComponentRegistry {
-    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
   }
 }
 
@@ -115,12 +73,21 @@ describe('core authoring APIs', () => {
     expect('fragmentTarget' in coreRoot).toBe(false);
   });
 
-  it('keeps typed-event declarations internal while storage adapters are public app wiring', () => {
+  it('keeps task-specific security and storage values off the authoring root', async () => {
     expect('event' in coreRoot).toBe(false);
-    expect('createMemoryStorage' in coreRoot).toBe(true);
-    expect('createFileSystemStorage' in coreRoot).toBe(true);
-    expect('createS3CompatibleStorage' in coreRoot).toBe(true);
-    expect(coreRoot.declareOffWire).toBe(declareOffWire);
+    expect('createMemoryStorage' in coreRoot).toBe(false);
+    expect('createFileSystemStorage' in coreRoot).toBe(false);
+    expect('createS3CompatibleStorage' in coreRoot).toBe(false);
+    expect('declareOffWire' in coreRoot).toBe(false);
+    expect('DeclassifyPolicy' in coreRoot).toBe(false);
+    expect((await import('./security.js')).declareOffWire).toBe(declareOffWire);
+    expect((await import('./storage-public.js')).createMemoryStorage).toBe(createMemoryStorage);
+    expect((await import('./storage-public.js')).createFileSystemStorage).toBe(
+      createFileSystemStorage,
+    );
+    expect((await import('./storage-public.js')).createS3CompatibleStorage).toBe(
+      createS3CompatibleStorage,
+    );
     expect('normalizeStorageKey' in coreRoot).toBe(false);
     expect('storageBodyToBytes' in coreRoot).toBe(false);
   });
@@ -149,10 +116,7 @@ describe('core authoring APIs', () => {
     expect(CartBadge.name).toBeUndefined();
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
 
-    const assertRegisteredComponent = (
-      value: import('./generated.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
-    ) => value;
-    expect(assertRegisteredComponent(CartBadge)).toBe(CartBadge);
+    expect(CartBadge).toBeTypeOf('function');
   });
 
   it('rejects raw string component render results', () => {
@@ -344,10 +308,8 @@ describe('core authoring APIs', () => {
   });
 
   it('requires an explicit audited reveal before a Secret can cross JsonValue boundaries', () => {
-    const policy = DeclassifyPolicy.create({
-      door: 'trustedReveal',
+    const policy = DeclassifyPolicy.forTrustedReveal({
       ownerScope: 'current-principal',
-      purpose: 'public-projection',
     });
     const revealed = trustedReveal('hash-1' as unknown as Secret<string>, policy);
     const assertRevealedString = (value: TrustedRevealValue<Secret<string>>) => value;
@@ -360,7 +322,7 @@ describe('core authoring APIs', () => {
     );
   });
 
-  it('preserves queryRef and form keys as typed authoring facts', () => {
+  it('preserves library-owned queryRef and form keys without ambient registry augmentation', () => {
     const cart = queryRef<'cart', { count: number }>('cart');
     const cartForProduct = cart.args((props: { productId: string }) => ({
       id: props.productId,
@@ -383,17 +345,8 @@ describe('core authoring APIs', () => {
     expect(cartProductUntil.refreshSpec.at({ count: 3 })).toBe(3);
     expect(cartProductUntil.args({ productId: 'p1' })).toEqual({ id: 'p1' });
     expect(form('cart/add').key).toBe('cart/add');
-
-    const assertUnknownQuery = () => {
-      // @ts-expect-error queryRef keys are checked against generated QueryRegistry facts.
-      queryRef('missing-query');
-    };
-    const assertUnknownMutation = () => {
-      // @ts-expect-error form keys are checked against generated MutationRegistry facts.
-      form('missing/mutation');
-    };
-    expect(assertUnknownQuery).toBeTypeOf('function');
-    expect(assertUnknownMutation).toBeTypeOf('function');
+    expect(queryRef('library/cart').key).toBe('library/cart');
+    expect(form('library/cart/update').key).toBe('library/cart/update');
   });
 
   it('declares per-queryRef refetch-on-focus opt-out on the queryRef handle (SPEC §9.3/§9.4)', () => {
@@ -586,84 +539,6 @@ describe('core authoring APIs', () => {
     expect(assertUnknownForm).toBeTypeOf('function');
   });
 
-  it('derives form input and failure facts from generated mutation registry values', () => {
-    const addToCart = form('cart/add');
-    const input = {
-      productId: 'p1',
-      quantity: 2,
-    } satisfies FormInput<typeof addToCart>;
-    const failure = {
-      code: 'OUT_OF_STOCK',
-      payload: { availableQuantity: 0 },
-    } satisfies FormFailure<typeof addToCart>;
-    const validationFailure = {
-      code: 'VALIDATION',
-      fieldErrors: { quantity: 'Expected number >= 1' },
-    } satisfies FormFailure<typeof addToCart>;
-
-    expect(addToCart.key).toBe('cart/add');
-    expect(input.quantity).toBe(2);
-    expect(failure.payload.availableQuantity).toBe(0);
-    expect(validationFailure.code).toBe('VALIDATION');
-
-    const assertMissingInput = () => {
-      // @ts-expect-error quantity is required by the generated mutation input schema.
-      const missing = { productId: 'p1' } satisfies FormInput<typeof addToCart>;
-      return missing;
-    };
-    const assertUnknownInput = () => {
-      const unknown = {
-        productId: 'p1',
-        quantity: 2,
-        // @ts-expect-error sku is not part of the generated mutation input schema.
-        sku: 'sku-1',
-      } satisfies FormInput<typeof addToCart>;
-      return unknown;
-    };
-    const assertUnknownFailure = () => {
-      // @ts-expect-error PRICE_CHANGED is not declared by the generated mutation error schema.
-      const unknown = { code: 'PRICE_CHANGED', payload: { currentPrice: 2 } } satisfies FormFailure<
-        typeof addToCart
-      >;
-      return unknown;
-    };
-    expect(assertMissingInput).toBeTypeOf('function');
-    expect(assertUnknownInput).toBeTypeOf('function');
-    expect(assertUnknownFailure).toBeTypeOf('function');
-  });
-
-  it('derives form facts from server-style MutationRegistry value types', () => {
-    const priceUpdate = form('cart/price');
-    const input = {
-      price: 1499,
-      productId: 'p1',
-    } satisfies FormInput<typeof priceUpdate>;
-    const failure = {
-      code: 'PRICE_CHANGED',
-      payload: { currentPrice: 1299 },
-    } satisfies FormFailure<typeof priceUpdate>;
-
-    expect(priceUpdate.key).toBe('cart/price');
-    expect(input.price).toBe(1499);
-    expect(failure.payload.currentPrice).toBe(1299);
-
-    const assertMissingInput = () => {
-      // @ts-expect-error price is required by the server mutation input schema.
-      const missing = { productId: 'p1' } satisfies FormInput<typeof priceUpdate>;
-      return missing;
-    };
-    const assertUnknownFailure = () => {
-      const unknown = {
-        // @ts-expect-error OUT_OF_STOCK is not declared by this server mutation error schema.
-        code: 'OUT_OF_STOCK',
-        payload: { currentPrice: 1299 },
-      } satisfies FormFailure<typeof priceUpdate>;
-      return unknown;
-    };
-    expect(assertMissingInput).toBeTypeOf('function');
-    expect(assertUnknownFailure).toBeTypeOf('function');
-  });
-
   it('derives form facts directly from mutation definition values', () => {
     const addToCartMutation = {
       errors: {
@@ -671,7 +546,7 @@ describe('core authoring APIs', () => {
       },
       input: { parse: (input: unknown) => input as { productId: string; quantity: number } },
       key: 'cart/add',
-    } satisfies CartAddRegistryMutation;
+    } satisfies CartAddMutation;
     const addToCart = form(addToCartMutation);
     const input = {
       productId: 'p1',
@@ -732,7 +607,7 @@ describe('core authoring APIs', () => {
     expect(assertUnknownProp).toBeTypeOf('function');
   });
 
-  it('builds typed routeRef hrefs, links, and redirects from generated registry facts', () => {
+  it('builds typed routeRef hrefs, links, and redirects from path literals', () => {
     const productRoute = routeRef<'/products/:id', { id: string }, { max: number; sort: string }>(
       '/products/:id',
       {
@@ -778,26 +653,16 @@ describe('core authoring APIs', () => {
       // @ts-expect-error id is required by the routeRef path.
       href('/products/:id', { search: { max: 500 } });
     };
-    const assertUnknownRoute = () => {
-      // @ts-expect-error routeRef hrefs are checked against generated RouteRegistry facts.
-      href('/missing', {});
-    };
-    const assertUnknownSearch = () => {
-      href('/products/:id', {
-        params: { id: 'p1' },
-        // @ts-expect-error sku is not part of the routeRef search schema.
-        search: { sku: 'sku-1' },
-      });
-    };
 
     expect(assertMissingParam).toBeTypeOf('function');
-    expect(assertUnknownRoute).toBeTypeOf('function');
-    expect(assertUnknownSearch).toBeTypeOf('function');
   });
 
-  it('types GET form fields against routeRef search schemas', () => {
-    const productFilter = form.get('/products');
-    const productDetailFilter = form.get('/products/:id', { params: { id: 'p1' } });
+  it('types GET form fields from an explicit library route contract', () => {
+    const productFilter = form.get<'/products', { max: number; sort: string }>('/products');
+    const productDetailFilter = form.get<'/products/:id', { max: number; sort: string }>(
+      '/products/:id',
+      { params: { id: 'p1' } },
+    );
 
     expect(productFilter).toMatchObject({
       action: '/products',
@@ -810,7 +675,9 @@ describe('core authoring APIs', () => {
     expect(productFilter.Form({ children: null })).toBeUndefined();
     expect(productFilter.input({ name: 'max', type: 'number' })).toBeUndefined();
     expect(productDetailFilter.action).toBe('/products/p1');
-    expect(form.get('/optional-search').input('next')).toEqual({ name: 'next' });
+    expect(
+      form.get<'/optional-search', { next: string | undefined }>('/optional-search').input('next'),
+    ).toEqual({ name: 'next' });
 
     const assertUnknownSearchField = () => {
       // @ts-expect-error sku is not part of the routeRef search schema.

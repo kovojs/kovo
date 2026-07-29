@@ -152,11 +152,14 @@ describe('framework identity resolver', () => {
       module: '@kovojs/core',
     });
     expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'createS3CompatibleStorage'),
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core/storage', 'createS3CompatibleStorage'),
     ).toEqual({
       exportName: 'createS3CompatibleStorage',
       module: '@kovojs/core',
     });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'createS3CompatibleStorage'),
+    ).toBeUndefined();
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'publicScopedKey')).toEqual({
       exportName: 'publicScopedKey',
       module: '@kovojs/core',
@@ -165,6 +168,24 @@ describe('framework identity resolver', () => {
       exportName: 'scopedKey',
       module: '@kovojs/server',
     });
+  });
+
+  it('catalogs security doors only from their canonical task subpath', () => {
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core/security', 'DeclassifyPolicy'),
+    ).toEqual({
+      exportName: 'DeclassifyPolicy',
+      module: '@kovojs/core',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core/security', 'trustedReveal'),
+    ).toEqual({
+      exportName: 'trustedReveal',
+      module: '@kovojs/core',
+    });
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core', 'trustedReveal'),
+    ).toBeUndefined();
   });
 
   it('catalogs only the reviewed public style authoring calls', () => {

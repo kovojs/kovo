@@ -1,4 +1,4 @@
-import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
@@ -21,7 +21,7 @@ import {
   verifierStringTrim,
 } from './verifier-security-intrinsics.js';
 
-export type { DiagnosticCode } from '@kovojs/core';
+export type { DiagnosticCode } from '@kovojs/core/diagnostics';
 
 /**
  * A database-verification diagnostic emitted by the harness verification API

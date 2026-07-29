@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-export type { DiagnosticCode } from '@kovojs/core';
+export type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import { lockCompilerSecurityRealm } from '@kovojs/compiler/internal/security-bootstrap';
 import { pathToFileURL } from 'node:url';
 

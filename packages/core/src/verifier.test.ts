@@ -9,8 +9,11 @@ import {
   type HmacSignatureOptions,
   type HmacSignatureVerifier,
   type WebhookVerificationRequest,
-} from './index.js';
-import { isFrameworkHmacSignatureVerifier } from './internal/verifier.js';
+} from '@kovojs/core/webhooks';
+import {
+  inspectFrameworkHmacSignatureVerifier,
+  isFrameworkHmacSignatureVerifier,
+} from './internal/verifier.js';
 
 const providerPayload = '{"id":"evt_test_webhook","object":"event"}';
 const providerTimestamp = 1674087231;
@@ -205,7 +208,8 @@ describe('webhook verifier kit', () => {
     tolerance.seconds = 0;
     options.secret = new TextEncoder().encode('7172737475767778797a7b7c7d7e7f80');
     options.payload = new TextEncoder().encode('attacker-payload');
-    const exposedPayload = verifier.config.payload as Uint8Array;
+    const inspection = inspectFrameworkHmacSignatureVerifier(verifier);
+    const exposedPayload = inspection.config.payload as Uint8Array;
     exposedPayload.fill(0);
 
     await expect(
@@ -219,9 +223,11 @@ describe('webhook verifier kit', () => {
       }),
     ).resolves.toBe(true);
     expect(Object.isFrozen(verifier)).toBe(true);
-    expect(Object.isFrozen(verifier.config)).toBe(true);
-    expect(Object.isFrozen(verifier.config.tolerance)).toBe(true);
-    expect(Object.isFrozen(verifier.resolved)).toBe(true);
+    expect(Object.isFrozen(inspection.config)).toBe(true);
+    expect(Object.isFrozen(inspection.config.tolerance)).toBe(true);
+    expect(Object.isFrozen(inspection.resolved)).toBe(true);
+    expect(verifier).not.toHaveProperty('config');
+    expect(verifier).not.toHaveProperty('resolved');
     expect(isFrameworkHmacSignatureVerifier(verifier)).toBe(true);
     expect(isFrameworkHmacSignatureVerifier(customVerifier('custom', () => true))).toBe(false);
     expect(
@@ -240,13 +246,16 @@ describe('webhook verifier kit', () => {
       payload: 'configured-payload',
       secret: snapshotSecret,
     });
-    expect(verifier.config).toEqual({
+    const inspection = inspectFrameworkHmacSignatureVerifier(verifier);
+    expect(inspection.config).toEqual({
       encoding: 'hex',
       header: 'x-signature',
       payload: 'configured-payload',
     });
-    expect(verifier.config).not.toHaveProperty('secret');
-    expect(verifier.resolved).not.toHaveProperty('secret');
+    expect(inspection.config).not.toHaveProperty('secret');
+    expect(inspection.resolved).not.toHaveProperty('secret');
+    expect(verifier).not.toHaveProperty('config');
+    expect(verifier).not.toHaveProperty('resolved');
     expect(JSON.stringify(verifier)).not.toContain(snapshotSecret);
     expect(await import('./index.js')).not.toHaveProperty('createProviderWebhookHmacVerifyHandle');
   });
@@ -639,7 +648,7 @@ describe('webhook verifier kit', () => {
   it('supports app-owned timestamped multi-signature HMAC recipes', async () => {
     const verifier = timestampedProviderSignature({ secret: providerSecret });
 
-    expect(verifier.resolved).toEqual({
+    expect(inspectFrameworkHmacSignatureVerifier(verifier).resolved).toEqual({
       encoding: 'hex',
       header: 'x-provider-signature',
       kind: 'hmac',
@@ -702,7 +711,7 @@ describe('webhook verifier kit', () => {
   it('uses the Standard Webhooks preset with whsec base64 secrets', async () => {
     const verifier = standardWebhooks({ secret: standardSecret });
 
-    expect(verifier.resolved).toEqual({
+    expect(inspectFrameworkHmacSignatureVerifier(verifier).resolved).toEqual({
       encoding: 'base64',
       header: 'webhook-signature',
       kind: 'hmac',
@@ -920,7 +929,9 @@ describe('webhook verifier kit', () => {
         payload,
       }),
     ).resolves.toBe(false);
-    expect(verifier.resolved.timestampBinding).toBe('automatic');
+    expect(inspectFrameworkHmacSignatureVerifier(verifier).resolved.timestampBinding).toBe(
+      'automatic',
+    );
   });
 
   it('supports custom verifier escapes for non-HMAC schemes', async () => {

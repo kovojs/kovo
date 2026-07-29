@@ -141,7 +141,7 @@ export type DeclassifyPurposeFor<Door extends DeclassifyDoorId> = Door extends
     ? 'public-projection'
     : 'credential-use' | 'server-computation';
 
-/** Validated constructor input for {@link DeclassifyPolicy.create}. */
+/** Closed input vocabulary used by framework-owned declassification constructors. */
 export interface DeclassifyPolicyOptions<Door extends DeclassifyDoorId> {
   /** Exact API door this policy may open. */
   door: Door;
@@ -157,13 +157,26 @@ const declassifyPolicyConstructorToken = freezeSecurityValue({
 const declassifyPolicies = securityWeakSet<object>();
 
 /**
- * Nominal, runtime-validated declassification policy. Use {@link DeclassifyPolicy.create}; object
- * literals, casts, subclasses, and copied fields are rejected by every runtime reveal door.
+ * Nominal, runtime-validated declassification policy. Use the exact static constructor for the
+ * reveal door being called; object literals, casts, subclasses, copied fields, and policies
+ * constructed for a different door are rejected.
  *
  * The type is author-time ergonomics. The private runtime registry and exact-door check own the
  * fail-closed floor (SPEC §2 and §6.6).
  */
-export class DeclassifyPolicy<Door extends DeclassifyDoorId = DeclassifyDoorId> {
+export class DeclassifyPolicy<
+  Door extends
+    | 'revealSecret'
+    | 'revealUntrusted'
+    | 'secret.reveal'
+    | 'trustedReveal'
+    | 'untrusted.reveal' =
+    | 'revealSecret'
+    | 'revealUntrusted'
+    | 'secret.reveal'
+    | 'trustedReveal'
+    | 'untrusted.reveal',
+> {
   readonly #kovoDeclassifyPolicy: true;
   /** Exact reveal API this policy may open. */
   readonly door: Door;
@@ -179,7 +192,9 @@ export class DeclassifyPolicy<Door extends DeclassifyDoorId = DeclassifyDoorId> 
     ownerScope: DeclassifyOwnerScope,
   ) {
     if (token !== declassifyPolicyConstructorToken) {
-      throw new TypeError('DeclassifyPolicy must be created by DeclassifyPolicy.create().');
+      throw new TypeError(
+        'DeclassifyPolicy must be created by its exact door-specific constructor.',
+      );
     }
     this.#kovoDeclassifyPolicy = true;
     if (this.#kovoDeclassifyPolicy !== true) {
@@ -192,33 +207,97 @@ export class DeclassifyPolicy<Door extends DeclassifyDoorId = DeclassifyDoorId> 
     freezeSecurityValue(this);
   }
 
-  /** Validate and reconstruct one exact closed-registry policy. */
-  static create<Door extends DeclassifyDoorId>(
-    options: DeclassifyPolicyOptions<Door>,
-  ): DeclassifyPolicy<Door>;
-  static create(
-    options: DeclassifyPolicyOptions<DeclassifyDoorId>,
-  ): DeclassifyPolicy<DeclassifyDoorId> {
+  /** Construct a policy accepted only by the standalone {@link revealSecret} door. */
+  static forRevealSecret(options: {
+    ownerScope: DeclassifyOwnerScope;
+    purpose: 'credential-use' | 'server-computation';
+  }): DeclassifyPolicy<'revealSecret'> {
+    return DeclassifyPolicy.createDoorPolicy('revealSecret', options);
+  }
+
+  /** Construct a policy accepted only by {@link SecretValue.reveal}. */
+  static forSecretValue(options: {
+    ownerScope: DeclassifyOwnerScope;
+    purpose: 'credential-use' | 'server-computation';
+  }): DeclassifyPolicy<'secret.reveal'> {
+    return DeclassifyPolicy.createDoorPolicy('secret.reveal', options);
+  }
+
+  /** Construct a policy accepted only by the audited {@link trustedReveal} projection door. */
+  static forTrustedReveal(options: {
+    ownerScope: DeclassifyOwnerScope;
+  }): DeclassifyPolicy<'trustedReveal'> {
+    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+      'trustedReveal',
+      options,
+      'public-projection',
+    );
+  }
+
+  /** Construct a policy accepted only by the standalone {@link revealUntrusted} door. */
+  static forRevealUntrusted(options: {
+    ownerScope: DeclassifyOwnerScope;
+  }): DeclassifyPolicy<'revealUntrusted'> {
+    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+      'revealUntrusted',
+      options,
+      'request-validation',
+    );
+  }
+
+  /** Construct a policy accepted only by {@link UntrustedValue.reveal}. */
+  static forUntrustedValue(options: {
+    ownerScope: DeclassifyOwnerScope;
+  }): DeclassifyPolicy<'untrusted.reveal'> {
+    return DeclassifyPolicy.createFixedPurposeDoorPolicy(
+      'untrusted.reveal',
+      options,
+      'request-validation',
+    );
+  }
+
+  private static createDoorPolicy<Door extends DeclassifyDoorId>(
+    door: Door,
+    options: Omit<DeclassifyPolicyOptions<Door>, 'door'>,
+  ): DeclassifyPolicy<Door> {
     const keys = securityObjectKeys(options);
     if (
-      keys.length !== 3 ||
-      !securityArrayIncludesExact(keys, 'door') ||
+      keys.length !== 2 ||
       !securityArrayIncludesExact(keys, 'ownerScope') ||
       !securityArrayIncludesExact(keys, 'purpose')
     ) {
-      throw new TypeError(
-        'DeclassifyPolicy options must contain exactly door, purpose, and ownerScope.',
-      );
+      throw new TypeError('DeclassifyPolicy options must contain exactly purpose and ownerScope.');
     }
-    const door = ownSecretOption(options, 'door', 'DeclassifyPolicy door');
     const purpose = ownSecretOption(options, 'purpose', 'DeclassifyPolicy purpose');
     const ownerScope = ownSecretOption(options, 'ownerScope', 'DeclassifyPolicy ownerScope');
-    if (!isDeclassifyDoorId(door)) throw new TypeError('Unknown declassification door.');
     if (!isDeclassifyOwnerScope(ownerScope)) {
       throw new TypeError('Unknown declassification owner scope.');
     }
     if (!declassifyPurposeMatchesDoor(door, purpose)) {
       throw new TypeError(`Declassification purpose is not valid for ${door}.`);
+    }
+    return new DeclassifyPolicy(
+      declassifyPolicyConstructorToken,
+      door,
+      purpose as DeclassifyPurposeFor<Door>,
+      ownerScope,
+    );
+  }
+
+  private static createFixedPurposeDoorPolicy<
+    Door extends 'revealUntrusted' | 'trustedReveal' | 'untrusted.reveal',
+  >(
+    door: Door,
+    options: { ownerScope: DeclassifyOwnerScope },
+    purpose: DeclassifyPurposeFor<Door>,
+  ): DeclassifyPolicy<Door> {
+    const keys = securityObjectKeys(options);
+    if (keys.length !== 1 || !securityArrayIncludesExact(keys, 'ownerScope')) {
+      throw new TypeError('DeclassifyPolicy options must contain exactly ownerScope.');
+    }
+    const ownerScope = ownSecretOption(options, 'ownerScope', 'DeclassifyPolicy ownerScope');
+    if (!isDeclassifyOwnerScope(ownerScope)) {
+      throw new TypeError('Unknown declassification owner scope.');
     }
     return new DeclassifyPolicy(declassifyPolicyConstructorToken, door, purpose, ownerScope);
   }
@@ -751,16 +830,6 @@ function declassifyPolicyLabel(policy: DeclassifyPolicy): string {
   return `${policy.purpose}:${policy.door}:${policy.ownerScope}`;
 }
 
-function isDeclassifyDoorId(value: unknown): value is DeclassifyDoorId {
-  return (
-    value === 'revealSecret' ||
-    value === 'revealUntrusted' ||
-    value === 'secret.reveal' ||
-    value === 'trustedReveal' ||
-    value === 'untrusted.reveal'
-  );
-}
-
 function isDeclassifyOwnerScope(value: unknown): value is DeclassifyOwnerScope {
   return (
     value === 'application' ||
@@ -979,7 +1048,7 @@ export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
  * expose a redacted or otherwise safe representation of a secret-classified value.
  *
  * The static Drizzle projection analyzer recognizes this function only with an inline,
- * compiler-visible `DeclassifyPolicy.create({ door: 'trustedReveal', ... })` call and records the
+ * compiler-visible `DeclassifyPolicy.forTrustedReveal({ ownerScope: ... })` call and records the
  * reveal for `kovo explain --revealed`. A policy cannot be selected by request data, reused at a
  * different door, or replaced by caller prose. The runtime constructor/registry is a fail-closed
  * floor; compiler provenance and capability closure own the by-construction checks (SPEC §6.6).
