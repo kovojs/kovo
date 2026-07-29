@@ -113,10 +113,16 @@ proof; shared root verification belongs in the latest-verification block.
   - Evidence: `packages/cli/src/index.kovo-doctor.test.ts` passes 6 tests covering the complete
     healthy inventory, a fail-closed negative for every named axis, safe cache repair, symlink
     refusal, credential non-disclosure, and human/JSON/GitHub parity.
-- [ ] Add `kovo add --list`, typo suggestions, `--dry-run`, and `--install=auto|never`.
-- [ ] Prove `kovo add --dry-run` performs zero filesystem or process writes.
-- [ ] Stage add/install mutations so output distinguishes completed work from planned work after
+- [x] Add `kovo add --list`, typo suggestions, `--dry-run`, and `--install=auto|never`.
+  - Evidence: the 24-test add suite proves the command schema, exact component registry,
+    enum-derived typo suggestion, and both install modes.
+- [x] Prove `kovo add --dry-run` performs zero filesystem or process writes.
+  - Evidence: the add suite spies on framework filesystem/process boundaries and proves the
+    dry-run reports the plan with no directory, manifest, or package-manager mutation.
+- [x] Stage add/install mutations so output distinguishes completed work from planned work after
       failure.
+  - Evidence: the add suite proves install failure rolls back staged component, manifest, and
+    lockfile changes while reporting the attempted and still-planned work separately.
 - [ ] Fix source-closure scanning so the packed 44-component copy-in fixture typechecks, checks,
       and builds within the ratified RSS budget.
 - [ ] Publish an instrumented `kovo check` phase census and meet the ratified cold/warm/one-file

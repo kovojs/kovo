@@ -560,15 +560,17 @@ granularity).
       retention, writable paths, and stale caches.
   - Evidence: the 6-test doctor suite proves all ten checks, structured adapter parity, bounded
     project-confined cache repair, symlink refusal, and credential non-disclosure.
-- [ ] (M) Extend `kovo add` with `--list`, typo suggestions, `--dry-run`, and `--install=auto|never`;
+- [x] (M) Extend `kovo add` with `--list`, typo suggestions, `--dry-run`, and `--install=auto|never`;
       stage file and package edits so an install failure cannot make the reported result ambiguous.
   - `--dry-run` performs zero filesystem/process writes, catalog/list equals the registry, and
     failure output distinguishes completed from planned work.
-  - Close the known 4.4-4.8 GiB OOM here, beside its cause: fix source-closure scanning so the
-    Track 2 all-44-component fixture typechecks/checks/builds within peak RSS ≤2.0 GiB _(prov.)_
-    (or a lower ratified value in `devex-budgets.json`) even when copied components are not
-    imported. (Track 2 keeps only the reproducer + failing
-    test; the register lists the OOM as expected-failing until this lands.)
+  - Evidence: the 24-test add suite proves exact registry/list identity, schema-derived typo help,
+    zero-write planning, both install postures, staged promotion, and unambiguous rollback output.
+- [ ] (M) Close the known 4.4-4.8 GiB OOM beside its cause: fix source-closure scanning so the
+      Track 2 all-44-component fixture typechecks/checks/builds within peak RSS ≤2.0 GiB _(prov.)_
+      (or a lower ratified value in `devex-budgets.json`) even when copied components are not
+      imported. (Track 2 keeps only the reproducer + failing test; the register lists the OOM as
+      expected-failing until this lands.)
 - [ ] (M) Meet G4 by adopting `plans/fast-kovo-check3.md`'s remaining work, after publishing an
       instrumented phase-by-phase decomposition of the starter's 64.01s cold check as the budget
       justification; add the phase-census test so speed cannot come from silently dropping a
