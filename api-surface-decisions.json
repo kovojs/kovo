@@ -109,6 +109,33 @@
         "packages/test/src/harness.test.ts"
       ]
     },
+    "test-csrf-contract": {
+      "packedExample": "generated:api-surface-packed-example/v1",
+      "contractTests": [
+        "examples/reference/src/app.test.ts",
+        "packages/conformance-fixtures/src/package-exports.test.ts"
+      ]
+    },
+    "test-harness-contract": {
+      "packedExample": "generated:api-surface-packed-example/v1",
+      "contractTests": [
+        "packages/conformance-fixtures/src/package-exports.test.ts",
+        "packages/test/src/harness.test.ts"
+      ]
+    },
+    "test-harness-migration-contract": {
+      "packedExample": "generated:api-surface-packed-example/v1",
+      "contractTests": [
+        "scripts/migrate-test-harness-v2.test.mjs"
+      ]
+    },
+    "test-postgres-contract": {
+      "packedExample": "generated:api-surface-packed-example/v1",
+      "contractTests": [
+        "packages/conformance-fixtures/src/package-exports.test.ts",
+        "packages/test/src/postgres.test.ts"
+      ]
+    },
     "ui-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
       "contractTests": [
@@ -261,6 +288,30 @@
       "owner": "testing",
       "spec": "spec/12-testing.md §12",
       "evidence": "test-contract"
+    },
+    "test-csrf": {
+      "userStory": "Mint mutation-bound CSRF tokens for focused HTTP tests without importing server internals.",
+      "owner": "testing",
+      "spec": "spec/12-testing.md §12",
+      "evidence": "test-csrf-contract"
+    },
+    "test-harness": {
+      "userStory": "Execute one imported app through inferred declarations and its digest-verified build proof.",
+      "owner": "testing",
+      "spec": "spec/12-testing.md §12",
+      "evidence": "test-harness-contract"
+    },
+    "test-harness-migration": {
+      "userStory": "Migrate legacy app tests without guessing app, artifact, project, or HTTP deployment choices.",
+      "owner": "testing",
+      "spec": "spec/12-testing.md §12",
+      "evidence": "test-harness-migration-contract"
+    },
+    "test-postgres": {
+      "userStory": "Exercise owner, admin, and system Postgres behavior through an ephemeral RLS test runtime.",
+      "owner": "testing",
+      "spec": "spec/12-testing.md §12",
+      "evidence": "test-postgres-contract"
     },
     "ui-components": {
       "userStory": "Render one copyable styled component family with explicit props and accessible anatomy.",
@@ -23329,6 +23380,22 @@
       "evidence": "test-contract"
     },
     {
+      "id": "@kovojs/test/csrf#mutationCsrfTokenForTesting",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/csrf",
+      "symbol": "mutationCsrfTokenForTesting",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/csrf",
+      "story": "test-csrf",
+      "evidence": "test-csrf-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "examples/reference/src/app.test.ts",
+        "nonTestExample": "site/content/guides/testing.md"
+      }
+    },
+    {
       "id": "@kovojs/test/harness#createKovoTestHarness",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
@@ -23336,8 +23403,8 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
     },
     {
       "id": "@kovojs/test/harness#DbVerificationDiagnostic",
@@ -23347,19 +23414,20 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
     },
     {
       "id": "@kovojs/test/harness#HarnessPageFixture",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "HarnessPageFixture",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/harness#KovoTestContext",
@@ -23369,8 +23437,23 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestDb",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestDb",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
     },
     {
       "id": "@kovojs/test/harness#KovoTestExecOptions",
@@ -23380,8 +23463,23 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestFrameworkMutationError",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestFrameworkMutationError",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
     },
     {
       "id": "@kovojs/test/harness#KovoTestHarnessOptions",
@@ -23391,63 +23489,233 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestMutation",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestMutation",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestMutationError",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestMutationError",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestMutationInput",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestMutationInput",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestMutationResult",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestMutationResult",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestMutationValue",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestMutationValue",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestQuery",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestQuery",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestQueryInput",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestQueryInput",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestQueryResult",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestQueryResult",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestRawRequest",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestRawRequest",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
     },
     {
       "id": "@kovojs/test/harness#KovoTestReadSite",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "KovoTestReadSite",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestRequest",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestRequest",
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/harness#KovoTestRouteKey",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/harness",
+      "symbol": "KovoTestRouteKey",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/harness",
+      "story": "test-harness",
+      "evidence": "test-harness-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/harness.test.ts"
+      }
     },
     {
       "id": "@kovojs/test/harness#KovoTestTouchGraph",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "KovoTestTouchGraph",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/harness#KovoTestTouchGraphEntry",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "KovoTestTouchGraphEntry",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/harness#KovoTestTouchSite",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "KovoTestTouchSite",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/harness#KovoTestUnresolvedWriteSite",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/harness",
       "symbol": "KovoTestUnresolvedWriteSite",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/harness#KovoTestVerificationConfig",
@@ -23457,8 +23725,8 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
     },
     {
       "id": "@kovojs/test/harness#PageAssertion",
@@ -23468,8 +23736,8 @@
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/test/harness",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness",
+      "evidence": "test-harness-contract"
     },
     {
       "id": "@kovojs/test/headers#cookiePair",
@@ -23857,6 +24125,97 @@
       "evidence": "test-contract"
     },
     {
+      "id": "@kovojs/test/postgres#createPostgresTestRuntime",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "createPostgresTestRuntime",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts",
+        "nonTestExample": "examples/crm/src/testing.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/postgres#KovoPostgresTestAdminDb",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "KovoPostgresTestAdminDb",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/postgres#KovoPostgresTestDb",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "KovoPostgresTestDb",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/postgres#KovoPostgresTestRuntime",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "KovoPostgresTestRuntime",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/postgres#KovoPostgresTestRuntimeOptions",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "KovoPostgresTestRuntimeOptions",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/test/postgres#KovoPostgresTestSystemDb",
+      "package": "@kovojs/test",
+      "specifier": "@kovojs/test/postgres",
+      "symbol": "KovoPostgresTestSystemDb",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/test/postgres",
+      "story": "test-postgres",
+      "evidence": "test-postgres-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md",
+        "contractTest": "packages/test/src/postgres.test.ts"
+      }
+    },
+    {
       "id": "@kovojs/test/sqlite#createSqliteTestDb",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/sqlite",
@@ -23938,33 +24297,36 @@
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/test-case",
       "symbol": "kovoTest",
-      "state": "public",
+      "state": "removed",
       "decision": "remove",
       "canonicalHome": "none",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/test-case#KovoTestCase",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/test-case",
       "symbol": "KovoTestCase",
-      "state": "public",
+      "state": "removed",
       "decision": "remove",
       "canonicalHome": "none",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/test/test-case#KovoTestRunner",
       "package": "@kovojs/test",
       "specifier": "@kovojs/test/test-case",
       "symbol": "KovoTestRunner",
-      "state": "public",
+      "state": "removed",
       "decision": "remove",
       "canonicalHome": "none",
-      "story": "test-assertions",
-      "evidence": "test-contract"
+      "story": "test-harness-migration",
+      "evidence": "test-harness-migration-contract",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "id": "@kovojs/verify#formatCertificateVerification",
@@ -24771,10 +25133,20 @@
       "state": "public"
     },
     {
-      "specifier": "@kovojs/test/harness",
-      "task": "Use the @kovojs/test/harness API for the exercise app behavior through browser-free html, headers, databases, and property checks.",
+      "specifier": "@kovojs/test/csrf",
+      "task": "Mint mutation-bound CSRF tokens for focused HTTP tests without importing server internals.",
       "owner": "testing",
-      "story": "test-assertions",
+      "story": "test-csrf",
+      "state": "public",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md"
+      }
+    },
+    {
+      "specifier": "@kovojs/test/harness",
+      "task": "Execute an imported app through inferred declarations and a digest-verified build proof.",
+      "owner": "testing",
+      "story": "test-harness",
       "state": "public"
     },
     {
@@ -24799,6 +25171,16 @@
       "state": "public"
     },
     {
+      "specifier": "@kovojs/test/postgres",
+      "task": "Exercise owner, admin, and system Postgres behavior through an ephemeral RLS test runtime.",
+      "owner": "testing",
+      "story": "test-postgres",
+      "state": "public",
+      "introduced": {
+        "releaseNote": "docs/releases/test-harness-v2.md"
+      }
+    },
+    {
       "specifier": "@kovojs/test/sqlite",
       "task": "Use the @kovojs/test/sqlite API for the exercise app behavior through browser-free html, headers, databases, and property checks.",
       "owner": "testing",
@@ -24807,10 +25189,11 @@
     },
     {
       "specifier": "@kovojs/test/test-case",
-      "task": "Use the @kovojs/test/test-case API for the exercise app behavior through browser-free html, headers, databases, and property checks.",
+      "task": "Migrate retired runner adapters to the imported-app harness without guessing app-owned proof inputs.",
       "owner": "testing",
-      "story": "test-assertions",
-      "state": "public"
+      "story": "test-harness-migration",
+      "state": "removed",
+      "migrationBatch": "test-harness-v2"
     },
     {
       "specifier": "@kovojs/ui",

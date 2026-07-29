@@ -79,6 +79,21 @@ function readyLedger(decision) {
   };
 }
 
+function unownedMoveDecision() {
+  const assigned = new Set(committedLedger.batches.flatMap((batch) => batch.decisions));
+  const decisionSet = structuredClone(decisions);
+  const decision = decisionSet.symbols.find(
+    (row) => row.state === 'public' && row.decision === 'keep' && !assigned.has(row.id),
+  );
+  if (!decision) throw new Error('fixture needs one current unowned keep decision');
+  decision.decision = 'move';
+  decision.canonicalHome =
+    decision.specifier === '@kovojs/core/diagnostics'
+      ? '@kovojs/core/security'
+      : '@kovojs/core/diagnostics';
+  return { decision, decisionSet };
+}
+
 describe('API migration protocol', () => {
   it('accepts the committed checked migration batches', () => {
     expect(
@@ -87,29 +102,42 @@ describe('API migration protocol', () => {
   });
 
   it('accepts a ready batch only after rewrite, refusal, and exercised evidence exists', () => {
-    const decision = decisions.symbols.find((row) => row.decision === 'move');
+    const { decision, decisionSet } = unownedMoveDecision();
     const result = validateApiMigrationLedger({
       ledger: readyLedger(decision),
-      decisions,
+      decisions: decisionSet,
       repoRoot,
     });
     expect(result.findings).toEqual([]);
   });
 
   it('fails closed when a ready batch lacks refusal fixtures', () => {
-    const decision = decisions.symbols.find((row) => row.decision === 'move');
+    const { decision, decisionSet } = unownedMoveDecision();
     const ledger = readyLedger(decision);
     const batchIndex = ledger.batches.length - 1;
     ledger.batches[batchIndex].fixtures.refusals = [];
-    const result = validateApiMigrationLedger({ ledger, decisions, repoRoot });
+    const result = validateApiMigrationLedger({ ledger, decisions: decisionSet, repoRoot });
     expect(result.findings).toContain(
       `batches[${batchIndex}].fixtures.refusals must be non-empty before removal`,
     );
   });
 
+  it('accepts a refusal-only removal batch without invented rewrite evidence', () => {
+    const { decision, decisionSet } = unownedMoveDecision();
+    decision.decision = 'remove';
+    decision.canonicalHome = 'none';
+    const ledger = readyLedger(decision);
+    const batch = ledger.batches.at(-1);
+    batch.rules = batch.rules.filter((rule) => rule.action === 'refuse');
+    batch.fixtures.rewrites = [];
+
+    expect(validateApiMigrationLedger({ ledger, decisions: decisionSet, repoRoot }).findings).toEqual(
+      [],
+    );
+  });
+
   it('does not allow the old export to disappear before its batch reaches removed', () => {
-    const mutatedDecisions = structuredClone(decisions);
-    const decision = mutatedDecisions.symbols.find((row) => row.decision !== 'keep');
+    const { decision, decisionSet: mutatedDecisions } = unownedMoveDecision();
     decision.state = 'removed';
     decision.migrationBatch = 'sample-move';
     const ledger = readyLedger(decision);

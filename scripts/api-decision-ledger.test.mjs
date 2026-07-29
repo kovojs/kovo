@@ -83,9 +83,17 @@ describe('public API decision ledger', () => {
   });
 
   it('requires explicit reviewed evidence for declaration growth', () => {
-    const row = ledger.symbols.find((candidate) => candidate.decision !== 'keep');
+    const row = ledger.symbols.find(
+      (candidate) =>
+        candidate.state === 'public' &&
+        candidate.decision === 'keep' &&
+        ledger.baseline.declarations.includes(candidate.id),
+    );
     const mutated = clone(ledger);
     mutated.baseline.declarations = mutated.baseline.declarations.filter((id) => id !== row.id);
+    const mutatedRow = mutated.symbols.find((candidate) => candidate.id === row.id);
+    mutatedRow.decision = 'internalize';
+    mutatedRow.canonicalHome = `internal:${mutatedRow.package}`;
 
     const result = validateApiDecisionLedger({ inventory, ledger: mutated, repoRoot });
     expect(result.findings).toContain(

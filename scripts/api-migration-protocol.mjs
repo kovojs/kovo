@@ -162,6 +162,7 @@ export function validateApiMigrationLedger({ ledger, decisions, repoRoot = defau
 
     const rules = Array.isArray(batch.rules) ? batch.rules : [];
     const ruleIds = new Set();
+    let rewriteRules = 0;
     let refusalRules = 0;
     for (const [ruleIndex, rule] of rules.entries()) {
       const ruleLabel = `${label}.rules[${ruleIndex}]`;
@@ -180,6 +181,7 @@ export function validateApiMigrationLedger({ ledger, decisions, repoRoot = defau
       if (!RULE_ACTIONS.has(rule.action)) findings.push(`${ruleLabel}.action is invalid`);
       validateEndpoint(findings, `${ruleLabel}.from`, rule.from);
       if (rule.action === 'rewrite') {
+        rewriteRules += 1;
         validateEndpoint(findings, `${ruleLabel}.to`, rule.to);
       } else {
         refusalRules += 1;
@@ -225,10 +227,20 @@ export function validateApiMigrationLedger({ ledger, decisions, repoRoot = defau
     if (!isRecord(batch.fixtures)) {
       findings.push(`${label}.fixtures must bind rewrite and refusal evidence`);
     } else {
-      for (const kind of ['rewrites', 'refusals']) {
+      for (const [kind, expectedRules] of [
+        ['rewrites', rewriteRules],
+        ['refusals', refusalRules],
+      ]) {
         const files = batch.fixtures[kind];
-        if (batch.state !== 'preparing' && (!Array.isArray(files) || files.length === 0)) {
+        if (
+          batch.state !== 'preparing' &&
+          expectedRules > 0 &&
+          (!Array.isArray(files) || files.length === 0)
+        ) {
           findings.push(`${label}.fixtures.${kind} must be non-empty before removal`);
+        }
+        if (batch.state !== 'preparing' && expectedRules === 0 && (files?.length ?? 0) > 0) {
+          findings.push(`${label}.fixtures.${kind} cannot claim evidence without a matching rule`);
         }
         for (const [fileIndex, file] of (files ?? []).entries()) {
           validateFile(findings, repoRoot, `${label}.fixtures.${kind}[${fileIndex}]`, file);

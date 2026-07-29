@@ -8051,6 +8051,156 @@
       }
     },
     {
+      "id": "test-harness-v2",
+      "state": "removed",
+      "owner": "testing",
+      "decisions": [
+        "@kovojs/test/harness#HarnessPageFixture",
+        "@kovojs/test/harness#KovoTestReadSite",
+        "@kovojs/test/harness#KovoTestTouchGraph",
+        "@kovojs/test/harness#KovoTestTouchGraphEntry",
+        "@kovojs/test/harness#KovoTestTouchSite",
+        "@kovojs/test/harness#KovoTestUnresolvedWriteSite",
+        "@kovojs/test/test-case",
+        "@kovojs/test/test-case#kovoTest",
+        "@kovojs/test/test-case#KovoTestCase",
+        "@kovojs/test/test-case#KovoTestRunner"
+      ],
+      "tool": {
+        "path": "scripts/migrate-test-harness-v2.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
+      },
+      "releaseNote": "docs/releases/test-harness-v2.md",
+      "rollback": "From a clean worktree, restore the prior Kovo test package and reverse only source changes made after resolving the structured refusal report.",
+      "rules": [
+        {
+          "id": "create-harness-v1-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "createKovoTestHarness"
+          },
+          "category": "app-context",
+          "reason": "The app, successful artifact, absolute project root, and optional HTTP origin are application-owned choices that source syntax cannot infer."
+        },
+        {
+          "id": "harness-page-fixture-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "HarnessPageFixture"
+          },
+          "category": "deployment-posture",
+          "reason": "In-process page fixtures must become an explicit separately bootstrapped HTTP origin, which a source rewrite cannot choose safely."
+        },
+        {
+          "id": "harness-read-site-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "KovoTestReadSite"
+          },
+          "category": "app-context",
+          "reason": "Caller-authored read facts must be replaced by the exact digest-verified app build artifact rather than translated into another writable shape."
+        },
+        {
+          "id": "harness-touch-graph-entry-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "KovoTestTouchGraphEntry"
+          },
+          "category": "app-context",
+          "reason": "Caller-authored graph entries must be removed in favor of compiler-authenticated facts from the selected successful app build."
+        },
+        {
+          "id": "harness-touch-graph-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "KovoTestTouchGraph"
+          },
+          "category": "app-context",
+          "reason": "A writable touch graph cannot be migrated without selecting and validating the consuming application's exact successful build artifact."
+        },
+        {
+          "id": "harness-touch-site-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "KovoTestTouchSite"
+          },
+          "category": "app-context",
+          "reason": "Caller-authored touch facts must be replaced by compiler-authenticated facts rather than mechanically preserved as application authority."
+        },
+        {
+          "id": "harness-unresolved-write-site-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/harness",
+            "symbol": "KovoTestUnresolvedWriteSite"
+          },
+          "category": "app-context",
+          "reason": "Unresolved write facts now come from the verified compiler proof, so retaining a caller-provided record would change the authority model."
+        },
+        {
+          "id": "test-case-function-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/test-case",
+            "symbol": "kovoTest"
+          },
+          "category": "app-context",
+          "reason": "The retired runner wrapper cannot supply the imported app and verified build inputs required by the app-scoped harness."
+        },
+        {
+          "id": "test-case-record-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/test-case",
+            "symbol": "KovoTestCase"
+          },
+          "category": "app-context",
+          "reason": "Test registration now belongs to the chosen runner while harness setup requires explicit application-owned proof inputs."
+        },
+        {
+          "id": "test-case-runner-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/test-case",
+            "symbol": "KovoTestRunner"
+          },
+          "category": "app-context",
+          "reason": "Runner typing is owned by the selected test framework and cannot be replaced without guessing that application dependency."
+        },
+        {
+          "id": "test-case-subpath-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/test/test-case"
+          },
+          "category": "ambiguous-binding",
+          "reason": "Namespace and side-effect imports do not reveal which retired runner or harness behaviors the consuming application depends on."
+        }
+      ],
+      "fixtures": {
+        "rewrites": [],
+        "refusals": [
+          "scripts/fixtures/api-migrations/test-harness-v2/legacy-harness.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-test-harness-v2.mjs --check scripts/fixtures/api-migrations/test-harness-v2"
+      }
+    },
+    {
       "id": "drizzle-typed-annotations-v1",
       "state": "removed",
       "owner": "data-plane",
