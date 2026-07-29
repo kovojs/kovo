@@ -31,7 +31,7 @@ export const cartSummary = query(cartSummaryDefinition);
 ```
 
 Every request-reachable query needs an access decision. A guard counts. A public query uses
-`publicAccess('reason')` so the public set is visible in `kovo explain --access`.
+`publicAccess('reason')` so the public set is visible in `kovo explain access`.
 
 ## Render it
 

@@ -61,7 +61,7 @@ On the node preset, task draining is part of the shipped runtime. You can inspec
 after a build:
 
 ```sh
-kovo explain --tasks dist/.kovo/graph.json
+kovo explain tasks dist/.kovo/graph.json
 kovo explain task email/send-welcome dist/.kovo/graph.json
 ```
 

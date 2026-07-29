@@ -64,12 +64,12 @@ failure paths.
 4. **Annotate `owner:`** on every per-user table and scope predicates to `req.session`, never to
    client input.
 5. **Classify confidential columns** with `secret`; project only provably public fields. Keep
-   declassification out of every request-reachable module and inspect `kovo explain --revealed`.
+   declassification out of every request-reachable module and inspect `kovo explain revealed`.
 6. **Govern server-owned columns** with `governed`; write them through `serverValue(...)` or
    `trustedAssign(...)`, never from request input.
-7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain --endpoints`.
+7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
-   `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain --endpoints`.
+   `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain endpoints`.
 9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
    `--endpoints`, `--revealed`, `--trust`, `--capabilities`, `--access`, `--cookies`, and
    `--sources-sinks`. Verify detached escape reviews with `--attest` before deployment.
@@ -248,7 +248,7 @@ Hit one guarded route logged out, then run one graph review mode:
 
 ```sh
 curl -i http://localhost:3000/account
-kovo explain --unguarded dist/.kovo/graph.json
+kovo explain unguarded dist/.kovo/graph.json
 ```
 
 The route should redirect or render the configured unauthorized shell before private data appears.
@@ -256,14 +256,14 @@ The review command should either print `SUMMARY total=0` or name the reachable m
 query you need to guard.
 
 ```sh
-kovo explain --unguarded graph.json   # reachable without an authed guard
-kovo explain --unscoped graph.json    # owner-annotated rows not provably session-scoped (IDOR)
-kovo explain --endpoints graph.json   # machine ingress: auth scheme + CSRF posture
-kovo explain --revealed graph.json    # confidential fields intentionally revealed
-kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
-kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
-kovo explain --cookies graph.json     # cookie posture and downgrade findings
-kovo explain --sources-sinks          # source/sink inventory
+kovo explain unguarded graph.json   # reachable without an authed guard
+kovo explain unscoped graph.json    # owner-annotated rows not provably session-scoped (IDOR)
+kovo explain endpoints graph.json   # machine ingress: auth scheme + CSRF posture
+kovo explain revealed graph.json    # confidential fields intentionally revealed
+kovo explain trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
+kovo explain access graph.json      # explicit public/authenticated/machine access decisions
+kovo explain cookies graph.json     # cookie posture and downgrade findings
+kovo explain sources-sinks          # source/sink inventory
 ```
 
 ### `--unguarded` — what's reachable without auth
@@ -468,7 +468,7 @@ input. It does not accept an opaque helper result. Use `trustedAssign(...)` for 
 reviewed opaque computation or an authorized admin write. Keep the obligation inline: prose,
 variables, spreads, computed fields, and malformed evidence fail `kovo check`. The build writes the
 unsigned subject to `.kovo/escape-obligations.json`; your out-of-band reviewer signs it for
-`kovo explain --attest ... --escape-reviews reviews.json`. That signature records review of these
+`kovo explain attest ... --escape-reviews reviews.json`. That signature records review of these
 exact bytes. It does not prove the policy is correct.
 
 ## Serve file downloads with capability URLs
@@ -503,7 +503,7 @@ export const invoiceRoute = route('/account/invoice', {
 `signUrl(...)` uses `signCapability` under the hood. The download endpoint verifies the method, key,
 expiry, and scope before any storage read. A leaked URL is still a bearer credential, so keep the
 expiry short and prefer one-time URLs for sensitive exports. Review the declared download endpoint in
-`kovo explain --endpoints` and the signing call in `kovo explain --sources-sinks`.
+`kovo explain endpoints` and the signing call in `kovo explain sources-sinks`.
 
 ## Source/sink boundaries
 

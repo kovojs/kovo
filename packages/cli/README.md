@@ -15,7 +15,7 @@ import { readFile } from 'node:fs/promises';
 
 const graph = JSON.parse(await readFile('graph.json', 'utf8'));
 
-const explain = kovoExplain(graph, { kind: 'page', target: '/' });
+const explain = kovoExplain(graph, { target: '/', view: 'page' });
 const check = kovoCheck(graph);
 ```
 

@@ -166,14 +166,14 @@ access modes accept `--fail-on-findings` so CI can fail on results:
 <!-- kovo-sample: illustrative reason="Bracketed tokens show optional CLI arguments; this block is a usage synopsis, not literal shell input." -->
 
 ```sh
-kovo explain --unguarded [--fail-on-findings] [graph.json]   # everything reachable without authentication
-kovo explain --unscoped  [--fail-on-findings] [graph.json]   # rows not tied to a principal via the owner: annotation
-kovo explain --endpoints [graph.json]                        # the machine-ingress audit (see below)
-kovo explain --revealed [graph.json]                         # confidential fields intentionally revealed
-kovo explain --capabilities [graph.json]                     # dangerous capabilities + static Postgres lease contract
-kovo explain --access [--fail-on-findings] [graph.json]      # explicit access decisions
-kovo explain --sources-sinks                                 # source/sink inventory
-kovo explain --cookies [graph.json]                          # cookie downgrade and posture audit
+kovo explain unguarded [--fail-on-findings] [graph.json]   # everything reachable without authentication
+kovo explain unscoped  [--fail-on-findings] [graph.json]   # rows not tied to a principal via the owner: annotation
+kovo explain endpoints [graph.json]                        # the machine-ingress audit (see below)
+kovo explain revealed [graph.json]                         # confidential fields intentionally revealed
+kovo explain capabilities [graph.json]                     # dangerous capabilities + static Postgres lease contract
+kovo explain access [--fail-on-findings] [graph.json]      # explicit access decisions
+kovo explain sources-sinks                                 # source/sink inventory
+kovo explain cookies [graph.json]                          # cookie downgrade and posture audit
 ```
 
 - **`--unguarded`** lists every mutation, route, and query reachable without auth — the audit guards
@@ -283,7 +283,7 @@ with process-stable jitter and on permission failures. The lease expires after 1
 serve-degraded grace. Drift or renewal failure sheds new database requests and drains pooled
 sessions. Fix transient drift and Kovo can re-witness the exact boot baseline; after an intentional
 posture change, restart the process so it can authorize a new baseline. Run
-`kovo explain --capabilities graph.json` to review the static contract and its bounds. That command
+`kovo explain capabilities graph.json` to review the static contract and its bounds. That command
 does not connect to the live process; its `liveStatus`, `liveDigest`, and `liveExpiry` fields say
 `not-observed` on purpose.
 

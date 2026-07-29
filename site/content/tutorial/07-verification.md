@@ -96,7 +96,7 @@ Here is the acceptance question — "what updates when cart/add commits?" — an
 {{snippet:07-verification/src/app.test.ts#intent-test}}
 
 The access audit rides the same surface. The product catalog remains visibly `public`; the cart
-query, order-history query, and cart mutation remain visibly guarded. `kovo explain --unguarded`
+query, order-history query, and cart mutation remain visibly guarded. `kovo explain unguarded`
 reports zero only because no route, query, or mutation is missing a decision — it does not relabel
 public surfaces as authenticated.
 

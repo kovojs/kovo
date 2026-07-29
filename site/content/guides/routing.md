@@ -285,7 +285,7 @@ export const adminRoute = route('/admin', {
 });
 ```
 
-Guarded pages enroll in the **`kovo explain --unguarded` audit** — the report of everything reachable
+Guarded pages enroll in the **`kovo explain unguarded` audit** — the report of everything reachable
 without authentication — alongside mutations and queries. Guard outcomes are fixed so auth stays
 typed: an `authed` failure runs the app's `onUnauthenticated` handler (default: 303 to the login
 route with the original URL as `next`), and an authenticated-but-unauthorized failure renders the
@@ -372,7 +372,7 @@ stamps or persistence policy.
 - [Interactive islands & client state](/guides/islands/) — coordinating islands through the typed URL.
 - [Layouts](/guides/layouts/) — nested route chrome, layout queries, guards, and boundaries.
 - [Mutations & forms](/guides/mutations/) — the POST-redirect-GET write side of navigation.
-- [The kovo & vp CLIs](/guides/cli/) — running `kovo explain --unguarded` and `kovo explain page`.
+- [The kovo & vp CLIs](/guides/cli/) — running `kovo explain unguarded` and `kovo explain page`.
 
 <details>
 <summary>Spec & diagnostics</summary>

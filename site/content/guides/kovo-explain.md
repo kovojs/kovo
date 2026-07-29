@@ -28,8 +28,8 @@ kovo explain query cart graph.json                  # read one node of the graph
 kovo explain mutation cart/add --optimistic graph.json
 kovo explain page /cart graph.json
 kovo explain component CartBadge graph.json
-kovo explain --unguarded graph.json
-kovo explain --revealed graph.json
+kovo explain unguarded graph.json
+kovo explain revealed graph.json
 ```
 
 Prefer the current-source check or construct a graph in focused tests instead of committing generated
@@ -199,15 +199,15 @@ red.
 Explain modes answer security review's first questions from the same artifact:
 
 ```sh
-kovo explain --unguarded graph.json   # every mutation, route, and query reachable without authed
-kovo explain --unscoped graph.json    # owner-annotated tables whose key predicate isn't session-traceable (IDOR)
-kovo explain --endpoints graph.json   # machine ingress: endpoints, webhooks, file/stream routes + auth/CSRF posture
-kovo explain --revealed graph.json    # confidential fields intentionally revealed
-kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
-kovo explain --capabilities graph.json # held capabilities + static external-Postgres lease contract
-kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
-kovo explain --cookies graph.json     # cookie posture and downgrade findings
-kovo explain --sources-sinks          # source/sink inventory
+kovo explain unguarded graph.json   # every mutation, route, and query reachable without authed
+kovo explain unscoped graph.json    # owner-annotated tables whose key predicate isn't session-traceable (IDOR)
+kovo explain endpoints graph.json   # machine ingress: endpoints, webhooks, file/stream routes + auth/CSRF posture
+kovo explain revealed graph.json    # confidential fields intentionally revealed
+kovo explain trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
+kovo explain capabilities graph.json # held capabilities + static external-Postgres lease contract
+kovo explain access graph.json      # explicit public/authenticated/machine access decisions
+kovo explain cookies graph.json     # cookie posture and downgrade findings
+kovo explain sources-sinks          # source/sink inventory
 ```
 
 ```txt

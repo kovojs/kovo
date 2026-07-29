@@ -183,7 +183,7 @@ field, no-JS response, replay, and typed failure UI.
 
 ## Audit the ingress surface
 
-`kovo explain --endpoints` is the stable security-review table. It lists every declared endpoint and
+`kovo explain endpoints` is the stable security-review table. It lists every declared endpoint and
 webhook, every mutation, and every route returning `respond.file()` or `respond.stream()`:
 
 ```txt
