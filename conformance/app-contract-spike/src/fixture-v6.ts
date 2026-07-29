@@ -1038,14 +1038,24 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
       : variant === 'arm-b'
         ? generatedFactory
         : directFactory;
+  const sharedServerImports = family === 'endpoint' ? ['publicAccess'] : [];
+  const variantImports =
+    variant === 'arm-a'
+      ? ["import { app } from '../../../src/kovo.js';"]
+      : variant === 'arm-b'
+        ? [
+            `import { ${family} as ${generatedFactory}${
+              family === 'layout' ? ', route as generatedRoute' : ''
+            } } from '#kovo';`,
+          ]
+        : [
+            `import { ${directFactory}${family === 'layout' ? ', route' : ''} } from '@kovojs/server';`,
+          ];
   const imports = [
-    `import { ${directFactory}, publicAccess${
-      family === 'layout' ? ', route' : ''
-    } } from '@kovojs/server';`,
-    `import { ${family} as ${generatedFactory}${
-      family === 'layout' ? ', route as generatedRoute' : ''
-    } } from '#kovo';`,
-    "import { app } from '../../../src/kovo.js';",
+    ...(sharedServerImports.length > 0
+      ? [`import { ${sharedServerImports.join(', ')} } from '@kovojs/server';`]
+      : []),
+    ...variantImports,
   ].join('\n');
   if (family === 'layout') {
     const routeFactory =
