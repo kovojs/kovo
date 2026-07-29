@@ -1875,7 +1875,6 @@
           "./storage-downloads",
           "./storage-keys",
           "./tasks",
-          "./testing",
           "./vite",
           "./webhooks",
           "./write-safety"
@@ -1906,6 +1905,7 @@
           "./internal/sqlite",
           "./internal/sqlite-capability",
           "./internal/static-export",
+          "./internal/testing",
           "./internal/vite-security-profile",
           "./internal/wire"
         ]
@@ -2069,11 +2069,6 @@
             "path": "./tasks",
             "slug": "server-tasks",
             "description": "Durable task declarations, scheduling, and status observation."
-          },
-          {
-            "path": "./testing",
-            "slug": "server-testing",
-            "description": "PGlite-backed Postgres helpers for tests that need real owner-scoped RLS behavior."
           },
           {
             "path": "./vite",

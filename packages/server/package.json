@@ -41,7 +41,6 @@
     "./storage-downloads": "./src/public-storage-downloads.ts",
     "./storage-keys": "./src/public-storage-keys.ts",
     "./tasks": "./src/public-tasks.ts",
-    "./testing": "./src/testing.ts",
     "./vite": "./src/vite-source.ts",
     "./webhooks": "./src/public-webhooks.ts",
     "./write-safety": "./src/public-write-safety.ts",
@@ -69,6 +68,7 @@
     "./internal/sqlite": "./src/internal/sqlite.ts",
     "./internal/sqlite-capability": "./src/internal/sqlite-capability.ts",
     "./internal/static-export": "./src/internal/static-export.ts",
+    "./internal/testing": "./src/internal/testing.ts",
     "./internal/vite-security-profile": "./src/internal/vite-security-profile.ts",
     "./internal/wire": "./src/internal/wire.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
@@ -200,10 +200,6 @@
         "types": "./dist/public-tasks.d.mts",
         "default": "./dist/public-tasks.mjs"
       },
-      "./testing": {
-        "types": "./dist/testing.d.mts",
-        "default": "./dist/testing.mjs"
-      },
       "./vite": {
         "types": "./dist/vite.d.mts",
         "default": "./dist/vite.mjs"
@@ -312,6 +308,10 @@
         "types": "./dist/internal/static-export.d.mts",
         "default": "./dist/internal/static-export.mjs"
       },
+      "./internal/testing": {
+        "types": "./dist/internal/testing.d.mts",
+        "default": "./dist/internal/testing.mjs"
+      },
       "./internal/vite-security-profile": {
         "types": "./dist/internal/vite-security-profile.d.mts",
         "default": "./dist/internal/vite-security-profile.mjs"
@@ -331,7 +331,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/public-agent.ts src/public-client-modules.ts src/public-command.ts src/public-confidential.ts src/public-custom-adapters.ts src/public-data.ts src/public-delegation.ts src/public-derived-data.ts src/public-diagnostics.ts src/public-egress.ts src/public-files.ts src/public-node.ts src/public-password.ts src/public-postgres.ts src/public-principal-epochs.ts src/public-principal-erasure.ts src/public-render-tree.ts src/public-rendering.ts src/public-replay.ts src/public-routing.ts src/public-secret-reading.ts src/public-security.ts src/public-signing.ts src/public-static-export.ts src/public-storage-downloads.ts src/public-storage-keys.ts src/public-tasks.ts src/public-webhooks.ts src/public-write-safety.ts src/runtime-bootstrap.ts src/sqlite.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build-preset-internal.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/better-auth.ts src/internal/build-context.ts src/internal/build.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/keyring.ts src/internal/managed-db.ts src/internal/postgres-capability.ts src/internal/route.ts src/internal/runtime-environment.ts src/internal/runtime-registry-wire.ts src/internal/sqlite-capability.ts src/internal/sqlite.ts src/internal/static-export.ts src/internal/testing.ts src/internal/vite-security-profile.ts src/internal/wire.ts src/jsx-runtime.ts src/public-agent.ts src/public-client-modules.ts src/public-command.ts src/public-confidential.ts src/public-custom-adapters.ts src/public-data.ts src/public-delegation.ts src/public-derived-data.ts src/public-diagnostics.ts src/public-egress.ts src/public-files.ts src/public-node.ts src/public-password.ts src/public-postgres.ts src/public-principal-epochs.ts src/public-principal-erasure.ts src/public-render-tree.ts src/public-rendering.ts src/public-replay.ts src/public-routing.ts src/public-secret-reading.ts src/public-security.ts src/public-signing.ts src/public-static-export.ts src/public-storage-downloads.ts src/public-storage-keys.ts src/public-tasks.ts src/public-webhooks.ts src/public-write-safety.ts src/runtime-bootstrap.ts src/sqlite.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
