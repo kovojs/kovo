@@ -30,8 +30,8 @@
   "devDependencies": {
     "@kovojs/cli": "workspace:*",
     "@kovojs/test": "workspace:*",
-    "marked": "^16.0.0",
-    "shiki": "^3.0.0",
+    "marked": "16.4.2",
+    "shiki": "3.23.0",
     "vite-plus": "0.1.24",
     "vitest": "4.1.8"
   }
