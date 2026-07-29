@@ -168,6 +168,8 @@ describe('authored code snippet extractor', () => {
           '',
           'A cart page should show the useful path first.',
           '',
+          '## Run it',
+          '',
           '```ts',
           'const a = 1;',
           'const b = 2;',
@@ -225,6 +227,64 @@ describe('authored code snippet extractor', () => {
           '# Page',
           '',
           'A cart page should show the useful path first. SPEC §9.1 explains why.',
+          '',
+          '```ts',
+          'const count = 1;',
+          '```',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredDocStyle({ dir: root })).rejects.toThrow('doc-style');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('requires the canonical collapsed Spec & diagnostics disclosure', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-doc-style-'));
+    try {
+      await writeFile(
+        path.join(root, 'page.md'),
+        [
+          '# Page',
+          '',
+          'A cart page should show the useful path first.',
+          '',
+          '## Run it',
+          '',
+          '```ts',
+          'const count = 1;',
+          '```',
+          '',
+          '<details>',
+          '<summary>Implementation notes</summary>',
+          '',
+          'SPEC §9.1 lives here.',
+          '',
+          '</details>',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(checkAuthoredDocStyle({ dir: root })).rejects.toThrow('doc-style');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('requires a proof step for task-guide code', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kovo-doc-style-'));
+    try {
+      await mkdir(path.join(root, 'guides'));
+      await writeFile(
+        path.join(root, 'guides/page.md'),
+        [
+          '# Add a cart',
+          '',
+          'A cart page can show the current item count.',
+          '',
+          '## Add the count',
           '',
           '```ts',
           'const count = 1;',
@@ -307,6 +367,8 @@ describe('authored code snippet extractor', () => {
           '# Page',
           '',
           'A cart page should show the useful path first.',
+          '',
+          '## Run it',
           '',
           '```ts',
           'const load = (value: any) => value;',

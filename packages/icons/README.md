@@ -31,9 +31,9 @@ export function IconExamples() {
 }
 ```
 
-## API
+## Use an icon
 
-Every icon accepts [`IconProps`](./src/icon-base.ts):
+Every glyph uses the shared `IconProps` contract:
 
 - `style?: style.StyleInput` — size (`width`/`height`) and color (`color`). There
   is **no `size` prop**; sizing goes through StyleX, consistent with `@kovojs/ui`.
@@ -46,18 +46,8 @@ Every icon accepts [`IconProps`](./src/icon-base.ts):
 Defaults match Lucide: `24×24`, `fill="none"`, `stroke="currentColor"`,
 `stroke-width="2"`. Color inherits from the surrounding text color.
 
-## Generated
+## Reference
 
-Icon components are **generated**, not hand-authored. `scripts/build-icons.mjs`
-reads the pinned `lucide-static` dependency and emits one `src/<name>.tsx` per
-glyph, plus this package's `exports` map and its `public-packages.json` entry.
-Regenerate with:
-
-```sh
-pnpm --filter @kovojs/icons run build:icons
-```
-
-The generated `src/*.tsx` files are committed source. The `icons.gen.test.ts`
-determinism check fails if committed output drifts from a fresh generation.
-
-Icons are derived from Lucide (ISC); see [NOTICE](./NOTICE).
+- Shared props: `/api/icons/`
+- Search all glyphs: `/guides/components/#icons`
+- License: [Lucide ISC notice](./NOTICE)

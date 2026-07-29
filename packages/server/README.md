@@ -23,5 +23,5 @@ export default createApp({
 
 ## Reference
 
-- API: `/api/server/`, `/api/server-build/`, `/api/server-vite/`
+- API: `/api/server/` (root plus `build`, `runtime-bootstrap`, `sqlite`, `testing`, and `vite`)
 - Guides: `/guides/request-shell/`, `/guides/deployment/`, `/guides/streaming/`

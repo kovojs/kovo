@@ -220,28 +220,30 @@ The commerce app's review output is clean (`total=0`). A finding adds a line per
 summary; in CI you run the blocking modes with fail-on-findings so a guard removed in a refactor
 can't land quietly.
 
-- `--unguarded` lists everything reachable without an `authed` guard — the first question of any
+- `kovo explain unguarded` lists everything reachable without an `authed` guard — the first question of any
   security review.
-- `--unscoped` is the IDOR audit: queries and writes touching an `owner:`-annotated table whose key
+- `kovo explain unscoped` is the IDOR audit: queries and writes touching an `owner:`-annotated table whose key
   predicate the analyzer can't trace back to `req.session`. In other words, data that should be scoped
   to its owner but provably might not be.
-- `--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for webhooks
+- `kovo explain endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for webhooks
   the write→domain chain — so "what can reach this app and what can it touch?" is answerable without
   executing anything.
-- `--revealed` lists confidential data reveals, including exact typed declassification-policy rows
+- `kovo explain revealed` lists confidential data reveals, including exact typed declassification-policy rows
   that need human review.
-- `--trust` lists trusted HTML, SQL, URL, and similar escape hatches with the evidence that made them
+- `kovo explain trust` lists trusted HTML, SQL, URL, and similar escape hatches with the evidence that made them
   reviewable.
-- `--capabilities` lists held dangerous capabilities and the static external-Postgres posture-lease
+- `kovo explain capabilities` lists held dangerous capabilities and the static external-Postgres posture-lease
   contract. It cannot see a running process, so current lease status, digest, and expiry remain
   `not-observed`.
-- `--access` lists explicit public/authenticated/machine access decisions, including missing
+- `kovo explain access` lists explicit public/authenticated/machine access decisions, including missing
   decisions that block under `kovo check`.
-- `--cookies` lists cookie posture and downgrade findings.
-- `--sources-sinks` emits the source/sink inventory used by the security gates.
+- `kovo explain cookies` lists cookie posture and downgrade findings.
+- `kovo explain sources-sinks` emits the source/sink inventory used by the security gates.
 
-Capability-style review currently happens through the concrete shipped surfaces: `--revealed`,
-`--trust`, `--endpoints`, `--sources-sinks`, and the audit-only `--capabilities` table. The static
+Capability-style review currently happens through the concrete shipped surfaces:
+`kovo explain revealed`,
+`kovo explain trust`, `kovo explain endpoints`, `kovo explain sources-sinks`, and the audit-only
+`kovo explain capabilities` table. The static
 lease rows are a contract review, not live health telemetry.
 
 ## Debug from the Network panel
@@ -277,7 +279,7 @@ The `kovo explain` / `kovo check` artifact formats: SPEC §5.3, §11.4. The comm
 diffs: SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update coverage is **KV311**
 (SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion:
 `rules/v1-acceptance.md`. Security review modes and guard reachability: SPEC §10.3, §11.4;
-`owner:` annotations behind `--unscoped`: SPEC §10.1. Confidential reveal review: SPEC §6.6, KV435.
+`owner:` annotations behind `kovo explain unscoped`: SPEC §10.1. Confidential reveal review: SPEC §6.6, KV435.
 Capability review through the shipped source/sink and ingress surfaces: SPEC §6.6. The wire
 vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
 SPEC §1.

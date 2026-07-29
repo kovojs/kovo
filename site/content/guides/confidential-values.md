@@ -107,7 +107,7 @@ const client = createCredentialClient(app.env.API_TOKEN);
 ```
 
 Run `kovo explain revealed`. The reveal appears with its source location and exact policy. The
-combined `--capabilities` view folds in the same fact. This is an audit trail, not permission to
+combined `kovo explain capabilities` view folds in the same fact. This is an audit trail, not permission to
 send the raw key elsewhere. Keep the policy inline and literal; its field order does not matter.
 Dynamic policy construction fails the build because Kovo cannot record an honest audit row for it.
 

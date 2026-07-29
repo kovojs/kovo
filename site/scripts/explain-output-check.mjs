@@ -106,13 +106,13 @@ const OPTIMISTIC_GRAPH = {
 
 const EXPLAIN_OUTPUT_CASES = [
   {
-    args: ['--endpoints'],
+    args: ['endpoints'],
     files: ['guides/endpoints-webhooks.md', 'guides/security.md'],
     graph: ENDPOINTS_GRAPH,
     id: 'endpoints',
   },
   {
-    args: ['--unscoped'],
+    args: ['unscoped'],
     files: ['guides/security.md'],
     graph: UNSCOPED_GRAPH,
     id: 'unscoped',

@@ -1,23 +1,26 @@
 # @kovojs/compiler
 
-Kovo's build-time compiler. It lowers authored TSX/JSX app components into
-server modules, client modules, graphs, diagnostics, and Vite integration
-artifacts. App authors usually reach it through `vp`, `kovo`, or the Vite plugin.
+Kovo's compiler is installed as build-time infrastructure. It lowers authored
+TSX/JSX app components into server modules, client modules, graphs, and
+diagnostics. App code does not import this package directly.
 
 ```sh
-pnpm add -D @kovojs/compiler
+pnpm dlx create-kovo my-app
 ```
 
+Configure an app through the public server-owned Vite entry:
+
 ```ts
-import { defineConfig } from 'vite';
-import { kovoVitePlugin } from '@kovojs/compiler';
+import { kovo } from '@kovojs/server/vite';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [kovoVitePlugin()],
+  plugins: [kovo({ app: '/src/app.tsx' })],
 });
 ```
 
 ## Reference
 
-- Guides: `/guides/compiler-internals/`, `/guides/cli/`
-- Public surface: see `public-packages.json` for the app-facing and generated subpaths.
+- Configure and build an app: `/api/server/` (`@kovojs/server/vite`)
+- Inspect compiler facts: `/guides/cli/`
+- Understand emitted source: `/guides/compiler-internals/`

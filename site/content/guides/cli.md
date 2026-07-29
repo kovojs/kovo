@@ -176,24 +176,26 @@ kovo explain sources-sinks                                 # source/sink invento
 kovo explain cookies [graph.json]                          # cookie downgrade and posture audit
 ```
 
-- **`--unguarded`** lists every mutation, route, and query reachable without auth — the audit guards
+- **`kovo explain unguarded`** lists every mutation, route, and query reachable without auth — the audit guards
   enroll pages in (see [routing](/guides/routing/)) and mutations enroll in (see
   [mutations](/guides/mutations/)).
-- **`--unscoped`** uses the schema's `owner:` annotation to flag data not tied to a principal.
-- **`--endpoints`** is the stable security-review surface: a diffable table of every declared
+- **`kovo explain unscoped`** uses the schema's `owner:` annotation to flag data not tied to a principal.
+- **`kovo explain endpoints`** is the stable security-review surface: a diffable table of every declared
   `endpoint()` and `webhook()`, plus every route returning `respond.file()`/`respond.stream()`, with
   name, method, path, mount mode, auth scheme, and CSRF posture (`checked` or `exempt:<justification>`).
-- **`--revealed`** lists confidentiality reveals, including exact typed declassification-policy
+- **`kovo explain revealed`** lists confidentiality reveals, including exact typed declassification-policy
   rows that need human review.
-- **`--capabilities`** lists held dangerous capabilities and the framework-owned external-Postgres
+- **`kovo explain capabilities`** lists held dangerous capabilities and the framework-owned external-Postgres
   posture-lease contract. It reads the graph, not a running server, so live status, digest, and expiry
   are printed as `not-observed`.
-- **`--access`** lists explicit public/authenticated/machine access decisions.
-- **`--cookies`** lists cookie posture and downgrade findings.
+- **`kovo explain access`** lists explicit public/authenticated/machine access decisions.
+- **`kovo explain cookies`** lists cookie posture and downgrade findings.
 
-Capability-style review currently runs through the concrete shipped surfaces: `--revealed`,
-`--trust`, `--endpoints`, `--sources-sinks`, and the audit-only `--capabilities` table. Do not use
-`--capabilities` as a blocking capability-URL proof or as live lease-health telemetry in technical
+Capability-style review currently runs through the concrete shipped surfaces:
+`kovo explain revealed`,
+`kovo explain trust`, `kovo explain endpoints`, `kovo explain sources-sinks`, and the audit-only
+`kovo explain capabilities` table. Do not use
+`kovo explain capabilities` as a blocking capability-URL proof or as live lease-health telemetry in technical
 preview.
 
 ### `kovo add` — vendor a UI component
@@ -324,7 +326,8 @@ Runs the security and access audits over the app graph as one command:
 kovo audit [--fail-on-findings] [graph.json]
 ```
 
-This rolls up the same auth/ingress posture the `explain --unguarded`/`--unscoped`/`--endpoints`
+This rolls up the same auth/ingress posture as `kovo explain unguarded`, `kovo explain unscoped`,
+and `kovo explain endpoints`
 modes surface, in a form CI can block on with `--fail-on-findings`.
 
 ### `kovo export` — static export
@@ -427,7 +430,7 @@ does not pretend deployment retention has been configured.
 
 The compiler pipeline, hard rules (1:1 mapping, fixpoint, registry atomicity that `kovo dev`/`vp check`
 rely on), and `kovo explain` sub-commands: SPEC §5.1–5.3. The verification surface — TypeScript
-checking, `kovo check`, graph queries over `kovo explain`, and the `--endpoints` machine-ingress
+checking, `kovo check`, graph queries over `kovo explain`, and the `kovo explain endpoints` machine-ingress
 audit: SPEC §11.4. Diagnostic severities and blocking policy: SPEC §11.3. Static export (`kovo
 export`, KV229) and the request shell: SPEC §9.5. The CLI command surface (subcommands, flags,
 positional sub-checks) is derived from `packages/cli/src/command-schema.ts` and verified by the

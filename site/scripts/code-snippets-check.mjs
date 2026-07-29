@@ -368,6 +368,8 @@ function checkDocStyle(markdown, sourcePath) {
   let inFence = false;
   let fenceLang = '';
   let inDetails = false;
+  let hasCanonicalSpecDetails = false;
+  let hasCitation = false;
   let firstCode = null;
   let firstProse = null;
 
@@ -395,6 +397,10 @@ function checkDocStyle(markdown, sourcePath) {
 
     if (inFence) continue;
     if (/<details\b/.test(line)) inDetails = true;
+    if (inDetails && /<summary>Spec & diagnostics<\/summary>/.test(line)) {
+      hasCanonicalSpecDetails = true;
+    }
+    if (/(SPEC §|SPEC section|KV\d{3})/.test(line)) hasCitation = true;
 
     if (
       !inDetails &&
@@ -443,6 +449,31 @@ function checkDocStyle(markdown, sourcePath) {
     // Unresolved identifiers are still enforced by the TypeScript snippet project below. Keep
     // this style pass focused on structural checks; name-only heuristics produce too many false
     // positives on JSX text, env vars, and deliberately declared app-local stubs.
+  }
+
+  if (hasCitation && !CITATION_ALLOWLIST.has(sourcePath) && !hasCanonicalSpecDetails) {
+    issues.push({
+      code: 'progressive-spec-details',
+      line: 1,
+      message:
+        'put SPEC/KV pointers under one collapsed <summary>Spec & diagnostics</summary> section',
+      sourcePath,
+    });
+  }
+
+  if (
+    firstCode &&
+    /^(?:getting-started|guides|tutorial)\//.test(sourcePath) &&
+    !/(^## (?:Assert|Build|Check|Find|Inspect|Run|Scaffold|See|Test|Try|Verify)\b|\bvp check\b|\bkovo check\b|View Source|```(?:console|output|text)\s*$)/imu.test(
+      markdown,
+    )
+  ) {
+    issues.push({
+      code: 'proof-backed-task',
+      line: firstCode.line,
+      message: 'pair the task sample with a runnable/inspectable proof step or captured output',
+      sourcePath,
+    });
   }
 
   if (firstProse) {

@@ -182,7 +182,7 @@ when you're curious; you don't need it to build.
 - [Tutorial](/tutorial/) — build the whole shop, step by step.
 
 <details>
-<summary>Spec references</summary>
+<summary>Spec & diagnostics</summary>
 
 Architecture overview: SPEC §3. Component model and the `kovo-deps`/`data-bind` stamps: SPEC §4.1,
 §4.8. Handlers and the loader: SPEC §4.3, §4.4. Navigation and typed links: SPEC §6.4, §8. The

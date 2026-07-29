@@ -230,7 +230,7 @@ in logs and provider retries.
 
 Raw `endpoint()`, `webhook()`, verifier kits, no ambient session, CSRF exemptions, response header
 channel, typed cookie builder, and KV415: SPEC §9.1. `csrf: false` mutation restrictions and KV418:
-SPEC §6.6. The `--endpoints` audit and printed row vocabulary: SPEC §11.4.
+SPEC §6.6. The `kovo explain endpoints` audit and printed row vocabulary: SPEC §11.4.
 
 API reference: [@kovojs/core](/api/core/), [@kovojs/server](/api/server/).
 

@@ -109,7 +109,7 @@ Dispatch is fixed and printable:
 
 There is no user middleware chain in v1. Control-flow extension points are declared surfaces:
 `sessionProvider`, guards, `endpoint()`, and `webhook()`. That is why `kovo explain endpoints`,
-`--unguarded`, and `--unscoped` can audit the app without executing a browser.
+`kovo explain unguarded`, and `kovo explain unscoped` can audit the app without executing a browser.
 
 ## Load shed before parsing
 

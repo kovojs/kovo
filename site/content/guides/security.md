@@ -70,9 +70,12 @@ failure paths.
 7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
    `createStorageDownloadEndpoint`, and review the download endpoint in `kovo explain endpoints`.
-9. **Run the security review modes in CI** next to `kovo check`: `--unguarded`, `--unscoped`,
-   `--endpoints`, `--revealed`, `--trust`, `--capabilities`, `--access`, `--cookies`, and
-   `--sources-sinks`. Verify detached escape reviews with `--attest` before deployment.
+9. **Run the security review modes in CI** next to `kovo check`: `kovo explain unguarded`,
+   `kovo explain unscoped`, `kovo explain endpoints`, `kovo explain revealed`,
+   `kovo explain trust`, `kovo explain capabilities`, `kovo explain access`,
+   `kovo explain cookies`, and
+   `kovo explain sources-sinks`. Verify detached escape reviews with `kovo explain attest` before
+   deployment.
 10. **Review every escape hatch** in the source/sink table before merging raw protocol code.
 
 ## Type your session
@@ -163,7 +166,7 @@ export const orderHistoryQuery = query({
 ```
 
 A query or write that touches an `owner:`-annotated table whose key predicate the analyzer can't trace
-back to `req.session` is reported by the `--unscoped` audit below. The same predicate extractor that
+back to `req.session` is reported by the `kovo explain unscoped` audit below. The same predicate extractor that
 derives row keys does the tracing. The fix is always the same: filter by a session field, never by an
 unguarded `args.userId`.
 
@@ -201,7 +204,7 @@ mutation must not read `req.session` or run a session/cookie-derived guard; doin
 CSRF/session diagnostic
 because the mutation would skip CSRF while still using ambient browser authority. Route non-browser
 writes through [endpoints and webhooks](/guides/endpoints-webhooks/), where cookies are not
-interpreted and verifier auth is explicit. Every opt-out shows up in the `--endpoints` audit with
+interpreted and verifier auth is explicit. Every opt-out shows up in the `kovo explain endpoints` audit with
 its justification.
 
 If a machine client still uses `mutation()` and your app configures a replay store, bind retries to
@@ -266,7 +269,7 @@ kovo explain cookies graph.json     # cookie posture and downgrade findings
 kovo explain sources-sinks          # source/sink inventory
 ```
 
-### `--unguarded` — what's reachable without auth
+### `kovo explain unguarded` — what's reachable without auth
 
 Lists every mutation, route, and **query** reachable without an `authed` guard. Queries count because
 every query is addressable over GET at `/_q/<key>` and its guard runs on every read. Clean output on
@@ -281,7 +284,7 @@ SUMMARY total=0
 A finding adds one line per reachable item above the summary, so a guard dropped in a refactor turns
 CI red instead of landing quietly.
 
-### `--unscoped` — the IDOR audit
+### `kovo explain unscoped` — the IDOR audit
 
 Lists every query and write touching an `owner:`-annotated table whose key predicate the analyzer
 can't trace to `req.session` — data that should be scoped to its owner but provably might not be:
@@ -296,7 +299,7 @@ SUMMARY total=1
 The fix is to scope the predicate to a session field as shown above; the line disappears when the
 extractor can trace it.
 
-### `--endpoints` — the machine-ingress table
+### `kovo explain endpoints` — the machine-ingress table
 
 The stable machine-ingress audit: every declared `endpoint()` and `webhook()`, plus every route
 returning `respond.file()`/`respond.stream()`. Each row lists name, method, path, mount mode, auth
@@ -316,14 +319,14 @@ SUMMARY total=4
 This answers "what can reach this app, and what can it touch?" — the report is snapshot-locked with
 the rest of the explain output, so a new endpoint or a `csrf: false` opt-out can't slip in unreviewed.
 
-### `--revealed` — confidential data crossing the boundary
+### `kovo explain revealed` — confidential data crossing the boundary
 
 Lists every reviewed confidentiality reveal. A proof-grade row comes from a statically analyzed
 projection that excludes secret columns. An audit-grade row comes from an explicit typed
 declassification policy outside the request-closed module graph and must be reviewed like any
 other escape hatch.
 
-### `--access` — default-deny access decisions
+### `kovo explain access` — default-deny access decisions
 
 Lists the explicit access decision for each query, mutation, route/page, endpoint, or webhook. A
 missing row is a build-blocking access gap; add a guard chain, `publicAccess("reason")`, or verified
@@ -332,8 +335,8 @@ machine auth rather than relying on default reachability.
 ### Capability-style powers
 
 Review capability-style powers through the concrete surfaces that create them today:
-`--revealed` for audit-grade typed declassification, `--trust` for trusted sink escapes,
-`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs.
+`kovo explain revealed` for audit-grade typed declassification, `kovo explain trust` for trusted sink escapes,
+`kovo explain endpoints` for signed download endpoints, and `kovo explain sources-sinks` for the raw capability APIs.
 
 ## Read across owners in an admin tool
 
@@ -550,13 +553,13 @@ content.
 <details>
 <summary>Spec & diagnostics</summary>
 
-The guard chain, combinators, and the `--unguarded` / `--unscoped` audits: SPEC §10.3 (verified
+The guard chain, combinators, and the `kovo explain unguarded` / `kovo explain unscoped` audits: SPEC §10.3 (verified
 against `examples/commerce/src/domain.ts` and `@kovojs/server`'s `guards`). Typed sessions, the
 `sessionProvider`, and guard-failure outcomes: SPEC §6.5. CSRF default-on, anonymous-CSRF, KV418, the
 `kovo-csrf` token, and the soundness boundary: SPEC §6.6, §9.1. Per-submit `Kovo-Idem` and replay
 reservation: SPEC §10.3. The typed read endpoint and per-read guard checks: SPEC §9.4. Live-push
 guard re-checks (fragments must not become a privilege-escalation channel): SPEC §9.3. The `owner:`
-annotation and `exempt`: SPEC §10.1. The verification surface and `--endpoints` machine-ingress
+annotation and `exempt`: SPEC §10.1. The verification surface and `kovo explain endpoints` machine-ingress
 audit: SPEC §11.4. Confidential data and typed declassification: SPEC §6.6, KV435/KV448. Governed write
 provenance, structured obligations, and detached review signatures: SPEC §6.6, §10.3, §11.4,
 KV438. Capability URLs for storage downloads:
