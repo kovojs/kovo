@@ -979,6 +979,14 @@ export async function runBuildCommand(
         ? {}
         : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
     };
+    const discoveryGraph: CoreGraph.KovoCheckInput = {
+      ...graphWithProvenance,
+      // The first bundle is temporary discovery output, but the serializer must remain
+      // fail-closed for every server bundle. Give it the pre-proof posture that production
+      // builds used before the completed-build stamp existed; the final pass below replaces
+      // this with the graph-and-build-token-bound posture before anything is promoted.
+      runtimePosture: createKovoRuntimePostureManifest(graphWithProvenance),
+    };
     // The server compiler contributes client modules, while the final runtime-posture registry
     // embeds the completed graph. Run one non-emitted discovery pass to close that dependency,
     // then prove the final pass retained the exact client-module set before any artifact write.
@@ -990,7 +998,7 @@ export async function runBuildCommand(
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(graphWithProvenance),
+        ...runtimeRegistryWireFactsFromGraph(discoveryGraph),
         ...commonRuntimeRegistry,
       },
       stylesheetAssets: buildCssAssets,
