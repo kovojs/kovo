@@ -14,4 +14,12 @@ functions; transforms as pure `(data, input)` functions; the wire as HTTP.
 API examples and integration harness guidance live in `docs/integration-testing.md` and
 `site/content/guides/testing.md`.
 
+An app-scoped test harness accepts the opaque `KovoApp` plus a digest-verified compiler proof graph.
+Compile-time types flow from the imported contract and declaration handles: query input/result,
+mutation input/result/error union, route params/search, request/session/DB/env, and task/endpoint
+types. The graph supplies runtime identities and proof facts; the token and TypeScript types do not
+substitute for it. A stale, partial, failed-build, digest-mismatched, or wrong-app graph fails before
+one handler runs. Public app tests do not inspect the token, call private aggregate constructors, or
+mock framework internals.
+
 ---

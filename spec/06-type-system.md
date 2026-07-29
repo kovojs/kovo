@@ -56,6 +56,12 @@ and tags: their module-relative exported binding identity is the generated graph
 primitive declares an external address string instead (§4.1). Routes and endpoints keep explicit path
 strings because those strings are the public HTTP addresses.
 
+App-scoped handles are the authoring identity and generated registry keys are compiler/runtime IR.
+An application does not augment `QueryRegistry`, `MutationRegistry`, or `InvalidationSets` by hand
+and does not read a query key to wire optimism. Registry generation resolves each proved handle's
+exported binding and assembly membership in one snapshot; an orphan or duplicate handle prevents
+emission rather than producing a partial registry.
+
 ### 6.1.1 Package component prefixes
 
 Component packages declare their HTML namespace once in their package manifest:
@@ -136,6 +142,85 @@ ERROR KV234 package component prefix conflict.
 | SQL statement safety  | managed DB-handle contract (§10.2/§10.3)                    | executable SQL text reaches framework-managed DB handles only as typed builders, parameterized SQL values, or audited `trustedSql(...)`; scalar request data binds as parameters, while identifiers/keywords come from schema facts or typed allowlists (KV422)              |
 | Output safety         | binding sink + value brand (§4.8)                           | every binding/derive into an unsafe output context (raw HTML, URL-scheme attr, `on*`, `style`, `srcdoc`, script/JSON) is `trustedHtml`/`trustedUrl`-branded or it is KV236                                                                                                   |
 
+#### 6.2.1 App-scoped declaration contract
+
+An app declares its runtime context exactly once with `defineKovo({...})`. The returned
+`KovoContract` is a declaration owner, not a mutable application aggregate. Its receiver methods
+`route`, `layout`, `query`, `mutation`, `endpoint`, and `task` are the ordinary authoring factories;
+each returns a named, declaration-emit-stable opaque handle interface. Request, validated session,
+managed read-only or transactional DB posture, declared environment projection, query input/result,
+mutation error/payload, route params/search, task input, and endpoint request/result types flow from
+that one contract. Authors MUST NOT need to name `AppRequest`, `Reader`, `QueryLoadContext`,
+`MutationContext`, `ComponentRenderSlots`, registry augmentations, or explicit app generics for an
+ordinary declaration.
+
+`defineKovo` snapshots provider descriptors and callbacks but MUST NOT invoke a DB, session/auth,
+environment, CSRF, replay, client-module, or other live provider. Provider evaluation and
+environment parsing begin only when `app.assemble({...})` closes the graph (or when an explicitly
+documented provider's existing contract requires a later request-time call). Importing the contract
+or any declaration module is therefore provider-inert. A provider throw during assembly fails that
+assembly before a `KovoApp` is returned; it cannot leave a partially registered application.
+
+Every declaration handle is registered by exact object identity in module-private state owned by
+the `KovoContract` that minted it. A module-private `unique symbol` may make accidental structural
+construction a TypeScript error, but the runtime proof is exact private-map membership. A handle
+from another contract, a copied/spread object, a structurally similar value, or a handle from a
+duplicate `@kovojs/server` package instance MUST fail assembly with an actionable diagnostic that
+names the declaration kind and the two resolved package identities when available. Public
+structural brand fields and `Symbol.for()` are forbidden. The compiler additionally detects
+duplicate Kovo package instances before authored evaluation; the runtime check is the fail-closed
+floor for direct/custom hosts.
+
+`app.assemble({...})` is the sole public application assembly operation and succeeds at most once
+for one contract identity. Its declaration arrays are dense, finite, snapshotted in authored order,
+and contain only handles minted by that exact contract. The result is an opaque minimal `KovoApp`
+token; normalized options, providers, route/query/mutation registries, runtime authorities, DB
+carriers, and generated registries remain framework-private. Public `CreateAppOptions` and a
+structural `createApp()` aggregate are not app API. A custom adapter accepts the same opaque token
+through a focused adapter entrypoint and cannot inspect or reconstruct its private state.
+
+Assembly membership is compiler-checked, not merely a hand-maintained runtime convention. For each
+proved `defineKovo` receiver, every compiled declaration handle reachable from that receiver MUST
+appear exactly once in the single proved `assemble` call. A missing handle, duplicate membership,
+dynamic/spread declaration list, second assembly, unresolved handle, or cross-contract handle is a
+build diagnostic before output. The diagnostic for a missing handle includes one deterministic
+source edit that appends the exported handle to the matching kind array; applying the edit twice is
+a no-op. Runtime assembly repeats the membership and duplicate checks for uncompiled/custom hosts.
+There is no ambient registration, import-order discovery, process-global pending registry, or
+fallback from the closed application inventory.
+
+Development HMR constructs a fresh contract and closed graph for the new module generation, then
+atomically swaps it only after compile and assembly succeed. It discards the old generation's
+private membership and provider references after in-flight requests release them; late declarations
+cannot join either generation. A failed update keeps the prior closed graph. HMR never invokes
+`assemble` twice on one contract or accumulates process-global registrations.
+
+The app-scoped access algebra reuses the executable self-naming guards of §10.2. The contract exposes
+`app.authenticated`, plus parameterized `app.role(...)`, `app.rateLimit(...)`,
+`app.owns(keyOf, ownsRow)`, and `app.all(...)`; these return the same guard values runtime dispatch
+executes and preserve their request refinements. They are not type markers or audit-only labels.
+`access: [guard, ...]`, `publicAccess(reason)`, and verified machine access remain the mutually
+exclusive §10.2 decisions, and missing or mixed decisions remain KV436. Binding a guard to a
+contract narrows its request/session type but does not change the authorization proof boundary:
+compiler census plus the exact runtime guard chain remain authoritative.
+
+Factory results expose only purpose-specific operations. In particular, a query handle exposes its
+inferred input/result types, component binding, and the §10.4 `optimistic` constructor; it does not
+expose a writable registry key. A mutation handle exposes its inferred input/result/error union for
+forms and tests without exposing private runtime callbacks. A component that binds a mutation
+handle receives its form failure and field-error slots from that handle (§6.3), so a parallel
+author-maintained slot registry is not part of the public contract. Public handle types keep
+conditional machinery behind named interfaces and errors must anchor on the offending definition
+property rather than expand private witness types.
+
+The compiler recognizes an app-scoped declaration only when the call receiver is proven by exact
+TypeScript symbol identity to originate from one direct `defineKovo` result under the receiver
+provenance rules in §5.2. A same-named local, cast, wrapper, destructured method, computed property,
+mutable/ambiguous alias, duplicate package identity, or structurally copied receiver does not mint
+factory provenance. Once proven, the factory lowers to the same finite declaration and
+`server.handler.root` facts as the corresponding primitive; the facade never replaces the
+AST/provenance gate or a runtime sink check.
+
 Client-handler publication has a deliberately narrower value grammar than the general JSON wire.
 `publishToClient(value, { reason })` accepts exactly `string | number | boolean | null`. It rejects
 every object, array, symbol, bigint, undefined, and function at runtime using only primitive
@@ -173,6 +258,9 @@ escape hatch for custom UI, with each bound mutation exposing
 `forms.<mutation>.failure: null | { code; payload; fieldErrors? }`. The failure value is scoped to
 the submitted form instance for that render and is cleared by the next successful render of that
 instance. `ctx.submit(mutation, { input, onError })` receives the same exhaustive typed-error union.
+Under the app contract, `<mutation handle>.form` and component mutation binding infer this surface
+directly from the handle; `ComponentRenderSlots` and a separately authored form-state map are not
+public prerequisites.
 
 Repeated forms must provide stable identity through authored `key` or serializable keyed component
 props; the compiler lowers it to `kovo-key` and derives the submitted-form fragment target. Hidden
@@ -221,7 +309,13 @@ const f = form.get('/products');
 <a href="/products/p1?max=500">View</a>
 ```
 
-`redirect('/products/:id', { params })` types the POST-redirect-GET path (§9.1) the same way. Residual literal `href`s in hand-authored IR are validated against the route table at compile time (KV220); full-origin URLs and an `external` marker opt out. The propagation property of §6.2 holds for navigation too: renaming a route path turns every `<Link>`, GET form, and `redirect()` in the app red under `vp check`.
+`Link` is JSX-only: `<Link to={productRoute} params={...}>...</Link>` renders an anchor and has no
+imperative overload or descriptor result. `href(productRoute, { params, search })` is the sole
+imperative URL-string constructor. GET-form helpers infer their public record directly from the
+route's search schema and expose only the form and typed control builders; their conditional helper
+families are private implementation types.
+
+`redirect(productRoute, { params })` types the POST-redirect-GET path (§9.1) the same way. Residual literal `href`s in hand-authored IR are validated against the route table at compile time (KV220); full-origin URLs and an `external` marker opt out. The propagation property of §6.2 holds for navigation too: renaming a route path turns every `<Link>`, GET form, and `redirect()` in the app red under `kovo check`.
 
 Two more route-level affordances close the request shell: **guards** — `guard:` on a `route()` runs the same combinator chain as mutations (§10.3) before `page`, refines `req.session` identically, and enrolls the page in the `kovo explain --unguarded` audit; and **`notFound()`** — returning `notFound()` from `page` renders the app's 404 page with the correct status, so status codes stay part of the typed surface rather than ad-hoc response construction. `redirect()` and `notFound()` are the sanctioned non-200 page outcomes in v1.
 
@@ -538,7 +632,8 @@ call shape all fail closed.
 
 **Capability-closed untrusted roots (normative, supported-subset static gate).** Before evaluating
 authored app modules, `kovo build` MUST scan the immutable app-source snapshot and census every
-application aggregate created by `createApp()` (including its lifecycle callbacks), route, layout,
+proved `defineKovo()` contract and its single `assemble()` closure (including lifecycle callbacks),
+route, layout,
 query, mutation, endpoint or low-level request adapter, webhook, durable or scheduled task,
 serialized browser handler, and supported agent/tool callback as an untrusted-data root. For each
 root, Kovo computes a transitive module/callback graph across eager imports, re-exports, local aliases
@@ -807,6 +902,14 @@ poison box. A module with no such root does not gain a trusted root merely by im
 This layer deliberately does not claim general JavaScript interpretation or same-realm isolation.
 The emitted operation lists are immutable, inspectable audit evidence consumed by component graphs
 and `kovo explain`; they are not an opcode sandbox and do not replace the actual C9 sink checks.
+For an app-scoped declaration, the factory root includes the receiver proof from §6.2.1. The
+compiler follows ordinary immutable local import/re-export aliases back to the exact
+`defineKovo()` result and binds the declaration to that contract's one `assemble()` closure before
+authored evaluation. A destructured factory, computed property, wrapper result, structural copy,
+cast, mutable or ambiguous alias, duplicate package identity, or declaration omitted from assembly
+is an unresolved root. The facade cannot make a same-named callback or structurally similar object
+trusted; successful receiver proof only enrolls the existing finite root analysis below.
+
 Every supported factory root MUST resolve from an inline definition object to either an inline
 function or one exact immutable same-file function. Definition spreads/computed root keys, missing
 roots, imported/aliased/reassigned roots, and dynamic definition carriers are KV449. This includes
@@ -950,10 +1053,11 @@ ergonomics; exact runtime registry membership and config preflight own enforceme
 
 **Operator-environment trust root (normative).** Bootstrap MUST pin operator environment names and values before authored evaluation, and later security lookup MUST preserve the host's name semantics. In particular, Windows names are case-insensitive: the pinned authority MUST resolve every case spelling equivalently and fail closed if an injected source contains case-fold-colliding names, while app env-schema snapshots retain the operator's original key spellings.
 
-**Application config-secret door (normative).** `createApp({ env: s.object(...) })` is the sole
+**Application config-secret door (normative).** `defineKovo({ env: s.object(...) })` is the sole
 public operator-environment projection. The runtime MUST admit only a genuine framework `s.object`
 schema, parse the bootstrap-pinned source once, retain only declared own fields, freeze that parsed
-record, and expose it as the precisely inferred read-only `app.env`. The raw operator snapshot and
+record, and expose it only through the precisely inferred read-only declaration/request context.
+The opaque public `KovoApp` token has no structural `env` field. The raw operator snapshot and
 undeclared keys remain framework-internal. A declared env schema failure refuses boot in every
 mode: development may warn for a weak framework signing secret, but it cannot return a typed
 `app.env` whose value never validated. `kovo build` is not runtime boot and MUST NOT require or
@@ -1081,7 +1185,7 @@ class, and the reachable delegated non-claim.
 
 **Outbound egress: the positive framework capability (normative).** Untrusted-data-reachable framework code MUST have one supported positive HTTP network door: the exact framework-owned `ctx.fetch` supplied to durable/scheduled tasks, verified webhooks, and any supported agent-tool callback. A runner or app MUST NOT replace that function. Raw `fetch`, `node:http`, `node:https`, `net`, datagram, proxy-agent, database-driver, worker, process, native-socket, or dynamically loaded network authority remains unavailable from that graph unless a separately reviewed framework door explicitly owns it. `egress.allowDestinations` MUST be a dense list of exact HTTP(S) origins. Boot MUST reject an empty, malformed, credential-bearing, path/query/fragment-bearing, non-HTTP(S), or non-string entry instead of warning and widening or silently narrowing posture. Boot canonicalizes scheme, URL-normalized hostname (including Unicode, legacy IPv4, IPv6, case, and a DNS trailing dot), and effective port into one origin identity. The initial request and every redirect or pooled-request origin MUST match that canonical set **before DNS, proxy selection, pool reuse, or dial**. Every admitted hostname request/hop MUST resolve all candidate addresses and classify all of them; any closed answer closes the whole request. Every new TCP dial MUST classify the exact resolver result that Node may select and pin that immutable result into the dial, so DNS rotation is admitted only when the origin remains declared and every new answer remains safe. A declared private origin additionally needs the ambient `allowInternal` posture below. A framework-created database socket is a separate, module-private exact-endpoint capability: it may follow DNS rotation for its registered Postgres host/port without opening that endpoint to unrelated sockets. Arbitrary application proxy/dispatcher configuration is unsupported and MUST fail boot or be stripped from `ctx.fetch`; an operator-controlled transparent proxy remains deployment authority outside this application-level origin proof and does not turn the private-network floor into a sandbox. Future agent-tool APIs MUST supply this same contextual door before they are supported. Same-process deliberately malicious code or intrinsic poisoning is outside this construction proof, as stated by the capability-closure boundary above.
 
-**Outbound egress: the private-network deny floor (normative, runtime defense-in-depth — NOT a proof).** The threat is the **SSRF network position**: a reflected or forged inbound request coaxes the server into making an _outbound_ request to an address it must never reach — cloud instance-metadata (`169.254.169.254` and the AWS ECS/EKS variants `169.254.170.2`/`169.254.170.23`, the AWS IMDSv6 `fd00:ec2::254`, Azure's IMDS plus its `IDENTITY_ENDPOINT` loopback, GCP's `metadata.google.internal`), localhost sidecars, or internal-only services on RFC1918 / link-local / unique-local / CGNAT ranges. The payoff is managed-identity credential theft off the metadata endpoint, or an internal-service pivot. Kovo installs the floor at `createApp()` by default and accepts explicit operator config through `createApp({ egress: { allowInternal: ['otel:4318', '10.0.5.2:6379'] } })` with the following normative behavior. **All public/external egress is UNRESTRICTED at this ambient process floor** — the positive framework capability above is the separate control that closes public destinations reached through `ctx.fetch`. **Private / loopback / link-local / unique-local / CGNAT / IANA-special destinations are DENIED by default in production and whenever an explicit `egress` object is supplied**, reachable only when the exact `host:port` is in the operator's narrow `allowInternal` allowlist (broad CIDR entries are flagged and warned). In development, an omitted `egress` option still installs both enforcement layers and still denies cloud metadata, but permits non-metadata private-network destinations so localhost DB/Redis/OTel/Ollama sidecars do not brick ordinary local boot; pass `egress: { allowInternal: [] }` in development to exercise production empty-allowlist semantics. A blocked connection throws a typed 502-class `EgressBlockedError` naming the destination and the remediation. **The cloud instance-metadata endpoint is DENIED by default and is NEVER reachable via `allowInternal`** — it is reachable only inside a module-private `metadataAllowed` `AsyncLocalStorage` frame entered ONLY by the per-cloud credential factories `awsCredential()` / `gcpCredential()` / `azureCredential()`, which wrap the cloud SDK's credential provider so a token _refresh_ re-enters the frame. There is deliberately no generic `withMetadataAccess` helper. A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays denied at the very same IP — provenance-as-current-frame, unforgeable by SSRF (it survives the `await`/timer boundaries that destroy stack frames) yet still runtime-DiD, not a proof. **DNS64/NAT64 topology is explicit operator authority.** Kovo always decodes RFC 6052's well-known `64:ff9b::/96` carrier. A deployment using any Network-Specific Prefix MUST list every active translator prefix in `egress.nat64Prefixes`; automatic RFC 7050 discovery or A/AAAA correlation is not accepted as the policy root. Only `/32`, `/40`, `/48`, `/56`, `/64`, and `/96` are valid. Boot MUST reject malformed CIDRs, set host bits, a non-zero `/96` u octet, duplicate/overlapping configured prefixes, and any configured prefix that overlaps the implicit well-known decoder. The framework snapshots and canonicalizes the resulting prefix set as process-global posture. At the sink, a matching configured prefix is decoded using RFC 6052 Table 1 before the context-free IPv6 registry verdict: the u octet MUST be zero for layouts shorter than `/96`, suffix bits are ignored, and the embedded IPv4 destination is classified normally. This explicit topology may expose public IPv4 through RFC 8215's local-use `64:ff9b:1::/48`, but embedded metadata remains metadata and can never be reopened by `allowInternal`. The decision rule runs **per request and per redirect hop, at BOTH enforcement layers**: resolve the host → normalize (IPv4-mapped `::ffff:`, decimal/octal/hex, well-known NAT64, and configured Network-Specific Pref64) → pin the exact validated resolver result from which Node may select a dial address → public IP allow; metadata IP allow iff the `metadataAllowed` frame is active; other non-public IP allow iff the development omitted-config posture permits it or `host:port ∈ allowInternal`; anything not confidently classified as public fails **closed**. Enforcement is **dual-layer because a single layer fails open**: (a) a custom undici dispatcher at the per-request `dispatch()` level — pooled-socket reuse skips the per-connection hook, so a connect-only check would pass the _second_ request to an origin; and (b) the `node:http`/`node:https` + `net.Socket.prototype.connect` layer — AWS IMDS via `@smithy` uses raw `node:http` and bypasses undici entirely — which also injects a pinning `lookup` so a TOCTOU DNS-rebind cannot swap a public answer for a private one between check and dial. Bootstrap installs both layers at the `createApp` chokepoint and runs a **loud startup self-probe** that warns unmissably when the floor is not installed; production refuses boot when the floor is missing, partial, tampered, or disabled without an audited non-empty opt-out justification. Because monkeypatches do not cross `Worker`/`child_process` boundaries, every worker/child bootstrap that serves requests MUST re-install (the self-probe is the safety net). Prototype-freezing is **opt-in / off by default** (it breaks Datadog/OTel/nock). This control is **labeled everywhere as a fail-closed runtime defense-in-depth floor, never a by-construction proof**. Residual fail-open holes (enumerated, by design): same-process app code can re-patch `net.Socket.prototype.connect` or call `setGlobalDispatcher` after the floor; `Worker`/`child_process`/native-socket paths the JS layer never sees; arbitrary raw per-call dispatchers/proxy agents outside the supported capability graph; and provider-shape drift in a future undici/node internal. The floor is **redundant on Lambda/PaaS/Workload-Identity-Federation** where IMDSv2 / hop-limits already close the metadata path; it earns its keep on long-lived managed-identity VMs and against the internal-service pivot.
+**Outbound egress: the private-network deny floor (normative, runtime defense-in-depth — NOT a proof).** The threat is the **SSRF network position**: a reflected or forged inbound request coaxes the server into making an _outbound_ request to an address it must never reach — cloud instance-metadata (`169.254.169.254` and the AWS ECS/EKS variants `169.254.170.2`/`169.254.170.23`, the AWS IMDSv6 `fd00:ec2::254`, Azure's IMDS plus its `IDENTITY_ENDPOINT` loopback, GCP's `metadata.google.internal`), localhost sidecars, or internal-only services on RFC1918 / link-local / unique-local / CGNAT ranges. The payoff is managed-identity credential theft off the metadata endpoint, or an internal-service pivot. Kovo installs the floor when `app.assemble()` closes the `defineKovo` contract and accepts explicit operator config through `defineKovo({ egress: { allowInternal: ['otel:4318', '10.0.5.2:6379'] } })` with the following normative behavior. **All public/external egress is UNRESTRICTED at this ambient process floor** — the positive framework capability above is the separate control that closes public destinations reached through `ctx.fetch`. **Private / loopback / link-local / unique-local / CGNAT / IANA-special destinations are DENIED by default in production and whenever an explicit `egress` object is supplied**, reachable only when the exact `host:port` is in the operator's narrow `allowInternal` allowlist (broad CIDR entries are flagged and warned). In development, an omitted `egress` option still installs both enforcement layers and still denies cloud metadata, but permits non-metadata private-network destinations so localhost DB/Redis/OTel/Ollama sidecars do not brick ordinary local boot; pass `egress: { allowInternal: [] }` in development to exercise production empty-allowlist semantics. A blocked connection throws a typed 502-class `EgressBlockedError` naming the destination and the remediation. **The cloud instance-metadata endpoint is DENIED by default and is NEVER reachable via `allowInternal`** — it is reachable only inside a module-private `metadataAllowed` `AsyncLocalStorage` frame entered ONLY by the per-cloud credential factories `awsCredential()` / `gcpCredential()` / `azureCredential()`, which wrap the cloud SDK's credential provider so a token _refresh_ re-enters the frame. There is deliberately no generic `withMetadataAccess` helper. A reflected SSRF never calls a factory, so it never enters the frame, so metadata stays denied at the very same IP — provenance-as-current-frame, unforgeable by SSRF (it survives the `await`/timer boundaries that destroy stack frames) yet still runtime-DiD, not a proof. **DNS64/NAT64 topology is explicit operator authority.** Kovo always decodes RFC 6052's well-known `64:ff9b::/96` carrier. A deployment using any Network-Specific Prefix MUST list every active translator prefix in `egress.nat64Prefixes`; automatic RFC 7050 discovery or A/AAAA correlation is not accepted as the policy root. Only `/32`, `/40`, `/48`, `/56`, `/64`, and `/96` are valid. Boot MUST reject malformed CIDRs, set host bits, a non-zero `/96` u octet, duplicate/overlapping configured prefixes, and any configured prefix that overlaps the implicit well-known decoder. The framework snapshots and canonicalizes the resulting prefix set as process-global posture. At the sink, a matching configured prefix is decoded using RFC 6052 Table 1 before the context-free IPv6 registry verdict: the u octet MUST be zero for layouts shorter than `/96`, suffix bits are ignored, and the embedded IPv4 destination is classified normally. This explicit topology may expose public IPv4 through RFC 8215's local-use `64:ff9b:1::/48`, but embedded metadata remains metadata and can never be reopened by `allowInternal`. The decision rule runs **per request and per redirect hop, at BOTH enforcement layers**: resolve the host → normalize (IPv4-mapped `::ffff:`, decimal/octal/hex, well-known NAT64, and configured Network-Specific Pref64) → pin the exact validated resolver result from which Node may select a dial address → public IP allow; metadata IP allow iff the `metadataAllowed` frame is active; other non-public IP allow iff the development omitted-config posture permits it or `host:port ∈ allowInternal`; anything not confidently classified as public fails **closed**. Enforcement is **dual-layer because a single layer fails open**: (a) a custom undici dispatcher at the per-request `dispatch()` level — pooled-socket reuse skips the per-connection hook, so a connect-only check would pass the _second_ request to an origin; and (b) the `node:http`/`node:https` + `net.Socket.prototype.connect` layer — AWS IMDS via `@smithy` uses raw `node:http` and bypasses undici entirely — which also injects a pinning `lookup` so a TOCTOU DNS-rebind cannot swap a public answer for a private one between check and dial. Bootstrap installs both layers at the assembly chokepoint and runs a **loud startup self-probe** that warns unmissably when the floor is not installed; production refuses boot when the floor is missing, partial, tampered, or disabled without an audited non-empty opt-out justification. Because monkeypatches do not cross `Worker`/`child_process` boundaries, every worker/child bootstrap that serves requests MUST re-install (the self-probe is the safety net). Prototype-freezing is **opt-in / off by default** (it breaks Datadog/OTel/nock). This control is **labeled everywhere as a fail-closed runtime defense-in-depth floor, never a by-construction proof**. Residual fail-open holes (enumerated, by design): same-process app code can re-patch `net.Socket.prototype.connect` or call `setGlobalDispatcher` after the floor; `Worker`/`child_process`/native-socket paths the JS layer never sees; arbitrary raw per-call dispatchers/proxy agents outside the supported capability graph; and provider-shape drift in a future undici/node internal. The floor is **redundant on Lambda/PaaS/Workload-Identity-Federation** where IMDSv2 / hop-limits already close the metadata path; it earns its keep on long-lived managed-identity VMs and against the internal-service pivot.
 
 **Scoped keys for non-database state (normative, fail-closed runtime authority).** Every
 app-addressable key that reaches a non-database stateful sink MUST be a runtime-opaque `ScopedKey`,

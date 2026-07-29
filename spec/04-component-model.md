@@ -80,6 +80,20 @@ attributes such as `key`, `kovo-key`, `style`, and `styles`.
 - Declared `clocks` are part of the component definition contract. They describe named `now.*`
   inputs for time-dependent render positions and derives; undeclared clock reads remain KV312/KV315.
 
+The public result is the small opaque `Component<Props>` callable contract. Its call/JSX props are
+the derived call-site props plus framework-owned JSX attributes; it has no public `.definition`,
+query-key metadata, render-slot plumbing, or conditional helper-family fields. The framework keeps
+the definition in module-private identity state and compiler/server internals resolve it through a
+private ABI. Public `AnyFunction`, `IsAny`, `Checked*`, `ComponentCall*`, internal prop/query
+metadata, and `ComponentRenderSlots` are not app API. TypeScript opacity is ergonomics; compiler
+provenance and exact runtime registry membership own definition acceptance.
+
+Mutation slots are inferred from mutation handles named in the component definition or used by a
+typed mutation form in its render. The third render argument exposes only the resulting
+handle-indexed `forms` failures, field errors, children, and named slots; authors do not declare a
+parallel slot-map type or augment a registry. A mutation code or payload-field rename therefore
+turns its exact component use red without exposing framework slot-support types.
+
 ### 4.2 Rendered output (the IR's runtime form)
 
 ```html

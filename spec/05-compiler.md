@@ -25,7 +25,12 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
 3. **Fixpoint invariant.** `compile(compile(src)) === compile(src)`; the IR is valid input. CI test ships in the starter template. Paired with a **semantic gate**: `render(src) ≡ render(compile(src))` — authored and lowered components must produce byte-identical HTML over the test corpus (a browser-free differential suite), so the fixpoint proves behavior preservation, not merely syntactic idempotence.
 4. **Platform-behavior emission.** Where the compiler proves a handler equivalent to a declarative platform feature (dialog open/close → invoker commands; popovers; `<details>`; pure-CSS state via `:has()`), it emits the attribute and drops the handler. `kovo explain` reports each substitution.
 5. **Teaching errors.** Every diagnostic shows the lowering: what would have been generated, why it can't be, and the fix menu.
-6. **Registry atomicity.** Registry `.d.ts` emission is part of every compile; `vp dev` and `vp check` regenerate registries before type-checking runs. A stale registry is unrepresentable, not just unlikely — the typegen failure modes (fresh clone red until first generation, watch-mode races) are designed out.
+6. **Registry and app-membership atomicity.** Registry `.d.ts` emission and the app-contract
+   membership check (§6.2.1) are part of every compile; `kovo dev`, `kovo check`, and `kovo build`
+   derive both from one immutable project snapshot before type-checking or authored evaluation.
+   A stale registry, a compiled app-scoped declaration omitted from `assemble`, or membership from
+   another module generation is unrepresentable, not just unlikely. Emitted registries contain
+   source-derived identities; they are not an ambient runtime registration mechanism.
 7. **TSX-only authoring.** TSX is the sole app-authoring surface. The lowered IR is an output format: valid Kovo source for fixpoint/render-equivalence gates and readable artifacts, but not something app code hand-authors or vendors. Hand-authored lowered IR in app source is **KV235** with a teaching message that shows the TSX equivalent. There is no suppression pragma or ejection workflow in v1; a front-end gap is fixed in the compiler or recorded as a SPEC conflict.
 8. **Public imports in app source.** App-authored source may import Kovo packages only through documented public entrypoints. Imports from framework-maintenance subpaths (`@kovojs/*/internal`, `kovo/internal`) and compiler-emitted ABI subpaths (`@kovojs/*/generated`) are invalid in app source and must produce a teaching diagnostic. Compiler-emitted modules may import generated ABI subpaths such as `@kovojs/browser/generated`; those imports are compiler-owned artifacts, not app-authored API. Generated app artifacts are reproducible outputs, not app dependencies: app-authored modules MUST NOT import app-local generated modules such as `src/generated/*`, and app-local generated artifacts MUST NOT be checked in. App-facing tests and scripts use authored entry points plus public `kovo emit`/`kovo explain`/`kovo check` flows; direct generated reads are reserved for compiler/build internals and on-demand verification artifacts that are created during the command.
 9. **Production build preflights.** `kovo build` MUST fail before writing deploy artifacts when the app's nearest TypeScript project fails `tsc --noEmit` or when the build-derived graph fails the full `kovo check` verifier. The standalone `kovo check` command remains the stable, inspectable `kovo-check/v1` surface for CI logs and agent debugging; build reuses that verifier as a deployment gate, not a separate policy.
@@ -47,8 +52,15 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
     escapes, ambiguous receiver joins, and unreviewed authority transfer fail with **KV449** before
     output. The generated wrapper and manifest are valid only as provenance-marked compiler IR for
     the rule #3 fixpoint/render-equivalence gates; rule #7/#8 still forbid app-authored lowered IR or
-    generated-ABI imports. A missing, spread/computed, imported, aliased, reassigned, or otherwise
-    unresolved root is KV449; it cannot disappear by producing no manifest row.
+    generated-ABI imports. An app-scoped root additionally carries the exact proved `defineKovo`
+    receiver and owning `assemble` identities from §6.2.1. Direct receiver calls and ordinary
+    immutable local import/re-export aliases are supported; a destructured factory, wrapper result,
+    computed member, cast/structural copy, mutable or ambiguous receiver, duplicate package
+    identity, missing assembly membership, or second assembly is closed before output. Once
+    enrolled, `app.query`/`app.mutation`/`app.endpoint`/`app.task` emit the same
+    `server.handler.root` family and callback facts as their primitive counterparts. A missing,
+    spread/computed, imported, aliased, reassigned, or otherwise unresolved callback root is KV449;
+    it cannot disappear by producing no manifest row.
 
 #### 5.2.1 Client representation, render-plan, and app-build identities (normative)
 

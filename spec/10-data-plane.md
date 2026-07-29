@@ -34,9 +34,10 @@ A table may opt out of domain mapping with `kovo({ exempt: true })` (silencing K
 ### 10.2 Queries
 
 ```ts
-// cart.queries.ts — session-derived, no client-visible args
-export const cartQuery = query({
-  load: (db, req) =>
+// cart.queries.ts — `app` owns request/session/DB/env inference
+export const cartQuery = app.query({
+  access: [app.authenticated],
+  load: (_input, { db, request }) =>
     db
       .select({
         count: count(cartItems.id),
@@ -45,21 +46,29 @@ export const cartQuery = query({
       .from(carts)
       .leftJoin(cartItems, eq(cartItems.cartId, carts.id))
       .leftJoin(products, eq(products.id, cartItems.productId))
-      .where(eq(carts.id, req.session.cartId)),
+      .where(eq(carts.id, request.session.cartId)),
 });
 
 // product.queries.ts — parameterized: args declared once, schema-style
-export const productQuery = query({
+export const productQuery = app.query({
   args: s.object({ id: s.string() }), // coerced wherever args arrive: props, route params, /_q/ search params (§9.4)
-  guard: authed, // optional — checked at page render AND at every typed read / live push
-  // guards receive the query's validated args/instance key (§10.3): guard: owns((a) => a.id, products.id)
-  load: (db, args, req) =>
+  access: [app.authenticated], // checked at page render AND at every typed read / live push
+  // guards receive the validated instance key (§10.3): app.owns((a) => a.id, products.id)
+  load: (args, { db }) =>
     db
       .select({ name: products.name, stock: products.stock })
       .from(products)
       .where(eq(products.id, args.id)),
 });
 ```
+
+The app-scoped query signature is `load(input, context)`. `input` is inferred from `args` and is
+`undefined` for an unparameterized query. `context` exposes the contract's precisely inferred,
+validated `request`, `session`, read-only managed `db`, read-only `env`, and request `signal`.
+There is no alternate positional `(db, args, request)` app signature. The named
+`QueryHandle<Input, Result>` carries the inferred JSON result without publishing loader callbacks
+or private registry metadata; binding it in a component supplies that result under the declared
+query property name.
 
 Derived from this one expression, statically:
 
@@ -100,6 +109,11 @@ the static gate and MUST also fail closed in the public constructor and app snap
 Authors compose executable guards in one `access: [guard(...), ...]` chain (or, while using the
 legacy field alone, one `guards.all(...)` guard). Endpoints and webhooks do not accept the legacy
 `guard` field at all; their executable guard chain belongs in `access`.
+
+App-scoped factories accept only the canonical `access` shape. Their executable guard values come
+from the contract-bound algebra (`app.authenticated`, `app.role`, `app.rateLimit`, `app.owns`, and
+`app.all`) or another documented exact guard value. The legacy `guard` spelling exists only while
+reading pre-contract primitive source during migration and is not a second app-contract behavior.
 
 A surface with **none** of these is **undecided**: the static app graph classifies it
 `decision: 'missing'` and the build fails with **KV436** (§11.3). An existing guard already _counts_
@@ -698,10 +712,19 @@ posture preserves the bounded enhanced scope plus the canonical 49-code-unit ide
 epoch suffix while keeping the outer frame within 4,096 code units. Public/principal keys and every other
 system posture retain the ordinary 1,024-code-unit app-key bound.
 
+The app-scoped mutation signature is `handler(input, request, context)`. `input` comes from the
+declared schema; `request` carries the validated contract request/session and transaction-scoped
+managed DB posture; `context` exposes `fail`, the declared error union, signal, and other
+framework-owned mutation operations. `fail(code, payload)` is keyed to the mutation's exact
+`errors` object, and both code renames and payload-field renames propagate to form slots and tests.
+Endpoint method, access, authentication, CSRF, body, cache, and response posture remain explicit
+even though their request/result types are inferred. A factory facade MUST NOT synthesize an
+allow/public/CSRF/response decision from a provider type.
+
 The handler `request.db` type is a defense-in-depth authoring guardrail, not the security proof:
 it preserves the configured DB provider's read/write surface while hiding public transaction
 openers such as `.transaction()`, so nested transaction/open-handle misuse is a TypeScript error
-on the normal `createApp({ mutations })` path. TypeScript cannot prove arbitrary object lifetime
+on the normal `app.mutation()` path. TypeScript cannot prove arbitrary object lifetime
 or reject every closure/module-scope capture of a handler parameter; runtime transaction ownership,
 rollback-on-throw, SQL provenance gates, and fail-closed sinks remain authoritative. External I/O
 inside a mutation handler is not a mutation-specific type or KV-gate error; it is governed by the
@@ -809,6 +832,35 @@ For every accepted `trustedAssign`, `kovo build` emits an **unsigned** `.kovo/es
 Optimism is keyed to **queries** (the data), never islands. One transform per (mutation × invalidated query); every island consuming the query updates from it — including islands written after the mutation (Constitution #2).
 
 **Hand-written:** transforms are authored in the mutation file as pure `(data, input)` functions against the query's inferred result type. **Explicitly deferred:** `'await-fragment'` documents "considered; 1-RTT latency accepted here."
+
+The public authoring spelling binds by query-handle identity rather than by registry augmentation
+or an authored query key:
+
+```ts
+optimistic: [
+  cartQuery.optimistic((data, input) => ({ ...data, count: data.count + input.quantity })),
+  productQuery.optimistic({
+    keys: (input) => [{ id: input.productId }],
+    apply: (product, input) => ({ ...product, stock: product.stock - input.quantity }),
+  }),
+]
+```
+
+The bare callback is legal only for a query with no client-visible instance key. A keyed query
+requires `{ keys, apply }`; `keys(input)` returns a bounded dense list of that query's exact inferred
+args shape and each instance receives the same pure transform. Each invalidated query handle occurs
+exactly once with status `derived`, one hand-written transform, or `await-fragment`. Duplicate,
+unrelated, cross-app, copied, or non-invalidated handles are hard errors, as is a keyed query with
+missing, empty, or malformed instance keys. The compiler resolves handle symbol identity to the
+source-derived registry identity and emits the same string-keyed wire/loader IR internally; app
+source does not author that key or augment `InvalidationSets`.
+
+Optimistic handle references must be statically initialized without an import cycle. A top-level
+query-handle read whose module strongly depends back on the declaring mutation module is a teaching
+diagnostic naming the cycle and the extraction fix; runtime `undefined` or import-order-dependent
+registration is not accepted. The transform remains a pure value-returning function. Kovo may use
+framework-owned bounded copy-on-write internally, but it MUST NOT expose a mutable draft contract or
+weaken determinism, touched-path bounds, rollback, settlement, or emitted-transform equivalence.
 
 **Derived:** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Hand-written transforms share the same IR, so an app can override generated transforms pair by pair.
 
