@@ -10,7 +10,7 @@ export const ProductHero = component({
       <img
         alt={product.imageAlt}
         data-transition="photo"
-        src={trustedUrl(product.imageSrc, 'fixture-owned product hero image source')}
+        src={trustedUrl(product.imageSrc, { reason: 'fixture-owned product hero image source' })}
         viewTransitionName="product-photo"
       />
       <h1 data-transition="title" viewTransitionName="product-title">

@@ -32,7 +32,10 @@ export async function renderInteractiveGalleryRoute(): Promise<string> {
       {renderedDemos.map(({ demo, rendered }) => (
         <section data-gallery-interactive-route={demo.name} id={demo.name}>
           <h2>{demo.title}</h2>
-          {trustedHtml(renderedValueToHtml(rendered))}
+          {trustedHtml(renderedValueToHtml(rendered), {
+            reason: 'gallery page embeds output from its reviewed demo renderer',
+            source: 'examples/gallery/src/interactive-docs.tsx',
+          })}
         </section>
       ))}
     </main>,

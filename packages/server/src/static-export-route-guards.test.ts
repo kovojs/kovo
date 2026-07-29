@@ -275,7 +275,7 @@ describe('server static export', () => {
           },
         }),
         route('/docs/intro/', {
-          page: () => trustedHtml('<main>Duplicate intro</main>'),
+          page: () => trustedHtml('<main>Duplicate intro</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -382,7 +382,7 @@ describe('server static export', () => {
                 return Reflect.apply(originalSetHas, this, [value]);
               };
               return trustedHtml(
-                '<main><form action="&#47;_m&#47;account&#47;delete"><button>Delete</button></form></main>',
+                '<main><form action="&#47;_m&#47;account&#47;delete"><button>Delete</button></form></main>', { reason: "framework server rendering test fixture" },
               );
             },
           }),
@@ -411,7 +411,7 @@ describe('server static export', () => {
       routes: [
         route('/account', {
           guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
-          page: () => trustedHtml('<main>Account</main>'),
+          page: () => trustedHtml('<main>Account</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -428,7 +428,7 @@ describe('server static export', () => {
     });
 
     const sessionApp = createApp({
-      routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>') })],
+      routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>', { reason: "framework server rendering test fixture" }) })],
       sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
@@ -452,7 +452,7 @@ describe('server static export', () => {
           guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
           page(_context, request) {
             const userId = (request as { session?: { user?: { id: string } } }).session?.user?.id;
-            return trustedHtml(`<main>${userId ?? 'anonymous'}:server-only-account-token</main>`);
+            return trustedHtml(`<main>${userId ?? 'anonymous'}:server-only-account-token</main>`, { reason: "framework server rendering test fixture" });
           },
         }),
       ],
@@ -493,7 +493,7 @@ describe('server static export', () => {
       routes: [
         route('/login', {
           access: publicAccess('public login shell'),
-          page: () => trustedHtml('<main>Login</main>'),
+          page: () => trustedHtml('<main>Login</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
       sessionProvider: () => ({ user: { id: 'u1' } }),
@@ -543,7 +543,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
-            page: () => trustedHtml('<main>Product</main>'),
+            page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
             staticPaths: [
               'products/p1',
               '/products/:id',
@@ -622,7 +622,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
-          page: () => trustedHtml('<main>Product</main>'),
+          page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -658,7 +658,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => trustedHtml('<main>Home</main>'),
+          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
         }),
         route('/downloads/orders.pdf', {
           page: () =>

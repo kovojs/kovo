@@ -27,6 +27,7 @@ import {
   compilerSetAdd,
   compilerSetForEach,
   compilerSetHas,
+  compilerStringTrim,
 } from '../compiler-security-intrinsics.js';
 import {
   expressionResolvesToTrustedHtmlBrand,
@@ -70,9 +71,10 @@ import { isCompilerAuditText } from '../security/audit-text.js';
  * serverValue/trustedAssign):
  *   - render user/CMS content through `safeRichHtml(value)` — the sanitizing rich-HTML floor; it is
  *     a different callee, so it is never flagged here;
- *   - for a value the author asserts is safe, take the audited escape `trustedHtml(value,
- *     "<justification>")` / `trustedUrl(value, "<justification>")` (a non-empty static reason),
- *     which discharges the public trust-brand gate but stays recorded.
+ *   - for a value the author asserts is safe, take the audited escape
+ *     `trustedHtml(value, { reason: "<justification>" })` /
+ *     `trustedUrl(value, { reason: "<justification>" })`, which discharges the public
+ *     trust-brand gate but stays recorded.
  */
 export const validateTrustedHtmlProvenance = securityClassifier(
   'compiler.trusted-html.validate-provenance',
@@ -1747,11 +1749,10 @@ function staticStringValue(
   return staticStringValue(initializer, visited);
 }
 
-/** Discharge: a non-empty STATIC reason as the second argument (`"…"` or `{ reason: "…" }`). */
+/** Discharge: a non-empty static reason in the required structured second argument. */
 function hasAuditedReason(call: ts.CallExpression): boolean {
   const metadata = call.arguments[1];
   if (metadata === undefined) return false;
-  if (ts.isStringLiteralLike(metadata)) return isCompilerAuditText(metadata.text);
   if (ts.isObjectLiteralExpression(metadata)) {
     const propertyLength = compilerArrayLength(metadata.properties, 'Trust metadata properties');
     for (let index = 0; index < propertyLength; index += 1) {
@@ -1769,7 +1770,10 @@ function hasAuditedReason(call: ts.CallExpression): boolean {
         identifierName(property.name) === AUDITED_REASON_PROPERTY &&
         ts.isStringLiteralLike(property.initializer)
       ) {
-        return isCompilerAuditText(property.initializer.text);
+        return (
+          isCompilerAuditText(property.initializer.text) &&
+          compilerStringTrim(property.initializer.text) === property.initializer.text
+        );
       }
     }
   }
@@ -2064,7 +2068,7 @@ function rawTrustProvenanceDiagnostic(
     `${sinkLabel} sends ${source} to a ${sink.rawSink} sink without sanitization or an audited ` +
     'justification.';
   const publicFix = sink.auditedReasonAllowed
-    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain trust.`
+    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, { reason: "<justification>" }) so it is surfaced in kovo explain trust.`
     : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
   return contextualizeCompilerDiagnostic(
     diagnosticAt(

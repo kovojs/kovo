@@ -2377,6 +2377,85 @@
       }
     },
     {
+      "id": "browser-authoring-v1",
+      "state": "removed",
+      "owner": "browser-runtime",
+      "decisions": [
+        "@kovojs/browser#TrustedOutputMetadataInput"
+      ],
+      "tool": {
+        "path": "scripts/migrate-browser-authoring-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
+      },
+      "releaseNote": "docs/releases/browser-authoring-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the trust-metadata edits named by the structured migration result.",
+      "rules": [
+        {
+          "id": "derive-string-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "derive"
+          },
+          "category": "app-context",
+          "reason": "Only the application can select the query, state, or clock handle that replaces a raw runtime input name."
+        },
+        {
+          "id": "trusted-html-metadata-rewrite",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedHtml"
+          },
+          "to": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedHtml"
+          }
+        },
+        {
+          "id": "trusted-output-metadata-input-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "TrustedOutputMetadataInput"
+          },
+          "category": "app-context",
+          "reason": "The string shorthand was removed; choosing a replacement local type boundary requires application-owned intent."
+        },
+        {
+          "id": "trusted-url-metadata-rewrite",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedUrl"
+          },
+          "to": {
+            "specifier": "@kovojs/browser",
+            "symbol": "trustedUrl"
+          }
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/browser-authoring-v1/trust-reason.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/browser-authoring-v1/derive-strings.refusal.ts",
+          "scripts/fixtures/api-migrations/browser-authoring-v1/missing-metadata.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-browser-authoring-v1.mjs --check scripts/fixtures/api-migrations/browser-authoring-v1"
+      }
+    },
+    {
       "id": "server-task-topology-v1",
       "state": "removed",
       "owner": "server-api",

@@ -37,7 +37,6 @@ import {
   compilerJsonStringify,
   compilerOwnDataValue,
   compilerRegExpTest,
-  compilerSetHas,
   compilerStringIncludes,
   compilerStringIndexOf,
   compilerStringSlice,
@@ -52,8 +51,8 @@ import {
 import {
   isUrlAttribute,
   expressionResolvesToTrustedHtmlBrand,
+  expressionResolvesToTrustedHtmlPureBrand,
   expressionResolvesToTrustedUrlPureBrand,
-  trustedHtmlBrandLocalNames,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
 import { literalStringValue } from '../scan/object.js';
@@ -62,6 +61,7 @@ import {
   jsxElements,
   jsxExpressions,
   parserFactHasFrameworkTrustedUrl,
+  parserStaticTrustedOutputMetadataReason,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -94,8 +94,6 @@ export function validateOutputContexts(
 ): CompilerDiagnostic[] {
   const found: CompilerDiagnostic[] = [];
 
-  const trustedBrandNames = trustedHtmlBrandLocalNames(model);
-
   const elements = jsxElements(model);
   const elementLength = compilerArrayLength(elements, 'Output-context JSX elements');
   for (let index = 0; index < elementLength; index += 1) {
@@ -112,7 +110,7 @@ export function validateOutputContexts(
     );
     appendOutputItems(
       found,
-      validateRawtextElementText(diagnostics, model, element, trustedBrandNames),
+      validateRawtextElementText(diagnostics, model, element),
       'Output-context RAWTEXT diagnostics',
     );
   }
@@ -352,7 +350,7 @@ function effectiveElementContextDiagnostic(
       help: compilerArrayJoin(
         [
           `Blocked reason: ${reason}.`,
-          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, { reason: auditedReason }) only for a reviewed dynamic script, link, or iframe URL.',
           'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
           'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed after structural lowering.',
         ],
@@ -375,7 +373,6 @@ function validateRawtextElementText(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   element: JsxElementModel,
-  trustedBrandNames: ReadonlySet<string>,
 ): CompilerDiagnostic[] {
   if (element.tag !== 'script' && element.tag !== 'style') return [];
 
@@ -384,8 +381,7 @@ function validateRawtextElementText(
   const childLength = compilerArrayLength(children, 'Direct RAWTEXT child expressions');
   for (let index = 0; index < childLength; index += 1) {
     const child = outputArrayValue(children, index, 'Direct RAWTEXT child expressions');
-    if (!isDynamicExpression(child) || isTrustedBrandCall(model, child, trustedBrandNames))
-      continue;
+    if (!isDynamicExpression(child) || isTrustedBrandCall(model, child)) continue;
     compilerArrayAppend(
       found,
       outputContextDiagnostic(diagnostics, `dynamic <${element.tag}> element text`, {
@@ -465,17 +461,22 @@ function isDynamicExpression(expression: JsxExpressionModel): boolean {
 function isTrustedBrandCall(
   model: ComponentModuleModel,
   expression: JsxExpressionModel,
-  trustedBrandNames: ReadonlySet<string>,
 ): boolean {
-  if (expression.callName !== undefined && compilerSetHas(trustedBrandNames, expression.callName)) {
-    return true;
-  }
   const astExpression = expressionAtSpan(
     ts as FrameworkIdentityTypeScript,
     model.sourceFile,
     expression,
   );
   if (!astExpression || !ts.isCallExpression(astExpression)) return false;
+  if (
+    expressionResolvesToTrustedHtmlPureBrand(model.sourceFile, astExpression.expression)
+  ) {
+    const metadata = astExpression.arguments[1];
+    return (
+      metadata !== undefined &&
+      parserStaticTrustedOutputMetadataReason(metadata) !== undefined
+    );
+  }
   return expressionResolvesToTrustedHtmlBrand(model.sourceFile, astExpression.expression);
 }
 
@@ -495,7 +496,10 @@ export function collectTrustedHtmlOutputContextFacts(
         attributeIndex,
         'Trusted HTML attributes',
       );
-      if (!isRawHtmlAttribute(attribute.name) || literalAttributeStringValue(attribute) !== null) {
+      if (
+        !isRawHtmlAttribute(attribute.name) ||
+        !attributeExpressionIsTrustedHtmlBrand(model, attribute)
+      ) {
         continue;
       }
 
@@ -681,7 +685,7 @@ function validateElementAttributes(
     if (isRawHtmlAttribute(attribute.name)) {
       appendOutputItems(
         found,
-        validateRawHtmlAttribute(diagnostics, attribute),
+        validateRawHtmlAttribute(diagnostics, model, attribute),
         'Raw HTML attribute diagnostics',
       );
       continue;
@@ -690,7 +694,7 @@ function validateElementAttributes(
     if (attribute.name === 'srcdoc') {
       appendOutputItems(
         found,
-        validateRawHtmlAttribute(diagnostics, attribute),
+        validateRawHtmlAttribute(diagnostics, model, attribute),
         'srcdoc attribute diagnostics',
       );
       continue;
@@ -763,6 +767,7 @@ function validateElementAttributes(
       found,
       validateStaticObjectEntrySinks(
         diagnostics,
+        model,
         spread.objectEntries,
         { end: spread.end, start: spread.start },
         hasExternalEscape,
@@ -781,7 +786,7 @@ function validateElementAttributes(
   // dynamic `attrs` value carries no statically-decidable literal sink and is deferred to runtime.
   appendOutputItems(
     found,
-    validatePrimitiveAttrsEntries(diagnostics, element, hasExternalEscape),
+    validatePrimitiveAttrsEntries(diagnostics, model, element, hasExternalEscape),
     'Primitive attrs diagnostics',
   );
 
@@ -1177,7 +1182,9 @@ function attributeExpressionIsTrustedUrlBrand(
     return (
       astExpression !== undefined &&
       ts.isCallExpression(astExpression) &&
-      expressionResolvesToTrustedUrlPureBrand(model.sourceFile, astExpression.expression)
+      expressionResolvesToTrustedUrlPureBrand(model.sourceFile, astExpression.expression) &&
+      astExpression.arguments[1] !== undefined &&
+      parserStaticTrustedOutputMetadataReason(astExpression.arguments[1]!) !== undefined
     );
   }
   return false;
@@ -1197,7 +1204,7 @@ function elementContextSecurityDiagnostic(
       help: compilerArrayJoin(
         [
           `Blocked reason: ${reason}.`,
-          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, auditedReason) only for a reviewed dynamic script, link, or iframe URL.',
+          'Fixes: keep execution/isolation attributes static; use the real trustedUrl(value, { reason: auditedReason }) only for a reviewed dynamic script, link, or iframe URL.',
           'Escape: trustedUrl never suppresses dynamic script type, link rel, or iframe sandbox.',
           'SPEC §4.8 and §5.2 rule 10 require element-aware output contexts to fail closed.',
         ],
@@ -1499,6 +1506,7 @@ function wireIdentityDiagnostic(
  */
 function validatePrimitiveAttrsEntries(
   diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
   element: JsxElementModel,
   hasExternalEscape: boolean,
 ): CompilerDiagnostic[] {
@@ -1513,6 +1521,7 @@ function validatePrimitiveAttrsEntries(
       found,
       validateStaticObjectEntrySinks(
         diagnostics,
+        model,
         attribute.expressionObjectEntries,
         { end: attribute.end, start: attribute.start },
         hasExternalEscape,
@@ -1536,6 +1545,7 @@ function validatePrimitiveAttrsEntries(
  */
 function validateStaticObjectEntrySinks(
   diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
   entries: readonly ObjectLiteralEntry[],
   span: SourceSpan,
   hasExternalEscape: boolean,
@@ -1555,6 +1565,7 @@ function validateStaticObjectEntrySinks(
         found,
         validateStaticObjectEntrySinks(
           diagnostics,
+          model,
           entry.objectEntries,
           span,
           hasExternalEscape,
@@ -1618,7 +1629,7 @@ function validateStaticObjectEntrySinks(
     if (isRawHtmlAttribute(synthetic.name)) {
       appendOutputItems(
         found,
-        validateRawHtmlAttribute(diagnostics, synthetic),
+        validateRawHtmlAttribute(diagnostics, model, synthetic),
         'Static raw HTML sink diagnostics',
       );
       continue;
@@ -1645,7 +1656,7 @@ function validateStaticObjectEntrySinks(
     if (synthetic.name === 'srcdoc') {
       appendOutputItems(
         found,
-        validateRawHtmlAttribute(diagnostics, synthetic),
+        validateRawHtmlAttribute(diagnostics, model, synthetic),
         'Static srcdoc sink diagnostics',
       );
       continue;
@@ -1769,9 +1780,10 @@ function validateStaticCssText(
 
 function validateRawHtmlAttribute(
   diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic[] {
-  if (literalAttributeStringValue(attribute) === null) return [];
+  if (attributeExpressionIsTrustedHtmlBrand(model, attribute)) return [];
 
   return [
     outputContextDiagnostic(
@@ -1780,6 +1792,31 @@ function validateRawHtmlAttribute(
       { start: attribute.start, length: attribute.end - attribute.start },
     ),
   ];
+}
+
+function attributeExpressionIsTrustedHtmlBrand(
+  model: ComponentModuleModel,
+  attribute: JsxAttributeModel,
+): boolean {
+  if (attribute.expressionStart === undefined || attribute.expressionEnd === undefined) {
+    return false;
+  }
+  const expressions = jsxExpressions(model);
+  const expressionLength = compilerArrayLength(expressions, 'Trusted HTML attribute expressions');
+  for (let index = 0; index < expressionLength; index += 1) {
+    const expression = outputArrayValue(
+      expressions,
+      index,
+      'Trusted HTML attribute expressions',
+    );
+    if (
+      expression.start === attribute.expressionStart &&
+      expression.end === attribute.expressionEnd
+    ) {
+      return isTrustedBrandCall(model, expression);
+    }
+  }
+  return false;
 }
 
 function validateComponentCssText(

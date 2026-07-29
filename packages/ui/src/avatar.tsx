@@ -192,7 +192,10 @@ export const AvatarImage = component({
         loading={attrs.loading}
         referrerpolicy="no-referrer"
         sizes={attrs.sizes}
-        src={trustedUrl(props.src, 'caller-selected avatar image')}
+        src={trustedUrl(props.src, {
+          reason: 'caller-selected avatar image',
+          source: '@kovojs/ui/avatar',
+        })}
       />
     );
   },

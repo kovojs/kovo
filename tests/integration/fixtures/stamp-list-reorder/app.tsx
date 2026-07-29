@@ -31,7 +31,7 @@ export const reorderBoard = mutation('stamp-list-reorder/reorder', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
       <BoardList />
       <form mutation={reorderBoard} enhance>
         <button type="submit">Reorder board</button>

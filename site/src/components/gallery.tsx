@@ -214,7 +214,14 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
           </a>
         ))}
       </nav>
-      <div style={galleryStyles.demo} data-gallery-demo-shell rawHtml={trustedHtml(demoHtml)} />
+      <div
+        style={galleryStyles.demo}
+        data-gallery-demo-shell
+        rawHtml={trustedHtml(demoHtml, {
+          reason: 'gallery build pipeline rendered reviewed component demo markup',
+          source: 'site/src/components/gallery.tsx',
+        })}
+      />
       <section style={galleryStyles.detail} aria-label={`${route.title} usage`}>
         <div>
           <h2 style={galleryStyles.detailHeading}>Usage</h2>

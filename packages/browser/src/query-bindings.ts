@@ -1126,7 +1126,9 @@ function setBoundAttribute(
   // F2 / SPEC §4.8: `null` removes a blocked primitive; `undefined` preserves the compiler-reviewed
   // live value when the element/attribute pair is itself the execution or isolation control.
   const sinkValue = trustedUrlWrite
-    ? mintTrustedUrl(securityString(value), 'compiler-reviewed reactive URL')
+    ? mintTrustedUrl(securityString(value), {
+        reason: 'compiler-reviewed reactive URL plan',
+      })
     : value;
   const rendered = kovoBoundAttributeValue(name, sinkValue, boundAttributeWriteContext(element));
   if (rendered === undefined) return;

@@ -439,7 +439,7 @@ if (Reflect.set(String.prototype, 'replace', () => 'attacker-output')) {
 export default createApp({
   routes: [route('/', {
     access: publicAccess('bootstrap poison regression'),
-    page: () => trustedHtml('<main data-exact-export>Exact export</main>', 'fixed test fixture'),
+    page: () => trustedHtml('<main data-exact-export>Exact export</main>', { reason: 'fixed test fixture' }),
   })],
 });
 `,

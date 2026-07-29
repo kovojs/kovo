@@ -28,7 +28,7 @@ const refreshParent = mutation('morph-nested-island-state/refresh', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
       <ParentPanel />
       {/* client.ts owns this specialized morph submission; typed enrollment would double-submit. */}
       <form id="refresh-parent" method="post" action="/_m/morph-nested-island-state/refresh">

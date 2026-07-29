@@ -781,7 +781,7 @@ export default createApp({
   routes: [
     route('/', {
       access: publicAccess('matrix route'),
-      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
 });
@@ -900,7 +900,7 @@ export default createApp({
   routes: [
     route('/', {
       access: publicAccess('endpoint fixture route'),
-      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
 });
@@ -928,7 +928,7 @@ export default createApp<{ session: string }>({
   routes: [
     route('/', {
       access: publicAccess('session value fixture route'),
-      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
   sessionProvider(request) {
@@ -954,7 +954,7 @@ export default createApp<{ session: string }>({
   routes: [
     route('/', {
       access: publicAccess('session set-cookie fixture route'),
-      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
   sessionProvider(request) {
@@ -1255,7 +1255,7 @@ export default createApp({
   routes: [
     route('/', {
       access: publicAccess('inherited adapter fixture route'),
-      page: () => trustedHtml('<main>safe</main>', 'fixed test fixture'),
+      page: () => trustedHtml('<main>safe</main>', { reason: 'fixed test fixture' }),
     }),
   ],
 });

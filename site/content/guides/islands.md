@@ -131,7 +131,7 @@ against the state/query shape and are null-aware: traversing a nullable segment 
 `data-state={...}` expressions lower to named, exported, pure derives with declared inputs:
 
 ```js
-import { derive } from '@kovojs/browser';
+import { derive } from '@kovojs/browser/generated';
 
 export const GalleryToggleDemo$button_aria_pressed_derive = derive(['state'], (state) =>
   String(state.pressed),
@@ -144,8 +144,11 @@ export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) =>
 );
 ```
 
-The declared inputs (`['state']`) tell the loader which changes re-run the derive — no dependency
-tracking — and the module loads lazily on the first relevant change.
+This is compiler-emitted IR, so its generated-only import deliberately retains the inspectable
+`['state']` runtime name. If you author a derive directly, import from `@kovojs/browser` and pass
+opaque handles such as `derive.query(cart)`, `derive.state<State>()`, or `derive.clock<Date>()`;
+the public API rejects raw input strings. Declared inputs tell the loader which changes re-run the
+derive — no dependency tracking — and the module loads lazily on the first relevant change.
 
 **3. Template stamps — keyed list reconciliation.** Lists lower to a `data-bind-list` with a
 `kovo-key` and a `<template kovo-stamp>`; on change the loader keys existing children against the new

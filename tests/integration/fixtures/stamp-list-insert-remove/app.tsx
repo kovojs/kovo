@@ -34,7 +34,7 @@ export const changeCart = mutation('stamp-list-insert-remove/change', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
       <CartList />
       <form mutation={changeCart} enhance>
         <input type="hidden" name="mode" value="insert" />

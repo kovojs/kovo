@@ -15,7 +15,7 @@ export const XssCard = component({
   render: ({ payload }: { payload: PayloadResult }) => (
     <tsx-xss-card>
       <output>{payload.text}</output>
-      <a href={trustedUrl('https://example.com', 'fixture reviewed navigation target')}>link</a>
+      <a href={trustedUrl('https://example.com', { reason: 'fixture reviewed navigation target' })}>link</a>
     </tsx-xss-card>
   ),
 });

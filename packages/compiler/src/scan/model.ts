@@ -237,6 +237,8 @@ export interface CallExpressionModel {
   argumentStringLiteralArrayValues: readonly (readonly string[] | null)[];
   argumentStaticValues: readonly (StaticLiteralValue | undefined)[];
   argumentTemporalReads: readonly (readonly TemporalReadModel[])[];
+  /** Parser-owned derive input facts; post-parse phases must not reparse `arguments`. */
+  deriveInputs?: DeriveInputsModel;
   end: number;
   exportedConstName?: string;
   /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
@@ -247,6 +249,18 @@ export interface CallExpressionModel {
   frameworkJsxRuntimeFactory?: 'createElement' | 'jsx' | 'jsxDEV' | 'jsxs';
   name: string;
   start: number;
+}
+
+export interface DeriveInputEntryModel {
+  /** Callback-local key for object-map derives. */
+  alias?: string;
+  input: string;
+  kind: 'clock' | 'generated' | 'query' | 'state';
+}
+
+export interface DeriveInputsModel {
+  entries: readonly DeriveInputEntryModel[];
+  form: 'object' | 'tuple';
 }
 
 export interface ArrowFunctionPartsModel {

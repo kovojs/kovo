@@ -111,28 +111,80 @@ describe('runtime output-context helpers', () => {
   });
 
   it('passes author-vouched trustedUrl values through unsafe-scheme neutralization (SPEC §4.8)', () => {
-    const dangerousUrl = trustedUrl('javascript:alert(1)');
-    const imageUrl = trustedUrl('data:image/png;base64,AAAA', 'reviewed CDN image');
+    const dangerousUrl = trustedUrl('javascript:alert(1)', {
+      reason: 'intentional unsafe-scheme pass-through fixture',
+    });
+    const imageUrl = trustedUrl('data:image/png;base64,AAAA', {
+      reason: 'reviewed CDN image',
+    });
 
-    expect(dangerousUrl).toEqual({ value: 'javascript:alert(1)' });
+    expect(dangerousUrl).toEqual({
+      reason: 'intentional unsafe-scheme pass-through fixture',
+      value: 'javascript:alert(1)',
+    });
     expect('__kovoTrustedUrl' in dangerousUrl).toBe(false);
     expect(imageUrl).toEqual({
       reason: 'reviewed CDN image',
       value: 'data:image/png;base64,AAAA',
     });
     expect('__kovoTrustedUrl' in imageUrl).toBe(false);
-    expect(isKovoTrustedUrl(trustedUrl('data:text/html,x'))).toBe(true);
+    expect(
+      isKovoTrustedUrl(
+        trustedUrl('data:text/html,x', { reason: 'trusted URL witness fixture' }),
+      ),
+    ).toBe(true);
     expect(isKovoTrustedUrl('data:text/html,x')).toBe(false);
 
     // An unbranded unsafe URL is neutralized; the trusted brand is emitted verbatim.
     expect(kovoSafeUrl('javascript:alert(1)')).toBe('#');
-    expect(kovoSafeUrl(trustedUrl('javascript:alert(1)'))).toBe('javascript:alert(1)');
+    expect(
+      kovoSafeUrl(
+        trustedUrl('javascript:alert(1)', {
+          reason: 'intentional unsafe-scheme sink fixture',
+        }),
+      ),
+    ).toBe('javascript:alert(1)');
 
     // The compiler-emitted bound-attribute path honors the brand too.
     expect(kovoBoundAttributeValue('href', 'data:text/html,evil')).toBe('#');
-    expect(kovoBoundAttributeValue('href', trustedUrl('data:image/png;base64,AAAA'))).toBe(
-      'data:image/png;base64,AAAA',
+    expect(
+      kovoBoundAttributeValue(
+        'href',
+        trustedUrl('data:image/png;base64,AAAA', {
+          reason: 'intentional image data URL fixture',
+        }),
+      ),
+    ).toBe('data:image/png;base64,AAAA');
+  });
+
+  it('requires exact structured, non-empty trusted-output review metadata', () => {
+    // @ts-expect-error Review metadata is mandatory.
+    expect(() => trustedHtml('<b>unsafe</b>')).toThrow(/structured metadata/u);
+    // @ts-expect-error String shorthand was removed.
+    expect(() => trustedUrl('javascript:alert(1)', 'reviewed')).toThrow(/structured metadata/u);
+    expect(() => trustedHtml('<b>unsafe</b>', { reason: '' })).toThrow(/non-empty/u);
+    expect(() => trustedHtml('<b>unsafe</b>', { reason: ' padded ' })).toThrow(
+      /surrounding whitespace/u,
     );
+    expect(() => trustedHtml('<b>unsafe</b>', { reason: 'bidi\u202ereason' })).toThrow(
+      /bidirectional/u,
+    );
+    expect(() =>
+      trustedUrl(
+        'javascript:alert(1)',
+        Object.defineProperty({}, 'reason', {
+          enumerable: true,
+          get: () => 'accessor-backed reason',
+        }) as { reason: string },
+      ),
+    ).toThrow(/own data property/u);
+    expect(() =>
+      trustedUrl('javascript:alert(1)', {
+        reason: 'reviewed',
+        // @ts-expect-error Unknown metadata fields are rejected at the runtime boundary.
+        ticket: 'SEC-1',
+      }),
+    ).toThrow(/unsupported field/u);
   });
 
   // bugz H6 (SPEC §4.8 KV236 / §6.6): historical `__kovoTrustedUrl`/`__kovoTrustedHtml`
@@ -218,8 +270,8 @@ describe('runtime output-context helpers', () => {
       toString: () => '<i>browser trusted</i>',
     } as const;
 
-    const html = trustedHtml('<b>safe</b>');
-    expect(html).toEqual({ value: '<b>safe</b>' });
+    const html = trustedHtml('<b>safe</b>', { reason: 'static trusted HTML fixture' });
+    expect(html).toEqual({ reason: 'static trusted HTML fixture', value: '<b>safe</b>' });
     expect('__kovoTrustedHtml' in html).toBe(false);
     expect(
       trustedHtml('<b>safe</b>', {
@@ -231,11 +283,23 @@ describe('runtime output-context helpers', () => {
       source: 'cms.promo.body',
       value: '<b>safe</b>',
     });
-    expect(isKovoTrustedHtml(trustedHtml('<b>safe</b>'))).toBe(true);
+    expect(
+      isKovoTrustedHtml(
+        trustedHtml('<b>safe</b>', { reason: 'trusted HTML witness fixture' }),
+      ),
+    ).toBe(true);
     expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(false);
     expect(isBrowserTrustedHtml({ toString: () => '<i>not branded</i>' })).toBe(false);
-    expect(kovoTrustedHtmlContent(trustedHtml('<b>safe</b>'))).toBe('<b>safe</b>');
-    expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe('');
+    expect(
+      kovoTrustedHtmlContent(
+        trustedHtml('<b>safe</b>', { reason: 'trusted HTML content fixture' }),
+      ),
+    ).toBe('<b>safe</b>');
+    expect(
+      kovoTrustedHtmlContent(
+        trustedHtml(browserTrustedHtml, { reason: 'foreign TrustedHTML fixture' }),
+      ),
+    ).toBe('');
     expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('');
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
@@ -247,8 +311,10 @@ describe('runtime output-context helpers', () => {
       [Symbol.toStringTag]: 'TrustedHTML',
       toString: () => browserBytes,
     } as const;
-    const html = trustedHtml(browserCarrier);
-    const url = trustedUrl('javascript:reviewed()');
+    const html = trustedHtml(browserCarrier, { reason: 'pinned browser carrier fixture' });
+    const url = trustedUrl('javascript:reviewed()', {
+      reason: 'pinned trusted URL carrier fixture',
+    });
     const rich = safeRichHtml('<p>safe</p><script>blocked()</script>');
 
     expect(Object.isFrozen(html)).toBe(true);
@@ -306,7 +372,9 @@ describe('runtime output-context helpers', () => {
       Set.prototype.has = () => true;
       Object.freeze = ((value: unknown) => value) as typeof Object.freeze;
 
-      const trusted = trustedHtml('<strong>pinned</strong>');
+      const trusted = trustedHtml('<strong>pinned</strong>', {
+        reason: 'ambient poisoning pinned carrier fixture',
+      });
       genuine = kovoTrustedHtmlContent(trusted);
       forged = kovoTrustedHtmlContent({ value: '<script>forged()</script>' });
       sanitized = sanitizeRichHtml('<p onclick="bad()">safe</p><script>bad()</script>');
@@ -515,7 +583,9 @@ describe('runtime output-context helpers', () => {
     expect(
       kovoBoundAttributeValue(
         'src',
-        trustedUrl('data:text/javascript,export default 1', 'reviewed executable asset'),
+        trustedUrl('data:text/javascript,export default 1', {
+          reason: 'reviewed executable asset',
+        }),
         { elementName: 'SCRIPT' },
       ),
     ).toBe('data:text/javascript,export default 1');

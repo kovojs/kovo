@@ -23,7 +23,7 @@ describe('server static export', () => {
       routes: [
         route('/about', {
           meta: { title: 'About' },
-          page: () => trustedHtml('<main>About Kovo</main>'),
+          page: () => trustedHtml('<main>About Kovo</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -56,7 +56,7 @@ describe('server static export', () => {
       },
       routes: [
         route('/', {
-          page: () => trustedHtml('from-page'),
+          page: () => trustedHtml('from-page', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -87,10 +87,10 @@ describe('server static export', () => {
         },
         routes: [
           route('/', {
-            page: () => trustedHtml('home'),
+            page: () => trustedHtml('home', { reason: "framework server rendering test fixture" }),
           }),
           route('/docs/intro', {
-            page: () => trustedHtml('intro'),
+            page: () => trustedHtml('intro', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -132,7 +132,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
-            page: () => trustedHtml('<main>Own output root</main>'),
+            page: () => trustedHtml('<main>Own output root</main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });

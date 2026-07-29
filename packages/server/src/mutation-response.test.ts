@@ -1805,7 +1805,7 @@ describe('server mutation primitives', () => {
       async *stream({ result }) {
         yield stream.fragment({
           html: trustedHtml(
-            '<article data-role="assistant"><span data-stream-text="assistant:a1"></span></article>',
+            '<article data-role="assistant"><span data-stream-text="assistant:a1"></span></article>', { reason: "framework server rendering test fixture" },
           ),
           mode: 'append',
           target: 'messages',
@@ -1888,7 +1888,7 @@ describe('server mutation primitives', () => {
           target: 'messages',
         });
         yield stream.fragment({
-          html: trustedHtml('<article data-safe="trusted">Trusted</article>'),
+          html: trustedHtml('<article data-safe="trusted">Trusted</article>', { reason: "framework server rendering test fixture" }),
           mode: 'append',
           target: 'messages',
         });

@@ -464,7 +464,7 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
   denominator because they schedule an already-reviewed resource rather than select its authority
   or isolation posture.
   The URL halves (`script[src|href|xlink:href]`, `link[href]`, and `iframe[src]`) may instead hold an
-  exact `trustedUrl(value, auditedReason)`; `trustedUrl` suppresses no other tuple. Live bindings and
+  exact `trustedUrl(value, { reason: auditedReason })`; `trustedUrl` suppresses no other tuple. Live bindings and
   keyed fragment morphs preserve the reviewed current value (including absence) rather than apply
   or remove a blocked control; newly adopted fragment nodes pass the same static-value floor before
   adoption. Compiler, server JSX, modular binding/fragment code, and the generated inline loader
@@ -511,29 +511,71 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 
 Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist its resolved value at both render and loader update time; a value resolving to a denied scheme is dropped to the attribute's empty semantics (the attribute is removed, per the `?.` rule above), never written verbatim. A binding into an unsafe context with no escape hatch is **KV236** with the usual teaching menu: change the projection, extract a derive that returns a safe value, or — for genuinely author-trusted markup/URLs — opt in via the trusted-HTML escape hatch.
 
-The escape hatch is a typed, named, public Kovo API (`trustedHtml(value)` / `trustedUrl(value)`, importable only from a documented public entrypoint per §5.2 #8) that brands its argument as author-vouched. A binding may reach an unsafe context only when its lowered value is a `trustedHtml`/`trustedUrl` brand; the brand is the only thing that suppresses KV236, it is visible in source and in `kovo explain component`, and it is never derivable by the compiler (so the author always writes it explicitly — the inverse of the "TSX never requires a string the compiler can derive" rule, applied to trust). A trusted value carries no escaping obligation onto the framework; producing it from unvalidated query data is the documented hazard the brand makes auditable.
+The escape hatch is a typed, named, public Kovo API
+(`trustedHtml(value, { reason, source? })` / `trustedUrl(value, { reason, source? })`, importable only
+from a documented public entrypoint per §5.2 #8) that brands its argument as author-vouched. The
+structured metadata argument is required. `reason` is a non-empty, trimmed audit justification;
+`source`, when present, is a non-empty, trimmed provenance label. Both are bounded and reject
+control/format characters, accessors, arrays, and unknown fields. String shorthand, missing
+metadata, and blank or dynamic reasons do not discharge compiler provenance. A binding may reach an
+unsafe context only when its lowered value is a `trustedHtml`/`trustedUrl` brand; the brand is the
+only thing that suppresses KV236, it is visible in source and in `kovo explain component`, and it is
+never derivable by the compiler (so the author always writes it explicitly — the inverse of the
+"TSX never requires a string the compiler can derive" rule, applied to trust). A trusted value
+carries no escaping obligation onto the framework; producing it from unvalidated query data is the
+documented hazard the brand makes auditable.
 
 For a reactive URL binding, the compiler MUST preserve that source provenance without emitting a
-runtime call to the author-facing constructor. It lowers the exact `trustedUrl(value,
-auditedReason)` argument as the derive value and emits a compiler-owned, generated-only sink marker
-plus a closed query-plan fact. The modular browser runtime and inline loader may mint the runtime
-brand only from that plan fact immediately before the reviewed URL sink. App-authored copies of the
-marker are KV235, and an unmarked query value remains subject to the ordinary URL-scheme floor.
+runtime call to the author-facing constructor. It lowers the exact `trustedUrl(value, { reason:
+auditedReason, source? })` argument as the derive value and emits a compiler-owned, generated-only
+sink marker plus a closed query-plan fact. The modular browser runtime and inline loader may mint
+the runtime brand only from that plan fact immediately before the reviewed URL sink. App-authored
+copies of the marker are KV235, and an unmarked query value remains subject to the ordinary
+URL-scheme floor.
 
 **Live-property bindings (`data-bind-prop:<prop>`) — the property-authoritative addendum.** A handful of attributes are _property-authoritative_: once the live DOM property is dirtied by user interaction (or script), the browser stops reflecting the attribute onto the property, so an attribute-only `data-bind:<attr>` write silently fails to update the observed state — `FormData` reads `input.checked`, not the `checked` attribute; `.indeterminate`/`.scrollTop`/`.scrollLeft` are not HTML attributes at all. For a **closed, security-reviewed allowlist** — `checked`, `indeterminate`, `value` (form controls), `scrollTop`, `scrollLeft`, `selected`, `open` — the compiler additionally emits a companion `data-bind-prop:<prop>` stamp alongside the SSR attribute and `data-bind:<attr>`, and the loader applies it by **assigning the live element property** (`el[prop] = coerce(prop, value)`: boolean for `checked`/`indeterminate`/`selected`/`open`, number for `scrollTop`/`scrollLeft`, string for `value`) on hydration and after every derive/morph re-render — the property write runs _after_ the attribute patch. The SSR attribute is unchanged, so first paint and no-JS stay correct and render-equivalence (§5.2 #3) treats `data-bind-prop:*` as a non-attribute output (byte-identical visible HTML; the property write is the extra output). This is not an author surface: a component still writes `checked={…}`/`scrollTop={…}` and the compiler derives both stamps from the one fact. **The allowlist is the security boundary** — `data-bind-prop:*` is never emitted or applied for any other property, and the unsafe sinks (`innerHTML`/`outerHTML`/`srcdoc`/`on*`) stay forbidden (KV236); the runtime ignores a non-allowlisted property defensively.
 
 **2. Named derives — the expression layer.** A derive is a named, exported, pure function with declared inputs — exactly parallel to handlers:
 
 ```ts
-// cart.client.js — authorable IR
-export const Cart$isEmpty = derive(['cart'], (cart) => cart.count === 0);
+// cart.client.ts — public authoring API
+import { derive } from '@kovojs/browser';
+import { cart } from './cart.server.js';
+
+export const Cart$isEmpty = derive([derive.query(cart)], (cartValue) => cartValue.count === 0);
+
+export const Cart$summary = derive(
+  {
+    cart: derive.query(cart),
+    local: derive.state<{ expanded: boolean }>(),
+    now: derive.clock<Date>(),
+  },
+  ({ cart, local, now }) => `${cart.count}:${local.expanded}:${now.toISOString()}`,
+);
 ```
 
 ```html
 <button data-bind:disabled="/c/cart.client.js#Cart$isEmpty">Checkout</button>
 ```
 
-Declared inputs tell the loader which query changes re-run it — no dependency tracking — and the module loads lazily on the first relevant change, preserving resumability. Inline JSX expressions in bound positions lower to named derives (the KV210 naming nudge applies). Minification cannot rename them (Constitution #1); `kovo explain component` lists every derive with its inputs.
+Each public input is an opaque, fieldless handle minted by the same installed
+`@kovojs/browser` instance. `derive.query(queryHandle)` preserves the query's result type and lets
+the compiler carry its source-derived runtime name without an app-authored string;
+`derive.state<Value>()` and `derive.clock<Value>()` name the framework-owned state and clock
+channels while preserving the callback value type. Tuple inputs preserve tuple positions. Object
+inputs preserve author-selected callback property names while retaining the underlying runtime
+input names. Casts, structural copies, accessors, foreign-package handles, and raw string inputs
+fail closed.
+
+The compiler-emitted `@kovojs/browser/generated` ABI retains raw tuple and object input names so
+lowered output is inspectable and fixpoint-validatable. App-authored use of that generated subpath
+or hand-authored raw derive IR is KV235 under §5.2; raw strings are not accepted by the public
+authoring API.
+
+Declared inputs tell the loader which query changes re-run it — no dependency tracking — and the
+module loads lazily on the first relevant change, preserving resumability. Inline JSX expressions
+in bound positions lower to named derives (the KV210 naming nudge applies). Minification cannot
+rename them (Constitution #1); `kovo explain component` lists every derive with its inputs.
 
 **3. Template stamps — keyed list reconciliation.**
 

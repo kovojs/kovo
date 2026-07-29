@@ -28,7 +28,7 @@ export const changeCart = mutation('scale-keyed-list/change', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>')}
+      {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
       <CartList />
       <form mutation={changeCart} enhance>
         <button type="submit">Change</button>

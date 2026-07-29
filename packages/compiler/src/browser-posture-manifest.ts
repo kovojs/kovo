@@ -193,7 +193,7 @@ function classifyAssetAttribute(
         browserPostureDiagnostic(
           options,
           span,
-          `${site} contains a computed external asset URL without the exact trustedUrl(value, auditedReason) escape`,
+          `${site} contains a computed external asset URL without the exact trustedUrl(value, { reason: auditedReason }) escape`,
         ),
       );
       return;
@@ -645,7 +645,7 @@ function browserPostureDiagnostic(
   return contextualizeCompilerDiagnostic(
     diagnosticFor(options.fileName, 'KV236', options.source, span.start, span.end - span.start),
     {
-      help: 'Fixes: keep the asset URL static so Kovo can derive its CSP origin, or use the exact trustedUrl(value, auditedReason) constructor and declare every admitted runtime origin with a rationale. SPEC §2/§4.8 requires browser response posture to fail closed when the compiler cannot derive the browser request authority.',
+      help: 'Fixes: keep the asset URL static so Kovo can derive its CSP origin, or use the exact trustedUrl(value, { reason: auditedReason }) constructor and declare every admitted runtime origin with a rationale. SPEC §2/§4.8 requires browser response posture to fail closed when the compiler cannot derive the browser request authority.',
       message: `Unsafe output context requires an explicit trusted Kovo escape hatch. ${reason}`,
     },
   );

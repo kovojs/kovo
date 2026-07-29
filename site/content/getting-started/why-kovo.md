@@ -132,7 +132,12 @@ import { trustedHtml } from '@kovojs/browser';
 declare const comment: { body: string };
 
 <div>{comment.body}</div>; // escaped — safe by default
-<div>{trustedHtml(comment.body, 'moderated comment markup')}</div>; // you opted in, on the record
+<div>
+  {trustedHtml(comment.body, {
+    reason: 'moderated comment markup',
+    source: 'comments/moderation.ts',
+  })}
+</div>; // you opted in, on the record
 ```
 
 The dangerous form is longer to write than the safe one, and it leaves a trace. That's the point.

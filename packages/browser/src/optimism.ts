@@ -1,4 +1,4 @@
-import type { Form, FormInput } from '@kovojs/core';
+import type { Form, FormInput, JsonValue } from '@kovojs/core';
 import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
@@ -135,7 +135,7 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
  * } satisfies OptimisticFor<typeof addToCartForm, { cart: { count: number } }>;
  */
 export type OptimisticFor<
-  Definition extends Form<string, any, any>,
+  Definition extends Form<string, Record<string, JsonValue>, unknown>,
   QueryValues extends Record<string, unknown>,
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {

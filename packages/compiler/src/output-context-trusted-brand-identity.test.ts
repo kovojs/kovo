@@ -33,12 +33,19 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
   });
 
   it('LEGIT: real @kovojs/browser trustedHtml single-call suppresses KV236', () => {
-    expect(kv236(SCRIPT(REAL, 'trustedHtml(cfg.inline)'))).toBe(0);
+    expect(
+      kv236(SCRIPT(REAL, "trustedHtml(cfg.inline, { reason: 'reviewed inline script' })")),
+    ).toBe(0);
   });
 
   it('LEGIT: an aliased real import (trustedHtml as th) still resolves by identity', () => {
     expect(
-      kv236(SCRIPT("import { trustedHtml as th } from '@kovojs/browser';", 'th(cfg.inline)')),
+      kv236(
+        SCRIPT(
+          "import { trustedHtml as th } from '@kovojs/browser';",
+          "th(cfg.inline, { reason: 'reviewed inline script' })",
+        ),
+      ),
     ).toBe(0);
   });
 
@@ -113,6 +120,8 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
     expect(
       kv236(STYLE('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.css)')),
     ).toBeGreaterThan(0);
-    expect(kv236(STYLE(REAL, 'trustedHtml(cfg.css)'))).toBe(0);
+    expect(
+      kv236(STYLE(REAL, "trustedHtml(cfg.css, { reason: 'reviewed inline style' })")),
+    ).toBe(0);
   });
 });

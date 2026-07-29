@@ -506,9 +506,9 @@ const suffix = '<i>also safe</i>';
 export const C = component({
   render: () => (
     <main>
-      {trustedHtml('<section>' + body + suffix)}
-      {trustedHtml(\`${'${body}'}${'${suffix}'}\`)}
-      <a href={trustedUrl('/docs/' + 'intro')}>docs</a>
+      {trustedHtml('<section>' + body + suffix, { reason: 'static local markup' })}
+      {trustedHtml(\`${'${body}'}${'${suffix}'}\`, { reason: 'static local template' })}
+      <a href={trustedUrl('/docs/' + 'intro', { reason: 'static docs path' })}>docs</a>
       {renderedHtml(true ? '<main>static</main>' : '<main>fallback</main>')}
     </main>
   ),
@@ -525,10 +525,10 @@ export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => (
     <main>
-      <article rawHtml={trustedHtml('<b>safe</b>')} />
-      <section innerHTML={trustedHtml(post.body, 'admin-curated body sanitized upstream')} />
-      <a href={trustedUrl('/docs')}>docs</a>
-      <a href={trustedUrl(post.href, 'admin-curated redirect')}>read</a>
+      <article rawHtml={trustedHtml('<b>safe</b>', { reason: 'static reviewed markup' })} />
+      <section innerHTML={trustedHtml(post.body, { reason: 'admin-curated body sanitized upstream' })} />
+      <a href={trustedUrl('/docs', { reason: 'static docs path' })}>docs</a>
+      <a href={trustedUrl(post.href, { reason: 'admin-curated redirect' })}>read</a>
     </main>
   ),
 });
@@ -582,7 +582,7 @@ export const C = component({
     ).toHaveLength(0);
   });
 
-  it('discharges with the audited escape trustedHtml(value, "<justification>")', () => {
+  it('rejects the retired string-shorthand audited escape', () => {
     expect(
       kv426(`
 import { trustedHtml } from '@kovojs/browser';
@@ -593,7 +593,7 @@ export const C = component({
   ),
 });
 `),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 
   it('discharges with the audited escape trustedHtml(value, { reason })', () => {
@@ -1047,7 +1047,7 @@ export const C = component({
 import { trustedUrl } from '@kovojs/browser';
 export const C = component({
   queries: { post: postQuery },
-  render: ({ post }) => <a href={trustedUrl(post.href, 'admin-curated redirect')}>read</a>,
+  render: ({ post }) => <a href={trustedUrl(post.href, { reason: 'admin-curated redirect' })}>read</a>,
 });
 `),
     ).toHaveLength(0);

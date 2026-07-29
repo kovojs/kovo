@@ -37,8 +37,8 @@ const homeRoute = route('/', {
     const cart = await readCart(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }))}
-        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }), { reason: "framework integration fixture markup" })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
         <CartPanelAuthority />
         <section id="cart-panel" kovo-deps="cart">
           <output data-bind="cart.count">{cart.count}</output>

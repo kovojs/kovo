@@ -38,10 +38,10 @@ const homeRoute = route('/', {
     const card = await readCard(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/card', name: 'card', value: card }))}
-        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        {trustedHtml(renderQueryScript({ href: '/_q/card', name: 'card', value: card }), { reason: "framework integration fixture markup" })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
         <BindingCard />
-        {trustedHtml(renderStateIsland())}
+        {trustedHtml(renderStateIsland(), { reason: "framework integration fixture markup" })}
       </main>
     );
   },

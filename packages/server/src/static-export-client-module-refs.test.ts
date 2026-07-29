@@ -45,7 +45,7 @@ describe('server static export', () => {
       routes: [
         route('/cart', {
           page: () =>
-            trustedHtml(`<main><button on:click="${cartHref}#Cart$add">Add</button></main>`),
+            trustedHtml(`<main><button on:click="${cartHref}#Cart$add">Add</button></main>`, { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -88,7 +88,7 @@ describe('server static export', () => {
             modulepreloads: [cartHref],
             page: () =>
               trustedHtml(
-                `<main><button on:click="${menuHref}#Menu$open">Open menu</button></main>`,
+                `<main><button on:click="${menuHref}#Menu$open">Open menu</button></main>`, { reason: "framework server rendering test fixture" },
               ),
           }),
         ],
@@ -148,7 +148,7 @@ describe('server static export', () => {
                 return added;
               };
               return trustedHtml(
-                `<main><button on:click="${publicHref}#Public$run">Run</button></main>`,
+                `<main><button on:click="${publicHref}#Public$run">Run</button></main>`, { reason: "framework server rendering test fixture" },
               );
             },
           }),
@@ -195,7 +195,7 @@ describe('server static export', () => {
             modulepreloads: [cartUrl],
             page: () =>
               trustedHtml(
-                `<main><button on:click="${menuUrl}#Menu$open">Open menu</button></main>`,
+                `<main><button on:click="${menuUrl}#Menu$open">Open menu</button></main>`, { reason: "framework server rendering test fixture" },
               ),
           }),
         ],
@@ -267,7 +267,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             modulepreloads: [cartHref],
-            page: () => trustedHtml('<main>Home</main>'),
+            page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -338,7 +338,7 @@ describe('server static export', () => {
           route('/unsafe', {
             page: () =>
               trustedHtml(
-                `<main>Unsafe module path<script type="module" src="${badHref}"></script></main>`,
+                `<main>Unsafe module path<script type="module" src="${badHref}"></script></main>`, { reason: "framework server rendering test fixture" },
               ),
           }),
         ],

@@ -16,7 +16,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
 
 /** @internal A form definition accepted by the typed `ctx.submit` context (SPEC §9.1). */
-export type SubmitFormDefinition = Form<string, any, any>;
+export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, unknown>;
 
 /** @internal Per-call options for a typed `ctx.submit` invocation (SPEC §9.1). */
 export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {

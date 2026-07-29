@@ -30,7 +30,7 @@ export const AdminPage = component({
   render({ adminOrders }: { adminOrders: { id: string } }) {
     return (
       <main data-order-id={adminOrders.id}>
-        {trustedHtml('<strong>Admin</strong>', 'Metric E representative app')}
+        {trustedHtml('<strong>Admin</strong>', { reason: 'Metric E representative app' })}
       </main>
     );
   },

@@ -34,7 +34,7 @@ export default defineFixture({
     errorShells: {
       forbidden: ({ status }) => ({
         body: trustedHtml(
-          `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`,
+          `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`, { reason: "framework integration fixture markup" },
         ),
         status,
       }),

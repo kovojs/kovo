@@ -100,7 +100,12 @@ export async function ProductDescription({ body }: { body: string }) {
     unknownTag: 'text',
   });
   return (
-    <section>{trustedHtml(html, 'renderTree escaped the rich-text tree server-side')}</section>
+    <section>
+      {trustedHtml(html, {
+        reason: 'renderTree escaped the rich-text tree server-side',
+        source: 'rich-text/render.ts',
+      })}
+    </section>
   );
 }
 ```

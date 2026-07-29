@@ -56,6 +56,10 @@ export const referencePublicRoute = route('/', {
         '<output id="reference-status">Waiting for client module.</output>',
         '</section>',
       ].join(''),
+      {
+        reason: 'reference route assembles reviewed static shell markup',
+        source: 'examples/reference/src/app-shell.ts',
+      },
     );
   },
 });
@@ -70,7 +74,10 @@ export const referenceLoginRoute = route('/login', {
   },
   page(context) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/account';
-    return trustedHtml(`<main>${ReferenceShellLoginForm({ next })}</main>`);
+    return trustedHtml(`<main>${ReferenceShellLoginForm({ next })}</main>`, {
+      reason: 'reference login route composes the reviewed login form renderer',
+      source: 'examples/reference/src/app-shell.ts',
+    });
   },
 });
 

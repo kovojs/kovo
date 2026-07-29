@@ -340,9 +340,9 @@ const TRUSTED_CALL_OWNER: Readonly<Record<string, string>> = {
  * so there is no app-authored override EXPRESSION to scan for. Rather than invent one, this
  * kind is left to whatever build-config producer owns that surface.
  *
- * A `justification` is captured when provided as: a trailing string argument, an options
- * object field (`reason`/`justification`/`verifyJustification`), or a leading
- * `// justification:` line comment on the call/declaration. KV426 treats a MISSING
+ * A `justification` for trusted HTML/URL is captured only from the required structured
+ * `{ reason }` argument. Other escapes retain their documented trailing-string,
+ * options-field, or leading `// justification:` forms. KV426 treats a MISSING
  * justification as a finding — but this pass emits the escape EITHER WAY (justification
  * left `undefined`); the renderer/consumer decides. Audit-only: surfacing the trust
  * surface enforces nothing.
@@ -450,9 +450,11 @@ function buildTrustedCallEscape(
 ): TrustEscapeExplain {
   const args = Node.isCallExpression(call) ? call.getArguments() : [];
   const justification =
-    optionsObjectJustification(args) ??
-    trailingStringJustification(args) ??
-    leadingJustification(call);
+    name === 'trustedHtml' || name === 'trustedUrl'
+      ? structuredTrustedOutputReason(args)
+      : optionsObjectJustification(args) ??
+        trailingStringJustification(args) ??
+        leadingJustification(call);
   const owner = TRUSTED_CALL_OWNER[name];
   const site = siteFor(file, call);
   const sourceBinding = sourceBindingForNode(file, call);
@@ -604,6 +606,13 @@ function buildCsrfFalseEscape(
 
 // ---- justification extraction helpers -------------------------------------------------
 
+function structuredTrustedOutputReason(args: readonly Node[]): string | undefined {
+  const metadata = args[1];
+  return metadata && Node.isObjectLiteralExpression(metadata)
+    ? objectStringProperty(metadata, 'reason')
+    : undefined;
+}
+
 function optionsObjectJustification(args: readonly Node[]): string | undefined {
   for (const arg of args) {
     if (!Node.isObjectLiteralExpression(arg)) continue;
@@ -614,7 +623,7 @@ function optionsObjectJustification(args: readonly Node[]): string | undefined {
 }
 
 function trailingStringJustification(args: readonly Node[]): string | undefined {
-  // A trailing string literal arg (e.g. trustedHtml(x, "reviewed")) read as justification.
+  // The exact structured reason (e.g. trustedHtml(x, { reason: "reviewed" })) is audit evidence.
   for (let i = args.length - 1; i >= 1; i -= 1) {
     const arg = args[i];
     if (arg && isStringLiteralLike(arg)) return arg.getLiteralText();

@@ -11,13 +11,13 @@ export const MorphAbortShell = component({
       {morphAbort.stage === 'removed' ? (
         <section data-morph-stage="removed">
           {trustedHtml(
-            '<replacement-abort-island kovo-c="replacement-abort-island"><button type="button" on:click="/client.ts#touchReplacement">Touch replacement</button></replacement-abort-island>',
+            '<replacement-abort-island kovo-c="replacement-abort-island"><button type="button" on:click="/client.ts#touchReplacement">Touch replacement</button></replacement-abort-island>', { reason: "framework integration fixture markup" },
           )}
         </section>
       ) : (
         <section data-morph-stage="active">
           {trustedHtml(
-            '<abortable-island kovo-c="abortable-island"><button type="button" on:click="/client.ts#startAbortable">Start abortable</button></abortable-island>',
+            '<abortable-island kovo-c="abortable-island"><button type="button" on:click="/client.ts#startAbortable">Start abortable</button></abortable-island>', { reason: "framework integration fixture markup" },
           )}
         </section>
       )}

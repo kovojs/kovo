@@ -14,15 +14,15 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         route('/admin', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
-          page: () => trustedHtml('<main>admin</main>'),
+          page: () => trustedHtml('<main>admin</main>', { reason: "framework server rendering test fixture" }),
         }),
         // public + moderate is fine (idempotent, not session-dependent)
-        route('/public', { prefetch: 'moderate', page: () => trustedHtml('<main>public</main>') }),
+        route('/public', { prefetch: 'moderate', page: () => trustedHtml('<main>public</main>', { reason: "framework server rendering test fixture" }) }),
         // guarded + conservative is fine (no prerender)
         route('/account', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'conservative',
-          page: () => trustedHtml('<main>account</main>'),
+          page: () => trustedHtml('<main>account</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -36,7 +36,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
   it('produces no KV419 when no route mixes a guard with prefetch:"moderate"', () => {
     const app = createApp({
       routes: [
-        route('/', { prefetch: 'conservative', page: () => trustedHtml('<main>home</main>') }),
+        route('/', { prefetch: 'conservative', page: () => trustedHtml('<main>home</main>', { reason: "framework server rendering test fixture" }) }),
       ],
     });
     expect(app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toHaveLength(0);
@@ -50,7 +50,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           prefetchJustification: 'Route is read-only; render is safe for credentialed prerender.',
-          page: () => trustedHtml('<main>admin</main>'),
+          page: () => trustedHtml('<main>admin</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -64,7 +64,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           prefetchJustification: { reviewed: true } as never,
-          page: () => trustedHtml('<main>private</main>'),
+          page: () => trustedHtml('<main>private</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -79,7 +79,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         route('/dashboard', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
-          page: () => trustedHtml('<main>dashboard</main>'),
+          page: () => trustedHtml('<main>dashboard</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -92,13 +92,13 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
     const moderate = route('/private', {
       guard: guards.authed<SessionShape>(),
       prefetch: 'moderate',
-      page: () => trustedHtml('<main>private</main>'),
+      page: () => trustedHtml('<main>private</main>', { reason: "framework server rendering test fixture" }),
     });
     const parameter = route('/products/:id', {
-      page: () => trustedHtml('<main>parameter</main>'),
+      page: () => trustedHtml('<main>parameter</main>', { reason: "framework server rendering test fixture" }),
     });
     const fixed = route('/products/new', {
-      page: () => trustedHtml('<main>fixed</main>'),
+      page: () => trustedHtml('<main>fixed</main>', { reason: "framework server rendering test fixture" }),
     });
     const nativeFilter = Array.prototype.filter;
     const nativeMap = Array.prototype.map;
@@ -131,7 +131,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         // No guard, but in a real app this page might read session data internally.
         route('/feed', {
           prefetch: 'moderate',
-          page: () => trustedHtml('<main>public feed</main>'),
+          page: () => trustedHtml('<main>public feed</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });

@@ -129,15 +129,15 @@ const trustedUrl = (value) => value;
 export const Contexts = component({
   render: (_queries, state) => (
     <>
-      <script src={reviewedUrl(state.script, 'reviewed')} />
-      <link href={browser.trustedUrl(state.stylesheet, 'reviewed')} />
-      <script {...{ src: reviewedUrl(state.script, 'reviewed spread') }} />
-      <link {...{ ...{ href: browser.trustedUrl(state.stylesheet, 'reviewed nested spread') } }} />
+      <script src={reviewedUrl(state.script, { reason: 'reviewed' })} />
+      <link href={browser.trustedUrl(state.stylesheet, { reason: 'reviewed' })} />
+      <script {...{ src: reviewedUrl(state.script, { reason: 'reviewed spread' }) }} />
+      <link {...{ ...{ href: browser.trustedUrl(state.stylesheet, { reason: 'reviewed nested spread' }) } }} />
       <iframe src={trustedUrl(state.frame, 'lookalike')} />
       <iframe src={typedUrl(state.frame, 'type only')} />
       <Tooltip.Trigger attrs={{
-        src: reviewedUrl(state.script, 'reviewed'),
-        href: browser.trustedUrl(state.stylesheet, 'reviewed'),
+        src: reviewedUrl(state.script, { reason: 'reviewed' }),
+        href: browser.trustedUrl(state.stylesheet, { reason: 'reviewed' }),
         sandbox: trustedUrl(state.sandbox, 'lookalike'),
       }} />
     </>

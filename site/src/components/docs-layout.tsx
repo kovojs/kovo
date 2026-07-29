@@ -346,9 +346,21 @@ export function DocsSidebarRegion({
 function DocsRouteContentView({ content }: { content: DocsRouteContent }): string {
   if (content.kind === 'html') {
     return content.prose === false ? (
-      <div rawHtml={trustedHtml(content.html)} />
+      <div
+        rawHtml={trustedHtml(content.html, {
+          reason: 'docs build pipeline produced reviewed authored HTML',
+          source: 'site/src/components/docs-layout.tsx',
+        })}
+      />
     ) : (
-      <article style={docsLayoutStyles.prose} data-prose rawHtml={trustedHtml(content.html)} />
+      <article
+        style={docsLayoutStyles.prose}
+        data-prose
+        rawHtml={trustedHtml(content.html, {
+          reason: 'docs build pipeline produced reviewed authored HTML',
+          source: 'site/src/components/docs-layout.tsx',
+        })}
+      />
     );
   }
   if (content.kind === 'spec') {
@@ -373,7 +385,14 @@ function DocsRouteContentView({ content }: { content: DocsRouteContent }): strin
           </a>{' '}
           at build time. The docs explain; the spec decides.
         </p>
-        <article style={docsLayoutStyles.prose} data-prose rawHtml={trustedHtml(content.html)} />
+        <article
+          style={docsLayoutStyles.prose}
+          data-prose
+          rawHtml={trustedHtml(content.html, {
+            reason: 'spec renderer produced reviewed normative HTML',
+            source: 'site/src/components/docs-layout.tsx',
+          })}
+        />
       </div>
     );
   }

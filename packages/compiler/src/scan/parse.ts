@@ -67,6 +67,7 @@ import {
 import { deriveMutationKey } from '../mutation-names.js';
 import { mutationFormProvenanceAttributeName } from '../mutation-form-provenance.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
+import { isCompilerAuditText } from '../security/audit-text.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import {
@@ -95,6 +96,8 @@ import type {
   ComponentOptionEntry,
   CompilerJsxRuntimeImportModel,
   DocumentElementActionModel,
+  DeriveInputEntryModel,
+  DeriveInputsModel,
   HandlerWriteSinkFact,
   HandlerWriteSinkOperationKind,
   HandlerWriteSinkOwner,
@@ -2076,6 +2079,81 @@ function stringLiteralArrayValuesFromExpression(expression: ts.Expression): stri
   }
 
   return values;
+}
+
+function deriveInputsFromExpression(expression: ts.Expression): DeriveInputsModel | null {
+  const value = unwrapExpression(expression);
+  if (ts.isArrayLiteralExpression(value)) {
+    const entries: DeriveInputEntryModel[] = [];
+    const length = compilerArrayLength(value.elements, 'Derive tuple inputs');
+    for (let index = 0; index < length; index += 1) {
+      const element = compilerOwnDataValue(value.elements, index, 'Derive tuple inputs') as
+        | ts.Expression
+        | ts.SpreadElement
+        | undefined;
+      if (!element || ts.isSpreadElement(element)) return null;
+      const entry = deriveInputEntry(element);
+      if (entry === null) return null;
+      compilerArrayAppend(entries, entry, 'Derive tuple input facts');
+    }
+    return { entries, form: 'tuple' };
+  }
+
+  if (!ts.isObjectLiteralExpression(value)) return null;
+  const entries: DeriveInputEntryModel[] = [];
+  const length = compilerArrayLength(value.properties, 'Derive object-map inputs');
+  for (let index = 0; index < length; index += 1) {
+    const property = compilerOwnDataValue(value.properties, index, 'Derive object-map inputs') as
+      | ts.ObjectLiteralElementLike
+      | undefined;
+    if (!property || !ts.isPropertyAssignment(property)) return null;
+    const alias = propertyNameText(property.name);
+    if (alias === null || alias.length === 0) return null;
+    const entry = deriveInputEntry(property.initializer);
+    if (entry === null) return null;
+    compilerArrayAppend(entries, { ...entry, alias }, 'Derive object-map input facts');
+  }
+  return { entries, form: 'object' };
+}
+
+function deriveInputEntry(expression: ts.Expression): DeriveInputEntryModel | null {
+  const value = unwrapExpression(expression);
+  if (ts.isStringLiteralLike(value) && value.text.length > 0) {
+    return { input: value.text, kind: 'generated' };
+  }
+  if (!ts.isCallExpression(value)) return null;
+  const callee = unwrapExpression(value.expression);
+  if (
+    !ts.isPropertyAccessExpression(callee) ||
+    !ts.isIdentifier(unwrapExpression(callee.expression)) ||
+    (unwrapExpression(callee.expression) as ts.Identifier).text !== 'derive'
+  ) {
+    return null;
+  }
+  const argumentLength = compilerArrayLength(value.arguments, 'Derive input helper arguments');
+  if (callee.name.text === 'state' && argumentLength === 0) {
+    return { input: 'state', kind: 'state' };
+  }
+  if (callee.name.text === 'clock' && argumentLength === 0) {
+    return { input: 'now', kind: 'clock' };
+  }
+  if (callee.name.text !== 'query' || argumentLength !== 1) return null;
+  const handle = compilerOwnDataValue(value.arguments, 0, 'Derive query input') as
+    | ts.Expression
+    | undefined;
+  if (!handle) return null;
+  const input = deriveQueryHandleName(unwrapExpression(handle));
+  return input === null ? null : { input, kind: 'query' };
+}
+
+function deriveQueryHandleName(expression: ts.Expression): string | null {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  if (ts.isElementAccessExpression(expression)) {
+    const key = expression.argumentExpression && unwrapExpression(expression.argumentExpression);
+    return key && ts.isStringLiteralLike(key) && key.text.length > 0 ? key.text : null;
+  }
+  return null;
 }
 
 function arrowFunctionPartsFromExpression(
@@ -8035,6 +8113,18 @@ function callExpressionModel(
       'Call argument temporal reads',
     );
   }
+  const firstArgument =
+    argumentLength === 0
+      ? undefined
+      : (compilerOwnDataValue(node.arguments, 0, 'Call expression arguments') as
+          | ts.Expression
+          | undefined);
+  const deriveInputs =
+    ts.isIdentifier(unwrapExpression(node.expression)) &&
+    (unwrapExpression(node.expression) as ts.Identifier).text === 'derive' &&
+    firstArgument !== undefined
+      ? deriveInputsFromExpression(firstArgument)
+      : null;
   return {
     arguments: argumentSources,
     argumentArrowFunctionParts,
@@ -8044,6 +8134,7 @@ function callExpressionModel(
     argumentStringLiteralArrayValues,
     argumentStaticValues,
     argumentTemporalReads,
+    ...(deriveInputs === null ? {} : { deriveInputs }),
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     ...(frameworkFactory === undefined ? {} : { frameworkFactory }),
@@ -8376,7 +8467,6 @@ function recordFrameworkTrustedUrlFact(
     )
   )
     return;
-  compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
   const rawValue = candidate.arguments[0];
   if (rawValue !== undefined) {
     compilerWeakMapSet(
@@ -8387,12 +8477,60 @@ function recordFrameworkTrustedUrlFact(
       ),
     );
   }
-  const rawReason = candidate.arguments[1];
-  if (rawReason === undefined) return;
-  const reason = unwrapExpression(rawReason);
-  if (!ts.isStringLiteralLike(reason) && !ts.isNoSubstitutionTemplateLiteral(reason)) return;
-  const normalized = compilerStringTrim(reason.text);
-  if (normalized !== '') compilerWeakMapSet(frameworkTrustedUrlReasonFacts, fact, normalized);
+  const rawMetadata = candidate.arguments[1];
+  if (rawMetadata === undefined) return;
+  const auditedReason = parserStaticTrustedOutputMetadataReason(rawMetadata);
+  if (auditedReason !== undefined) {
+    compilerWeakMapSet(frameworkTrustedUrlFacts, fact, true);
+    compilerWeakMapSet(frameworkTrustedUrlReasonFacts, fact, auditedReason);
+  }
+}
+
+/** @internal Exact static `{ reason, source? }` metadata accepted by trusted-output constructors. */
+export function parserStaticTrustedOutputMetadataReason(
+  expression: ts.Expression,
+): string | undefined {
+  const metadata = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(metadata)) return undefined;
+
+  let reason: string | undefined;
+  let sawSource = false;
+  const propertyLength = compilerArrayLength(
+    metadata.properties,
+    'Trusted output metadata properties',
+  );
+  for (let index = 0; index < propertyLength; index += 1) {
+    const property = compilerOwnDataValue(
+      metadata.properties,
+      index,
+      'Trusted output metadata properties',
+    ) as ts.ObjectLiteralElementLike | undefined;
+    if (!property || !ts.isPropertyAssignment(property)) return undefined;
+    const name = propertyNameText(property.name);
+    if (name !== 'reason' && name !== 'source') return undefined;
+
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value) && !ts.isNoSubstitutionTemplateLiteral(value)) {
+      return undefined;
+    }
+    const normalized = compilerStringTrim(value.text);
+    if (
+      normalized === '' ||
+      normalized !== value.text ||
+      !isCompilerAuditText(normalized)
+    ) {
+      return undefined;
+    }
+
+    if (name === 'reason') {
+      if (reason !== undefined) return undefined;
+      reason = normalized;
+    } else {
+      if (sawSource) return undefined;
+      sawSource = true;
+    }
+  }
+  return reason;
 }
 
 function jsxAttributeExpressionStaticValue(

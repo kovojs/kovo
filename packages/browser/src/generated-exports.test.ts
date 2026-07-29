@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as generated from './generated.js';
 import { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
-import { derive } from './derive.js';
+import { derive, generatedDerive } from './derive.js';
 import { handler } from './handlers.js';
 import { installGeneratedKovoLoader } from './loader.js';
 import { now, tempId } from './optimism.js';
@@ -21,7 +21,12 @@ describe('runtime generated exports', () => {
     expect(generated.applyCompiledQueryUpdatePlan).toBe(applyCompiledQueryUpdatePlan);
     expect(generated.runQueryUpdatePlan).toBe(runQueryUpdatePlan);
     expect(generated.createQueryStore).toBe(createQueryStore);
-    expect(generated.derive).toBe(derive);
+    expect(generated.derive).toBe(generatedDerive);
+    expect(generated.derive).not.toBe(derive);
+    expect(generated.derive(['cart'], (cart) => cart).inputs).toEqual(['cart']);
+    expect(() => (derive as unknown as typeof generated.derive)(['cart'], (cart) => cart)).toThrow(
+      /minted by derive/u,
+    );
     expect(generated.handler).toBe(handler);
     expect(generated.installKovoLoader).toBe(installGeneratedKovoLoader);
     expect(generated.kovoEscapeHtml).toBe(kovoEscapeHtml);

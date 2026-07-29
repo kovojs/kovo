@@ -90,7 +90,10 @@ export const PostBody = component({
     <article>
       {safeRichHtml(post.body)}
       {trustedHtml('<hr/>')}
-      {trustedHtml(post.title, 'admin-curated title, sanitized upstream')}
+      {trustedHtml(post.title, {
+        reason: 'admin-curated title, sanitized upstream',
+        source: 'admin/editor.ts',
+      })}
     </article>
   ),
 });

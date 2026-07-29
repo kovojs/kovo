@@ -184,7 +184,12 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
         <h1 style={exampleSplitStyles.headTitle}>{title}</h1>
         <p style={exampleSplitStyles.headBlurb}>{blurb}</p>
       </header>
-      <style rawHtml={trustedHtml(tabStyle)} />
+      <style
+        rawHtml={trustedHtml(tabStyle, {
+          reason: 'example tabs generate a closed selector rule set',
+          source: 'site/src/components/example-split.tsx',
+        })}
+      />
       <div style={exampleSplitStyles.split}>
         <section style={exampleSplitStyles.shell} aria-label={`${title} running app`}>
           <div style={exampleSplitStyles.bar}>
@@ -200,7 +205,10 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
           {appHref ? (
             <iframe
               style={exampleSplitStyles.frame}
-              src={trustedUrl(appHref, 'configured docs example application')}
+              src={trustedUrl(appHref, {
+                reason: 'configured docs example application',
+                source: 'site/src/components/example-split.tsx',
+              })}
               title={`${title} running app`}
               loading="lazy"
               sandbox="allow-forms allow-scripts"
@@ -239,14 +247,24 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
                 style={exampleSplitStyles.panel}
                 data-index={index}
                 data-example-panel
-                rawHtml={trustedHtml(file.html)}
+                rawHtml={trustedHtml(file.html, {
+                  reason: 'syntax highlighter produced escaped example source markup',
+                  source: 'site/src/components/example-split.tsx',
+                })}
               />
             ))}
           </div>
         </section>
       </div>
       {guideHtml ? (
-        <article style={exampleSplitStyles.guide} data-prose rawHtml={trustedHtml(guideHtml)} />
+        <article
+          style={exampleSplitStyles.guide}
+          data-prose
+          rawHtml={trustedHtml(guideHtml, {
+            reason: 'docs build pipeline produced reviewed example guide HTML',
+            source: 'site/src/components/example-split.tsx',
+          })}
+        />
       ) : (
         ''
       )}

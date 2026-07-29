@@ -329,7 +329,7 @@ describe('server app shell Vite dev seam', () => {
             routes: [
               route('/cart', {
                 modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
-                page: () => trustedHtml('<main>Cart</main>'),
+                page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }),
               }),
             ],
           }),
@@ -1137,8 +1137,8 @@ describe('server app shell Vite dev seam', () => {
   it('serves KV228 route-table diagnostics through the default dev handler', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => trustedHtml('<main>Param</main>') }),
-        route('/products/new', { page: () => trustedHtml('<main>New</main>') }),
+        route('/products/:id', { page: () => trustedHtml('<main>Param</main>', { reason: "framework server rendering test fixture" }) }),
+        route('/products/new', { page: () => trustedHtml('<main>New</main>', { reason: "framework server rendering test fixture" }) }),
       ],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
@@ -1236,7 +1236,7 @@ describe('server app shell Vite dev seam', () => {
     const poisonedDocument = '<script>globalThis.__kovoDevHmrPwned=1</script>';
     const poisonedClient = 'globalThis.__kovoDevHmrClientPwned=1;';
     const app = createApp({
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
+      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }) })],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({

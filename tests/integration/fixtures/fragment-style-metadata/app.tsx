@@ -33,7 +33,7 @@ export const revealLateCard = mutation('fragment-style-metadata/reveal', {
         <>
           <link
             rel="stylesheet"
-            href={trustedUrl(href, 'compiler-emitted fixture stylesheet metadata')}
+            href={trustedUrl(href, { reason: 'compiler-emitted fixture stylesheet metadata' })}
           />
           <LateCard />
         </>

@@ -547,7 +547,7 @@ describe('kovo add', () => {
       expect(avatar).toContain('const avatarStyles = style.create');
       expect(avatar).toContain('styles?: AvatarStyleOverrides');
       expect(avatar).toContain('referrerpolicy="no-referrer"');
-      expect(avatar).toContain("trustedUrl(props.src, 'caller-selected avatar image')");
+      expect(avatar).toContain("reason: 'caller-selected avatar image'");
       expect(avatar).not.toContain('srcset=');
       expect(badge).toContain('export const Badge = component({');
       expect(badge).toContain("import * as style from '@kovojs/style';");

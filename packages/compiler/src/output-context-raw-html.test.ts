@@ -79,13 +79,13 @@ const browserTrustedHtml = {
 export const TrustedRawHtml = component({
   render: () => (
     <section>
-      <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>")} />
-      <article innerHTML={trustedHtml(browserTrustedHtml)} />
-      <article rawHtml={trustedHtml("<em>raw helper</em>")} />
+      <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>", { reason: 'reviewed static markup' })} />
+      <article innerHTML={trustedHtml(browserTrustedHtml, { reason: 'reviewed browser TrustedHTML' })} />
+      <article rawHtml={trustedHtml("<em>raw helper</em>", { reason: 'reviewed raw helper markup' })} />
       <article html={trustedHtml({
         [Symbol.toStringTag]: "TrustedHTML",
         toString: () => "<strong>compatible</strong>",
-      })} />
+      }, { reason: 'reviewed compatible TrustedHTML' })} />
     </section>
   ),
 });
@@ -108,21 +108,21 @@ export const TrustedRawHtml = component({
         "outputContextFacts": [
           {
             "context": "trusted-html",
-            "expression": "trustedHtml("<b>kovo trusted</b>")",
+            "expression": "trustedHtml("<b>kovo trusted</b>", { reason: 'reviewed static markup' })",
             "sink": "dangerouslySetInnerHTML",
             "source": "server-render",
             "writer": "trusted raw HTML attribute",
           },
           {
             "context": "trusted-html",
-            "expression": "trustedHtml(browserTrustedHtml)",
+            "expression": "trustedHtml(browserTrustedHtml, { reason: 'reviewed browser TrustedHTML' })",
             "sink": "innerHTML",
             "source": "server-render",
             "writer": "trusted raw HTML attribute",
           },
           {
             "context": "trusted-html",
-            "expression": "trustedHtml("<em>raw helper</em>")",
+            "expression": "trustedHtml("<em>raw helper</em>", { reason: 'reviewed raw helper markup' })",
             "sink": "rawHtml",
             "source": "server-render",
             "writer": "trusted raw HTML attribute",
@@ -132,7 +132,7 @@ export const TrustedRawHtml = component({
             "expression": "trustedHtml({
               [Symbol.toStringTag]: "TrustedHTML",
               toString: () => "<strong>compatible</strong>",
-            })",
+            }, { reason: 'reviewed compatible TrustedHTML' })",
             "sink": "html",
             "source": "server-render",
             "writer": "trusted raw HTML attribute",
@@ -151,13 +151,13 @@ export const TrustedRawHtml = component({
       export const TrustedRawHtml = component({
         render: () => (
           <section kovo-c="trusted-raw-html">
-            <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>")} />
-            <article innerHTML={trustedHtml(browserTrustedHtml)} />
-            <article rawHtml={trustedHtml("<em>raw helper</em>")} />
+            <article dangerouslySetInnerHTML={trustedHtml("<b>kovo trusted</b>", { reason: 'reviewed static markup' })} />
+            <article innerHTML={trustedHtml(browserTrustedHtml, { reason: 'reviewed browser TrustedHTML' })} />
+            <article rawHtml={trustedHtml("<em>raw helper</em>", { reason: 'reviewed raw helper markup' })} />
             <article html={trustedHtml({
               [Symbol.toStringTag]: "TrustedHTML",
               toString: () => "<strong>compatible</strong>",
-            })} />
+            }, { reason: 'reviewed compatible TrustedHTML' })} />
           </section>
         ),
       });

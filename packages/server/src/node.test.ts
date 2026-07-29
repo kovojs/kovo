@@ -1251,7 +1251,7 @@ describe('server node adapter', () => {
       routes: [
         route('/cart', {
           modulepreloads: [clientHref],
-          page: () => trustedHtml(`<main>Cart ${db.count}</main>`),
+          page: () => trustedHtml(`<main>Cart ${db.count}</main>`, { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -1418,7 +1418,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
       },
     }));
     const sessionProvider = vi.fn(() => null);
-    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>', { reason: "framework server rendering test fixture" }));
     const background = task('security/bodyless-ingress', {
       input: s.object({}),
       run() {},
@@ -1473,7 +1473,7 @@ describe('toNodeHandler incomplete request transport closure', () => {
       },
     }));
     const sessionProvider = vi.fn(() => null);
-    const page = vi.fn(() => trustedHtml('<main>unreachable</main>'));
+    const page = vi.fn(() => trustedHtml('<main>unreachable</main>', { reason: "framework server rendering test fixture" }));
     const background = task('security/streamed-body-ingress', {
       input: s.object({}),
       run() {},

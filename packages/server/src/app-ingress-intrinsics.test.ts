@@ -25,14 +25,14 @@ describe('request ingress intrinsic authority', () => {
   it('does not let a late global URL constructor cross-bind route capability bytes', async () => {
     const victimCapability = 'victim-route-capability';
     const publicRoute = route('/public', {
-      page: () => trustedHtml('<main>public-route</main>'),
+      page: () => trustedHtml('<main>public-route</main>', { reason: "framework server rendering test fixture" }),
     });
     const capabilityRoute = route('/capability', {
       page: ({ search }) =>
         trustedHtml(
           search.token === victimCapability
             ? '<main>victim-account</main>'
-            : '<main>access-denied</main>',
+            : '<main>access-denied</main>', { reason: "framework server rendering test fixture" },
         ),
       search: s.object({ token: s.string() }),
     });
@@ -72,7 +72,7 @@ describe('request ingress intrinsic authority', () => {
           route('/account', {
             page: () => {
               calls.push('rendered');
-              return trustedHtml('<main>account</main>');
+              return trustedHtml('<main>account</main>', { reason: "framework server rendering test fixture" });
             },
           }),
         ],
@@ -148,7 +148,7 @@ describe('request ingress intrinsic authority', () => {
                 }
                 return Reflect.apply(nativeGet, this, [name]);
               };
-              return trustedHtml('<main>full-document</main>');
+              return trustedHtml('<main>full-document</main>', { reason: "framework server rendering test fixture" });
             },
           }),
         ],

@@ -16,8 +16,7 @@ export type {
   SafeRichHtmlOptions,
   TrustedHtml,
   TrustedOutputMetadata,
-  TrustedOutputMetadataInput,
   TrustedUrl,
 } from './security-output.js';
 export { derive } from './derive.js';
-export type { DeriveDefinition } from './derive.js';
+export type { DeriveDefinition, DeriveInput } from './derive.js';

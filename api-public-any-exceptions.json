@@ -3,28 +3,6 @@
   "$comment": "Temporary exact-count debt only. AST reachability unwraps first-party aliases; expiry and descending match counts are binding.",
   "exceptions": [
     {
-      "id": "browser-derived-values",
-      "package": "@kovojs/browser",
-      "declarationPattern": "@kovojs/browser/dist/derive-<chunk>.d.mts",
-      "symbolPattern": "*",
-      "memberPattern": "*",
-      "maximumMatches": 1,
-      "owner": "browser-runtime",
-      "reason": "The current variadic derived-value adapter still erases heterogeneous callback input tuples.",
-      "expires": "2026-10-31"
-    },
-    {
-      "id": "browser-optimism-generics",
-      "package": "@kovojs/browser",
-      "declarationPattern": "@kovojs/browser/dist/optimism-<chunk>.d.mts",
-      "symbolPattern": "*",
-      "memberPattern": "*",
-      "maximumMatches": 2,
-      "owner": "browser-runtime",
-      "reason": "The existing optimism inference graph uses any as a conditional-type wildcard while the public contract is redesigned.",
-      "expires": "2026-10-31"
-    },
-    {
       "id": "core-form-helper-generics",
       "package": "@kovojs/core",
       "declarationPattern": "@kovojs/core/dist/forms-types-<chunk>.d.mts",

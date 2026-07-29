@@ -606,7 +606,10 @@ export function BreadcrumbDemo(): string {
       </p>
       <div data-ui-demo="breadcrumb">
         {Breadcrumb.definition.render({
-          children: trustedHtml(`${account}${separator}${billing}`) as unknown as string,
+          children: trustedHtml(`${account}${separator}${billing}`, {
+            reason: 'breadcrumb fixture composes Kovo-rendered primitive markup',
+            source: 'examples/gallery/src/demo-fixtures.tsx',
+          }) as unknown as string,
           label: 'Account path',
         })}
       </div>

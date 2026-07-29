@@ -20,6 +20,10 @@ describe('packed browser client consumer proof', () => {
       assertPackedBrowserClientManifest({
         dependencies: { '@kovojs/core': '0.2.0' },
         exports: {
+          '.': {
+            default: './dist/index.mjs',
+            types: './dist/index.d.mts',
+          },
           './client': {
             default: './dist/client.mjs',
             types: './dist/client.d.mts',

@@ -11,7 +11,7 @@ export const CatalogCard = component({
         <img
           alt={product.imageAlt}
           data-transition="photo"
-          src={trustedUrl(product.imageSrc, 'fixture-owned catalog image source')}
+          src={trustedUrl(product.imageSrc, { reason: 'fixture-owned catalog image source' })}
           viewTransitionName="product-photo"
         />
         <h2 data-transition="title" viewTransitionName="product-title">

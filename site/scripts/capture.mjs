@@ -233,7 +233,7 @@ export async function captureLoaderBudget() {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => trustedHtml('<main>loader budget</main>'),
+          page: () => trustedHtml('<main>loader budget</main>', { reason: "site capture renderer output" }),
         }),
       ],
     });

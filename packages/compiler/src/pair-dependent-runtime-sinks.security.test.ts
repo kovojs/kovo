@@ -399,7 +399,7 @@ export const ActiveEmbed = component({
     ],
     [
       'missing sandbox for a reviewed dynamic source',
-      '<iframe src={trustedUrl(state.value, "reviewed embed")} />',
+      '<iframe src={trustedUrl(state.value, { reason: "reviewed embed" })} />',
     ],
     [
       'isolation-lifting pair',
@@ -544,18 +544,18 @@ export const StaticContext = component({
       <script {...{ src: '/assets/runtime.js', type: 'module' }} />
       <link {...{ href: '/assets/theme.css', rel: 'stylesheet' }} />
       <iframe {...{ sandbox: 'allow-forms', src: '/untrusted/profile' }} />
-      <script {...{ src: trustedUrl(state.asset, 'reviewed spread module'), type: 'module' }} />
-      <script {...{ ...{ src: trustedUrl(state.asset, 'reviewed nested spread module') }, type: 'module' }} />
-      <link {...{ href: trustedUrl(state.stylesheet, 'reviewed spread stylesheet'), rel: 'stylesheet' }} />
-      <iframe {...{ sandbox: 'allow-forms', src: trustedUrl(state.asset, 'reviewed spread frame') }} />
-      <script src={trustedUrl(state.asset, 'reviewed executable module asset')} />
+      <script {...{ src: trustedUrl(state.asset, { reason: 'reviewed spread module' }), type: 'module' }} />
+      <script {...{ ...{ src: trustedUrl(state.asset, { reason: 'reviewed nested spread module' }) }, type: 'module' }} />
+      <link {...{ href: trustedUrl(state.stylesheet, { reason: 'reviewed spread stylesheet' }), rel: 'stylesheet' }} />
+      <iframe {...{ sandbox: 'allow-forms', src: trustedUrl(state.asset, { reason: 'reviewed spread frame' }) }} />
+      <script src={trustedUrl(state.asset, { reason: 'reviewed executable module asset' })} />
       <link
         rel="stylesheet"
-        href={trustedUrl(state.stylesheet, 'reviewed stylesheet asset')}
+        href={trustedUrl(state.stylesheet, { reason: 'reviewed stylesheet asset' })}
       />
       <iframe
         sandbox="allow-forms"
-        src={trustedUrl(state.asset, 'reviewed embedded application')}
+        src={trustedUrl(state.asset, { reason: 'reviewed embedded application' })}
       />
     </>
   ),
@@ -645,13 +645,13 @@ export const TrustedComposedContext = component({
   state: () => ({ script: '/reviewed.js', stylesheet: '/reviewed.css', frame: '/reviewed' }),
   render: (_queries, state) => (
     <>
-      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.script, 'reviewed script') }}>
+      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.script, { reason: 'reviewed script' }) }}>
         <script type="module" />
       </Tooltip.Trigger>
-      <Tooltip.Trigger asChild attrs={{ href: browser.trustedUrl(state.stylesheet, 'reviewed stylesheet') }}>
+      <Tooltip.Trigger asChild attrs={{ href: browser.trustedUrl(state.stylesheet, { reason: 'reviewed stylesheet' }) }}>
         <link rel="stylesheet" />
       </Tooltip.Trigger>
-      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.frame, 'reviewed frame') }}>
+      <Tooltip.Trigger asChild attrs={{ src: reviewedUrl(state.frame, { reason: 'reviewed frame' }) }}>
         <iframe sandbox="allow-forms" />
       </Tooltip.Trigger>
     </>
@@ -661,9 +661,11 @@ export const TrustedComposedContext = component({
     });
 
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
-    expect(result.loweredSource).toContain("src={reviewedUrl(state.script, 'reviewed script')}");
     expect(result.loweredSource).toContain(
-      "href={browser.trustedUrl(state.stylesheet, 'reviewed stylesheet')}",
+      "src={reviewedUrl(state.script, { reason: 'reviewed script' })}",
+    );
+    expect(result.loweredSource).toContain(
+      "href={browser.trustedUrl(state.stylesheet, { reason: 'reviewed stylesheet' })}",
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -697,9 +699,9 @@ export const TrustedLiveContext = component({
   state: () => ({ script: '/reviewed.js', stylesheet: '/reviewed.css', frame: '/reviewed' }),
   render: (_queries, state) => (
     <>
-      <script type="module" src={trustedUrl(state.script, 'reviewed script')} />
-      <link rel="stylesheet" href={trustedUrl(state.stylesheet, 'reviewed stylesheet')} />
-      <iframe sandbox="allow-forms" src={trustedUrl(state.frame, 'reviewed frame')} />
+      <script type="module" src={trustedUrl(state.script, { reason: 'reviewed script' })} />
+      <link rel="stylesheet" href={trustedUrl(state.stylesheet, { reason: 'reviewed stylesheet' })} />
+      <iframe sandbox="allow-forms" src={trustedUrl(state.frame, { reason: 'reviewed frame' })} />
     </>
   ),
 });

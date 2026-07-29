@@ -105,7 +105,9 @@ import { component } from '@kovojs/core';
 import { trustedUrl } from '@kovojs/browser';
 
 export const ReviewedEscape = component({
-  render: ({ avatar }) => <img src={trustedUrl(avatar, 'reviewed avatar CDN')} alt="avatar" />,
+  render: ({ avatar }) => (
+    <img src={trustedUrl(avatar, { reason: 'reviewed avatar CDN' })} alt="avatar" />
+  ),
 });
 `);
     const missingReason = browserPosture(`
@@ -122,7 +124,10 @@ import { trustedUrl } from '@kovojs/browser';
 
 export const ReviewedSpread = component({
   render: ({ avatar }) => (
-    <img {...{ src: trustedUrl(avatar, 'reviewed spread avatar CDN') }} alt="avatar" />
+    <img
+      {...{ src: trustedUrl(avatar, { reason: 'reviewed spread avatar CDN' }) }}
+      alt="avatar"
+    />
   ),
 });
 `);
@@ -147,7 +152,7 @@ export const ReviewedSpread = component({
       expect.arrayContaining([
         expect.objectContaining({
           code: 'KV236',
-          message: expect.stringContaining('trustedUrl(value, auditedReason)'),
+          message: expect.stringContaining('trustedUrl(value, { reason: auditedReason })'),
         }),
       ]),
     );
@@ -222,7 +227,7 @@ import { trustedUrl } from '@kovojs/browser';
 export const NestedReviewedAsset = component({
   render: ({ avatar }) => (
     <img
-      {...{ ...{ src: trustedUrl(avatar, 'reviewed nested avatar CDN') } }}
+      {...{ ...{ src: trustedUrl(avatar, { reason: 'reviewed nested avatar CDN' }) } }}
       alt="avatar"
     />
   ),

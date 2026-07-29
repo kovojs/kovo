@@ -1678,7 +1678,7 @@ export default createApp({
   routes: [
     route('/admin', {
       guard: allow,
-      page: () => trustedHtml('<main>Admin</main>', 'build access fixture'),
+      page: () => trustedHtml('<main>Admin</main>', { reason: 'build access fixture' }),
     }),
   ],
 });
@@ -1700,9 +1700,11 @@ export default createApp({
     const csrfStart = appSource.indexOf("mutation('admin/update'");
     const csrfEnd = appSource.indexOf('\n});', csrfStart) + '\n})'.length;
     const htmlStart = appSource.indexOf(
-      "trustedHtml('<main>Admin</main>', 'build access fixture')",
+      "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })",
     );
-    const htmlEnd = htmlStart + "trustedHtml('<main>Admin</main>', 'build access fixture')".length;
+    const htmlEnd =
+      htmlStart +
+      "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })".length;
     const allowSite = exactSite(allowStart, allowEnd);
     const csrfSite = exactSite(csrfStart, csrfEnd);
     const htmlSite = exactSite(htmlStart, htmlEnd);
@@ -1831,7 +1833,7 @@ export default createApp({
       "const allow = guards.rateLimit({ max: 10, per: 'global' });",
       "export const sharedRoute = route('/shared', {",
       '  guard: allow,',
-      "  page: () => trustedHtml('<main>Shared</main>', 'nested source identity fixture'),",
+      "  page: () => trustedHtml('<main>Shared</main>', { reason: 'nested source identity fixture' }),",
       '});',
       '',
     ].join('\n');
@@ -2558,7 +2560,7 @@ export default createApp({
   routes: [
     route('/contacts', {
       access: publicAccess('source-derived consumer fixture'),
-      page: () => trustedHtml('<main>Contacts</main>', 'source-derived consumer fixture'),
+      page: () => trustedHtml('<main>Contacts</main>', { reason: 'source-derived consumer fixture' }),
     }),
   ],
 });
@@ -2706,7 +2708,7 @@ export default createApp({
   routes: [
     route('/contacts', {
       access: publicAccess('derived invalidates fixture'),
-      page: () => trustedHtml('<main>Contacts</main>', 'derived invalidates fixture'),
+      page: () => trustedHtml('<main>Contacts</main>', { reason: 'derived invalidates fixture' }),
     }),
   ],
 });
@@ -5000,7 +5002,7 @@ export default createApp({
   routes: [
     route('/', {
       access: publicAccess('trustedHtml barrel build preflight fixture'),
-      page: () => <main>{trustedHtml('<h1>Home</h1>', 'trustedHtml barrel build preflight fixture')}<Promo /></main>,
+      page: () => <main>{trustedHtml('<h1>Home</h1>', { reason: 'trustedHtml barrel build preflight fixture' })}<Promo /></main>,
     }),
   ],
 });

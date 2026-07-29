@@ -11,7 +11,7 @@ const home = route('/', {
         Open OAuth fixture
       </a>
       <iframe
-        srcdoc={trustedHtml('<main>Embedded fixture</main>')}
+        srcdoc={trustedHtml('<main>Embedded fixture</main>', { reason: "framework integration fixture markup" })}
         sandbox="allow-same-origin"
         title="Embed fixture"
       />

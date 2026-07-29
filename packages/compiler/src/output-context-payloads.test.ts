@@ -484,7 +484,7 @@ export const DynamicUrlPayloads = component({
   render: ({ product }) => (
     <article>
       <a href={product.href}>Product</a>
-      <img src={trustedUrl(product.image, 'reviewed product image origin')} />
+      <img src={trustedUrl(product.image, { reason: 'reviewed product image origin' })} />
     </article>
   ),
 });

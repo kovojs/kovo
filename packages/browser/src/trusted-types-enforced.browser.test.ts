@@ -106,7 +106,9 @@ describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () =
       },
     });
     try {
-      const direct = trustedHtml(directCarrier);
+      const direct = trustedHtml(directCarrier, {
+        reason: 'Trusted Types direct carrier fixture',
+      });
       const safe = safeRichHtml('<strong data-kovo-stringifier-safe>SAFE</strong>');
       expect(kovoTrustedHtmlContent(direct)).toBe(
         '<em data-kovo-direct-stringifier-safe>DIRECT SAFE</em>',

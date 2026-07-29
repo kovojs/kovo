@@ -83,7 +83,12 @@ export const C = component({ render: () => <article>{trustedHtml('<p>reviewed</p
 import { trustedHtml } from '@kovojs/browser';
 export const C = component({
   render: ({}, _state, { request }) => (
-    <article>{trustedHtml(request.headers.get('x-reviewed') ?? '', 'reviewed upstream CMS')}</article>
+    <article>
+      {trustedHtml(request.headers.get('x-reviewed') ?? '', {
+        reason: 'reviewed upstream CMS',
+        source: 'adversarial-corpus.ts',
+      })}
+    </article>
   ),
 });
 `,

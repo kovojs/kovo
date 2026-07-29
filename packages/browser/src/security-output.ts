@@ -7,6 +7,7 @@ import {
 import { isKovoControlPlaneAttribute } from '@kovojs/core/internal/semantic-attributes';
 
 import {
+  securityArrayIsArray,
   securityArrayAppend,
   defineSecurityProperties,
   freezeSecurityValue,
@@ -39,29 +40,27 @@ import {
 import { kovoCreateHTML, kovoReadTrustedHTML } from './trusted-types.js';
 
 /**
- * Optional provenance attached to explicit trust escape hatches.
+ * Required, structured provenance attached to explicit trust escape hatches.
  */
 export interface TrustedOutputMetadata {
-  readonly reason?: string;
+  readonly reason: string;
   readonly source?: string;
 }
-
-/**
- * Metadata accepted by `trustedHtml(...)` and `trustedUrl(...)`: a shorthand reason string or a
- * structured provenance object.
- */
-export type TrustedOutputMetadataInput = string | TrustedOutputMetadata;
 
 /**
  * Conservative rich-HTML sanitizer options for CMS/user-authored HTML. This is a
  * runtime defense-in-depth floor, not a by-construction XSS proof (SPEC §6.6).
  */
-export interface SafeRichHtmlOptions extends TrustedOutputMetadata {
+export interface SafeRichHtmlOptions {
   /**
    * Optional additional element names to admit. Attribute filtering and URL-sink
    * checks still apply.
    */
   readonly allowedTags?: readonly string[];
+  /** Optional override for the sanitizer's built-in review reason. */
+  readonly reason?: string;
+  /** Optional source locator surfaced in trust explain output. */
+  readonly source?: string;
 }
 
 /**
@@ -94,7 +93,7 @@ const trustedUrlBrand: unique symbol = Symbol('kovo.security.trustedUrl');
  */
 export interface TrustedHtml {
   readonly [trustedHtmlBrand]: true;
-  readonly reason?: string;
+  readonly reason: string;
   readonly source?: string;
   readonly value: string | BrowserTrustedHTML;
 }
@@ -116,7 +115,7 @@ const browserTrustedHtmlSnapshots = securityWeakMap<object, string>();
  */
 export function trustedHtml(
   value: string | BrowserTrustedHTML,
-  metadata?: TrustedOutputMetadataInput,
+  metadata: TrustedOutputMetadata,
 ): TrustedHtml {
   const snapshot = trustedHtmlValueContent(value);
   const trusted = {
@@ -187,7 +186,7 @@ export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
  */
 export interface TrustedUrl {
   readonly [trustedUrlBrand]: true;
-  readonly reason?: string;
+  readonly reason: string;
   readonly source?: string;
   readonly value: string;
 }
@@ -199,7 +198,7 @@ export interface TrustedUrl {
  * {@link trustedHtml}: you take responsibility for the URL's safety, and the
  * brand is visible in source and `kovo explain`.
  */
-export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
+export function trustedUrl(value: string, metadata: TrustedOutputMetadata): TrustedUrl {
   const snapshot = securityString(value);
   const trusted = { ...trustedOutputMetadata(metadata), value: snapshot } as TrustedUrl;
   securityWeakMapSet(trustedUrlSnapshots, trusted, snapshot);
@@ -398,14 +397,69 @@ function snapshotBrowserTrustedHtml(value: object): string | undefined {
 }
 
 function trustedOutputMetadata(
-  metadata: TrustedOutputMetadataInput | undefined,
+  metadata: TrustedOutputMetadata,
 ): TrustedOutputMetadata {
-  if (metadata === undefined) return {};
-  if (typeof metadata === 'string') return { reason: metadata };
+  if (
+    typeof metadata !== 'object' ||
+    metadata === null ||
+    securityArrayIsArray(metadata)
+  ) {
+    throw new TypeError(
+      'trusted output constructors require structured metadata: { reason: "reviewed purpose" }.',
+    );
+  }
+  const keys = securityObjectKeys(metadata);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key !== 'reason' && key !== 'source') {
+      throw new TypeError(`trusted output metadata contains unsupported field "${key ?? ''}".`);
+    }
+  }
+  const reasonDescriptor = securityGetOwnPropertyDescriptor(metadata, 'reason');
+  if (reasonDescriptor === undefined || !('value' in reasonDescriptor)) {
+    throw new TypeError('trusted output metadata.reason must be an own data property.');
+  }
+  const reason = trustedOutputReviewText(reasonDescriptor.value, 'metadata.reason');
+  const sourceDescriptor = securityGetOwnPropertyDescriptor(metadata, 'source');
+  if (sourceDescriptor === undefined) return { reason };
+  if (!('value' in sourceDescriptor)) {
+    throw new TypeError('trusted output metadata.source must be an own data property.');
+  }
   return {
-    ...(metadata.reason === undefined ? {} : { reason: metadata.reason }),
-    ...(metadata.source === undefined ? {} : { source: metadata.source }),
+    reason,
+    source: trustedOutputReviewText(sourceDescriptor.value, 'metadata.source'),
   };
+}
+
+function trustedOutputReviewText(value: unknown, label: string): string {
+  const trimmed = typeof value === 'string' ? securityStringTrim(value) : undefined;
+  if (
+    typeof value !== 'string' ||
+    value.length > 4_096 ||
+    trimmed === '' ||
+    trimmed !== value
+  ) {
+    throw new TypeError(
+      `trusted output ${label} must be non-empty bounded review text without surrounding whitespace.`,
+    );
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const code = securityStringCharCodeAt(value, index);
+    if (
+      code <= 0x1f ||
+      (code >= 0x7f && code <= 0x9f) ||
+      code === 0x061c ||
+      (code >= 0x200b && code <= 0x200f) ||
+      (code >= 0x2028 && code <= 0x202e) ||
+      (code >= 0x2060 && code <= 0x206f) ||
+      code === 0xfeff
+    ) {
+      throw new TypeError(
+        `trusted output ${label} must not contain control, invisible, or bidirectional formatting characters.`,
+      );
+    }
+  }
+  return value;
 }
 
 const DEFAULT_RICH_HTML_TAGS = [

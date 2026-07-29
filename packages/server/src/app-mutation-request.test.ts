@@ -181,7 +181,7 @@ describe('server app mutation request boundary', () => {
         return {
           save: {
             fragmentRenderers: [
-              { render: () => trustedHtml('<output>secret</output>'), target: 'secret' },
+              { render: () => trustedHtml('<output>secret</output>', { reason: "framework server rendering test fixture" }), target: 'secret' },
             ],
           },
         };
@@ -199,7 +199,7 @@ describe('server app mutation request boundary', () => {
       name: 'one uniquely named sensitive renderer',
       renderers: [
         {
-          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>')),
+          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>', { reason: "framework server rendering test fixture" })),
           target: 'admin',
         },
       ],
@@ -207,9 +207,9 @@ describe('server app mutation request boundary', () => {
     {
       name: 'duplicate sensitive renderer targets',
       renderers: [
-        { render: vi.fn(() => trustedHtml('<output>public</output>')), target: 'shared' },
+        { render: vi.fn(() => trustedHtml('<output>public</output>', { reason: "framework server rendering test fixture" })), target: 'shared' },
         {
-          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>')),
+          render: vi.fn(() => trustedHtml('<output>SERVER_DATABASE_SECRET</output>', { reason: "framework server rendering test fixture" })),
           target: 'shared',
         },
       ],
@@ -579,7 +579,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
-      page: () => trustedHtml('<main>Cart</main>'),
+      page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }),
       stylesheets: [stylesheet('./cart.css')],
     });
     const renderer = {
@@ -722,7 +722,7 @@ describe('server app mutation request boundary', () => {
         mutations: [save],
         routes: [
           route('/cart-array-census', {
-            page: () => trustedHtml('<main>Cart</main>'),
+            page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }),
             stylesheets: [
               stylesheet({ criticalCss: '.route-safe{color:blue}', href: './route.css' }),
             ],
@@ -1047,7 +1047,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
-      page: () => trustedHtml('<main>Cart</main>'),
+      page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }),
       stylesheets: [stylesheet('./cart.css')],
     });
     const app = createApp({
@@ -1282,7 +1282,7 @@ describe('server app mutation request boundary', () => {
         render: ({ contextual }) =>
           trustedHtml(
             `<mutation-source-panel>${(contextual as { value: string }).value}</mutation-source-panel>`,
-            'source-context regression fixture',
+            { reason: 'source-context regression fixture' },
           ),
       }),
       'components/mutation/source-panel',

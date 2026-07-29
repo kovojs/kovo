@@ -189,7 +189,13 @@ export const StyleOutputContextFacts = component({
 import { trustedHtml } from '@kovojs/browser';
 
 export const TrustedOutputContextFacts = component({
-  render: () => <article dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,
+  render: () => (
+    <article
+      dangerouslySetInnerHTML={trustedHtml("<b>safe</b>", {
+        reason: 'reviewed output-context fixture',
+      })}
+    />
+  ),
 });
 `,
     });
@@ -198,7 +204,9 @@ export const TrustedOutputContextFacts = component({
       [
         {
           "context": "trusted-html",
-          "expression": "trustedHtml('<b>safe</b>')",
+          "expression": "trustedHtml('<b>safe</b>', {
+              reason: 'reviewed output-context fixture',
+            })",
           "sink": "dangerouslySetInnerHTML",
           "source": "server-render",
           "writer": "trusted raw HTML attribute",

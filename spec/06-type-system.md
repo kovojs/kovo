@@ -829,7 +829,8 @@ source span for `script[src]`, sandboxed `iframe[src]`, `img[src|srcset]`, SVG
 `source[src|srcset]`, `track[src]`, `input[type=image][src]`, and fetch-bearing `link[href]` relations
 (`stylesheet`, `modulepreload`, icons, and typed preloads). Relative/path-only and fragment URLs
 remain same-origin and add no origin. A computed URL at one of those positions is KV236 unless it
-is the exact framework `trustedUrl(value, auditedReason)` call with a non-empty static reason. That
+is the exact framework `trustedUrl(value, { reason: auditedReason, source? })` call with a non-empty
+static reason. That
 escape is recorded as opaque audit evidence; it does not invent an origin or establish isolation.
 A computed `link[rel]`, opaque spread that could introduce an asset position, unclassifiable
 external URL, raw browser fetch/worker authority, frame, or popup likewise prevents a positive

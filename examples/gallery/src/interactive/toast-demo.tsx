@@ -54,7 +54,7 @@ export const GalleryToastDemo = component({
         <style
           rawHtml={trustedHtml(
             '@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}',
-            'KV426: static gallery toast keyframes literal; no request or query data',
+            { reason: 'KV426: static gallery toast keyframes literal; no request or query data' },
           )}
         />
         {/* better-components-ux: the trigger lives in the normal demo flow; the

@@ -31,14 +31,14 @@ export default defineFixture({
           body: trustedHtml(
             `<main data-error-shell="404"><h1>Custom missing</h1><p>${status}:${escapeShellText(
               url.pathname,
-            )}</p></main>`,
+            )}</p></main>`, { reason: "framework integration fixture markup" },
           ),
           status,
         };
       },
       serverError: ({ status }) => ({
         body: trustedHtml(
-          `<main data-error-shell="500"><h1>Custom failure</h1><p>${status}:safe</p></main>`,
+          `<main data-error-shell="500"><h1>Custom failure</h1><p>${status}:safe</p></main>`, { reason: "framework integration fixture markup" },
         ),
         status,
       }),

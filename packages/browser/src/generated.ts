@@ -1,3 +1,5 @@
+import { generatedDerive } from './derive.js';
+
 export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {
   AppliedDeferredStreamResponseToRuntime,
@@ -124,5 +126,6 @@ export type {
   TrustedHtml,
   TrustedUrl,
 } from './security-output.js';
-export { derive } from './derive.js';
+/** @generated Compiler-emitted derive ABI. */
+export const derive = generatedDerive;
 export type { DeriveDefinition } from './derive.js';

@@ -777,6 +777,8 @@ export interface QueryDeriveFact {
   expression: string;
   exportName: string;
   input: string;
+  /** Generated object-map ABI: callback aliases mapped to runtime query/state/clock inputs. */
+  inputMap?: Readonly<Record<string, string>>;
   inputs?: readonly string[];
   name: string;
   param: string;

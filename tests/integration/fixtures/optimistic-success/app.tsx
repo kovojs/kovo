@@ -29,8 +29,8 @@ const homeRoute = route('/', {
     const cart = await readCart(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }))}
-        {trustedHtml('<script type="module" src="/client.ts"></script>')}
+        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }), { reason: "framework integration fixture markup" })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
         <CartPanel />
         <output data-testid="cart-double">{cart.count * 2}</output>
         {/* client.ts owns this optimistic submit; typed enrollment would double-dispatch it. */}

@@ -185,7 +185,7 @@ describe('renderTree', () => {
 describe('renderTree security boundaries (SPEC §4.10)', () => {
   const payload = '<img src=x onerror="globalThis.__kovoRenderTreePwned=1">';
   const Dangerous = component({
-    render: () => trustedHtml(payload, 'render-tree security regression') as never,
+    render: () => trustedHtml(payload, { reason: 'render-tree security regression' }) as never,
   });
 
   it('does not compose escaped output through a late Array.join replacement', async () => {

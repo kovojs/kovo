@@ -48,6 +48,10 @@ export function assertPackedBrowserClientManifest(manifest) {
   if (client?.types !== './dist/client.d.mts' || client?.default !== './dist/client.mjs') {
     throw new Error('Packed browser client does not resolve built runtime and declarations');
   }
+  const authoring = manifest.exports?.['.'];
+  if (authoring?.types !== './dist/index.d.mts' || authoring?.default !== './dist/index.mjs') {
+    throw new Error('Packed browser authoring root does not resolve built runtime and declarations');
+  }
   if (
     manifest.dependencies?.[CORE_PACKAGE] === undefined ||
     Object.keys(manifest.dependencies).some((name) => name.startsWith('node:'))
@@ -145,7 +149,7 @@ export function checkPackedBrowserClientConsumer() {
     assertPackedTypeConsumer(consumerRoot);
     assertPackedRuntimeConsumer(consumerRoot);
     process.stdout.write(
-      'Packed browser client consumer passed (3 declarations, 1 runtime value, 0 Node builtins).\n',
+      'Packed browser client/authoring consumer passed (opaque derives, structured trust metadata, 3 client declarations, 0 Node builtins).\n',
     );
   } finally {
     rmSync(consumerRoot, { force: true, recursive: true });
@@ -178,9 +182,23 @@ function assertPackedTypeConsumer(consumerRoot) {
     sourcePath,
     [
       "import { installKovoClient, type InstallKovoClientOptions, type KovoClient } from '@kovojs/browser/client';",
+      "import { derive, trustedHtml, trustedUrl, type DeriveInput, type TrustedOutputMetadata } from '@kovojs/browser';",
       'declare const root: EventTarget & ParentNode;',
+      "declare const cart: { readonly key: 'cart'; readonly result?: { count: number } };",
       'const options: InstallKovoClientOptions = { root };',
       'const client: KovoClient = installKovoClient(options);',
+      "const cartInput: DeriveInput<'cart', { count: number }> = derive.query(cart);",
+      'const label = derive([cartInput, derive.state<{ selected: boolean }>()], (value, state) => state.selected ? `${value.count} selected` : `${value.count} items`);',
+      'const summary = derive({ basket: cartInput, now: derive.clock<Date>() }, ({ basket, now }) => `${basket.count}:${now.toISOString()}`);',
+      "const metadata: TrustedOutputMetadata = { reason: 'reviewed packed consumer output', source: 'consumer.ts' };",
+      "trustedHtml('<strong>safe</strong>', metadata);",
+      "trustedUrl('https://example.test/checkout', { reason: 'allowlisted packed checkout redirect' });",
+      '// @ts-expect-error public derive inputs are opaque handles, not raw runtime names',
+      "derive(['cart'], (value) => value);",
+      '// @ts-expect-error trust metadata is required and string shorthand is retired',
+      "trustedHtml('<strong>unsafe</strong>', 'reviewed');",
+      'void label;',
+      'void summary;',
       "void client.dispose('abort');",
       '',
     ].join('\n'),
@@ -210,7 +228,12 @@ function assertPackedTypeConsumer(consumerRoot) {
 function assertPackedRuntimeConsumer(consumerRoot) {
   const source = [
     "import * as clientApi from '@kovojs/browser/client';",
+    "import { derive, trustedHtml, trustedUrl } from '@kovojs/browser';",
     "if (JSON.stringify(Object.keys(clientApi).sort()) !== JSON.stringify(['installKovoClient'])) throw new Error('runtime exports drifted');",
+    "const count = derive([derive.query({ key: 'cart' })], (cart) => cart.count);",
+    "if (count.run({ count: 2 }) !== 2) throw new Error('derive runtime drifted');",
+    "if (trustedHtml('<b>safe</b>', { reason: 'reviewed packed output' }).reason !== 'reviewed packed output') throw new Error('trustedHtml metadata drifted');",
+    "if (trustedUrl('/checkout', { reason: 'reviewed packed redirect' }).reason !== 'reviewed packed redirect') throw new Error('trustedUrl metadata drifted');",
     'class Root extends EventTarget { querySelectorAll() { return []; } }',
     'const root = new Root();',
     'const client = clientApi.installKovoClient({ importModule: async () => ({}), root });',

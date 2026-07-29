@@ -396,7 +396,7 @@ describe('server jsx runtime', () => {
       html(
         jsx('textarea', {
           name: 'record',
-          rawHtml: trustedHtml('record&#13;1'),
+          rawHtml: trustedHtml('record&#13;1', { reason: "framework server rendering test fixture" }),
         }),
       ),
     ).toThrow(/KV236.*raw HTML.*SPEC §13\.2/u);
@@ -404,28 +404,28 @@ describe('server jsx runtime', () => {
       html(
         jsx('textarea', {
           name: 'record',
-          children: trustedHtml('record&#0;1'),
+          children: trustedHtml('record&#0;1', { reason: "framework server rendering test fixture" }),
         }),
       ),
     ).toThrow(/KV236.*TrustedHtml.*SPEC §13\.2/u);
     expect(() =>
       html(
         jsx('option', {
-          children: trustedHtml('record&#32;&#32;one'),
+          children: trustedHtml('record&#32;&#32;one', { reason: "framework server rendering test fixture" }),
         }),
       ),
     ).toThrow(/KV236.*TrustedHtml.*SPEC §13\.2/u);
     expect(() =>
       html(
         jsx('option', {
-          rawHtml: trustedHtml('record&#32;&#32;one'),
+          rawHtml: trustedHtml('record&#32;&#32;one', { reason: "framework server rendering test fixture" }),
         }),
       ),
     ).toThrow(/KV236.*raw HTML.*SPEC §13\.2/u);
 
     // An explicit option value owns submission identity, so its trusted rich label is display-only.
     expect(
-      html(jsx('option', { value: 'record-1', rawHtml: trustedHtml('<b>Record one</b>') })),
+      html(jsx('option', { value: 'record-1', rawHtml: trustedHtml('<b>Record one</b>', { reason: "framework server rendering test fixture" }) })),
     ).toBe('<option value="record-1"><b>Record one</b></option>');
   });
 
@@ -1239,7 +1239,7 @@ describe('server jsx runtime', () => {
         jsx('style', {
           media: 'not all',
           nonce: 'reused-nonce',
-          rawHtml: trustedHtml('#kovo-reviewed-style-probe { display: none !important }'),
+          rawHtml: trustedHtml('#kovo-reviewed-style-probe { display: none !important }', { reason: "framework server rendering test fixture" }),
           type: 'text/plain',
         }),
       ),
@@ -1357,7 +1357,7 @@ describe('server jsx runtime', () => {
         jsx('iframe', {
           src: trustedUrl(
             'data:text/html,<script>parent.pwned=true</script>',
-            'reviewed active frame',
+            { reason: 'reviewed active frame' },
           ),
           sandbox: 'allow-scripts',
         }),
@@ -1564,7 +1564,7 @@ describe('server jsx runtime', () => {
     expect(html(jsx('style', { children: 'body{background:url(javascript:alert(1))}' }))).toBe(
       '<style></style>',
     );
-    expect(html(jsx('style', { rawHtml: trustedHtml('body{color:green}') }))).toBe(
+    expect(html(jsx('style', { rawHtml: trustedHtml('body{color:green}', { reason: "framework server rendering test fixture" }) }))).toBe(
       '<style>body{color:green}</style>',
     );
   });
@@ -1686,16 +1686,16 @@ describe('server jsx runtime', () => {
     expect(
       html(
         jsx('section', {
-          dangerouslySetInnerHTML: trustedHtml('<b>kovo trusted</b>'),
+          dangerouslySetInnerHTML: trustedHtml('<b>kovo trusted</b>', { reason: "framework server rendering test fixture" }),
           children: 'ignored',
         }),
       ),
     ).toBe('<section><b>kovo trusted</b></section>');
     expect(html(jsx('section', { innerHTML: browserTrustedHtml }))).toBe('<section></section>');
-    expect(html(jsx('section', { rawHtml: trustedHtml(browserTrustedHtml) }))).toBe(
+    expect(html(jsx('section', { rawHtml: trustedHtml(browserTrustedHtml, { reason: "framework server rendering test fixture" }) }))).toBe(
       '<section></section>',
     );
-    expect(html(jsx('section', { html: trustedHtml('<em>html helper</em>') }))).toBe(
+    expect(html(jsx('section', { html: trustedHtml('<em>html helper</em>', { reason: "framework server rendering test fixture" }) }))).toBe(
       '<section><em>html helper</em></section>',
     );
   });
@@ -1733,7 +1733,7 @@ describe('server jsx runtime', () => {
   });
 
   it('renders trusted HTML child values without escaping', () => {
-    expect(html(jsx('section', { children: trustedHtml('<kovo-defer></kovo-defer>') }))).toBe(
+    expect(html(jsx('section', { children: trustedHtml('<kovo-defer></kovo-defer>', { reason: "framework server rendering test fixture" }) }))).toBe(
       '<section><kovo-defer></kovo-defer></section>',
     );
   });
@@ -1744,7 +1744,7 @@ describe('server jsx runtime', () => {
     expect(html(jsx('a', { href: 'javascript:alert(1)', children: 'bad' }))).toBe(
       '<a href="#">bad</a>',
     );
-    expect(html(jsx('a', { href: trustedUrl('javascript:alert(1)'), children: 'vouched' }))).toBe(
+    expect(html(jsx('a', { href: trustedUrl('javascript:alert(1)', { reason: "framework server rendering test fixture" }), children: 'vouched' }))).toBe(
       '<a href="javascript:alert(1)">vouched</a>',
     );
     expect(html(jsx('a', { href: forgedUrl, children: 'forged' }))).not.toContain(
@@ -1753,8 +1753,8 @@ describe('server jsx runtime', () => {
   });
 
   it('renders the bytes pinned when trusted HTML and URL carriers were minted', () => {
-    const markup = trustedHtml('<em>browser-safe</em>');
-    const url = trustedUrl('javascript:reviewed()');
+    const markup = trustedHtml('<em>browser-safe</em>', { reason: "framework server rendering test fixture" });
+    const url = trustedUrl('javascript:reviewed()', { reason: "framework server rendering test fixture" });
 
     expect(Reflect.set(markup as object, 'value', '<script>alert(1)</script>')).toBe(false);
     expect(Reflect.set(url as object, 'value', 'javascript:alert(1)')).toBe(false);
@@ -1770,14 +1770,14 @@ describe('server jsx runtime', () => {
     expect(
       html(
         jsx('span', {
-          'data-next': trustedUrl('/account'),
+          'data-next': trustedUrl('/account', { reason: "framework server rendering test fixture" }),
           children: 'next',
-          title: trustedUrl('javascript:alert(1)'),
+          title: trustedUrl('javascript:alert(1)', { reason: "framework server rendering test fixture" }),
         }),
       ),
     ).toBe('<span>next</span>');
     expect(
-      html(jsx('button', { formaction: trustedUrl('javascript:alert(1)'), children: 'go' })),
+      html(jsx('button', { formaction: trustedUrl('javascript:alert(1)', { reason: "framework server rendering test fixture" }), children: 'go' })),
     ).toBe('<button formaction="javascript:alert(1)">go</button>');
   });
 

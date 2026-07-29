@@ -47,10 +47,10 @@ const homeRoute = route('/', {
     const deal = await readDeal(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/deal', name: 'deal', value: deal }))}
+        {trustedHtml(renderQueryScript({ href: '/_q/deal', name: 'deal', value: deal }), { reason: "framework integration fixture markup" })}
         <DealCard />
         {trustedHtml(
-          '<nullable-state kovo-state=\'{"contact":null}\'><output data-bind="state.contact?.name"></output><a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a><button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button><button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button></nullable-state>',
+          '<nullable-state kovo-state=\'{"contact":null}\'><output data-bind="state.contact?.name"></output><a data-bind:href="state.contact?.name" data-bind:aria-label="state.contact?.name">State contact</a><button type="button" on:click="/state-actions.ts#fillContact">Fill state contact</button><button type="button" on:click="/state-actions.ts#clearContact">Clear state contact</button></nullable-state>', { reason: "framework integration fixture markup" },
         )}
         <form mutation={fillDeal} enhance>
           <button type="submit">Fill server contact</button>

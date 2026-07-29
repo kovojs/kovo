@@ -8,10 +8,12 @@ import {
   compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
+  compilerCreateNullRecord,
   compilerMapGet,
   compilerMapSet,
   compilerOwnDataValue,
   compilerSnapshotDenseArray,
+  compilerSetOwnDataProperty,
   compilerStringReplaceAll,
   compilerStringSlice,
   compilerStringStartsWith,
@@ -22,6 +24,7 @@ import {
   jsxElements,
   type ArrowFunctionPartsModel,
   type ComponentModuleModel,
+  type DeriveInputsModel,
 } from '../scan/parse.js';
 import { outputContextForAttribute } from '../output-context-facts.js';
 import { escapeCssString } from '../shared.js';
@@ -37,37 +40,75 @@ export function exportedDerives(
     const call = calls[index]!;
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
-    const inputs = deriveInputNames(
-      ownStringArray(
-        compilerOwnDataValue(
-          call.argumentStringLiteralArrayValues,
-          0,
-          'Compiler derive input argument',
-        ),
-        'Compiler derive input argument',
-      ),
-    );
+    const deriveInputs = call.deriveInputs;
+    const inputs =
+      deriveInputs === undefined
+        ? deriveInputNames(
+            ownStringArray(
+              compilerOwnDataValue(
+                call.argumentStringLiteralArrayValues,
+                0,
+                'Compiler derive input argument',
+              ),
+              'Compiler derive input argument',
+            ),
+          )
+        : deriveInputNamesFromModel(deriveInputs);
     const derive = ownArrowFunctionParts(
       compilerOwnDataValue(call.argumentArrowFunctionParts, 1, 'Compiler derive arrow arguments'),
       'Compiler derive arrow argument',
     );
-    if (inputs.length === 0 || !derive || derive.params.length !== inputs.length) continue;
+    if (
+      inputs.length === 0 ||
+      !derive ||
+      (deriveInputs?.form === 'object'
+        ? derive.params.length !== 1
+        : derive.params.length !== inputs.length)
+    ) {
+      continue;
+    }
     const input = inputs[0];
     if (!input) continue;
     const exportName = call.exportedConstName;
+    const inputMap = deriveInputMapFromModel(deriveInputs);
 
     compilerMapSet(derives, exportName, {
       exportName,
       expression: derive.expression,
       input,
+      ...(inputMap === undefined ? {} : { inputMap }),
       ...(inputs.length > 1 ? { inputs } : {}),
       name: exportName,
       param: derive.param,
-      ...(derive.params.length > 1 ? { params: derive.params } : {}),
+      ...(deriveInputs?.form !== 'object' && derive.params.length > 1
+        ? { params: derive.params }
+        : {}),
     });
   }
 
   return derives;
+}
+
+function deriveInputNamesFromModel(model: DeriveInputsModel): string[] {
+  const entries = compilerSnapshotDenseArray(model.entries, 'Compiler derive input facts');
+  const names: string[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    compilerArrayAppend(names, entries[index]!.input, 'Compiler derive input names');
+  }
+  return names;
+}
+
+function deriveInputMapFromModel(
+  model: DeriveInputsModel | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (model?.form !== 'object') return undefined;
+  const entries = compilerSnapshotDenseArray(model.entries, 'Compiler derive input-map facts');
+  const inputMap = compilerCreateNullRecord<string>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    compilerSetOwnDataProperty(inputMap, entry.alias ?? entry.input, entry.input);
+  }
+  return inputMap;
 }
 
 function ownStringArray(value: unknown, label: string): string[] | null {

@@ -66,7 +66,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             stylesheets: ['/assets/app.css'],
-            page: () => trustedHtml('<main>Home</main>'),
+            page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -136,7 +136,7 @@ describe('server static export', () => {
           route('/', {
             bootstrapScript: cartHref,
             modulepreloads: [cartHref],
-            page: () => trustedHtml('<main>Home</main>'),
+            page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
             stylesheets: [
               '/assets/app.css',
               stylesheet('./async.css', { deferFull: true, href: '/assets/async.css' }),
@@ -210,7 +210,7 @@ describe('server static export', () => {
             route('/', {
               page: () =>
                 trustedHtml(
-                  `<link rel="stylesheet" href="/assets/app.css" ${integrityAttributes}><main>Home</main>`,
+                  `<link rel="stylesheet" href="/assets/app.css" ${integrityAttributes}><main>Home</main>`, { reason: "framework server rendering test fixture" },
                 ),
             }),
           ],
@@ -247,7 +247,7 @@ describe('server static export', () => {
           route('/', {
             page: () =>
               trustedHtml(
-                `<link rel="stylesheet" href="/assets/app.css" integrity="${integrity}"><main>Home</main>`,
+                `<link rel="stylesheet" href="/assets/app.css" integrity="${integrity}"><main>Home</main>`, { reason: "framework server rendering test fixture" },
               ),
           }),
         ],
@@ -306,7 +306,7 @@ describe('server static export', () => {
                 }
                 return Reflect.apply(originalMap, this, [callback, thisArg]);
               } as typeof Array.prototype.map;
-              return trustedHtml('<main>reviewed-static-body</main>');
+              return trustedHtml('<main>reviewed-static-body</main>', { reason: "framework server rendering test fixture" });
             },
           }),
         ],
@@ -338,7 +338,7 @@ describe('server static export', () => {
       routes: [
         route('/', {
           stylesheets: ['/assets/app.css'],
-          page: () => trustedHtml('<main>Home</main>'),
+          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });
@@ -374,7 +374,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             page: () =>
-              trustedHtml('<main><img src="/mark.svg" alt=""><a href="/note.txt">Note</a></main>'),
+              trustedHtml('<main><img src="/mark.svg" alt=""><a href="/note.txt">Note</a></main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -432,7 +432,7 @@ describe('server static export', () => {
                 }
                 return Reflect.apply(originalSort, this, [compareFn]);
               } as typeof Array.prototype.sort;
-              return trustedHtml('<main><img src="/mark.svg" alt=""></main>');
+              return trustedHtml('<main><img src="/mark.svg" alt=""></main>', { reason: "framework server rendering test fixture" });
             },
           }),
         ],
@@ -475,7 +475,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
-            page: () => trustedHtml('<main>Home</main>'),
+            page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
             stylesheets: ['/assets/styles.css'],
           }),
         ],
@@ -519,7 +519,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/', {
-            page: () => trustedHtml('<main><img src="/missing.svg" alt=""></main>'),
+            page: () => trustedHtml('<main><img src="/missing.svg" alt=""></main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -548,7 +548,7 @@ describe('server static export', () => {
       routes: [
         route('/', {
           stylesheets: [stylesheet('./home.css')],
-          page: () => trustedHtml('<main>Home</main>'),
+          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
       stylesheets: [stylesheet('./styles.css')],
@@ -568,7 +568,7 @@ describe('server static export', () => {
 
   it('rejects duplicate static asset paths during dry-run inventory planning', async () => {
     const app = createApp({
-      routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+      routes: [route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) })],
     });
 
     await expect(
@@ -599,7 +599,7 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'app.css');
       await writeFile(source, 'body {}\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) })],
       });
 
       await expect(
@@ -631,7 +631,7 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'index.html');
       await writeFile(source, '<p>asset</p>', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) })],
       });
 
       await expect(
@@ -667,7 +667,7 @@ describe('server static export', () => {
       await writeFile(firstSource, 'body { color: red; }\n', 'utf8');
       await writeFile(secondSource, 'body { color: blue; }\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) })],
       });
 
       await expect(
@@ -703,7 +703,7 @@ describe('server static export', () => {
     try {
       const missingSource = path.join(sourceDir, 'missing.css');
       const app = createApp({
-        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) })],
       });
 
       await expect(

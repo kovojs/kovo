@@ -306,6 +306,62 @@ export const ClockLabel = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('accepts handle-backed tuple derives and preserves generated string IR at fixpoint', () => {
+    const result = compileComponentModule({
+      fileName: 'handle-clock-label.tsx',
+      source: `
+export const HandleClockLabel$value = derive(
+  [derive.clock<{ ago: Date }>(), derive.query(cart)],
+  (now, cart) => formatRelative(now.ago, cart.updatedAt),
+);
+
+export const HandleClockLabel = component({
+  queries: { cart },
+  clocks: { ago: { every: '1s' } },
+  render: () => <time data-derive="now.HandleClockLabel$value">initial</time>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'now']);
+    expect(clientSource).toContain(
+      'export const HandleClockLabel$value = derive(["now","cart"], (now, cart) => formatRelative(now.ago, cart.updatedAt));',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('accepts handle-backed object-map derives with inferred callback aliases', () => {
+    const result = compileComponentModule({
+      fileName: 'mapped-clock-label.tsx',
+      source: `
+export const MappedClockLabel$value = derive(
+  {
+    current: derive.clock<{ ago: Date }>(),
+    basket: derive.query(cart),
+  },
+  (values) => formatRelative(values.current.ago, values.basket.updatedAt),
+);
+
+export const MappedClockLabel = component({
+  queries: { cart },
+  clocks: { ago: { every: '1s' } },
+  render: () => <time data-derive="now.MappedClockLabel$value">initial</time>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'now']);
+    expect(clientSource).toContain(
+      'export const MappedClockLabel$value = derive({"current":"now","basket":"cart"}, (values) => formatRelative(values.current.ago, values.basket.updatedAt));',
+    );
+    expect(clientSource).toContain(
+      'MappedClockLabel$value.run(...kovoDeriveValues(["now","cart"],',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers inline text expressions that mix now and query inputs into clock-backed derives', () => {
     const result = compileComponentModule({
       fileName: 'clock-label.tsx',

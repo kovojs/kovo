@@ -74,16 +74,43 @@ ratchet segment, and release note in one checkpoint.
 
 ## Browser
 
-- [ ] Implement one experimental custom-shell installer returning `ready` and async `dispose`.
-- [ ] Define drain/abort disposal and sanctioned session-transition reset semantics.
-- [ ] Internalize store, root, plans, default transport, allowlist, snapshots, and mutable cache.
-- [ ] Keep framework ownership of security-bearing Request/init under custom fetch observation.
-- [ ] Enforce compiler/document module allowlists for default and custom dynamic imports.
-- [ ] Cover arbitrary URLs, redirects, credentials, upload/stream/error hooks, custom root,
+- [x] Implement one experimental custom-shell installer returning `ready` and async `dispose`.
+  - Evidence: `packages/browser/src/client-installer.test.ts` and the packed
+    `scripts/check-packed-browser-client-consumer.mjs` exercise the single three-export client
+    facade and its asynchronous lifecycle.
+- [x] Define drain/abort disposal and sanctioned session-transition reset semantics.
+  - Evidence: `packages/browser/src/client-installer.test.ts` proves drain, abort, idempotent
+    disposal, pending-work settlement, and query/session reset.
+- [x] Internalize store, root, plans, default transport, allowlist, snapshots, and mutable cache.
+  - Evidence: `scripts/check-packed-browser-client-consumer.mjs` pins the packed client root to
+    `installKovoClient`, `InstallKovoClientOptions`, and `KovoClient` and rejects all 17 retired
+    assembly exports.
+- [x] Keep framework ownership of security-bearing Request/init under custom fetch observation.
+  - Evidence: `packages/browser/src/client-installer.test.ts` proves the observer receives the
+    framework-created `Request`, must call `next()` exactly once, and must return its exact
+    `Response`.
+- [x] Enforce compiler/document module allowlists for default and custom dynamic imports.
+  - Evidence: `packages/browser/src/client-installer.test.ts` rejects arbitrary, redirected, and
+    unregistered client-module URLs for both default and custom import hooks.
+- [x] Cover arbitrary URLs, redirects, credentials, upload/stream/error hooks, custom root,
       recovery, and repeated install/dispose adversarially.
-- [ ] Make manual `derive` inputs handle-backed and fully inferred while preserving authorable IR.
-- [ ] Require structured non-empty review metadata for trusted HTML/URL constructors.
-- [ ] Pass generated-bootstrap parity and the ratified loader budget.
+  - Evidence: the focused installer/index suite passes 19 tests across
+    `client-installer.test.ts`, `index-exports.test.ts`, `index.test.ts`, and the packed-consumer
+    contract.
+- [x] Make manual `derive` inputs handle-backed and fully inferred while preserving authorable IR.
+  - Evidence: `packages/browser/src/derive.test.ts`, `generated-exports.test.ts`, and
+    `packages/compiler/src/query-coverage.test.ts` prove opaque same-instance inputs, tuple/object
+    inference, query-name lowering, raw-string rejection at the public root, and generated ABI
+    fixpoint support.
+- [x] Require structured non-empty review metadata for trusted HTML/URL constructors.
+  - Evidence: `packages/browser/src/security-output.test.ts`, compiler provenance/posture tests,
+    the 368-test Drizzle explain suite, and `scripts/migrate-browser-authoring-v1.test.mjs` prove
+    exact `{ reason, source? }` metadata, adversarial rejection, explain visibility, and a
+    fail-closed atomic migration.
+- [x] Pass generated-bootstrap parity and the ratified loader budget.
+  - Evidence: `inline-loader-parser-parity.test.ts`, `inline-loader-artifact-minifier.test.ts`,
+    `generated-exports.test.ts`, and `pnpm --filter @kovojs/browser run check:inline-loader` pass;
+    the packed client/authoring consumer also reports zero Node builtins.
 
 ## Core
 
@@ -109,3 +136,7 @@ ratchet segment, and release note in one checkpoint.
 - Focused UI, gallery, headless reachability, component-catalog, icon, and packed-policy tests
 - Actual `pnpm pack --config.ignore-scripts=true` inspection for `@kovojs/ui` and
   `@kovojs/icons`
+- Browser focused suites: 119 derive/compiler tests, 105 trusted-output/compiler tests, 368
+  Drizzle explain tests, and the packed client/authoring consumer.
+- `node scripts/packed-public-any-gate.mjs --tarball-dir .release/tarballs` reports zero Browser
+  `any`; only the separately owned Core and Server exception ledgers remain.

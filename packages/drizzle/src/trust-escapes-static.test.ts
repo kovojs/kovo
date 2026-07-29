@@ -205,11 +205,11 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     ]);
   });
 
-  it('captures a justification from an options object, trailing string, or leading comment', () => {
+  it('captures trusted HTML/URL justification only from structured reason metadata', () => {
     const escapes = trustEscapesFor(`
       import { trustedHtml, trustedUrl } from '@kovojs/browser';
-      const a = trustedHtml(body, { justification: 'cms sanitizer owns rich text' });
-      const b = trustedUrl(href, 'reviewed deep link');
+      const a = trustedHtml(body, { reason: 'cms sanitizer owns rich text' });
+      const b = trustedUrl(href, { reason: 'reviewed deep link' });
       // justification: legacy embed
       const c = trustedHtml(embed);
     `);
@@ -219,7 +219,7 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     );
     expect(byKindSource['trustedHtml:body']).toBe('cms sanitizer owns rich text');
     expect(byKindSource['trustedUrl:href']).toBe('reviewed deep link');
-    expect(byKindSource['trustedHtml:embed']).toBe('legacy embed');
+    expect(byKindSource['trustedHtml:embed']).toBeUndefined();
   });
 
   it('emits a trustedSql escape', () => {
@@ -7374,13 +7374,13 @@ export const report = query('report', {
           const submitted = slots.forms.add.submitted ?? {};
           submittedFieldValue(submitted.name);
           const href = items.map((contact) => contact.email).join('');
-          return <main><a href={trustedUrl(href, 'reviewed contact URL')}>Contact</a><ul>{items.map((contact) => renderCard(contact))}</ul></main>;
+          return <main><a href={trustedUrl(href, { reason: 'reviewed contact URL' })}>Contact</a><ul>{items.map((contact) => renderCard(contact))}</ul></main>;
         },
       });
       const HeaderProof = component({
         render(_data, _state, slots) {
           const proof = slots.request?.headers.get('x-proof') ?? '';
-          return <aside>{trustedHtml(proof, 'reviewed proof header')}</aside>;
+          return <aside>{trustedHtml(proof, { reason: 'reviewed proof header' })}</aside>;
         },
       });
       export default createApp({

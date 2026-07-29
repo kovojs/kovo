@@ -1166,7 +1166,7 @@ function emitQueryUpdatePlanExport(
     if (inputs.length > 1) needsDeriveValues = true;
     appendClientValue(
       deriveExportParts,
-      `export const ${derive.exportName} = derive(${compilerJsonSource(inputs, 'Client derive inputs')}, (${compilerArrayJoin(deriveParams(derive), ', ')}) => ${derive.expression});`,
+      `export const ${derive.exportName} = derive(${compilerJsonSource(derive.inputMap ?? inputs, 'Client derive inputs')}, (${compilerArrayJoin(deriveParams(derive), ', ')}) => ${derive.expression});`,
       'Client derive export source',
     );
   }

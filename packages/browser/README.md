@@ -9,14 +9,30 @@ pnpm add @kovojs/browser
 
 ```ts
 import { derive } from '@kovojs/browser';
+import { cart } from './cart.server.js';
 
-export const cartLabel = derive(['cart'], (cart: { count: number }) =>
-  cart.count === 1 ? '1 item' : `${cart.count} items`,
+export const cartLabel = derive([derive.query(cart)], (value) =>
+  value.count === 1 ? '1 item' : `${value.count} items`,
 );
 ```
 
 Most apps do not import this package directly. The compiler emits the browser
-runtime imports it needs.
+runtime imports it needs. Manual derives use opaque query, state, or clock input
+handles; raw string inputs belong only to compiler-emitted modules.
+
+Reviewed HTML and URL escape hatches require structured audit metadata:
+
+```ts
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+
+const article = trustedHtml(reviewedMarkup, {
+  reason: 'rendered by the audited Markdown pipeline',
+  source: 'content/markdown.ts',
+});
+const payment = trustedUrl(paymentUrl, {
+  reason: 'allowlisted payment-provider redirect',
+});
+```
 
 Custom shells have one experimental bootstrap:
 

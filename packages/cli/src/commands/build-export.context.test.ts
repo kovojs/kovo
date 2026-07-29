@@ -26,7 +26,7 @@ function appModuleSource(): string {
     '  errorShells: {},',
     '  mutations: [],',
     '  queries: [],',
-    "  routes: [{ path: '/', page: () => trustedHtml('<main>Home</main>') }],",
+    "  routes: [{ path: '/', page: () => trustedHtml('<main>Home</main>', { reason: 'fixed export context fixture' }) }],",
     '  stylesheets: [],',
     '});',
     '',

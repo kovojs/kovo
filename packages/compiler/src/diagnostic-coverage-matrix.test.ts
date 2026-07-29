@@ -1423,7 +1423,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "code": "KV426",
           "fileName": "trusted-html-provenance-bad.tsx",
           "help": "Blocked reason: trustedHtml() is a pure raw HTML escape that performs NO sanitization (SPEC §4.8); sending request/query-derived or unprovable data to it can emit attacker-controlled bytes verbatim.
-      Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedHtml(value, "<justification>") so it is surfaced in kovo explain trust.
+      Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedHtml(value, { reason: "<justification>" }) so it is surfaced in kovo explain trust.
       SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (trustedHtml); KV236/KV426 family. Provenance is decided by AST symbol-identity over the request/query source set, modeled on KV438 (SPEC §11.1).
       Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
       Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain trust.
@@ -1480,7 +1480,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 57,
-            "line": 10,
+            "line": 12,
           },
         },
       ]

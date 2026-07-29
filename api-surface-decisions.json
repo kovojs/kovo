@@ -16,7 +16,10 @@
       "packedExample": "generated:api-surface-packed-example/v1",
       "contractTests": [
         "packages/browser/src/client-installer.test.ts",
-        "packages/browser/src/index.test.ts"
+        "packages/browser/src/derive.test.ts",
+        "packages/browser/src/index.test.ts",
+        "packages/browser/src/security-output.test.ts",
+        "scripts/migrate-browser-authoring-v1.test.mjs"
       ]
     },
     "cli-contract": {
@@ -1242,7 +1245,12 @@
       "decision": "keep",
       "canonicalHome": "@kovojs/browser",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/browser-authoring-v1.md",
+        "contractTest": "packages/browser/src/derive.test.ts",
+        "nonTestExample": "packages/browser/README.md"
+      }
     },
     {
       "id": "@kovojs/browser#DeriveDefinition",
@@ -1254,6 +1262,22 @@
       "canonicalHome": "@kovojs/browser",
       "story": "browser-authoring",
       "evidence": "browser-contract"
+    },
+    {
+      "id": "@kovojs/browser#DeriveInput",
+      "package": "@kovojs/browser",
+      "specifier": "@kovojs/browser",
+      "symbol": "DeriveInput",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/browser",
+      "story": "browser-authoring",
+      "evidence": "browser-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/browser-authoring-v1.md",
+        "contractTest": "packages/browser/src/derive.test.ts",
+        "nonTestExample": "packages/browser/README.md"
+      }
     },
     {
       "id": "@kovojs/browser#ElementParamValue",
@@ -1436,11 +1460,12 @@
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "TrustedOutputMetadataInput",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-authoring-v1"
     },
     {
       "id": "@kovojs/browser#trustedUrl",

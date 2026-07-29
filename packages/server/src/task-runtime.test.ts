@@ -515,7 +515,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       routes: [
         route('/needs-startup', {
           page() {
-            return trustedHtml('<main>route ok</main>');
+            return trustedHtml('<main>route ok</main>', { reason: "framework server rendering test fixture" });
           },
         }),
       ],
@@ -562,7 +562,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
       routes: [
         route('/', {
           page() {
-            return trustedHtml('<main>ok</main>');
+            return trustedHtml('<main>ok</main>', { reason: "framework server rendering test fixture" });
           },
         }),
       ],

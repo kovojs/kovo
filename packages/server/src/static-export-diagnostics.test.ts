@@ -164,7 +164,7 @@ describe('server static export diagnostic boundary', () => {
           route('/', {
             page() {
               replayed = true;
-              return trustedHtml('<main><img src=x onerror=alert(1)></main>');
+              return trustedHtml('<main><img src=x onerror=alert(1)></main>', { reason: "framework server rendering test fixture" });
             },
           }),
         ],
@@ -212,7 +212,7 @@ describe('server static export diagnostic boundary', () => {
             },
           }),
           route('/products/new', {
-            page: () => trustedHtml('<main>New</main>'),
+            page: () => trustedHtml('<main>New</main>', { reason: "framework server rendering test fixture" }),
           }),
         ],
       });
@@ -237,7 +237,7 @@ describe('server static export diagnostic boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => trustedHtml('<main>Home</main>'),
+          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
         }),
       ],
     });

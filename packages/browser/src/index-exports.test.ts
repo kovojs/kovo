@@ -84,7 +84,11 @@ describe('runtime public export boundaries', () => {
 
   it('keeps inline-loader and generated output helpers off public app-authored surfaces', () => {
     expect(typeof inlineLoader.kovoLoaderSource).toBe('string');
-    expect(output.kovoTrustedHtmlContent(trustedHtml('<b>x</b>'))).toBe('<b>x</b>');
+    expect(
+      output.kovoTrustedHtmlContent(
+        trustedHtml('<b>x</b>', { reason: 'index export boundary fixture' }),
+      ),
+    ).toBe('<b>x</b>');
 
     for (const name of [
       'kovoLoaderSource',

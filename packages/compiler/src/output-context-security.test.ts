@@ -132,7 +132,9 @@ export const Link = component({
 import { trustedUrl } from '@kovojs/browser';
 
 export const TrustedLink = component({
-  render: () => <a href={trustedUrl("javascript:alert(1)")}>vouched</a>,
+  render: () => (
+    <a href={trustedUrl("javascript:alert(1)", { reason: 'reviewed navigation' })}>vouched</a>
+  ),
 });
 `,
     });
@@ -321,7 +323,13 @@ export const Promo = component({
 import { trustedHtml } from '@kovojs/browser';
 
 export const TrustedPromo = component({
-  render: ({ promo }) => <div dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,
+  render: ({ promo }) => (
+    <div
+      dangerouslySetInnerHTML={trustedHtml("<b>safe</b>", {
+        reason: 'reviewed static promo',
+      })}
+    />
+  ),
 });
 `,
     });
@@ -833,7 +841,9 @@ import { trustedHtml } from '@kovojs/browser';
 
 export const ScriptTextTrusted = component({
   queries: { cfg: () => ({ inline: "" }) },
-  render: ({ cfg }) => <div><script>{trustedHtml(cfg.inline)}</script></div>,
+  render: ({ cfg }) => (
+    <div><script>{trustedHtml(cfg.inline, { reason: 'reviewed inline script' })}</script></div>
+  ),
 });
 `,
     });
