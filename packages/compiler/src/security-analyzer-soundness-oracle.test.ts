@@ -19,6 +19,7 @@ import {
   generateAnalyzerOracleTransferWitnesses,
   persistAnalyzerOracleNonCanaryReplayProbeForTest,
   replayAnalyzerSoundnessCounterexample,
+  rewriteAnalyzerOracleFrameworkImportForTest,
   runAnalyzerSoundnessOracle,
 } from './security-analyzer-soundness-oracle.js';
 import {
@@ -120,6 +121,24 @@ describe('SPEC §11.2 finite analyzer soundness-falsification oracle', () => {
     expect(
       sourceFor('budget.summary-count-close').match(/function helper/gu)?.length,
     ).toBeGreaterThan(securityAbstractInterpreterCensus.resourceBounds.summaries);
+  });
+
+  it('instruments only one exact reviewed server declaration import', () => {
+    expect(
+      rewriteAnalyzerOracleFrameworkImportForTest(
+        "import { task } from '@kovojs/server/tasks';\nexport const value = task;\n",
+      ),
+    ).toContain('data:text/javascript,oracle-stub');
+    expect(() =>
+      rewriteAnalyzerOracleFrameworkImportForTest(
+        "import { task } from '@kovojs/server/tasks';\nimport { endpoint } from '@kovojs/server';\n",
+      ),
+    ).toThrow('exactly one reviewed');
+    expect(() =>
+      rewriteAnalyzerOracleFrameworkImportForTest(
+        "import { task } from '@kovojs/server/not-reviewed';\n",
+      ),
+    ).toThrow('exactly one reviewed');
   });
 
   it('keeps instrumented emitted effects inside abstract predictions for the seeded finite language', async () => {

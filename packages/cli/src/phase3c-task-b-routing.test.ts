@@ -13,11 +13,11 @@ import {
 } from '@kovojs/drizzle/internal/static';
 
 const source = `
-import { createApp, endpoint, layout, mutation, query, route } from '@kovojs/server'
+import { defineKovo, endpoint, layout, mutation, query, route } from '@kovojs/server'
 import { task } from '@kovojs/server/tasks'
 import { webhook } from '@kovojs/server/webhooks';
 
-export const app = createApp({});
+export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
 export const api = endpoint('/api', { handler() { return { ok: true }; } });
 export const chrome = layout({ render() { return null; } });
 export const save = mutation('save', { handler() { return { ok: true }; } });

@@ -706,20 +706,33 @@ export function task(name, options) { return Object.freeze({ ...options, name })
 }
 
 function rewriteServerImport(source: string, endpointStubUrl: string): string {
-  const singleQuoted = "'@kovojs/server'";
-  const doubleQuoted = '"@kovojs/server"';
-  const singleCount = source.split(singleQuoted).length - 1;
-  const doubleCount = source.split(doubleQuoted).length - 1;
-  if (singleCount + doubleCount !== 1) {
-    throw new TypeError('Oracle emitted source must contain exactly one @kovojs/server import.');
+  const reviewedSpecifiers = ['@kovojs/server', '@kovojs/server/tasks'] as const;
+  const matches = reviewedSpecifiers.flatMap((specifier) => {
+    const singleQuoted = `'${specifier}'`;
+    const doubleQuoted = `"${specifier}"`;
+    return [
+      ...Array.from({ length: source.split(singleQuoted).length - 1 }, () => singleQuoted),
+      ...Array.from({ length: source.split(doubleQuoted).length - 1 }, () => doubleQuoted),
+    ];
+  });
+  if (matches.length !== 1) {
+    throw new TypeError(
+      'Oracle emitted source must contain exactly one reviewed @kovojs/server declaration import.',
+    );
   }
-  const rewritten = source
-    .replace(singleQuoted, JSON.stringify(endpointStubUrl))
-    .replace(doubleQuoted, JSON.stringify(endpointStubUrl));
+  const rewritten = source.replace(matches[0]!, JSON.stringify(endpointStubUrl));
   if (/\bfrom\s+['"]@kovojs\//u.test(rewritten)) {
     throw new TypeError('Oracle emitted source retained an uninstrumented Kovo import.');
   }
   return rewritten;
+}
+
+/** @internal Exact instrumentation boundary exposed only to the adjacent falsification tests. */
+export function rewriteAnalyzerOracleFrameworkImportForTest(
+  source: string,
+  endpointStubUrl = 'data:text/javascript,oracle-stub',
+): string {
+  return rewriteServerImport(source, endpointStubUrl);
 }
 
 async function minimizeAnalyzerOracleFailure(

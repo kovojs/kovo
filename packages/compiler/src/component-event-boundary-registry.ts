@@ -52,7 +52,14 @@ const mutableReviewedComponentEventBoundaries: Record<string, readonly string[]>
     'BreadcrumbSeparator',
   ],
   '@kovojs/ui/button': ['Button'],
-  '@kovojs/ui/card': ['Card'],
+  '@kovojs/ui/card': [
+    'Card',
+    'CardHeader',
+    'CardTitle',
+    'CardDescription',
+    'CardContent',
+    'CardFooter',
+  ],
   '@kovojs/ui/checkbox': ['Checkbox'],
   '@kovojs/ui/checkbox-group': [
     'CheckboxGroup',

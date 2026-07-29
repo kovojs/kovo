@@ -128,4 +128,18 @@ describe('TASK B compiler finite-verdict caller carriers', () => {
       ),
     );
   });
+
+  it('refuses virtual build roots that escape or alias the compiler-owned project', () => {
+    expect(() =>
+      snapshotBuildCompilerTaskBFiniteVerdictForTests([
+        { fileName: '../outside.ts', source: 'export const escaped = true;' },
+      ]),
+    ).toThrow('escapes its compiler-owned project');
+    expect(() =>
+      snapshotBuildCompilerTaskBFiniteVerdictForTests([
+        { fileName: 'src/first.ts', source: 'export const first = true;' },
+        { fileName: 'src/../src/first.ts', source: 'export const second = true;' },
+      ]),
+    ).toThrow('duplicates src/first.ts');
+  });
 });

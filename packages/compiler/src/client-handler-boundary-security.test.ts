@@ -98,7 +98,8 @@ describe('publishToClient value-only executable boundary', () => {
   ] as const) {
     it(`closes ${label} and omits the entire handler/import`, () => {
       const result = compile(`
-        import { component, publishToClient } from '@kovojs/core';
+        import { component } from '@kovojs/core';
+        import { publishToClient } from '@kovojs/core/security';
         import { execFileSync } from 'node:child_process';
         export const Page = component({
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,
@@ -111,7 +112,8 @@ describe('publishToClient value-only executable boundary', () => {
 
   it('preserves an audited non-callable value in an ordinary value position', () => {
     const result = compile(`
-      import { component, publishToClient } from '@kovojs/core';
+      import { component } from '@kovojs/core';
+      import { publishToClient } from '@kovojs/core/security';
       const PUBLIC_VALUE = 'public value';
       export const Page = component({
         render: () => <button onClick={() => String(publishToClient(
@@ -126,7 +128,8 @@ describe('publishToClient value-only executable boundary', () => {
   it('never emits an imported module for a published value assertion', () => {
     const result = compile(
       `
-        import { component, publishToClient } from '@kovojs/core';
+        import { component } from '@kovojs/core';
+        import { publishToClient } from '@kovojs/core/security';
         import { PUBLIC_VALUE } from './evil-public-value.js';
         export const Page = component({
           render: () => <button onClick={() => String(publishToClient(
@@ -177,7 +180,8 @@ describe('publishToClient value-only executable boundary', () => {
     it(`refuses ${label} as a published client carrier`, () => {
       const result = compile(
         `
-          import { component, publishToClient } from '@kovojs/core';
+          import { component } from '@kovojs/core';
+          import { publishToClient } from '@kovojs/core/security';
           ${declaration}
           export const Page = component({
             render: () => <button onClick={() => String(publishToClient(
@@ -195,7 +199,8 @@ describe('publishToClient value-only executable boundary', () => {
 
   it('keeps a handler-local primitive shadow distinct from the module const', () => {
     const result = compile(`
-      import { component, publishToClient } from '@kovojs/core';
+      import { component } from '@kovojs/core';
+      import { publishToClient } from '@kovojs/core/security';
       const PUBLIC_VALUE = 'module value';
       export const Page = component({
         render: () => <button onClick={() => {
@@ -217,7 +222,8 @@ describe('publishToClient value-only executable boundary', () => {
   ] as const) {
     it(`snapshots one pristine same-file const ${label}`, () => {
       const result = compile(`
-        import { component, publishToClient } from '@kovojs/core';
+        import { component } from '@kovojs/core';
+        import { publishToClient } from '@kovojs/core/security';
         ${declaration}
         export const Page = component({
           render: () => <button onClick={() => publishToClient(
@@ -238,7 +244,8 @@ describe('publishToClient value-only executable boundary', () => {
 
   it('keeps namespace publication closed independently of result-use analysis', () => {
     const result = compile(`
-      import { component, publishToClient } from '@kovojs/core';
+      import { component } from '@kovojs/core';
+      import { publishToClient } from '@kovojs/core/security';
       import * as child from 'node:child_process';
       export const Page = component({
         render: () => <button onClick={() => publishToClient(
@@ -302,7 +309,8 @@ describe('publishToClient value-only executable boundary', () => {
   ] as const) {
     it(`closes ${label} and omits its carrier`, () => {
       const result = compile(`
-        import { component, publishToClient } from '@kovojs/core';
+        import { component } from '@kovojs/core';
+        import { publishToClient } from '@kovojs/core/security';
         import { execFileSync } from 'node:child_process';
         export const Page = component({
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,
@@ -508,7 +516,8 @@ describe('client-handler dynamic-code boundary', () => {
       `const code = publishToClient(PUBLIC_CODE, { reason: 'reviewed timer text' }); return setInterval(code, 0);`,
     ]) {
       const result = compile(`
-        import { component, publishToClient } from '@kovojs/core';
+        import { component } from '@kovojs/core';
+        import { publishToClient } from '@kovojs/core/security';
         const PUBLIC_CODE = 'globalThis.__timer_code__ = true';
         export const Page = component({
           render: () => <button onClick={() => { ${handlerBody} }}>Go</button>,

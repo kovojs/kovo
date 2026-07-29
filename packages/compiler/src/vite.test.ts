@@ -725,9 +725,10 @@ export const cartQuery = query({ load: () => ({ count: 1 }), output: {}, reads: 
       fileName: 'src/app-shell.tsx',
       source: `
 import { component as defineComponent } from '@kovojs/core';
-import { domain as defineDomain, mutation as defineMutation, task as defineTask } from '@kovojs/server/api/data';
-import * as data from '@kovojs/server/api/data';
-import * as routing from '@kovojs/server/api/routing';
+import { domain as defineDomain, mutation as defineMutation } from '@kovojs/server';
+import * as data from '@kovojs/server';
+import { task as defineTask } from '@kovojs/server/tasks';
+import * as webhooks from '@kovojs/server/webhooks';
 
 const ComponentAlias = defineComponent;
 const DataQuery = data.query;
@@ -739,7 +740,7 @@ export const addToCart = defineMutation({ handler() {}, input: {} });
 export const cartQuery = DataQuery({ load: () => ({ count: 1 }), reads: [] });
 export const auditQuery = DataQuery({ load: () => ({ ok: true }), reads: [] });
 export const sendReceipt = defineTask({ input: {}, run() {} });
-export const orderPaid = routing.webhook('/webhooks/order-paid', {
+export const orderPaid = webhooks.webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
   verify: 'none',
@@ -770,7 +771,7 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', {
       'export const sendReceipt = __kovoAssignDerivedTaskKey(defineTask({ input: {}, run() {} }), "app-shell/send-receipt")',
     );
     expect(transformed).toContain(
-      `export const orderPaid = __kovoAssignDerivedWebhookName(routing.webhook('/webhooks/order-paid', {
+      `export const orderPaid = __kovoAssignDerivedWebhookName(webhooks.webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
   verify: 'none',

@@ -24,7 +24,9 @@ describe('reviewed component event-boundary registry', () => {
 
   it('requires an exact reviewed module and export pair', () => {
     expect(isReviewedComponentEventBoundary('@kovojs/ui/button', 'Button')).toBe(true);
+    expect(isReviewedComponentEventBoundary('@kovojs/ui/card', 'CardHeader')).toBe(true);
     expect(isReviewedComponentEventBoundary('@kovojs/ui/button', 'Anything')).toBe(false);
+    expect(isReviewedComponentEventBoundary('@kovojs/ui/card', 'CardAnything')).toBe(false);
     expect(isReviewedComponentEventBoundary('@kovojs/ui/not-a-real-entry', 'Button')).toBe(false);
     expect(isReviewedComponentEventBoundary('@kovojs/ui/theme', 'uiTheme')).toBe(false);
   });

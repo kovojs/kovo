@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
 import { compileComponentModule } from './index.js';
 
 interface AnalyzableFragmentRow {
@@ -76,14 +77,21 @@ describe('SPEC §6.6 analyzable-fragment witnesses', () => {
 
   // @kovo-security-certifies C13 analyzable-fragment-real-root-budget-binding
   it('measures every named semantic budget against the checked real-root corpus', () => {
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: ledger.budgetBindingMeasurement.corpus.files.map((fileName) =>
+        path.join(repoRoot, fileName),
+      ),
+    });
     const bindingRoots = new Map<string, Set<string>>(
       ledger.budgetBindingMeasurement.budgets.map(({ reason }) => [reason, new Set()]),
     );
     let rootCount = 0;
 
     for (const fileName of ledger.budgetBindingMeasurement.corpus.files) {
-      const source = readFileSync(path.join(repoRoot, fileName), 'utf8');
-      const result = compile(fileName, source);
+      const result = project.compileEntry(path.join(repoRoot, fileName)).component;
+      if (result === undefined) {
+        throw new TypeError(`${fileName} did not produce a compiler result.`);
+      }
       const roots = result.componentGraphFacts.flatMap(
         (fact) => fact.securitySemanticGraph?.roots ?? [],
       );

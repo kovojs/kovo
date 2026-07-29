@@ -3606,18 +3606,102 @@ function queryDiagnosticSourceCatalog(
 export function snapshotBuildCompilerTaskBFiniteVerdictForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
 ): CompilerTaskBFiniteVerdict {
-  return sourceGraphFactsFromFiles(files).compilerTaskBFiniteVerdict;
+  return withMaterializedBuildCompilerSourcesForTests(
+    files,
+    (materializedFiles) => sourceGraphFactsFromFiles(materializedFiles).compilerTaskBFiniteVerdict,
+  );
 }
 
 /** Internal executable seam proving ordinary build diagnostics retain the route compiler census. */
 export function snapshotBuildCompilerDiagnosticsForTests(
   files: readonly { readonly fileName: string; readonly source: string }[],
 ): CoreGraph.StaticDiagnosticFact[] {
-  return buildMapDense(
-    buildPreflightComponentDiagnostics(sourceGraphFactsFromFiles(files).components),
-    'Build compiler diagnostic test seam',
-    staticDiagnosticFact,
+  return withMaterializedBuildCompilerSourcesForTests(files, (materializedFiles) =>
+    buildMapDense(
+      buildPreflightComponentDiagnostics(sourceGraphFactsFromFiles(materializedFiles).components),
+      'Build compiler diagnostic test seam',
+      staticDiagnosticFact,
+    ),
   );
+}
+
+/**
+ * Give test-supplied source the same exact Program ownership as a real build.
+ *
+ * The production path receives source files that already exist beneath the approved build root.
+ * These test seams receive immutable in-memory snapshots, so they materialize a fresh, bounded
+ * project under the repository root before invoking the same compiler-owned Program path. A
+ * relative path escape or duplicate normalized identity fails before any source is compiled.
+ */
+function withMaterializedBuildCompilerSourcesForTests<Value>(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+  operation: (files: readonly { readonly fileName: string; readonly source: string }[]) => Value,
+): Value {
+  const projectRoot = builtinMkdtempSync(
+    builtinJoin(process.cwd(), '.kovo-task-b-compiler-project-'),
+  );
+  try {
+    const sources = buildSnapshotDenseArray(files, 'TASK B virtual compiler source files');
+    const materialized: { fileName: string; source: string }[] = [];
+    const seen = buildCreateSet<string>();
+    for (let index = 0; index < sources.length; index += 1) {
+      const file = sources[index]!;
+      const fileName = buildOwnDataValue(
+        file,
+        'fileName',
+        `TASK B virtual compiler source file[${index}]`,
+      );
+      const source = buildOwnDataValue(
+        file,
+        'source',
+        `TASK B virtual compiler source file[${index}]`,
+      );
+      if (
+        typeof fileName !== 'string' ||
+        !/\.[cm]?[jt]sx?$/u.test(fileName) ||
+        builtinIsAbsolute(fileName)
+      ) {
+        throw new TypeError(
+          `TASK B virtual compiler source file[${index}] must use a project-relative JavaScript or TypeScript path.`,
+        );
+      }
+      if (typeof source !== 'string') {
+        throw new TypeError(`TASK B virtual compiler source file[${index}] must contain source.`);
+      }
+      const destination = builtinResolve(projectRoot, fileName);
+      const relativeDestination = builtinRelative(projectRoot, destination);
+      if (
+        relativeDestination.length === 0 ||
+        relativeDestination === '..' ||
+        relativeDestination.startsWith(`..${builtinPathSeparator}`) ||
+        builtinIsAbsolute(relativeDestination)
+      ) {
+        throw new TypeError(
+          `TASK B virtual compiler source file[${index}] escapes its compiler-owned project.`,
+        );
+      }
+      if (buildSetHas(seen, destination)) {
+        throw new TypeError(
+          `TASK B virtual compiler source file[${index}] duplicates ${relativeDestination}.`,
+        );
+      }
+      buildSetAdd(seen, destination);
+      builtinMkdirSync(builtinDirname(destination), { recursive: true });
+      builtinWriteFileSync(destination, source, { encoding: 'utf8', flag: 'wx' });
+      buildSecurityArrayAppend(
+        materialized,
+        { fileName: destination, source },
+        'TASK B materialized compiler source files',
+      );
+    }
+    return operation(materialized);
+  } finally {
+    try {
+      builtinRmSync(projectRoot, { force: true, recursive: true });
+    } catch {
+      // The test seam never lets cleanup failure replace the compiler verdict under test.
+    }
+  }
 }
 
 /** Internal seam proving exact compiler diagnostic ranges survive the build-graph projection. */
