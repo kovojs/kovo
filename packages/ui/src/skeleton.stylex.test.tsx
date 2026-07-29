@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import { createKeyframes } from '@kovojs/style/internal';
 import { Skeleton } from './skeleton.js';
 describe('@kovojs/ui Skeleton StyleX styles', () => {
   it('renders decorative skeleton markup with StyleX classes', () => {
-    const rendered = String(Skeleton.definition.render({}));
+    const rendered = String(renderUiComponent(Skeleton, {}));
     // The pulse keyframe animation (`kv-skeleton-animation-`) is now statically
     // extractable: the compiler resolves the `style.keyframes` name and emits the
     // matching `@keyframes` block into the served CSS (SPEC.md §13.1).
@@ -33,7 +34,7 @@ describe('@kovojs/ui Skeleton StyleX styles', () => {
         width: 160,
       },
     });
-    const rendered = String(Skeleton.definition.render({ style: overrides.root }));
+    const rendered = String(renderUiComponent(Skeleton, { style: overrides.root }));
     expect(rendered).toContain('kv-skeleton-stylex-test-h-');
     expect(rendered).toContain('kv-skeleton-stylex-test-w-');
     expect(rendered).toContain('skeleton.stylex.test.tsx#root');

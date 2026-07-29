@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -18,7 +19,7 @@ describe('@kovojs/ui Slider StyleX styles', () => {
     };
 
     expect({
-      input: SliderInput.definition.render({
+      input: renderUiComponent(SliderInput, {
         ...state,
         descriptionId: 'volume-description',
         errorId: 'volume-error',
@@ -27,25 +28,25 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         label: 'Volume',
         valueText: '35 percent',
       }),
-      range: SliderRange.definition.render({
+      range: renderUiComponent(SliderRange, {
         ...state,
         id: 'volume-range',
       }),
-      root: Slider.definition.render({
+      root: renderUiComponent(Slider, {
         ...state,
         children: 'volume slider',
         id: 'volume-slider',
       }),
-      thumb: SliderThumb.definition.render({
+      thumb: renderUiComponent(SliderThumb, {
         ...state,
         descriptionId: 'volume-description',
         id: 'volume-thumb',
         label: 'Volume',
         valueText: '35 percent',
       }),
-      track: SliderTrack.definition.render({
+      track: renderUiComponent(SliderTrack, {
         ...state,
-        children: SliderRange.definition.render(state),
+        children: renderUiComponent(SliderRange, state),
         id: 'volume-track',
       }),
     }).toMatchSnapshot();
@@ -71,14 +72,14 @@ describe('@kovojs/ui Slider StyleX styles', () => {
     });
 
     expect({
-      input: SliderInput.definition.render({ styles: { input: overrides.input }, value: 50 }),
-      range: SliderRange.definition.render({ styles: { range: overrides.range }, value: 50 }),
-      root: Slider.definition.render({
+      input: renderUiComponent(SliderInput, { styles: { input: overrides.input }, value: 50 }),
+      range: renderUiComponent(SliderRange, { styles: { range: overrides.range }, value: 50 }),
+      root: renderUiComponent(Slider, {
         children: 'Custom slider',
         styles: { root: overrides.root },
       }),
-      thumb: SliderThumb.definition.render({ styles: { thumb: overrides.thumb }, value: 50 }),
-      track: SliderTrack.definition.render({
+      thumb: renderUiComponent(SliderThumb, { styles: { thumb: overrides.thumb }, value: 50 }),
+      track: renderUiComponent(SliderTrack, {
         children: 'custom range',
         styles: { track: overrides.track },
         value: 50,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,9 +8,9 @@ import { Progress } from './progress.js';
 describe('@kovojs/ui Progress StyleX styles', () => {
   it('matches native progress states with StyleX output', () => {
     expect({
-      complete: Progress.definition.render({ children: '100%', max: 100, value: 100 }),
-      indeterminate: Progress.definition.render({ children: 'Loading', max: 100, value: null }),
-      loading: Progress.definition.render({
+      complete: renderUiComponent(Progress, { children: '100%', max: 100, value: 100 }),
+      indeterminate: renderUiComponent(Progress, { children: 'Loading', max: 100, value: null }),
+      loading: renderUiComponent(Progress, {
         children: '42%',
         max: 100,
         value: 42,
@@ -27,7 +28,7 @@ describe('@kovojs/ui Progress StyleX styles', () => {
     });
 
     expect(
-      Progress.definition.render({
+      renderUiComponent(Progress, {
         children: '75%',
         max: 100,
         style: overrides.root,

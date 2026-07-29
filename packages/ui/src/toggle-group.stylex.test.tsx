@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -20,24 +21,24 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
     };
 
     expect({
-      button: ToggleGroupButton.definition.render({
+      button: renderUiComponent(ToggleGroupButton, {
         ...state,
         children: 'Bold',
         id: 'bold-button',
         itemValue: 'bold',
       }),
-      disabledButton: ToggleGroupButton.definition.render({
+      disabledButton: renderUiComponent(ToggleGroupButton, {
         ...state,
         children: 'Strike',
         itemValue: 'strike',
       }),
-      item: ToggleGroupItem.definition.render({
+      item: renderUiComponent(ToggleGroupItem, {
         ...state,
         children: 'bold button',
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      root: ToggleGroup.definition.render({
+      root: renderUiComponent(ToggleGroup, {
         ...state,
         children: 'format controls',
         descriptionId: 'format-help',
@@ -70,19 +71,19 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
     });
 
     expect({
-      button: ToggleGroupButton.definition.render({
+      button: renderUiComponent(ToggleGroupButton, {
         ...state,
         children: 'Bold',
         itemValue: 'bold',
         styles: { button: overrides.button },
       }),
-      item: ToggleGroupItem.definition.render({
+      item: renderUiComponent(ToggleGroupItem, {
         ...state,
         children: 'Bold',
         itemValue: 'bold',
         styles: { item: overrides.item },
       }),
-      root: ToggleGroup.definition.render({
+      root: renderUiComponent(ToggleGroup, {
         ...state,
         children: 'format controls',
         styles: { root: overrides.root },

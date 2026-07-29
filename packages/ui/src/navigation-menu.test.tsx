@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import { NavigationMenuLink, NavigationMenuTrigger } from './navigation-menu.js';
 
@@ -8,7 +9,7 @@ const ESCAPED_CHILD = '&lt;span&gt;Products&lt;/span&gt;';
 describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () => {
   it('neutralizes a javascript: href to the safe fallback', () => {
     const html = String(
-      NavigationMenuLink.definition.render({
+      renderUiComponent(NavigationMenuLink, {
         children: 'Company',
         href: 'javascript:alert(document.cookie)',
         itemValue: 'company',
@@ -21,7 +22,7 @@ describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () =>
 
   it('preserves a safe relative href', () => {
     const html = String(
-      NavigationMenuLink.definition.render({
+      renderUiComponent(NavigationMenuLink, {
         children: 'Company',
         href: '/company',
         itemValue: 'company',
@@ -33,7 +34,7 @@ describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () =>
 
   it('uses the shared core URL allowlist', () => {
     const html = String(
-      NavigationMenuLink.definition.render({
+      renderUiComponent(NavigationMenuLink, {
         children: 'Download',
         href: 'ftp://example.test/file.txt',
         itemValue: 'download',
@@ -47,7 +48,7 @@ describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () =>
 describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1)', () => {
   it('escapes an itemLabel fallback containing HTML in NavigationMenuTrigger', () => {
     const html = String(
-      NavigationMenuTrigger.definition.render({
+      renderUiComponent(NavigationMenuTrigger, {
         itemLabel: '<img src=x onerror=alert(1)>',
         itemValue: 'products',
       }),
@@ -59,7 +60,7 @@ describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1
 
   it('escapes an itemValue fallback containing HTML in NavigationMenuLink', () => {
     const html = String(
-      NavigationMenuLink.definition.render({
+      renderUiComponent(NavigationMenuLink, {
         itemValue: '<img src=x onerror=alert(1)>',
       }),
     );
@@ -70,7 +71,7 @@ describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1
 
   it('escapes plain string children as text', () => {
     const html = String(
-      NavigationMenuTrigger.definition.render({
+      renderUiComponent(NavigationMenuTrigger, {
         children: '<span>Products</span>',
         itemLabel: 'Products',
         itemValue: 'products',

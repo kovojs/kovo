@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -13,10 +14,10 @@ const items = [
 describe('@kovojs/ui Menubar StyleX slots', () => {
   it('matches menubar markup with StyleX slot output', () => {
     expect({
-      menubar: Menubar.definition.render({
+      menubar: renderUiComponent(Menubar, {
         activeValue: 'file',
         children:
-          MenubarItem.definition.render({
+          renderUiComponent(MenubarItem, {
             activeValue: 'file',
             contentId: 'file-menu',
             itemLabel: 'File',
@@ -24,10 +25,10 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
             items,
             openValue: 'file',
           }) +
-          MenubarSubmenu.definition.render({
-            children: MenubarGroup.definition.render({
+          renderUiComponent(MenubarSubmenu, {
+            children: renderUiComponent(MenubarGroup, {
               children:
-                MenubarItem.definition.render({
+                renderUiComponent(MenubarItem, {
                   activeValue: 'new',
                   itemLabel: 'New',
                   itemParentValue: 'file',
@@ -35,8 +36,8 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
                   items,
                   openValue: 'file',
                 }) +
-                MenubarSeparator.definition.render({ id: 'file-separator' }) +
-                MenubarItem.definition.render({
+                renderUiComponent(MenubarSeparator, { id: 'file-separator' }) +
+                renderUiComponent(MenubarItem, {
                   itemDisabled: true,
                   itemLabel: 'Open',
                   itemParentValue: 'file',
@@ -77,14 +78,14 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
     });
 
     expect(
-      Menubar.definition.render({
+      renderUiComponent(Menubar, {
         children:
-          MenubarItem.definition.render({
+          renderUiComponent(MenubarItem, {
             itemValue: 'file',
             openValue: 'file',
             styles: { item: overrides.item },
           }) +
-          MenubarSubmenu.definition.render({
+          renderUiComponent(MenubarSubmenu, {
             children: 'submenu',
             openValue: 'file',
             styles: { submenu: overrides.submenu },

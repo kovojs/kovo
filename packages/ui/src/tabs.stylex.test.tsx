@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 const items = [
@@ -14,7 +15,7 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
       value: 'overview',
     };
     const root = String(
-      Tabs.definition.render({
+      renderUiComponent(Tabs, {
         ...state,
         children: 'tabs body',
         disabled: true,
@@ -22,13 +23,13 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
       }),
     );
     const list = String(
-      TabsList.definition.render({
+      renderUiComponent(TabsList, {
         ...state,
         label: 'Account sections',
       }),
     );
     const trigger = String(
-      TabsTrigger.definition.render({
+      renderUiComponent(TabsTrigger, {
         ...state,
         children: 'Overview',
         itemValue: 'overview',
@@ -36,7 +37,7 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
       }),
     );
     const inactivePanel = String(
-      TabsPanel.definition.render({
+      renderUiComponent(TabsPanel, {
         ...state,
         children: 'Billing',
         itemValue: 'billing',
@@ -77,18 +78,18 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
       },
     });
     const root = String(
-      Tabs.definition.render({
+      renderUiComponent(Tabs, {
         children: 'tabs body',
         styles: { root: overrides.root },
       }),
     );
     const list = String(
-      TabsList.definition.render({
+      renderUiComponent(TabsList, {
         styles: { list: overrides.list },
       }),
     );
     const trigger = String(
-      TabsTrigger.definition.render({
+      renderUiComponent(TabsTrigger, {
         activeValue: 'overview',
         itemValue: 'overview',
         styles: { trigger: overrides.trigger },
@@ -96,7 +97,7 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
       }),
     );
     const panel = String(
-      TabsPanel.definition.render({
+      renderUiComponent(TabsPanel, {
         itemValue: 'overview',
         styles: { panel: overrides.panel },
         value: 'overview',

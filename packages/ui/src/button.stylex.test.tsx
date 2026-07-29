@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import { Button } from './button.js';
 describe('@kovojs/ui Button StyleX prototype', () => {
   it('renders StyleX-authored classes and metadata', () => {
     const html = String(
-      Button.definition.render({
+      renderUiComponent(Button, {
         children: 'Save',
         disabled: true,
         form: 'settings-form',
@@ -34,7 +35,7 @@ describe('@kovojs/ui Button StyleX prototype', () => {
       },
     });
     const html = String(
-      Button.definition.render({
+      renderUiComponent(Button, {
         children: 'Save',
         style: overrides.root,
       }),
@@ -46,12 +47,12 @@ describe('@kovojs/ui Button StyleX prototype', () => {
   });
   it('renders size and variant StyleX classes without exposing style objects', () => {
     const html = [
-      Button.definition.render({ children: 'Primary' }),
-      Button.definition.render({ children: 'Small', size: 'sm' }),
-      Button.definition.render({ children: 'Secondary', variant: 'secondary' }),
-      Button.definition.render({ children: 'Ghost', variant: 'ghost' }),
-      Button.definition.render({ children: 'Destructive', variant: 'destructive' }),
-      Button.definition.render({ children: 'Outline', variant: 'outline' }),
+      renderUiComponent(Button, { children: 'Primary' }),
+      renderUiComponent(Button, { children: 'Small', size: 'sm' }),
+      renderUiComponent(Button, { children: 'Secondary', variant: 'secondary' }),
+      renderUiComponent(Button, { children: 'Ghost', variant: 'ghost' }),
+      renderUiComponent(Button, { children: 'Destructive', variant: 'destructive' }),
+      renderUiComponent(Button, { children: 'Outline', variant: 'outline' }),
     ].join(' ');
 
     expect(html).toContain('kv-button-size-h-');

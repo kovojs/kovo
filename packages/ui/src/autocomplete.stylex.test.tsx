@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -28,7 +29,7 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
     };
 
     expect({
-      input: AutocompleteInput.definition.render({
+      input: renderUiComponent(AutocompleteInput, {
         ...state,
         autocomplete: 'off',
         descriptionId: 'team-help',
@@ -37,24 +38,24 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      list: AutocompleteList.definition.render({
+      list: renderUiComponent(AutocompleteList, {
         ...state,
         children: 'options',
         id: 'team-list',
         labelledBy: 'team-input',
       }),
-      option: AutocompleteOption.definition.render({
+      option: renderUiComponent(AutocompleteOption, {
         ...state,
         itemValue: 'design',
       }),
-      root: Autocomplete.definition.render({
+      root: renderUiComponent(Autocomplete, {
         ...state,
         children: 'autocomplete body',
         id: 'team-autocomplete',
         invalid: true,
         required: true,
       }),
-      value: AutocompleteValue.definition.render({
+      value: renderUiComponent(AutocompleteValue, {
         ...state,
         id: 'team-value',
       }),
@@ -82,22 +83,22 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
     });
 
     expect({
-      input: AutocompleteInput.definition.render({
+      input: renderUiComponent(AutocompleteInput, {
         styles: { input: overrides.input },
       }),
-      list: AutocompleteList.definition.render({
+      list: renderUiComponent(AutocompleteList, {
         children: 'options',
         styles: { list: overrides.list },
       }),
-      option: AutocompleteOption.definition.render({
+      option: renderUiComponent(AutocompleteOption, {
         itemValue: 'design',
         styles: { option: overrides.option },
       }),
-      root: Autocomplete.definition.render({
+      root: renderUiComponent(Autocomplete, {
         children: 'autocomplete body',
         styles: { root: overrides.root },
       }),
-      value: AutocompleteValue.definition.render({
+      value: renderUiComponent(AutocompleteValue, {
         styles: { value: overrides.value },
         value: 'design',
       }),

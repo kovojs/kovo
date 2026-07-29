@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,15 +8,15 @@ import { Switch } from './switch.js';
 describe('@kovojs/ui Switch StyleX styles', () => {
   it('matches native switch states with StyleX output', () => {
     expect({
-      checked: Switch.definition.render({
+      checked: renderUiComponent(Switch, {
         checked: true,
         children: 'Notifications',
         id: 'notifications',
         name: 'notifications',
         value: 'enabled',
       }),
-      disabled: Switch.definition.render({ children: 'Disabled', disabled: true }),
-      unchecked: Switch.definition.render({ children: 'Marketing' }),
+      disabled: renderUiComponent(Switch, { children: 'Disabled', disabled: true }),
+      unchecked: renderUiComponent(Switch, { children: 'Marketing' }),
     }).toMatchSnapshot();
   });
 
@@ -32,7 +33,7 @@ describe('@kovojs/ui Switch StyleX styles', () => {
     });
 
     expect(
-      Switch.definition.render({
+      renderUiComponent(Switch, {
         checked: true,
         children: 'Custom',
         styles: {

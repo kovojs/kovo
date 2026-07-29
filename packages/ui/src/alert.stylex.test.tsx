@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,14 +8,14 @@ import { Alert } from './alert.js';
 describe('@kovojs/ui Alert StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
     expect({
-      danger: Alert.definition.render({
+      danger: renderUiComponent(Alert, {
         children: 'Payment method required.',
         role: 'alert',
         title: 'Billing issue',
         variant: 'danger',
       }),
-      info: Alert.definition.render({ children: 'Queued.' }),
-      success: Alert.definition.render({
+      info: renderUiComponent(Alert, { children: 'Queued.' }),
+      success: renderUiComponent(Alert, {
         children: 'Imported.',
         title: 'Import complete',
         variant: 'success',
@@ -32,7 +33,7 @@ describe('@kovojs/ui Alert StyleX styles', () => {
     });
 
     expect(
-      Alert.definition.render({
+      renderUiComponent(Alert, {
         children: 'Custom',
         style: overrides.root,
         variant: 'warning',

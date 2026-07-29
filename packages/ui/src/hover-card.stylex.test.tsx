@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,26 +8,26 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card.js';
 describe('@kovojs/ui HoverCard StyleX slots', () => {
   it('matches hover-card markup with StyleX slot output', () => {
     expect({
-      disabled: HoverCard.definition.render({
+      disabled: renderUiComponent(HoverCard, {
         children:
-          HoverCardTrigger.definition.render({
+          renderUiComponent(HoverCardTrigger, {
             children: 'Ada',
             contentId: 'profile-card',
             disabled: true,
             href: '/team/ada',
           }) +
-          HoverCardContent.definition.render({ children: 'Profile', contentId: 'profile-card' }),
+          renderUiComponent(HoverCardContent, { children: 'Profile', contentId: 'profile-card' }),
         disabled: true,
       }),
-      open: HoverCard.definition.render({
+      open: renderUiComponent(HoverCard, {
         children:
-          HoverCardTrigger.definition.render({
+          renderUiComponent(HoverCardTrigger, {
             children: 'Ada',
             contentId: 'profile-card',
             href: '/team/ada',
             open: true,
           }) +
-          HoverCardContent.definition.render({
+          renderUiComponent(HoverCardContent, {
             children: 'Profile',
             contentId: 'profile-card',
             open: true,
@@ -53,16 +54,16 @@ describe('@kovojs/ui HoverCard StyleX slots', () => {
     });
 
     expect(
-      HoverCard.definition.render({
+      renderUiComponent(HoverCard, {
         children:
-          HoverCardTrigger.definition.render({
+          renderUiComponent(HoverCardTrigger, {
             children: 'Ada',
             contentId: 'profile-card',
             href: '/team/ada',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          HoverCardContent.definition.render({
+          renderUiComponent(HoverCardContent, {
             children: 'Profile',
             contentId: 'profile-card',
             open: true,

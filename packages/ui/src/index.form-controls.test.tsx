@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import { Checkbox } from './checkbox.js';
 import {
   CheckboxGroup,
@@ -47,7 +48,7 @@ describe('@kovojs/ui styled package foundation', () => {
       value: ['updates'] as const,
     };
     const root = String(
-      CheckboxGroup.definition.render({
+      renderUiComponent(CheckboxGroup, {
         ...state,
         children: 'checkbox options',
         errorId: 'notifications-error',
@@ -57,28 +58,28 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const item = String(
-      CheckboxGroupItem.definition.render({
+      renderUiComponent(CheckboxGroupItem, {
         ...state,
         children: 'updates input',
         itemValue: 'updates',
       }),
     );
     const control = String(
-      CheckboxGroupControl.definition.render({
+      renderUiComponent(CheckboxGroupControl, {
         ...state,
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
     );
     const disabledControl = String(
-      CheckboxGroupControl.definition.render({
+      renderUiComponent(CheckboxGroupControl, {
         ...state,
         controlId: 'notifications-security',
         itemValue: 'security',
       }),
     );
     const label = String(
-      CheckboxGroupLabel.definition.render({
+      renderUiComponent(CheckboxGroupLabel, {
         ...state,
         children: 'Product updates',
         controlId: 'notifications-updates',
@@ -119,7 +120,7 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 'express',
     };
     const root = String(
-      RadioGroup.definition.render({
+      renderUiComponent(RadioGroup, {
         ...state,
         children: 'radio options',
         id: 'shipping-speed',
@@ -127,28 +128,28 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const item = String(
-      RadioGroupItem.definition.render({
+      renderUiComponent(RadioGroupItem, {
         ...state,
         children: 'express input',
         itemValue: 'express',
       }),
     );
     const radio = String(
-      RadioGroupRadio.definition.render({
+      renderUiComponent(RadioGroupRadio, {
         ...state,
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
     );
     const disabledRadio = String(
-      RadioGroupRadio.definition.render({
+      renderUiComponent(RadioGroupRadio, {
         ...state,
         controlId: 'shipping-freight',
         itemValue: 'freight',
       }),
     );
     const label = String(
-      RadioGroupLabel.definition.render({
+      renderUiComponent(RadioGroupLabel, {
         ...state,
         children: 'Express',
         controlId: 'shipping-express',
@@ -171,7 +172,7 @@ describe('@kovojs/ui styled package foundation', () => {
   });
   it('wraps headless form-control primitives as styled native controls', () => {
     const checkbox = String(
-      Checkbox.definition.render({
+      renderUiComponent(Checkbox, {
         checked: 'indeterminate',
         children: 'Some permissions',
         describedBy: 'permissions-help permissions-error',
@@ -184,7 +185,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const switchControl = String(
-      Switch.definition.render({
+      renderUiComponent(Switch, {
         checked: true,
         children: 'Notifications',
         describedBy: 'notifications-help',
@@ -196,7 +197,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const toggle = String(
-      Toggle.definition.render({
+      renderUiComponent(Toggle, {
         children: 'Bold',
         pressed: true,
         variant: 'subtle',
@@ -232,7 +233,7 @@ describe('@kovojs/ui styled package foundation', () => {
       value: ['bold'] as const,
     };
     const root = String(
-      ToggleGroup.definition.render({
+      renderUiComponent(ToggleGroup, {
         ...state,
         children: 'format controls',
         descriptionId: 'format-help',
@@ -242,7 +243,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const item = String(
-      ToggleGroupItem.definition.render({
+      renderUiComponent(ToggleGroupItem, {
         ...state,
         children: 'bold button',
         id: 'bold-item',
@@ -250,7 +251,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const button = String(
-      ToggleGroupButton.definition.render({
+      renderUiComponent(ToggleGroupButton, {
         ...state,
         children: 'Bold',
         id: 'bold-button',
@@ -258,7 +259,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const disabledButton = String(
-      ToggleGroupButton.definition.render({
+      renderUiComponent(ToggleGroupButton, {
         ...state,
         children: 'Strike',
         itemValue: 'strike',
@@ -286,7 +287,7 @@ describe('@kovojs/ui styled package foundation', () => {
       orientation: 'vertical' as const,
     };
     const root = String(
-      Toolbar.definition.render({
+      renderUiComponent(Toolbar, {
         ...state,
         children: 'format controls',
         descriptionId: 'format-help',
@@ -295,7 +296,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const item = String(
-      ToolbarItem.definition.render({
+      renderUiComponent(ToolbarItem, {
         ...state,
         children: 'bold button',
         id: 'bold-item',
@@ -303,7 +304,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const button = String(
-      ToolbarButton.definition.render({
+      renderUiComponent(ToolbarButton, {
         ...state,
         children: 'Bold',
         id: 'bold-button',
@@ -312,7 +313,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const disabledButton = String(
-      ToolbarButton.definition.render({
+      renderUiComponent(ToolbarButton, {
         ...state,
         children: 'Link',
         itemValue: 'link',
@@ -345,21 +346,21 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 2,
     };
     const root = String(
-      NumberField.definition.render({
+      renderUiComponent(NumberField, {
         ...state,
         children: 'quantity controls',
         id: 'quantity-field',
       }),
     );
     const control = String(
-      NumberFieldControl.definition.render({
+      renderUiComponent(NumberFieldControl, {
         ...state,
         children: 'stepper',
         id: 'quantity-control',
       }),
     );
     const decrement = String(
-      NumberFieldDecrement.definition.render({
+      renderUiComponent(NumberFieldDecrement, {
         ...state,
         id: 'quantity-decrement',
         inputId: 'quantity-input',
@@ -367,7 +368,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const input = String(
-      NumberFieldInput.definition.render({
+      renderUiComponent(NumberFieldInput, {
         ...state,
         descriptionId: 'quantity-description',
         errorId: 'quantity-error',
@@ -377,7 +378,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const increment = String(
-      NumberFieldIncrement.definition.render({
+      renderUiComponent(NumberFieldIncrement, {
         ...state,
         id: 'quantity-increment',
         inputId: 'quantity-input',
@@ -385,7 +386,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const disabledAtMax = String(
-      NumberFieldIncrement.definition.render({
+      renderUiComponent(NumberFieldIncrement, {
         max: 10,
         value: 10,
       }),
@@ -424,16 +425,16 @@ describe('@kovojs/ui styled package foundation', () => {
       value: '1234',
     };
     const root = String(
-      OtpField.definition.render({
+      renderUiComponent(OtpField, {
         ...state,
         children: 'otp controls',
         id: 'otp-field',
       }),
     );
-    const group = String(OtpFieldGroup.definition.render({ children: 'slots' }));
-    const hidden = String(OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' }));
+    const group = String(renderUiComponent(OtpFieldGroup, { children: 'slots' }));
+    const hidden = String(renderUiComponent(OtpFieldHiddenInput, { ...state, id: 'otp-code' }));
     const firstSlot = String(
-      OtpFieldInput.definition.render({
+      renderUiComponent(OtpFieldInput, {
         ...state,
         id: 'otp-slot-1',
         label: 'One-time code digit 1',
@@ -441,14 +442,14 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const emptySlot = String(
-      OtpFieldInput.definition.render({
+      renderUiComponent(OtpFieldInput, {
         ...state,
         id: 'otp-slot-6',
         slotIndex: 5,
       }),
     );
     const completeDisabled = String(
-      OtpField.definition.render({
+      renderUiComponent(OtpField, {
         disabled: true,
         length: 4,
         value: '9876',
@@ -484,14 +485,14 @@ describe('@kovojs/ui styled package foundation', () => {
       required: true,
     };
     const root = String(
-      Field.definition.render({
+      renderUiComponent(Field, {
         ...state,
         children: 'email field',
         id: 'email-field',
       }),
     );
     const label = String(
-      FieldLabel.definition.render({
+      renderUiComponent(FieldLabel, {
         ...state,
         children: 'Email',
         controlId: 'email',
@@ -499,7 +500,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const control = String(
-      FieldControl.definition.render({
+      renderUiComponent(FieldControl, {
         ...state,
         autoComplete: 'email',
         descriptionId: 'email-description',
@@ -517,7 +518,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const textarea = String(
-      FieldTextarea.definition.render({
+      renderUiComponent(FieldTextarea, {
         autoComplete: 'off',
         descriptionId: 'bio-description',
         form: 'profile-form',
@@ -529,7 +530,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const select = String(
-      FieldSelect.definition.render({
+      renderUiComponent(FieldSelect, {
         children:
           '<option value="starter">Starter</option><option value="team" selected>Team</option>',
         descriptionId: 'plan-description',
@@ -541,7 +542,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const selectOption = String(
-      FieldSelectOption.definition.render({
+      renderUiComponent(FieldSelectOption, {
         children: 'Enterprise',
         disabled: true,
         selected: true,
@@ -549,19 +550,19 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const description = String(
-      FieldDescription.definition.render({
+      renderUiComponent(FieldDescription, {
         children: 'Used for notifications.',
         id: 'email-description',
       }),
     );
     const error = String(
-      FieldErrorMessage.definition.render({ children: 'Email required.', id: 'email-error' }),
+      renderUiComponent(FieldErrorMessage, { children: 'Email required.', id: 'email-error' }),
     );
     const fieldset = String(
-      Fieldset.definition.render({
+      renderUiComponent(Fieldset, {
         children:
-          FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }) +
-          FieldControl.definition.render({
+          renderUiComponent(FieldsetLegend, { children: 'Plan', id: 'plan-legend' }) +
+          renderUiComponent(FieldControl, {
             id: 'seat',
             form: 'profile-form',
             name: 'seat',

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -23,28 +24,28 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
     };
 
     expect({
-      control: NumberFieldControl.definition.render({
+      control: renderUiComponent(NumberFieldControl, {
         ...state,
         children: 'stepper',
         id: 'quantity-control',
       }),
-      decrement: NumberFieldDecrement.definition.render({
+      decrement: renderUiComponent(NumberFieldDecrement, {
         ...state,
         id: 'quantity-decrement',
         inputId: 'quantity-input',
         label: 'Decrease quantity',
       }),
-      disabledAtMax: NumberFieldIncrement.definition.render({
+      disabledAtMax: renderUiComponent(NumberFieldIncrement, {
         max: 10,
         value: 10,
       }),
-      increment: NumberFieldIncrement.definition.render({
+      increment: renderUiComponent(NumberFieldIncrement, {
         ...state,
         id: 'quantity-increment',
         inputId: 'quantity-input',
         label: 'Increase quantity',
       }),
-      input: NumberFieldInput.definition.render({
+      input: renderUiComponent(NumberFieldInput, {
         ...state,
         descriptionId: 'quantity-description',
         errorId: 'quantity-error',
@@ -52,7 +53,7 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
         id: 'quantity-input',
         labelledBy: 'quantity-label',
       }),
-      root: NumberField.definition.render({
+      root: renderUiComponent(NumberField, {
         ...state,
         children: 'quantity controls',
         id: 'quantity-field',
@@ -79,21 +80,21 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
     });
 
     expect({
-      control: NumberFieldControl.definition.render({
+      control: renderUiComponent(NumberFieldControl, {
         children: 'Custom control',
         styles: { control: overrides.control },
       }),
-      decrement: NumberFieldDecrement.definition.render({
+      decrement: renderUiComponent(NumberFieldDecrement, {
         styles: { button: overrides.button },
       }),
-      increment: NumberFieldIncrement.definition.render({
+      increment: renderUiComponent(NumberFieldIncrement, {
         styles: { button: overrides.button },
       }),
-      input: NumberFieldInput.definition.render({
+      input: renderUiComponent(NumberFieldInput, {
         styles: { input: overrides.input },
         value: 4,
       }),
-      root: NumberField.definition.render({
+      root: renderUiComponent(NumberField, {
         children: 'Custom number field',
         styles: { root: overrides.root },
       }),

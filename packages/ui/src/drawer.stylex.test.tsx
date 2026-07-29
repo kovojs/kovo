@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,7 +8,7 @@ import { Drawer } from './drawer.js';
 describe('@kovojs/ui Drawer StyleX slots', () => {
   it('matches drawer markup with StyleX slot output', () => {
     expect({
-      open: Drawer.definition.render({
+      open: renderUiComponent(Drawer, {
         children: 'Drawer body',
         contentId: 'standalone-drawer',
         description: 'Standalone drawer description.',
@@ -50,7 +51,7 @@ describe('@kovojs/ui Drawer StyleX slots', () => {
     });
 
     expect(
-      Drawer.definition.render({
+      renderUiComponent(Drawer, {
         children: 'Custom drawer body',
         closeLabel: 'Done',
         contentId: 'custom-drawer',

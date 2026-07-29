@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,20 +8,20 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover.js';
 describe('@kovojs/ui Popover StyleX slots', () => {
   it('matches popover markup with StyleX slot output', () => {
     expect({
-      closed: Popover.definition.render({
+      closed: renderUiComponent(Popover, {
         children:
-          PopoverTrigger.definition.render({ children: 'Filters', contentId: 'filters' }) +
-          PopoverContent.definition.render({ children: 'Menu', contentId: 'filters' }),
+          renderUiComponent(PopoverTrigger, { children: 'Filters', contentId: 'filters' }) +
+          renderUiComponent(PopoverContent, { children: 'Menu', contentId: 'filters' }),
         id: 'filters-popover',
       }),
-      open: Popover.definition.render({
+      open: renderUiComponent(Popover, {
         children:
-          PopoverTrigger.definition.render({
+          renderUiComponent(PopoverTrigger, {
             children: 'Filters',
             contentId: 'filters',
             open: true,
           }) +
-          PopoverContent.definition.render({ children: 'Menu', contentId: 'filters', open: true }),
+          renderUiComponent(PopoverContent, { children: 'Menu', contentId: 'filters', open: true }),
         id: 'filters-popover',
         open: true,
       }),
@@ -44,15 +45,15 @@ describe('@kovojs/ui Popover StyleX slots', () => {
     });
 
     expect(
-      Popover.definition.render({
+      renderUiComponent(Popover, {
         children:
-          PopoverTrigger.definition.render({
+          renderUiComponent(PopoverTrigger, {
             children: 'Filters',
             contentId: 'filters',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          PopoverContent.definition.render({
+          renderUiComponent(PopoverContent, {
             children: 'Menu',
             contentId: 'filters',
             open: true,

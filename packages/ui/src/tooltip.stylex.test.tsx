@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,23 +8,23 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js';
 describe('@kovojs/ui Tooltip StyleX slots', () => {
   it('matches tooltip markup with StyleX slot output', () => {
     expect({
-      disabled: Tooltip.definition.render({
+      disabled: renderUiComponent(Tooltip, {
         children:
-          TooltipTrigger.definition.render({
+          renderUiComponent(TooltipTrigger, {
             children: 'Help',
             contentId: 'tooltip-help',
             disabled: true,
-          }) + TooltipContent.definition.render({ children: 'Info', contentId: 'tooltip-help' }),
+          }) + renderUiComponent(TooltipContent, { children: 'Info', contentId: 'tooltip-help' }),
         disabled: true,
       }),
-      open: Tooltip.definition.render({
+      open: renderUiComponent(Tooltip, {
         children:
-          TooltipTrigger.definition.render({
+          renderUiComponent(TooltipTrigger, {
             children: 'Help',
             contentId: 'tooltip-help',
             open: true,
           }) +
-          TooltipContent.definition.render({
+          renderUiComponent(TooltipContent, {
             children: 'Info',
             contentId: 'tooltip-help',
             open: true,
@@ -50,15 +51,15 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
     });
 
     expect(
-      Tooltip.definition.render({
+      renderUiComponent(Tooltip, {
         children:
-          TooltipTrigger.definition.render({
+          renderUiComponent(TooltipTrigger, {
             children: 'Help',
             contentId: 'tooltip-help',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          TooltipContent.definition.render({
+          renderUiComponent(TooltipContent, {
             children: 'Info',
             contentId: 'tooltip-help',
             open: true,

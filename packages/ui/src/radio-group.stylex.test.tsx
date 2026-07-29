@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -21,23 +22,23 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
     };
 
     expect({
-      item: RadioGroupItem.definition.render({
+      item: renderUiComponent(RadioGroupItem, {
         ...state,
         children: 'Express option',
         itemValue: 'express',
       }),
-      label: RadioGroupLabel.definition.render({
+      label: renderUiComponent(RadioGroupLabel, {
         ...state,
         children: 'Express',
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      radio: RadioGroupRadio.definition.render({
+      radio: renderUiComponent(RadioGroupRadio, {
         ...state,
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      root: RadioGroup.definition.render({
+      root: renderUiComponent(RadioGroup, {
         ...state,
         children: 'radio options',
         id: 'shipping-speed',
@@ -71,26 +72,26 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
     };
 
     expect({
-      item: RadioGroupItem.definition.render({
+      item: renderUiComponent(RadioGroupItem, {
         ...state,
         children: 'Express option',
         itemValue: 'express',
         styles: { item: overrides.item },
       }),
-      label: RadioGroupLabel.definition.render({
+      label: renderUiComponent(RadioGroupLabel, {
         ...state,
         children: 'Express',
         controlId: 'shipping-express',
         itemValue: 'express',
         styles: { label: overrides.label },
       }),
-      radio: RadioGroupRadio.definition.render({
+      radio: renderUiComponent(RadioGroupRadio, {
         ...state,
         controlId: 'shipping-express',
         itemValue: 'express',
         styles: { radio: overrides.radio },
       }),
-      root: RadioGroup.definition.render({
+      root: renderUiComponent(RadioGroup, {
         ...state,
         children: 'radio options',
         styles: { root: overrides.root },

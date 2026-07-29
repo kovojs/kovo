@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -10,25 +11,25 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
     const closed = { contentId: 'archived-details', open: false as const };
 
     expect({
-      closed: Disclosure.definition.render({
+      closed: renderUiComponent(Disclosure, {
         children:
-          DisclosureTrigger.definition.render({ ...closed, children: 'Archived review' }) +
-          DisclosureContent.definition.render({
+          renderUiComponent(DisclosureTrigger, { ...closed, children: 'Archived review' }) +
+          renderUiComponent(DisclosureContent, {
             ...closed,
             children: 'Hidden until a client action re-opens it.',
           }),
         id: 'disclosure-closed',
         open: false,
       }),
-      disabled: Disclosure.definition.render({
+      disabled: renderUiComponent(Disclosure, {
         children:
-          DisclosureTrigger.definition.render({
+          renderUiComponent(DisclosureTrigger, {
             children: 'Disabled review',
             contentId: 'disabled-review',
             disabled: true,
             open: false,
           }) +
-          DisclosureContent.definition.render({
+          renderUiComponent(DisclosureContent, {
             children: 'Disabled panels stay hidden.',
             contentId: 'disabled-review',
             disabled: true,
@@ -38,10 +39,10 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         id: 'disclosure-disabled',
         open: false,
       }),
-      open: Disclosure.definition.render({
+      open: renderUiComponent(Disclosure, {
         children:
-          DisclosureTrigger.definition.render({ ...open, children: 'Show audit details' }) +
-          DisclosureContent.definition.render({
+          renderUiComponent(DisclosureTrigger, { ...open, children: 'Show audit details' }) +
+          renderUiComponent(DisclosureContent, {
             ...open,
             children: 'Two reviewers approved the release.',
           }),
@@ -66,15 +67,15 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
     });
 
     expect(
-      Disclosure.definition.render({
+      renderUiComponent(Disclosure, {
         children:
-          DisclosureTrigger.definition.render({
+          renderUiComponent(DisclosureTrigger, {
             children: 'Custom disclosure',
             contentId: 'custom-disclosure-content',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          DisclosureContent.definition.render({
+          renderUiComponent(DisclosureContent, {
             children: 'Overrides should stay author-last.',
             contentId: 'custom-disclosure-content',
             open: true,

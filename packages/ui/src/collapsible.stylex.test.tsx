@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -10,24 +11,24 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
     const closed = { contentId: 'archived-notes', open: false as const };
 
     expect({
-      closed: Collapsible.definition.render({
+      closed: renderUiComponent(Collapsible, {
         children:
-          CollapsibleTrigger.definition.render({ ...closed, children: 'Archived notes' }) +
-          CollapsibleContent.definition.render({
+          renderUiComponent(CollapsibleTrigger, { ...closed, children: 'Archived notes' }) +
+          renderUiComponent(CollapsibleContent, {
             ...closed,
             children: 'Older notes stay available without JavaScript.',
           }),
         id: 'collapsible-closed',
         open: false,
       }),
-      disabled: Collapsible.definition.render({
+      disabled: renderUiComponent(Collapsible, {
         children:
-          CollapsibleTrigger.definition.render({
+          renderUiComponent(CollapsibleTrigger, {
             children: 'Disabled notes',
             contentId: 'disabled-notes',
             disabled: true,
           }) +
-          CollapsibleContent.definition.render({
+          renderUiComponent(CollapsibleContent, {
             children: 'Disabled content remains in the document.',
             contentId: 'disabled-notes',
             disabled: true,
@@ -36,10 +37,10 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         id: 'collapsible-disabled',
         open: false,
       }),
-      open: Collapsible.definition.render({
+      open: renderUiComponent(Collapsible, {
         children:
-          CollapsibleTrigger.definition.render({ ...open, children: 'Release notes' }) +
-          CollapsibleContent.definition.render({
+          renderUiComponent(CollapsibleTrigger, { ...open, children: 'Release notes' }) +
+          renderUiComponent(CollapsibleContent, {
             ...open,
             children: 'Includes dependency updates and migration notes.',
           }),
@@ -63,15 +64,15 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
     });
 
     expect(
-      Collapsible.definition.render({
+      renderUiComponent(Collapsible, {
         children:
-          CollapsibleTrigger.definition.render({
+          renderUiComponent(CollapsibleTrigger, {
             children: 'Custom release notes',
             contentId: 'custom-collapsible-content',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          CollapsibleContent.definition.render({
+          renderUiComponent(CollapsibleContent, {
             children: 'Overrides should win by slot.',
             contentId: 'custom-collapsible-content',
             open: true,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -22,17 +23,17 @@ const commandItems = [
 describe('@kovojs/ui Command StyleX slots', () => {
   it('matches command states with StyleX output', () => {
     expect({
-      rendered: Command.definition.render({
+      rendered: renderUiComponent(Command, {
         children:
-          CommandTrigger.definition.render({
+          renderUiComponent(CommandTrigger, {
             children: 'Open command menu',
             contentId: 'command-dialog',
             id: 'command-trigger',
             open: true,
           }) +
-          CommandDialog.definition.render({
+          renderUiComponent(CommandDialog, {
             children:
-              CommandInput.definition.render({
+              renderUiComponent(CommandInput, {
                 highlightedValue: 'open-file',
                 id: 'command-input',
                 items: commandItems,
@@ -41,9 +42,9 @@ describe('@kovojs/ui Command StyleX slots', () => {
                 placeholder: 'Search commands',
                 value: 'open',
               }) +
-              CommandListbox.definition.render({
+              renderUiComponent(CommandListbox, {
                 children:
-                  CommandItem.definition.render({
+                  renderUiComponent(CommandItem, {
                     highlightedValue: 'open-file',
                     items: commandItems,
                     itemLabel: 'Open file',
@@ -52,7 +53,7 @@ describe('@kovojs/ui Command StyleX slots', () => {
                     open: true,
                     value: 'open-file',
                   }) +
-                  CommandItem.definition.render({
+                  renderUiComponent(CommandItem, {
                     items: commandItems,
                     itemDisabled: true,
                     itemLabel: 'Archive file',
@@ -61,7 +62,7 @@ describe('@kovojs/ui Command StyleX slots', () => {
                     open: true,
                     value: 'open-file',
                   }) +
-                  CommandEmpty.definition.render({
+                  renderUiComponent(CommandEmpty, {
                     children: 'No commands matched',
                   }),
                 highlightedValue: 'open-file',
@@ -69,11 +70,11 @@ describe('@kovojs/ui Command StyleX slots', () => {
                 open: true,
                 value: 'open-file',
               }) +
-              CommandValue.definition.render({
+              renderUiComponent(CommandValue, {
                 items: commandItems,
                 value: 'open-file',
               }) +
-              CommandClose.definition.render({
+              renderUiComponent(CommandClose, {
                 contentId: 'command-dialog',
                 open: true,
               }),
@@ -121,36 +122,36 @@ describe('@kovojs/ui Command StyleX slots', () => {
     });
 
     expect(
-      Command.definition.render({
+      renderUiComponent(Command, {
         children:
-          CommandTrigger.definition.render({
+          renderUiComponent(CommandTrigger, {
             children: 'Custom command',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          CommandDialog.definition.render({
+          renderUiComponent(CommandDialog, {
             children:
-              CommandInput.definition.render({
+              renderUiComponent(CommandInput, {
                 open: true,
                 styles: { input: overrides.input },
               }) +
-              CommandListbox.definition.render({
+              renderUiComponent(CommandListbox, {
                 children:
-                  CommandItem.definition.render({
+                  renderUiComponent(CommandItem, {
                     items: [{ value: 'first' }],
                     itemValue: 'first',
                     listboxId: 'custom-command-listbox',
                     open: true,
                     styles: { item: overrides.item },
                   }) +
-                  CommandEmpty.definition.render({
+                  renderUiComponent(CommandEmpty, {
                     styles: { empty: overrides.empty },
                   }) +
-                  CommandValue.definition.render({
+                  renderUiComponent(CommandValue, {
                     styles: { value: overrides.value },
                     value: 'first',
                   }) +
-                  CommandClose.definition.render({
+                  renderUiComponent(CommandClose, {
                     styles: { close: overrides.close },
                   }),
                 open: true,
@@ -168,7 +169,7 @@ describe('@kovojs/ui Command StyleX slots', () => {
   it('forwards listboxId to id-less command items', () => {
     expect(
       String(
-        CommandItem.definition.render({
+        renderUiComponent(CommandItem, {
           highlightedValue: 'open-file',
           itemValue: 'open-file',
           items: commandItems,

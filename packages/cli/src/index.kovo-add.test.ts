@@ -38,13 +38,14 @@ function requiredKovoPackageDependencies(source: string): readonly string[] {
   const sourceWithoutComments = source
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
-  return [
-    ...new Set(
-      [...sourceWithoutComments.matchAll(/['"](@kovojs\/[^/'"]+)(?:\/[^'"]*)?['"]/g)].map(
-        (match) => match[1],
-      ),
-    ),
-  ].sort();
+  const dependencies = new Set<string>();
+  const importSpecifier =
+    /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)['"](@kovojs\/[^/'"]+)(?:\/[^'"]*)?['"]/g;
+  for (const match of sourceWithoutComments.matchAll(importSpecifier)) {
+    const packageName = match[1];
+    if (packageName) dependencies.add(packageName);
+  }
+  return [...dependencies].sort();
 }
 
 function soundSubsetFindings(source: string): readonly string[] {

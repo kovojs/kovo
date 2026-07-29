@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -18,8 +19,8 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
     };
 
     expect({
-      corner: ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' }),
-      hiddenThumb: ScrollAreaThumb.definition.render({
+      corner: renderUiComponent(ScrollAreaCorner, { ...state, id: 'activity-corner' }),
+      hiddenThumb: renderUiComponent(ScrollAreaThumb, {
         ...state,
         forceMount: true,
         id: 'activity-thumb-x',
@@ -27,14 +28,14 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         scrollPosition: 'none',
         visible: false,
       }),
-      root: ScrollArea.definition.render({
+      root: renderUiComponent(ScrollArea, {
         ...state,
         children: 'viewport and scrollbars',
         id: 'activity',
       }),
-      verticalScrollbar: ScrollAreaScrollbar.definition.render({
+      verticalScrollbar: renderUiComponent(ScrollAreaScrollbar, {
         ...state,
-        children: ScrollAreaThumb.definition.render({
+        children: renderUiComponent(ScrollAreaThumb, {
           ...state,
           orientation: 'vertical',
           scrollPosition: 'middle',
@@ -45,7 +46,7 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         scrollPosition: 'middle',
         visible: true,
       }),
-      viewport: ScrollAreaViewport.definition.render({
+      viewport: renderUiComponent(ScrollAreaViewport, {
         ...state,
         children: 'feed',
         descriptionId: 'activity-description',
@@ -77,21 +78,21 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
     });
 
     expect(
-      ScrollArea.definition.render({
+      renderUiComponent(ScrollArea, {
         children:
-          ScrollAreaViewport.definition.render({
+          renderUiComponent(ScrollAreaViewport, {
             children: 'feed',
             styles: { viewport: overrides.viewport },
           }) +
-          ScrollAreaScrollbar.definition.render({
-            children: ScrollAreaThumb.definition.render({
+          renderUiComponent(ScrollAreaScrollbar, {
+            children: renderUiComponent(ScrollAreaThumb, {
               styles: { thumb: overrides.thumb },
               visible: true,
             }),
             styles: { scrollbar: overrides.scrollbar },
             visible: true,
           }) +
-          ScrollAreaCorner.definition.render({
+          renderUiComponent(ScrollAreaCorner, {
             styles: { corner: overrides.corner },
           }),
         styles: { root: overrides.root },

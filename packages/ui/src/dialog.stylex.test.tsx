@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -18,17 +19,17 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
     const dialogState = { contentId: 'account-dialog', open: true as const };
 
     expect({
-      open: Dialog.definition.render({
+      open: renderUiComponent(Dialog, {
         children:
-          DialogTrigger.definition.render({ ...dialogState, children: 'Edit account' }) +
-          DialogContent.definition.render({
+          renderUiComponent(DialogTrigger, { ...dialogState, children: 'Edit account' }) +
+          renderUiComponent(DialogContent, {
             ...dialogState,
             children:
-              DialogCloseX.definition.render({ ...dialogState }) +
-              DialogHeader.definition.render({
+              renderUiComponent(DialogCloseX, { ...dialogState }) +
+              renderUiComponent(DialogHeader, {
                 children:
-                  DialogTitle.definition.render({ children: 'Account', id: 'account-title' }) +
-                  DialogDescription.definition.render({
+                  renderUiComponent(DialogTitle, { children: 'Account', id: 'account-title' }) +
+                  renderUiComponent(DialogDescription, {
                     children: 'Profile settings',
                     id: 'account-description',
                   }),
@@ -36,7 +37,7 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
             descriptionId: 'account-description',
             titleId: 'account-title',
           }) +
-          DialogClose.definition.render({ ...dialogState, children: 'Done' }),
+          renderUiComponent(DialogClose, { ...dialogState, children: 'Done' }),
         id: 'dialog-root',
         open: true,
       }),
@@ -60,21 +61,21 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
     });
 
     expect(
-      Dialog.definition.render({
+      renderUiComponent(Dialog, {
         children:
-          DialogTrigger.definition.render({
+          renderUiComponent(DialogTrigger, {
             children: 'Edit account',
             contentId: 'account-dialog',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          DialogContent.definition.render({
+          renderUiComponent(DialogContent, {
             children: 'Account form',
             contentId: 'account-dialog',
             open: true,
             styles: { content: overrides.content },
           }) +
-          DialogClose.definition.render({
+          renderUiComponent(DialogClose, {
             contentId: 'account-dialog',
             open: true,
             styles: { close: overrides.close },

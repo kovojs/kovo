@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,7 +8,7 @@ import { Sheet } from './sheet.js';
 describe('@kovojs/ui Sheet StyleX slots', () => {
   it('matches sheet markup with StyleX slot output', () => {
     expect({
-      sheet: Sheet.definition.render({
+      sheet: renderUiComponent(Sheet, {
         children: 'Sheet body',
         contentId: 'account-sheet',
         description: 'Update your profile.',
@@ -47,7 +48,7 @@ describe('@kovojs/ui Sheet StyleX slots', () => {
     });
 
     expect(
-      Sheet.definition.render({
+      renderUiComponent(Sheet, {
         children: 'Custom sheet body',
         closeLabel: 'Done',
         contentId: 'custom-sheet',

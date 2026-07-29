@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import {
   Select,
@@ -24,7 +25,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
     };
     const rendered = {
       content: String(
-        SelectContent.definition.render({
+        renderUiComponent(SelectContent, {
           ...state,
           children: 'options',
           id: 'team-listbox',
@@ -32,7 +33,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
         }),
       ),
       hiddenInput: String(
-        SelectHiddenInput.definition.render({
+        renderUiComponent(SelectHiddenInput, {
           ...state,
           form: 'team-form',
           id: 'team-hidden',
@@ -40,13 +41,13 @@ describe('@kovojs/ui Select StyleX slots', () => {
         }),
       ),
       item: String(
-        SelectItem.definition.render({
+        renderUiComponent(SelectItem, {
           ...state,
           itemValue: 'design',
         }),
       ),
       root: String(
-        Select.definition.render({
+        renderUiComponent(Select, {
           ...state,
           children: 'select body',
           id: 'team-select',
@@ -55,7 +56,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
         }),
       ),
       trigger: String(
-        SelectTrigger.definition.render({
+        renderUiComponent(SelectTrigger, {
           ...state,
           children: 'Design',
           descriptionId: 'team-help',
@@ -65,7 +66,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
         }),
       ),
       value: String(
-        SelectValue.definition.render({
+        renderUiComponent(SelectValue, {
           ...state,
           id: 'team-value',
         }),
@@ -108,38 +109,38 @@ describe('@kovojs/ui Select StyleX slots', () => {
     });
     const rendered = {
       content: String(
-        SelectContent.definition.render({
+        renderUiComponent(SelectContent, {
           children: 'options',
           styles: { content: overrides.content },
         }),
       ),
       hiddenInput: String(
-        SelectHiddenInput.definition.render({
+        renderUiComponent(SelectHiddenInput, {
           name: 'team',
           styles: { hiddenInput: overrides.hiddenInput },
           value: 'design',
         }),
       ),
       item: String(
-        SelectItem.definition.render({
+        renderUiComponent(SelectItem, {
           itemValue: 'design',
           styles: { item: overrides.item },
         }),
       ),
       root: String(
-        Select.definition.render({
+        renderUiComponent(Select, {
           children: 'select body',
           styles: { root: overrides.root },
         }),
       ),
       trigger: String(
-        SelectTrigger.definition.render({
+        renderUiComponent(SelectTrigger, {
           children: 'Design',
           styles: { trigger: overrides.trigger },
         }),
       ),
       value: String(
-        SelectValue.definition.render({
+        renderUiComponent(SelectValue, {
           styles: { value: overrides.value },
           value: 'design',
         }),

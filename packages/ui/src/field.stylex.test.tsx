@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import { trustedHtml } from '@kovojs/browser';
 import * as style from '@kovojs/style';
@@ -24,7 +25,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
     };
 
     expect({
-      control: FieldControl.definition.render({
+      control: renderUiComponent(FieldControl, {
         ...state,
         autoComplete: 'email',
         descriptionId: 'email-description',
@@ -40,16 +41,16 @@ describe('@kovojs/ui Field StyleX styles', () => {
         type: 'email',
         value: 'ada@example.com',
       }),
-      description: FieldDescription.definition.render({
+      description: renderUiComponent(FieldDescription, {
         children: 'Used for notifications.',
         id: 'email-description',
       }),
-      error: FieldErrorMessage.definition.render({
+      error: renderUiComponent(FieldErrorMessage, {
         children: 'Email required.',
         id: 'email-error',
       }),
-      fieldset: Fieldset.definition.render({
-        children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
+      fieldset: renderUiComponent(Fieldset, {
+        children: renderUiComponent(FieldsetLegend, { children: 'Plan', id: 'plan-legend' }),
         descriptionId: 'plan-description',
         disabled: true,
         form: 'profile-form',
@@ -57,18 +58,18 @@ describe('@kovojs/ui Field StyleX styles', () => {
         invalid: true,
         name: 'plan-options',
       }),
-      label: FieldLabel.definition.render({
+      label: renderUiComponent(FieldLabel, {
         ...state,
         children: 'Email',
         controlId: 'email',
         id: 'email-label',
       }),
-      root: Field.definition.render({
+      root: renderUiComponent(Field, {
         ...state,
         children: 'email field',
         id: 'email-field',
       }),
-      select: FieldSelect.definition.render({
+      select: renderUiComponent(FieldSelect, {
         children: trustedHtml(
           '<option value="starter">Starter</option><option value="team" selected>Team</option>',
         ) as unknown as string,
@@ -79,13 +80,13 @@ describe('@kovojs/ui Field StyleX styles', () => {
         required: true,
         value: 'team',
       }),
-      selectOption: FieldSelectOption.definition.render({
+      selectOption: renderUiComponent(FieldSelectOption, {
         children: 'Enterprise',
         disabled: true,
         selected: true,
         value: 'enterprise',
       }),
-      textarea: FieldTextarea.definition.render({
+      textarea: renderUiComponent(FieldTextarea, {
         autoComplete: 'off',
         descriptionId: 'bio-description',
         form: 'profile-form',
@@ -113,36 +114,36 @@ describe('@kovojs/ui Field StyleX styles', () => {
     });
 
     expect({
-      control: FieldControl.definition.render({ styles: { control: overrides.control } }),
-      description: FieldDescription.definition.render({
+      control: renderUiComponent(FieldControl, { styles: { control: overrides.control } }),
+      description: renderUiComponent(FieldDescription, {
         children: 'Custom description',
         styles: { description: overrides.description },
       }),
-      error: FieldErrorMessage.definition.render({
+      error: renderUiComponent(FieldErrorMessage, {
         children: 'Custom error',
         styles: { error: overrides.error },
       }),
-      fieldset: Fieldset.definition.render({
-        children: FieldsetLegend.definition.render({
+      fieldset: renderUiComponent(Fieldset, {
+        children: renderUiComponent(FieldsetLegend, {
           children: 'Legend',
           styles: { fieldsetLegend: overrides.fieldsetLegend },
         }),
         styles: { fieldset: overrides.fieldset },
       }),
-      label: FieldLabel.definition.render({
+      label: renderUiComponent(FieldLabel, {
         children: 'Custom label',
         styles: { label: overrides.label },
       }),
-      root: Field.definition.render({
+      root: renderUiComponent(Field, {
         children: 'Custom field',
         styles: { root: overrides.root },
       }),
-      select: FieldSelect.definition.render({ styles: { select: overrides.select } }),
-      selectOption: FieldSelectOption.definition.render({
+      select: renderUiComponent(FieldSelect, { styles: { select: overrides.select } }),
+      selectOption: renderUiComponent(FieldSelectOption, {
         children: 'Custom option',
         styles: { selectOption: overrides.selectOption },
       }),
-      textarea: FieldTextarea.definition.render({ styles: { textarea: overrides.textarea } }),
+      textarea: renderUiComponent(FieldTextarea, { styles: { textarea: overrides.textarea } }),
     }).toMatchSnapshot();
   });
 });

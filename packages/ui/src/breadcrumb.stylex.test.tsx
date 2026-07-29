@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,21 +8,21 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from 
 describe('@kovojs/ui Breadcrumb StyleX styles', () => {
   it('matches breadcrumb parts with StyleX output', () => {
     expect({
-      current: BreadcrumbLink.definition.render({ children: 'Billing', current: true }),
-      item: BreadcrumbItem.definition.render({ children: 'Settings' }),
-      link: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),
-      root: Breadcrumb.definition.render({
+      current: renderUiComponent(BreadcrumbLink, { children: 'Billing', current: true }),
+      item: renderUiComponent(BreadcrumbItem, { children: 'Settings' }),
+      link: renderUiComponent(BreadcrumbLink, { children: 'Account', href: '/account' }),
+      root: renderUiComponent(Breadcrumb, {
         children:
-          BreadcrumbItem.definition.render({
-            children: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),
+          renderUiComponent(BreadcrumbItem, {
+            children: renderUiComponent(BreadcrumbLink, { children: 'Account', href: '/account' }),
           }) +
-          BreadcrumbSeparator.definition.render({}) +
-          BreadcrumbItem.definition.render({
-            children: BreadcrumbLink.definition.render({ children: 'Billing', current: true }),
+          renderUiComponent(BreadcrumbSeparator, {}) +
+          renderUiComponent(BreadcrumbItem, {
+            children: renderUiComponent(BreadcrumbLink, { children: 'Billing', current: true }),
           }),
         label: 'Account path',
       }),
-      separator: BreadcrumbSeparator.definition.render({ children: '>' }),
+      separator: renderUiComponent(BreadcrumbSeparator, { children: '>' }),
     }).toMatchSnapshot();
   });
 
@@ -48,22 +49,22 @@ describe('@kovojs/ui Breadcrumb StyleX styles', () => {
     });
 
     expect(
-      Breadcrumb.definition.render({
+      renderUiComponent(Breadcrumb, {
         children:
-          BreadcrumbItem.definition.render({
-            children: BreadcrumbLink.definition.render({
+          renderUiComponent(BreadcrumbItem, {
+            children: renderUiComponent(BreadcrumbLink, {
               children: 'Account',
               href: '/account',
               styles: { link: overrides.link },
             }),
             styles: { item: overrides.item },
           }) +
-          BreadcrumbSeparator.definition.render({
+          renderUiComponent(BreadcrumbSeparator, {
             children: '/',
             styles: { separator: overrides.separator },
           }) +
-          BreadcrumbItem.definition.render({
-            children: BreadcrumbLink.definition.render({
+          renderUiComponent(BreadcrumbItem, {
+            children: renderUiComponent(BreadcrumbLink, {
               children: 'Billing',
               current: true,
               styles: { current: overrides.current },

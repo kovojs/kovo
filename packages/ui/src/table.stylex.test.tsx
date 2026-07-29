@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import { jsx } from '@kovojs/server/jsx-runtime';
 import * as style from '@kovojs/style';
@@ -20,10 +21,14 @@ describe('@kovojs/ui Table StyleX slots', () => {
     const nativeWeakSetHas = WeakSet.prototype.has;
     let rendered: unknown;
     try {
-      Array.isArray = () => false;
-      Array.prototype.map = () => ['<script data-array-poison></script>'];
+      Array.isArray = (() => false) as unknown as typeof Array.isArray;
+      Array.prototype.map = (() => [
+        '<script data-array-poison></script>',
+      ]) as typeof Array.prototype.map;
       JSON.stringify = () => '<img data-json-poison src=x onerror=alert(1)>';
-      Object.entries = () => [['class', '" data-object-poison="true']];
+      Object.entries = (() => [
+        ['class', '" data-object-poison="true'],
+      ]) as unknown as typeof Object.entries;
       Object.getOwnPropertyDescriptor = () => ({
         configurable: true,
         enumerable: true,
@@ -35,7 +40,7 @@ describe('@kovojs/ui Table StyleX slots', () => {
       };
       WeakSet.prototype.has = () => true;
 
-      rendered = Table.definition.render({
+      rendered = renderUiComponent(Table, {
         caption: '<img data-caption-poison src=x onerror=alert(1)>',
         children: ['<script data-child-poison>globalThis.pwned=1</script>'],
       });
@@ -69,7 +74,7 @@ describe('@kovojs/ui Table StyleX slots', () => {
         return Reflect.get(target, property, receiver);
       },
     });
-    const html = await render(Table.definition.render({ children: proxied }));
+    const html = await render(renderUiComponent(Table, { children: proxied }));
     expect(liveLengthReads).toBe(0);
     expect(html).toContain('&lt;script data-proxy-child&gt;');
 
@@ -83,62 +88,62 @@ describe('@kovojs/ui Table StyleX slots', () => {
         return '<script data-accessor-child></script>';
       },
     });
-    expect(() => Table.definition.render({ children: accessorChildren })).toThrow(
+    expect(() => renderUiComponent(Table, { children: accessorChildren })).toThrow(
       /stable own data elements/u,
     );
     expect(accessorInvoked).toBe(false);
 
-    expect(() => Table.definition.render({ children: new Array(1) })).toThrow(
+    expect(() => renderUiComponent(Table, { children: new Array(1) })).toThrow(
       /dense own data elements/u,
     );
 
-    expect(() => Table.definition.render({ children: new Array(10_001) })).toThrow(
+    expect(() => renderUiComponent(Table, { children: new Array(10_001) })).toThrow(
       /bounded stable dense array/u,
     );
   });
 
   it('renders semantic table markup with StyleX slot classes', async () => {
-    const header = await TableHead.definition.render({
-      children: await TableRow.definition.render({
+    const header = await renderUiComponent(TableHead, {
+      children: await renderUiComponent(TableRow, {
         children: [
-          await TableHeaderCell.definition.render({
+          await renderUiComponent(TableHeaderCell, {
             children: 'Invoice',
           }),
-          await TableHeaderCell.definition.render({
+          await renderUiComponent(TableHeaderCell, {
             children: 'Status',
           }),
-          await TableHeaderCell.definition.render({
+          await renderUiComponent(TableHeaderCell, {
             children: 'Amount',
           }),
         ],
       }),
     });
-    const body = await TableBody.definition.render({
+    const body = await renderUiComponent(TableBody, {
       children: [
-        await TableRow.definition.render({
+        await renderUiComponent(TableRow, {
           children: [
-            await TableHeaderCell.definition.render({
+            await renderUiComponent(TableHeaderCell, {
               children: 'INV-0042',
               scope: 'row',
             }),
-            await TableCell.definition.render({
+            await renderUiComponent(TableCell, {
               children: 'Paid',
             }),
-            await TableCell.definition.render({
+            await renderUiComponent(TableCell, {
               children: '$250.00',
             }),
           ],
         }),
-        await TableRow.definition.render({
-          children: await TableCell.definition.render({
+        await renderUiComponent(TableRow, {
+          children: await renderUiComponent(TableCell, {
             children: 'Two pending invoices omitted',
             colSpan: 3,
           }),
         }),
       ],
     });
-    const legacyBody = `${await TableRow.definition.render({
-      children: `${await TableHeaderCell.definition.render({
+    const legacyBody = `${await renderUiComponent(TableRow, {
+      children: `${await renderUiComponent(TableHeaderCell, {
         children: 'INV-0042',
         scope: 'row',
       })}`,
@@ -146,13 +151,13 @@ describe('@kovojs/ui Table StyleX slots', () => {
 
     expect({
       rendered: await render(
-        Table.definition.render({
+        renderUiComponent(Table, {
           caption: 'Invoices for the current billing period',
           children: [header, body],
         }),
       ),
       stringComposedChildrenAreText: await render(
-        Table.definition.render({
+        renderUiComponent(Table, {
           children: legacyBody,
         }),
       ),
@@ -192,12 +197,12 @@ describe('@kovojs/ui Table StyleX slots', () => {
 
     expect(
       await render(
-        Table.definition.render({
+        renderUiComponent(Table, {
           caption: 'Custom invoices',
           children: [
-            await TableHead.definition.render({
-              children: await TableRow.definition.render({
-                children: await TableHeaderCell.definition.render({
+            await renderUiComponent(TableHead, {
+              children: await renderUiComponent(TableRow, {
+                children: await renderUiComponent(TableHeaderCell, {
                   children: 'Invoice',
                   styles: { headerCell: overrides.headerCell },
                 }),
@@ -205,9 +210,9 @@ describe('@kovojs/ui Table StyleX slots', () => {
               }),
               styles: { head: overrides.head },
             }),
-            await TableBody.definition.render({
-              children: await TableRow.definition.render({
-                children: await TableCell.definition.render({
+            await renderUiComponent(TableBody, {
+              children: await renderUiComponent(TableRow, {
+                children: await renderUiComponent(TableCell, {
                   children: 'INV-1000',
                   styles: { cell: overrides.cell },
                 }),

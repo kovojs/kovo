@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -28,28 +29,28 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
     };
 
     expect({
-      control: CheckboxGroupControl.definition.render({
+      control: renderUiComponent(CheckboxGroupControl, {
         ...state,
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      disabledControl: CheckboxGroupControl.definition.render({
+      disabledControl: renderUiComponent(CheckboxGroupControl, {
         ...state,
         controlId: 'notifications-security',
         itemValue: 'security',
       }),
-      item: CheckboxGroupItem.definition.render({
+      item: renderUiComponent(CheckboxGroupItem, {
         ...state,
         children: 'updates input',
         itemValue: 'updates',
       }),
-      label: CheckboxGroupLabel.definition.render({
+      label: renderUiComponent(CheckboxGroupLabel, {
         ...state,
         children: 'Product updates',
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      root: CheckboxGroup.definition.render({
+      root: renderUiComponent(CheckboxGroup, {
         ...state,
         children: 'checkbox options',
         errorId: 'notifications-error',
@@ -79,26 +80,26 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
     });
 
     expect({
-      control: CheckboxGroupControl.definition.render({
+      control: renderUiComponent(CheckboxGroupControl, {
         controlId: 'custom-updates',
         itemValue: 'updates',
         styles: { control: overrides.control },
         value: ['updates'],
       }),
-      item: CheckboxGroupItem.definition.render({
+      item: renderUiComponent(CheckboxGroupItem, {
         children: 'Custom item',
         itemValue: 'updates',
         styles: { item: overrides.item },
         value: ['updates'],
       }),
-      label: CheckboxGroupLabel.definition.render({
+      label: renderUiComponent(CheckboxGroupLabel, {
         children: 'Custom label',
         controlId: 'custom-updates',
         itemValue: 'updates',
         styles: { label: overrides.label },
         value: ['updates'],
       }),
-      root: CheckboxGroup.definition.render({
+      root: renderUiComponent(CheckboxGroup, {
         children: 'Custom options',
         styles: { root: overrides.root },
       }),

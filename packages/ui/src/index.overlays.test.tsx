@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import {
   Command,
   CommandClose,
@@ -45,32 +46,32 @@ import {
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless toast primitive as styled live-region markup', () => {
     const toast = String(
-      Toast.definition.render({
-        children: `${ToastTitle.definition.render({
+      renderUiComponent(Toast, {
+        children: `${renderUiComponent(ToastTitle, {
           children: 'Deployment complete',
           id: 'deploy-toast-title',
-        })}${ToastDescription.definition.render({
+        })}${renderUiComponent(ToastDescription, {
           children: 'Production is serving the new build.',
           id: 'deploy-toast-description',
-        })}${ToastAction.definition.render({
+        })}${renderUiComponent(ToastAction, {
           actionValue: 'open-deploy',
           children: 'View',
           id: 'deploy-toast',
           variant: 'success',
-        })}${ToastAction.definition.render({
+        })}${renderUiComponent(ToastAction, {
           actionValue: 'keep-open',
           children: 'Keep open',
           dismissOnAction: false,
           id: 'deploy-toast',
           variant: 'success',
-        })}${ToastAction.definition.render({
+        })}${renderUiComponent(ToastAction, {
           actionValue: 'blocked',
           children: 'Blocked',
           disabled: true,
           dismissOnAction: false,
           id: 'deploy-toast',
           variant: 'success',
-        })}${ToastClose.definition.render({
+        })}${renderUiComponent(ToastClose, {
           children: 'Dismiss',
           id: 'deploy-toast',
           variant: 'success',
@@ -82,14 +83,14 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const viewport = String(
-      ToastViewport.definition.render({
+      renderUiComponent(ToastViewport, {
         children: toast,
         id: 'toast-viewport',
         label: 'Build notifications',
         placement: 'top-center',
       }),
     );
-    const hiddenToast = String(Toast.definition.render({ id: 'hidden-toast', open: false }));
+    const hiddenToast = String(renderUiComponent(Toast, { id: 'hidden-toast', open: false }));
     expect(viewport).toContain('aria-label="Build notifications"');
     expect(viewport).toContain('data-placement="top-center" id="toast-viewport"');
     expect(viewport).toContain('role="region" tabIndex="-1"');
@@ -124,17 +125,17 @@ describe('@kovojs/ui styled package foundation', () => {
       open: true,
     };
     const dropdown = String(
-      DropdownMenu.definition.render({
+      renderUiComponent(DropdownMenu, {
         ...dropdownState,
-        children: `${DropdownMenuTrigger.definition.render({
+        children: `${renderUiComponent(DropdownMenuTrigger, {
           ...dropdownState,
           contentId: 'file-actions-menu',
           id: 'file-actions-trigger',
-        })}${DropdownMenuContent.definition.render({
+        })}${renderUiComponent(DropdownMenuContent, {
           ...dropdownState,
           children: dropdownItems
             .map((item) =>
-              DropdownMenuItem.definition.render({
+              renderUiComponent(DropdownMenuItem, {
                 ...dropdownState,
                 ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
                 itemLabel: item.label,
@@ -148,18 +149,18 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const context = String(
-      ContextMenu.definition.render({
-        children: `${ContextMenuTrigger.definition.render({
+      renderUiComponent(ContextMenu, {
+        children: `${renderUiComponent(ContextMenuTrigger, {
           contentId: 'row-menu',
           id: 'row-trigger',
           open: true,
-        })}${ContextMenuContent.definition.render({
-          children: `${ContextMenuItem.definition.render({
+        })}${renderUiComponent(ContextMenuContent, {
+          children: `${renderUiComponent(ContextMenuItem, {
             highlightedValue: 'inspect',
             itemLabel: 'Inspect',
             itemValue: 'inspect',
             open: true,
-          })}${ContextMenuItem.definition.render({
+          })}${renderUiComponent(ContextMenuItem, {
             highlightedValue: 'inspect',
             itemDisabled: true,
             itemLabel: 'Delete',
@@ -202,30 +203,30 @@ describe('@kovojs/ui styled package foundation', () => {
       { disabled: true, label: 'Import', parentValue: 'file', value: 'import' },
     ];
     const menubar = String(
-      Menubar.definition.render({
+      renderUiComponent(Menubar, {
         activeValue: 'file',
-        children: `${MenubarItem.definition.render({
+        children: `${renderUiComponent(MenubarItem, {
           activeValue: 'file',
           contentId: 'file-menu',
           itemLabel: 'File',
           itemValue: 'file',
           items: menubarItems,
           openValue: 'file',
-        })}${MenubarItem.definition.render({
+        })}${renderUiComponent(MenubarItem, {
           activeValue: 'file',
           itemLabel: 'Edit',
           itemValue: 'edit',
           items: menubarItems,
           openValue: 'file',
-        })}${MenubarSubmenu.definition.render({
-          children: `${MenubarItem.definition.render({
+        })}${renderUiComponent(MenubarSubmenu, {
+          children: `${renderUiComponent(MenubarItem, {
             activeValue: 'new',
             itemLabel: 'New',
             itemParentValue: 'file',
             itemValue: 'new',
             items: menubarItems,
             openValue: 'file',
-          })}${MenubarItem.definition.render({
+          })}${renderUiComponent(MenubarItem, {
             activeValue: 'new',
             itemDisabled: true,
             itemLabel: 'Import',
@@ -249,13 +250,13 @@ describe('@kovojs/ui styled package foundation', () => {
       { label: 'Docs', value: 'docs' },
     ];
     const navigation = String(
-      NavigationMenu.definition.render({
+      renderUiComponent(NavigationMenu, {
         activeValue: 'products',
-        children: `${NavigationMenuList.definition.render({
+        children: `${renderUiComponent(NavigationMenuList, {
           activeValue: 'products',
-          children: `${NavigationMenuItem.definition.render({
+          children: `${renderUiComponent(NavigationMenuItem, {
             activeValue: 'products',
-            children: NavigationMenuTrigger.definition.render({
+            children: renderUiComponent(NavigationMenuTrigger, {
               activeValue: 'products',
               contentId: 'products-panel',
               itemLabel: 'Products',
@@ -266,9 +267,9 @@ describe('@kovojs/ui styled package foundation', () => {
             itemValue: 'products',
             items: navItems,
             openValue: 'products',
-          })}${NavigationMenuItem.definition.render({
+          })}${renderUiComponent(NavigationMenuItem, {
             activeValue: 'products',
-            children: NavigationMenuLink.definition.render({
+            children: renderUiComponent(NavigationMenuLink, {
               activeValue: 'products',
               href: '/docs',
               itemLabel: 'Docs',
@@ -282,12 +283,12 @@ describe('@kovojs/ui styled package foundation', () => {
           })}`,
           items: navItems,
           openValue: 'products',
-        })}${NavigationMenuContent.definition.render({
+        })}${renderUiComponent(NavigationMenuContent, {
           children: 'Product links',
           id: 'products-panel',
           openValue: 'products',
           value: 'products',
-        })}${NavigationMenuViewport.definition.render({
+        })}${renderUiComponent(NavigationMenuViewport, {
           id: 'products-viewport',
           openValue: 'products',
         })}`,
@@ -337,29 +338,29 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 'invite',
     };
     const command = String(
-      Command.definition.render({
+      renderUiComponent(Command, {
         ...state,
         children:
-          CommandTrigger.definition.render({
+          renderUiComponent(CommandTrigger, {
             ...state,
             contentId: 'command-dialog',
             id: 'command-trigger',
           }) +
-          CommandDialog.definition.render({
+          renderUiComponent(CommandDialog, {
             ...state,
             children:
-              CommandInput.definition.render({
+              renderUiComponent(CommandInput, {
                 ...state,
                 id: 'command-input',
                 labelledBy: 'command-title',
                 listboxId: 'command-listbox',
               }) +
-              CommandListbox.definition.render({
+              renderUiComponent(CommandListbox, {
                 ...state,
                 children: items.reduce(
                   (html, item) =>
                     html +
-                    CommandItem.definition.render({
+                    renderUiComponent(CommandItem, {
                       ...state,
                       ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
                       itemLabel: item.label,
@@ -371,15 +372,15 @@ describe('@kovojs/ui styled package foundation', () => {
                 id: 'command-listbox',
                 labelledBy: 'command-title',
               }) +
-              CommandEmpty.definition.render({
+              renderUiComponent(CommandEmpty, {
                 inputValue: 'zzz',
                 items,
               }) +
-              CommandClose.definition.render({
+              renderUiComponent(CommandClose, {
                 ...state,
                 contentId: 'command-dialog',
               }) +
-              CommandValue.definition.render({
+              renderUiComponent(CommandValue, {
                 ...state,
                 id: 'command-value',
               }),
@@ -411,7 +412,7 @@ describe('@kovojs/ui styled package foundation', () => {
   });
   it('wraps the headless dialog primitive for a bounded sheet component', () => {
     const rendered = String(
-      Sheet.definition.render({
+      renderUiComponent(Sheet, {
         children: 'Sheet body',
         contentId: 'account-sheet',
         description: 'Manage account settings',
@@ -431,14 +432,14 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(rendered).toContain('data-style-src="sheet.tsx#content; sheet.tsx#left"');
     expect(rendered).toContain('command="request-close" commandfor="account-sheet"');
     const topSheet = String(
-      Sheet.definition.render({
+      renderUiComponent(Sheet, {
         contentId: 'top-sheet',
         side: 'top',
         title: 'Top sheet',
       }),
     );
     const drawer = String(
-      Drawer.definition.render({
+      renderUiComponent(Drawer, {
         children: 'Drawer body',
         contentId: 'account-drawer',
         description: 'Mobile actions',

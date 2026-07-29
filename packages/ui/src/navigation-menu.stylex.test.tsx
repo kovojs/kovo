@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -21,16 +22,16 @@ const items = [
 describe('@kovojs/ui NavigationMenu StyleX slots', () => {
   it('matches navigation menu markup with StyleX slot output', () => {
     expect({
-      nav: NavigationMenu.definition.render({
+      nav: renderUiComponent(NavigationMenu, {
         activeValue: 'products',
         children:
-          NavigationMenuList.definition.render({
+          renderUiComponent(NavigationMenuList, {
             activeValue: 'products',
             children:
-              NavigationMenuItem.definition.render({
+              renderUiComponent(NavigationMenuItem, {
                 activeValue: 'products',
                 children:
-                  NavigationMenuTrigger.definition.render({
+                  renderUiComponent(NavigationMenuTrigger, {
                     activeValue: 'products',
                     contentId: 'products-panel',
                     itemLabel: 'Products',
@@ -38,7 +39,7 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
                     items,
                     openValue: 'products',
                   }) +
-                  NavigationMenuContent.definition.render({
+                  renderUiComponent(NavigationMenuContent, {
                     children: 'Product links',
                     id: 'products-panel',
                     labelledBy: 'products-trigger',
@@ -48,8 +49,8 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
                 itemValue: 'products',
                 openValue: 'products',
               }) +
-              NavigationMenuItem.definition.render({
-                children: NavigationMenuLink.definition.render({
+              renderUiComponent(NavigationMenuItem, {
+                children: renderUiComponent(NavigationMenuLink, {
                   href: '/docs',
                   itemLabel: 'Docs',
                   itemValue: 'docs',
@@ -62,11 +63,11 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
             labelledBy: 'main-nav-label',
             openValue: 'products',
           }) +
-          NavigationMenuViewport.definition.render({
+          renderUiComponent(NavigationMenuViewport, {
             children: 'Viewport',
             openValue: 'products',
           }) +
-          NavigationMenuIndicator.definition.render({
+          renderUiComponent(NavigationMenuIndicator, {
             openValue: 'products',
           }),
         id: 'main-nav',
@@ -95,20 +96,20 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
     });
 
     expect(
-      NavigationMenu.definition.render({
+      renderUiComponent(NavigationMenu, {
         children:
-          NavigationMenuTrigger.definition.render({
+          renderUiComponent(NavigationMenuTrigger, {
             itemValue: 'products',
             openValue: 'products',
             styles: { trigger: overrides.trigger },
           }) +
-          NavigationMenuContent.definition.render({
+          renderUiComponent(NavigationMenuContent, {
             children: 'Product links',
             openValue: 'products',
             styles: { content: overrides.content },
             value: 'products',
           }) +
-          NavigationMenuLink.definition.render({
+          renderUiComponent(NavigationMenuLink, {
             itemValue: 'docs',
             styles: { link: overrides.link },
           }),

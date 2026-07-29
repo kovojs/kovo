@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import { HoverCardTrigger } from './hover-card.js';
 
 describe('HoverCardTrigger href sanitization (SECURITY_FINDINGS.md H3)', () => {
   it('neutralizes a javascript: href to the safe fallback', () => {
     const html = String(
-      HoverCardTrigger.definition.render({
+      renderUiComponent(HoverCardTrigger, {
         children: 'Ada',
         href: 'javascript:alert(document.cookie)',
       }),
@@ -16,20 +17,22 @@ describe('HoverCardTrigger href sanitization (SECURITY_FINDINGS.md H3)', () => {
   });
 
   it('preserves a safe relative href', () => {
-    const html = String(HoverCardTrigger.definition.render({ children: 'Ada', href: '/team/ada' }));
+    const html = String(
+      renderUiComponent(HoverCardTrigger, { children: 'Ada', href: '/team/ada' }),
+    );
 
     expect(html).toContain('href="/team/ada"');
   });
 
   it('defaults to the # fallback when no href is supplied', () => {
-    const html = String(HoverCardTrigger.definition.render({ children: 'Ada' }));
+    const html = String(renderUiComponent(HoverCardTrigger, { children: 'Ada' }));
 
     expect(html).toContain('href="#"');
   });
 
   it('omits the href entirely when disabled', () => {
     const html = String(
-      HoverCardTrigger.definition.render({
+      renderUiComponent(HoverCardTrigger, {
         children: 'Ada',
         disabled: true,
         href: 'javascript:alert(1)',

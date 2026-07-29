@@ -1318,10 +1318,11 @@
       "files": ["src/table.tsx"],
       "exports": ["Table", "TableHead", "TableBody", "TableRow", "TableHeaderCell", "TableCell"],
       "dependencies": {
+        "@kovojs/browser": ["trustedHtml"],
         "@kovojs/headless-ui": [],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component", "ComponentChild"],
-        "@kovojs/server": ["renderRouteHtml", "trustedHtml"]
+        "@kovojs/server": ["renderRouteHtml"]
       },
       "uiComponents": ["theme"]
     },

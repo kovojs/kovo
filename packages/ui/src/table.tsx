@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
-import { renderRouteHtml, trustedHtml } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -185,7 +186,10 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 }
 
 function tableRenderedHtml(html: string): TableRenderedHtml {
-  const rendered = trustedHtml(html, 'ui table primitive composition');
+  const rendered = trustedHtml(html, {
+    reason: 'Compose Kovo-vetted table primitive markup.',
+    source: '@kovojs/ui/table',
+  });
   return rendered;
 }
 

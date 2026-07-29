@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import { AccordionContent, AccordionHeader, AccordionItem, AccordionTrigger } from './accordion.js';
 import { Alert } from './alert.js';
@@ -31,7 +32,7 @@ describe('@kovojs/ui styled package foundation', () => {
     const buttonOverride = style.create({ root: { letterSpacing: 1 } });
     expect(
       String(
-        Button.definition.render({
+        renderUiComponent(Button, {
           children: 'Save',
           disabled: true,
           form: 'settings-form',
@@ -48,7 +49,7 @@ describe('@kovojs/ui styled package foundation', () => {
     );
     expect(
       String(
-        Button.definition.render({
+        renderUiComponent(Button, {
           children: 'Save',
           form: 'settings-form',
           name: 'settings-action',
@@ -57,24 +58,24 @@ describe('@kovojs/ui styled package foundation', () => {
         }),
       ),
     ).toContain('form="settings-form" name="settings-action" type="submit" value="save"');
-    expect(String(Button.definition.render({ children: 'Save', disabled: true }))).toContain(
+    expect(String(renderUiComponent(Button, { children: 'Save', disabled: true }))).toContain(
       ' disabled type="button"',
     );
-    expect(String(Button.definition.render({ children: 'Save', size: 'sm' }))).toContain(
+    expect(String(renderUiComponent(Button, { children: 'Save', size: 'sm' }))).toContain(
       'button.tsx#root; button.tsx#sm; button.tsx#primary',
     );
-    expect(String(Badge.definition.render({ children: 'Live', variant: 'success' }))).toContain(
+    expect(String(renderUiComponent(Badge, { children: 'Live', variant: 'success' }))).toContain(
       'data-style-src="badge.tsx#root; badge.tsx#success"',
     );
-    expect(String(Card.definition.render({ children: '<p>Total</p>' }))).toContain(
+    expect(String(renderUiComponent(Card, { children: '<p>Total</p>' }))).toContain(
       'data-style-src="card.tsx#root"',
     );
-    expect(String(Kbd.definition.render({ children: 'Ctrl K' }))).toContain(
+    expect(String(renderUiComponent(Kbd, { children: 'Ctrl K' }))).toContain(
       'data-style-src="kbd.tsx#root"',
     );
     expect(
       String(
-        Alert.definition.render({
+        renderUiComponent(Alert, {
           children: 'Payment method required.',
           role: 'alert',
           title: 'Billing issue',
@@ -82,11 +83,11 @@ describe('@kovojs/ui styled package foundation', () => {
         }),
       ),
     ).toContain('role="alert"');
-    expect(String(Alert.definition.render({ children: 'Saved.', variant: 'success' }))).toContain(
+    expect(String(renderUiComponent(Alert, { children: 'Saved.', variant: 'success' }))).toContain(
       'role="status"',
     );
     const skeletonOverride = style.create({ root: { height: 16, width: 128 } });
-    expect(String(Skeleton.definition.render({ style: skeletonOverride.root }))).toContain(
+    expect(String(renderUiComponent(Skeleton, { style: skeletonOverride.root }))).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
   });
@@ -104,7 +105,7 @@ describe('@kovojs/ui styled package foundation', () => {
     };
     expect(
       String(
-        AccordionTrigger.definition.render({
+        renderUiComponent(AccordionTrigger, {
           ...accordionState,
           children: 'Shipping',
           contentId: 'shipping-panel',
@@ -115,7 +116,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-controls="shipping-panel"');
     expect(
       String(
-        AccordionContent.definition.render({
+        renderUiComponent(AccordionContent, {
           ...accordionState,
           children: 'Ships from the nearest warehouse.',
           contentId: 'shipping-panel',
@@ -126,7 +127,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('role="region"');
     expect(
       String(
-        AccordionHeader.definition.render({
+        renderUiComponent(AccordionHeader, {
           ...accordionState,
           children: 'Shipping',
           itemValue: 'shipping',
@@ -136,7 +137,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-level="3"');
     expect(
       String(
-        AccordionItem.definition.render({
+        renderUiComponent(AccordionItem, {
           ...accordionState,
           children: 'item',
           itemValue: 'shipping',
@@ -145,12 +146,12 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('data-state="open"');
     expect(
       String(
-        AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete', open: false }),
+        renderUiComponent(AlertDialogTrigger, { ...dialogState, children: 'Delete', open: false }),
       ),
     ).toContain('command="show-modal" commandfor="confirm-dialog"');
     expect(
       String(
-        AlertDialogContent.definition.render({
+        renderUiComponent(AlertDialogContent, {
           ...dialogState,
           children: '<h2 id="confirm-title">Confirm</h2>',
         }),
@@ -158,7 +159,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('role="alertdialog"');
     expect(
       String(
-        AlertDialogCancel.definition.render({
+        renderUiComponent(AlertDialogCancel, {
           ...dialogState,
           autoFocus: true,
           children: 'Cancel',
@@ -167,7 +168,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('autofocus');
     expect(
       String(
-        AlertDialogAction.definition.render({
+        renderUiComponent(AlertDialogAction, {
           ...dialogState,
           children: 'Delete',
           intent: 'destructive',
@@ -176,8 +177,8 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('data-intent="destructive"');
     expect(
       String(
-        Avatar.definition.render({
-          children: AvatarImage.definition.render({
+        renderUiComponent(Avatar, {
+          children: renderUiComponent(AvatarImage, {
             alt: 'Ada',
             src: '/ada.png',
             status: 'loading',
@@ -188,12 +189,12 @@ describe('@kovojs/ui styled package foundation', () => {
         }),
       ),
     ).toContain('role="img"');
-    expect(String(AvatarFallback.definition.render({ children: 'AL', status: 'error' }))).toContain(
-      'data-state="error"',
-    );
+    expect(
+      String(renderUiComponent(AvatarFallback, { children: 'AL', status: 'error' })),
+    ).toContain('data-state="error"');
     expect(
       String(
-        CollapsibleTrigger.definition.render({
+        renderUiComponent(CollapsibleTrigger, {
           children: 'Release notes',
           contentId: 'release-notes',
           open: true,
@@ -202,7 +203,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-expanded="true"');
     expect(
       String(
-        CollapsibleContent.definition.render({
+        renderUiComponent(CollapsibleContent, {
           children: 'Details',
           contentId: 'release-notes',
           open: true,
@@ -211,7 +212,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('id="release-notes"');
     expect(
       String(
-        DisclosureTrigger.definition.render({
+        renderUiComponent(DisclosureTrigger, {
           children: 'Show details',
           contentId: 'disclosure-content',
           open: true,
@@ -220,7 +221,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-controls="disclosure-content"');
     expect(
       String(
-        DisclosureContent.definition.render({
+        renderUiComponent(DisclosureContent, {
           children: 'Details',
           contentId: 'disclosure-content',
           open: false,
@@ -228,10 +229,10 @@ describe('@kovojs/ui styled package foundation', () => {
       ),
     ).toContain('hidden');
     expect(
-      String(DialogTrigger.definition.render({ children: 'Open', contentId: 'dialog-content' })),
+      String(renderUiComponent(DialogTrigger, { children: 'Open', contentId: 'dialog-content' })),
     ).toContain('command="show-modal"');
     const dialogContent = String(
-      DialogContent.definition.render({
+      renderUiComponent(DialogContent, {
         children: '<h2 id="dialog-title">Title</h2>',
         contentId: 'dialog-content',
         open: true,
@@ -240,12 +241,12 @@ describe('@kovojs/ui styled package foundation', () => {
     );
     expect(dialogContent).toContain('aria-labelledby="dialog-title"');
     expect(dialogContent).toContain('closedby="any"');
-    expect(String(DialogClose.definition.render({ contentId: 'dialog-content' }))).toContain(
+    expect(String(renderUiComponent(DialogClose, { contentId: 'dialog-content' }))).toContain(
       'command="request-close"',
     );
     expect(
       String(
-        HoverCardTrigger.definition.render({
+        renderUiComponent(HoverCardTrigger, {
           children: 'Ada',
           contentId: 'profile-card',
           href: '/team/ada',
@@ -254,7 +255,7 @@ describe('@kovojs/ui styled package foundation', () => {
       ),
     ).toContain('kovo-hover-card="profile-card"');
     const disabledHoverCardTrigger = String(
-      HoverCardTrigger.definition.render({
+      renderUiComponent(HoverCardTrigger, {
         children: 'Ada',
         contentId: 'profile-card',
         disabled: true,
@@ -270,7 +271,7 @@ describe('@kovojs/ui styled package foundation', () => {
     // the imperative showPopover() call, so it stayed display:none and the card
     // never appeared). Visibility is governed by data-state/hidden instead.
     const openHoverCardContent = String(
-      HoverCardContent.definition.render({
+      renderUiComponent(HoverCardContent, {
         contentId: 'profile-card',
         open: true,
       }),
@@ -279,20 +280,24 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(openHoverCardContent).toContain('data-state="open"');
     expect(
       String(
-        PopoverTrigger.definition.render({ children: 'Filters', contentId: 'filters', open: true }),
+        renderUiComponent(PopoverTrigger, {
+          children: 'Filters',
+          contentId: 'filters',
+          open: true,
+        }),
       ),
     ).toContain('popovertarget="filters"');
     expect(
-      String(PopoverContent.definition.render({ contentId: 'filters', open: true })),
+      String(renderUiComponent(PopoverContent, { contentId: 'filters', open: true })),
     ).toContain('popover="auto"');
     expect(
-      String(TooltipContent.definition.render({ contentId: 'tip', open: true })),
+      String(renderUiComponent(TooltipContent, { contentId: 'tip', open: true })),
     ).not.toContain('popover=');
     expect(
-      String(TooltipTrigger.definition.render({ children: 'Help', contentId: 'tip', open: true })),
+      String(renderUiComponent(TooltipTrigger, { children: 'Help', contentId: 'tip', open: true })),
     ).toContain('kovo-tooltip="tip"');
     const disabledTooltipTrigger = String(
-      TooltipTrigger.definition.render({
+      renderUiComponent(TooltipTrigger, {
         children: 'Help',
         contentId: 'tip',
         disabled: true,
@@ -301,46 +306,46 @@ describe('@kovojs/ui styled package foundation', () => {
     );
     expect(disabledTooltipTrigger).toContain('data-disabled="" data-state="closed" disabled');
     expect(disabledTooltipTrigger).not.toContain('kovo-tooltip=');
-    expect(String(TooltipContent.definition.render({ contentId: 'tip', open: true }))).toContain(
+    expect(String(renderUiComponent(TooltipContent, { contentId: 'tip', open: true }))).toContain(
       'role="tooltip"',
     );
-    expect(String(Meter.definition.render({ max: 100, value: 84 }))).toContain(
+    expect(String(renderUiComponent(Meter, { max: 100, value: 84 }))).toContain(
       'data-state="optimum"',
     );
-    expect(String(Progress.definition.render({ max: 100, value: null }))).toContain(
+    expect(String(renderUiComponent(Progress, { max: 100, value: null }))).toContain(
       'data-state="indeterminate"',
     );
     expect(
-      String(Separator.definition.render({ decorative: false, orientation: 'vertical' })),
+      String(renderUiComponent(Separator, { decorative: false, orientation: 'vertical' })),
     ).toContain('aria-orientation="vertical"');
   });
   it('exports table primitives as styled semantic markup', () => {
     const tableMarkup = String(
-      Table.definition.render({
+      renderUiComponent(Table, {
         caption: 'Invoices',
-        children: TableBody.definition.render({ children: undefined }),
+        children: renderUiComponent(TableBody, { children: undefined }),
       }),
     );
     expect(tableMarkup).toContain('Invoices</caption><tbody');
     expect(tableMarkup).toContain('data-style-src="table.tsx#body"');
     expect(
-      String(TableHeaderCell.definition.render({ children: 'Status', scope: 'row' })),
+      String(renderUiComponent(TableHeaderCell, { children: 'Status', scope: 'row' })),
     ).toContain('scope="row">Status</th>');
-    expect(String(TableCell.definition.render({ children: '$250.00', colSpan: 2 }))).toContain(
+    expect(String(renderUiComponent(TableCell, { children: '$250.00', colSpan: 2 }))).toContain(
       'colspan="2"',
     );
   });
   it('exports breadcrumb primitives with headless separator attributes', () => {
-    expect(String(Breadcrumb.definition.render({ children: '<li>Settings</li>' }))).toContain(
+    expect(String(renderUiComponent(Breadcrumb, { children: '<li>Settings</li>' }))).toContain(
       'aria-label="Breadcrumb"',
     );
-    expect(String(BreadcrumbItem.definition.render({ children: 'Settings' }))).toContain(
+    expect(String(renderUiComponent(BreadcrumbItem, { children: 'Settings' }))).toContain(
       '>Settings</li>',
     );
     expect(
-      String(BreadcrumbLink.definition.render({ children: 'Account', current: true })),
+      String(renderUiComponent(BreadcrumbLink, { children: 'Account', current: true })),
     ).toContain('aria-current="page"');
-    expect(String(BreadcrumbSeparator.definition.render({ children: '>' }))).toContain(
+    expect(String(renderUiComponent(BreadcrumbSeparator, { children: '>' }))).toContain(
       'data-orientation="horizontal" role="none">&gt;',
     );
   });

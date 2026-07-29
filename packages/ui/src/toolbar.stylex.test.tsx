@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -15,26 +16,26 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
     };
 
     expect({
-      button: ToolbarButton.definition.render({
+      button: renderUiComponent(ToolbarButton, {
         ...state,
         children: 'Bold',
         id: 'bold-button',
         itemValue: 'bold',
         pressed: true,
       }),
-      disabledButton: ToolbarButton.definition.render({
+      disabledButton: renderUiComponent(ToolbarButton, {
         ...state,
         children: 'Link',
         itemValue: 'link',
         pressed: false,
       }),
-      item: ToolbarItem.definition.render({
+      item: renderUiComponent(ToolbarItem, {
         ...state,
         children: 'bold button',
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      root: Toolbar.definition.render({
+      root: renderUiComponent(Toolbar, {
         ...state,
         children: 'format controls',
         descriptionId: 'format-help',
@@ -64,20 +65,20 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
     });
 
     expect({
-      button: ToolbarButton.definition.render({
+      button: renderUiComponent(ToolbarButton, {
         ...state,
         children: 'Bold',
         itemValue: 'bold',
         pressed: true,
         styles: { button: overrides.button },
       }),
-      item: ToolbarItem.definition.render({
+      item: renderUiComponent(ToolbarItem, {
         ...state,
         children: 'Bold',
         itemValue: 'bold',
         styles: { item: overrides.item },
       }),
-      root: Toolbar.definition.render({
+      root: renderUiComponent(Toolbar, {
         ...state,
         children: 'format controls',
         styles: { root: overrides.root },

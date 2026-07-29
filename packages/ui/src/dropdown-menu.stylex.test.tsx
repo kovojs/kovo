@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -19,26 +20,26 @@ const items = [
 describe('@kovojs/ui DropdownMenu StyleX slots', () => {
   it('matches dropdown menu markup with StyleX slot output', () => {
     expect({
-      menu: DropdownMenu.definition.render({
+      menu: renderUiComponent(DropdownMenu, {
         children:
-          DropdownMenuTrigger.definition.render({
+          renderUiComponent(DropdownMenuTrigger, {
             children: 'Actions',
             contentId: 'actions-menu',
             labelledBy: 'actions-label',
             open: true,
           }) +
-          DropdownMenuContent.definition.render({
-            children: DropdownMenuGroup.definition.render({
+          renderUiComponent(DropdownMenuContent, {
+            children: renderUiComponent(DropdownMenuGroup, {
               children:
-                DropdownMenuItem.definition.render({
+                renderUiComponent(DropdownMenuItem, {
                   highlightedValue: 'open',
                   itemLabel: 'Open',
                   itemValue: 'open',
                   items,
                   open: true,
                 }) +
-                DropdownMenuSeparator.definition.render({ id: 'menu-separator' }) +
-                DropdownMenuItem.definition.render({
+                renderUiComponent(DropdownMenuSeparator, { id: 'menu-separator' }) +
+                renderUiComponent(DropdownMenuItem, {
                   itemDisabled: true,
                   itemLabel: 'Archive',
                   itemValue: 'archive',
@@ -77,15 +78,15 @@ describe('@kovojs/ui DropdownMenu StyleX slots', () => {
     });
 
     expect(
-      DropdownMenu.definition.render({
+      renderUiComponent(DropdownMenu, {
         children:
-          DropdownMenuTrigger.definition.render({
+          renderUiComponent(DropdownMenuTrigger, {
             children: 'Actions',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          DropdownMenuContent.definition.render({
-            children: DropdownMenuItem.definition.render({
+          renderUiComponent(DropdownMenuContent, {
+            children: renderUiComponent(DropdownMenuItem, {
               highlightedValue: 'open',
               itemValue: 'open',
               open: true,

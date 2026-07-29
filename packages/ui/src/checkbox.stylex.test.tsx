@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,7 +8,7 @@ import { Checkbox } from './checkbox.js';
 describe('@kovojs/ui Checkbox StyleX styles', () => {
   it('matches native checkbox states with StyleX output', () => {
     expect({
-      checked: Checkbox.definition.render({
+      checked: renderUiComponent(Checkbox, {
         checked: true,
         children: 'Accept terms',
         id: 'terms',
@@ -15,8 +16,8 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
         required: true,
         value: 'accepted',
       }),
-      disabled: Checkbox.definition.render({ children: 'Locked', disabled: true }),
-      indeterminate: Checkbox.definition.render({
+      disabled: renderUiComponent(Checkbox, { children: 'Locked', disabled: true }),
+      indeterminate: renderUiComponent(Checkbox, {
         checked: 'indeterminate',
         children: 'Some permissions',
         name: 'permissions',
@@ -38,7 +39,7 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
     });
 
     expect(
-      Checkbox.definition.render({
+      renderUiComponent(Checkbox, {
         checked: true,
         children: 'Custom',
         styles: {

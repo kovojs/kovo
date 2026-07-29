@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -22,14 +23,14 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
     };
 
     expect({
-      open: Accordion.definition.render({
+      open: renderUiComponent(Accordion, {
         children:
-          AccordionItem.definition.render({
+          renderUiComponent(AccordionItem, {
             ...shipping,
             children:
-              AccordionHeader.definition.render({
+              renderUiComponent(AccordionHeader, {
                 ...shipping,
-                children: AccordionTrigger.definition.render({
+                children: renderUiComponent(AccordionTrigger, {
                   ...shipping,
                   children: 'Shipping',
                   contentId: 'shipping-panel',
@@ -37,19 +38,19 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
                 }),
                 level: 3,
               }) +
-              AccordionContent.definition.render({
+              renderUiComponent(AccordionContent, {
                 ...shipping,
                 children: 'Ships from the nearest warehouse.',
                 contentId: 'shipping-panel',
                 triggerId: 'shipping-trigger',
               }),
           }) +
-          AccordionItem.definition.render({
+          renderUiComponent(AccordionItem, {
             ...billing,
             children:
-              AccordionHeader.definition.render({
+              renderUiComponent(AccordionHeader, {
                 ...billing,
-                children: AccordionTrigger.definition.render({
+                children: renderUiComponent(AccordionTrigger, {
                   ...billing,
                   children: 'Billing',
                   contentId: 'billing-panel',
@@ -57,7 +58,7 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
                 }),
                 level: 3,
               }) +
-              AccordionContent.definition.render({
+              renderUiComponent(AccordionContent, {
                 ...billing,
                 children: 'Invoices remain available after checkout.',
                 contentId: 'billing-panel',
@@ -90,24 +91,24 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
     });
 
     expect(
-      Accordion.definition.render({
-        children: AccordionItem.definition.render({
+      renderUiComponent(Accordion, {
+        children: renderUiComponent(AccordionItem, {
           itemValue: 'one',
           styles: { item: overrides.item },
           value: 'one',
           children:
-            AccordionHeader.definition.render({
+            renderUiComponent(AccordionHeader, {
               itemValue: 'one',
               styles: { header: overrides.header },
               value: 'one',
-              children: AccordionTrigger.definition.render({
+              children: renderUiComponent(AccordionTrigger, {
                 children: 'One',
                 itemValue: 'one',
                 styles: { trigger: overrides.trigger },
                 value: 'one',
               }),
             }) +
-            AccordionContent.definition.render({
+            renderUiComponent(AccordionContent, {
               children: 'Panel one',
               itemValue: 'one',
               styles: { content: overrides.content },

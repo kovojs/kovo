@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import { jsx } from '@kovojs/server/jsx-runtime';
 import * as style from '@kovojs/style';
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableRow } from './table.js';
 describe('@kovojs/ui Card StyleX styles', () => {
   it('matches the rendered StyleX snapshot', () => {
     expect({
-      rendered: Card.definition.render({
+      rendered: renderUiComponent(Card, {
         children: '<h2>Release candidate</h2><p>Ready for audit.</p>',
       }),
     }).toMatchSnapshot();
@@ -25,7 +26,7 @@ describe('@kovojs/ui Card StyleX styles', () => {
     });
 
     expect(
-      Card.definition.render({
+      renderUiComponent(Card, {
         children: '<p>Total</p>',
         style: overrides.root,
       }),

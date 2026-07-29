@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -20,25 +21,25 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
     };
 
     expect({
-      completeDisabled: OtpField.definition.render({
+      completeDisabled: renderUiComponent(OtpField, {
         disabled: true,
         length: 4,
         value: '9876',
       }),
-      emptySlot: OtpFieldInput.definition.render({
+      emptySlot: renderUiComponent(OtpFieldInput, {
         ...state,
         id: 'otp-slot-6',
         slotIndex: 5,
       }),
-      firstSlot: OtpFieldInput.definition.render({
+      firstSlot: renderUiComponent(OtpFieldInput, {
         ...state,
         id: 'otp-slot-1',
         label: 'One-time code digit 1',
         slotIndex: 0,
       }),
-      group: OtpFieldGroup.definition.render({ children: 'slots' }),
-      hidden: OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' }),
-      root: OtpField.definition.render({
+      group: renderUiComponent(OtpFieldGroup, { children: 'slots' }),
+      hidden: renderUiComponent(OtpFieldHiddenInput, { ...state, id: 'otp-code' }),
+      root: renderUiComponent(OtpField, {
         ...state,
         children: 'otp controls',
         id: 'otp-field',
@@ -64,19 +65,19 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
     });
 
     expect({
-      group: OtpFieldGroup.definition.render({
+      group: renderUiComponent(OtpFieldGroup, {
         children: 'custom slots',
         styles: { group: overrides.group },
       }),
-      hidden: OtpFieldHiddenInput.definition.render({
+      hidden: renderUiComponent(OtpFieldHiddenInput, {
         styles: { hiddenInput: overrides.hiddenInput },
       }),
-      input: OtpFieldInput.definition.render({
+      input: renderUiComponent(OtpFieldInput, {
         slotIndex: 0,
         styles: { input: overrides.input },
         value: '1',
       }),
-      root: OtpField.definition.render({
+      root: renderUiComponent(OtpField, {
         children: 'Custom OTP',
         styles: { root: overrides.root },
       }),

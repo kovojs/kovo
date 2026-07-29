@@ -296,7 +296,7 @@ function generateUiRegistryJson() {
         } else {
           styleSymbols.add('*');
         }
-      } else if (module === '@kovojs/server') {
+      } else if (module === '@kovojs/server' || module.startsWith('@kovojs/server/')) {
         symbols.forEach((symbol) => serverSymbols.add(symbol));
       } else if (module === '@kovojs/core') {
         symbols.forEach((symbol) => coreSymbols.add(symbol));

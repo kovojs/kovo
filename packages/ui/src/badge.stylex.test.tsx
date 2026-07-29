@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import * as style from '@kovojs/style';
 import { Badge } from './badge.js';
 describe('@kovojs/ui Badge StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
-    const neutral = String(Badge.definition.render({ children: 'Draft' }));
-    const success = String(Badge.definition.render({ children: 'Live', variant: 'success' }));
+    const neutral = String(renderUiComponent(Badge, { children: 'Draft' }));
+    const success = String(renderUiComponent(Badge, { children: 'Live', variant: 'success' }));
     const warning = String(
-      Badge.definition.render({
+      renderUiComponent(Badge, {
         children: 'Needs review',
         variant: 'warning',
       }),
@@ -17,9 +18,9 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     expect(success).toContain('badge.tsx#root; badge.tsx#success');
     expect(warning).toContain('badge.tsx#root; badge.tsx#warning');
     expect(
-      String(Badge.definition.render({ children: 'Draft', variant: 'destructive' })),
+      String(renderUiComponent(Badge, { children: 'Draft', variant: 'destructive' })),
     ).toContain('badge.tsx#root; badge.tsx#destructive');
-    expect(String(Badge.definition.render({ children: 'Draft', variant: 'outline' }))).toContain(
+    expect(String(renderUiComponent(Badge, { children: 'Draft', variant: 'outline' }))).toContain(
       'badge.tsx#root; badge.tsx#outline',
     );
   });
@@ -31,7 +32,7 @@ describe('@kovojs/ui Badge StyleX styles', () => {
       },
     });
     const rendered = String(
-      Badge.definition.render({
+      renderUiComponent(Badge, {
         children: 'Custom',
         style: overrides.root,
         variant: 'success',

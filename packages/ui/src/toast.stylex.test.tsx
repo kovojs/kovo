@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -14,25 +15,25 @@ import {
 describe('@kovojs/ui Toast StyleX slots', () => {
   it('matches toast states with StyleX output', () => {
     expect({
-      rendered: ToastViewport.definition.render({
-        children: Toast.definition.render({
+      rendered: renderUiComponent(ToastViewport, {
+        children: renderUiComponent(Toast, {
           children:
-            ToastTitle.definition.render({
+            renderUiComponent(ToastTitle, {
               children: 'Deploy complete',
               id: 'toast-title',
             }) +
-            ToastDescription.definition.render({
+            renderUiComponent(ToastDescription, {
               children: 'Production received the latest release.',
               id: 'toast-description',
             }) +
-            ToastAction.definition.render({
+            renderUiComponent(ToastAction, {
               actionValue: 'view',
               children: 'View',
               id: 'toast-action',
               open: true,
               variant: 'success',
             }) +
-            ToastClose.definition.render({
+            renderUiComponent(ToastClose, {
               id: 'toast-close',
               open: true,
               variant: 'success',
@@ -74,23 +75,23 @@ describe('@kovojs/ui Toast StyleX slots', () => {
     });
 
     expect(
-      ToastViewport.definition.render({
-        children: Toast.definition.render({
+      renderUiComponent(ToastViewport, {
+        children: renderUiComponent(Toast, {
           children:
-            ToastTitle.definition.render({
+            renderUiComponent(ToastTitle, {
               children: 'Custom toast',
               styles: { title: overrides.title },
             }) +
-            ToastDescription.definition.render({
+            renderUiComponent(ToastDescription, {
               children: 'Overrides should stay last.',
               styles: { description: overrides.description },
             }) +
-            ToastAction.definition.render({
+            renderUiComponent(ToastAction, {
               children: 'Undo',
               id: 'custom-action',
               styles: { action: overrides.action },
             }) +
-            ToastClose.definition.render({
+            renderUiComponent(ToastClose, {
               id: 'custom-close',
               styles: { close: overrides.close },
             }),

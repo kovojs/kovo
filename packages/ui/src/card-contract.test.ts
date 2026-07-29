@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { renderHtmlValue } from '@kovojs/server/internal/html';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card.js';
+import { renderUiComponent } from './test-component-render.js';
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(srcDir);
@@ -14,14 +15,14 @@ const anatomy = ['Card', 'CardHeader', 'CardTitle', 'CardDescription', 'CardCont
 describe('@kovojs/ui/card public anatomy', () => {
   it('renders the root, header, title, description, content, and footer parts', () => {
     const children =
-      CardHeader.definition.render({
+      renderUiComponent(CardHeader, {
         children:
-          CardTitle.definition.render({ children: 'Account' }) +
-          CardDescription.definition.render({ children: 'Profile settings' }),
+          renderUiComponent(CardTitle, { children: 'Account' }) +
+          renderUiComponent(CardDescription, { children: 'Profile settings' }),
       }) +
-      CardContent.definition.render({ children: 'Controls' }) +
-      CardFooter.definition.render({ children: 'Saved' });
-    const html = renderHtmlValue(Card.definition.render({ children }));
+      renderUiComponent(CardContent, { children: 'Controls' }) +
+      renderUiComponent(CardFooter, { children: 'Saved' });
+    const html = renderHtmlValue(renderUiComponent(Card, { children }));
 
     expect(html).toMatch(/^<section /);
     expect(html).toContain('<h3 ');

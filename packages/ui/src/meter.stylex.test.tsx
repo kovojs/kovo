@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,7 +8,7 @@ import { Meter } from './meter.js';
 describe('@kovojs/ui Meter StyleX styles', () => {
   it('matches native meter states with StyleX output', () => {
     expect({
-      optimum: Meter.definition.render({
+      optimum: renderUiComponent(Meter, {
         children: '84%',
         high: 90,
         low: 50,
@@ -17,7 +18,7 @@ describe('@kovojs/ui Meter StyleX styles', () => {
         value: 84,
         valueText: '84 percent quality score',
       }),
-      suboptimum: Meter.definition.render({
+      suboptimum: renderUiComponent(Meter, {
         children: '42%',
         high: 90,
         low: 50,
@@ -37,7 +38,7 @@ describe('@kovojs/ui Meter StyleX styles', () => {
     });
 
     expect(
-      Meter.definition.render({
+      renderUiComponent(Meter, {
         children: '72%',
         max: 100,
         style: overrides.root,

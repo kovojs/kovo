@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -19,31 +20,31 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
     const dialogState = { contentId: 'delete-account', open: true as const };
 
     expect({
-      open: AlertDialog.definition.render({
+      open: renderUiComponent(AlertDialog, {
         children:
-          AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete account' }) +
-          AlertDialogContent.definition.render({
+          renderUiComponent(AlertDialogTrigger, { ...dialogState, children: 'Delete account' }) +
+          renderUiComponent(AlertDialogContent, {
             ...dialogState,
             children:
-              AlertDialogHeader.definition.render({
+              renderUiComponent(AlertDialogHeader, {
                 children:
-                  AlertDialogTitle.definition.render({
+                  renderUiComponent(AlertDialogTitle, {
                     children: 'Delete account',
                     id: 'delete-title',
                   }) +
-                  AlertDialogDescription.definition.render({
+                  renderUiComponent(AlertDialogDescription, {
                     children: 'This action is permanent.',
                     id: 'delete-description',
                   }),
               }) +
-              AlertDialogFooter.definition.render({
+              renderUiComponent(AlertDialogFooter, {
                 children:
-                  AlertDialogCancel.definition.render({
+                  renderUiComponent(AlertDialogCancel, {
                     ...dialogState,
                     autoFocus: true,
                     children: 'Cancel',
                   }) +
-                  AlertDialogAction.definition.render({
+                  renderUiComponent(AlertDialogAction, {
                     ...dialogState,
                     children: 'Delete',
                     intent: 'destructive',
@@ -78,26 +79,26 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
     });
 
     expect(
-      AlertDialog.definition.render({
+      renderUiComponent(AlertDialog, {
         children:
-          AlertDialogTrigger.definition.render({
+          renderUiComponent(AlertDialogTrigger, {
             children: 'Delete account',
             contentId: 'delete-account',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          AlertDialogContent.definition.render({
+          renderUiComponent(AlertDialogContent, {
             children: 'Confirm deletion',
             contentId: 'delete-account',
             open: true,
             styles: { content: overrides.content },
           }) +
-          AlertDialogCancel.definition.render({
+          renderUiComponent(AlertDialogCancel, {
             contentId: 'delete-account',
             open: true,
             styles: { cancel: overrides.cancel },
           }) +
-          AlertDialogAction.definition.render({
+          renderUiComponent(AlertDialogAction, {
             children: 'Delete',
             contentId: 'delete-account',
             intent: 'destructive',

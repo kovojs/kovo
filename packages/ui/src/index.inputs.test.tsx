@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 import {
   AutocompleteInput,
   AutocompleteList,
@@ -30,14 +31,14 @@ describe('@kovojs/ui styled package foundation', () => {
       scrollbars: 'both' as const,
     };
     const root = String(
-      ScrollArea.definition.render({
+      renderUiComponent(ScrollArea, {
         ...state,
         children: 'viewport and scrollbars',
         id: 'activity',
       }),
     );
     const viewport = String(
-      ScrollAreaViewport.definition.render({
+      renderUiComponent(ScrollAreaViewport, {
         ...state,
         children: 'feed',
         descriptionId: 'activity-description',
@@ -48,7 +49,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const verticalScrollbar = String(
-      ScrollAreaScrollbar.definition.render({
+      renderUiComponent(ScrollAreaScrollbar, {
         ...state,
         children: 'thumb',
         id: 'activity-scrollbar-y',
@@ -58,7 +59,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const hiddenThumb = String(
-      ScrollAreaThumb.definition.render({
+      renderUiComponent(ScrollAreaThumb, {
         ...state,
         forceMount: true,
         id: 'activity-thumb-x',
@@ -67,9 +68,9 @@ describe('@kovojs/ui styled package foundation', () => {
         visible: false,
       }),
     );
-    const corner = String(ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' }));
+    const corner = String(renderUiComponent(ScrollAreaCorner, { ...state, id: 'activity-corner' }));
     const disabledViewport = String(
-      ScrollAreaViewport.definition.render({
+      renderUiComponent(ScrollAreaViewport, {
         disabled: true,
         label: 'Archived feed',
         scrollbars: 'vertical',
@@ -110,16 +111,16 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 'growth',
     };
     const root = String(
-      Select.definition.render({ ...state, children: 'select body', id: 'plan-root' }),
+      renderUiComponent(Select, { ...state, children: 'select body', id: 'plan-root' }),
     );
     const trigger = String(
-      SelectTrigger.definition.render({
+      renderUiComponent(SelectTrigger, {
         ...state,
-        children: SelectContent.definition.render({
+        children: renderUiComponent(SelectContent, {
           ...state,
           children: items
             .map((item) =>
-              SelectItem.definition.render({
+              renderUiComponent(SelectItem, {
                 ...state,
                 itemLabel: item.label,
                 itemValue: item.value,
@@ -133,9 +134,9 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const hiddenInput = String(
-      SelectHiddenInput.definition.render({ ...state, id: 'plan-hidden' }),
+      renderUiComponent(SelectHiddenInput, { ...state, id: 'plan-hidden' }),
     );
-    const value = String(SelectValue.definition.render({ ...state, id: 'plan-value' }));
+    const value = String(renderUiComponent(SelectValue, { ...state, id: 'plan-value' }));
     expect(root).toContain('data-invalid="" data-required="" data-state="closed" id="plan-root"');
     expect(trigger).toContain('aria-describedby="plan-help plan-error"');
     expect(trigger).toContain('aria-expanded="false"');
@@ -176,18 +177,18 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 'ada',
     };
     const input = String(
-      ComboboxInput.definition.render({
+      renderUiComponent(ComboboxInput, {
         ...state,
         id: 'assignee',
         labelledBy: 'assignee-label',
       }),
     );
     const listbox = String(
-      ComboboxListbox.definition.render({
+      renderUiComponent(ComboboxListbox, {
         ...state,
         children: items
           .map((item, index) =>
-            ComboboxOption.definition.render({
+            renderUiComponent(ComboboxOption, {
               ...state,
               id: `assignee-listbox-option-${index}`,
               itemLabel: item.label,
@@ -199,7 +200,7 @@ describe('@kovojs/ui styled package foundation', () => {
         labelledBy: 'assignee-label',
       }),
     );
-    const value = String(ComboboxValue.definition.render({ ...state, id: 'assignee-value' }));
+    const value = String(renderUiComponent(ComboboxValue, { ...state, id: 'assignee-value' }));
     expect(input).toContain('aria-autocomplete="list"');
     expect(input).toContain('aria-controls="assignee-listbox"');
     expect(input).toContain('aria-expanded="true"');
@@ -233,18 +234,18 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 'growth',
     };
     const input = String(
-      AutocompleteInput.definition.render({
+      renderUiComponent(AutocompleteInput, {
         ...state,
         id: 'plan-search',
         labelledBy: 'plan-search-label',
       }),
     );
     const list = String(
-      AutocompleteList.definition.render({
+      renderUiComponent(AutocompleteList, {
         ...state,
         children: items
           .map((item) =>
-            AutocompleteOption.definition.render({
+            renderUiComponent(AutocompleteOption, {
               ...state,
               itemLabel: item.label,
               itemValue: item.value,
@@ -256,7 +257,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const value = String(
-      AutocompleteValue.definition.render({ ...state, id: 'plan-search-value' }),
+      renderUiComponent(AutocompleteValue, { ...state, id: 'plan-search-value' }),
     );
     expect(input).toContain('aria-activedescendant="plan-suggestions-option-0"');
     expect(input).toContain('autocomplete="off"');
@@ -282,19 +283,19 @@ describe('@kovojs/ui styled package foundation', () => {
       value: 65,
     };
     const root = String(
-      Slider.definition.render({
+      renderUiComponent(Slider, {
         ...state,
-        children: `${SliderInput.definition.render({
+        children: `${renderUiComponent(SliderInput, {
           ...state,
           descriptionId: 'coverage-help',
           form: 'coverage-form',
           id: 'coverage',
           label: 'Coverage',
           valueText: '65 percent',
-        })}${SliderTrack.definition.render({
+        })}${renderUiComponent(SliderTrack, {
           ...state,
-          children: SliderRange.definition.render(state),
-        })}${SliderThumb.definition.render(state)}`,
+          children: renderUiComponent(SliderRange, state),
+        })}${renderUiComponent(SliderThumb, state)}`,
         id: 'coverage-root',
       }),
     );
@@ -326,7 +327,7 @@ describe('@kovojs/ui styled package foundation', () => {
     };
     expect(
       String(
-        Tabs.definition.render({
+        renderUiComponent(Tabs, {
           ...state,
           children: 'tabs body',
           id: 'account-tabs',
@@ -335,7 +336,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('data-orientation="horizontal" id="account-tabs">tabs body</div>');
     expect(
       String(
-        TabsList.definition.render({
+        renderUiComponent(TabsList, {
           ...state,
           children: 'triggers',
           label: 'Account sections',
@@ -344,7 +345,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-label="Account sections"');
     expect(
       String(
-        TabsTrigger.definition.render({
+        renderUiComponent(TabsTrigger, {
           ...state,
           children: 'Overview',
           id: 'overview-tab',
@@ -355,7 +356,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-controls="overview-panel" aria-selected="true"');
     expect(
       String(
-        TabsTrigger.definition.render({
+        renderUiComponent(TabsTrigger, {
           ...state,
           children: 'Audit',
           itemValue: 'audit',
@@ -363,7 +364,7 @@ describe('@kovojs/ui styled package foundation', () => {
       ),
     ).toContain('data-disabled="" data-state="inactive" disabled role="tab" tabIndex="-1"');
     const activeUnselectedTab = String(
-      TabsTrigger.definition.render({
+      renderUiComponent(TabsTrigger, {
         ...state,
         activeValue: 'activity',
         children: 'Activity',
@@ -374,7 +375,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(activeUnselectedTab).toContain('data-state="inactive" role="tab" tabIndex="0"');
     expect(
       String(
-        TabsPanel.definition.render({
+        renderUiComponent(TabsPanel, {
           ...state,
           children: 'Overview content',
           id: 'overview-panel',
@@ -385,7 +386,7 @@ describe('@kovojs/ui styled package foundation', () => {
     ).toContain('aria-labelledby="overview-tab"');
     expect(
       String(
-        TabsPanel.definition.render({
+        renderUiComponent(TabsPanel, {
           ...state,
           children: 'Activity content',
           itemValue: 'activity',

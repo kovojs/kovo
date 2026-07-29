@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -19,26 +20,26 @@ const items = [
 describe('@kovojs/ui ContextMenu StyleX slots', () => {
   it('matches context menu markup with StyleX slot output', () => {
     expect({
-      menu: ContextMenu.definition.render({
+      menu: renderUiComponent(ContextMenu, {
         children:
-          ContextMenuTrigger.definition.render({
+          renderUiComponent(ContextMenuTrigger, {
             children: 'Right click',
             contentId: 'context-actions',
             labelledBy: 'context-label',
             open: true,
           }) +
-          ContextMenuContent.definition.render({
-            children: ContextMenuGroup.definition.render({
+          renderUiComponent(ContextMenuContent, {
+            children: renderUiComponent(ContextMenuGroup, {
               children:
-                ContextMenuItem.definition.render({
+                renderUiComponent(ContextMenuItem, {
                   highlightedValue: 'copy',
                   itemLabel: 'Copy',
                   itemValue: 'copy',
                   items,
                   open: true,
                 }) +
-                ContextMenuSeparator.definition.render({ id: 'context-separator' }) +
-                ContextMenuItem.definition.render({
+                renderUiComponent(ContextMenuSeparator, { id: 'context-separator' }) +
+                renderUiComponent(ContextMenuItem, {
                   itemDisabled: true,
                   itemLabel: 'Delete',
                   itemValue: 'delete',
@@ -79,15 +80,15 @@ describe('@kovojs/ui ContextMenu StyleX slots', () => {
     });
 
     expect(
-      ContextMenu.definition.render({
+      renderUiComponent(ContextMenu, {
         children:
-          ContextMenuTrigger.definition.render({
+          renderUiComponent(ContextMenuTrigger, {
             children: 'Right click',
             open: true,
             styles: { trigger: overrides.trigger },
           }) +
-          ContextMenuContent.definition.render({
-            children: ContextMenuItem.definition.render({
+          renderUiComponent(ContextMenuContent, {
+            children: renderUiComponent(ContextMenuItem, {
               highlightedValue: 'copy',
               itemValue: 'copy',
               open: true,

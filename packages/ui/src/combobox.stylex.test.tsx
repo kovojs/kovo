@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -27,7 +28,7 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
     };
 
     expect({
-      input: ComboboxInput.definition.render({
+      input: renderUiComponent(ComboboxInput, {
         ...state,
         descriptionId: 'team-help',
         errorId: 'team-error',
@@ -35,24 +36,24 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      listbox: ComboboxListbox.definition.render({
+      listbox: renderUiComponent(ComboboxListbox, {
         ...state,
         children: 'options',
         id: 'team-listbox',
         labelledBy: 'team-input',
       }),
-      option: ComboboxOption.definition.render({
+      option: renderUiComponent(ComboboxOption, {
         ...state,
         itemValue: 'design',
       }),
-      root: Combobox.definition.render({
+      root: renderUiComponent(Combobox, {
         ...state,
         children: 'combobox body',
         id: 'team-combobox',
         invalid: true,
         required: true,
       }),
-      value: ComboboxValue.definition.render({
+      value: renderUiComponent(ComboboxValue, {
         ...state,
         id: 'team-value',
       }),
@@ -80,22 +81,22 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
     });
 
     expect({
-      input: ComboboxInput.definition.render({
+      input: renderUiComponent(ComboboxInput, {
         styles: { input: overrides.input },
       }),
-      listbox: ComboboxListbox.definition.render({
+      listbox: renderUiComponent(ComboboxListbox, {
         children: 'options',
         styles: { listbox: overrides.listbox },
       }),
-      option: ComboboxOption.definition.render({
+      option: renderUiComponent(ComboboxOption, {
         itemValue: 'design',
         styles: { option: overrides.option },
       }),
-      root: Combobox.definition.render({
+      root: renderUiComponent(Combobox, {
         children: 'combobox body',
         styles: { root: overrides.root },
       }),
-      value: ComboboxValue.definition.render({
+      value: renderUiComponent(ComboboxValue, {
         styles: { value: overrides.value },
         value: 'design',
       }),

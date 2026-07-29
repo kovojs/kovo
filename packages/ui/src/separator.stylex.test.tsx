@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,8 +8,8 @@ import { Separator } from './separator.js';
 describe('@kovojs/ui Separator StyleX styles', () => {
   it('matches default and semantic orientation output', () => {
     expect({
-      decorative: Separator.definition.render({}),
-      semanticVertical: Separator.definition.render({
+      decorative: renderUiComponent(Separator, {}),
+      semanticVertical: renderUiComponent(Separator, {
         decorative: false,
         orientation: 'vertical',
       }),
@@ -23,6 +24,6 @@ describe('@kovojs/ui Separator StyleX styles', () => {
       },
     });
 
-    expect(Separator.definition.render({ style: overrides.root })).toMatchSnapshot();
+    expect(renderUiComponent(Separator, { style: overrides.root })).toMatchSnapshot();
   });
 });

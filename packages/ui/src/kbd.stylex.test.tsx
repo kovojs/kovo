@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { renderUiComponent } from './test-component-render.js';
 
 import * as style from '@kovojs/style';
 
@@ -7,7 +8,7 @@ import { Kbd } from './kbd.js';
 describe('@kovojs/ui Kbd StyleX styles', () => {
   it('matches default rendered output', () => {
     expect({
-      rendered: Kbd.definition.render({ children: 'Ctrl' }),
+      rendered: renderUiComponent(Kbd, { children: 'Ctrl' }),
     }).toMatchSnapshot();
   });
 
@@ -20,6 +21,6 @@ describe('@kovojs/ui Kbd StyleX styles', () => {
       },
     });
 
-    expect(Kbd.definition.render({ children: 'K', style: overrides.root })).toMatchSnapshot();
+    expect(renderUiComponent(Kbd, { children: 'K', style: overrides.root })).toMatchSnapshot();
   });
 });

@@ -1,6 +1,6 @@
 import './security-bootstrap.js';
 
-import type { Component, ErrorBoundaryProps, JsonValue } from '@kovojs/core';
+import type { Component, ComponentRenderResult, ErrorBoundaryProps, JsonValue } from '@kovojs/core';
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import {
@@ -94,7 +94,7 @@ import {
   witnessObjectKeys,
   witnessOwnKeys,
 } from './security-witness-intrinsics.js';
-import { renderServerRenderable } from './renderable.js';
+import { renderServerRenderable, type InternalServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
 import { revealUntrustedRequestValue } from './untrusted-request-body.js';
@@ -121,14 +121,11 @@ const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode =
-  | JsxChild[]
-  | boolean
-  | null
-  | number
+  | ComponentRenderResult
   | RenderedHtml
+  | readonly JsxChild[]
   | string
-  | TrustedHtml
-  | undefined;
+  | TrustedHtml;
 
 /** @generated JSX automatic-runtime ABI child value, including async component output. */
 export type JsxChild = JsxNode | Promise<JsxNode>;
@@ -1113,7 +1110,10 @@ function renderJsxChildren(children: JsxChild): MaybePromise<string> {
       ? deferMutationFormHelper(currentJsxMutationFormHelperRegistry(), helper.kind, helper.props)
       : renderMutationFormHelperOutput(helper.kind, helper.props, failure);
   }
-  return renderServerRenderable(children);
+  // `ComponentRenderResult` deliberately hides the concrete rendered-HTML carrier as `object`.
+  // The runtime renderer still owns validation/escaping; this cast only bridges that opaque
+  // author-facing type to the audited internal sink (SPEC §4.1/§4.5).
+  return renderServerRenderable(children as InternalServerRenderable);
 }
 
 function renderJsxChildArray(
