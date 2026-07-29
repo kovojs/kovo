@@ -1,13 +1,12 @@
 import { Table } from 'drizzle-orm';
-import { PgDialect, getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
-import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
+import { PgDialect, type AnyPgTable } from 'drizzle-orm/pg-core';
+import type { AnySQLiteTable } from 'drizzle-orm/sqlite-core';
 
 import {
   runtimeArrayAppend,
   runtimeArrayIsArray,
   runtimeArrayLength,
   runtimeArrayValue,
-  runtimeDefineOwnData,
   runtimeFreeze,
   runtimeGetOwnPropertyDescriptor,
   runtimeMap,
@@ -16,7 +15,6 @@ import {
   runtimeMapHas,
   runtimeMapSet,
   runtimeMapSize,
-  runtimeNullRecord,
   runtimeObjectKeys,
   runtimeOwnDataValue,
   runtimeRegExpTest,
@@ -31,14 +29,17 @@ import {
   runtimeSnapshotArray,
 } from './runtime-security-intrinsics.js';
 
-const drizzleExtraConfigBuilder = requireDrizzleExtraConfigBuilder();
+const drizzleTableSymbols = requireDrizzleTableSymbols();
+const drizzleColumns = drizzleTableSymbols.columns;
+const drizzleExtraConfigBuilder = drizzleTableSymbols.extraConfigBuilder;
+const drizzleExtraConfigColumns = drizzleTableSymbols.extraConfigColumns;
+const drizzleName = drizzleTableSymbols.name;
+const drizzleSchema = drizzleTableSymbols.schema;
 const runtimeAuthzPolicyDialect = new PgDialect();
 const runtimeAuthzPolicySqlToQuery = requireRuntimeAuthzPolicySqlToQuery();
 
 /** Drizzle table object accepted by `extractKovoRuntimeDbMetadata`. */
-export type KovoRuntimeDbTable =
-  | Parameters<typeof getPgTableConfig>[0]
-  | Parameters<typeof getSqliteTableConfig>[0];
+export type KovoRuntimeDbTable = AnyPgTable | AnySQLiteTable;
 type KovoRuntimeDbColumn = {
   name: string;
 };
@@ -106,20 +107,21 @@ export interface KovoRuntimeTableSecurityManifest {
   tables: readonly KovoRuntimeTableSecurityManifestTable[];
 }
 type KovoRuntimeTableFacts = {
+  annotationColumnObjectsByKey: ReadonlyMap<string, object>;
   annotation: KovoRuntimeDomainAnnotation | undefined;
   columnKeys: ReadonlyMap<string, string>;
   columnObjectsByKey: ReadonlyMap<string, object>;
   config: KovoRuntimeDbTableConfig;
-  selectorKeys: ReadonlyMap<object, string>;
-  selectorView: Readonly<Record<string, unknown>>;
   table: KovoRuntimeDbTable;
 };
 type KovoRuntimeColumnRef = object;
 type KovoRuntimeColumnAnnotation = true | KovoRuntimeColumnRef | readonly unknown[];
 type KovoRuntimeDomainAnnotation = ((self: unknown) => unknown) & {
+  atomic?: KovoRuntimeColumnAnnotation;
   authzPolicy?: unknown;
   confidentialAtRest?: KovoRuntimeColumnAnnotation;
   domain: unknown;
+  fans?: readonly unknown[];
   governed?: KovoRuntimeColumnAnnotation;
   key?: KovoRuntimeColumnRef | readonly KovoRuntimeColumnRef[];
   owner?: KovoRuntimeColumnRef;
@@ -130,9 +132,17 @@ type KovoRuntimeDomainAnnotation = ((self: unknown) => unknown) & {
   };
   public?: true;
   reference?: true;
+  secret?: KovoRuntimeColumnAnnotation;
+  version?: KovoRuntimeColumnAnnotation;
 };
 
-function requireDrizzleExtraConfigBuilder(): symbol {
+function requireDrizzleTableSymbols(): {
+  columns: symbol;
+  extraConfigBuilder: symbol;
+  extraConfigColumns: symbol;
+  name: symbol;
+  schema: symbol;
+} {
   const symbolBag = runtimeOwnDataValue(Table, 'Symbol');
   if (
     !symbolBag.found ||
@@ -141,13 +151,31 @@ function requireDrizzleExtraConfigBuilder(): symbol {
   ) {
     throw new TypeError('The installed Drizzle version does not expose its table symbol bag.');
   }
-  const extraConfigBuilder = runtimeOwnDataValue(symbolBag.value, 'ExtraConfigBuilder');
-  if (!extraConfigBuilder.found || typeof extraConfigBuilder.value !== 'symbol') {
-    throw new TypeError(
-      'The installed Drizzle version does not expose its table extra-config key.',
-    );
+  const requiredSymbols = {
+    columns: 'Columns',
+    extraConfigBuilder: 'ExtraConfigBuilder',
+    extraConfigColumns: 'ExtraConfigColumns',
+    name: 'Name',
+    schema: 'Schema',
+  } as const;
+  const result = {} as {
+    columns: symbol;
+    extraConfigBuilder: symbol;
+    extraConfigColumns: symbol;
+    name: symbol;
+    schema: symbol;
+  };
+  for (const resultKey of runtimeObjectKeys(requiredSymbols)) {
+    const symbolName = requiredSymbols[resultKey as keyof typeof requiredSymbols];
+    const symbol = runtimeOwnDataValue(symbolBag.value, symbolName);
+    if (!symbol.found || typeof symbol.value !== 'symbol') {
+      throw new TypeError(
+        `The installed Drizzle version does not expose its table ${symbolName} key.`,
+      );
+    }
+    result[resultKey as keyof typeof result] = symbol.value;
   }
-  return extraConfigBuilder.value;
+  return runtimeFreeze(result);
 }
 
 function requireRuntimeAuthzPolicySqlToQuery(): PgDialect['sqlToQuery'] {
@@ -331,6 +359,12 @@ function extractKovoRuntimeDbMetadataWithManifest(
       factsByTable,
       parent.value,
       snapshotRuntimeTableFacts(parent.value as KovoRuntimeDbTable),
+    );
+  }
+  for (let tableIndex = 0; tableIndex < tableFacts.length; tableIndex += 1) {
+    assertConcreteRuntimeAnnotationIdentities(
+      runtimeArrayValue(tableFacts, tableIndex, 'Kovo Drizzle runtime table facts'),
+      factsByTable,
     );
   }
   const allColumnKeys = runtimeSet<string>();
@@ -899,13 +933,26 @@ function throwRuntimeTableSecurityMismatch(table: string): never {
 }
 
 function getRuntimeTableConfig(table: unknown): KovoRuntimeDbTableConfig {
-  try {
-    const config = getSqliteTableConfig(table as Parameters<typeof getSqliteTableConfig>[0]);
-    return { columns: config.columns, name: config.name, schema: undefined };
-  } catch {
-    const config = getPgTableConfig(table as Parameters<typeof getPgTableConfig>[0]);
-    return { columns: config.columns, name: config.name, schema: config.schema };
+  if (typeof table !== 'object' || table === null || runtimeArrayIsArray(table)) {
+    throw new TypeError('Kovo Drizzle runtime metadata requires a concrete Drizzle table.');
   }
+  const name = ownPropertyValue(table, drizzleName);
+  const schema = ownPropertyValue(table, drizzleSchema);
+  const columnRecord = ownPropertyValue(table, drizzleColumns);
+  if (typeof columnRecord !== 'object' || columnRecord === null) {
+    throw new TypeError('Kovo Drizzle runtime table has no concrete column record.');
+  }
+  const columns: KovoRuntimeDbColumn[] = [];
+  const columnKeys = runtimeObjectKeys(columnRecord);
+  for (let index = 0; index < columnKeys.length; index += 1) {
+    const key = runtimeArrayValue(columnKeys, index, 'Kovo Drizzle runtime column keys');
+    const column = ownPropertyValue(columnRecord, key);
+    if (typeof column !== 'object' || column === null || columnName(column) === undefined) {
+      throw new TypeError('Kovo Drizzle runtime table has an invalid concrete column.');
+    }
+    runtimeArrayAppend(columns, column as KovoRuntimeDbColumn, 'Kovo Drizzle runtime columns');
+  }
+  return { columns, name: name as string, schema: schema as string | undefined };
 }
 
 function snapshotRuntimeTableFacts(table: KovoRuntimeDbTable): KovoRuntimeTableFacts {
@@ -923,23 +970,173 @@ function snapshotRuntimeTableFacts(table: KovoRuntimeDbTable): KovoRuntimeTableF
   ) as readonly KovoRuntimeDbColumn[];
   const config = runtimeFreeze({ columns, name: sourceConfig.name, schema });
   const columnKeys = columnKeysByDbName(table, columns);
-  const columnObjectsByKey = runtimeMap<string, object>();
-  runtimeMapForEach(columnKeys, (key) => {
-    const column = ownPropertyValue(table as object, key);
-    if (typeof column === 'object' && column !== null) {
-      runtimeMapSet(columnObjectsByKey, key, column);
-    }
-  });
-  const selector = runtimeTableSelectorFacts(columnKeys);
+  const columnObjectsByKey = columnObjectsByKeyFromRecord(table as unknown as object, columnKeys);
+  const extraConfigColumns = ownPropertyValue(
+    table as unknown as object,
+    drizzleExtraConfigColumns,
+  );
+  if (typeof extraConfigColumns !== 'object' || extraConfigColumns === null) {
+    throw new TypeError(
+      `Kovo Drizzle runtime table ${sourceConfig.name} has no concrete extra-config column record.`,
+    );
+  }
+  const annotationColumnObjectsByKey = columnObjectsByKeyFromRecord(extraConfigColumns, columnKeys);
   return runtimeFreeze({
+    annotationColumnObjectsByKey,
     annotation: kovoDomainAnnotation(table),
     columnKeys,
     columnObjectsByKey,
     config,
-    selectorKeys: selector.selectorKeys,
-    selectorView: selector.selectorView,
     table,
   });
+}
+
+function columnObjectsByKeyFromRecord(
+  record: object,
+  columnKeys: ReadonlyMap<string, string>,
+): ReadonlyMap<string, object> {
+  const columns = runtimeMap<string, object>();
+  runtimeMapForEach(columnKeys, (key) => {
+    const column = ownPropertyValue(record, key);
+    if (typeof column === 'object' && column !== null) {
+      runtimeMapSet(columns, key, column);
+    }
+  });
+  return columns;
+}
+
+function assertConcreteRuntimeAnnotationIdentities(
+  facts: KovoRuntimeTableFacts,
+  factsByTable: ReadonlyMap<object, KovoRuntimeTableFacts>,
+): void {
+  const annotation = facts.annotation;
+  if (annotation === undefined) return;
+
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'atomic'), facts, 'atomic', {
+    allowArray: true,
+    allowTrue: false,
+  });
+  assertRuntimeColumnAnnotation(
+    annotationValue(annotation, 'confidentialAtRest'),
+    facts,
+    'confidentialAtRest',
+    { allowArray: true, allowTrue: true },
+  );
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'governed'), facts, 'governed', {
+    allowArray: true,
+    allowTrue: true,
+  });
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'key'), facts, 'key', {
+    allowArray: true,
+    allowTrue: false,
+    requireNonEmptyArray: true,
+  });
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'owner'), facts, 'owner', {
+    allowArray: false,
+    allowTrue: false,
+  });
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'secret'), facts, 'secret', {
+    allowArray: true,
+    allowTrue: true,
+  });
+  assertRuntimeColumnAnnotation(annotationValue(annotation, 'version'), facts, 'version', {
+    allowArray: true,
+    allowTrue: false,
+  });
+
+  const ownerVia = annotationValue(annotation, 'ownerVia');
+  if (ownerVia !== undefined) {
+    if (typeof ownerVia !== 'object' || ownerVia === null || runtimeArrayIsArray(ownerVia)) {
+      throwInvalidRuntimeAnnotationIdentity(facts, 'ownerVia');
+    }
+    const fk = runtimeOwnDataValue(ownerVia, 'fk');
+    const parent = runtimeOwnDataValue(ownerVia, 'parent');
+    const parentKey = runtimeOwnDataValue(ownerVia, 'parentKey');
+    if (
+      !fk.found ||
+      columnKeyForRef(fk.value, facts) === undefined ||
+      !parent.found ||
+      typeof parent.value !== 'object' ||
+      parent.value === null ||
+      !parentKey.found
+    ) {
+      throwInvalidRuntimeAnnotationIdentity(facts, 'ownerVia');
+    }
+    const parentFacts = runtimeMapGet(factsByTable, parent.value);
+    if (
+      parentFacts === undefined ||
+      columnKeyForPublicRef(parentKey.value, parentFacts) === undefined
+    ) {
+      throwInvalidRuntimeAnnotationIdentity(facts, 'ownerVia');
+    }
+  }
+
+  const fans = annotationValue(annotation, 'fans');
+  if (fans !== undefined) {
+    if (!runtimeArrayIsArray(fans)) throwInvalidRuntimeAnnotationIdentity(facts, 'fans');
+    const length = runtimeArrayLength(fans, `Kovo Drizzle ${facts.config.name} fans annotation`);
+    for (let index = 0; index < length; index += 1) {
+      const fan = runtimeArrayValue(
+        fans,
+        index,
+        `Kovo Drizzle ${facts.config.name} fans annotation`,
+      );
+      if (typeof fan !== 'object' || fan === null || runtimeArrayIsArray(fan)) {
+        throwInvalidRuntimeAnnotationIdentity(facts, 'fans');
+      }
+      const via = runtimeOwnDataValue(fan, 'via');
+      if (!via.found || columnKeyForRef(via.value, facts) === undefined) {
+        throwInvalidRuntimeAnnotationIdentity(facts, 'fans');
+      }
+    }
+  }
+}
+
+function assertRuntimeColumnAnnotation(
+  value: unknown,
+  facts: KovoRuntimeTableFacts,
+  field: string,
+  options: {
+    allowArray: boolean;
+    allowTrue: boolean;
+    requireNonEmptyArray?: boolean;
+  },
+): void {
+  if (value === undefined) return;
+  if (value === true) {
+    if (options.allowTrue) return;
+    throwInvalidRuntimeAnnotationIdentity(facts, field);
+  }
+  if (runtimeArrayIsArray(value)) {
+    if (!options.allowArray) throwInvalidRuntimeAnnotationIdentity(facts, field);
+    const length = runtimeArrayLength(
+      value,
+      `Kovo Drizzle ${facts.config.name} ${field} annotation`,
+    );
+    if (options.requireNonEmptyArray === true && length === 0) {
+      throwInvalidRuntimeAnnotationIdentity(facts, field);
+    }
+    for (let index = 0; index < length; index += 1) {
+      const ref = runtimeArrayValue(
+        value,
+        index,
+        `Kovo Drizzle ${facts.config.name} ${field} annotation`,
+      );
+      if (columnKeyForRef(ref, facts) === undefined) {
+        throwInvalidRuntimeAnnotationIdentity(facts, field);
+      }
+    }
+    return;
+  }
+  if (columnKeyForRef(value, facts) === undefined) {
+    throwInvalidRuntimeAnnotationIdentity(facts, field);
+  }
+}
+
+function throwInvalidRuntimeAnnotationIdentity(facts: KovoRuntimeTableFacts, field: string): never {
+  throw new TypeError(
+    `Kovo Drizzle ${field} annotation for ${facts.config.name} must use the exact Drizzle column identity required by SPEC §10.1.`,
+  );
 }
 
 function columnKeysByDbName(
@@ -965,9 +1162,15 @@ function columnKeysByDbName(
 
 function kovoSecretAnnotation(
   annotation: KovoRuntimeDomainAnnotation | undefined,
-): true | string | readonly unknown[] | undefined {
+): true | object | readonly unknown[] | undefined {
   const secret = annotationValue(annotation, 'secret');
-  if (secret === true || typeof secret === 'string' || runtimeArrayIsArray(secret)) return secret;
+  if (
+    secret === true ||
+    (typeof secret === 'object' && secret !== null) ||
+    runtimeArrayIsArray(secret)
+  ) {
+    return secret;
+  }
   return undefined;
 }
 
@@ -1020,13 +1223,27 @@ function kovoDomainAnnotation(table: KovoRuntimeDbTable): KovoRuntimeDomainAnnot
   // kovo() value shadow the real callback, while module-local brands disappear when the app and
   // extractor are bundled as distinct copies. Drizzle's own cross-copy table key identifies the
   // callback without exposing a Kovo signing oracle or accepting unrelated table properties.
-  return domainAnnotationValue(
-    ownPropertyValue(table as unknown as object, drizzleExtraConfigBuilder),
+  const extraConfigBuilder = ownPropertyValue(
+    table as unknown as object,
+    drizzleExtraConfigBuilder,
   );
+  if (typeof extraConfigBuilder !== 'function') return undefined;
+  const extraConfigColumns = ownPropertyValue(
+    table as unknown as object,
+    drizzleExtraConfigColumns,
+  );
+  if (typeof extraConfigColumns !== 'object' || extraConfigColumns === null) {
+    throw new TypeError('Kovo Drizzle runtime table has no concrete extra-config column record.');
+  }
+  // Invoke the exact callback with the exact record instead of probing dialect-specific
+  // getTableConfig helpers. A wrong-dialect probe can initialize a Postgres annotation with
+  // SQLite's public column record when mutable Object/Array controls are poisoned.
+  runtimeReflectApply(extraConfigBuilder, undefined, [extraConfigColumns]);
+  return domainAnnotationValue(extraConfigBuilder);
 }
 
 function kovoSecretColumnKeys(
-  annotation: string | readonly unknown[],
+  annotation: object | readonly unknown[],
   facts: KovoRuntimeTableFacts,
 ): string[] {
   const refs = runtimeArrayIsArray(annotation) ? annotation : runtimeFreeze([annotation]);
@@ -1160,7 +1377,7 @@ function ownerViaSourceForTable(
   const fk = runtimeOwnDataValue(ownerViaValue, 'fk');
   const parentKey = runtimeOwnDataValue(ownerViaValue, 'parentKey');
   const fkColumnKey = columnKeyForRef(fk.found ? fk.value : undefined, facts);
-  const parentKeyColumnKey = columnKeyForRef(
+  const parentKeyColumnKey = columnKeyForPublicRef(
     parentKey.found ? parentKey.value : undefined,
     parentFacts,
   );
@@ -1194,41 +1411,23 @@ function columnKeysForAnnotation(annotation: unknown, facts: KovoRuntimeTableFac
 }
 
 function columnKeyForRef(ref: unknown, facts: KovoRuntimeTableFacts): string | undefined {
-  if (typeof ref === 'string') return runtimeMapGet(facts.columnKeys, ref) ?? ref;
-  if (typeof ref === 'object' && ref !== null) {
-    const table = runtimeOwnDataValue(ref, 'table');
-    const name = columnName(ref);
-    return table.found && table.value === facts.table && name !== undefined
-      ? runtimeMapGet(facts.columnKeys, name)
-      : undefined;
-  }
-  if (typeof ref !== 'function') return undefined;
-  try {
-    // SPEC §6.6/§10.3: annotation selectors are app functions, not metadata authority. Give
-    // them a frozen projection of column names rather than the live Drizzle table/column objects;
-    // otherwise a re-entrant owner/key selector can rewrite a later secret/governed lookup during
-    // this same extraction and erase confidentiality metadata.
-    const selected = ref(facts.selectorView);
-    return typeof selected === 'object' && selected !== null
-      ? runtimeMapGet(facts.selectorKeys, selected)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return columnKeyForExactRef(ref, facts.annotationColumnObjectsByKey);
 }
 
-function runtimeTableSelectorFacts(columnKeys: ReadonlyMap<string, string>): {
-  selectorKeys: ReadonlyMap<object, string>;
-  selectorView: Readonly<Record<string, unknown>>;
-} {
-  const view = runtimeNullRecord();
-  const selectorKeys = runtimeMap<object, string>();
-  runtimeMapForEach(columnKeys, (key, name) => {
-    const selectorColumn = runtimeFreeze({ name });
-    runtimeDefineOwnData(view, key, selectorColumn, 'Kovo Drizzle runtime selector table');
-    runtimeMapSet(selectorKeys, selectorColumn, key);
+function columnKeyForPublicRef(ref: unknown, facts: KovoRuntimeTableFacts): string | undefined {
+  return columnKeyForExactRef(ref, facts.columnObjectsByKey);
+}
+
+function columnKeyForExactRef(
+  ref: unknown,
+  columnsByKey: ReadonlyMap<string, object>,
+): string | undefined {
+  if (typeof ref !== 'object' || ref === null) return undefined;
+  let result: string | undefined;
+  runtimeMapForEach(columnsByKey, (column, key) => {
+    if (column === ref) result = key;
   });
-  return { selectorKeys, selectorView: runtimeFreeze(view) };
+  return result;
 }
 
 function annotationValue(
