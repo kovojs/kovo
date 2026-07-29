@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "NOTICE"
+    "NOTICE",
+    "README.md"
   ],
   "type": "module",
   "exports": {

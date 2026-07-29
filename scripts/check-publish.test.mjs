@@ -8,7 +8,7 @@ describe('publish readiness orchestration', () => {
 
     checkPublish({ exec });
 
-    expect(exec).toHaveBeenCalledTimes(5);
+    expect(exec).toHaveBeenCalledTimes(6);
     expect(exec.mock.calls.slice(0, 2).map((call) => call[1][0])).toEqual([
       expect.stringMatching(/scripts\/build-publish\.mjs$/u),
       expect.stringMatching(/scripts\/pack-public-packages\.mjs$/u),
@@ -22,6 +22,9 @@ describe('publish readiness orchestration', () => {
       expect.stringMatching(/scripts\/verify-packed-release-certificate\.mjs$/u),
     ]);
     expect(exec.mock.calls[4][1]).toEqual([
+      expect.stringMatching(/scripts\/check-packed-verifier-consumer\.mjs$/u),
+    ]);
+    expect(exec.mock.calls[5][1]).toEqual([
       expect.stringMatching(/scripts\/egress-floor\.mjs$/u),
       '--policy',
       'install',

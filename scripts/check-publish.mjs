@@ -29,6 +29,15 @@ export function checkPublish({ exec = execFileSync } = {}) {
   );
   exec(
     process.execPath,
+    [path.join(repoRoot, 'scripts', 'check-packed-verifier-consumer.mjs')],
+    {
+      cwd: repoRoot,
+      env: deterministicPackEnvironment(process.env),
+      stdio: 'inherit',
+    },
+  );
+  exec(
+    process.execPath,
     [path.join(repoRoot, 'scripts', 'verify-packed-release-certificate.mjs')],
     {
       cwd: repoRoot,
@@ -52,7 +61,7 @@ export function checkPublish({ exec = execFileSync } = {}) {
       stdio: 'inherit',
     },
   );
-  console.log('Publish artifacts built, packed, inspected, and attested.');
+  console.log('Publish artifacts built, packed, consumer-checked, inspected, and attested.');
 }
 
 if (isMainEntry(import.meta.url)) await runGate(checkPublish);

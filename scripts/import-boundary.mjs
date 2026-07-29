@@ -127,6 +127,12 @@ export function appLocalGeneratedImportTier(specifier, importerPath = null) {
 }
 
 function importBoundaryTier(specifier, importerPath) {
+  // The standalone package README demonstrates its own public API. Keep that exact documentation
+  // import while every executable verifier file and every other Kovo package specifier stays
+  // forbidden; packed dependency/runtime closure is proved separately by the release consumer.
+  if (importerPath === 'packages/verify/README.md' && specifier === '@kovojs/verify') {
+    return null;
+  }
   if (importerPath.startsWith('packages/verify/') && specifier.startsWith('@kovojs/')) {
     return 'standalone-kovo';
   }

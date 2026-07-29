@@ -1,13 +1,62 @@
 #!/usr/bin/env node
 
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import packageMetadata from '../package.json' with { type: 'json' };
 
 import { readBoundedRegularFileSnapshot } from './file-snapshot.js';
-import { formatCertificateVerification, verifyCertificateDirectory } from './index.js';
+import {
+  formatCertificateVerification,
+  type KovoCertificateVerificationResult,
+  verifyCertificateDirectory,
+} from './index.js';
 
 const MAX_CERTIFICATE_BYTES = 2 * 1024 * 1024;
 const MAX_POLICY_BYTES = 1024 * 1024;
+const REPORT_SCHEMA = 'kovo.verify-report/v1';
+const COMMAND_ERROR_SCHEMA = 'kovo.verify-command-error/v1';
+const COMMAND_VERSION = packageMetadata.version;
+const USAGE = 'kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>';
+const HELP = `Verify a Kovo release certificate against an independently obtained policy.
+
+Usage:
+  ${USAGE} [--format <human|json>]
+
+Arguments:
+  <certificate.json>  Certificate bytes to check.
+
+Options:
+  --policy <path>     Independently obtained kovo.certificate-policy/v1 bytes.
+  --artifacts <root>  Unpacked package tree containing the exact reviewed artifacts.
+  --format <format>   Report format: human (default) or json.
+  -h, --help          Show this help.
+  --version           Show the installed command version.
+
+The certificate argument and the --policy, --artifacts, and --format flag groups
+may appear in any order. Use -- before a certificate path that begins with "-".
+
+Exit codes:
+  0  Certificate verified.
+  1  Certificate findings were reported.
+  2  Usage, I/O, or parse error; verification was indeterminate.
+`;
+
+type KovoVerifyFormat = 'human' | 'json';
+
+interface KovoVerifyRequest {
+  artifactRoot: string;
+  certificatePath: string;
+  format: KovoVerifyFormat;
+  policyPath: string;
+}
+
+type ParsedKovoVerifyArgs =
+  | { kind: 'help' }
+  | { kind: 'version' }
+  | { kind: 'verify'; request: KovoVerifyRequest }
+  | { format: KovoVerifyFormat; kind: 'usage-error'; message: string };
 
 /** Injectable text sinks for the stable `kovo-verify` command contract. */
 export interface KovoVerifyIo {
@@ -15,7 +64,12 @@ export interface KovoVerifyIo {
   stdout(text: string): void;
 }
 
-/** Run `kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>`. */
+/**
+ * Run the standalone command contract from SPEC §6.6.
+ *
+ * Verification reports are written to stdout and return 0 or 1. Usage, I/O, and parse failures
+ * are indeterminate rather than certificate findings, so they are written to stderr and return 2.
+ */
 export async function runKovoVerify(
   args: readonly string[],
   io: KovoVerifyIo = {
@@ -24,26 +78,38 @@ export async function runKovoVerify(
   },
 ): Promise<number> {
   const parsed = parseArgs(args);
-  if (parsed === undefined) {
-    io.stderr('usage: kovo-verify <certificate.json> --policy <policy.json> --artifacts <root>\n');
+  if (parsed.kind === 'help') {
+    io.stdout(HELP);
+    return 0;
+  }
+  if (parsed.kind === 'version') {
+    io.stdout(`kovo-verify ${COMMAND_VERSION}\n`);
+    return 0;
+  }
+  if (parsed.kind === 'usage-error') {
+    io.stderr(formatCommandError(parsed.message, parsed.format));
     return 2;
   }
+  const request = parsed.request;
   try {
     const certificateBytes = readBoundedEvidenceFile(
-      parsed.certificatePath,
+      request.certificatePath,
       MAX_CERTIFICATE_BYTES,
       'certificate',
     );
     const certificate = JSON.parse(
       new TextDecoder('utf-8', { fatal: true }).decode(certificateBytes),
     ) as unknown;
-    const policyBytes = readBoundedEvidenceFile(parsed.policyPath, MAX_POLICY_BYTES, 'policy');
-    const result = await verifyCertificateDirectory(certificate, policyBytes, parsed.artifactRoot);
-    io.stdout(formatCertificateVerification(result));
+    const policyBytes = readBoundedEvidenceFile(request.policyPath, MAX_POLICY_BYTES, 'policy');
+    const result = await verifyCertificateDirectory(certificate, policyBytes, request.artifactRoot);
+    io.stdout(formatVerification(result, request.format));
     return result.ok ? 0 : 1;
   } catch (error) {
     io.stderr(
-      `kovo-verify/v1 ERROR ${error instanceof Error ? error.message : 'verification failed'}\n`,
+      formatCommandError(
+        error instanceof Error ? error.message : 'verification failed',
+        request.format,
+      ),
     );
     return 2;
   }
@@ -53,27 +119,147 @@ function readBoundedEvidenceFile(filePath: string, maxBytes: number, label: stri
   return readBoundedRegularFileSnapshot(filePath, maxBytes, label).bytes;
 }
 
-function parseArgs(
-  args: readonly string[],
-): { artifactRoot: string; certificatePath: string; policyPath: string } | undefined {
-  if (
-    args.length !== 5 ||
-    args[1] !== '--policy' ||
-    args[3] !== '--artifacts' ||
-    !args[0] ||
-    !args[2] ||
-    !args[4]
-  ) {
-    return undefined;
+function parseArgs(args: readonly string[]): ParsedKovoVerifyArgs {
+  if (args.includes('-h') || args.includes('--help')) return { kind: 'help' };
+  if (args.includes('--version')) return { kind: 'version' };
+
+  const errorFormat = requestedErrorFormat(args);
+  let artifactRoot: string | undefined;
+  let certificatePath: string | undefined;
+  let format: KovoVerifyFormat = 'human';
+  let formatSeen = false;
+  let policyPath: string | undefined;
+  let positionalOnly = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === undefined || argument === '') {
+      return usageError('arguments must not be empty', errorFormat);
+    }
+    if (!positionalOnly && argument === '--') {
+      positionalOnly = true;
+      continue;
+    }
+    if (!positionalOnly && argument.startsWith('-')) {
+      if (!['--artifacts', '--format', '--policy'].includes(argument)) {
+        return usageError(`unknown option ${JSON.stringify(argument)}`, errorFormat);
+      }
+      const value = args[index + 1];
+      if (value === undefined || value === '' || value === '--') {
+        return usageError(`${argument} requires a value`, errorFormat);
+      }
+      index += 1;
+      if (argument === '--artifacts') {
+        if (artifactRoot !== undefined) {
+          return usageError('--artifacts may appear only once', errorFormat);
+        }
+        artifactRoot = value;
+      } else if (argument === '--policy') {
+        if (policyPath !== undefined) {
+          return usageError('--policy may appear only once', errorFormat);
+        }
+        policyPath = value;
+      } else {
+        if (formatSeen) return usageError('--format may appear only once', errorFormat);
+        formatSeen = true;
+        if (value !== 'human' && value !== 'json') {
+          return usageError('--format must be human or json', errorFormat);
+        }
+        format = value;
+      }
+      continue;
+    }
+    if (certificatePath !== undefined) {
+      return usageError('exactly one certificate path is required', errorFormat);
+    }
+    certificatePath = argument;
   }
+
+  if (certificatePath === undefined) return usageError('certificate path is required', errorFormat);
+  if (policyPath === undefined) return usageError('--policy is required', errorFormat);
+  if (artifactRoot === undefined) return usageError('--artifacts is required', errorFormat);
   return {
-    artifactRoot: resolve(args[4]),
-    certificatePath: resolve(args[0]),
-    policyPath: resolve(args[2]),
+    kind: 'verify',
+    request: {
+      artifactRoot: resolve(artifactRoot),
+      certificatePath: resolve(certificatePath),
+      format,
+      policyPath: resolve(policyPath),
+    },
   };
 }
 
+function requestedErrorFormat(args: readonly string[]): KovoVerifyFormat {
+  return args.some((argument, index) => argument === '--format' && args[index + 1] === 'json')
+    ? 'json'
+    : 'human';
+}
+
+function usageError(message: string, format: KovoVerifyFormat): ParsedKovoVerifyArgs {
+  return { format, kind: 'usage-error', message };
+}
+
+function formatVerification(
+  result: KovoCertificateVerificationResult,
+  format: KovoVerifyFormat,
+): string {
+  if (format === 'human') return formatCertificateVerification(result);
+  return `${JSON.stringify(
+    {
+      schema: REPORT_SCHEMA,
+      status: result.ok ? 'verified' : 'findings',
+      ok: result.ok,
+      stats: result.stats,
+      findings: result.findings,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function formatCommandError(message: string, format: KovoVerifyFormat): string {
+  if (format === 'json') {
+    return `${JSON.stringify(
+      {
+        schema: COMMAND_ERROR_SCHEMA,
+        status: 'indeterminate',
+        message: singleLine(message),
+      },
+      null,
+      2,
+    )}\n`;
+  }
+  return `kovo-verify/v1 ERROR ${singleLine(message)}\nRun "kovo-verify --help" for usage.\n`;
+}
+
+function singleLine(message: string): string {
+  let result = '';
+  for (const character of message) {
+    const codePoint = character.codePointAt(0);
+    result +=
+      codePoint !== undefined &&
+      (codePoint <= 0x1f || codePoint === 0x7f || codePoint === 0x2028 || codePoint === 0x2029)
+        ? ' '
+        : character;
+  }
+  return result.trim();
+}
+
 const invokedPath = process.argv[1];
-if (invokedPath !== undefined && import.meta.url === pathToFileURL(resolve(invokedPath)).href) {
+if (invokedPath !== undefined && sameEntryPath(invokedPath, import.meta.url)) {
   process.exitCode = await runKovoVerify(process.argv.slice(2));
+}
+
+function sameEntryPath(invokedPath: string, moduleUrl: string): boolean {
+  return canonicalEntryUrl(invokedPath) === canonicalEntryUrl(fileURLToPath(moduleUrl));
+}
+
+function canonicalEntryUrl(filePath: string): string {
+  const resolved = resolve(filePath);
+  try {
+    return pathToFileURL(realpathSync(resolved)).href;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ERR_ACCESS_DENIED') throw error;
+    return pathToFileURL(resolved).href;
+  }
 }

@@ -82,7 +82,7 @@ export type KovoCertificateRootKind =
   | 'serialized-browser-handler'
   | 'webhook';
 
-/** Frozen independently-checkable artifact certificate (Plan 3 §2.1). */
+/** Frozen independently-checkable artifact certificate (SPEC §6.6). */
 export interface KovoCertificateV1 {
   artifacts: readonly string[];
   cap: Readonly<Record<string, readonly KovoCertificateCapabilityKind[]>>;
@@ -223,7 +223,14 @@ function snapshotArtifactSource(
   }
 }
 
-/** Verify a certificate without importing Kovo's analyzer or runtime. */
+/**
+ * Verify a certificate without importing Kovo's analyzer or runtime.
+ *
+ * @param certificateInput - Parsed, untrusted `kovo.certificate/v1` input.
+ * @param policyBytes - Exact independently authenticated `kovo.certificate-policy/v1` bytes.
+ * @param artifacts - Finite source of exact packed runtime-module bytes.
+ * @returns The complete ordered findings and certificate statistics.
+ */
 export async function verifyCertificate(
   certificateInput: unknown,
   policyBytes: Uint8Array,
@@ -343,6 +350,18 @@ async function verifyCertificateSnapshot(
  * Verify against regular non-symlink files below an artifact root such as an unpacked
  * `node_modules` directory. Only package dist trees named by the separately supplied policy are
  * enumerated; executable siblings and package entrypoint retargeting fail closed.
+ *
+ * @param certificateInput - Parsed, untrusted `kovo.certificate/v1` input.
+ * @param policyBytes - Exact independently authenticated `kovo.certificate-policy/v1` bytes.
+ * @param artifactRoot - Root containing the exact unpacked `@kovojs/*` package tree.
+ * @returns The complete ordered findings and certificate statistics.
+ * @example
+ * import { readFile } from 'node:fs/promises';
+ * import { verifyCertificateDirectory } from '@kovojs/verify';
+ *
+ * const certificate = JSON.parse(await readFile('./certificate.json', 'utf8'));
+ * const policy = new Uint8Array(await readFile('./reviewer-policy.json'));
+ * const result = await verifyCertificateDirectory(certificate, policy, './packages');
  */
 export async function verifyCertificateDirectory(
   certificateInput: unknown,
@@ -392,7 +411,12 @@ export async function verifyCertificateDirectory(
   );
 }
 
-/** Render a byte-stable human report for the standalone verifier CLI. */
+/**
+ * Render the byte-stable `kovo-verify/v1` human report.
+ *
+ * @param result - Result returned by either certificate verifier.
+ * @returns A newline-terminated report with the same ordered findings as the JSON CLI format.
+ */
 export function formatCertificateVerification(result: KovoCertificateVerificationResult): string {
   const status = result.ok ? 'PASS' : 'FAIL';
   const stats = result.stats;

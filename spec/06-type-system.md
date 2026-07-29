@@ -464,6 +464,26 @@ MUST still be observed because complete parsing precedes extraction. The checker
 caller-owned JSON and policy bytes once before validation and MUST NOT re-read them after making a
 decision.
 
+The published `@kovojs/verify` package is the runtime-independent front door to this checker. Its
+human-public root MUST retain the certificate family as one coherent 11-declaration surface:
+`KOVO_CERTIFICATE_CAPABILITY_DOMAIN`, `KovoCertificateCapabilityKind`,
+`KovoCertificateRootKind`, `KovoCertificateV1`, `KovoCertificatePolicyV1`,
+`KovoCertificateFinding`, `KovoCertificateArtifactSource`,
+`KovoCertificateVerificationResult`, `verifyCertificate`, `verifyCertificateDirectory`, and
+`formatCertificateVerification`. The packed package MUST bundle its reviewed parser bytes and MUST
+have no production dependency on a Kovo compiler, analyzer, server, or runtime package.
+
+The package bin is `kovo-verify`. `-h`, `--help`, and `--version` MUST write to stdout and exit 0.
+The verification grammar is one certificate path plus the required `--policy <path>` and
+`--artifacts <root>` flag groups and optional `--format <human|json>`; those groups may appear in
+any order. A completed verification with no findings exits 0. A completed verification with one or
+more certificate findings exits 1. Invalid/ambiguous usage, duplicate or unknown options, file I/O,
+text decoding, and JSON parsing failures are indeterminate rather than certificate findings and
+MUST write to stderr and exit 2. Human reports remain `kovo-verify/v1`. JSON reports MUST carry
+schema `kovo.verify-report/v1`, status, `ok`, the same stats, and the exact same ordered
+`{obligation, code, message}` findings as the human report. A JSON-mode indeterminate error uses
+`kovo.verify-command-error/v1`; it MUST NOT be shaped like a completed verification report.
+
 Every non-dry release from the authorized `main` commit MUST publish separate GitHub artifact
 attestations for the exact committed reviewer-policy and certificate files. The attestation job MUST
 perform no dependency installation or repository script execution, and dry runs MUST receive no

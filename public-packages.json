@@ -2148,6 +2148,11 @@
         "public": ["."],
         "generated": [],
         "internal": ["./internal/translation"]
+      },
+      "apiRef": {
+        "order": 10,
+        "slug": "verify",
+        "description": "Runtime-independent certificate verification API for exact packed Kovo artifacts and independently reviewed policy."
       }
     },
     {

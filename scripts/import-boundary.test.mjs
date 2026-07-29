@@ -235,7 +235,7 @@ const ignored = "import('@kovojs/core/internal/string-literal')";
     );
   });
 
-  it('mechanically forbids every Kovo import from the standalone verifier package', async () => {
+  it('mechanically forbids every Kovo import from executable standalone verifier files', async () => {
     const rootDir = await fixtureRoot();
     await writeFixture(
       rootDir,
@@ -251,6 +251,33 @@ const ignored = "import('@kovojs/core/internal/string-literal')";
     ).resolves.toEqual([
       {
         fileName: 'packages/verify/src/index.ts',
+        specifier: '@kovojs/server',
+        tier: 'standalone-kovo',
+      },
+    ]);
+  });
+
+  it('allows only the standalone verifier README to demonstrate its own public root', async () => {
+    const rootDir = await fixtureRoot();
+    await writeFixture(
+      rootDir,
+      'packages/verify/README.md',
+      [
+        '```ts',
+        "import { verifyCertificate } from '@kovojs/verify';",
+        "import { createApp } from '@kovojs/server';",
+        '```',
+      ].join('\n'),
+    );
+
+    await expect(
+      collectImportBoundaryViolations({
+        rootDir,
+        roots: ['packages/verify'],
+      }),
+    ).resolves.toEqual([
+      {
+        fileName: 'packages/verify/README.md',
         specifier: '@kovojs/server',
         tier: 'standalone-kovo',
       },

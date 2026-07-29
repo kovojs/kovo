@@ -86,6 +86,7 @@ describe('api-ref generator', () => {
   let drizzlePage;
   let headlessUiPage;
   let uiPage;
+  let verifyPage;
 
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
@@ -95,6 +96,7 @@ describe('api-ref generator', () => {
     drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
     headlessUiPage = await readFile(path.join(outDir, 'headless-ui.md'), 'utf8');
     uiPage = await readFile(path.join(outDir, 'ui.md'), 'utf8');
+    verifyPage = await readFile(path.join(outDir, 'verify.md'), 'utf8');
   }, 60_000);
 
   afterAll(async () => {
@@ -114,6 +116,7 @@ describe('api-ref generator', () => {
       'better-auth.md',
       'ui.md',
       'cli.md',
+      'verify.md',
     ]);
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(
       '@kovojs/server/build',
@@ -227,6 +230,35 @@ describe('api-ref generator', () => {
       }
     }
     expect(signatures).toBe(result.exports);
+  });
+
+  it('keeps the complete 11-declaration verifier family together and documented', () => {
+    const verifier = result.packages.find((pkg) => pkg.name === '@kovojs/verify');
+    expect(verifier).toMatchObject({
+      documented: 11,
+      exports: 11,
+      file: 'verify.md',
+      subpaths: ['@kovojs/verify'],
+    });
+    expect(new Set(verifier.names)).toEqual(
+      new Set([
+        'KOVO_CERTIFICATE_CAPABILITY_DOMAIN',
+        'KovoCertificateArtifactSource',
+        'KovoCertificateCapabilityKind',
+        'KovoCertificateFinding',
+        'KovoCertificatePolicyV1',
+        'KovoCertificateRootKind',
+        'KovoCertificateV1',
+        'KovoCertificateVerificationResult',
+        'formatCertificateVerification',
+        'verifyCertificate',
+        'verifyCertificateDirectory',
+      ]),
+    );
+    expect(verifyPage.match(/^#### `/gmu)).toHaveLength(11);
+    expect(verifyPage).not.toContain('*Undocumented.*');
+    expect(verifyPage).toContain('**Example**');
+    expect(verifyPage).toContain("import { verifyCertificateDirectory } from '@kovojs/verify';");
   });
 
   it('flags undocumented exports with an explicit marker, never omits them', () => {
@@ -433,6 +465,7 @@ describe('api-ref generator', () => {
       '@kovojs/style': 34,
       '@kovojs/better-auth': 19,
       '@kovojs/cli': 11,
+      '@kovojs/verify': 11,
       '@kovojs/test': 26,
       '@kovojs/ui': 2,
     };
