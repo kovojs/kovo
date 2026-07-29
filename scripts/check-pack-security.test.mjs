@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -14,22 +16,66 @@ import {
 } from './check-pack-security.mjs';
 
 function validateFixture(files, overrides = {}) {
-  const text = new Map(
-    files.map((file) => [file.path, typeof file.text === 'string' ? file.text : '']),
+  const bytes = new Map(
+    files.map((file) => [
+      file.path,
+      Buffer.isBuffer(file.bytes)
+        ? file.bytes
+        : Buffer.from(typeof file.text === 'string' ? file.text : ''),
+    ]),
   );
   return validatePackedPackage({
     files: files.map((file) => ({
+      bytes: bytes.get(file.path),
       path: file.path,
-      size: file.size ?? Buffer.byteLength(file.text ?? ''),
+      size: file.size ?? bytes.get(file.path).byteLength,
     })),
     manifest: overrides.manifest ?? {
       exports: { '.': { default: './dist/index.mjs', types: './dist/index.d.mts' } },
     },
     packageName: overrides.packageName ?? '@kovojs/example',
-    readTextFile: (rel) => text.get(rel),
+    readFileBytes: (rel) => bytes.get(rel),
+    readTextFile: (rel) => bytes.get(rel)?.toString('utf8'),
     allowedSourceFiles: overrides.allowedSourceFiles ?? [],
     targetFiles: overrides.targetFiles ?? ['dist/index.d.mts', 'dist/index.mjs'],
   });
+}
+
+function createExampleAssetManifest(entries = {}) {
+  return {
+    examples: Object.fromEntries(
+      ['commerce', 'crm'].map((exampleName) => [
+        exampleName,
+        {
+          files: (entries[exampleName] ?? []).map(({ path, source }) => {
+            const bytes = Buffer.from(source);
+            return {
+              bytes: bytes.byteLength,
+              path,
+              sha256: createHash('sha256').update(bytes).digest('hex'),
+            };
+          }),
+        },
+      ]),
+    ),
+    schema: 'create-kovo-example-assets/v1',
+  };
+}
+
+function createKovoFixture(entries = {}) {
+  const manifest = createExampleAssetManifest(entries);
+  return [
+    { path: 'package.json', text: '{}' },
+    { path: 'dist/index.mjs', text: 'export {};' },
+    { path: 'dist/index.d.mts', text: 'export {};' },
+    { path: 'dist/examples/manifest.json', text: JSON.stringify(manifest) },
+    ...Object.entries(entries).flatMap(([exampleName, files]) =>
+      files.map(({ path, source }) => ({
+        path: `dist/examples/${exampleName}/${path}`,
+        text: source,
+      })),
+    ),
+  ];
 }
 
 describe('pack-security gate', () => {
@@ -171,9 +217,7 @@ describe('pack-security gate', () => {
   it('allows create-kovo to ship starter template source files', () => {
     const findings = validateFixture(
       [
-        { path: 'package.json', text: '{}' },
-        { path: 'dist/index.mjs', text: 'export {};' },
-        { path: 'dist/index.d.mts', text: 'export {};' },
+        ...createKovoFixture(),
         {
           path: 'templates/src/app.tsx',
           text: 'export function App() { return <main>Hello</main>; }',
@@ -184,6 +228,179 @@ describe('pack-security gate', () => {
     );
 
     expect(findings).toEqual([]);
+  });
+
+  it('allows only create-kovo example sources declared by its exact byte manifest', () => {
+    const findings = validateFixture(
+      createKovoFixture({
+        commerce: [{ path: 'src/app.tsx', source: 'export const App = () => <main />;\n' }],
+        crm: [
+          { path: 'src/app-shell.ts', source: 'export const shell = true;\n' },
+          { path: 'src/styles.css', source: 'main { display: block; }\n' },
+        ],
+      }),
+      { packageName: 'create-kovo' },
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('fails closed when create-kovo example assets lack a valid exact manifest', () => {
+    const missing = validateFixture(
+      [
+        { path: 'package.json', text: '{}' },
+        { path: 'dist/index.mjs', text: 'export {};' },
+        { path: 'dist/index.d.mts', text: 'export {};' },
+        { path: 'dist/examples/crm/src/model.ts', text: 'export const model = true;\n' },
+      ],
+      { packageName: 'create-kovo' },
+    );
+    expect(missing).toEqual(
+      expect.arrayContaining([
+        'create-kovo: packed example asset manifest is missing',
+        expect.stringContaining('unexpected source file dist/examples/crm/src/model.ts'),
+      ]),
+    );
+
+    const malformedFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source: 'export const model = true;\n' }],
+    });
+    const malformedManifest = malformedFiles.find(
+      (file) => file.path === 'dist/examples/manifest.json',
+    );
+    malformedManifest.text = '{"schema":';
+    expect(
+      validateFixture(malformedFiles, {
+        packageName: 'create-kovo',
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        'create-kovo: packed example asset manifest is malformed JSON',
+        expect.stringContaining('unexpected source file dist/examples/crm/src/model.ts'),
+      ]),
+    );
+  });
+
+  it('rejects unexpected example names, unsafe paths, and duplicate declarations', () => {
+    const files = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source: 'export const model = true;\n' }],
+    });
+    const manifestFile = files.find((file) => file.path === 'dist/examples/manifest.json');
+    const wrongNames = JSON.parse(manifestFile.text);
+    wrongNames.examples.admin = { files: [] };
+    manifestFile.text = JSON.stringify(wrongNames);
+    expect(validateFixture(files, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: packed example asset manifest must contain exactly commerce, crm',
+    );
+
+    const unsafeFiles = createKovoFixture();
+    const unsafeManifestFile = unsafeFiles.find(
+      (file) => file.path === 'dist/examples/manifest.json',
+    );
+    const unsafeManifest = JSON.parse(unsafeManifestFile.text);
+    unsafeManifest.examples.crm.files = [
+      {
+        bytes: 1,
+        path: '../secret.ts',
+        sha256: 'a'.repeat(64),
+      },
+    ];
+    unsafeManifestFile.text = JSON.stringify(unsafeManifest);
+    expect(validateFixture(unsafeFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: packed example asset manifest contains unsafe path at crm.files[0]: ../secret.ts',
+    );
+
+    const duplicateFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source: 'export const model = true;\n' }],
+    });
+    const duplicateManifestFile = duplicateFiles.find(
+      (file) => file.path === 'dist/examples/manifest.json',
+    );
+    const duplicateManifest = JSON.parse(duplicateManifestFile.text);
+    duplicateManifest.examples.crm.files.push(duplicateManifest.examples.crm.files[0]);
+    duplicateManifestFile.text = JSON.stringify(duplicateManifest);
+    expect(validateFixture(duplicateFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: packed example asset manifest duplicates crm/src/model.ts',
+    );
+  });
+
+  it('rejects duplicate, unlisted, missing, resized, and digest-mutated example assets', () => {
+    const source = 'export const model = true;\n';
+    const duplicatePackedFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source }],
+    });
+    duplicatePackedFiles.push({
+      path: 'dist/examples/crm/src/model.ts',
+      text: source,
+    });
+    expect(validateFixture(duplicatePackedFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: packed example asset appears more than once: dist/examples/crm/src/model.ts',
+    );
+
+    const unlistedFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source }],
+    });
+    unlistedFiles.push({
+      path: 'dist/examples/crm/src/unlisted.json',
+      text: '{"not":"declared"}',
+    });
+    expect(validateFixture(unlistedFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: unlisted packed example asset dist/examples/crm/src/unlisted.json',
+    );
+
+    const missingFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source }],
+    }).filter((file) => file.path !== 'dist/examples/crm/src/model.ts');
+    expect(validateFixture(missingFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: declared packed example asset is missing: dist/examples/crm/src/model.ts',
+    );
+
+    const resizedFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source }],
+    });
+    const resizedAsset = resizedFiles.find(
+      (file) => file.path === 'dist/examples/crm/src/model.ts',
+    );
+    resizedAsset.text = `${source} `;
+    expect(validateFixture(resizedFiles, { packageName: 'create-kovo' })).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'packed example asset size mismatch for dist/examples/crm/src/model.ts',
+        ),
+        'create-kovo: packed example asset SHA-256 mismatch for dist/examples/crm/src/model.ts',
+      ]),
+    );
+
+    const digestFiles = createKovoFixture({
+      crm: [{ path: 'src/model.ts', source }],
+    });
+    const digestManifestFile = digestFiles.find(
+      (file) => file.path === 'dist/examples/manifest.json',
+    );
+    const digestManifest = JSON.parse(digestManifestFile.text);
+    digestManifest.examples.crm.files[0].sha256 = '0'.repeat(64);
+    digestManifestFile.text = JSON.stringify(digestManifest);
+    expect(validateFixture(digestFiles, { packageName: 'create-kovo' })).toContain(
+      'create-kovo: packed example asset SHA-256 mismatch for dist/examples/crm/src/model.ts',
+    );
+  });
+
+  it('still secret-scans create-kovo sources that the asset manifest declares', () => {
+    const findings = validateFixture(
+      createKovoFixture({
+        crm: [
+          {
+            path: 'src/model.ts',
+            source: `export const token = "npm_${'a'.repeat(36)}";\n`,
+          },
+        ],
+      }),
+      { packageName: 'create-kovo' },
+    );
+
+    expect(findings).toContain(
+      'create-kovo: dist/examples/crm/src/model.ts matches npm token secret pattern',
+    );
   });
 
   it('allows explicitly modeled UI copy-in source files but rejects adjacent source leaks', () => {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -37,6 +38,8 @@ const forbiddenPathSegments = new Set([
 const sourceFilePattern = /\.(?:[cm]?ts|tsx|jsx)$/;
 const declarationPattern = /\.d\.(?:[cm]?ts|ts)$/;
 const sourcemapPattern = /\.map$/;
+const createKovoExampleManifestPath = 'dist/examples/manifest.json';
+const createKovoExampleNames = ['commerce', 'crm'];
 const secretPatterns = [
   { label: 'private key block', pattern: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: 'AWS access key id', pattern: /\bAKIA[0-9A-Z]{16}\b/ },
@@ -115,12 +118,21 @@ export function validatePackedPackage({
   files,
   manifest,
   packageName,
+  readFileBytes,
   readTextFile,
   targetFiles,
 }) {
   const findings = [];
   const fileSet = new Set(files.map((file) => file.path));
-  const allowedSourceFileSet = new Set(allowedSourceFiles);
+  const createKovoExampleAssets =
+    packageName === 'create-kovo'
+      ? validateCreateKovoExampleAssets({ files, readFileBytes, readTextFile })
+      : { allowedSourceFiles: [], findings: [] };
+  findings.push(...createKovoExampleAssets.findings);
+  const allowedSourceFileSet = new Set([
+    ...allowedSourceFiles,
+    ...createKovoExampleAssets.allowedSourceFiles,
+  ]);
 
   for (const target of targetFiles) {
     if (!packedTargetExists(target, files, fileSet)) {
@@ -205,6 +217,218 @@ export function validatePackedPackage({
   }
 
   return findings;
+}
+
+/**
+ * create-kovo ships authored example sources intentionally. The packed manifest is the only
+ * source-file allowlist: it must be structurally trustworthy before any entry can bypass the
+ * generic source rejection, and the tarball bytes are then checked independently against it.
+ */
+export function validateCreateKovoExampleAssets({ files, readFileBytes, readTextFile }) {
+  const findings = [];
+  const packedManifestFiles = files.filter((file) => file.path === createKovoExampleManifestPath);
+  if (packedManifestFiles.length === 0) {
+    return {
+      allowedSourceFiles: [],
+      findings: ['create-kovo: packed example asset manifest is missing'],
+    };
+  }
+  if (packedManifestFiles.length !== 1) {
+    return {
+      allowedSourceFiles: [],
+      findings: ['create-kovo: packed example asset manifest must appear exactly once'],
+    };
+  }
+
+  const manifestText = readTextFile(createKovoExampleManifestPath);
+  if (manifestText === undefined) {
+    return {
+      allowedSourceFiles: [],
+      findings: ['create-kovo: packed example asset manifest bytes are unreadable'],
+    };
+  }
+
+  let assetManifest;
+  try {
+    assetManifest = JSON.parse(manifestText);
+  } catch {
+    return {
+      allowedSourceFiles: [],
+      findings: ['create-kovo: packed example asset manifest is malformed JSON'],
+    };
+  }
+
+  if (
+    !isPlainObject(assetManifest) ||
+    !hasExactKeys(assetManifest, ['examples', 'schema']) ||
+    assetManifest.schema !== 'create-kovo-example-assets/v1' ||
+    !isPlainObject(assetManifest.examples)
+  ) {
+    return {
+      allowedSourceFiles: [],
+      findings: ['create-kovo: packed example asset manifest has an invalid top-level shape'],
+    };
+  }
+
+  const exampleNames = Object.keys(assetManifest.examples).sort(compareStrings);
+  if (stableJson(exampleNames) !== stableJson(createKovoExampleNames)) {
+    return {
+      allowedSourceFiles: [],
+      findings: [
+        `create-kovo: packed example asset manifest must contain exactly ${createKovoExampleNames.join(', ')}`,
+      ],
+    };
+  }
+
+  const declaredFiles = new Map();
+  let manifestShapeIsValid = true;
+  for (const exampleName of createKovoExampleNames) {
+    const example = assetManifest.examples[exampleName];
+    if (
+      !isPlainObject(example) ||
+      !hasExactKeys(example, ['files']) ||
+      !Array.isArray(example.files)
+    ) {
+      findings.push(
+        `create-kovo: packed example asset manifest entry ${exampleName} must contain only a files array`,
+      );
+      manifestShapeIsValid = false;
+      continue;
+    }
+
+    const seenRelativePaths = new Set();
+    for (const [index, file] of example.files.entries()) {
+      const label = `${exampleName}.files[${index}]`;
+      if (
+        !isPlainObject(file) ||
+        !hasExactKeys(file, ['bytes', 'path', 'sha256']) ||
+        !Number.isSafeInteger(file.bytes) ||
+        file.bytes < 0 ||
+        file.bytes > maxPackedFileBytes ||
+        typeof file.sha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/u.test(file.sha256)
+      ) {
+        findings.push(`create-kovo: packed example asset metadata is invalid at ${label}`);
+        manifestShapeIsValid = false;
+        continue;
+      }
+      if (!isSafeCreateKovoExampleAssetPath(file.path)) {
+        findings.push(
+          `create-kovo: packed example asset manifest contains unsafe path at ${label}: ${String(file.path)}`,
+        );
+        manifestShapeIsValid = false;
+        continue;
+      }
+      if (seenRelativePaths.has(file.path)) {
+        findings.push(
+          `create-kovo: packed example asset manifest duplicates ${exampleName}/${file.path}`,
+        );
+        manifestShapeIsValid = false;
+        continue;
+      }
+      seenRelativePaths.add(file.path);
+      declaredFiles.set(`dist/examples/${exampleName}/${file.path}`, file);
+    }
+  }
+
+  if (!manifestShapeIsValid) {
+    return { allowedSourceFiles: [], findings };
+  }
+
+  const packedAssetPaths = files
+    .map((file) => file.path)
+    .filter(
+      (filePath) =>
+        filePath.startsWith('dist/examples/') && filePath !== createKovoExampleManifestPath,
+    );
+  const packedAssetPathSet = new Set(packedAssetPaths);
+  if (packedAssetPathSet.size !== packedAssetPaths.length) {
+    const duplicatePaths = [
+      ...new Set(
+        packedAssetPaths.filter((filePath, index) => packedAssetPaths.indexOf(filePath) !== index),
+      ),
+    ].sort(compareStrings);
+    for (const duplicatePath of duplicatePaths) {
+      findings.push(`create-kovo: packed example asset appears more than once: ${duplicatePath}`);
+    }
+  }
+
+  for (const packedPath of [...packedAssetPathSet].sort(compareStrings)) {
+    if (!declaredFiles.has(packedPath)) {
+      findings.push(`create-kovo: unlisted packed example asset ${packedPath}`);
+    }
+  }
+
+  for (const [packedPath, expected] of [...declaredFiles.entries()].sort(([left], [right]) =>
+    compareStrings(left, right),
+  )) {
+    if (!packedAssetPathSet.has(packedPath)) {
+      findings.push(`create-kovo: declared packed example asset is missing: ${packedPath}`);
+      continue;
+    }
+    const bytes = readFileBytes?.(packedPath);
+    if (!Buffer.isBuffer(bytes)) {
+      findings.push(`create-kovo: packed example asset bytes are unreadable: ${packedPath}`);
+      continue;
+    }
+    if (bytes.byteLength !== expected.bytes) {
+      findings.push(
+        `create-kovo: packed example asset size mismatch for ${packedPath}: expected ${expected.bytes}, observed ${bytes.byteLength}`,
+      );
+    }
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    if (digest !== expected.sha256) {
+      findings.push(`create-kovo: packed example asset SHA-256 mismatch for ${packedPath}`);
+    }
+  }
+
+  return {
+    allowedSourceFiles: [...declaredFiles.keys()]
+      .filter((filePath) => sourceFilePattern.test(filePath) && !declarationPattern.test(filePath))
+      .sort(compareStrings),
+    findings,
+  };
+}
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value, expectedKeys) {
+  return (
+    isPlainObject(value) &&
+    stableJson(Object.keys(value).sort(compareStrings)) ===
+      stableJson([...expectedKeys].sort(compareStrings))
+  );
+}
+
+function isSafeCreateKovoExampleAssetPath(relativePath) {
+  if (
+    typeof relativePath !== 'string' ||
+    relativePath.length === 0 ||
+    relativePath.includes('\\') ||
+    relativePath.includes('\0') ||
+    path.posix.isAbsolute(relativePath)
+  ) {
+    return false;
+  }
+  const segments = relativePath.split('/');
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    return false;
+  }
+  const lower = relativePath.toLowerCase();
+  return !(
+    lower === '.env' ||
+    lower.startsWith('.env.') ||
+    lower.includes('/.env') ||
+    lower === 'node_modules' ||
+    lower.startsWith('node_modules/') ||
+    lower.includes('/node_modules/') ||
+    lower === '.git' ||
+    lower.startsWith('.git/') ||
+    lower.includes('/.git/') ||
+    /(?:^|\/)(?:id_[rd]sa|.*\.(?:key|pem|p12|pfx))$/u.test(lower)
+  );
 }
 
 /**
@@ -540,6 +764,15 @@ function createReader(files) {
   };
 }
 
+function createByteReader(files) {
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  return (rel) => {
+    const file = byPath.get(rel);
+    if (!file) return undefined;
+    return file.bytes ?? readFileSync(file.diskPath);
+  };
+}
+
 function readPackedManifest(files, packageName) {
   const file = files.find((candidate) => candidate.path === 'package.json');
   if (!file) throw new Error(`${packageName}: tarball does not include package.json`);
@@ -581,6 +814,7 @@ function inspectPackedFiles({ files, packageJson, packageName }) {
     files,
     manifest,
     packageName,
+    readFileBytes: createByteReader(files),
     readTextFile: createReader(files),
     targetFiles: plan.targetFiles,
   });
