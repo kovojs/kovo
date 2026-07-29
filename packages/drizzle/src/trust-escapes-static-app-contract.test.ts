@@ -9,6 +9,33 @@ function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
   return collectUnregisteredSinksFromProject({ files });
 }
 
+const SQLITE_STARTER_TEMPLATES = [
+  ['src/_kovo/app-runtime-db.ts', 'src/_kovo/app-runtime-db.sqlite.ts'],
+  ['src/app.tsx', 'src/app.tsx'],
+  ['src/auth.ts', 'src/auth.sqlite.ts'],
+  ['src/components/auth-forms.tsx', 'src/components/auth-forms.tsx'],
+  ['src/components/contacts.tsx', 'src/components/contacts.tsx'],
+  ['src/db.ts', 'src/db.sqlite.ts'],
+  ['src/kovo.ts', 'src/kovo.ts'],
+  ['src/model.ts', 'src/model.ts'],
+  ['src/mutations.ts', 'src/mutations.ts'],
+  ['src/queries.ts', 'src/queries.ts'],
+  ['src/schema.ts', 'src/schema.sqlite.ts'],
+  ['src/theme.ts', 'src/theme.ts'],
+] as const;
+
+function sqliteStarterFiles(
+  transform: (fileName: string, source: string) => string = (_fileName, source) => source,
+): readonly TrustEscapeSourceFileInput[] {
+  return SQLITE_STARTER_TEMPLATES.map(([fileName, templateFileName]) => {
+    const source = readFileSync(
+      new URL(`../../create-kovo/templates/${templateFileName}`, import.meta.url),
+      'utf8',
+    ).replace('{{app_id}}', '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e');
+    return { fileName, source: transform(fileName, source) };
+  });
+}
+
 describe('defineKovo request-authority provenance', () => {
   it('accepts the generated Postgres app contract through public runtime and auth doors', () => {
     const templateFiles = [
@@ -37,6 +64,31 @@ describe('defineKovo request-authority provenance', () => {
     );
 
     expect(facts, JSON.stringify(facts)).toEqual([]);
+  });
+
+  it('accepts the generated SQLite app contract through public runtime and auth doors', () => {
+    const facts = sinksForFiles(sqliteStarterFiles());
+
+    expect(facts, JSON.stringify(facts)).toEqual([]);
+  });
+
+  it('keeps a mutated SQLite Better Auth schema closed at the public app door', () => {
+    const facts = sinksForFiles(
+      sqliteStarterFiles((fileName, source) =>
+        fileName === 'src/schema.ts'
+          ? `${source}\nObject.defineProperty(authSchema, 'user', { value: {} });\n`
+          : source,
+      ),
+    );
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sink: 'request-handler.opaque-call',
+          source: 'createSqliteAppRuntime',
+        }),
+      ]),
+    );
   });
 
   it('keeps the exact imported contract, declaration handles, guards, optimism, and assembly open', () => {

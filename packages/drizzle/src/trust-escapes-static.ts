@@ -32329,26 +32329,30 @@ function requestDrizzleTableReferenceIsExactGeneratedAuthSchemaEntry(
   const declarationKey = requestSymbolKey(declarationSymbol);
   for (const sourceFile of project.getSourceFiles()) {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      if (
-        !(
+      const consumer = (
+        [
           [
-            [
-              'createBetterAuthPostgresBindingsFromEnvironment',
-              '@kovojs/better-auth/generated/postgres',
-            ],
-            [
-              'createBetterAuthSqliteBindingsFromEnvironment',
-              '@kovojs/better-auth/generated/sqlite',
-            ],
-          ] as const
-        ).some(([exportName, module]) =>
+            'createBetterAuthPostgresBindingsFromEnvironment',
+            '@kovojs/better-auth/generated/postgres',
+            1,
+            0,
+          ],
+          [
+            'createBetterAuthSqliteBindingsFromEnvironment',
+            '@kovojs/better-auth/generated/sqlite',
+            1,
+            0,
+          ],
+          ['createBetterAuthPostgresAppBindings', '@kovojs/better-auth/postgres', 2, 1],
+          ['createBetterAuthSqliteAppBindings', '@kovojs/better-auth/sqlite', 2, 1],
+        ] as const
+      ).find(
+        ([exportName, module, argumentCount]) =>
+          call.getArguments().length === argumentCount &&
           requestExactPristineDirectImport(call.getExpression(), module, exportName),
-        ) ||
-        call.getArguments().length !== 1
-      ) {
-        continue;
-      }
-      const options = unwrapStaticExpression(call.getArguments()[0]!);
+      );
+      if (!consumer) continue;
+      const options = unwrapStaticExpression(call.getArguments()[consumer[3]]!);
       if (!Node.isObjectLiteralExpression(options)) continue;
       const schemas = options
         .getProperties()
