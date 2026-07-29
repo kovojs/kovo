@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.4",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.5",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "aacc0db0d3a3bfaeafae5a22c3edefe4d68fb62d5ea6a52b33abb6f0a9dee354",
+      "sourceTreeSha256": "2f101e085212dd537257445bd020bbae43c38264519e85f680af7d5658eb632b",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -873,7 +873,7 @@
           "reason": "The diagnostic schema constant is an authority-free protocol identifier."
         }
       ],
-      "sourceTreeSha256": "4c4d94c7c4695a7ecfc99384d80c4aeaa7f70f9fb1084e16e175db5bfc58ef92"
+      "sourceTreeSha256": "15426084c5243ac22f172544375963167edf0c66db87dec58b36220f25b14b10"
     },
     {
       "manifestVariants": [
@@ -10204,7 +10204,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "e33547aba2d69828b5e56afbca2b58b7bc95b7762704bd90c9ee4c9f307bf542"
+      "sourceTreeSha256": "47d9acb405df6a6dddb8d1b5a816d31d493cfcfb41c69eb3871bc5a396938f0c"
     },
     {
       "manifestVariants": [
