@@ -10,6 +10,7 @@ vi.mock('@kovojs/server/custom-adapters', async () => {
 });
 
 import { createDevtoolApp } from './mount.mjs';
+import { createRuntimeFrameStore } from './runtime-frames.mjs';
 
 function bundle() {
   return {
@@ -58,7 +59,12 @@ describe('createDevtoolApp', () => {
   });
 
   it('serves the same bounded frame store to the development UI and SSE stream', async () => {
-    const devtool = createDevtoolApp({ bundles: [bundle()], mode: 'development' });
+    const runtimeFrames = createRuntimeFrameStore({ limit: 2 });
+    const devtool = createDevtoolApp({
+      bundles: [bundle()],
+      mode: 'development',
+      runtimeFrames,
+    });
     const frame = devtool.runtimeFrames.recordRoundTrip({
       app: 'demo',
       phase: 'settled',

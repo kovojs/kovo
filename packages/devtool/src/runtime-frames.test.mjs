@@ -197,7 +197,7 @@ describe('devtool runtime frame store', () => {
   });
 
   it('coalesces blocked SSE consumers and releases subscriber capacity on cancel', async () => {
-    const store = createRuntimeFrameStore({ maxSubscribers: 1 });
+    const store = createRuntimeFrameStore({ limit: 2, maxSubscribers: 1 });
     const request = () =>
       new Request('https://kovo.test/_runtime/frames?app=demo', {
         headers: { Origin: 'https://kovo.test' },

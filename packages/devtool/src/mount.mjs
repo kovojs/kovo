@@ -106,7 +106,7 @@ export function createDevtoolApp({
             liveFrames === undefined
               ? undefined
               : {
-                  frames: liveFrames.recent({ app, limit: 8 }),
+                  frames: liveFrames.recent({ app, limit: Math.min(8, liveFrames.limit) }),
                   href: base + RUNTIME_FRAME_STREAM_PATH,
                   moduleHref: base + runtimeHref,
                 },

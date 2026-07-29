@@ -184,4 +184,16 @@ describe('devtool finite MCP transport', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('clamps the default recent-frame request to a smaller shared store', () => {
+    const runtimeFrames = createRuntimeFrameStore({ limit: 2 });
+    const mcp = createMcpServer({ bundles: [bundle()], runtimeFrames });
+
+    expect(mcp.recentFrames({})).toEqual({
+      app: 'demo',
+      count: 0,
+      frames: [],
+      schema: 'kovo-devtool-runtime-frames/v1',
+    });
+  });
 });

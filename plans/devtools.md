@@ -326,7 +326,7 @@ object-form mutation values' --reporter=dot` passed (8 tests).
 plans/devex-feel-and-teach.md tests/browser-acceptance.mjs
 tests/kovo-check.server-browser.node.mjs vite.config.ts` passed (54 formatted files, 37
   lint/typechecked files).
-- The focused devtool/parity run passed 11 files and 52 tests; direct same-artifact conformance
+- The focused devtool/parity run passed 11 files and 53 tests; direct same-artifact conformance
   passed across three apps.
 - `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/devtool/src/devtool-render.browser.test.ts --browser.name chromium --reporter=dot`

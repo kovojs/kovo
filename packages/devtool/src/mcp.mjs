@@ -20,6 +20,7 @@ export function createMcpServer({ bundles, runtimeFrames = createRuntimeFrameSto
   }
   const appIds = [...apps.keys()];
   const DEFAULT_APP = appIds[0];
+  const DEFAULT_RUNTIME_LIMIT = Math.min(8, runtimeFrames.limit);
 
   function explain(options) {
     if (!isRecord(options)) throw new Error('kovo_explain arguments must be an object');
@@ -79,7 +80,7 @@ export function createMcpServer({ bundles, runtimeFrames = createRuntimeFrameSto
     if (keys.some((key) => key !== 'app' && key !== 'limit')) {
       throw new Error('kovo_graph_recent_frames arguments contain unsupported fields');
     }
-    const { app = DEFAULT_APP, limit = 8 } = options;
+    const { app = DEFAULT_APP, limit = DEFAULT_RUNTIME_LIMIT } = options;
     if (typeof app !== 'string') {
       throw new Error('kovo_graph_recent_frames app must be a string');
     }
@@ -147,7 +148,9 @@ export function createMcpServer({ bundles, runtimeFrames = createRuntimeFrameSto
           type: 'integer',
           minimum: 1,
           maximum: Math.min(runtimeFrames.limit, RUNTIME_FRAME_MAX_LIMIT),
-          description: `max recent frames (default 8; store bound ${runtimeFrames.limit}).`,
+          description:
+            `max recent frames (default ${DEFAULT_RUNTIME_LIMIT}; ` +
+            `store bound ${runtimeFrames.limit}).`,
         },
       },
     },

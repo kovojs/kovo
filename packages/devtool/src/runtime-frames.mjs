@@ -160,7 +160,7 @@ function runtimeFrameFromRoundTrip(input, sequence) {
  *
  * @param {{ app: string, request: Request, store: ReturnType<typeof createRuntimeFrameStore>, limit?: number }} options
  */
-export function runtimeFrameSseResponse({ app, request, store, limit = 12 }) {
+export function runtimeFrameSseResponse({ app, request, store, limit }) {
   if (!(request instanceof Request)) {
     throw new TypeError('Kovo runtime frame stream requires a Request.');
   }
@@ -177,7 +177,12 @@ export function runtimeFrameSseResponse({ app, request, store, limit = 12 }) {
     });
   }
   const selectedApp = appName(app);
-  const backlogLimit = boundedInteger(limit, 1, store.limit, 'runtime frame backlog limit');
+  const backlogLimit = boundedInteger(
+    limit ?? Math.min(12, store.limit),
+    1,
+    store.limit,
+    'runtime frame backlog limit',
+  );
   const encoder = textEncoder;
   let unsubscribe = () => {};
   let removeAbort = () => {};

@@ -100,6 +100,6 @@ packages/cli/src/source-anchors.test.ts --reporter=dot` passed (7 files, 124 tes
 packages/cli/src/trusted-boundary-failure.test.ts packages/cli/src/diagnostic-empathy.test.ts
 packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5 files, 24 tests);
   `node scripts/api-surface-gate.mjs` passed with zero publicness violations.
-- Devtool unit/parity verification passed 11 files and 52 tests; direct conformance proved UI
+- Devtool unit/parity verification passed 11 files and 53 tests; direct conformance proved UI
   edges ≡ MCP cards ≡ CLI text across three committed apps; the Chromium browser suite passed 3
   interaction/replay tests and is registered for Chromium, Firefox, and WebKit in CI.
