@@ -36,6 +36,15 @@ const registryGuideEndMarker = '<!-- GENERATED:ui-registry-copy:end -->';
 const generatedSourceComment =
   '// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.';
 
+const PUBLIC_KOVO_DEPS = new Set([
+  '@kovojs/browser',
+  '@kovojs/core',
+  '@kovojs/headless-ui',
+  '@kovojs/icons',
+  '@kovojs/server',
+  '@kovojs/style',
+]);
+
 const paths = {
   galleryBrowserFixtureManifest: path.join(
     galleryRoot,
@@ -267,6 +276,7 @@ function generateUiRegistryJson() {
     const exportedComponents = parseExportedComponents(source);
     const exportedLeafNames = new Set(exportedComponents.map(bindingToLeafName));
 
+    const browserSymbols = new Set();
     const headlessUiSymbols = new Set();
     const styleSymbols = new Set();
     const serverSymbols = new Set();
@@ -276,7 +286,9 @@ function generateUiRegistryJson() {
     const otherDeps = new Set();
 
     for (const { module, symbols } of imports) {
-      if (module === '@kovojs/headless-ui' || module.startsWith('@kovojs/headless-ui/')) {
+      if (module === '@kovojs/browser') {
+        symbols.forEach((symbol) => browserSymbols.add(symbol));
+      } else if (module === '@kovojs/headless-ui' || module.startsWith('@kovojs/headless-ui/')) {
         symbols.forEach((symbol) => headlessUiSymbols.add(symbol));
       } else if (module === '@kovojs/style') {
         if (symbols.length > 0) {
@@ -338,6 +350,7 @@ function generateUiRegistryJson() {
       files: [`src/${file}`],
       exports: exportedComponents,
       dependencies: {
+        ...(browserSymbols.size ? { '@kovojs/browser': sorted(browserSymbols) } : {}),
         '@kovojs/headless-ui': sorted(headlessUiSymbols),
         ...(styleSymbols.size ? { '@kovojs/style': sorted(styleSymbols) } : {}),
         ...(coreSymbols.size ? { '@kovojs/core': sorted(coreSymbols) } : {}),
@@ -1274,14 +1287,6 @@ function validateManifestDrift() {
 
   return findings;
 }
-
-const PUBLIC_KOVO_DEPS = new Set([
-  '@kovojs/core',
-  '@kovojs/headless-ui',
-  '@kovojs/icons',
-  '@kovojs/server',
-  '@kovojs/style',
-]);
 
 /** Parse every `import ... from '<mod>'` statement, returning { module, symbols[] }. */
 function parseImports(source) {

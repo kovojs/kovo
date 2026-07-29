@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedUrl } from '@kovojs/browser';
 import { component, type ComponentChild } from '@kovojs/core';
 import {
   avatarFallbackAttributes,
@@ -6,7 +7,6 @@ import {
   avatarRootAttributes,
   type AvatarImageStatus,
 } from '@kovojs/headless-ui/avatar';
-import { trustedUrl } from '@kovojs/server';
 import { attrs as styleAttributes } from '@kovojs/style';
 import * as style from '@kovojs/style';
 

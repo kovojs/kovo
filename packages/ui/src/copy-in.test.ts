@@ -11,8 +11,9 @@ import { describe, expect, it } from 'vitest';
 // component's .tsx source into their own app ("you own the code", shadcn-style).
 // The copied source must compile against ONLY the public, versioned packages it
 // imports — @kovojs/core (component()), @kovojs/headless-ui (behavior),
-// @kovojs/style (StyleX fork), and optionally @kovojs/server (escape helpers) — with NO
-// dependency on any @kovojs/ui-internal module.
+// @kovojs/style (StyleX fork), @kovojs/browser (reviewed browser-safe values), and
+// optionally @kovojs/server (server rendering helpers) — with NO dependency on any
+// @kovojs/ui-internal module.
 //
 // This test proves the model end to end: it copies representative components
 // into a scratch dir that resolves the public packages the same way an external
@@ -49,6 +50,7 @@ function linkKovoDep(nodeModules: string, pkg: string): void {
 
 const COMPONENTS = [
   { file: 'alert-dialog.tsx', label: 'overlay + @kovojs/icons X close glyph' },
+  { file: 'avatar.tsx', label: 'browser-safe reviewed image URL' },
   { file: 'button.tsx', label: 'static (no headless behavior)' },
   { file: 'card.tsx', label: 'six-part structural anatomy' },
   { file: 'hover-card.tsx', label: 'overlay slot overrides + href sanitization' },
@@ -94,6 +96,7 @@ describe('@kovojs/ui copy-in model', () => {
       const nodeModules = join(root, 'node_modules');
       mkdirSync(nodeModules, { recursive: true });
       for (const pkg of [
+        '@kovojs/browser',
         '@kovojs/core',
         '@kovojs/headless-ui',
         '@kovojs/icons',
@@ -170,6 +173,7 @@ describe('@kovojs/ui copy-in model', () => {
     };
     const uiPackage = publicPackages.packages.find((entry) => entry.name === '@kovojs/ui');
     const PUBLIC = new Set([
+      '@kovojs/browser',
       '@kovojs/core',
       '@kovojs/headless-ui',
       '@kovojs/icons',

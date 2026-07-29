@@ -290,13 +290,13 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/icons": "workspace:*",
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {
-    "@kovojs/browser": "workspace:*",
     "@kovojs/style": "workspace:*",
     "vitest": "4.1.8"
   },
@@ -310,7 +310,7 @@
       "alert": "sha256-3uQjuikNFtopE5w6wjilclpwSfPYA8l5s-9KVLNj2fU",
       "alert-dialog": "sha256-b5yTjDFOgGiJyNkiDI6bszEcLNJNs8cKxFbEslnasQQ",
       "autocomplete": "sha256-xtFR-qt4DlrK3q7_BYhHN0ayK07AFHTnF5NxqxZ4zWI",
-      "avatar": "sha256-IcDmFvLJxY5SDZDDF5PlzAecLr9xNPY9UlBgEAhs4HQ",
+      "avatar": "sha256-ejKBj_kqtoy0bdUuqJzS3tRppBQkqZ7oyRzaA8UbOpU",
       "badge": "sha256-Ljpeft2k8VKi8USzcjJxDQjYQ2rG5tGDYBrJK-MzFfI",
       "breadcrumb": "sha256-eon1iQXCnnASEtO2QoUaN9JqA7uOGPrNkSHLwQb7LIA",
       "button": "sha256-POZJkE5M6hHSw9OHADMO4EYo0zqZ0zidKqs2zMQQy0w",

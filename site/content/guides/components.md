@@ -315,7 +315,7 @@ sibling files to copy alongside it). `public-packages.json` declares `@kovojs/ui
 mode as `package-and-copy-in`, so the generated registry records both the package-managed and copy-in
 paths from the same source of truth. The current registry spans 44 components,
 tracks anatomy, enhancement, keyboard, and accessibility metadata for every component, and
-limits copied source imports to `@kovojs/core`, `@kovojs/icons`, `@kovojs/server`, `@kovojs/headless-ui`, and `@kovojs/style`. This is the data
+limits copied source imports to `@kovojs/core`, `@kovojs/icons`, `@kovojs/server`, `@kovojs/browser`, `@kovojs/headless-ui`, and `@kovojs/style`. This is the data
 `kovo add <component>` consumes to copy a component and its dependencies into your app. It is
 also enforced: a copy-in smoke test typechecks representative components against the public
 packages alone, so a component cannot start depending on a non-public symbol without the build

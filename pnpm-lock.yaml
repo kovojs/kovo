@@ -753,6 +753,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
@@ -766,9 +769,6 @@ importers:
         specifier: workspace:*
         version: link:../server
     devDependencies:
-      '@kovojs/browser':
-        specifier: workspace:*
-        version: link:../browser
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
