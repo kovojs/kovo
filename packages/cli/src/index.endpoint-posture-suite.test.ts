@@ -53,6 +53,8 @@ describe('kovo check endpoint-posture suite', () => {
         expect.stringMatching(/node_modules[/\\]vite-plus[/\\]bin[/\\]vp$/u),
         'test',
         '--run',
+        '--config',
+        expect.stringMatching(/packages[/\\]cli[/\\]src[/\\]test-runner-config\.ts$/u),
         'src/endpoint-posture.test.ts',
       ]);
       expect(stdout).toBe(
