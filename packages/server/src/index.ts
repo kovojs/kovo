@@ -600,7 +600,6 @@ export type {
   LayoutRegionResults,
   LayoutRenderResult,
   LayoutRenderSlots,
-  LinkDescriptor,
   NotFound,
   RateLimitedDenial,
   RateLimitOptions,

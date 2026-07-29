@@ -744,9 +744,6 @@ describe('core authoring APIs', () => {
     expect(href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
       '/products/p%201?max=500',
     );
-    expect(Link('/products/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
-      href: '/products/p1?sort=price',
-    });
     expect(
       Link({
         children: 'View',
@@ -761,9 +758,6 @@ describe('core authoring APIs', () => {
     // segment after `:`, so a hyphen/dot param name must substitute the whole value
     // rather than stopping at the first non-word char (which dropped the value).
     expect(href('/users/:user-id', { params: { 'user-id': '42' } })).toBe('/users/42');
-    expect(Link('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
-      href: '/users/42',
-    });
     expect(redirect('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
       location: '/users/42',
       status: 303,
@@ -778,6 +772,10 @@ describe('core authoring APIs', () => {
       // @ts-expect-error id is required by the routeRef path.
       href('/products/:id', { search: { max: 500 } });
     };
+    const assertImperativeLinkRemoved = () => {
+      // @ts-expect-error Link is JSX-only; imperative code uses href().
+      Link('/products/:id', { params: { id: 'p1' } });
+    };
     const assertUnknownRoute = () => {
       // @ts-expect-error routeRef hrefs are checked against generated RouteRegistry facts.
       href('/missing', {});
@@ -791,6 +789,7 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertMissingParam).toBeTypeOf('function');
+    expect(assertImperativeLinkRemoved).toBeTypeOf('function');
     expect(assertUnknownRoute).toBeTypeOf('function');
     expect(assertUnknownSearch).toBeTypeOf('function');
   });

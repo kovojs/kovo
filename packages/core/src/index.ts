@@ -737,44 +737,26 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
 
 /** Props accepted by the compiler-bound `<Link />` navigation sugar (SPEC §6.4). */
 export interface LinkProps {
-  children?: ComponentRenderResult;
+  children?: ComponentChild;
   params?: Record<string, string>;
   search?: Record<string, RouteSearchValue>;
   to: keyof RouteRegistry extends never ? string : Extract<keyof RouteRegistry, string>;
   [attribute: string]: unknown;
 }
 
-/** Result of `Link(path, options)`: a resolved `href` string ready to spread onto an anchor. */
-export interface LinkDescriptor {
-  href: string;
-}
-
 /**
- * Build a typed link descriptor (`{ href }`) for a registered route. Same
- * typing as `href`, returned as an object you can spread onto an anchor
- * (SPEC §6.4).
+ * Compiler-bound JSX navigation sugar. Use {@link href} when imperative code
+ * needs a URL string (SPEC §6.4).
  *
- * @param path - A registered route path.
- * @param options - `params` for the path segments and optional `search`.
- * @returns A `LinkDescriptor` carrying the resolved `href`.
+ * @param props - Registered route, params/search, children, and anchor attributes.
+ * @returns Compiler-rendered link output.
  * @example
  * import { Link } from '@kovojs/core';
  *
- * const link = Link('/products/:id', { params: { id: 'p1' } });
- * const anchor = `<a href="${link.href}">View</a>`;
+ * const link = <Link to="/products/:id" params={{ id: 'p1' }}>View</Link>;
  */
-export function Link(props: LinkProps): ComponentRenderResult;
-export function Link<const Path extends RegistryKey<RouteRegistry>>(
-  path: Path,
-  options: RouteHrefOptions<RouteFor<Path>>,
-): LinkDescriptor;
-export function Link<const Path extends RegistryKey<RouteRegistry>>(
-  pathOrProps: Path | LinkProps,
-  options?: RouteHrefOptions<RouteFor<Path>>,
-): ComponentRenderResult | LinkDescriptor {
-  const path = pathOrProps;
-  if (typeof path === 'object' && path !== null) return undefined;
-  return { href: href(path, options as RouteHrefOptions<RouteFor<Path>>) };
+export function Link(_props: LinkProps): ComponentRenderResult {
+  return undefined;
 }
 
 /** A 303 redirect outcome returned by `redirect()`. */
