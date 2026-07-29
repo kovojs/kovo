@@ -70,12 +70,14 @@ pnpm run check
 pnpm test
 ```
 
-`pnpm run check` is the starter aggregate gate. It runs `vp check`, the starter sound-subset policy,
-`pnpm run build:prod`, and the endpoint-posture audit. `pnpm test` runs the starter test through the
-same app wiring. The production path is also present from day one:
+`pnpm run check` is the starter's source-only quick gate. It runs `vp check`, the starter
+sound-subset policy, and source-backed `kovo check` without requiring deployment retention or
+writing `dist`. `pnpm test` runs the starter test through the same app wiring. The explicit
+production proof is also present from day one:
 
 ```sh
 npm run build:prod
+npm run check:endpoint-posture
 npm start
 ```
 

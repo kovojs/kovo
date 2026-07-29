@@ -166,6 +166,13 @@ export function isExplainKind(value: string | undefined): value is ExplainKind {
 
 type CheckArgParseResult =
   | {
+      appModulePath: string;
+      cache: boolean;
+      format: KovoDiagnosticFormat;
+      ok: true;
+      source: true;
+    }
+  | {
       family: KovoCheckFamily;
       format: KovoDiagnosticFormat;
       inputPath: string | undefined;
@@ -195,6 +202,18 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
     return {
       message: 'kovo: check advisories requires asynchronous command dispatch.\n',
       ok: false,
+    };
+  }
+  if (parsed.value.form === 'source-default' || parsed.value.form === 'source') {
+    return {
+      appModulePath:
+        parsed.value.form === 'source'
+          ? (parsed.value.arguments.appModule ?? './src/app.tsx')
+          : './src/app.tsx',
+      cache: parsed.value.options.cache,
+      format: parsed.value.options.format,
+      ok: true,
+      source: true,
     };
   }
 

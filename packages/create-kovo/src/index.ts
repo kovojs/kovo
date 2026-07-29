@@ -350,7 +350,7 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
         .filter((file) => dialect === 'postgres' || file.postgresOnly !== true)
         .map((file) => ({
           path: file.path,
-          source: renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values),
+          source: renderProjectTemplate(file, dialect, values),
         })),
       // Generated (non-template) project files: a per-project random CSRF secret and the
       // ignore rules that keep the real secret out of version control.
@@ -360,6 +360,21 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
     ],
     name: packageName,
   };
+}
+
+function renderProjectTemplate(
+  file: TemplateFile,
+  dialect: CreateKovoDialect,
+  values: Readonly<Record<string, string>>,
+): string {
+  const source = renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values);
+  // The repository stores JSON templates under its own formatter configuration, while a generated
+  // app formats the rendered manifest under its Vite+ project configuration. Canonicalize only at
+  // this trusted template boundary so placeholder length and dialect-specific arrays cannot make a
+  // brand-new app fail its first `vp check`.
+  return file.path === 'package.json'
+    ? `${JSON.stringify(JSON.parse(source) as unknown, null, 2)}\n`
+    : source;
 }
 
 export function writeKovoProject(
@@ -523,7 +538,7 @@ function templatePathForDialect(file: TemplateFile, dialect: CreateKovoDialect):
   return dialect === 'sqlite' && file.sqlitePath ? file.sqlitePath : (file.sourcePath ?? file.path);
 }
 
-function renderTemplate(source: string, values: Record<string, string>): string {
+function renderTemplate(source: string, values: Readonly<Record<string, string>>): string {
   return source.replaceAll(/\{\{([a-zA-Z0-9_]+)\}\}/g, (_match, key: string) => {
     const value = values[key];
     if (value === undefined) {

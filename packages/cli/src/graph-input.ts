@@ -15,6 +15,29 @@ export function runGraphCommand(
   return run(input.value);
 }
 
+/**
+ * Run a graph-only check without permitting the historical empty-object fallback.
+ *
+ * Bare `kovo check` now derives current source proof. Focused graph-family invocations remain
+ * available for generated test/review graphs, but absence of both an explicit and conventional
+ * graph is a proof failure rather than vacuous `OK` (SPEC §11.4).
+ */
+export function runRequiredGraphCommand(
+  inputPath: string | undefined,
+  run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
+  invocationCwd = process.cwd(),
+  family = 'graph',
+): CliCommandResult {
+  const selectedPath = inputPath ?? discoverGraphInputPath(invocationCwd);
+  if (selectedPath === undefined) {
+    return {
+      error: `kovo: check ${family} requires a graph input; pass graph.json or run bare kovo check to derive current source proof.`,
+      exitCode: 1,
+    };
+  }
+  return runGraphCommand(selectedPath, run, invocationCwd);
+}
+
 interface InputReadError {
   expected?: 'array' | 'object';
   field?: string;

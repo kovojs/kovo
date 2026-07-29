@@ -137,6 +137,26 @@ export type KovoSemanticCommandRequest =
       };
     }
   | {
+      readonly arguments: { readonly [key: PropertyKey]: never };
+      readonly command: 'check';
+      readonly form: 'source-default';
+      readonly options?: {
+        readonly cache?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
+      };
+    }
+  | {
+      readonly arguments: {
+        readonly appModule?: string;
+      };
+      readonly command: 'check';
+      readonly form: 'source';
+      readonly options?: {
+        readonly cache?: boolean;
+        readonly format?: 'human' | 'json' | 'github';
+      };
+    }
+  | {
       readonly arguments: {
         readonly family?: 'optimistic' | 'coverage' | 'endpoint-posture' | 'sources-sinks';
         readonly graph?: string;

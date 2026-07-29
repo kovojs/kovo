@@ -532,6 +532,11 @@ interface KovoBuildOptions {
   preset?: KovoBuildPresetName;
 }
 
+interface KovoSourceCheckOptions {
+  appModulePath: string;
+  cache: boolean;
+}
+
 interface LoadedBuildAppModule {
   appModule: unknown;
   serverBuildModule: typeof import('@kovojs/server/build');
@@ -632,6 +637,80 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   };
 }
 
+/**
+ * Derive the complete standalone verification result from current authored source.
+ *
+ * This intentionally stops before preset selection, neutral/deploy artifact emission, and preset
+ * inspection. Those deployment proofs—including SPEC §14 retention/KV417—remain owned by
+ * {@link runBuildCommand}. The source command still runs the same TypeScript, compiler, static
+ * security, graph, fixpoint, render-equivalence, and cache-freshness work that build consumes.
+ */
+export async function runSourceCheckCommand(
+  options: KovoSourceCheckOptions,
+  security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
+): Promise<CliCommandResult> {
+  try {
+    options = configurationBoundary(() => snapshotKovoSourceCheckOptions(options));
+    const invocationRoot = security.invocationCwd;
+    const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
+    assertReadableKovoInputFile(resolvedAppModulePath, 'kovo check app module');
+    const configPath = findKovoBuildConfig(invocationRoot);
+    if (configPath !== undefined) {
+      assertReadableKovoInputFile(configPath, 'kovo check config');
+    }
+
+    // SPEC §6.6 rule 6: source checking evaluates the same authored authority as build. Capture
+    // source/config authority before any authored module is evaluated, but do not interpret a
+    // deployment preset or manufacture a retention declaration merely to make local proof green.
+    const reachableSessionAuthorityFacts =
+      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+    if (configPath !== undefined) {
+      runPreEvaluationBuildConfigTrustPreflight(
+        configPath,
+        invocationRoot,
+        security.paranoidStaticAdvisory,
+        'check',
+      );
+    }
+
+    const typeScriptPreflight = runTypeScriptBuildPreflight(
+      resolvedAppModulePath,
+      invocationRoot,
+      security.invocationEnv,
+      'check',
+    );
+    buildObservePromise(
+      typeScriptPreflight,
+      () => {},
+      () => {},
+    );
+
+    let sourceCheck: { ok: true; value: KovoCheckResult } | { error: unknown; ok: false };
+    try {
+      sourceCheck = {
+        ok: true,
+        value: await deriveCurrentSourceCheck(
+          resolvedAppModulePath,
+          options.cache,
+          reachableSessionAuthorityFacts,
+          security,
+          invocationRoot,
+        ),
+      };
+    } catch (error) {
+      sourceCheck = { error, ok: false };
+    }
+
+    // Preserve build's fail-closed, type-error-first ordering. No deploy artifact has been written:
+    // the only persistent output allowed here is content-invalidated analysis/typegen cache state.
+    await typeScriptPreflight;
+    if (!sourceCheck.ok) throw sourceCheck.error;
+    return sourceCheck.value;
+  } catch (error) {
+    return sourceCheckErrorResult(error);
+  }
+}
+
 export async function runBuildCommand(
   options: KovoBuildOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
@@ -664,6 +743,7 @@ export async function runBuildCommand(
             configPath,
             invocationRoot,
             security.paranoidStaticAdvisory,
+            'build',
           );
     const loadedConfig = await configurationBoundaryAsync(() =>
       loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
@@ -965,6 +1045,43 @@ async function loadAndCheckBuildApp(
   };
 }
 
+async function deriveCurrentSourceCheck(
+  resolvedAppModulePath: string,
+  cache: boolean,
+  reachableSessionAuthorityFacts: readonly CoreGraph.SessionAuthorityFact[],
+  security: KovoCommandSecurityDisposition,
+  invocationRoot: string,
+): Promise<KovoCheckResult> {
+  const preEvaluationStaticTrust = runPreEvaluationStaticTrustPreflight(
+    resolvedAppModulePath,
+    invocationRoot,
+    security.paranoidStaticAdvisory,
+  );
+  const loadedBuildApp = await withBuildGraphDerivationContext(() =>
+    loadBuildAppModule(
+      resolvedAppModulePath,
+      invocationRoot,
+      preEvaluationStaticTrust.approvedSourceFiles,
+      preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+    ),
+  );
+  // Stylesheet compilation is source proof even though asset placement is deployment proof.
+  await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
+  const app = appFromModule(loadedBuildApp.appModule, resolvedAppModulePath);
+  const artifacts = await buildCheckGraph(app, {
+    cache,
+    execution: loadedBuildApp.serverExecutionModule,
+    preEvaluationStaticTrust,
+    reachableSessionAuthorityFacts,
+    root: invocationRoot,
+  });
+  return kovoCheckWithDiagnosticSourceCatalog(
+    artifacts.graph,
+    { paranoidStaticAdvisory: security.paranoidStaticAdvisory },
+    artifacts.diagnosticSourceCatalog,
+  );
+}
+
 interface PreEvaluationStaticTrust {
   readonly approvedSourceFiles: readonly BuildCheckSourceFile[];
   readonly capabilityClosure: AnalyzeCapabilityClosureResult;
@@ -984,6 +1101,7 @@ function runPreEvaluationBuildConfigTrustPreflight(
   configPath: string,
   root: string,
   paranoidStaticAdvisory: boolean,
+  command: 'build' | 'check' = 'build',
 ): PreEvaluationBuildConfigTrust {
   // SPEC §6.6 rule 6: kovo.config is authored authority-bearing code. Snapshot its exact entry and
   // relative-import closure through the descriptor-bound source capability, classify both eager
@@ -1021,7 +1139,7 @@ function runPreEvaluationBuildConfigTrustPreflight(
     return { facts, files, path: configPath };
   }
   throw new KovoBuildCheckDiagnosticError(
-    `kovo build config preflight failed:\n${buildCheckFailureOutput(result.output)}`,
+    `kovo ${command} config preflight failed:\n${buildCheckFailureOutput(result.output)}`,
     result.diagnostics,
   );
 }
@@ -1329,6 +1447,7 @@ async function runTypeScriptBuildPreflight(
   appModulePath: string,
   invocationRoot: string,
   invocationEnv: NodeJS.ProcessEnv,
+  command: 'build' | 'check' = 'build',
 ): Promise<void> {
   const tsconfigPath = findBuildTsconfig(appModulePath, invocationRoot);
   if (tsconfigPath === undefined) return;
@@ -1339,7 +1458,7 @@ async function runTypeScriptBuildPreflight(
     tscBin = createRequire(`${projectDir}/package.json`).resolve('typescript/bin/tsc');
   } catch (error) {
     throw new Error(
-      `kovo build TypeScript preflight could not resolve typescript from ${projectDir}. Install typescript or remove ${tsconfigPath}.\n${
+      `kovo ${command} TypeScript preflight could not resolve typescript from ${projectDir}. Install typescript or remove ${tsconfigPath}.\n${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -1386,7 +1505,7 @@ async function runTypeScriptBuildPreflight(
     );
     await projectOutput.writeFile(projectBuildInfoFile, readFileSync(buildInfoFile));
   } catch (error) {
-    throw new Error(`kovo build TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
+    throw new Error(`kovo ${command} TypeScript preflight failed:\n${execFileErrorOutput(error)}`);
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
@@ -6012,6 +6131,21 @@ function snapshotKovoBuildOptions(value: KovoBuildOptions): KovoBuildOptions {
   return snapshot as unknown as KovoBuildOptions;
 }
 
+function snapshotKovoSourceCheckOptions(value: KovoSourceCheckOptions): KovoSourceCheckOptions {
+  if (typeof value !== 'object' || value === null) {
+    throw new KovoCommandConfigurationError('Kovo source-check options must be an object.');
+  }
+  const appModulePath = requiredBuildOptionString(value, 'appModulePath', 'check');
+  const cache = buildOwnDataValue(value, 'cache', 'Kovo source-check options');
+  if (typeof cache !== 'boolean') {
+    throw new TypeError('Kovo source-check options.cache must be an own boolean.');
+  }
+  const snapshot = buildCreateNullRecord<unknown>();
+  snapshot.appModulePath = appModulePath;
+  snapshot.cache = cache;
+  return snapshot as unknown as KovoSourceCheckOptions;
+}
+
 function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions {
   if (typeof value !== 'object' || value === null) {
     throw new KovoCommandConfigurationError('Kovo export options must be an object.');
@@ -6044,7 +6178,7 @@ function snapshotKovoExportOptions(value: KovoExportOptions): KovoExportOptions 
 function requiredBuildOptionString(
   value: object,
   name: 'appModulePath' | 'outDir',
-  command: 'build' | 'export',
+  command: 'build' | 'check' | 'export',
 ): string {
   const option = buildOwnDataValue(value, name, `Kovo ${command} options`);
   return requiredString(option, `${command} ${name}`);
@@ -6784,6 +6918,24 @@ function stringifyBuildValue(value: unknown, space?: number): string {
 function buildErrorResult(error: unknown): CliCommandResult {
   const result: CliCommandResult = {
     error: `${buildOutputVersion}\nERROR ${error instanceof Error ? error.message : String(error)}`,
+    exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
+  };
+  if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {
+    Object.defineProperty(result, 'diagnostics', {
+      configurable: false,
+      enumerable: false,
+      value: error.diagnostics,
+      writable: false,
+    });
+  }
+  return result;
+}
+
+function sourceCheckErrorResult(error: unknown): CliCommandResult {
+  const result: CliCommandResult = {
+    error: `${requireKovoCommandResultProtocol('check')}\nERROR ${
+      error instanceof Error ? error.message : String(error)
+    }`,
     exitCode: error instanceof KovoCommandConfigurationError ? 2 : 1,
   };
   if (error instanceof KovoBuildCheckDiagnosticError && error.diagnostics !== undefined) {

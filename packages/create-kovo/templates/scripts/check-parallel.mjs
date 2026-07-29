@@ -1,21 +1,18 @@
 #!/usr/bin/env node
 // Concurrent runner for the Kovo starter `check` pipeline.
 //
-// The starter's verification has five steps that the npm `check` script used to
+// The starter's source verification has four steps that the npm `check` script used to
 // run strictly sequentially:
-//   lifecycle policy && vp check && sound subset && build:prod && endpoint posture
-// Four of those steps are independent, so this runner fans them out across
-// concurrent "lanes" to shorten the warm pipeline (measured ~9.5s -> ~5.9s,
-// ~38% faster) while staying FAIL-CLOSED: the process exits non-zero if ANY
-// step fails, and the failing step's output stays legible because every line is
-// prefixed with its step label.
+//   lifecycle policy && vp check && sound subset && source proof
+// Those steps are independent, so this runner fans them out across
+// concurrent "lanes" while staying FAIL-CLOSED: the process exits non-zero if
+// ANY step fails, and the failing step's output stays legible because every
+// line is prefixed with its step label.
 //
-// RACE SAFETY: `build:prod` (kovo build) and `check:endpoint-posture`
-// (vitest + `kovo check`) BOTH write the shared, gitignored tsc incremental
-// preflight `.kovo/cache/tsc-preflight.tsbuildinfo`. It is written in place by
-// tsc, so running build + posture concurrently could corrupt it. They stay in ONE
-// SEQUENTIAL lane (build THEN posture). `vp check` and `check:sound-subset` do
-// not touch `.kovo/cache`, so each runs as its own concurrent lane.
+// The endpoint-posture probe exercises the emitted production server and therefore belongs after
+// `build:prod`, not in this source-only loop. CI runs it immediately after the explicit deployment
+// build. `vp check` and `check:sound-subset` do not touch `.kovo/cache`; source proof alone owns the
+// gitignored TypeScript incremental preflight file during this command.
 //
 // No bash-isms: all orchestration happens in Node; each step is a single
 // program invoked via child_process.spawn.
@@ -32,10 +29,7 @@ const lanes = [
   [step('lifecycle-policy', pm, ['run', 'check:lifecycle-policy'])],
   [step('vp check', 'vp', ['check'])],
   [step('sound-subset', pm, ['run', 'check:sound-subset'])],
-  [
-    step('build:prod', pm, ['run', 'build:prod']),
-    step('endpoint-posture', pm, ['run', 'check:endpoint-posture']),
-  ],
+  [step('source-proof', pm, ['run', 'check:source'])],
 ];
 
 const palette = [36, 35, 33, 32, 34, 31, 96, 95];

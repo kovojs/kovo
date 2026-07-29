@@ -315,6 +315,11 @@ const diagnosticFormatOption = flag(
 );
 
 const checkOptions = [
+  flag('cache', ['--no-cache'], 'Disable source-analysis caches.', {
+    booleanValue: false,
+    category: 'advanced',
+    defaultBoolean: true,
+  }),
   flag('feed', ['--feed'], 'Override the default HTTPS advisory feed.', {
     category: 'input',
     missingValueMessage: 'kovo: check advisories --feed requires a URL or file.\n',
@@ -615,9 +620,10 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   {
     aliases: [],
     category: 'inspect-security',
-    compilerRealm: 'unlocked',
+    compilerRealm: 'locked-before-dispatch',
     examples: [
       'kovo check',
+      'kovo check source ./src/app.tsx --no-cache',
       'kovo check coverage graph.json',
       'kovo check env deployment.json',
       'kovo check advisories .kovo/graph.json',
@@ -632,6 +638,23 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     summary: 'Run consistency, security, environment, and advisory verification.',
     usageErrorPrefix: 'kovo',
     usage: [
+      {
+        async: true,
+        id: 'source-default',
+        summary: 'Derive and verify the default app entry from current source.',
+        tokens: [option('cache'), option('format')],
+      },
+      {
+        async: true,
+        id: 'source',
+        summary: 'Derive and verify an explicit app entry from current source.',
+        tokens: [
+          literal('source', 'Derive proof from current authored source.'),
+          argument('appModule', value('path', 'app-module'), { required: false }),
+          option('cache'),
+          option('format'),
+        ],
+      },
       {
         id: 'graph',
         tokens: [

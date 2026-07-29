@@ -138,7 +138,12 @@ export {
   parseExplainArgs,
   writeCheckUsageError,
 } from './graph-args.js';
-export { inputErrorMessage, readGraphInput, runGraphCommand } from './graph-input.js';
+export {
+  inputErrorMessage,
+  readGraphInput,
+  runGraphCommand,
+  runRequiredGraphCommand,
+} from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
 import {
   projectKovoDiagnostic,

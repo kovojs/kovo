@@ -202,10 +202,28 @@ declared finite check→await→use production may enter the analyzer oracle's g
 For a Kovo app, the following are checkable **without executing a browser**:
 
 1. TypeScript static checking — all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, transforms, guards).
-2. `kovo check` — touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint + render-equivalence invariants, capability closure (KV448), unguarded and unscoped audits.
+2. `kovo check` — TypeScript plus a compiler/security graph derived from the current app source,
+   followed by touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311),
+   fixpoint + render-equivalence invariants, capability closure (KV448), and unguarded and unscoped
+   audits.
 3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including each component's finite operation rows and the `--capabilities` root/door/package/closed provenance ledger from §6.6.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
+
+**Source-proof and deployment-proof split (normative).** Bare `kovo check` derives the app from
+`./src/app.tsx`; `kovo check source [app-module]` selects another authored entry. Both regenerate
+TypeScript and compiler/security facts from that current source before emitting the stable
+`kovo-check/v1` result. They MUST NOT require, infer, or fabricate a deployment preset, emitted
+artifact, least-privilege deployment posture, or §14 retention declaration, and they MUST NOT write
+deploy artifacts. A graph-consuming compatibility form such as `kovo check coverage [graph.json]`
+MUST fail non-zero when neither its explicit graph nor a conventional graph exists; absence is
+never converted into an empty passing verifier input.
+
+`kovo build` reruns the same current-source proof, then additionally verifies the selected preset,
+artifact, least-privilege, and deploy-skew/retention obligations before promoting deploy output.
+Those deployment obligations remain fail-closed, including KV417 under §14. A passing source check
+therefore means “current authored source satisfies the source verifier,” not “this deployment is
+ready.”
 
 **Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
 app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,

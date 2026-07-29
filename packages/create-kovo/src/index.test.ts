@@ -223,6 +223,7 @@ describe('create-kovo starter (metadata)', () => {
         'check:endpoint-posture':
           'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
         'check:lifecycle-policy': 'node scripts/check-lifecycle-policy.mjs',
+        'check:source': 'kovo check',
         'check:sound-subset': 'node scripts/check-sound-subset.mjs',
         dev: 'kovo dev ./src/app.tsx',
         serve: 'pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs',
@@ -245,6 +246,10 @@ describe('create-kovo starter (metadata)', () => {
       expect(ciWorkflow).toContain('vp install --frozen-lockfile');
       expect(ciWorkflow).toContain('vp exec pnpm run check');
       expect(ciWorkflow).toContain('vp exec pnpm run test');
+      expect(ciWorkflow).toContain('vp exec pnpm run check:endpoint-posture');
+      expect(ciWorkflow.indexOf('vp exec pnpm run build:prod')).toBeLessThan(
+        ciWorkflow.indexOf('vp exec pnpm run check:endpoint-posture'),
+      );
       expect(ciWorkflow).not.toContain('- run: vp check');
       expect(ciWorkflow).not.toMatch(/uses: [^\n]+@v\d/u);
       expect(ciWorkflow).not.toContain('run: kovo build');
@@ -256,6 +261,8 @@ describe('create-kovo starter (metadata)', () => {
       expect(readme).toContain('keep that posture in your process');
       expect(readme).toContain('blocks private-network egress by default');
       expect(readme).toContain('KOVO_DATA_DIR');
+      expect(readme).toContain('source-backed `kovo check`');
+      expect(readme).toMatch(/needs no\s+deployment-retention declaration/u);
 
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain("host: process.env.HOST ?? '127.0.0.1'");

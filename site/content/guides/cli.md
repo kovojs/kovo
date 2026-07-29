@@ -82,33 +82,37 @@ Vite fields and lifecycle hooks fail closed because they can replace the SSR com
 ordinary Vite+ commands still read the complete config for their own build, test, lint, format, and
 task workflows.
 
-## Build the graph artifact first
+## Check current source; inspect artifacts explicitly
 
-Every `kovo check` and graph-backed `kovo explain` command reads an extracted graph artifact.
-`kovo build` writes it to `dist/.kovo/graph.json`. With no path argument, the CLI looks for
-`graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json` in the current working
-directory. That means a bare `kovo check` in a fresh clone can pass vacuously because there is no
-graph yet. Build first, run the command from the app root, or pass the path explicitly.
+Bare `kovo check` reruns TypeScript, loads `./src/app.tsx`, derives a fresh compiler/security graph,
+and verifies it without writing `dist`. Use `kovo check source <app-module>` when the authored entry
+lives elsewhere. This source proof intentionally stops before deployment preset, artifact,
+least-privilege, and retention checks; `kovo build` owns those.
 
-### `kovo check` — the graph/coverage check
+Graph-backed `kovo explain` and focused compatibility checks still consume an extracted graph.
+Pass that graph explicitly, or create a conventional graph first. Missing graph input is an error,
+never an empty passing proof synthesized from absence.
 
-Runs the framework's consistency and exhaustiveness verifier over the app graph: touch-graph
-consistency, optimistic exhaustiveness (KV310), update coverage (KV311), endpoint posture,
-source/sink inventory, and the fixpoint / render-equivalence invariants. The focused sub-checks are
+### `kovo check` — current-source proof and focused artifact checks
+
+The source form runs the framework's consistency and exhaustiveness verifier over freshly derived
+app facts: touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311),
+source/sink inventory, and the fixpoint / render-equivalence invariants. Focused artifact checks are
 positional, not dash-flags:
 
 ```sh
-kovo check                      # full consistency check
-kovo check optimistic           # optimistic exhaustiveness only
-kovo check coverage             # update-coverage (every query/state position has a status)
-kovo check coverage graph.json  # against a pre-emitted graph artifact
+kovo check                               # current ./src/app.tsx; no deploy artifacts
+kovo check source ./src/admin-app.tsx    # current source from another authored entry
+kovo check --no-cache                    # force every current-source derivation
+kovo check optimistic graph.json         # optimistic exhaustiveness for an artifact
+kovo check coverage graph.json           # update coverage for an artifact
 kovo check endpoint-posture .kovo/endpoint-posture.json
 kovo check sources-sinks
 kovo check advisories dist/.kovo/graph.json
 ```
 
-If you want the command to be explicit in CI logs, point it at `dist/.kovo/graph.json` directly
-instead of relying on discovery.
+Keep bare `kovo check` as the fast current-source CI log. Use the explicit graph forms only when the
+artifact itself is the subject under review.
 
 ### Check published security advisories
 
@@ -203,14 +207,14 @@ combobox, dialog, dropdown-menu, popover, select, tabs, toast, toggle, tooltip, 
 
 ### `kovo build` — verified production build of an app module
 
-Runs the production preflights, then builds a Kovo app module into a preset output. When the app
-belongs to a TypeScript project, the command runs `tsc --noEmit` for the nearest `tsconfig.json`;
-after loading the app it derives the same graph used by `kovo check` and fails on verifier findings
-before writing deploy artifacts.
+Reruns the same current-source proof as `kovo check`, then verifies the selected deployment preset,
+artifact posture, least-privilege posture, and deploy-skew retention before emitting. A source check
+can therefore pass before deployment is configured while build remains fail-closed, including KV417
+for an unsupported retention window.
 
 ```sh
-kovo build ./src/app.ts                          # → dist/
-kovo build ./src/app.ts --out build --preset vercel
+kovo build ./src/app.tsx                          # → dist/
+kovo build ./src/app.tsx --out build --preset vercel
 ```
 
 `--preset` selects the deployment target (`node`, `vercel`, `cloudflare`); `--out` overrides the
@@ -390,14 +394,14 @@ or transport internals.
 npm script  →  vp  →  kovo
 ─────────────────────────────────────────────
 npm run check        →  vp check                       (typecheck + lint, regenerates registries)
-npm run check:kovo   →  vp run kovo-check  →  kovo check   (graph consistency + coverage)
+npm run check:kovo   →  vp run kovo-check  →  kovo check   (current source + compiler/security proof)
 npm run test:*       →  vp run <task>                   (project test suites)
 ```
 
-Use `vp` to _run things_; use `kovo` to _ask the graph questions_ and emit artifacts. In CI,
-`kovo build` reruns the production TypeScript and graph-verifier preflights before emitting deploy
-output; keep `kovo check` as an explicit earlier step when you want a stable `kovo-check/v1` log or
-to debug touch-graph consistency, optimistic exhaustiveness, and update coverage without building.
+Use `vp` to _run things_; use `kovo` to verify current app facts, inspect graphs, and emit artifacts.
+In CI, `kovo build` reruns the source verifier and adds the deployment gates before emitting output;
+keep `kovo check` as an explicit earlier step for a stable `kovo-check/v1` log and a quick loop that
+does not pretend deployment retention has been configured.
 
 ## Next
 

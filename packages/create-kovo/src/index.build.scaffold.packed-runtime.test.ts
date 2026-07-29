@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -11,13 +11,12 @@ import {
   createStarterApp,
   fetchTextWhenReady,
   reservePort,
-  runStarterVpCheck,
   stopProcess,
   withStarterBinOnPath,
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: packed runtime scaffold)', () => {
-  it('runs vp check and the production artifact from a packed starter install', async () => {
+  it('runs the source quick check and production artifact from a packed starter install', async () => {
     const app = createStarterApp({
       install: 'packed',
       name: 'Packed Build Run Proof',
@@ -31,9 +30,18 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
     try {
       expectPackedKovoPackageShape(app.root);
       // The generated dev-server HTTP suite has its own starter-typecheck shard. Keep this packed
-      // acceptance path focused on the published production artifact: repeating the full PGlite
-      // and Vite dev bootstrap here can consume the real build's bounded test budget.
-      runStarterVpCheck(app.root);
+      // acceptance path focused on the published source-proof and production-artifact commands:
+      // repeating the full PGlite/Vite dev bootstrap would consume the real build's bounded budget.
+      const sourceCheck = execFileSync('pnpm', ['run', 'check'], {
+        cwd: app.root,
+        encoding: 'utf8',
+        env: withStarterBinOnPath(app.root),
+        maxBuffer: 128 * 1024 * 1024,
+      });
+      expect(sourceCheck).toContain('source-proof');
+      expect(sourceCheck).toContain('kovo-check/v1');
+      expect(existsSync(join(app.root, 'dist'))).toBe(false);
+
       buildReusableProductionArtifact(app.root);
       expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(
         /from\s+['"]\.\/assets\//,

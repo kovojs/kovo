@@ -8,19 +8,22 @@ order: 7
 
 When you want to know what updates when a button is clicked, you ask `kovo explain` instead of reading
 through app code. When you want CI to hold a rule — "every component showing cart data refreshes when
-the cart changes" — you assert it with `kovo check`. Both read the same derived facts your build emits,
-and both print stable, diffable text that agents and humans consume the same way. This guide is the
-working vocabulary: what each command says, how to assert it in CI, and how the same facts show up in
-the Network panel.
+the cart changes" — you assert it with `kovo check`. Bare `kovo check` derives those facts from current
+source; `kovo explain` reads a materialized graph for stable artifact inspection. Both print stable,
+diffable text that agents and humans consume the same way. This guide is the working vocabulary: what
+each command says, how to assert it in CI, and how the same facts show up in the Network panel.
 
 ## The graph workflow
 
-Everything runs off the app graph — components, queries, mutations, pages, optimistic coverage, and
-the touch graph (the derived map of which writes refresh which queries). When you materialize that
-graph for CI or tooling, the commands read the graph file:
+Everything runs off app facts — components, queries, mutations, pages, optimistic coverage, and the
+touch graph (the derived map of which writes refresh which queries). Use the source-backed command
+for the ordinary loop, then use an explicit materialized graph when the artifact itself is under
+inspection:
 
 ```sh
-kovo check graph.json                               # semantic gates (KV310, KV311, review modes)
+kovo check                                          # derive current ./src/app.tsx
+kovo check source ./src/admin-app.tsx               # choose another authored entry
+kovo check graph.json                               # compatibility check of an explicit artifact
 kovo explain query cart graph.json                  # read one node of the graph
 kovo explain mutation cart/add --optimistic graph.json
 kovo explain page /cart graph.json
@@ -29,8 +32,9 @@ kovo explain --unguarded graph.json
 kovo explain --revealed graph.json
 ```
 
-Prefer deriving or constructing the graph in tests instead of committing generated graph artifacts;
-the output is stable and diffable, so CI can still assert product rules directly.
+Prefer the current-source check or construct a graph in focused tests instead of committing generated
+app artifacts. A graph-consuming form fails when its graph is absent; it never treats missing facts as
+a passing app.
 
 ## Read the output
 

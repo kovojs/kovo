@@ -36,8 +36,12 @@ jobs:
       # cannot execute an app dependency's lifecycle script before CI reports the policy failure.
       - run: node scripts/check-lifecycle-policy.mjs
       - run: vp install --frozen-lockfile
-      # Run the package script, not bare `vp check`: the script also enforces the
-      # sound TypeScript subset, endpoint posture, and production graph proof.
+      # Run the package script, not bare `vp check`: the source-only quick loop also enforces the
+      # sound TypeScript subset and a current-source graph proof without requiring deploy posture.
       - run: vp exec pnpm run check
       - run: vp exec pnpm run test
+      # Deployment proof stays explicit: this additionally enforces preset, least-privilege,
+      # artifact, and SPEC §14 retention/KV417 posture.
       - run: vp exec pnpm run build:prod
+      # This probe starts the emitted production server, so it follows a successful deployment build.
+      - run: vp exec pnpm run check:endpoint-posture

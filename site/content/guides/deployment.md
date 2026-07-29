@@ -307,14 +307,17 @@ The verification surface is browser-free by design. In the generated starter, th
 ships the right scripts for CI and for the emitted server:
 
 ```sh
-pnpm run check       # starter aggregate: vp check + sound-subset + build:prod + endpoint posture
+pnpm run check       # source-only: type/lint + sound-subset + current compiler/security proof
 pnpm run build:prod  # kovo build ./src/app.tsx
+pnpm run check:endpoint-posture # exercise the emitted production server after build
 pnpm run start       # NODE_ENV=production node dist/server/server.mjs
 ```
 
-`pnpm run check` is the starter's proof script, not just a typecheck alias. It runs `vp check`,
-the starter sound-subset gate, `pnpm run build:prod`, and the endpoint-posture audit. `pnpm run start`
-is the emitted Node server entrypoint. Add app-owned graph assertions only after your app owns a
+`pnpm run check` is the starter's current-source proof script, not just a typecheck alias. It runs
+`vp check`, the starter sound-subset gate, and source-backed `kovo check` without requiring a
+deployment-retention claim or writing `dist`. `pnpm run build:prod` adds the selected preset,
+artifact, least-privilege, and §14 retention gates; only after it succeeds can the endpoint-posture
+audit exercise the emitted Node server. Add app-owned graph assertions only after your app owns a
 matching script. See [reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Checklist
@@ -324,7 +327,8 @@ matching script. See [reading kovo check & kovo explain](/guides/kovo-explain/).
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
 - [ ] 103 Early Hints / preload wired from route page hints if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
-- [ ] CI runs `pnpm run check` and `pnpm run build:prod` before deploy.
+- [ ] CI runs `pnpm run check`, `pnpm run build:prod`, and then
+      `pnpm run check:endpoint-posture` before deploy.
 - [ ] App-owned graph assertions run before deploy, if the app has a script for them.
 
 ## Next

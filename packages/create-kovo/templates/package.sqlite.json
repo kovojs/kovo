@@ -8,6 +8,7 @@
     "check:endpoint-posture": "vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json",
     "check:lifecycle-policy": "node scripts/check-lifecycle-policy.mjs",
     "check:sound-subset": "node scripts/check-sound-subset.mjs",
+    "check:source": "kovo check",
     "dev": "kovo dev ./src/app.tsx",
     "serve": "pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs",
     "start": "NODE_ENV=production node dist/server/server.mjs",

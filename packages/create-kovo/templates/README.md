@@ -7,7 +7,7 @@ as possible.
 
 ```sh
 pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
-pnpm run check       # vp check + sound-subset + endpoint posture + kovo build
+pnpm run check       # type/lint + sound-subset + current-source proof; no deploy artifacts
 pnpm run test        # vp test
 pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
 npm start            # NODE_ENV=production node dist/server/server.mjs
@@ -32,14 +32,19 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 `kovo dev` bootstraps Kovo before loading the Vite config; `vp check` and `vp test`
 retain the `kovo()` config integration, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md
-§9.5). `pnpm run check` also runs `kovo build`, so the compiler-derived
-dependency graph verifier runs before deploy — there is no hand-maintained graph
-file.
+§9.5). `pnpm run check` runs source-backed `kovo check`, which reruns TypeScript
+and derives the compiler/security graph from the current app source. It needs no
+deployment-retention declaration and writes no deploy artifact. There is no
+hand-maintained graph file.
 
 `pnpm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
 source: strict TypeScript plus local bans on `any`, non-null assertions, and
 unchecked `as` casts. Keep deliberate escapes outside starter app code until
 they have a framework-owned audit path.
+
+`pnpm run check:endpoint-posture` exercises the emitted production server, so run it only after a
+successful `pnpm run build:prod`. The generated CI workflow keeps that deployment-backed probe
+separate from the source-only quick loop.
 
 Install note: Better Auth currently marks `drizzle-orm@^0.45.2` as an optional
 peer while this starter uses Drizzle `1.0.0-rc.4`. The resulting pnpm peer warning
@@ -86,7 +91,8 @@ checks; do not put it in the app process. The app boots with the ordinary runtim
 dedicated `kovo_system` login, never the owner/admin connection. `kovo db check` prefers that same
 system URL when both authorities are present.
 
-`kovo build ./src/app.tsx` reruns TypeScript and Kovo graph verification, then
+`kovo build ./src/app.tsx` reruns the same source proof, then checks the selected
+deployment preset, least-privilege posture, and deploy-skew retention before it
 emits a Node server under `dist/server` using the preset in `kovo.config.ts`
 (Node by default; uncomment Vercel or Cloudflare). The generated `serve` and
 `start` scripts set `NODE_ENV=production`; keep that posture in your process

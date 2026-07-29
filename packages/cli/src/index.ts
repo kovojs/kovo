@@ -8,6 +8,7 @@ import {
   parseExportArgs,
   runBuildCommand,
   runExportCommand,
+  runSourceCheckCommand,
 } from './commands/build-export.js';
 import { parseDbArgs, runDbCommand } from './commands/db.js';
 import { parseAttestArgs, runAttestCommand } from './commands/attest.js';
@@ -62,6 +63,7 @@ import {
   parseCheckArgs,
   parseExplainArgs,
   runGraphCommand,
+  runRequiredGraphCommand,
   writeCheckUsageError,
 } from './graph-output.js';
 import { writeCommandResult, writeFormattedCommandResult, writeUsageError } from './shared.js';
@@ -144,6 +146,12 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   check(args, security) {
     const parsed = parseCheckArgs(args);
     if (!parsed.ok) return writeCheckUsageError(parsed);
+    if ('source' in parsed) {
+      return writeUsageError(
+        'kovo: source-backed check requires asynchronous command dispatch.\n',
+        'check',
+      );
+    }
     if ('environment' in parsed) {
       return writeFormattedCommandResult(
         runDeploymentEnvironmentCheck(
@@ -177,7 +185,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
       );
     }
     return writeFormattedCommandResult(
-      runGraphCommand(
+      runRequiredGraphCommand(
         inputPath,
         (input) =>
           kovoCheck(input, {
@@ -185,6 +193,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
             paranoidStaticAdvisory: security.paranoidStaticAdvisory,
           }),
         security.invocationCwd,
+        family,
       ),
       parsed.format,
       'proof',
@@ -365,6 +374,32 @@ export async function mainAsync(
       'proof',
       'check',
       'unknown',
+    );
+  }
+  if (
+    invocation.command === 'check' &&
+    (invocation.form === 'source-default' || invocation.form === 'source')
+  ) {
+    const parsed = parseCheckArgs(args.slice(1));
+    if (!parsed.ok || !('source' in parsed)) {
+      return writeUsageError(
+        parsed.ok
+          ? 'kovo: source-backed check selected an incompatible command form.\n'
+          : parsed.message,
+        'check',
+      );
+    }
+    return writeFormattedCommandResult(
+      await runSourceCheckCommand(
+        {
+          appModulePath: parsed.appModulePath,
+          cache: parsed.cache,
+        },
+        security,
+      ),
+      parsed.format,
+      'proof',
+      'check',
     );
   }
   if (!isAsyncCommand(command)) {

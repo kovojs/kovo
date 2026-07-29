@@ -72,16 +72,16 @@ The generated `.env` is for local development only. Set `BETTER_AUTH_SECRET` or
 This is the authoritative command table; the [Quickstart](/getting-started/quickstart/) links here rather than
 repeating it.
 
-| Command                          | What it does                                                                                               |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                    | Bootstrap-first Kovo dev server (`kovo dev ./src/app.tsx`).                                                |
-| `npm run check`                  | Full starter gate: `vp check`, sound-subset policy, and endpoint posture.                                  |
-| `vp check`                       | Typecheck + lint sub-gate; this is where Kovo static errors surface.                                       |
-| `npm run check:sound-subset`     | Rejects `any`, unchecked casts, and non-null assertions in starter app code.                               |
-| `npm run check:endpoint-posture` | Exercises declared endpoint fixtures, then runs `kovo check endpoint-posture .kovo/endpoint-posture.json`. |
-| `vp test`                        | Vitest suites.                                                                                             |
-| `npm run build:prod`             | Production build through `kovo build ./src/app.tsx`.                                                       |
-| `npm start`                      | Run the emitted Node server from `dist/server/server.mjs`.                                                 |
+| Command                          | What it does                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run dev`                    | Bootstrap-first Kovo dev server (`kovo dev ./src/app.tsx`).                               |
+| `npm run check`                  | Source-only starter gate: `vp check`, sound-subset policy, and current Kovo source proof. |
+| `vp check`                       | Typecheck + lint sub-gate; this is where Kovo static errors surface.                      |
+| `npm run check:sound-subset`     | Rejects `any`, unchecked casts, and non-null assertions in starter app code.              |
+| `npm run check:endpoint-posture` | After build, exercises the emitted server and checks its declared endpoint fixtures.      |
+| `vp test`                        | Vitest suites.                                                                            |
+| `npm run build:prod`             | Production build through `kovo build ./src/app.tsx`.                                      |
+| `npm start`                      | Run the emitted Node server from `dist/server/server.mjs`.                                |
 
 ### Two CLIs, two jobs
 
@@ -90,15 +90,15 @@ and check. `kovo` is the framework CLI: graph-level checks and explains, product
 copy-in commands such as `kovo add`. The [CLI guide](/guides/cli/) covers the full surface of both.
 
 If you internalize one command, make it `npm run check`. `vp check` proves the framework wiring -
-handler references, form fields, navigation targets, and data-binding paths - but the scaffold's
-full gate also runs the app sound-subset policy and the endpoint-posture audit that verifies declared
-machine ingress.
+handler references, form fields, navigation targets, and data-binding paths - while the scaffold's
+quick gate also runs the app sound-subset policy and derives the compiler/security graph from current
+source. The deployment-backed endpoint-posture audit follows a successful `npm run build:prod`.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
 The starter sound-subset script enforces the app-authored subset Kovo relies on for SPEC §6.6
-client-capture and sink guarantees. `npm run check:endpoint-posture` writes
+client-capture and sink guarantees. After build, `npm run check:endpoint-posture` writes
 `.kovo/endpoint-posture.json` from real endpoint requests and validates it with
 `kovo check endpoint-posture .kovo/endpoint-posture.json`.
 
