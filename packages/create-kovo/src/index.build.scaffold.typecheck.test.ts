@@ -38,10 +38,10 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     }
   });
 
-  it('runs the generated public HTTP journey after the real runtime bootstrap', () => {
+  it('runs the generated public inferred harness against a verified build graph', () => {
     const app = createStarterApp({
       name: 'Vitest Proof',
-      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      retention: 'retained-24h',
       tempPrefix: 'create-kovo-vitest-',
     });
 
@@ -50,5 +50,5 @@ describe('create-kovo starter (build integration: scaffold typecheck)', () => {
     } finally {
       app.cleanup();
     }
-  }, 120_000);
+  }, 420_000);
 });

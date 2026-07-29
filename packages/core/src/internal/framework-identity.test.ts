@@ -131,6 +131,19 @@ describe('framework identity resolver', () => {
     ).toBeUndefined();
   });
 
+  it('catalogs the reviewed server-root app-authoring helpers', () => {
+    for (const exportName of [
+      'mutationFormAttributes',
+      'session',
+      'stylesheet',
+    ] as const) {
+      expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', exportName)).toEqual({
+        exportName,
+        module: '@kovojs/server',
+      });
+    }
+  });
+
   it('catalogs server authorities only from their semantic task subpaths', () => {
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/server/command', 'runCommand'),
@@ -242,10 +255,13 @@ describe('framework identity resolver', () => {
       module: '@kovojs/style',
     });
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'attrs')).toBeUndefined();
-    expect(frameworkCatalogExportsForModule('@kovojs/style')).toEqual(new Set(['create']));
-    expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'defineTheme'),
-    ).toBeUndefined();
+    expect(frameworkCatalogExportsForModule('@kovojs/style')).toEqual(
+      new Set(['create', 'defineTheme']),
+    );
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'defineTheme')).toEqual({
+      exportName: 'defineTheme',
+      module: '@kovojs/style',
+    });
     expect(frameworkCatalogExportForModuleSpecifier('@kovojs/style', 'tokens')).toBeUndefined();
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/style/internal', 'createAtomicStyles'),

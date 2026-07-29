@@ -1,8 +1,6 @@
 import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite';
-import { sqliteSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
-import { authed, type BetterAuthCsrfRequestLike } from '@kovojs/better-auth';
-import type { BetterAuthGeneratedRequest } from '@kovojs/better-auth/generated';
-import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
+import type { BetterAuthAppRequest } from '@kovojs/better-auth';
+import { createBetterAuthSqliteAppBindings } from '@kovojs/better-auth/sqlite';
 import { type AccessDecision } from '@kovojs/server';
 import { type MutationReplayStore } from '@kovojs/server/replay';
 import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
@@ -50,20 +48,12 @@ const APP_SEED = [
 ] as const satisfies readonly KovoSqliteSeed[];
 
 const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
-const authSystemDb = sqliteSystemDbForGeneratedIntegration(appDatabase, {
-  operation: 'write',
-  reason: 'Better Auth adapter manages local session tables before an app session exists',
-  surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
-});
 
 /** Volatile local-development replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
-type StarterAuthRequest = BetterAuthGeneratedRequest &
-  BetterAuthCsrfRequestLike & {
-    session?: AppSession | null;
-  };
+type StarterAuthRequest = BetterAuthAppRequest<AppSession>;
 
 interface AppAuthBindingOptions {
   csrf: CsrfOptions<StarterAuthRequest>;
@@ -73,25 +63,18 @@ interface AppAuthBindingOptions {
 /**
  * SQLite twin of the framework-owned Better Auth construction boundary (SPEC §6.6/§10.3).
  *
- * The raw-capability consumer is package-internal. Generated code can only pass the opaque
- * capability to this sanitized binding constructor and receives no Better Auth/database object.
+ * The public SQLite task door verifies the exact runtime, recovers its purpose-closed system
+ * capability internally, and returns no Better Auth/database object.
  */
 export function createAppAuthBindings(options: AppAuthBindingOptions) {
-  return createBetterAuthSqliteBindingsFromEnvironment<
-    StarterAuthRequest,
-    AppSession,
-    StarterAuthRequest & { session: AppSession }
-  >({
+  return createBetterAuthSqliteAppBindings(appDatabase, {
     csrf: options.csrf,
     mapSession: ({ session: authSession, user }) => ({
       id: authSession.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
-    principalEpochStore: appRuntimePrincipalEpochStore,
     schema: authSchema,
     signInAccess: options.signInAccess,
-    signOutAccess: [authed<StarterAuthRequest>()],
-    systemDb: authSystemDb,
   });
 }
 

@@ -4,11 +4,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildPublicApiInventory } from './public-api-inventory.mjs';
 import { computeFrameworkRuntimeSurface } from './framework-export-posture-gate.mjs';
 
 const BATCH_ID = 'better-auth-generated-assembly-v1';
 const PACKAGE = '@kovojs/better-auth';
 const RELEASE_NOTE = 'docs/releases/better-auth-generated-assembly-v1.md';
+const APP_BINDINGS_RELEASE_NOTE = 'docs/releases/better-auth-app-bindings-v1.md';
+const APP_BINDINGS_CONTRACT_TEST = 'packages/better-auth/src/public-app-bindings.test.ts';
 const RESULT_SCHEMA = 'kovo-api-migration-result/v1';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -21,6 +24,7 @@ const postureSource = readFileSync(posturePath, 'utf8');
 const decisions = JSON.parse(decisionsSource);
 const migrations = JSON.parse(migrationsSource);
 const posture = JSON.parse(postureSource);
+const inventory = buildPublicApiInventory({ repoRoot });
 
 const replacements = new Map([
   [
@@ -108,11 +112,117 @@ const contractEvidence = {
   contractTests: [
     'packages/better-auth/src/generated.api.test.ts',
     'packages/better-auth/src/index.session.test.ts',
+    APP_BINDINGS_CONTRACT_TEST,
     'scripts/check-packed-better-auth-consumer.test.mjs',
     'scripts/migrate-better-auth-api-v1.test.mjs',
   ],
 };
 decisions.evidence['better-auth-contract'] = contractEvidence;
+
+decisions.stories['better-auth-postgres'] = {
+  userStory:
+    'Bind Better Auth to one exact framework-owned Postgres app runtime without handling system database authority.',
+  owner: 'auth',
+  spec: 'spec/06-type-system.md §6.5',
+  evidence: 'better-auth-contract',
+};
+decisions.stories['better-auth-sqlite'] = {
+  userStory:
+    'Bind Better Auth to one exact framework-owned SQLite app runtime without handling system database authority.',
+  owner: 'auth',
+  spec: 'spec/06-type-system.md §6.5',
+  evidence: 'better-auth-contract',
+};
+
+const appBindingDeclarations = inventory.exportedDeclarations.filter(
+  (entry) =>
+    entry.package === PACKAGE &&
+    (entry.specifier === PACKAGE ||
+      entry.specifier === `${PACKAGE}/postgres` ||
+      entry.specifier === `${PACKAGE}/sqlite`) &&
+    (entry.symbol.startsWith('BetterAuthApp') ||
+      entry.symbol === 'createBetterAuthPostgresAppBindings' ||
+      entry.symbol === 'createBetterAuthSqliteAppBindings'),
+);
+const appBindingIds = new Set(appBindingDeclarations.map(declarationId));
+const expectedAppBindingIds = new Set([
+  `${PACKAGE}#BetterAuthAppBindings`,
+  `${PACKAGE}#BetterAuthAppBindingsOptions`,
+  `${PACKAGE}#BetterAuthAppCredentialResult`,
+  `${PACKAGE}#BetterAuthAppRequest`,
+  `${PACKAGE}#BetterAuthAppSignInMutation`,
+  `${PACKAGE}#BetterAuthAppSignOutMutation`,
+  `${PACKAGE}/postgres#createBetterAuthPostgresAppBindings`,
+  `${PACKAGE}/sqlite#createBetterAuthSqliteAppBindings`,
+]);
+if (
+  appBindingIds.size !== expectedAppBindingIds.size ||
+  [...appBindingIds].some((id) => !expectedAppBindingIds.has(id))
+) {
+  throw new Error(
+    `Better Auth app-binding declarations differ from the reviewed set: ${[...appBindingIds]
+      .sort()
+      .join(', ')}`,
+  );
+}
+const appBindingRows = appBindingDeclarations.map((entry) => {
+  const postgres = entry.specifier === `${PACKAGE}/postgres`;
+  const sqlite = entry.specifier === `${PACKAGE}/sqlite`;
+  const value = entry.kind.includes('value');
+  return {
+    id: declarationId(entry),
+    package: PACKAGE,
+    specifier: entry.specifier,
+    symbol: entry.symbol,
+    state: 'public',
+    decision: 'keep',
+    canonicalHome: entry.specifier,
+    story: postgres
+      ? 'better-auth-postgres'
+      : sqlite
+        ? 'better-auth-sqlite'
+        : 'better-auth-human',
+    evidence: 'better-auth-contract',
+    introduced: {
+      releaseNote: APP_BINDINGS_RELEASE_NOTE,
+      contractTest: APP_BINDINGS_CONTRACT_TEST,
+      ...(value
+        ? {
+            nonTestExample: 'packages/better-auth/README.md',
+          }
+        : {}),
+    },
+  };
+});
+decisions.symbols = [
+  ...decisions.symbols.filter((entry) => !appBindingIds.has(entry.id)),
+  ...appBindingRows,
+].sort((left, right) => left.id.localeCompare(right.id));
+const appBindingSubpaths = [
+  {
+    specifier: `${PACKAGE}/postgres`,
+    task:
+      'Bind Better Auth to one framework-owned Postgres app runtime while Kovo owns system database and deployment authority.',
+    owner: 'auth',
+    story: 'better-auth-postgres',
+    state: 'public',
+    introduced: { releaseNote: APP_BINDINGS_RELEASE_NOTE },
+  },
+  {
+    specifier: `${PACKAGE}/sqlite`,
+    task:
+      'Bind Better Auth to one framework-owned SQLite app runtime while Kovo owns system database and deployment authority.',
+    owner: 'auth',
+    story: 'better-auth-sqlite',
+    state: 'public',
+    introduced: { releaseNote: APP_BINDINGS_RELEASE_NOTE },
+  },
+];
+const appBindingSpecifiers = new Set(appBindingSubpaths.map((entry) => entry.specifier));
+decisions.subpaths = [
+  ...decisions.subpaths.filter((entry) => !appBindingSpecifiers.has(entry.specifier)),
+  ...appBindingSubpaths,
+].sort((left, right) => left.specifier.localeCompare(right.specifier));
 
 const migrationDecisions = [...replacements.keys()]
   .map((symbol) => `${PACKAGE}#${symbol}`)
@@ -153,16 +263,6 @@ const existingBatch = migrations.batches.findIndex((entry) => entry.id === BATCH
 if (existingBatch === -1) migrations.batches.push(batch);
 else migrations.batches[existingBatch] = batch;
 
-let nextDecisionsSource = decisionsSource;
-nextDecisionsSource = replacePropertyObject(
-  nextDecisionsSource,
-  'better-auth-contract',
-  contractEvidence,
-);
-for (const row of updatedRows) {
-  nextDecisionsSource = replaceObjectByField(nextDecisionsSource, 'id', row.id, row);
-}
-
 const nextMigrationsSource =
   existingBatch === -1
     ? appendArrayObject(migrationsSource, 'batches', batch)
@@ -180,7 +280,12 @@ const actualMembers = new Set(
     names.map((name) => `${subpath}\0${name}`),
   ),
 );
-const postureGroups = reviewedBetterAuth.postureGroups
+const appBindingPostureGroupIds = new Set([
+  'authority-free-module-initializer-auth-app-bindings-20260729',
+  'framework-door-auth-app-bindings-database-driver-20260729',
+]);
+const retainedPostureGroups = reviewedBetterAuth.postureGroups
+  .filter((group) => !appBindingPostureGroupIds.has(group.id))
   .map((group) => ({
     ...group,
     members: Object.fromEntries(
@@ -193,6 +298,72 @@ const postureGroups = reviewedBetterAuth.postureGroups
     ),
   }))
   .filter((group) => Object.keys(group.members).length > 0);
+const postureGroups = [
+  ...retainedPostureGroups,
+  {
+    capabilities: [],
+    disposition: 'authority-free',
+    id: 'authority-free-module-initializer-auth-app-bindings-20260729',
+    matrix: {
+      cells: {
+        A: 'public-runtime-export-posture-control',
+        Au: 'public-runtime-export-posture-control',
+        C: 'public-runtime-export-posture-control',
+        I: 'public-runtime-export-posture-control',
+      },
+      surface: 'auth',
+    },
+    members: {
+      './postgres': ['<module>'],
+      './sqlite': ['<module>'],
+    },
+    review: {
+      basis:
+        'The backend task entries eagerly load only their matching reviewed Better Auth adapter path and acquire no raw database authority during module evaluation.',
+      evidence: [
+        'packages/better-auth/src/public-postgres.ts',
+        'packages/better-auth/src/public-sqlite.ts',
+        APP_BINDINGS_CONTRACT_TEST,
+      ],
+      id: 'first-party-runtime-posture/2026-07-29-better-auth-app-bindings',
+    },
+    rootKind: 'none',
+    securityRole: 'module-initializer',
+  },
+  {
+    capabilities: ['database-driver'],
+    disposition: 'framework-door',
+    id: 'framework-door-auth-app-bindings-database-driver-20260729',
+    matrix: {
+      cells: {
+        A: 'public-runtime-export-posture-control',
+        Au: 'public-runtime-export-posture-control',
+        C: 'public-runtime-export-posture-control',
+        I: 'public-runtime-export-posture-control',
+      },
+      surface: 'auth',
+    },
+    members: {
+      './postgres': ['createBetterAuthPostgresAppBindings'],
+      './sqlite': ['createBetterAuthSqliteAppBindings'],
+    },
+    review: {
+      basis:
+        'Each exact app-binding door accepts only a server-witnessed database runtime, mints the fixed-purpose system capability internally, and returns a frozen record with no raw Better Auth, driver, or system-database authority.',
+      evidence: [
+        'packages/better-auth/src/public-postgres.ts',
+        'packages/better-auth/src/public-sqlite.ts',
+        'packages/server/src/generated-db-capabilities.ts',
+        APP_BINDINGS_CONTRACT_TEST,
+        'spec/06-type-system.md',
+        'spec/10-data-plane.md',
+      ],
+      id: 'first-party-runtime-posture/2026-07-29-better-auth-app-bindings',
+    },
+    rootKind: 'none',
+    securityRole: 'framework-door',
+  },
+];
 const reviewedMembers = new Set(
   postureGroups.flatMap((group) =>
     Object.entries(group.members).flatMap(([subpath, names]) =>
@@ -220,7 +391,7 @@ const nextPostureSource = replaceObjectByField(
   updatedPosture,
 );
 
-writeFileSync(decisionsPath, nextDecisionsSource, 'utf8');
+writeFileSync(decisionsPath, `${JSON.stringify(decisions, null, 2)}\n`, 'utf8');
 writeFileSync(migrationsPath, nextMigrationsSource, 'utf8');
 writeFileSync(posturePath, nextPostureSource, 'utf8');
 
@@ -232,6 +403,10 @@ function moveEntries(symbols, canonicalHome) {
       canonicalHome,
     },
   ]);
+}
+
+function declarationId(declaration) {
+  return `${declaration.specifier}#${declaration.symbol}`;
 }
 
 function migrationRule(symbol, replacement, index) {

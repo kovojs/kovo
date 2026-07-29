@@ -8,17 +8,44 @@ and an opaque redirect-protocol mount.
 pnpm add @kovojs/better-auth
 ```
 
-Kovo-generated server assembly imports
-`createBetterAuthSqliteBindingsFromEnvironment` or
-`createBetterAuthPostgresBindingsFromEnvironment` from
-`@kovojs/better-auth/generated/sqlite` or
-`@kovojs/better-auth/generated/postgres`. App-authored modules do not import those generated ABIs.
-Backend-neutral result and option contracts live at the type-only
-`@kovojs/better-auth/generated` entry; keeping the runtime constructors split prevents one import
-from booting two database engines. Both backends return the same Kovo-facing `sessionProvider`,
-`signIn`, `signOut`, `mountAdapter`, optional `requestPasswordReset`, and `seedDemoUser` shape; the
-raw Better Auth object and database capability never leave the constructor. Caller-created
-`betterAuth()` objects are intentionally not accepted by the public API (SPEC §6.6).
+Choose the app-binding task entry for the database runtime your app already owns:
+
+```ts
+import {
+  betterAuthCsrfFromEnvironment,
+  type BetterAuthAppRequest,
+} from '@kovojs/better-auth';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
+import { publicAccess } from '@kovojs/server';
+import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
+
+type AuthRequest = BetterAuthAppRequest<{ id: string }>;
+const database = createPostgresAppRuntimeDb(databaseOptions);
+const auth = createBetterAuthPostgresAppBindings(database, {
+  csrf: betterAuthCsrfFromEnvironment<AuthRequest>({ field: 'csrf' }),
+  mapSession: ({ session }) => ({ id: session.id }),
+  schema: authSchema,
+  signInAccess: publicAccess('sign-in begins before authentication'),
+});
+```
+
+Use `createBetterAuthSqliteAppBindings` from `@kovojs/better-auth/sqlite` for the experimental
+single-principal SQLite runtime. The entries stay split so importing one backend does not boot the
+other. Both verify an exact framework-minted app runtime, mint the system database capability
+internally with fixed posture, consume deployment origin/secrets from the boot-pinned environment,
+and return the same Kovo-facing `sessionProvider`, `signIn`, `signOut`, `mountAdapter`, and
+`seedDemoUser` shape. Persistent revocation and authenticated sign-out posture are framework-owned.
+The raw Better Auth object and database capability never leave the constructor, and caller-created
+`betterAuth()` objects are intentionally not accepted (SPEC §6.6/§10.3).
+
+The `@kovojs/better-auth/generated*` entries remain compiler-emitted ABI. App and copied starter
+source must not import them.
+
+```ts
+import { createBetterAuthSqliteAppBindings } from '@kovojs/better-auth/sqlite';
+
+const localAuth = createBetterAuthSqliteAppBindings(sqliteRuntime, appBindingOptions);
+```
 
 The opaque `mount('/api/auth', appAuth.mountAdapter)` is redirect-only. Kovo rejects Better Auth
 JSON/HTML routes and external or ambiguous redirects, strips every response body and unreviewed
@@ -26,7 +53,7 @@ header, and emits only a canonical same-origin `Location`, reviewed callback coo
 `no-store` cache floor (SPEC §6.6/§9.1).
 
 OAuth mounting is **experimental** in this technical preview. The callback boundary and state-cookie
-posture are tested, but generated bindings do not yet expose a supported social-provider
+posture are tested, but app bindings do not yet expose a supported social-provider
 configuration workflow. Do not advertise or depend on production OAuth until that workflow has a
 framework-owned configuration door and a real provider round-trip conformance test. Email/password
 sign-in, sign-out, sanitized sessions, and guards are the mature workflows in this package.

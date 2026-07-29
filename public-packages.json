@@ -1899,6 +1899,7 @@
           "./internal/keyring",
           "./internal/managed-db-capabilities",
           "./internal/managed-db",
+          "./internal/sql-parser-authority-bootstrap",
           "./internal/postgres-capability",
           "./internal/runtime-registry-wire",
           "./internal/runtime-environment",
@@ -2301,14 +2302,31 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": ["."],
+        "public": [".", "./postgres", "./sqlite"],
         "generated": ["./generated", "./generated/postgres", "./generated/sqlite"],
         "internal": ["./internal", "./internal/server-mount-adapter"]
       },
       "apiRef": {
         "order": 7,
         "slug": "better-auth",
-        "description": "Better Auth adapter: typed session/sign-in/up/out mutations, authed/role guards, and the redirect-protocol mount."
+        "description": "Better Auth adapter: typed session/sign-in/up/out mutations, authed/role guards, and the redirect-protocol mount.",
+        "entries": [
+          {
+            "path": ".",
+            "slug": "better-auth",
+            "description": "Shared app-binding contracts, session guards, CSRF configuration, and redirect-protocol mounting."
+          },
+          {
+            "path": "./postgres",
+            "slug": "better-auth-postgres",
+            "description": "Purpose-closed Better Auth bindings for one framework-owned Postgres app runtime."
+          },
+          {
+            "path": "./sqlite",
+            "slug": "better-auth-sqlite",
+            "description": "Purpose-closed Better Auth bindings for one framework-owned SQLite app runtime."
+          }
+        ]
       }
     },
     {

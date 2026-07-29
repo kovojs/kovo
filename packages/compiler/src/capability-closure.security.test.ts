@@ -310,11 +310,14 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'roots.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import { createApp, endpoint, layout, mutation, query, route } from '@kovojs/server'
+          import { defineKovo, endpoint, layout, mutation, query, route } from '@kovojs/server'
           import { task } from '@kovojs/server/tasks'
           import { webhook } from '@kovojs/server/webhooks';
           import { handler } from '@kovojs/browser';
-          export const app = createApp({});
+          const kovo = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+          export const app = kovo.assemble({});
           export const page = route('/page', { access: {}, render() { return null; } });
           export const chrome = layout({ render() { return null; } });
           export const save = mutation('save', { handler() {} });
@@ -374,21 +377,26 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     );
   });
 
-  it('roots createApp lifecycle modules and closes their raw authority', () => {
+  it('roots defineKovo assembly lifecycle modules and closes their raw authority', () => {
     const files = [
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
+          import { defineKovo } from '@kovojs/server';
           import { onError, sessionProvider } from './lifecycle.js';
-          export const app = createApp({ onError, sessionProvider });
+          const kovo = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+            auth: sessionProvider,
+            onError,
+          });
+          export const app = kovo.assemble({});
         `,
       },
       {
         fileName: 'lifecycle.ts',
         source: `
           import { readFileSync } from 'node:fs';
-          export const sessionProvider = { load() { return readFileSync('/ambient-session'); } };
+          export function sessionProvider() { return readFileSync('/ambient-session'); }
           export function onError() { return readFileSync('/ambient-error'); }
         `,
       },
@@ -780,15 +788,15 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.ts',
         source: `
           import { handler } from '@kovojs/browser';
-          import { createApp, route } from '@kovojs/server';
+          import { defineKovo, route } from '@kovojs/server';
           function localFactory() { return null; }
           function defaultShadows(
             route = localFactory,
-            createApp = localFactory,
+            defineKovo = localFactory,
             handler = localFactory,
           ) {
             route('/default-parameter-not-root');
-            createApp({});
+            defineKovo({});
             handler(() => {});
           }
           {
@@ -796,12 +804,15 @@ describe('SPEC §6.6 capability-closed module graph', () => {
             route('/block-not-root');
           }
           function nestedFunction() {
-            const createApp = localFactory;
-            createApp({});
+            const defineKovo = localFactory;
+            defineKovo({});
           }
           const immutableRoute = route;
           export const page = immutableRoute('/immutable-alias', { render() { return null; } });
-          export const app = createApp({});
+          const kovo = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+          export const app = kovo.assemble({});
           export const browser = handler(() => {});
           void defaultShadows;
           void nestedFunction;
@@ -814,7 +825,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .filter((fact) => fact.kind === 'root')
         .map((fact) => `${fact.rootKind}:${fact.name}`)
         .sort(),
-    ).toEqual(['application:app', 'route:/immutable-alias', 'serialized-browser-handler:browser']);
+    ).toEqual([
+      'application:app',
+      'route:/immutable-alias',
+      'serialized-browser-handler:browser',
+    ]);
     expect(result.diagnostics).toEqual([]);
   });
 
@@ -1059,24 +1074,28 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         fileName: 'app.tsx',
         source: `
           import { component } from '@kovojs/core';
-          import { createApp, domain, mutation, query, route, s } from '@kovojs/server'
+          import { defineKovo, domain, s } from '@kovojs/server'
           import { createMemoryStorage } from '@kovojs/core/storage'
           import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules'
           import { publicScopedKey } from '@kovojs/core';
 
           const records = domain('records');
-          const recordsQuery = query('records', {
+          const clientModules = createMemoryVersionedClientModuleRegistry();
+          const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+            clientModules,
+          });
+          const recordsQuery = app.query({
             access: { kind: 'public', reason: 'test fixture' },
             load() { return []; },
             reads: [records],
           });
-          const save = mutation({
+          const save = app.mutation({
             csrf: false,
             csrfJustification: 'non-browser test fixture',
             input: s.object({ id: s.string().allowControlChars() }),
             handler() { return { ok: true }; },
           });
-          const clientModules = createMemoryVersionedClientModuleRegistry();
           clientModules.put({
             path: '/c/page.js',
             source: 'export const page = true;',
@@ -1084,11 +1103,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
           const storage = createMemoryStorage();
           await storage.put(publicScopedKey('receipts/one.txt'), 'one');
           const Page = component({ render() { return <main />; } });
-          export default createApp({
-            clientModules,
+          const page = app.route('/schema-component', { page: () => <Page /> });
+          export default app.assemble({
             mutations: [save],
             queries: [recordsQuery],
-            routes: [route('/schema-component', { page: () => <Page /> })],
+            routes: [page],
           });
         `,
       },
@@ -1096,7 +1115,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.facts.filter((fact) => fact.kind === 'root').map((fact) => fact.name)).toEqual(
-      expect.arrayContaining(['createApp', 'records', 'save', '/schema-component']),
+      expect.arrayContaining(['assemble', 'recordsQuery', 'save', '/schema-component']),
     );
   });
 
@@ -3159,8 +3178,11 @@ describe('SPEC §6.6 capability-closed module graph', () => {
       {
         fileName: 'app.ts',
         source: `
-          import { createApp } from '@kovojs/server';
-          export const app = createApp({});
+          import { defineKovo } from '@kovojs/server';
+          const kovo = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+          export const app = kovo.assemble({});
         `,
       },
     ]);

@@ -70,13 +70,20 @@ describe('kovo test', () => {
       expect.stringMatching(/node_modules[/\\]vite-plus[/\\]bin[/\\]vp$/u),
       'test',
       '--run',
+      '--config',
+      expect.stringMatching(/packages[/\\]cli[/\\]src[/\\]test-runner-config\.ts$/u),
       'src/app.test.ts',
       '--coverage',
       '--passWithNoTests',
       '--reporter',
       'dot',
     ]);
-    expect(options).toMatchObject({ cwd: '/app', stdio: 'inherit' });
+    expect(options).toMatchObject({
+      cwd: '/app',
+      env: expect.not.objectContaining({ KOVO_CLI_TRANSFORM_TYPES: expect.anything() }),
+      stdio: 'inherit',
+    });
+    expect(options?.env).toMatchObject({ BETTER_AUTH_URL: 'http://127.0.0.1:4173' });
   });
 
   it('maps test findings to exit 1 and runner failures to exit 2', async () => {
@@ -132,7 +139,7 @@ async function capture(
   try {
     const exitCode = await mainAsync(args, {
       invocationCwd: '/app',
-      invocationEnv: {},
+      invocationEnv: { KOVO_CLI_TRANSFORM_TYPES: '1' },
       paranoidStaticAdvisory: false,
     });
     return { exitCode, stderr, stdout };

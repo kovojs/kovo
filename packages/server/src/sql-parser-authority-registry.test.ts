@@ -7,6 +7,7 @@ import { managedSqlParserAuthorityInstallCapability } from './sql-parser-authori
 import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import {
   classifyStatement,
+  ensureManagedSqlParserAuthority,
   installManagedSqlParserAuthority,
   sealManagedSqlParserAuthorityRegistry,
 } from './sql-write-allowlist.js';
@@ -52,6 +53,53 @@ describe('managed SQL parser authority registry', () => {
     expect(() =>
       installManagedSqlParserAuthority(managedSqlParserAuthorityInstallCapability, () => []),
     ).toThrow(/authority registry is sealed/u);
+  });
+
+  it('lets equivalent trusted bootstrap evaluators retain the first pinned authority only', () => {
+    const script = `
+      const { existsSync } = await import('node:fs');
+      const { registerHooks } = await import('node:module');
+      registerHooks({
+        resolve(specifier, context, nextResolve) {
+          if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+            const candidate = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+            if (existsSync(candidate)) return nextResolve(candidate.href, context);
+          }
+          return nextResolve(specifier, context);
+        },
+      });
+      const capability = await import(
+        new URL('./src/sql-parser-authority-install-capability.ts', import.meta.url)
+      );
+      const registry = await import(new URL('./src/sql-write-allowlist.ts', import.meta.url));
+      const first = () => [];
+      registry.ensureManagedSqlParserAuthority(
+        capability.managedSqlParserAuthorityInstallCapability,
+        first,
+      );
+      registry.sealManagedSqlParserAuthorityRegistry();
+      registry.ensureManagedSqlParserAuthority(
+        capability.managedSqlParserAuthorityInstallCapability,
+        () => { throw new Error('replacement authority executed'); },
+      );
+      const verdict = registry.classifyStatement('SELECT 1', { dialect: 'postgres' });
+      process.exit(verdict.kind === 'proven-safe' ? 0 : 3);
+    `;
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--disable-warning=ExperimentalWarning',
+        '--experimental-transform-types',
+        '--input-type=module',
+        '--eval',
+        script,
+      ],
+      { cwd: new URL('../', import.meta.url), encoding: 'utf8' },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(typeof ensureManagedSqlParserAuthority).toBe('function');
   });
 
   it('keeps internal/execution neutral and routes managed DB through its readiness subpath', () => {

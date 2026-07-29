@@ -133,7 +133,7 @@ const BETTER_AUTH_SIGN_IN_FIELDS: readonly MutationInputFieldFact[] = [
  *
  * Only direct, non-aliased named imports and named re-exports are followed. The terminal must be
  * either an exact `@kovojs/server` `mutation()` declaration or an exact projection from Kovo's
- * generated Better Auth environment binding constructor. Missing files, duplicate paths/exports,
+ * human-public, runtime-witnessed Better Auth app binding door. Missing files, duplicate paths/exports,
  * cycles, namespace/computed access, aliases, structural lookalikes, and visible mutation all
  * produce no fact, so the existing KV242 form gate remains closed.
  */
@@ -498,10 +498,12 @@ function directGeneratedAuthFactory(module: ProjectModule, name: string): boolea
   if (!returned || !ts.isCallExpression(returned)) return false;
   const callee = unwrapExpression(returned.expression);
   if (!callee || !ts.isIdentifier(callee)) return false;
-  const constructorModule = generatedBetterAuthConstructorModule(callee.text);
+  const constructorModule = betterAuthAppBindingConstructorModule(callee.text);
   if (constructorModule === null) return false;
-  if (returned.arguments.length !== 1) return false;
-  const options = unwrapExpression(returned.arguments[0]);
+  if (returned.arguments.length !== 2) return false;
+  const runtime = unwrapExpression(returned.arguments[0]);
+  if (!runtime || !ts.isIdentifier(runtime)) return false;
+  const options = unwrapExpression(returned.arguments[1]);
   if (!options || !ts.isObjectLiteralExpression(options)) return false;
   return (
     hasExactPackageImport(module, callee.text, constructorModule) &&
@@ -509,12 +511,12 @@ function directGeneratedAuthFactory(module: ProjectModule, name: string): boolea
   );
 }
 
-function generatedBetterAuthConstructorModule(name: string): string | null {
-  if (name === 'createBetterAuthPostgresBindingsFromEnvironment') {
-    return '@kovojs/better-auth/generated/postgres';
+function betterAuthAppBindingConstructorModule(name: string): string | null {
+  if (name === 'createBetterAuthPostgresAppBindings') {
+    return '@kovojs/better-auth/postgres';
   }
-  if (name === 'createBetterAuthSqliteBindingsFromEnvironment') {
-    return '@kovojs/better-auth/generated/sqlite';
+  if (name === 'createBetterAuthSqliteAppBindings') {
+    return '@kovojs/better-auth/sqlite';
   }
   return null;
 }

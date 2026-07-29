@@ -8,8 +8,8 @@ as possible.
 ```sh
 pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
 pnpm run check       # type/lint + sound-subset + current-source proof; no deploy artifacts
-pnpm run test        # kovo test
 pnpm run build:prod  # kovo build ./src/app.tsx → {{deployment_target}} preset output
+pnpm run test        # app-inferred harness; verifies the completed build graph first
 {{production_start_command}}
 ```
 
@@ -23,12 +23,13 @@ development does not need `BETTER_AUTH_URL`.
 | File                   | Building block                                                                                                                                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/schema.ts`        | Drizzle tables. `contacts` carries a typed `kovo((columns) => ({ ... }))` annotation so the compiler can prove invalidation and authorization posture; the five Better Auth tables sit alongside it. |
-| `src/db.ts`            | App-facing database types plus `readonlyAppDb` for read surfaces; raw PGlite creation and seeding live in the framework-owned `_kovo` runtime module.                                                |
-| `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                                           |
-| `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                                         |
-| `src/auth.ts`          | Real [Better Auth](https://better-auth.com) on the same PGlite/Drizzle database, wired into Kovo via `@kovojs/better-auth`.                                                                          |
+| `src/db.ts`            | The app database type. Raw PGlite creation and seeding stay in `_kovo`; `defineKovo({ db })` infers the read/write context available to each receiver-bound factory.                                 |
+| `src/kovo.ts`          | One `defineKovo()` contract that infers session, database, environment, CSRF, client-module, replay, and revocation context for the app.                                                             |
+| `src/queries.ts`       | `app.query({ ... })` declares `contactsQuery`; its loader receives an inferred read-only database context and the compiler extracts the Drizzle read.                                                |
+| `src/mutations.ts`     | `app.mutation({ ... })` declares `addContact`; the authenticated request and transaction-scoped write database are inferred without manual context types.                                            |
+| `src/auth.ts`          | Real [Better Auth](https://better-auth.com), obtained through the purpose-closed `@kovojs/better-auth/postgres` app-binding door rather than a raw auth/database object.                             |
 | `src/components/*.tsx` | `@kovojs/ui` components (`Card`, `Button`, `Badge`) composing the contact list, add-contact form, and auth forms.                                                                                    |
-| `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export.                  |
+| `src/app.tsx`          | Receiver-bound layouts, routes, and endpoints, followed by one explicit `app.assemble({ ... })` inventory. Vite and `kovo build` load its opaque default app token.                                  |
 | `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                                 |
 
 ## Supported development hosts
@@ -41,7 +42,8 @@ the selected `{{deployment_target}}` preset.
 `kovo()` config integration while the framework owns the pinned formatter, linter, TypeScript,
 compiler, and test-runner phases. The source-backed check derives the security graph from current
 app source, needs no deployment-retention declaration, and writes no deploy artifact. There is no
-hand-maintained graph file.
+hand-maintained graph file. Run `build:prod` before `test`: the public harness rejects missing,
+partial, wrong-app, or stale artifacts before it sends a request.
 
 `pnpm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
 source: strict TypeScript plus local bans on `any`, non-null assertions, and

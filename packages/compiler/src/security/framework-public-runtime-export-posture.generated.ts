@@ -42,15 +42,21 @@ export const frameworkZeroPublicRequestClosedPackages: readonly string[] = ['@ko
 // prettier-ignore
 export const frameworkExportPosturePackages: readonly FrameworkExportPosturePackage[] = [
   ["@kovojs/better-auth", "0.2.0", [
-    ["sha256:38aedbeab0edfec4288581919509d98a6d265277b096e4e8b2769a48cbe41ece", [
+    ["sha256:217888a3a84c708c6a5237893cc441fd78abc2cbb44a5e5e57309eee905bfb20", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:b259dc823aa742b77a609aac7307a2eaea7e6cf34013df225dde5af3af2bb81e"]],
-    ["sha256:c5c8b4cb07662f4563c3d01a676fa285e12945ba356e1e63b196e018b731a961", [
+      ["./postgres",["default","types"]],
+      ["./sqlite",["default","types"]],
+    ], ["kovo-packed-tree-sha256:aa996cd30668341f3be9e45fcee3a72309a245308e0f3c42c8fb57c23be598fa"]],
+    ["sha256:821751dde9b809b7c2ba68d2dd2a193c7ce9d3f7ef65ea0c3dbbc625fbc93b3e", [
+      [".",["default","types"]],
+      ["./postgres",["default","types"]],
+      ["./sqlite",["default","types"]],
+    ], ["kovo-packed-tree-sha256:aa996cd30668341f3be9e45fcee3a72309a245308e0f3c42c8fb57c23be598fa"]],
+    ["sha256:9d1ec8f6e8b5154abf02cd777d6e17746896ce691bf98fa7c7bc9ca63f8400f3", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:b21d58a9f69323a042e28fd1dacde1a1c75a1766ad3179150b7b0c621ba62559"]],
-    ["sha256:cea10dd9785b91140937f80cd8a2e99ae6d0cfa9520de56d44c15e5656bef166", [
-      [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:b259dc823aa742b77a609aac7307a2eaea7e6cf34013df225dde5af3af2bb81e"]],
+      ["./postgres",["default"]],
+      ["./sqlite",["default"]],
+    ], ["kovo-source-tree-sha256:bc958f47c0fd7c9ab9b0f0819ecf20890f328c87c9dfbc202dfa6ecf16cdec0e"]],
   ], "exact-implementation"],
   ["@kovojs/browser", "0.2.0", [
     ["sha256:14b64fc8375b9cea85ca25d524c8d07333dc15cb24feb8fc2ec50563ed122616", [
@@ -84,25 +90,25 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./security",["default"]],
       ["./storage",["default"]],
       ["./webhooks",["default"]],
-    ], ["kovo-source-tree-sha256:316bdd39b3f1d0ba771bb01c7c407272f9bec0d28a16506a1a4b9353a0019149"]],
+    ], ["kovo-source-tree-sha256:b6bdb4ab165dd3b4cf4c51c69483b3bb644e62717cac9aee782d77b48493a770"]],
     ["sha256:457819560fb289eb0f382feb4635e42d2bd1711e0f11701031ba0d636b75f2f8", [
       [".",["default","types"]],
       ["./diagnostics",["default","types"]],
       ["./security",["default","types"]],
       ["./storage",["default","types"]],
       ["./webhooks",["default","types"]],
-    ], ["kovo-packed-tree-sha256:277c62d7f4be0a8d35b9378300d68fcff68c54eb2740067e2c0b95d9fdd18b86"]],
+    ], ["kovo-packed-tree-sha256:ea404aa974e636359c86c1095c1512368ca77b3e70c71d7703d2bc136a673d68"]],
   ], "exact-implementation"],
   ["@kovojs/drizzle", "0.2.0", [
     ["sha256:50b4ecab6c1cf42f9413a9fd115b04cffe9aa94046978130ca273b28c4083d6f", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:3119d9e4ba00dde805ceffe40a300d99011ea990084aa510a9e665ea199301dd"]],
+    ], ["kovo-packed-tree-sha256:c34a6eead06ef54bee846dd1734e0ab21b051f6ce16d3126d4e7fcccd7a5cd34"]],
     ["sha256:5aac6d4b2c75686e77ec4bf611b6f1e0d4f70d43aef945b34666ef514433c825", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:3119d9e4ba00dde805ceffe40a300d99011ea990084aa510a9e665ea199301dd"]],
+    ], ["kovo-packed-tree-sha256:c34a6eead06ef54bee846dd1734e0ab21b051f6ce16d3126d4e7fcccd7a5cd34"]],
     ["sha256:ddeb653edb811d7d214ba36f4569cbdc0641fa9033015c792e3fb6551a86c936", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:e68d71f0c5e519b1c432c797f9e985477ac512b7ee7c522d0ebe58521ef84458"]],
+    ], ["kovo-source-tree-sha256:32b7c7da8f09bef968b91ec40c9598e101a07f9fa7d2b2e4a2baa857762bfabb"]],
   ], "exact-implementation"],
   ["@kovojs/headless-ui", "0.2.0", [
     ["sha256:28c97b200b5d592458a4d9c0a71ec9478e5e13e4b951addd9f9c1e70999a6ddc", [
@@ -5440,7 +5446,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
     ], ["kovo-packed-tree-sha256:b04f09f0d92bfe62f279a2e276cabb4d5b5cc737d1d0451a14de0c0a0ae20b06"]],
   ], "exact-implementation"],
   ["@kovojs/server", "0.2.0", [
-    ["sha256:2fbd145fafa943627d4831f039aca76fadb3c421984a1dd59af153647a79fadb", [
+    ["sha256:76af380912d81e458d27f025984d54e8b8c0a08b73f2e0d4f6f639c35a4acb99", [
       [".",["default"]],
       ["./agent",["default"]],
       ["./build",["default"]],
@@ -5475,8 +5481,8 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default"]],
       ["./webhooks",["default"]],
       ["./write-safety",["default"]],
-    ], ["kovo-source-tree-sha256:8781abbb4fed415c117201894008cfcd7682381be85c54632f85261bf756e14c"]],
-    ["sha256:5b36d0af489d40b74acf7004c6d799a92710d92cdf259afab4366d4afe7ecf2e", [
+    ], ["kovo-source-tree-sha256:3ee8d988e3fdd2943393eafb06a55cabeca48a5720f58cb5e0aea1aaaa96be9b"]],
+    ["sha256:7dfc7069e65be9b0ad53632a40f4bf7d259dad5866d191311d0b90306dcc20b3", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
       ["./build",["default","types"]],
@@ -5511,8 +5517,8 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:6933793a435dba4acddd1c39115fa505fb3e958f0e9cc0ad384e4f6185de25bc"]],
-    ["sha256:bee2ba2dc5c0f6b5f3b6afaa597e374b8cdcca7375d87758bbb2d4c68c99ecf2", [
+    ], ["kovo-packed-tree-sha256:5fe68105e1070ba5a886486d17e12b9bcc8f7a0a1c706771e073564b81c624d6"]],
+    ["sha256:cfd044f63f574ad2cb5bd477ece36e565aac053dc924e9717314cf0b750985c6", [
       [".",["default","types"]],
       ["./agent",["default","types"]],
       ["./build",["default","types"]],
@@ -5547,7 +5553,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
       ["./vite",["default","types"]],
       ["./webhooks",["default","types"]],
       ["./write-safety",["default","types"]],
-    ], ["kovo-packed-tree-sha256:6933793a435dba4acddd1c39115fa505fb3e958f0e9cc0ad384e4f6185de25bc"]],
+    ], ["kovo-packed-tree-sha256:5fe68105e1070ba5a886486d17e12b9bcc8f7a0a1c706771e073564b81c624d6"]],
   ], "exact-implementation"],
   ["@kovojs/style", "0.2.0", [
     ["sha256:2e071714c73748fd43018c9c06e8bab0b41326ee0d43c1b3af862f6a125778b0", [
@@ -5740,7 +5746,7 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["create-kovo", "0.2.0", [
     ["sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a", [
 
-    ], ["kovo-packed-tree-sha256:9679a066b2bd2d4429b11c99ec592915a398727d72181cf50517ef6cc8837c0f","kovo-source-tree-sha256:60917ca4323305a2728143484d670e39a914c641b08331d02ca338ced5ca2734"]],
+    ], ["kovo-packed-tree-sha256:9679a066b2bd2d4429b11c99ec592915a398727d72181cf50517ef6cc8837c0f","kovo-source-tree-sha256:99fae657a4b97d0889756d776e96b7ecdbe85d3108e8c637679133609ed4132a"]],
     ["sha256:7e12bd4ad88296e801d099e9479c8ac74041631b8c5a39e9de873eef8e9f1873", [
 
     ], ["kovo-packed-tree-sha256:9679a066b2bd2d4429b11c99ec592915a398727d72181cf50517ef6cc8837c0f"]],
@@ -5767,6 +5773,14 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ]],
   ["@kovojs/better-auth", "authority-free", [], "none", null, [
     [".",["role"]],
+  ]],
+  ["@kovojs/better-auth", "authority-free", [], "none", null, [
+    ["./postgres",["<module>"]],
+    ["./sqlite",["<module>"]],
+  ]],
+  ["@kovojs/better-auth", "framework-door", ["database-driver"], "none", null, [
+    ["./postgres",["createBetterAuthPostgresAppBindings"]],
+    ["./sqlite",["createBetterAuthSqliteAppBindings"]],
   ]],
   ["@kovojs/browser", "authority-free", [], "none", null, [
     [".",["<module>"]],

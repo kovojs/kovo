@@ -3781,6 +3781,8 @@ const REQUEST_REVIEWED_BUILD_EVALUATED_MODULES = new Set([
   '@kovojs/better-auth/generated',
   '@kovojs/better-auth/generated/postgres',
   '@kovojs/better-auth/generated/sqlite',
+  '@kovojs/better-auth/postgres',
+  '@kovojs/better-auth/sqlite',
   '@kovojs/browser',
   '@kovojs/core',
   '@kovojs/core/diagnostics',
@@ -8289,17 +8291,22 @@ function requestCallConsumesExactGeneratedPostgresAuthSchema(
   call: import('ts-morph').CallExpression,
   schemaSymbolKey: string,
 ): boolean {
-  if (
-    !requestExactPristineDirectImport(
+  const generated =
+    requestExactPristineDirectImport(
       call.getExpression(),
       '@kovojs/better-auth/generated/postgres',
       'createBetterAuthPostgresBindingsFromEnvironment',
-    ) ||
-    call.getArguments().length !== 1
-  ) {
+    ) && call.getArguments().length === 1;
+  const appBindings =
+    requestExactPristineDirectImport(
+      call.getExpression(),
+      '@kovojs/better-auth/postgres',
+      'createBetterAuthPostgresAppBindings',
+    ) && call.getArguments().length === 2;
+  if (!generated && !appBindings) {
     return false;
   }
-  const options = unwrapStaticExpression(call.getArguments()[0]!);
+  const options = unwrapStaticExpression(call.getArguments()[appBindings ? 1 : 0]!);
   if (!Node.isObjectLiteralExpression(options)) return false;
   const schemas = options
     .getProperties()
@@ -8376,9 +8383,16 @@ function requestExpressionIsExactGeneratedAuthSystemDb(expression: Node): boolea
 function requestCallIsExactBetterAuthEnvironmentBindings(
   call: import('ts-morph').CallExpression,
 ): boolean {
+  if (requestCallIsExactBetterAuthAppBindings(call)) return true;
   const identities = [
-    ['createBetterAuthPostgresBindingsFromEnvironment', '@kovojs/better-auth/generated/postgres'],
-    ['createBetterAuthSqliteBindingsFromEnvironment', '@kovojs/better-auth/generated/sqlite'],
+    [
+      'createBetterAuthPostgresBindingsFromEnvironment',
+      '@kovojs/better-auth/generated/postgres',
+    ],
+    [
+      'createBetterAuthSqliteBindingsFromEnvironment',
+      '@kovojs/better-auth/generated/sqlite',
+    ],
   ] as const;
   if (
     !identities.some(([exportName, module]) =>
@@ -8445,12 +8459,76 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
   return required.size === 0;
 }
 
+/**
+ * Exact public Better Auth app door. The facade accepts only a pristine framework-owned app
+ * runtime plus the same finite option grammar used by the generated assembly ABI. Runtime system
+ * authority and sign-out posture stay package-owned (SPEC §6.6/§10.3 C9).
+ */
+function requestCallIsExactBetterAuthAppBindings(call: import('ts-morph').CallExpression): boolean {
+  const identities = [
+    ['createBetterAuthPostgresAppBindings', '@kovojs/better-auth/postgres'],
+    ['createBetterAuthSqliteAppBindings', '@kovojs/better-auth/sqlite'],
+  ] as const;
+  if (
+    !identities.some(([exportName, module]) =>
+      requestExactPristineDirectImport(call.getExpression(), module, exportName),
+    ) ||
+    call.getArguments().length !== 2
+  ) {
+    return false;
+  }
+  const [runtimeExpression, optionsExpression] = call.getArguments();
+  if (
+    !runtimeExpression ||
+    !requestExpressionResolvesToExactManagedAppRuntime(runtimeExpression, new Set()) ||
+    !requestExactManagedAppRuntimeIsPristine(runtimeExpression) ||
+    !optionsExpression
+  ) {
+    return false;
+  }
+  const options = unwrapStaticExpression(optionsExpression);
+  if (!Node.isObjectLiteralExpression(options)) return false;
+  const required = new Set(['csrf', 'mapSession', 'schema', 'signInAccess']);
+  for (const property of options.getProperties()) {
+    if (
+      !Node.isPropertyAssignment(property) ||
+      Node.isComputedPropertyName(property.getNameNode())
+    ) {
+      return false;
+    }
+    const name = staticMemberName(property.getNameNode());
+    const initializer = property.getInitializer();
+    if (!name || !initializer || !required.delete(name)) return false;
+    if (
+      name === 'csrf' &&
+      !requestExpressionIsExactGeneratedAuthFactoryOption(initializer, call, 'csrf')
+    ) {
+      return false;
+    }
+    if (name === 'mapSession' && !requestExpressionIsExactGeneratedMapSession(initializer)) {
+      return false;
+    }
+    if (name === 'schema' && !requestExpressionIsExactGeneratedAuthSchema(initializer, call)) {
+      return false;
+    }
+    if (
+      name === 'signInAccess' &&
+      !requestExpressionIsExactGeneratedAuthFactoryOption(initializer, call, 'signInAccess')
+    ) {
+      return false;
+    }
+  }
+  return required.size === 0;
+}
+
 function scanRequestExactBetterAuthEnvironmentBindings(
   call: import('ts-morph').CallExpression,
   context: RequestProcessScanContext,
   allowExactGeneratedFactoryProjections = false,
 ): void {
-  const options = unwrapStaticExpression(call.getArguments()[0]!);
+  const options = unwrapStaticExpression(
+    call.getArguments()[requestCallIsExactBetterAuthAppBindings(call) ? 1 : 0]!,
+  );
   if (!Node.isObjectLiteralExpression(options)) return;
   for (const property of options.getProperties()) {
     if (!Node.isPropertyAssignment(property)) continue;
@@ -9612,6 +9690,8 @@ function requestCallIsExactBootOnlyGeneratedSetup(
         return close(requestCallIsExactBetterAuthCsrfFromEnvironment(call));
       case 'createBetterAuthPostgresBindingsFromEnvironment':
       case 'createBetterAuthSqliteBindingsFromEnvironment':
+      case 'createBetterAuthPostgresAppBindings':
+      case 'createBetterAuthSqliteAppBindings':
         return close(requestCallIsExactBetterAuthEnvironmentBindings(call));
       case 'createAppAuthBindings':
         return close(requestExactGeneratedBetterAuthBindingFactoryInnerCall(call) !== undefined);
@@ -32256,17 +32336,17 @@ function requestDrizzleTableReferenceIsExactGeneratedAuthSchemaEntry(
   for (const sourceFile of project.getSourceFiles()) {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       if (
-        !(
-          requestExactPristineDirectImport(
-            call.getExpression(),
-            '@kovojs/better-auth/generated/postgres',
+        !([
+          [
             'createBetterAuthPostgresBindingsFromEnvironment',
-          ) ||
-          requestExactPristineDirectImport(
-            call.getExpression(),
-            '@kovojs/better-auth/generated/sqlite',
+            '@kovojs/better-auth/generated/postgres',
+          ],
+          [
             'createBetterAuthSqliteBindingsFromEnvironment',
-          )
+            '@kovojs/better-auth/generated/sqlite',
+          ],
+        ] as const).some(([exportName, module]) =>
+          requestExactPristineDirectImport(call.getExpression(), module, exportName),
         ) ||
         call.getArguments().length !== 1
       ) {

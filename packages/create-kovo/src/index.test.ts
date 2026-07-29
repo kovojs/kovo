@@ -294,7 +294,6 @@ describe('create-kovo starter (metadata)', () => {
     expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
     expect(packageJson.pnpm?.overrides).toEqual({ '@node-rs/argon2': '2.0.2' });
-    expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");
     expect(files.get('src/db.ts')).toContain(
       "import type { PgAsyncDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'",
     );
@@ -302,15 +301,10 @@ describe('create-kovo starter (metadata)', () => {
       "import type { EmptyRelations } from 'drizzle-orm/relations'",
     );
     expect(files.get('src/db.ts')).toContain(
-      "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
-    );
-    expect(files.get('src/db.ts')).toContain(
       'export type AppDb = PgAsyncDatabase<PgQueryResultHKT, EmptyRelations>',
     );
-    expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
-    expect(files.get('src/db.ts')).toContain(
-      'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
-    );
+    expect(files.get('src/db.ts')).not.toContain('Reader');
+    expect(files.get('src/db.ts')).not.toContain('appRuntimeReadonlyDb');
     expect(files.get('src/db.ts')).not.toContain('createAppDb');
     expect(files.get('src/db.ts')).not.toContain('CreatedAppDb');
     expect(files.get('src/db.ts')).not.toContain('appDbReady');
@@ -323,7 +317,7 @@ describe('create-kovo starter (metadata)', () => {
       "import * as schema from '../schema.js'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import type { AppReadonlyDb } from '../db.js'",
+      "import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("} from '@kovojs/server';");
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
@@ -335,8 +329,11 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const authSystemDb = postgresSystemDbForGeneratedIntegration(appDatabase, {',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'postgresSystemDbForGeneratedIntegration',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      '@kovojs/server/generated/db-capabilities',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('function lazyAppDatabaseValue');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
@@ -365,11 +362,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('appRuntimeReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return createBetterAuthPostgresBindingsFromEnvironment<',
+      'return createBetterAuthPostgresAppBindings(appDatabase, {',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'export function createAuthAdapter',
@@ -377,7 +372,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function createAppAuthBindings(options: AppAuthBindingOptions)',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('systemDb: authSystemDb,');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('systemDb:');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('process.env');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('developmentSeed');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('export const appRuntimeAuthDb');
@@ -401,11 +396,16 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');
     expect(files.get('src/kovo.ts')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
-    expect(files.get('src/app.test.ts')).toContain("spawn('kovo', ['dev', './src/app.tsx']");
-    expect(files.get('src/app.test.ts')).toContain('await fetch(');
-    expect(files.get('src/app.test.ts')).toContain('toBeInstanceOf(Response)');
-    expect(files.get('src/app.test.ts')).toContain("response.headers.get('content-type')");
-    expect(files.get('src/app.test.ts')).not.toContain("from './app.js'");
+    expect(files.get('src/app.test.ts')).toContain(
+      "import { createKovoTestHarness, type KovoTestContext } from '@kovojs/test/harness'",
+    );
+    expect(files.get('src/app.test.ts')).toContain("import starterApp from './app.js'");
+    expect(files.get('src/app.test.ts')).toContain(
+      "artifact: new URL('../dist/.kovo/graph.json', import.meta.url)",
+    );
+    expect(files.get('src/app.test.ts')).toContain("projectRoot: new URL('../', import.meta.url)");
+    expect(files.get('src/app.test.ts')).toContain("harness.page('/login')");
+    expect(files.get('src/app.test.ts')).toContain('harness.request(');
     expect(files.get('src/app.test.ts')).not.toContain('isKovoApp');
     expect(files.get('src/app.test.ts')).not.toContain('/internal/');
     expect(files.get('vite.config.ts')).not.toContain('setupFiles');
@@ -424,7 +424,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('drizzleAdapter');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain("from 'better-auth'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'createBetterAuthPostgresBindingsFromEnvironment',
+      'createBetterAuthPostgresAppBindings',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('betterAuthPostgresSecret');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('secret:');
@@ -517,8 +517,8 @@ describe('create-kovo starter (metadata)', () => {
       expect(productionSource).toContain('betterAuthCsrfFromEnvironment({');
       expect(productionSource).toContain(
         dialect === 'postgres'
-          ? 'createBetterAuthPostgresBindingsFromEnvironment<'
-          : 'createBetterAuthSqliteBindingsFromEnvironment<',
+          ? 'createBetterAuthPostgresAppBindings(appDatabase, {'
+          : 'createBetterAuthSqliteAppBindings(appDatabase, {',
       );
     }
   });
@@ -1093,14 +1093,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).toContain(
       "import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'",
     );
-    expect(files.get('src/db.ts')).toContain(
-      "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
-    );
     expect(files.get('src/db.ts')).toContain('export type AppDb = BetterSQLite3Database;');
-    expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
-    expect(files.get('src/db.ts')).toContain(
-      'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
-    );
+    expect(files.get('src/db.ts')).not.toContain('Reader');
+    expect(files.get('src/db.ts')).not.toContain('appRuntimeReadonlyDb');
     expect(files.get('src/db.ts')).not.toContain('createAppDb');
     expect(files.get('src/db.ts')).not.toContain('CreatedAppDb');
     expect(files.get('src/db.ts')).not.toContain('appRuntimeDbProvider');
@@ -1109,9 +1104,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite'",
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'createBetterAuthSqliteBindingsFromEnvironment',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createBetterAuthSqliteAppBindings');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('const APP_TABLES = [');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'verification, rateLimit] as const;',
@@ -1122,8 +1115,11 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const authSystemDb = sqliteSystemDbForGeneratedIntegration(appDatabase, {',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'sqliteSystemDbForGeneratedIntegration',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      '@kovojs/server/generated/db-capabilities',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('better-sqlite3');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('drizzleAdapter');
@@ -1134,9 +1130,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('sqliteFile');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('openDatabase');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('RUNTIME_DB_METADATA');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('appRuntimeReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeDbProvider = appDatabase.db;',
     );
@@ -1444,7 +1438,7 @@ describe('create-kovo starter (CLI)', () => {
         'const authBindings = createAppAuthBindings({',
       );
       expect(readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8')).toContain(
-        'createBetterAuthSqliteBindingsFromEnvironment<',
+        'createBetterAuthSqliteAppBindings(appDatabase, {',
       );
     } finally {
       stdout.mockRestore();
@@ -1466,7 +1460,7 @@ describe('create-kovo starter (CLI)', () => {
         'const authBindings = createAppAuthBindings({',
       );
       expect(readFileSync(join(root, 'src/_kovo/app-runtime-db.ts'), 'utf8')).toContain(
-        'createBetterAuthSqliteBindingsFromEnvironment<',
+        'createBetterAuthSqliteAppBindings(appDatabase, {',
       );
     } finally {
       if (previousOptIn === undefined) {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { collectUnregisteredSinksFromProject } from '@kovojs/drizzle/internal/static';
@@ -8,6 +10,35 @@ function sinksForFiles(files: readonly TrustEscapeSourceFileInput[]) {
 }
 
 describe('defineKovo request-authority provenance', () => {
+  it('accepts the generated Postgres app contract through public runtime and auth doors', () => {
+    const templateFiles = [
+      'src/_kovo/app-runtime-db-options.ts',
+      'src/_kovo/app-runtime-db.ts',
+      'src/app.tsx',
+      'src/auth.ts',
+      'src/components/auth-forms.tsx',
+      'src/components/contacts.tsx',
+      'src/db.ts',
+      'src/kovo.ts',
+      'src/model.ts',
+      'src/mutations.ts',
+      'src/queries.ts',
+      'src/schema.ts',
+      'src/theme.ts',
+    ];
+    const facts = sinksForFiles(
+      templateFiles.map((fileName) => ({
+        fileName,
+        source: readFileSync(
+          new URL(`../../create-kovo/templates/${fileName}`, import.meta.url),
+          'utf8',
+        ).replace('{{app_id}}', '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e'),
+      })),
+    );
+
+    expect(facts, JSON.stringify(facts)).toEqual([]);
+  });
+
   it('keeps the exact imported contract, declaration handles, guards, optimism, and assembly open', () => {
     const facts = sinksForFiles([
       {

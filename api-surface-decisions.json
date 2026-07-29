@@ -8,6 +8,7 @@
       "contractTests": [
         "packages/better-auth/src/generated.api.test.ts",
         "packages/better-auth/src/index.session.test.ts",
+        "packages/better-auth/src/public-app-bindings.test.ts",
         "scripts/check-packed-better-auth-consumer.test.mjs",
         "scripts/migrate-better-auth-api-v1.test.mjs"
       ]
@@ -24,93 +25,63 @@
     },
     "cli-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/cli/src/api.test.ts"
-      ]
+      "contractTests": ["packages/cli/src/api.test.ts"]
     },
     "core-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/index.test.ts"
-      ]
+      "contractTests": ["packages/core/src/index.test.ts"]
     },
     "core-diagnostics-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/diagnostics.test.ts"
-      ]
+      "contractTests": ["packages/core/src/diagnostics.test.ts"]
     },
     "core-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/secret.test.ts"
-      ]
+      "contractTests": ["packages/core/src/secret.test.ts"]
     },
     "core-storage-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/storage.test.ts"
-      ]
+      "contractTests": ["packages/core/src/storage.test.ts"]
     },
     "core-webhook-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/core/src/verifier.test.ts"
-      ]
+      "contractTests": ["packages/core/src/verifier.test.ts"]
     },
     "drizzle-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/drizzle/src/runtime-surface.test.ts"
-      ]
+      "contractTests": ["packages/drizzle/src/runtime-surface.test.ts"]
     },
     "headless-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/headless-ui/src/tooling/lint-primitives.test.ts"
-      ]
+      "contractTests": ["packages/headless-ui/src/tooling/lint-primitives.test.ts"]
     },
     "icons-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/icons/src/icons.test.ts"
-      ]
+      "contractTests": ["packages/icons/src/icons.test.ts"]
     },
     "server-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/app.test.ts"
-      ]
+      "contractTests": ["packages/server/src/app.test.ts"]
     },
     "server-build-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/build.test.ts"
-      ]
+      "contractTests": ["packages/server/src/build.test.ts"]
     },
     "server-data-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"
-      ]
+      "contractTests": ["packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"]
     },
     "server-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/server/src/access.test.ts"
-      ]
+      "contractTests": ["packages/server/src/access.test.ts"]
     },
     "style-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/style/src/index.test.ts"
-      ]
+      "contractTests": ["packages/style/src/index.test.ts"]
     },
     "test-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/test/src/harness.test.ts"
-      ]
+      "contractTests": ["packages/test/src/harness.test.ts"]
     },
     "test-csrf-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
@@ -128,9 +99,7 @@
     },
     "test-harness-migration-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "scripts/migrate-test-harness-v2.test.mjs"
-      ]
+      "contractTests": ["scripts/migrate-test-harness-v2.test.mjs"]
     },
     "test-postgres-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
@@ -141,15 +110,11 @@
     },
     "ui-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/ui/src/manifest-generation.test.ts"
-      ]
+      "contractTests": ["packages/ui/src/manifest-generation.test.ts"]
     },
     "verify-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": [
-        "packages/verify/src/index.test.ts"
-      ]
+      "contractTests": ["packages/verify/src/index.test.ts"]
     },
     "server-task-topology-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
@@ -501,6 +466,18 @@
       "owner": "data-plane",
       "spec": "spec/10-data-plane.md §10.3",
       "evidence": "server-task-topology-contract"
+    },
+    "better-auth-postgres": {
+      "userStory": "Bind Better Auth to one exact framework-owned Postgres app runtime without handling system database authority.",
+      "owner": "auth",
+      "spec": "spec/06-type-system.md §6.5",
+      "evidence": "better-auth-contract"
+    },
+    "better-auth-sqlite": {
+      "userStory": "Bind Better Auth to one exact framework-owned SQLite app runtime without handling system database authority.",
+      "owner": "auth",
+      "spec": "spec/06-type-system.md §6.5",
+      "evidence": "better-auth-contract"
     }
   },
   "generatedFamilies": [
@@ -529,6 +506,38 @@
   ],
   "symbols": [
     {
+      "id": "@kovojs/better-auth/postgres#createBetterAuthPostgresAppBindings",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth/postgres",
+      "symbol": "createBetterAuthPostgresAppBindings",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth/postgres",
+      "story": "better-auth-postgres",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts",
+        "nonTestExample": "packages/better-auth/README.md"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth/sqlite#createBetterAuthSqliteAppBindings",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth/sqlite",
+      "symbol": "createBetterAuthSqliteAppBindings",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth/sqlite",
+      "story": "better-auth-sqlite",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts",
+        "nonTestExample": "packages/better-auth/README.md"
+      }
+    },
+    {
       "id": "@kovojs/better-auth#authed",
       "package": "@kovojs/better-auth",
       "specifier": "@kovojs/better-auth",
@@ -538,6 +547,96 @@
       "canonicalHome": "@kovojs/better-auth",
       "story": "better-auth-human",
       "evidence": "better-auth-contract"
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppBindings",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppBindings",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppBindingsOptions",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppBindingsOptions",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppCredentialResult",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppCredentialResult",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppRequest",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppRequest",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppSignInMutation",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppSignInMutation",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/better-auth#BetterAuthAppSignOutMutation",
+      "package": "@kovojs/better-auth",
+      "specifier": "@kovojs/better-auth",
+      "symbol": "BetterAuthAppSignOutMutation",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/better-auth",
+      "story": "better-auth-human",
+      "evidence": "better-auth-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md",
+        "contractTest": "packages/better-auth/src/public-app-bindings.test.ts"
+      }
     },
     {
       "id": "@kovojs/better-auth#BetterAuthBindingRequest",
@@ -11223,6 +11322,22 @@
       }
     },
     {
+      "id": "@kovojs/server/data#AppDbProvider",
+      "package": "@kovojs/server",
+      "specifier": "@kovojs/server/data",
+      "symbol": "AppDbProvider",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/server/data",
+      "story": "server-data",
+      "evidence": "server-data-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/server-task-topology-v1.md",
+        "contractTest": "packages/server/src/api-topology.test.ts",
+        "nonTestExample": "packages/server/README.md"
+      }
+    },
+    {
       "id": "@kovojs/server/data#AppReadRequest",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/data",
@@ -11243,22 +11358,6 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server/data",
       "symbol": "ChangeRecord",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server/data",
-      "story": "server-data",
-      "evidence": "server-data-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/server-task-topology-v1.md",
-        "contractTest": "packages/server/src/api-topology.test.ts",
-        "nonTestExample": "packages/server/README.md"
-      }
-    },
-    {
-      "id": "@kovojs/server/data#AppDbProvider",
-      "package": "@kovojs/server",
-      "specifier": "@kovojs/server/data",
-      "symbol": "AppDbProvider",
       "state": "public",
       "decision": "keep",
       "canonicalHome": "@kovojs/server/data",
@@ -24482,6 +24581,26 @@
       "owner": "auth",
       "story": "better-auth-human",
       "state": "public"
+    },
+    {
+      "specifier": "@kovojs/better-auth/postgres",
+      "task": "Bind Better Auth to one framework-owned Postgres app runtime while Kovo owns system database and deployment authority.",
+      "owner": "auth",
+      "story": "better-auth-postgres",
+      "state": "public",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md"
+      }
+    },
+    {
+      "specifier": "@kovojs/better-auth/sqlite",
+      "task": "Bind Better Auth to one framework-owned SQLite app runtime while Kovo owns system database and deployment authority.",
+      "owner": "auth",
+      "story": "better-auth-sqlite",
+      "state": "public",
+      "introduced": {
+        "releaseNote": "docs/releases/better-auth-app-bindings-v1.md"
+      }
     },
     {
       "specifier": "@kovojs/browser",

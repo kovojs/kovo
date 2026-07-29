@@ -265,9 +265,12 @@ function starterTestSurfaceOutcome(nodeModules) {
     source.includes('isKovoApp');
   if (internalMock) return 'defect-reproduced';
   if (
-    source.includes("spawn('kovo', ['dev', './src/app.tsx']") &&
-    source.includes('fetch(`${appOrigin}/api/health`)') &&
-    source.includes('fetch(`${appOrigin}/login`)')
+    source.includes("from '@kovojs/test/harness'") &&
+    source.includes("import starterApp from './app.js'") &&
+    source.includes("artifact: new URL('../dist/.kovo/graph.json', import.meta.url)") &&
+    source.includes("projectRoot: new URL('../', import.meta.url)") &&
+    source.includes("harness.page('/login')") &&
+    source.includes('harness.request(')
   ) {
     return 'desired-behavior';
   }

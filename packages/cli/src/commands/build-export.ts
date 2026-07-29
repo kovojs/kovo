@@ -3840,12 +3840,24 @@ function accessDecisionGraphFact(
     };
   }
 
-  if (access.kind === 'public') return { kind: 'public', reason: access.reason };
-  if (access.kind === 'verified-machine-auth') return { kind: 'verified-machine-auth' };
+  // Array.isArray is the runtime discriminator, but TypeScript cannot subtract an open object
+  // interface from an array structurally. This cast is the internal post-discrimination boundary;
+  // declaration-time snapshotting has already limited the non-array branch to these two sentinels.
+  const structuredAccess = access as
+    | { readonly kind: 'public'; readonly reason: string }
+    | { readonly kind: 'verified-machine-auth' };
+  if (structuredAccess.kind === 'public') {
+    return { kind: 'public', reason: structuredAccess.reason };
+  }
+  if (structuredAccess.kind === 'verified-machine-auth') {
+    return { kind: 'verified-machine-auth' };
+  }
   return undefined;
 }
 
-function isGuardAccessDecisionValue(access: AccessDecision): access is readonly Guard<any, any>[] {
+function isGuardAccessDecisionValue(
+  access: AccessDecision,
+): access is Extract<AccessDecision, readonly unknown[]> {
   return buildArrayIsArray(access);
 }
 
@@ -4291,6 +4303,15 @@ async function preloadKovoSsrSecurityProfile(
   const serverRootPath = requireFromApp.resolve('@kovojs/server');
   const requireFromServer = createRequire(pathToFileURL(serverRootPath));
 
+  // Install and seal the Node data-plane parser before the compiler/static-analysis preload can
+  // read a classifier and close its one-shot registry. This load occurs inside the exact SSR graph
+  // that evaluates the app, not only in the native CLI graph (SPEC §6.6 rule 6).
+  await server.ssrLoadModule(
+    viteSsrModuleId(
+      requireFromApp.resolve('@kovojs/server/internal/sql-parser-authority-bootstrap'),
+      root,
+    ),
+  );
   await server.ssrLoadModule(
     viteSsrModuleId(
       requireFromServer.resolve('@kovojs/compiler/internal/security-bootstrap'),

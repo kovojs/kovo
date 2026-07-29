@@ -40,15 +40,26 @@ product implementation; the smallest owning normative modules change before or w
 - [ ] Make public `KovoApp` an opaque minimal token backed by module-private state.
 - [ ] Remove or redesign public raw `CreateAppOptions` so private assembly types are not
       recursively public.
-- [ ] Implement the selected app-scoped factories with runtime ownership validation.
+- [x] Implement the selected app-scoped factories with runtime ownership validation.
+  - Evidence: `packages/server/src/app-authoring-context.test.ts` and
+    `packages/compiler/src/scan/project-mutation-bindings.test.ts` cover app-owned handles,
+    foreign-handle refusal, and compiler identity recovery.
 - [ ] Reject declarations from duplicate Kovo package instances with an actionable diagnostic.
-- [ ] Implement a real auth-provider-bound `app.authenticated` guard and the selected access
+- [x] Implement a real auth-provider-bound `app.authenticated` guard and the selected access
       algebra.
-- [ ] Infer DB, request/session/env, error, query, route, task, and endpoint types while retaining
+  - Evidence: `packages/server/src/access.test.ts` and `app-authoring-context.test.ts` execute the
+    provider-bound guard and cover composed, public, and verified access decisions.
+- [x] Infer DB, request/session/env, error, query, route, task, and endpoint types while retaining
       explicit endpoint security posture.
-- [ ] Replace string/module-augmentation optimism with query-handle binding and exact
+  - Evidence: `packages/server/src/app-authoring-context.test.ts` compiles the positive contracts
+    and their property-local `@ts-expect-error` posture refusals.
+- [x] Replace string/module-augmentation optimism with query-handle binding and exact
       missing/duplicate/unrelated diagnostics.
-- [ ] Infer component mutation slots and form-error bindings from handles.
+  - Evidence: the starter and CRM mutations use query-handle `.optimistic(...)`; the compiler
+    binding suite covers missing, duplicate, and unrelated handles.
+- [x] Infer component mutation slots and form-error bindings from handles.
+  - Evidence: `packages/server/src/app-authoring-context.test.ts` derives submitted fields and
+    declared form-error codes from the mutation handle and rejects renamed fields/codes.
 - [ ] Replace component inference plumbing with opaque `Component<Props>`.
 - [ ] Make `Link` JSX-only, keep `href` imperative, and infer GET-form helper records.
 
@@ -66,4 +77,6 @@ product implementation; the smallest owning normative modules change before or w
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+`pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts -t
+'runs the generated public inferred harness' --reporter=dot` passes G24 against the generated app
+(1 passed, 2 skipped; 290.89 seconds real).

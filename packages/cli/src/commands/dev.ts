@@ -195,6 +195,10 @@ export async function startKovoDevServer(
     liveServer = await createServer(liveConfig);
     const activeLiveServer = liveServer;
     lockLiveDevEnvironmentPluginLists(liveServer.config);
+    // The live Vite runner owns a distinct SSR module graph. Install and seal the managed SQL
+    // parser in that graph before loading the runtime-neutral server root, which deliberately
+    // closes any still-open parser install window (SPEC §6.6 rule 6).
+    await liveServer.ssrLoadModule(profile.nodeDataPlaneBootstrapModuleId);
     const bindDevelopmentOrigin = await loadKovoDevLoopbackOriginBinder(liveServer, profile);
     const liveHttpServer = liveServer.httpServer;
     if (liveHttpServer === null) {
@@ -390,6 +394,7 @@ function ownStringData(value: object, key: string): string | undefined {
 
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
   appShellModuleId: string;
+  nodeDataPlaneBootstrapModuleId: string;
   securityProfileModuleId: string;
   serverBuildModuleId: string;
   trustedKovoVitePlugin(options: {
@@ -438,6 +443,14 @@ async function preloadDevSecurityProfile(
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
   const serverRootPath = requireFromApp.resolve('@kovojs/server');
   const requireFromServer = createRequire(pathToFileURL(serverRootPath));
+
+  const nodeDataPlaneBootstrapModuleId = viteSsrModuleId(
+    requireFromApp.resolve('@kovojs/server/internal/sql-parser-authority-bootstrap'),
+    root,
+  );
+  // Install the Node data-plane parser before any compiler/server module can close its one-shot
+  // bootstrap registry. The live graph repeats this exact load before authored evaluation.
+  await server.ssrLoadModule(nodeDataPlaneBootstrapModuleId);
 
   // C73/C74: all three loads happen in this exact noExternal graph, in a fixed sequence, before
   // the authored config module or any of its imported plugins can execute.
@@ -502,6 +515,7 @@ async function preloadDevSecurityProfile(
   }
   return nativeObjectFreeze({
     appShellModuleId,
+    nodeDataPlaneBootstrapModuleId,
     nodeRequestPreloadIngressRejection:
       nodeRequestPreloadIngressRejection as DevSecurityProfileModule['nodeRequestPreloadIngressRejection'],
     rejectNodeRequestPreloadIngress:

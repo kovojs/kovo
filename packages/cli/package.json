@@ -32,7 +32,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts src/commands/sound-subset.mjs --dts && node ../../scripts/agent-docs-snapshot.mjs",
+    "build:dist": "vp pack src/api.ts src/bin.ts src/index.ts src/test-runner-config.ts src/test-runtime-bootstrap.ts src/commands/sound-subset.mjs --dts && node ../../scripts/agent-docs-snapshot.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

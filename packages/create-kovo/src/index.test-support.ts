@@ -15,7 +15,11 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { writeKovoProject, type CreateKovoDialect } from './index.js';
+import {
+  writeKovoProject,
+  type CreateKovoDialect,
+  type CreateKovoRetentionPosture,
+} from './index.js';
 
 type StarterInstallMode = 'link-local' | 'packed' | 'symlink';
 type StarterScaffoldMode = 'packed-bin' | 'source';
@@ -25,6 +29,7 @@ interface StarterAppOptions {
   experimentalSqlite?: boolean;
   install?: StarterInstallMode;
   name: string;
+  retention?: CreateKovoRetentionPosture;
   scaffold?: StarterScaffoldMode;
   tempParent?: string;
   tempPrefix?: string;
@@ -70,6 +75,7 @@ const packedWorkspacePackages: readonly WorkspacePackage[] = [
   { name: '@kovojs/ui', dir: 'ui' },
   { name: '@kovojs/better-auth', dir: 'better-auth' },
   { name: '@kovojs/verify', dir: 'verify' },
+  { name: '@kovojs/test', dir: 'test' },
   { name: '@kovojs/compiler', dir: 'compiler' },
   { name: '@kovojs/cli', dir: 'cli' },
   { name: 'create-kovo', dir: 'create-kovo' },
@@ -97,6 +103,7 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
         ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
         disableGit: true,
         name: options.name,
+        ...(options.retention === undefined ? {} : { retention: options.retention }),
       });
     }
 
@@ -199,7 +206,13 @@ export function runStarterTypecheck(root: string): void {
 }
 
 export function runStarterAppHttpTest(root: string): void {
-  execFileSync(resolveStarterBin(root, 'vitest'), ['--run', 'src/app.test.ts'], {
+  execFileSync(resolveStarterBin(root, 'kovo'), ['build', './src/app.tsx'], {
+    cwd: root,
+    env: withStarterBinOnPath(root),
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: 'pipe',
+  });
+  execFileSync(resolveStarterBin(root, 'kovo'), ['test', 'src/app.test.ts'], {
     cwd: root,
     env: withStarterBinOnPath(root),
     maxBuffer: 128 * 1024 * 1024,
@@ -294,6 +307,7 @@ export function linkStarterBuildDependencies(root: string): void {
     '@kovojs/drizzle',
     '@kovojs/server',
     '@kovojs/style',
+    '@kovojs/test',
     '@kovojs/ui',
     '@kovojs/cli',
   ]) {
@@ -498,6 +512,9 @@ function scaffoldWithPackedCreateKovo(
   materializePackedPackage(coreTarball, join(creatorRoot, 'node_modules/@kovojs/core'));
 
   const args = [root, '--name', options.name, '--disable-git'];
+  if (options.retention !== undefined) {
+    args.push('--retention', options.retention);
+  }
   if (options.dialect === 'sqlite') {
     args.push('--sqlite');
     if (options.experimentalSqlite === true) {

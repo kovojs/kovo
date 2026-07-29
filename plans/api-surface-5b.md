@@ -21,10 +21,15 @@ checklist from the charter.
 
 ## Better Auth and optimism
 
-- [ ] Reduce Better Auth human root to guards, CSRF/environment config, mounting, and mature
+- [x] Reduce Better Auth human root to guards, CSRF/environment config, mounting, and mature
       workflows.
-- [ ] Move generated backend binding/carrier machinery to a generated/private assembly boundary
+  - Evidence: `pnpm run check:api-surface` reports zero undecided exports; the root exports only
+    reviewed app-binding types, guards, environment/CSRF, mount, session, and password-reset APIs.
+- [x] Move generated backend binding/carrier machinery to a generated/private assembly boundary
       and converge Postgres/SQLite shapes.
+  - Evidence: `/generated/postgres` and `/generated/sqlite` own compiler assembly while
+    `/postgres` and `/sqlite` expose the same app-owned options/result contract without accepting
+    a human-supplied system DB capability.
 - [ ] Add real mount/OAuth and password-reset journeys or mark incomplete workflows experimental.
 - [ ] Make inline mutation optimism the sole taught ordinary path.
 - [ ] Remove duplicate plans/cast adapters unless an advanced example proves a standalone need.
@@ -52,9 +57,9 @@ checklist from the charter.
 - [x] Ratify installed-size and dependency-count budgets before adding the harness to the starter.
   - Evidence: the budget gate measures 3,088,503 installed bytes, nine package-store entries, and a
     243,685-byte tarball within the dated ratchets.
-- [ ] Add the dependency and a real inferred harness example to the packed starter.
-  - Current gap: the starter dependency is present, but `templates/src/app.test.ts` still teaches
-    the HTTP subprocess journey and does not import `createKovoTestHarness`.
+- [x] Add the dependency and a real inferred harness example to the packed starter.
+  - Evidence: G24 runs `templates/src/app.test.ts` with `createKovoTestHarness`, an imported app
+    contract, and the digest-verified successful-build graph (1 passed, 2 skipped).
 
 ## Exit
 
@@ -63,6 +68,6 @@ checklist from the charter.
 
 ## Latest verification
 
-Focused verification: five harness/Postgres/export/migration/budget test files pass (17 tests);
-`pnpm run check:test-package-budget` passes its build, offline install, exact dependency closure,
-measured budgets, and two mutation tests. The packed starter harness example and G24 remain open.
+Latest verification: G24 passes in 290.89 seconds real; `pnpm run check:api-surface` reports 1,674
+ledger-backed declarations across 1,873 subpaths and passes 28 API/migration tests. The combined
+5b exit remains open pending the other standing batch checks.

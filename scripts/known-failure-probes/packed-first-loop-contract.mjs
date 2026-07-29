@@ -775,14 +775,17 @@ function digestFile(file) {
 }
 
 function minimalAppSource(reason) {
-  return `import { createApp, publicAccess, route } from '@kovojs/server';
+  return `import { defineKovo } from '@kovojs/server';
 
-const home = route('/', {
-  access: publicAccess(${JSON.stringify(reason)}),
+const app = defineKovo({
+  appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+});
+const home = app.route('/', {
+  access: app.publicAccess(${JSON.stringify(reason)}),
   page: () => 'ready',
 });
 
-export default createApp({ routes: [home] });
+export default app.assemble({ routes: [home] });
 `;
 }
 

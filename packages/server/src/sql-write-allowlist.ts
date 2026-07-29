@@ -56,6 +56,31 @@ export function installManagedSqlParserAuthority(
   managedSqlParserAuthority = authority;
 }
 
+/**
+ * @internal Bootstrap-only idempotent install across equivalent framework module evaluators.
+ *
+ * Vite can evaluate the trusted bootstrap through more than one module id while retaining this
+ * registry as one externalized instance. The exact private capability may acknowledge an already
+ * pinned authority, but it can neither replace that authority nor populate a registry that an
+ * earlier classifier read already sealed empty (SPEC §6.6 rule 6).
+ */
+export function ensureManagedSqlParserAuthority(
+  capability: unknown,
+  authority: ManagedSqlParserAuthority,
+): void {
+  if (capability !== managedSqlParserAuthorityInstallCapability) {
+    throw new TypeError('Kovo managed SQL parser authority install capability is invalid.');
+  }
+  if (typeof authority !== 'function') {
+    throw new TypeError('Kovo managed SQL parser authority must be callable.');
+  }
+  if (managedSqlParserAuthority !== undefined) return;
+  if (managedSqlParserAuthorityRegistrySealed) {
+    throw new TypeError('Kovo managed SQL parser authority registry is sealed.');
+  }
+  managedSqlParserAuthority = authority;
+}
+
 /** @internal Root/bootstrap close transition before any authored app module evaluates. */
 export function sealManagedSqlParserAuthorityRegistry(): void {
   managedSqlParserAuthorityRegistrySealed = true;

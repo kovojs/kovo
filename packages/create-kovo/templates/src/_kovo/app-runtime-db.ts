@@ -1,34 +1,24 @@
 import { type AccessDecision } from '@kovojs/server';
-import { postgresSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
 import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { type MutationReplayStore } from '@kovojs/server/replay';
 import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
 import type { CsrfOptions } from '@kovojs/server/security';
-import { authed, type BetterAuthCsrfRequestLike } from '@kovojs/better-auth';
-import type { BetterAuthGeneratedRequest } from '@kovojs/better-auth/generated';
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
+import type { BetterAuthAppRequest } from '@kovojs/better-auth';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
 
 import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
 import type { AppSession } from '../auth.js';
 
-// SPEC §6.6/§10.3: app boot eagerly mints the database runtime and its one narrowly scoped
-// auth capability. Generated runtime exports below project only app-safe values; the system
-// capability and raw Better Auth/Drizzle objects never cross this module.
+// SPEC §6.6/§10.3: app boot eagerly mints the database runtime. The Better Auth task door below
+// accepts only that exact witnessed runtime and internally owns its fixed system-write capability;
+// raw Better Auth/Drizzle objects never cross this module.
 const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
-const authSystemDb = postgresSystemDbForGeneratedIntegration(appDatabase, {
-  operation: 'write',
-  reason: 'Better Auth adapter manages session tables before an app session exists',
-  surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
-});
 
 /** Durable SPEC §10.3 replay token; opaque and non-callable in app-authored modules. */
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
-type StarterAuthRequest = BetterAuthGeneratedRequest &
-  BetterAuthCsrfRequestLike & {
-    session?: AppSession | null;
-  };
+type StarterAuthRequest = BetterAuthAppRequest<AppSession>;
 
 interface AppAuthBindingOptions {
   csrf: CsrfOptions<StarterAuthRequest>;
@@ -38,26 +28,19 @@ interface AppAuthBindingOptions {
 /**
  * Framework-owned Better Auth construction boundary (SPEC §6.6/§10.3).
  *
- * The generated module passes only an opaque system capability into `@kovojs/better-auth` and
- * receives a frozen sanitized binding record. Neither the raw database nor Better Auth instance
- * becomes an app-authored value.
+ * The public Postgres task door verifies the exact runtime, mints its purpose-closed system
+ * capability internally, and returns a frozen sanitized binding record. Neither the raw database
+ * nor Better Auth instance becomes an app-authored value.
  */
 export function createAppAuthBindings(options: AppAuthBindingOptions) {
-  return createBetterAuthPostgresBindingsFromEnvironment<
-    StarterAuthRequest,
-    AppSession,
-    StarterAuthRequest & { session: AppSession }
-  >({
+  return createBetterAuthPostgresAppBindings(appDatabase, {
     csrf: options.csrf,
     mapSession: ({ session: authSession, user }) => ({
       id: authSession.id,
       user: { email: user.email, id: user.id, name: user.name },
     }),
-    principalEpochStore: appRuntimePrincipalEpochStore,
     schema: appRuntimeSchema.authSchema,
     signInAccess: options.signInAccess,
-    signOutAccess: [authed<StarterAuthRequest>()],
-    systemDb: authSystemDb,
   });
 }
 

@@ -20,10 +20,11 @@ export const addContact = mutation({
 `;
 
 const authFactorySource = `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
+const appDatabase = {};
 
 export function createAppAuthBindings(options: Record<string, unknown>) {
-  return createBetterAuthPostgresBindingsFromEnvironment({ ...options });
+  return createBetterAuthPostgresAppBindings(appDatabase, { ...options });
 }
 `;
 
@@ -141,13 +142,14 @@ describe('project mutation-form provenance', () => {
     );
   });
 
-  it('accepts the exact generated SQLite constructor boundary', () => {
+  it('accepts the exact human-public SQLite app binding door', () => {
     const files = stockFiles({
       '_kovo/app-runtime-db.ts': `
-import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
+import { createBetterAuthSqliteAppBindings } from '@kovojs/better-auth/sqlite';
+const appDatabase = {};
 
 export function createAppAuthBindings(options: Record<string, unknown>) {
-  return createBetterAuthSqliteBindingsFromEnvironment({ ...options });
+  return createBetterAuthSqliteAppBindings(appDatabase, { ...options });
 }
 `,
     });
@@ -234,59 +236,64 @@ export const appSignOut = authBindings.signOut;
       },
     },
     {
-      label: 'wrapper around generated constructor stays closed',
+      label: 'wrapper around app binding door stays closed',
       replacements: {
         '_kovo/app-runtime-db.ts': `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
+const appDatabase = {};
 function wrap(value) { return value; }
 export function createAppAuthBindings(options) {
-  return wrap(createBetterAuthPostgresBindingsFromEnvironment(options));
+  return wrap(createBetterAuthPostgresAppBindings(appDatabase, options));
 }
 `,
       },
     },
     {
-      label: 'human Better Auth root constructor stays closed',
+      label: 'Better Auth root lookalike constructor stays closed',
       replacements: {
         '_kovo/app-runtime-db.ts': `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth';
+const appDatabase = {};
 export function createAppAuthBindings(options) {
-  return createBetterAuthPostgresBindingsFromEnvironment(options);
+  return createBetterAuthPostgresAppBindings(appDatabase, options);
 }
 `,
       },
     },
     {
-      label: 'cross-backend generated constructor import stays closed',
+      label: 'cross-backend app binding import stays closed',
       replacements: {
         '_kovo/app-runtime-db.ts': `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/sqlite';
+const appDatabase = {};
 export function createAppAuthBindings(options) {
-  return createBetterAuthPostgresBindingsFromEnvironment(options);
+  return createBetterAuthPostgresAppBindings(appDatabase, options);
 }
 `,
       },
     },
     {
-      label: 'generated constructor subpath prefix lookalike stays closed',
+      label: 'app binding subpath prefix lookalike stays closed',
       replacements: {
         '_kovo/app-runtime-db.ts': `
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres/extra';
+import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres/extra';
+const appDatabase = {};
 export function createAppAuthBindings(options) {
-  return createBetterAuthPostgresBindingsFromEnvironment(options);
+  return createBetterAuthPostgresAppBindings(appDatabase, options);
 }
 `,
       },
     },
     {
-      label: 'renamed generated constructor import stays closed',
+      label: 'renamed app binding constructor import stays closed',
       replacements: {
         '_kovo/app-runtime-db.ts': `
 import {
-  createBetterAuthPostgresBindingsFromEnvironment as createBindings
-} from '@kovojs/better-auth/generated/postgres';
+  createBetterAuthPostgresAppBindings as createBindings
+} from '@kovojs/better-auth/postgres';
+const appDatabase = {};
 export function createAppAuthBindings(options) {
-  return createBindings(options);
+  return createBindings(appDatabase, options);
 }
 `,
       },

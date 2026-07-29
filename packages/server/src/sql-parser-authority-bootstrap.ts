@@ -1,7 +1,7 @@
 import { managedSqlParserAuthorityInstallCapability } from './sql-parser-authority-install-capability.js';
 import { parseWithIsolatedSqlParser } from './sql-parser-authority.js';
 import {
-  installManagedSqlParserAuthority,
+  ensureManagedSqlParserAuthority,
   sealManagedSqlParserAuthorityRegistry,
 } from './sql-write-allowlist.js';
 
@@ -14,7 +14,7 @@ import {
  * capability-authenticated install.
  */
 let parserAuthorityReady = false;
-installManagedSqlParserAuthority(
+ensureManagedSqlParserAuthority(
   managedSqlParserAuthorityInstallCapability,
   parseWithIsolatedSqlParser,
 );

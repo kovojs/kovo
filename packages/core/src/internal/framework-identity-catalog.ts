@@ -57,7 +57,7 @@ const CORE_SECURITY_SPECIFIERS = ['@kovojs/core/security'] as const;
 const serverDataSourceFiles = ['domain', 'index', 'mutation', 'query', 'schema'] as const;
 const serverAppSourceFiles = ['app-contract', 'index'] as const;
 const serverRoutingSourceFiles = ['endpoint', 'guards', 'index', 'route'] as const;
-const serverRenderingSourceFiles = ['index', 'rendering/html/safe-html'] as const;
+const serverRenderingSourceFiles = ['hints', 'index', 'rendering/html/safe-html'] as const;
 const serverWriteGovernanceSourceFiles = ['public-write-safety', 'write-governance'] as const;
 
 function serverData(exportName: string): FrameworkIdentityCatalogEntry {
@@ -224,7 +224,7 @@ function styleAuthoring(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
     module: '@kovojs/style',
-    packageSourceFiles: ['engine', 'index'],
+    packageSourceFiles: ['engine', 'index', 'theme'],
     scopes: ['authoring', 'rendering'],
     specifiers: ['@kovojs/style'],
   };
@@ -265,7 +265,11 @@ const catalogEntries: FrameworkIdentityCatalogEntry[] = [];
 
 appendCatalogEntry(catalogEntries, serverApp('defineKovo'));
 
-appendCatalogFactories(catalogEntries, ['domain', 'mutation', 'query', 's', 'tag'], serverData);
+appendCatalogFactories(
+  catalogEntries,
+  ['domain', 'mutation', 'mutationFormAttributes', 'query', 's', 'tag'],
+  serverData,
+);
 appendCatalogEntry(
   catalogEntries,
   serverTaskSurface('agent', '@kovojs/server/agent', ['agent', 'public-agent']),
@@ -332,11 +336,13 @@ appendCatalogFactories(
     'publicAccess',
     'respond',
     'route',
+    'session',
     'verifiedAccess',
   ],
   serverRouting,
 );
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml'));
+appendCatalogEntry(catalogEntries, serverRendering('stylesheet'));
 appendCatalogEntry(catalogEntries, serverRendering('trustedHtml', '@kovojs/browser'));
 appendCatalogEntry(catalogEntries, serverRendering('trustedUrl', '@kovojs/browser'));
 appendCatalogFactories(catalogEntries, ['mintCsrfField', 'mintCsrfToken'], serverCsrfAuthoring);
@@ -439,7 +445,7 @@ for (let index = 0; index < generatedHeadlessClientExecutableIdentities.length; 
     headlessHandler(entry.value.exportName, entry.value.specifier),
   );
 }
-appendCatalogEntry(catalogEntries, styleAuthoring('create'));
+appendCatalogFactories(catalogEntries, ['create', 'defineTheme'], styleAuthoring);
 appendCatalogEntry(catalogEntries, serverRendering('safeRichHtml', '@kovojs/browser'));
 appendCatalogFactories(
   catalogEntries,

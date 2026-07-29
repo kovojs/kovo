@@ -108,7 +108,9 @@ describe('known-failure register', () => {
     expect(rootPackage.scripts['devex:known-failures']).toBe(
       'pnpm run test:devex-known-failures-available',
     );
-    expect(ciWorkflowSource).toContain('run: vp exec pnpm run test:devex-known-failures-available');
+    expect(ciWorkflowSource).toContain(
+      'run: timeout 5m vp exec pnpm run test:devex-known-failures-available',
+    );
   });
 
   it('keeps the high-memory full-catalog probe nightly without weakening its result contract', () => {
