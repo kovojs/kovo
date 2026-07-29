@@ -834,7 +834,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'prints derived resources, decided transitions, and named budgeted escapes',
           'makes a top transition fail kovo check with KV414',
           'fail-closed-top',
-          'options: { grants: true }',
+          "options: { view: 'grants' }",
         ],
       },
       {
@@ -899,7 +899,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'rejects cross-schema duplicate base names before secret grant metadata can collide',
           'secret: true',
-          "secret: ['classified']",
+          'secret: [columns.classified]',
           'KV433_DUPLICATE_TABLE_NAME',
         ],
       },
@@ -999,7 +999,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           'prints deterministic quoted non-correspondence records and one dead-role warning',
           'predicate="organization_id = 1\\\\nFORGED"',
-          'options: { authorization: true }',
+          "options: { view: 'authorization' }",
         ],
       },
       {
@@ -1511,7 +1511,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         file: 'packages/drizzle/src/index.toctou-readonly.test.ts',
         snippets: [
           'flags query() loaders that reach storage put/delete authority',
-          'import { createMemoryStorage } from "@kovojs/core/storage"\nimport { query } from "@kovojs/server";',
+          'import { createMemoryStorage } from "@kovojs/core/storage"; import { query } from "@kovojs/server";',
           'const storage = createMemoryStorage();',
           'operationProvenance',
         ],
@@ -2055,7 +2055,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'cyclic named re-export stays closed',
           'mutated generated binding carrier stays closed',
           'aliased generated binding carrier stays closed',
-          'wrapper around generated constructor stays closed',
+          'wrapper around app binding door stays closed',
           'closes every binding when distinct terminal definitions claim one key',
         ],
       },
@@ -2773,9 +2773,9 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           '<div style={styles.s${index}}>row ${index}</div>',
           'keeps non-intrinsic identifier spellings on the component invocation boundary',
           "['cjk.tsx', '中Child']",
-          'keeps more than 32 opaque JSX component invocations globally fail closed',
+          'keeps more than 128 opaque JSX component invocations globally fail closed',
           '<Opaque${index} />',
-          'keeps more than 32 genuine opaque effects globally fail closed',
+          'keeps more than 128 genuine opaque effects globally fail closed',
           'value.member${index};',
           'expect(scanned.lexicalProvenanceBudgetExhausted).toBe(true)',
           '/unreviewed-framework-call-effects',
@@ -2973,7 +2973,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         id: 'application-and-custom-adapter-roots',
         file: 'packages/compiler/src/capability-closure.security.test.ts',
         snippets: [
-          'roots createApp lifecycle modules and closes their raw authority',
+          'roots defineKovo assembly lifecycle modules and closes their raw authority',
           'accepts the documented bootstrap-first separated custom Node adapter',
           'rejects a custom adapter that loads its handler before runtime bootstrap',
           'rejects runtime bootstrap in an inline toNodeHandler module',
@@ -3022,7 +3022,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
           'kills omission, duplicate, and newly exported-member mutants',
           'digests every regular non-compiler production source asset',
           'keeps security-bearing roles and root factories explicit',
-          "['@kovojs/server', '.', 'createApp', 'application']",
+          "['@kovojs/server', '.', 'endpoint', 'endpoint']",
         ],
       },
       {
@@ -3586,7 +3586,7 @@ export const REQUIRED_CLASSIFIER_CORPORA = [
         snippets: [
           '@kovo-security-classifier-corpus C13 finite-ir-reviewed-data-doors',
           'accepts exact reviewed secret, raw SQL, table-alias, and managed-read operations',
-          "door: 'trustedReveal'",
+          'DeclassifyPolicy.forTrustedReveal({',
           "ownerScope: 'application'",
           "purpose: 'public-projection'",
           '@kovo-security-classifier-corpus C13 declassification-robustness',
