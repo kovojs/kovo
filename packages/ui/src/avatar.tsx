@@ -7,6 +7,7 @@ import {
   type AvatarImageStatus,
 } from '@kovojs/headless-ui/avatar';
 import { trustedUrl } from '@kovojs/server';
+import { attrs as styleAttributes } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -181,11 +182,9 @@ export const AvatarImage = component({
       src: props.src,
       ...(props.status === undefined ? {} : { status: props.status }),
     });
-    const styleAttrs = style.attrs(avatarStyles.image, props.styles?.image);
-
     return (
       <img
-        {...styleAttrs}
+        {...styleAttributes(avatarStyles.image, props.styles?.image)}
         alt={attrs.alt}
         data-state={attrs['data-state']}
         decoding={attrs.decoding}

@@ -71,6 +71,7 @@ import {
   type SourceSpan,
   type StaticJsxWireAttributeEntry,
 } from '../scan/parse.js';
+import { frameworkStyleAttrsReturnedWireKeys } from '../style-attrs-provenance.js';
 export type { OutputContext } from '../output-context-facts.js';
 
 export const runtimeOutputHelpers = {
@@ -940,17 +941,27 @@ function validateDocumentNavigationElements(
 }
 
 /**
- * SPEC §5.2 rule 10 / §6.3: two opaque-looking authored spellings have a narrower runtime shape
- * than an arbitrary carrier. The exact mutationFormAttributes export has a finite returned-key
- * summary, while unresolved button/input spreads are always reconstructed through the
- * mutation-submitter boundary, which removes every submitter transport name. Both checks remain
- * tied to the shared finite browser-control denominator so adding a new uncovered control closes
- * the compiler verdict automatically.
+ * SPEC §4.7 / §5.2 rule 10 / §6.3: three opaque-looking authored spellings have a narrower runtime
+ * shape than an arbitrary carrier. The exact style attrs export has a finite returned wire-key
+ * summary, mutationFormAttributes has a finite returned-key summary, and unresolved button/input
+ * spreads are always reconstructed through the mutation-submitter boundary, which removes every
+ * submitter transport name. Every check remains tied to the shared finite browser-control
+ * denominator so adding a new uncovered control closes the compiler verdict automatically.
  */
 function opaqueSpreadHasClosedElementContextControls(
   tag: string,
   spread: JsxSpreadAttributeModel,
 ): boolean {
+  const styleKeys = frameworkStyleAttrsReturnedWireKeys(spread);
+  if (styleKeys !== undefined) {
+    const keyLength = compilerArrayLength(styleKeys, 'style attrs returned keys');
+    for (let index = 0; index < keyLength; index += 1) {
+      const key = outputArrayValue(styleKeys, index, 'style attrs returned keys');
+      if (elementContextSecurityControl(tag, key) !== undefined) return false;
+    }
+    return true;
+  }
+
   if (tag === 'form') {
     const keys = frameworkMutationFormAttributesReturnedKeys(spread);
     if (keys === undefined) return false;

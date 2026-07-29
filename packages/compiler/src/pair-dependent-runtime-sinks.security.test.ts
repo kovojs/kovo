@@ -252,6 +252,82 @@ export const AddContactForm = component({
     ).toEqual([]);
   });
 
+  it('accepts the exact framework style attrs helper as a validated class/style spread', () => {
+    expect(
+      kv236Diagnostics(`
+import { attrs as styleAttributes } from '@kovojs/style';
+
+export const AvatarImage = component({
+  render: ({ profile }) => (
+    <img
+      {...styleAttributes(profile.imageStyle)}
+      alt="Profile"
+      referrerpolicy="no-referrer"
+      src="/profile.png"
+    />
+  ),
+});
+`),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      'same-named local helper',
+      `
+function attrs(value) {
+  return value;
+}
+
+export const ForgedStyleSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state) => <img {...attrs(state.attributes)} src="/profile.png" />,
+});
+`,
+    ],
+    [
+      'same-named third-party export',
+      `
+import { attrs } from 'third-party-style';
+
+export const ThirdPartyStyleSpread = component({
+  state: () => ({ attributes: {} }),
+  render: (_queries, state) => <img {...attrs(state.attributes)} src="/profile.png" />,
+});
+`,
+    ],
+    [
+      'namespace wrapper without exact parser provenance',
+      `
+import * as style from '@kovojs/style';
+
+export const NamespaceStyleSpread = component({
+  state: () => ({ styleInput: {} }),
+  render: (_queries, state) => <img {...style.attrs(state.styleInput)} src="/profile.png" />,
+});
+`,
+    ],
+    [
+      'shadowed framework import',
+      `
+import { attrs as styleAttributes } from '@kovojs/style';
+
+export const ShadowedStyleSpread = component({
+  state: () => ({ styleInput: {} }),
+  render: (_queries, state, styleAttributes) => (
+    <img {...styleAttributes(state.styleInput)} src="/profile.png" />
+  ),
+});
+`,
+    ],
+  ])('keeps arbitrary style spread calls closed: %s', (_name, source) => {
+    expect(kv236Diagnostics(source)).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining('opaque <img> spread'),
+      }),
+    ]);
+  });
+
   it.each([
     [
       'same-named local helper',
