@@ -15,12 +15,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G1"]
       },
-      "state": "pending-repro",
+      "state": "retired",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "sqlite-login",
           "--id",
           "KF-DEVEX-001",
           "--packed-manifest",
@@ -31,7 +32,10 @@
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
       "desiredBehavior": "A packed SQLite scaffold reaches login using only creator-emitted configuration and instructions.",
-      "gap": "Needs the shared packed scaffold journey and a bounded login request probe; no source-link substitute is accepted."
+      "retirement": {
+        "evidence": "The authenticated packed SQLite auth-origin minimization reaches the login form at the documented default origin without an auth-origin environment edit.",
+        "verification": "pnpm run test:devex-known-failures-available"
+      }
     },
     {
       "id": "KF-DEVEX-002",
@@ -46,12 +50,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G2"]
       },
-      "state": "pending-repro",
+      "state": "executable",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "dev-ready",
           "--id",
           "KF-DEVEX-002",
           "--packed-manifest",
@@ -61,8 +66,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens.",
-      "gap": "Needs the packed journey runner's observable listen marker so the probe can distinguish silent output from a server that never listened."
+      "desiredBehavior": "A packed scaffold prints its readiness URL and posture immediately after the server listens."
     },
     {
       "id": "KF-DEVEX-003",
@@ -143,12 +147,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G8"]
       },
-      "state": "pending-repro",
+      "state": "executable",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "transactional-build",
           "--id",
           "KF-DEVEX-005",
           "--packed-manifest",
@@ -158,8 +163,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched.",
-      "gap": "Needs a packed app fixture with one successful build followed by a deterministic compiler failure and artifact digest comparison."
+      "desiredBehavior": "A deliberately failed packed build never promotes its staged graph and leaves the last known-good dist untouched."
     },
     {
       "id": "KF-DEVEX-006",
@@ -174,12 +178,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G1", "G7"]
       },
-      "state": "pending-repro",
+      "state": "executable",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "fresh-check",
           "--id",
           "KF-DEVEX-006",
           "--packed-manifest",
@@ -189,8 +194,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup.",
-      "gap": "Needs the packed starter and its generated checking scripts preserved as the test input before those scripts are removed."
+      "desiredBehavior": "A newly packed scaffold completes check without bespoke KV417 classifier setup."
     },
     {
       "id": "KF-DEVEX-007",
@@ -205,12 +209,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G4"]
       },
-      "state": "pending-repro",
+      "state": "executable",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "full-catalog",
           "--id",
           "KF-DEVEX-007",
           "--packed-manifest",
@@ -220,8 +225,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target.",
-      "gap": "Needs the full-catalog packed fixture and RSS-enforced runner; devex-budgets.json records the non-binding provisional target."
+      "desiredBehavior": "A packed scaffold with all 44 copied components typechecks, checks, and builds under the provisional 2 GiB peak-RSS target."
     },
     {
       "id": "KF-DEVEX-008",
@@ -306,12 +310,13 @@
         "fixTrack": "Track 1",
         "scorecardGates": ["G9"]
       },
-      "state": "pending-repro",
+      "state": "executable",
       "probe": {
-        "path": "scripts/known-failure-probes/pending.mjs",
+        "path": "scripts/known-failure-probes/packed-first-loop-contract.mjs",
         "command": [
           "node",
-          "scripts/known-failure-probes/pending.mjs",
+          "scripts/known-failure-probes/packed-first-loop-contract.mjs",
+          "opaque-boundary",
           "--id",
           "KF-DEVEX-010",
           "--packed-manifest",
@@ -321,8 +326,7 @@
         "packedInput": true,
         "resultSchema": "kovo-known-failure-probe-result/v1"
       },
-      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500.",
-      "gap": "Needs a minimized packed request fixture that preserves the opaque boundary and distinguishes the intended diagnostic from an infrastructure failure."
+      "desiredBehavior": "The packed scaffold handles the opaque trusted-boundary path without an unexplained internal 500."
     }
   ]
 }

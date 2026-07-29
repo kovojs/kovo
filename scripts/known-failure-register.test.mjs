@@ -16,7 +16,10 @@ import {
   runKnownFailureProbes,
   validateKnownFailureRegister,
 } from './known-failure-register.mjs';
-import { packedCliContractOutcome } from './lib/known-failure-probe-classifier.mjs';
+import {
+  packedCliContractOutcome,
+  packedFirstLoopContractOutcome,
+} from './lib/known-failure-probe-classifier.mjs';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const register = JSON.parse(
@@ -35,15 +38,23 @@ const packedProbeSource = readFileSync(
   path.join(repoRoot, 'scripts/known-failure-probes/packed-cli-contract.mjs'),
   'utf8',
 );
+const packedFirstLoopProbeSource = readFileSync(
+  path.join(repoRoot, 'scripts/known-failure-probes/packed-first-loop-contract.mjs'),
+  'utf8',
+);
+const packedReleaseHarnessSource = readFileSync(
+  path.join(repoRoot, 'scripts/lib/known-failure-packed-release.mjs'),
+  'utf8',
+);
 
 describe('known-failure register', () => {
   it('covers the exact ten named baseline defects with stable IDs and bounded packed mappings', () => {
     expect(validateRegister(register)).toEqual([]);
     expect(register.entries.map((entry) => entry.id)).toEqual(BASELINE_KNOWN_FAILURE_IDS);
     expect(knownFailureSummary(register)).toEqual({
-      executable: 1,
-      'pending-repro': 6,
-      retired: 3,
+      executable: 6,
+      'pending-repro': 0,
+      retired: 4,
     });
     expect(
       register.entries.every(
@@ -64,7 +75,7 @@ describe('known-failure register', () => {
     ).toBe(true);
   });
 
-  it('separates valid register data from still-incomplete executable closure', () => {
+  it('reports schema validity and complete executable closure independently', () => {
     const script = path.join(repoRoot, 'scripts/known-failure-register.mjs');
     const schema = spawnSync(
       'node',
@@ -85,10 +96,9 @@ describe('known-failure register', () => {
 
     expect(schema.status).toBe(0);
     expect(schema.stdout).toContain('SCHEMA_VALID');
-    expect(schema.stdout).toContain('EXECUTABLE_CLOSURE_INCOMPLETE');
-    expect(schema.stdout).not.toContain('\nOK\n');
-    expect(closure.status).toBe(1);
-    expect(closure.stderr).toContain('repro coverage is incomplete');
+    expect(schema.stdout).toContain('EXECUTABLE_CLOSURE_COMPLETE');
+    expect(closure.status).toBe(0);
+    expect(closure.stdout).toContain('EXECUTABLE_CLOSURE_COMPLETE');
   });
 
   it('publishes a packed-manifest-backed available-probe gate in CI', () => {
@@ -138,11 +148,17 @@ describe('known-failure register', () => {
   });
 
   it('materializes authenticated tarballs without running a dependency install', () => {
-    expect(packedProbeSource).toContain('validatedPackageTarballEntries');
-    expect(packedProbeSource).toContain('verifyPackedAttestationBytes');
-    expect(packedProbeSource).not.toMatch(/\bpnpm\s+install\b/u);
-    expect(packedProbeSource).not.toContain('--no-frozen-lockfile');
-    expect(packedProbeSource).not.toContain('--ignore-scripts');
+    for (const source of [
+      packedProbeSource,
+      packedFirstLoopProbeSource,
+      packedReleaseHarnessSource,
+    ]) {
+      expect(source).not.toMatch(/\bpnpm\s+install\b/u);
+      expect(source).not.toContain('--no-frozen-lockfile');
+      expect(source).not.toContain('--ignore-scripts');
+    }
+    expect(packedReleaseHarnessSource).toContain('validatedPackageTarballEntries');
+    expect(packedReleaseHarnessSource).toContain('verifyPackedAttestationBytes');
   });
 
   it('keeps the full-catalog known failure linked to a non-binding provisional RSS target', () => {
@@ -152,6 +168,9 @@ describe('known-failure register', () => {
       ratification: null,
       knownFailure: 'KF-DEVEX-007',
     });
+    expect(packedFirstLoopProbeSource).toContain('collectProcessTreeRssKiB');
+    expect(packedFirstLoopProbeSource).toContain('2_048');
+    expect(packedFirstLoopProbeSource).toContain('NODE_OPTIONS: null');
   });
 
   it('reports missing IDs, missing probe files, and stale unregistered probe files', () => {
@@ -180,7 +199,7 @@ describe('known-failure register', () => {
     expect(validateRegister(noMappings)).toEqual(
       expect.arrayContaining([
         'stale unregistered probe: scripts/known-failure-probes/packed-cli-contract.mjs',
-        'stale unregistered probe: scripts/known-failure-probes/pending.mjs',
+        'stale unregistered probe: scripts/known-failure-probes/packed-first-loop-contract.mjs',
       ]),
     );
   });
@@ -213,21 +232,21 @@ describe('known-failure register', () => {
     try {
       const probeDirectory = path.join(temporaryRoot, 'scripts/known-failure-probes');
       mkdirSync(probeDirectory, { recursive: true });
-      for (const name of ['pending.mjs', 'packed-cli-contract.mjs']) {
+      for (const name of ['packed-cli-contract.mjs', 'packed-first-loop-contract.mjs']) {
         copyFileSync(
           path.join(repoRoot, 'scripts/known-failure-probes', name),
           path.join(probeDirectory, name),
         );
       }
       symlinkSync(
-        path.join(repoRoot, 'scripts/known-failure-probes/pending.mjs'),
+        path.join(repoRoot, 'scripts/known-failure-probes/packed-first-loop-contract.mjs'),
         path.join(probeDirectory, 'linked.mjs'),
       );
       symlinkSync(probeDirectory, path.join(probeDirectory, 'alias'), 'dir');
       const nestedProbeDirectory = path.join(probeDirectory, 'nested');
       mkdirSync(nestedProbeDirectory);
       copyFileSync(
-        path.join(repoRoot, 'scripts/known-failure-probes/pending.mjs'),
+        path.join(repoRoot, 'scripts/known-failure-probes/packed-first-loop-contract.mjs'),
         path.join(nestedProbeDirectory, 'stale.mjs'),
       );
       const linked = structuredClone(register);
@@ -245,7 +264,8 @@ describe('known-failure register', () => {
       );
 
       const aliased = structuredClone(register);
-      aliased.entries[0].probe.path = 'scripts/known-failure-probes/alias/pending.mjs';
+      aliased.entries[0].probe.path =
+        'scripts/known-failure-probes/alias/packed-first-loop-contract.mjs';
       aliased.entries[0].probe.command[1] = aliased.entries[0].probe.path;
       expect(
         validateKnownFailureRegister(aliased, {
@@ -253,7 +273,7 @@ describe('known-failure register', () => {
           ledgerResolver,
         }),
       ).toContain(
-        'KF-DEVEX-001: scripts/known-failure-probes/alias/pending.mjs: mapped probe contains a symbolic-link path segment: scripts/known-failure-probes/alias/pending.mjs',
+        'KF-DEVEX-001: scripts/known-failure-probes/alias/packed-first-loop-contract.mjs: mapped probe contains a symbolic-link path segment: scripts/known-failure-probes/alias/packed-first-loop-contract.mjs',
       );
     } finally {
       rmSync(temporaryRoot, { recursive: true, force: true });
@@ -281,16 +301,27 @@ describe('known-failure register', () => {
       spawnSync: (_executable, args) => processResult(commandId(args), 'desired-behavior'),
     });
 
-    expect(xfail.executableClosureComplete).toBe(false);
+    expect(xfail.executableClosureComplete).toBe(true);
     expect(xfail.availablePass).toBe(true);
-    expect(xfail.pass).toBe(false);
+    expect(xfail.pass).toBe(true);
     expect(xfail.results.filter((result) => result.status === 'xfail')).toEqual([
+      expect.objectContaining({ id: 'KF-DEVEX-002' }),
       expect.objectContaining({ id: 'KF-DEVEX-004' }),
+      expect.objectContaining({ id: 'KF-DEVEX-005' }),
+      expect.objectContaining({ id: 'KF-DEVEX-006' }),
+      expect.objectContaining({ id: 'KF-DEVEX-007' }),
+      expect.objectContaining({ id: 'KF-DEVEX-010' }),
     ]);
+    expect(xpass.executableClosureComplete).toBe(true);
     expect(xpass.availablePass).toBe(false);
     expect(xpass.pass).toBe(false);
     expect(xpass.results.filter((result) => result.status === 'xpass')).toEqual([
+      expect.objectContaining({ id: 'KF-DEVEX-002' }),
       expect.objectContaining({ id: 'KF-DEVEX-004' }),
+      expect.objectContaining({ id: 'KF-DEVEX-005' }),
+      expect.objectContaining({ id: 'KF-DEVEX-006' }),
+      expect.objectContaining({ id: 'KF-DEVEX-007' }),
+      expect.objectContaining({ id: 'KF-DEVEX-010' }),
     ]);
   });
 
@@ -319,7 +350,7 @@ describe('known-failure register', () => {
       expect(result.pass).toBe(false);
       expect(result.results.some((item) => item.status === 'xfail')).toBe(false);
       expect(result.results.filter((item) => item.status === 'infrastructure-error')).toHaveLength(
-        4,
+        10,
       );
     }
 
@@ -357,12 +388,13 @@ describe('known-failure register', () => {
     });
     expect(executed).toContain('KF-DEVEX-003');
     expect(passing.results.filter((result) => result.status === 'retired-pass')).toEqual([
+      { id: 'KF-DEVEX-001', status: 'retired-pass' },
       { id: 'KF-DEVEX-003', status: 'retired-pass' },
       { id: 'KF-DEVEX-008', status: 'retired-pass' },
       { id: 'KF-DEVEX-009', status: 'retired-pass' },
     ]);
     expect(passing.availablePass).toBe(true);
-    expect(passing.pass).toBe(false);
+    expect(passing.pass).toBe(true);
 
     const regression = runKnownFailureProbes(register, {
       repoRoot,
@@ -373,6 +405,7 @@ describe('known-failure register', () => {
     expect(regression.availablePass).toBe(false);
     expect(regression.pass).toBe(false);
     expect(regression.results.filter((result) => result.status === 'retired-regression')).toEqual([
+      { id: 'KF-DEVEX-001', status: 'retired-regression' },
       { id: 'KF-DEVEX-003', status: 'retired-regression' },
       { id: 'KF-DEVEX-008', status: 'retired-regression' },
       { id: 'KF-DEVEX-009', status: 'retired-regression' },
@@ -414,6 +447,236 @@ describe('known-failure register', () => {
         stderr: '',
       }),
     ).toBe('defect-reproduced');
+  });
+
+  it('classifies the SQLite login and dev-ready reproducers only from complete observations', () => {
+    expect(
+      packedFirstLoopContractOutcome('sqlite-login', {
+        body: '<form><label>Email</label><button>Sign in</button></form>',
+        healthStatus: 200,
+        listened: true,
+        serverOutput: '',
+        status: 200,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('sqlite-login', {
+        body: 'Internal Server Error',
+        healthStatus: 200,
+        listened: true,
+        serverOutput: 'Better Auth session provider failed inside the trusted plaintext boundary',
+        status: 500,
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('sqlite-login', {
+        body: 'Internal Server Error',
+        healthStatus: 200,
+        listened: true,
+        serverOutput: 'permission denied',
+        status: 500,
+      }),
+    ).toBeNull();
+
+    const report = [
+      'Kovo dev ready in 12ms',
+      '  Local URL    http://127.0.0.1:5173/',
+      '  Network URL  http://127.0.0.1:5173/ (loopback only)',
+      '  Mode         development',
+      '  App          src/app.tsx',
+      '  Database     SQLite (experimental)',
+      '  Devtool      http://127.0.0.1:5173/__kovo',
+      '',
+    ].join('\n');
+    expect(
+      packedFirstLoopContractOutcome('dev-ready', {
+        graceExpired: false,
+        listened: true,
+        readyDelayMs: 12,
+        stdout: report,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('dev-ready', {
+        graceExpired: true,
+        listened: true,
+        readyDelayMs: null,
+        stdout: '',
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('dev-ready', {
+        graceExpired: false,
+        listened: true,
+        readyDelayMs: 12,
+        stdout: 'Local: http://127.0.0.1:5173',
+      }),
+    ).toBeNull();
+  });
+
+  it('classifies stale build promotion and KV417 coupling without accepting generic failures', () => {
+    const beforeDigest = `sha256:${'a'.repeat(64)}`;
+    const afterDigest = `sha256:${'b'.repeat(64)}`;
+    const failedOutput =
+      'ERROR KV417 deployment retention proof is required for client-module history';
+    expect(
+      packedFirstLoopContractOutcome('transactional-build', {
+        afterDigest: beforeDigest,
+        beforeDigest,
+        failedExit: 1,
+        failedGraphPromoted: false,
+        failedOutput,
+        initialExit: 0,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('transactional-build', {
+        afterDigest,
+        beforeDigest,
+        failedExit: 1,
+        failedGraphPromoted: true,
+        failedOutput,
+        initialExit: 0,
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('transactional-build', {
+        afterDigest,
+        beforeDigest,
+        failedExit: 1,
+        failedGraphPromoted: true,
+        failedOutput: 'TypeScript failed',
+        initialExit: 0,
+      }),
+    ).toBeNull();
+
+    expect(
+      packedFirstLoopContractOutcome('fresh-check', {
+        exit: 0,
+        output: 'check summary\ncheck passed\n',
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('fresh-check', {
+        exit: 1,
+        output: failedOutput,
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('fresh-check', {
+        exit: 1,
+        output: 'permission denied',
+      }),
+    ).toBeNull();
+  });
+
+  it('classifies the bounded full-catalog OOM and opaque 500 without laundering failures', () => {
+    expect(
+      packedFirstLoopContractOutcome('full-catalog', {
+        buildExit: 0,
+        buildMemoryExceeded: false,
+        buildOutput: '',
+        buildPeakRssMiB: 1_000,
+        checkExit: 0,
+        checkMemoryExceeded: false,
+        checkOutput: '',
+        checkPeakRssMiB: 1_000,
+        componentCount: 44,
+        typecheckExit: 0,
+        typecheckMemoryExceeded: false,
+        typecheckOutput: '',
+        typecheckPeakRssMiB: 1_000,
+        unimported: true,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('full-catalog', {
+        buildExit: 0,
+        buildMemoryExceeded: false,
+        buildOutput: '',
+        buildPeakRssMiB: 1_000,
+        checkExit: 0,
+        checkMemoryExceeded: false,
+        checkOutput: '',
+        checkPeakRssMiB: 1_000,
+        componentCount: 44,
+        typecheckExit: 134,
+        typecheckMemoryExceeded: true,
+        typecheckOutput:
+          'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory',
+        typecheckPeakRssMiB: 2_049,
+        unimported: true,
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('full-catalog', {
+        buildExit: 0,
+        buildMemoryExceeded: false,
+        buildOutput: '',
+        buildPeakRssMiB: 1_000,
+        checkExit: 0,
+        checkMemoryExceeded: false,
+        checkOutput: '',
+        checkPeakRssMiB: 1_000,
+        componentCount: 44,
+        typecheckExit: 1,
+        typecheckMemoryExceeded: false,
+        typecheckOutput: 'TypeScript error',
+        typecheckPeakRssMiB: 1_000,
+        unimported: true,
+      }),
+    ).toBeNull();
+    expect(
+      packedFirstLoopContractOutcome('full-catalog', {
+        buildExit: 0,
+        buildMemoryExceeded: false,
+        buildOutput: '',
+        buildPeakRssMiB: 1_000,
+        checkExit: 0,
+        checkMemoryExceeded: false,
+        checkOutput: '',
+        checkPeakRssMiB: 1_000,
+        componentCount: 44,
+        typecheckExit: 137,
+        typecheckMemoryExceeded: true,
+        typecheckOutput: 'killed',
+        typecheckPeakRssMiB: 1_000,
+        unimported: true,
+      }),
+    ).toBeNull();
+
+    expect(
+      packedFirstLoopContractOutcome('opaque-boundary', {
+        body: 'ok',
+        healthStatus: 200,
+        listened: true,
+        status: 200,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('opaque-boundary', {
+        body: 'KV490\nCause: invalid origin\nNext step: run kovo doctor',
+        healthStatus: 200,
+        listened: true,
+        status: 500,
+      }),
+    ).toBe('desired-behavior');
+    expect(
+      packedFirstLoopContractOutcome('opaque-boundary', {
+        body: 'Internal Server Error',
+        healthStatus: 200,
+        listened: true,
+        status: 500,
+      }),
+    ).toBe('defect-reproduced');
+    expect(
+      packedFirstLoopContractOutcome('opaque-boundary', {
+        body: 'upstream unavailable',
+        healthStatus: 200,
+        listened: true,
+        status: 502,
+      }),
+    ).toBeNull();
   });
 });
 
