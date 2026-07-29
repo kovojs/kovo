@@ -1,5 +1,8 @@
 import type { WebhookVerifier } from '@kovojs/core/webhooks';
-import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
+import {
+  inspectFrameworkHmacSignatureVerifier,
+  isFrameworkHmacSignatureVerifier,
+} from '@kovojs/core/internal/verifier';
 import {
   accessDecisionFor,
   assertUnambiguousAccessDeclaration,
@@ -845,12 +848,13 @@ function snapshotEndpointAuth(auth: EndpointAuthDeclaration | undefined): Pinned
 
 function snapshotExecutableVerifier(value: unknown): PinnedExecutableVerifier | undefined {
   if (isFrameworkHmacSignatureVerifier(value)) {
+    const inspection = inspectFrameworkHmacSignatureVerifier(value);
     const verify = witnessGetOwnPropertyDescriptor(value, 'verify')?.value as
       | WebhookVerifier['verify']
       | undefined;
     if (typeof verify !== 'function') return undefined;
     return {
-      auditName: value.resolved.scheme,
+      auditName: inspection.resolved.scheme,
       kind: 'hmac',
       verifier: value,
       verify: async (request) => (await witnessReflectApply(verify, value, [request])) === true,

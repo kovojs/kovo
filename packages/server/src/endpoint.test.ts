@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
+import { inspectFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { describe, expect, it } from 'vitest';
 
 import { mintCsrfToken } from './csrf.js';
@@ -320,7 +321,11 @@ describe('server endpoints', () => {
     });
     let handlerCalls = 0;
     const inventoryWebhook = endpoint('/webhooks/inventory', {
-      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      auth: {
+        kind: 'verifier',
+        name: inspectFrameworkHmacSignatureVerifier(verifier).resolved.scheme,
+        verify: verifier,
+      },
       csrf: false,
       csrfJustification: 'signed inventory webhook',
       async handler(request) {
@@ -470,7 +475,11 @@ describe('server endpoints', () => {
     const forged = { ...official, verify: async () => true } as HmacSignatureVerifier;
     const dishonest = [
       endpoint('/machine/forged-hmac', {
-        auth: { kind: 'verifier', name: official.resolved.scheme, verify: forged },
+        auth: {
+          kind: 'verifier',
+          name: inspectFrameworkHmacSignatureVerifier(official).resolved.scheme,
+          verify: forged,
+        },
         csrf: false,
         csrfJustification: 'forged verifier regression',
         handler: () => new Response('leaked'),

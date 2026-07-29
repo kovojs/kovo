@@ -943,7 +943,15 @@ export function defineKovo(options: any): any {
     contract,
     'assemble',
     immutable((assembly: AppAssemblyOptions<Request, DbValue, Owner>) =>
-      assembleContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>(
+      assembleContract<
+        RawRequest,
+        SessionValue,
+        DbValue,
+        EnvValue,
+        Request,
+        Owner,
+        AppAssemblyOptions<Request, DbValue, Owner>
+      >(
         state,
         assembly,
       ),
