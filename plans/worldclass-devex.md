@@ -961,11 +961,14 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
       and devtool inspectors agree on the projected `kovo-diagnostic/v1` fields (code, severity,
       help, source span) — field-level equality on a named fixture corpus, one fixture per
       diagnostic family.
-- [ ] (S) Extend API-reference generation to emit a source/package/public-manifest digest and file
+- [x] (S) Extend API-reference generation to emit a source/package/public-manifest digest and file
       manifest; generate twice in clean temporary directories, compare determinism, and prove the
       site content build consumes the matching digest. Keep `site/gen` ignored unless a separate
       repository policy decision chooses to commit it; stale ignored local files are not release
       evidence.
+  - Evidence: the 25-test API-reference/content-manifest suite generates twice, byte-compares the
+    output, seals source/package/public-manifest/file digests, and makes site consumption verify
+    every record.
 - [x] (M) Compile every JSDoc, generated API, package README, and authored guide code sample
       against packed `dist` exports; parse every documented CLI invocation against the command
       schema. Mark samples as `executable`, `type-error`, `output`, or `illustrative`; every skip
@@ -973,8 +976,11 @@ and generate teaching artifacts from owning manifests. Seeds child ledger
   - Evidence: `pnpm run check:publish` classifies all 3,096 samples, compiles 1,139 executable
     samples and 920 JSDoc examples against packed exports, validates 93 CLI invocations through
     the command schema, and admits only reviewed output/illustrative exclusions.
-- [ ] (M) Regenerate API references by task: values and copyable examples first, named supporting
+- [x] (M) Regenerate API references by task: values and copyable examples first, named supporting
       types second, implementation/protocol types absent from human pages.
+  - Evidence: the same suite proves task labels, value/supporting-type grouping, copyable examples
+    before signatures, and exclusion of generated/internal and Drizzle runtime carriers across all
+    1,666 documented exports.
 - [ ] (M) Publish one canonical, compiled recipe for each golden task: component, route, query,
       mutation, form error, auth, inline optimism, trusted output, storage, upload, webhook, task,
       custom shell, theme, test harness, and deploy posture. Compile and execute the recipes

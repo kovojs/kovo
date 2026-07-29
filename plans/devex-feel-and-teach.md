@@ -27,8 +27,12 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Provenance and executable teaching
 
-- [ ] Add source/package/public-manifest digests and a file manifest to API-reference output.
-- [ ] Prove deterministic clean generation and matching site-consumed digests.
+- [x] Add source/package/public-manifest digests and a file manifest to API-reference output.
+  - Evidence: the focused API-reference suite in Latest verification seals all four digest
+    families under `kovo-api-reference-manifest/v1`.
+- [x] Prove deterministic clean generation and matching site-consumed digests.
+  - Evidence: the same suite generates twice into clean temporary directories, byte-compares every
+    output, and makes the site reject mismatched input or output records.
 - [x] Compile every JSDoc, generated API, package README, and authored guide sample against packed
       exports.
   - Evidence: `pnpm run check:publish` compiles 1,139 executable samples and 920 JSDoc examples
@@ -38,8 +42,10 @@ compiler/runtime facts; none may become a second analyzer.
 - [x] Require reviewed `executable`, `type-error`, `output`, or `illustrative` classifications.
   - Evidence: `scripts/packed-doc-samples.test.mjs` and the packed gate reject unclassified code
     and illustrative skips without a reviewed reason.
-- [ ] Generate task-first API pages with values/examples before named supporting types and no
+- [x] Generate task-first API pages with values/examples before named supporting types and no
       implementation/protocol types.
+  - Evidence: the focused API-reference suite covers value/supporting-type grouping, copyable
+    examples before signatures, and exclusion of generated/internal and Drizzle runtime carriers.
 - [ ] Publish and pack-test one canonical recipe for every golden task named in the charter.
 - [ ] Run rename drills for props, query results, route params, form fields, and mutation errors.
 - [ ] Generate searchable UI and icon catalogs from owning manifests and one catalog schema.
@@ -54,5 +60,7 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Latest verification
 
+- `pnpm exec vitest --run site/scripts/api-ref.test.mjs site/src/content-api-manifest.test.ts
+  --reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
 - `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
   1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.
