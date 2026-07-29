@@ -37,7 +37,8 @@ describe('server static export', () => {
                   '<form method="post" action="/_m/cart/add"><button>Add</button></form>',
                   '<a href="/_q/cart?args=%7B%7D">Refresh cart</a>',
                   '</main>',
-                ].join(''), { reason: "framework server rendering test fixture" },
+                ].join(''),
+                { reason: 'framework server rendering test fixture' },
               ),
           }),
         ],
@@ -82,7 +83,8 @@ describe('server static export', () => {
                 return Reflect.apply(originalMap, this, [callback, thisArg]);
               } as typeof Array.prototype.map;
               return trustedHtml(
-                '<main><form method="post" action="/_m/cart/add"><button>Add</button></form></main>', { reason: "framework server rendering test fixture" },
+                '<main><form method="post" action="/_m/cart/add"><button>Add</button></form></main>',
+                { reason: 'framework server rendering test fixture' },
               );
             },
           }),
@@ -126,12 +128,16 @@ describe('server static export', () => {
                 }
                 return Reflect.apply(originalPush, this, items);
               } as typeof Array.prototype.push;
-              return trustedHtml('<main>Plugin landing</main>', { reason: "framework server rendering test fixture" });
+              return trustedHtml('<main>Plugin landing</main>', {
+                reason: 'framework server rendering test fixture',
+              });
             },
           }),
           route('/cart', {
             page() {
-              return trustedHtml('<main data-approved="true">Approved cart</main>', { reason: "framework server rendering test fixture" });
+              return trustedHtml('<main data-approved="true">Approved cart</main>', {
+                reason: 'framework server rendering test fixture',
+              });
             },
           }),
         ],
@@ -169,14 +175,22 @@ describe('server static export', () => {
                   );
                 }
               } as typeof URL;
-              return trustedHtml('<main>Poison setup</main>', { reason: "framework server rendering test fixture" });
+              return trustedHtml('<main>Poison setup</main>', {
+                reason: 'framework server rendering test fixture',
+              });
             },
           }),
           route('/public', {
-            page: () => trustedHtml('<main data-public="true">Public</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main data-public="true">Public</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
           route('/admin', {
-            page: () => trustedHtml('<main data-admin-secret="true">Admin secret</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main data-admin-secret="true">Admin secret</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       });
@@ -210,14 +224,22 @@ describe('server static export', () => {
                   super(target, init);
                 }
               } as typeof Request;
-              return trustedHtml('<main>Poison setup</main>', { reason: "framework server rendering test fixture" });
+              return trustedHtml('<main>Poison setup</main>', {
+                reason: 'framework server rendering test fixture',
+              });
             },
           }),
           route('/public', {
-            page: () => trustedHtml('<main data-public="true">Public</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main data-public="true">Public</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
           route('/admin', {
-            page: () => trustedHtml('<main data-admin-secret="true">Admin secret</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main data-admin-secret="true">Admin secret</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       });
@@ -239,7 +261,8 @@ describe('server static export', () => {
         route('/cart', {
           page: () =>
             trustedHtml(
-              '<main><button formaction="/_m/cart/add" formmethod="post">Add</button></main>', { reason: "framework server rendering test fixture" },
+              '<main><button formaction="/_m/cart/add" formmethod="post">Add</button></main>',
+              { reason: 'framework server rendering test fixture' },
             ),
         }),
       ],
@@ -276,7 +299,8 @@ describe('server static export', () => {
                 `<button on:click="${cartHref}#Cart$add">Add locally</button>`,
                 '<a href="https://api.example.test/_m/cart/add">Remote API docs</a>',
                 '</main>',
-              ].join(''), { reason: "framework server rendering test fixture" },
+              ].join(''),
+              { reason: 'framework server rendering test fixture' },
             ),
         }),
       ],
@@ -317,7 +341,8 @@ describe('server static export', () => {
                 '<style>.example::before { content: \'<a href="/_q/style">\'; }</style>',
                 `<button on:click="${realHref}#Guide$open">Open</button>`,
                 '</main>',
-              ].join(''), { reason: "framework server rendering test fixture" },
+              ].join(''),
+              { reason: 'framework server rendering test fixture' },
             ),
         }),
       ],

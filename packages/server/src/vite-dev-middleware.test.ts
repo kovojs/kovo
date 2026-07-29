@@ -283,7 +283,14 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects full ingress failures before graph-local Vite SSR or app loading', async () => {
     const app = createApp({
-      routes: [route('/cart', { page: () => trustedHtml('<main>unreachable</main>', { reason: "framework server rendering test fixture" }) })],
+      routes: [
+        route('/cart', {
+          page: () =>
+            trustedHtml('<main>unreachable</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
+        }),
+      ],
     });
     const loadedModuleIds: string[] = [];
     const shouldHandleRequest = vi.fn(() => false);
@@ -331,7 +338,11 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects body-framed GET before live Vite filtering or app dispatch', () => {
     const middlewares: KovoAppShellViteMiddleware[] = [];
-    const page = vi.fn(() => trustedHtml('<main>unreachable</main>', { reason: "framework server rendering test fixture" }));
+    const page = vi.fn(() =>
+      trustedHtml('<main>unreachable</main>', {
+        reason: 'framework server rendering test fixture',
+      }),
+    );
     const shouldHandleRequest = vi.fn(() => true);
     const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', { page })] }), {
       shouldHandleRequest,
@@ -383,7 +394,11 @@ describe('server app shell Vite plugin', () => {
 
   it('rejects full ingress failures before live Vite filtering or app dispatch', () => {
     const middlewares: KovoAppShellViteMiddleware[] = [];
-    const page = vi.fn(() => trustedHtml('<main>unreachable</main>', { reason: "framework server rendering test fixture" }));
+    const page = vi.fn(() =>
+      trustedHtml('<main>unreachable</main>', {
+        reason: 'framework server rendering test fixture',
+      }),
+    );
     const shouldHandleRequest = vi.fn(() => false);
     const plugin = kovoAppShellVitePlugin(createApp({ routes: [route('/cart', { page })] }), {
       shouldHandleRequest,
@@ -427,7 +442,12 @@ describe('server app shell Vite plugin', () => {
 
   it('owns the app-shell dev plugin option matrix for generated module loading', async () => {
     const app = createApp({
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }) })],
+      routes: [
+        route('/cart', {
+          page: () =>
+            trustedHtml('<main>Cart</main>', { reason: 'framework server rendering test fixture' }),
+        }),
+      ],
     });
     const plugin = kovoAppShellViteDevPlugin({
       appExportName: 'shopApp',

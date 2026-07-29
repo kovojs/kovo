@@ -37,8 +37,12 @@ const homeRoute = route('/', {
     const payload = await readPayload(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/payload', name: 'payload', value: payload }), { reason: "framework integration fixture markup" })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+        {trustedHtml(renderQueryScript({ href: '/_q/payload', name: 'payload', value: payload }), {
+          reason: 'framework integration fixture markup',
+        })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', {
+          reason: 'framework integration fixture markup',
+        })}
         <XssCard />
         <XssResponseAuthority />
         <form mutation={updatePayload} enhance>

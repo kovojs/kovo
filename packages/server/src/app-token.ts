@@ -39,11 +39,7 @@ export function createKovoAppToken(app: RuntimeKovoApp): KovoApp<never> {
 
 /** Test exact opaque-token identity without reflecting over caller-owned properties. */
 export function isKovoApp(value: unknown): value is KovoApp {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    witnessWeakMapHas(runtimeApps, value)
-  );
+  return typeof value === 'object' && value !== null && witnessWeakMapHas(runtimeApps, value);
 }
 
 /**

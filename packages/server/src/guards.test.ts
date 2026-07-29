@@ -82,8 +82,14 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
 
   it('ROUTING-NAV-4: strips an unrecognized in-app path to "/" when routes are supplied', () => {
     const routes = [
-      route('/home', { page: () => trustedHtml('<h1>Home</h1>', { reason: "framework server rendering test fixture" }) }),
-      route('/account', { page: () => trustedHtml('<h1>Account</h1>', { reason: "framework server rendering test fixture" }) }),
+      route('/home', {
+        page: () =>
+          trustedHtml('<h1>Home</h1>', { reason: 'framework server rendering test fixture' }),
+      }),
+      route('/account', {
+        page: () =>
+          trustedHtml('<h1>Account</h1>', { reason: 'framework server rendering test fixture' }),
+      }),
     ];
 
     expect(sanitizeNext('/totally-unknown', routes)).toBe('/');
@@ -92,13 +98,23 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
   });
 
   it('ROUTING-NAV-4: keeps query/hash on a matched route path', () => {
-    const routes = [route('/account', { page: () => trustedHtml('<h1>Account</h1>', { reason: "framework server rendering test fixture" }) })];
+    const routes = [
+      route('/account', {
+        page: () =>
+          trustedHtml('<h1>Account</h1>', { reason: 'framework server rendering test fixture' }),
+      }),
+    ];
 
     expect(sanitizeNext('/account?tab=orders#section', routes)).toBe('/account?tab=orders#section');
   });
 
   it('ROUTING-NAV-4: preserves existing open-redirect protection when routes are supplied', () => {
-    const routes = [route('/home', { page: () => trustedHtml('<h1>Home</h1>', { reason: "framework server rendering test fixture" }) })];
+    const routes = [
+      route('/home', {
+        page: () =>
+          trustedHtml('<h1>Home</h1>', { reason: 'framework server rendering test fixture' }),
+      }),
+    ];
 
     expect(sanitizeNext('//evil.example', routes)).toBe('/');
     expect(sanitizeNext('/\\evil.example', routes)).toBe('/');
@@ -1863,7 +1879,10 @@ describe('guards.unprovenOwns production-path: runners thread validated args/par
         resourceKey: 'params.id',
       },
     ),
-    page: ({ params }) => trustedHtml(`<h1>order ${params.id}</h1>`, { reason: "framework server rendering test fixture" }),
+    page: ({ params }) =>
+      trustedHtml(`<h1>order ${params.id}</h1>`, {
+        reason: 'framework server rendering test fixture',
+      }),
   });
 
   it('runRoutePage allows the owner of the resolved route-param key', async () => {

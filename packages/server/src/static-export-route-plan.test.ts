@@ -15,10 +15,16 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro/', {
-              page: () => trustedHtml('<main>Intro</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Intro</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/products/:id', {
-              page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Product</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/products/p1/', '/products/p2'],
             }),
           ],
@@ -40,7 +46,10 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/users/:user-id/files/:name.json', {
-              page: () => trustedHtml('<main>File</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>File</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/users/u%201/files/report.md'],
             }),
           ],
@@ -64,13 +73,22 @@ describe('server static export route plan', () => {
           routes: [
             route('/admin', {
               guard: () => true,
-              page: () => trustedHtml('<main>Admin</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Admin</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/products/:id', {
-              page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Product</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/orders/:id', {
-              page: () => trustedHtml('<main>Order</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Order</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/orders/:id', '/cart'],
             }),
           ],
@@ -113,7 +131,8 @@ describe('server static export route plan', () => {
     const deny = guard('static-proxy-deny', () => ({ kind: 'forbidden' as const }));
     const declaration = route('/proxied-private', {
       access: [deny],
-      page: () => trustedHtml('<main>Private</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>Private</main>', { reason: 'framework server rendering test fixture' }),
     });
     const clone = { ...declaration };
     let accessReads = 0;
@@ -153,10 +172,16 @@ describe('server static export route plan', () => {
           routes: [
             route('/login', {
               access: publicAccess('static login shell'),
-              page: () => trustedHtml('<main>Login</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Login</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/profile', {
-              page: () => trustedHtml('<main>Profile</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Profile</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
           ],
           sessionProvider: () => ({ user: { id: 'u1' } }),
@@ -188,7 +213,10 @@ describe('server static export route plan', () => {
           routes: [
             route('/login', {
               access: publicAccess('static login shell'),
-              page: () => trustedHtml('<main>Login</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Login</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
           ],
         }),
@@ -225,7 +253,10 @@ describe('server static export route plan', () => {
           routes: [
             route('/status', {
               access: publicAccess('static status shell'),
-              page: () => trustedHtml('<main>Status</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Status</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
           ],
         }),
@@ -242,17 +273,29 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro', {
-              page: () => trustedHtml('<main>Intro</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Intro</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/docs/intro/', {
-              page: () => trustedHtml('<main>Duplicate intro</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Duplicate intro</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/products/:id', {
-              page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Product</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/products/p1', '/products/p1/'],
             }),
             route('/docs/:slug', {
-              page: () => trustedHtml('<main>Docs</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Docs</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/docs/intro'],
             }),
           ],
@@ -316,10 +359,16 @@ describe('server static export route plan', () => {
           endpoints: [exact, prefix],
           routes: [
             route('/docs', {
-              page: () => trustedHtml('<main>Docs</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Docs</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/products/:section/:id', {
-              page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Product</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/products/private/p1', '/products/public/p1'],
             }),
           ],
@@ -361,13 +410,22 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/_m/export-me', {
-              page: () => trustedHtml('<main>Mutation-shaped route</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Mutation-shaped route</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/_q/export-me', {
-              page: () => trustedHtml('<main>Query-shaped route</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Query-shaped route</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/c/export-me', {
-              page: () => trustedHtml('<main>Module-shaped route</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Module-shaped route</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
           ],
         }),
@@ -394,10 +452,16 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/%2e%2e', {
-              page: () => trustedHtml('<main>Unsafe docs</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Unsafe docs</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
             }),
             route('/products/:id', {
-              page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+              page: () =>
+                trustedHtml('<main>Product</main>', {
+                  reason: 'framework server rendering test fixture',
+                }),
               staticPaths: ['/products/%2f', '/products/%E0%A4%A'],
             }),
           ],

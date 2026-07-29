@@ -181,12 +181,12 @@ describe('route and query guard responses', () => {
       onUnauthenticated({ next }) {
         return { location: `/signin?continue=${encodeURIComponent(next)}`, status: 303 };
       },
-      page: () => trustedHtml('account', { reason: "framework server rendering test fixture" }),
+      page: () => trustedHtml('account', { reason: 'framework server rendering test fixture' }),
       search: s.object({ tab: s.string() }),
     });
     const adminRoute = route('/admin', {
       guard: guards.role<AppRequest>('admin'),
-      page: () => trustedHtml('admin', { reason: "framework server rendering test fixture" }),
+      page: () => trustedHtml('admin', { reason: 'framework server rendering test fixture' }),
     });
     const accountQuery = query('account', {
       args: s.object({ id: s.string() }),

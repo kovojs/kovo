@@ -67,7 +67,8 @@ describe('route search carrier integrity', () => {
         trustedHtml(
           search.token === victimCapability
             ? '<main>victim-account</main>'
-            : '<main>access-denied</main>', { reason: "framework server rendering test fixture" },
+            : '<main>access-denied</main>',
+          { reason: 'framework server rendering test fixture' },
         ),
       search: s.object({ token: s.string() }),
     });
@@ -125,7 +126,10 @@ describe('trusted request scheme provenance', () => {
     try {
       const [browserApi, appApi, appDocumentApi, routeApi] = await productionDocumentRuntime();
       const homeRoute = routeApi.route('/', {
-        page: () => browserApi.trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+        page: () =>
+          browserApi.trustedHtml('<main>Home</main>', {
+            reason: 'framework server rendering test fixture',
+          }),
       });
       const request = new Request('http://shop.example.test/', {
         headers: { 'x-forwarded-proto': 'https' },
@@ -163,7 +167,9 @@ describe('trusted request scheme provenance', () => {
       const homeRoute = routeApi.route('/', {
         page: () => {
           globalThis.URL = PoisonedURL;
-          return browserApi.trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" });
+          return browserApi.trustedHtml('<main>Home</main>', {
+            reason: 'framework server rendering test fixture',
+          });
         },
       });
       const request = new Request('http://shop.example.test/');
@@ -193,7 +199,10 @@ describe('trusted request scheme provenance', () => {
     try {
       const [browserApi, appApi, appDocumentApi, routeApi] = await productionDocumentRuntime();
       const homeRoute = routeApi.route('/', {
-        page: () => browserApi.trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+        page: () =>
+          browserApi.trustedHtml('<main>Home</main>', {
+            reason: 'framework server rendering test fixture',
+          }),
       });
       const request = new Request('https://shop.example.test/');
 
@@ -248,7 +257,10 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
     // SPEC §5.2.1 rule 2(b): every full page render must carry the build token.
     // Before the fix, buildToken() returned '' for apps with no client modules,
     // and the meta was omitted entirely.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -270,7 +282,10 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
   it('render-plan fingerprint flows through registry into the kovo-build meta (D1)', async () => {
     // Two identical apps whose registries differ only by renderPlanFingerprint must
     // emit different kovo-build meta content values.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
 
     const makeApp = (fingerprint: string) => {
       const app = createApp({
@@ -326,7 +341,8 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     // SPEC §9.3: fingerprint must be derived from session identity, not full cookie header.
     // Before the fix, any CSRF/theme cookie churn produced a different fingerprint.
     const homeRoute = route('/', {
-      page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
     });
 
     const makeRequest = (cookies: string) =>
@@ -378,7 +394,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('different session ids produce different fingerprints (K3)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
 
     const makeReq = (sessionId: string) =>
       new Request('https://example.test/', {
@@ -422,7 +441,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('stamps fingerprints from non-cookie sessions resolved by the lifecycle request', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider(request) {
@@ -459,7 +481,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('uses a resolved second-cookie session instead of collapsing on an identical first cookie', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const sessionProvider = (request: Request) => {
       const cookie = request.headers.get('cookie') ?? '';
       const match = cookie.match(/(?:^|; )sid=([^;]+)/);
@@ -495,7 +520,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('does not derive broadcast fingerprints from cookies without a resolved session', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -510,7 +538,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('fails closed for an unresolved session principal: no fingerprint, still no-store', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({ user: { id: 'unknown' } }),
@@ -531,7 +562,10 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
   });
 
   it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -562,7 +596,10 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     // SPEC §6.6 runtime DiD (cross-browser floor — NOT a by-construction proof): an app
     // declares its analytics/Stripe/embed origins via `createApp({ document: { csp:
     // { allowlist } } })`; those origins MUST appear on the auto-attached document CSP.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       document: {
         csp: {
@@ -601,7 +638,10 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
   });
 
   it('emits relative same-origin Reporting API headers for the framework-owned CSP group', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({ routes: [homeRoute] });
 
     const response = await renderAppRouteDocumentResponse({
@@ -626,7 +666,10 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     // `form-action`/`frame-ancestors` are assembled internally and are unreachable from
     // `CspAllowlist`. Even passing through an `objectSrc`/`baseUri`-shaped widening
     // attempt must NOT relax the locked secure defaults.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       document: {
         csp: {
@@ -674,7 +717,10 @@ describe('createApp({ document: { csp } }) threads CSP allowlist into document C
     const structured = Document({
       children: Head({ children: Meta({ content: 'yes', name: 'safe-shell' }) }),
     });
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       document: {
         csp: { allowlist: { scriptSrc: scriptSources } },
@@ -1207,7 +1253,8 @@ describe('server app document boundary', () => {
     });
     const productRoute = route('/products/:id', {
       stylesheets: [stylesheet('./product.css'), appStylesheet],
-      page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>Product</main>', { reason: 'framework server rendering test fixture' }),
     });
     const request = new Request('https://shop.example.test/products/p1');
     const app = createApp({
@@ -1289,7 +1336,9 @@ describe('server app document boundary', () => {
       errorShells: {
         notFound() {
           return {
-            body: trustedHtml('<main>must not render</main>', { reason: "framework server rendering test fixture" }),
+            body: trustedHtml('<main>must not render</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
             headers: remoteHeaders,
           };
         },
@@ -1317,7 +1366,9 @@ describe('server app document boundary', () => {
       errorShells: {
         notFound() {
           return {
-            body: trustedHtml('<main>allowed metadata</main>', { reason: "framework server rendering test fixture" }),
+            body: trustedHtml('<main>allowed metadata</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
             headers: {
               'Cache-Control': 'private, no-store',
               'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
@@ -1341,7 +1392,9 @@ describe('server app document boundary', () => {
         errorShells: {
           notFound() {
             return {
-              body: trustedHtml('<main>blocked</main>', { reason: "framework server rendering test fixture" }),
+              body: trustedHtml('<main>blocked</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
               // @ts-expect-error SPEC §9.1.1 exposes only typed structured response metadata.
               headers: { 'Access-Control-Allow-Origin': '*' },
             };
@@ -1364,7 +1417,9 @@ describe('server app document boundary', () => {
       errorShells: {
         notFound({ status }) {
           return {
-            body: trustedHtml(`<main data-shell="404">configured:${status}</main>`, { reason: "framework server rendering test fixture" }),
+            body: trustedHtml(`<main data-shell="404">configured:${status}</main>`, {
+              reason: 'framework server rendering test fixture',
+            }),
             headers: {
               'Last-Modified': 'Wed, 21 Oct 2015 07:28:00 GMT',
             },
@@ -1429,7 +1484,8 @@ describe('server app document boundary', () => {
             trustedHtml(
               `<main data-private-boundary>${
                 (request as { session: { user: { id: string } } }).session.user.id
-              }</main>`, { reason: "framework server rendering test fixture" },
+              }</main>`,
+              { reason: 'framework server rendering test fixture' },
             ),
         },
         page() {
@@ -1459,10 +1515,16 @@ describe('server app document boundary', () => {
   );
 
   it('keeps the rolling-cookie cache floor on matched 200, 403, and 500 route outcomes', async () => {
-    const okRoute = route('/rolling-ok', { page: () => trustedHtml('<main>ok</main>', { reason: "framework server rendering test fixture" }) });
+    const okRoute = route('/rolling-ok', {
+      page: () =>
+        trustedHtml('<main>ok</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const forbiddenRoute = route('/rolling-forbidden', {
       access: [() => ({ kind: 'forbidden' as const })],
-      page: () => trustedHtml('<main>must not render</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>must not render</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const brokenRoute = route('/rolling-broken', {
       page() {
@@ -1511,7 +1573,9 @@ describe('server app document boundary', () => {
       errorShells: {
         serverError({ status }) {
           return {
-            body: trustedHtml(`<main data-shell="500">configured:${status}</main>`, { reason: "framework server rendering test fixture" }),
+            body: trustedHtml(`<main data-shell="500">configured:${status}</main>`, {
+              reason: 'framework server rendering test fixture',
+            }),
             status,
           };
         },
@@ -1589,14 +1653,19 @@ describe('server app document boundary', () => {
       guard: guards.role<
         Request & { session?: { user: { id: string; roles: readonly string[] } } }
       >('admin'),
-      page: () => trustedHtml('<main data-secret>Admin</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main data-secret>Admin</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const request = new Request('https://shop.example.test/admin');
     const app = createApp({
       errorShells: {
         forbidden({ status }) {
           return {
-            body: trustedHtml(`<main data-shell="403">configured:${status}</main>`, { reason: "framework server rendering test fixture" }),
+            body: trustedHtml(`<main data-shell="403">configured:${status}</main>`, {
+              reason: 'framework server rendering test fixture',
+            }),
             status,
           };
         },
@@ -1625,7 +1694,10 @@ describe('server app document boundary', () => {
       guard: guards.role<
         Request & { session?: { user: { id: string; roles: readonly string[] } } }
       >('admin'),
-      page: () => trustedHtml('<main data-secret>Admin</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main data-secret>Admin</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const request = new Request('https://shop.example.test/admin');
     const app = createApp({
@@ -1658,23 +1730,31 @@ describe('server app document boundary', () => {
     const NotFoundLayout = layout({
       boundaries: {
         notFound: ({ status }) =>
-          trustedHtml(`<main data-layout-boundary="404">layout:${status}</main>`, { reason: "framework server rendering test fixture" }),
+          trustedHtml(`<main data-layout-boundary="404">layout:${status}</main>`, {
+            reason: 'framework server rendering test fixture',
+          }),
       },
       render: (_queries, _state, { children }) =>
-        trustedHtml(`<section>${String(children)}</section>`, { reason: "framework server rendering test fixture" }),
+        trustedHtml(`<section>${String(children)}</section>`, {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const AdminLayout = layout<
       Request & { session?: { user?: { id?: string; roles: readonly string[] } } }
     >({
       boundaries: {
         unauthorized: ({ status }) =>
-          trustedHtml(`<main data-layout-boundary="403">layout:${status}</main>`, { reason: "framework server rendering test fixture" }),
+          trustedHtml(`<main data-layout-boundary="403">layout:${status}</main>`, {
+            reason: 'framework server rendering test fixture',
+          }),
       },
       guard: guards.role<
         Request & { session?: { user?: { id?: string; roles: readonly string[] } } }
       >('admin'),
       render: (_queries, _state, { children }) =>
-        trustedHtml(`<section>${String(children)}</section>`, { reason: "framework server rendering test fixture" }),
+        trustedHtml(`<section>${String(children)}</section>`, {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const missingRoute = route('/admin/missing', {
       layout: NotFoundLayout,
@@ -1682,7 +1762,10 @@ describe('server app document boundary', () => {
     });
     const forbiddenRoute = route('/admin', {
       layout: AdminLayout,
-      page: () => trustedHtml('<main data-secret>Admin</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main data-secret>Admin</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const app = createApp({
       errorShells: {
@@ -1733,7 +1816,10 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     // response so a continuously-active user's session actually extends. Before this fix the
     // GET document path never passed `onSessionSetCookie`, so the refresh cookies were dropped
     // and the session was silently hard-logged-out at the original boundary.
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({
@@ -1764,7 +1850,10 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
   });
 
   it('emits no Set-Cookie when the session provider returns a plain value (no refresh)', async () => {
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     const app = createApp({
       routes: [homeRoute],
       sessionProvider: () => ({ user: { id: 'u1' } }),
@@ -1795,7 +1884,10 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     // loading the public unguarded `/` got a CACHEABLE response carrying their `Set-Cookie` → a
     // shared CDN/proxy caches it and replays the session cookie to other anonymous visitors
     // (cross-principal session-token leak / takeover).
-    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }) });
+    const homeRoute = route('/', {
+      page: () =>
+        trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
+    });
     expect(homeRoute.guard).toBeUndefined();
 
     const app = createApp({
@@ -1831,7 +1923,9 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
     const homeRoute = route('/', {
       page: (_context, request) => {
         lifecycleRequest = request;
-        return trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" });
+        return trustedHtml('<main>Home</main>', {
+          reason: 'framework server rendering test fixture',
+        });
       },
     });
     const app = createApp({
@@ -1866,7 +1960,9 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
                 property,
                 descriptor,
               ])) as typeof Object.defineProperty;
-        return trustedHtml('<main>private account</main>', { reason: "framework server rendering test fixture" });
+        return trustedHtml('<main>private account</main>', {
+          reason: 'framework server rendering test fixture',
+        });
       },
     });
     const app = createApp({
@@ -1907,7 +2003,9 @@ describe('rolling-session Set-Cookie forces no-store on unguarded GET documents 
             ? Reflect.apply(nativeIterator, attackerCookies, [])
             : Reflect.apply(nativeIterator, this, []);
         };
-        return trustedHtml('<main>account</main>', { reason: "framework server rendering test fixture" });
+        return trustedHtml('<main>account</main>', {
+          reason: 'framework server rendering test fixture',
+        });
       },
     });
     const app = createApp({

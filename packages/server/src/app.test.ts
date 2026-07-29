@@ -354,7 +354,10 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
 
   it('rejects non-POST CSP report requests without falling through to app routes', async () => {
     const appRoute = route(KOVO_CSP_REPORT_ENDPOINT, {
-      page: () => trustedHtml('<main>app route should not win</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>app route should not win</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     });
     const handler = createRequestHandler(createApp({ routes: [appRoute] }));
     const response = await handler(new Request(`https://example.test${KOVO_CSP_REPORT_ENDPOINT}`));
@@ -1057,7 +1060,9 @@ describe('server createApp request shell', () => {
     const accountLayout = layout({
       queries: { profile: profileQuery },
       render: ({ profile }, _state, { children }) =>
-        trustedHtml(`<main data-profile="${profile.name}">${String(children)}</main>`, { reason: "framework server rendering test fixture" }),
+        trustedHtml(`<main data-profile="${profile.name}">${String(children)}</main>`, {
+          reason: 'framework server rendering test fixture',
+        }),
     });
 
     const renderer = {
@@ -1073,7 +1078,10 @@ describe('server createApp request shell', () => {
         routes: [
           route('/account', {
             layout: accountLayout,
-            page: () => trustedHtml('<section>Account</section>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<section>Account</section>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
@@ -1427,14 +1435,29 @@ describe('server createApp request shell', () => {
         }),
       ],
       queries: [query('cart', { reads: [domain('cart')] })],
-      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }) })],
+      routes: [
+        route('/cart', {
+          page: () =>
+            trustedHtml('<main>Cart</main>', { reason: 'framework server rendering test fixture' }),
+        }),
+      ],
     });
 
     for (const malformedApp of [
       { ...app, endpoints: [{ path: '/status' }] },
       { ...app, mutations: [{ key: 'cart/add', handler: () => ({ ok: true }) }] },
       { ...app, queries: [{ key: 'cart', reads: [{ name: 'cart' }] }] },
-      { ...app, routes: [{ page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }) }] },
+      {
+        ...app,
+        routes: [
+          {
+            page: () =>
+              trustedHtml('<main>Cart</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
+          },
+        ],
+      },
     ]) {
       expect(() =>
         createRequestHandler(malformedApp as unknown as Parameters<typeof createRequestHandler>[0]),
@@ -1531,8 +1554,16 @@ describe('server createApp request shell', () => {
   it('blocks ambiguous route tables with KV228 before declaration-order dispatch', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => trustedHtml('<main>Param</main>', { reason: "framework server rendering test fixture" }) }),
-        route('/products/new', { page: () => trustedHtml('<main>New</main>', { reason: "framework server rendering test fixture" }) }),
+        route('/products/:id', {
+          page: () =>
+            trustedHtml('<main>Param</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
+        }),
+        route('/products/new', {
+          page: () =>
+            trustedHtml('<main>New</main>', { reason: 'framework server rendering test fixture' }),
+        }),
       ],
     });
 
@@ -1571,8 +1602,18 @@ describe('server createApp request shell', () => {
     try {
       app = createApp({
         routes: [
-          route('/diagnostic/:id', { page: () => trustedHtml('<main>Param</main>', { reason: "framework server rendering test fixture" }) }),
-          route('/diagnostic/fixed', { page: () => trustedHtml('<main>Fixed</main>', { reason: "framework server rendering test fixture" }) }),
+          route('/diagnostic/:id', {
+            page: () =>
+              trustedHtml('<main>Param</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
+          }),
+          route('/diagnostic/fixed', {
+            page: () =>
+              trustedHtml('<main>Fixed</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
+          }),
         ],
       });
     } finally {
@@ -1590,10 +1631,18 @@ describe('server createApp request shell', () => {
   it('pins blocking diagnostics against entry mutation and late collection replacement', async () => {
     const app = createApp({
       routes: [
-        route('/admin/:section', { page: () => trustedHtml('<main>Public parameter</main>', { reason: "framework server rendering test fixture" }) }),
+        route('/admin/:section', {
+          page: () =>
+            trustedHtml('<main>Public parameter</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
+        }),
         route('/admin/settings', {
           guard: guards.authed,
-          page: () => trustedHtml('<main>Private settings</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Private settings</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
         }),
       ],
     });
@@ -1623,12 +1672,16 @@ describe('server createApp request shell', () => {
       createApp({
         errorShells: {
           forbidden({ status }) {
-            return trustedHtml(`<main>${status}:forbidden</main>`, { reason: "framework server rendering test fixture" });
+            return trustedHtml(`<main>${status}:forbidden</main>`, {
+              reason: 'framework server rendering test fixture',
+            });
           },
           notFound({ request, status }) {
             const url = new URL(request.url);
             return {
-              body: trustedHtml(`<main>${status}:${url.pathname}</main>`, { reason: "framework server rendering test fixture" }),
+              body: trustedHtml(`<main>${status}:${url.pathname}</main>`, {
+                reason: 'framework server rendering test fixture',
+              }),
               status,
             };
           },
@@ -1666,7 +1719,9 @@ describe('server createApp request shell', () => {
               signature: request.headers.get('x-machine-signature'),
             });
             return {
-              body: trustedHtml('<main>missing mutation</main>', { reason: "framework server rendering test fixture" }),
+              body: trustedHtml('<main>missing mutation</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
               headers: {
                 'Clear-Site-Data': '"cookies"',
                 'Set-Cookie': 'sid=attacker; Path=/',
@@ -1712,7 +1767,9 @@ describe('server createApp request shell', () => {
               request.headers.get('x-machine-signature'),
             ]);
             return {
-              body: trustedHtml('<main>server error</main>', { reason: "framework server rendering test fixture" }),
+              body: trustedHtml('<main>server error</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
               headers: {
                 'Clear-Site-Data': '"cookies"',
                 'Set-Cookie': 'sid=attacker; Path=/',
@@ -1750,7 +1807,9 @@ describe('server createApp request shell', () => {
       errorShells: {
         serverError() {
           return {
-            body: trustedHtml('<main>startup error</main>', { reason: "framework server rendering test fixture" }),
+            body: trustedHtml('<main>startup error</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
             headers: {
               'Clear-Site-Data': '"cookies"',
               'Set-Cookie': 'sid=attacker; Path=/',
@@ -2674,7 +2733,10 @@ describe('server createApp request shell', () => {
         }),
       ],
       errorShells: {
-        serverError: () => trustedHtml('<main>stable shell</main>', { reason: "framework server rendering test fixture" }),
+        serverError: () =>
+          trustedHtml('<main>stable shell</main>', {
+            reason: 'framework server rendering test fixture',
+          }),
       },
       mutations: [
         mutation('machine/run', {
@@ -2691,7 +2753,12 @@ describe('server createApp request shell', () => {
           throw new Error('clientIp trap');
         },
       },
-      routes: [route('/', { page: () => trustedHtml('<main>home</main>', { reason: "framework server rendering test fixture" }) })],
+      routes: [
+        route('/', {
+          page: () =>
+            trustedHtml('<main>home</main>', { reason: 'framework server rendering test fixture' }),
+        }),
+      ],
     });
     const handler = createRequestHandler(app);
 
@@ -3056,7 +3123,8 @@ describe('server createApp request shell', () => {
     });
     const rateLimitedRoute = route('/route-guard-per-ip', {
       guard: guards.rateLimit<{ clientIp?: string }>({ max: 1, per: 'ip', windowMs: 60_000 }),
-      page: () => trustedHtml('<main>ok</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>ok</main>', { reason: 'framework server rendering test fixture' }),
     });
     const app = createApp({
       queries: [rateLimitedQuery],
@@ -3134,7 +3202,14 @@ describe('server createApp request shell', () => {
 
     const routeHandler = createRequestHandler(
       createApp({
-        routes: [route('/docs', { page: () => trustedHtml('<main>Docs</main>', { reason: "framework server rendering test fixture" }) })],
+        routes: [
+          route('/docs', {
+            page: () =>
+              trustedHtml('<main>Docs</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
+          }),
+        ],
       }),
     );
     const routeRedirect = await routeHandler(new Request('https://example.test//docs'));
@@ -3166,7 +3241,11 @@ describe('server createApp request shell', () => {
             return '203.0.113.10';
           },
         },
-        routes: [route('/status', { page: () => trustedHtml('route', { reason: "framework server rendering test fixture" }) })],
+        routes: [
+          route('/status', {
+            page: () => trustedHtml('route', { reason: 'framework server rendering test fixture' }),
+          }),
+        ],
         sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
@@ -3488,7 +3567,8 @@ describe('server createApp request shell', () => {
       queries: { cart: cartQuery },
       render: ({ cart }, _state, { children }) =>
         trustedHtml(
-          `<main><output data-bind="cart.count">${cart.count}</output>${String(children)}</main>`, { reason: "framework server rendering test fixture" },
+          `<main><output data-bind="cart.count">${cart.count}</output>${String(children)}</main>`,
+          { reason: 'framework server rendering test fixture' },
         ),
     });
     const handler = createRequestHandler(
@@ -3498,7 +3578,10 @@ describe('server createApp request shell', () => {
         routes: [
           route('/cart', {
             layout: CartLayout,
-            page: () => trustedHtml('<section>Cart</section>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<section>Cart</section>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
@@ -3936,7 +4019,8 @@ describe('server createApp request shell', () => {
       render: ({ cart: cartData }, _state, { children }) =>
         trustedHtml(
           `<main><output data-bind="runtimeRegistryCart.count">${cartData.count}</output>` +
-            `${String(children)}</main>`, { reason: "framework server rendering test fixture" },
+            `${String(children)}</main>`,
+          { reason: 'framework server rendering test fixture' },
         ),
     });
     registerGeneratedMutationTouchRegistry({
@@ -3956,7 +4040,10 @@ describe('server createApp request shell', () => {
         routes: [
           route('/cart', {
             layout: CartLayout,
-            page: () => trustedHtml('<section>Cart</section>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<section>Cart</section>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),

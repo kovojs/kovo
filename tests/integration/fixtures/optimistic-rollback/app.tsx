@@ -60,10 +60,16 @@ const homeRoute = route('/', {
     const cart = await readCart(request.db);
     return (
       <>
-        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }), { reason: "framework integration fixture markup" })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }), {
+          reason: 'framework integration fixture markup',
+        })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', {
+          reason: 'framework integration fixture markup',
+        })}
         <main>
-          {trustedHtml(await renderCartPanel(request.db), { reason: "framework integration fixture markup" })}
+          {trustedHtml(await renderCartPanel(request.db), {
+            reason: 'framework integration fixture markup',
+          })}
           <OptimisticForm />
         </main>
       </>

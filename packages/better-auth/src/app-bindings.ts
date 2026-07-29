@@ -42,20 +42,19 @@ export interface BetterAuthAppCredentialResult<Status extends string> {
 }
 
 /** CSRF-protected email/password sign-in mutation returned by an app binding constructor. */
-export type BetterAuthAppSignInMutation<Request extends BetterAuthAppRequest> =
-  MutationDefinition<
-    'auth/sign-in',
-    Schema<{ email: string; next: string | undefined; password: string }>,
-    {
-      INVALID_CREDENTIALS: Schema<Record<string, never>>;
-      RATE_LIMITED: Schema<Record<string, never>>;
-    },
-    Request,
-    BetterAuthAppCredentialResult<'signed-in'>,
-    Request
-  > &
-    MutationFormDefinition<'auth/sign-in', Request> &
-    AppMutationAdapter;
+export type BetterAuthAppSignInMutation<Request extends BetterAuthAppRequest> = MutationDefinition<
+  'auth/sign-in',
+  Schema<{ email: string; next: string | undefined; password: string }>,
+  {
+    INVALID_CREDENTIALS: Schema<Record<string, never>>;
+    RATE_LIMITED: Schema<Record<string, never>>;
+  },
+  Request,
+  BetterAuthAppCredentialResult<'signed-in'>,
+  Request
+> &
+  MutationFormDefinition<'auth/sign-in', Request> &
+  AppMutationAdapter;
 
 /** CSRF-protected sign-out mutation returned by an app binding constructor. */
 export type BetterAuthAppSignOutMutation<

@@ -16,7 +16,7 @@ describe('browser authoring API v1 migration executable', () => {
       source:
         "import { trustedHtml as html, trustedUrl } from '@kovojs/browser';\n" +
         "export const body = html(markup, 'reviewed markdown');\n" +
-        "export const href = trustedUrl(url, `allowlisted checkout redirect`);\n",
+        'export const href = trustedUrl(url, `allowlisted checkout redirect`);\n',
     });
 
     expect(analysis).toMatchObject({ status: 'rewritten' });

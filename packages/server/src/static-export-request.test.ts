@@ -60,7 +60,10 @@ describe('server static export synthetic request boundary', () => {
       app: createApp({
         routes: [
           route('/context', {
-            page: () => trustedHtml('<main>context shell</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main>context shell</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
@@ -80,7 +83,8 @@ describe('server static export synthetic request boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
         }),
       ],
     });

@@ -57,7 +57,9 @@ export const loadMore = mutation('feed/load-more', {
   },
   async *stream({ result }) {
     yield stream.fragment({
-      html: trustedHtml(renderRow(result.value.row), { reason: "framework integration fixture markup" }),
+      html: trustedHtml(renderRow(result.value.row), {
+        reason: 'framework integration fixture markup',
+      }),
       mode: 'append',
       target: 'feed',
     });
@@ -69,7 +71,9 @@ const homeRoute = route('/', {
     const feed = await renderFeed(request.db);
     return (
       <main>
-        <kovo-fragment target="feed">{trustedHtml(feed, { reason: "framework integration fixture markup" })}</kovo-fragment>
+        <kovo-fragment target="feed">
+          {trustedHtml(feed, { reason: 'framework integration fixture markup' })}
+        </kovo-fragment>
         <form mutation={loadMore} enhance stream kovo-deps="feed">
           <button type="submit">Load more</button>
         </form>

@@ -20,9 +20,7 @@ describe('app-scoped test harness v2 migration', () => {
       '',
     ].join('\n');
 
-    expect(
-      analyzeTestHarnessV2Migration({ fileName: 'src/app.test.ts', source }),
-    ).toEqual({
+    expect(analyzeTestHarnessV2Migration({ fileName: 'src/app.test.ts', source })).toEqual({
       refusals: [],
       source,
       status: 'unchanged',

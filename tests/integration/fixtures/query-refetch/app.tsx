@@ -13,8 +13,12 @@ const homeRoute = route('/', {
     const refetch = await readRefetch(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/refetch', name: 'refetch', value: refetch }), { reason: "framework integration fixture markup" })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+        {trustedHtml(renderQueryScript({ href: '/_q/refetch', name: 'refetch', value: refetch }), {
+          reason: 'framework integration fixture markup',
+        })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', {
+          reason: 'framework integration fixture markup',
+        })}
         <RefetchCard />
       </main>
     );

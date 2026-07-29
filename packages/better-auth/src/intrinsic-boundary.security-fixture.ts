@@ -84,12 +84,7 @@ const postgresAccount = pgTable(
     domain: 'auth',
     key: columns.userId,
     owner: columns.userId,
-    secret: [
-      columns.password,
-      columns.accessToken,
-      columns.refreshToken,
-      columns.idToken,
-    ],
+    secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken],
   })),
 );
 const postgresVerification = pgTable('verification', {

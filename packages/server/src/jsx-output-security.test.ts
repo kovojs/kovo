@@ -136,7 +136,13 @@ describe('JSX output authority security', () => {
       '<script></script>',
     );
     expect(
-      renderHtmlValue(jsx('script', { children: trustedHtml('globalThis.reviewedScript()', { reason: "framework server rendering test fixture" }) })),
+      renderHtmlValue(
+        jsx('script', {
+          children: trustedHtml('globalThis.reviewedScript()', {
+            reason: 'framework server rendering test fixture',
+          }),
+        }),
+      ),
     ).toBe('<script>globalThis.reviewedScript()</script>');
   });
 

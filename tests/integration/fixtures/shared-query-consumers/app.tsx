@@ -33,7 +33,9 @@ const homeRoute = route('/', {
     const profile = await readProfile(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/profile', name: 'profile', value: profile }), { reason: "framework integration fixture markup" })}
+        {trustedHtml(renderQueryScript({ href: '/_q/profile', name: 'profile', value: profile }), {
+          reason: 'framework integration fixture markup',
+        })}
         <ProfileSummary />
         <ProfileStatus />
         <form mutation={publishProfile} enhance>

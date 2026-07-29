@@ -396,14 +396,8 @@ function snapshotBrowserTrustedHtml(value: object): string | undefined {
   return snapshot;
 }
 
-function trustedOutputMetadata(
-  metadata: TrustedOutputMetadata,
-): TrustedOutputMetadata {
-  if (
-    typeof metadata !== 'object' ||
-    metadata === null ||
-    securityArrayIsArray(metadata)
-  ) {
+function trustedOutputMetadata(metadata: TrustedOutputMetadata): TrustedOutputMetadata {
+  if (typeof metadata !== 'object' || metadata === null || securityArrayIsArray(metadata)) {
     throw new TypeError(
       'trusted output constructors require structured metadata: { reason: "reviewed purpose" }.',
     );
@@ -433,12 +427,7 @@ function trustedOutputMetadata(
 
 function trustedOutputReviewText(value: unknown, label: string): string {
   const trimmed = typeof value === 'string' ? securityStringTrim(value) : undefined;
-  if (
-    typeof value !== 'string' ||
-    value.length > 4_096 ||
-    trimmed === '' ||
-    trimmed !== value
-  ) {
+  if (typeof value !== 'string' || value.length > 4_096 || trimmed === '' || trimmed !== value) {
     throw new TypeError(
       `trusted output ${label} must be non-empty bounded review text without surrounding whitespace.`,
     );

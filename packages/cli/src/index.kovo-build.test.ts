@@ -1703,8 +1703,7 @@ export default createApp({
       "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })",
     );
     const htmlEnd =
-      htmlStart +
-      "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })".length;
+      htmlStart + "trustedHtml('<main>Admin</main>', { reason: 'build access fixture' })".length;
     const allowSite = exactSite(allowStart, allowEnd);
     const csrfSite = exactSite(csrfStart, csrfEnd);
     const htmlSite = exactSite(htmlStart, htmlEnd);

@@ -5,13 +5,7 @@ import {
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
 
-export type AppDeclarationKind =
-  | 'endpoint'
-  | 'layout'
-  | 'mutation'
-  | 'query'
-  | 'route'
-  | 'task';
+export type AppDeclarationKind = 'endpoint' | 'layout' | 'mutation' | 'query' | 'route' | 'task';
 
 export interface AppDeclarationOwnership {
   readonly contract: object;
@@ -64,17 +58,12 @@ export function transferAppDeclarationOwner<Declaration extends object>(
 }
 
 /** @internal Resolve exact private ownership for assembly checks. */
-export function appDeclarationOwner(
-  declaration: object,
-): AppDeclarationOwnership | undefined {
+export function appDeclarationOwner(declaration: object): AppDeclarationOwnership | undefined {
   return witnessWeakMapGet(declarationOwners, declaration);
 }
 
 /** @internal Attach framework-private app-contract metadata to a declaration handle. */
-export function registerAppDeclarationMetadata(
-  declaration: object,
-  metadata: unknown,
-): void {
+export function registerAppDeclarationMetadata(declaration: object, metadata: unknown): void {
   witnessWeakMapSet(declarationMetadata, declaration, metadata);
 }
 

@@ -37,7 +37,9 @@ function mintDeriveInput<Name extends string, Value>(name: Name): DeriveInput<Na
 
 function inputState(value: unknown, label: string): DeriveInputState {
   if (typeof value !== 'object' || value === null) {
-    throw new TypeError(`${label} must be minted by derive.query(), derive.state(), or derive.clock().`);
+    throw new TypeError(
+      `${label} must be minted by derive.query(), derive.state(), or derive.clock().`,
+    );
   }
   const state = deriveInputs.get(value);
   if (state === undefined) {
@@ -107,7 +109,11 @@ function queryInput<const Handle extends { readonly key: string }>(
     throw new TypeError('derive.query() requires a query registry handle.');
   }
   const descriptor = Object.getOwnPropertyDescriptor(handle, 'key');
-  if (descriptor === undefined || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+  if (
+    descriptor === undefined ||
+    !('value' in descriptor) ||
+    typeof descriptor.value !== 'string'
+  ) {
     throw new TypeError('derive.query() requires a query handle with an own string key.');
   }
   return mintDeriveInput(descriptor.value);
@@ -136,10 +142,7 @@ export function derive<const Inputs extends readonly DeriveInput[], Value>(
   },
   Value
 >;
-export function derive<
-  const Inputs extends Readonly<Record<string, DeriveInput>>,
-  Value,
->(
+export function derive<const Inputs extends Readonly<Record<string, DeriveInput>>, Value>(
   inputs: Inputs,
   fn: (values: {
     readonly [Name in keyof Inputs]: Inputs[Name] extends DeriveInput<string, infer InputValue>
@@ -199,10 +202,7 @@ export function generatedDerive<const Inputs extends readonly string[], Value>(
   fn: (...values: readonly unknown[]) => Value,
 ): DeriveDefinition<Inputs, Value>;
 /** @internal */
-export function generatedDerive<
-  const Inputs extends Readonly<Record<string, string>>,
-  Value,
->(
+export function generatedDerive<const Inputs extends Readonly<Record<string, string>>, Value>(
   inputs: Inputs,
   fn: (values: Readonly<Record<keyof Inputs, unknown>>) => Value,
 ): DeriveDefinition<readonly string[], Value>;

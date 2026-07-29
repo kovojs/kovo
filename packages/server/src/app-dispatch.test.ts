@@ -1239,7 +1239,9 @@ describe('server app matched dispatch boundary', () => {
       errorShells: {
         notFound() {
           return {
-            body: trustedHtml('<h1>Missing</h1>', { reason: "framework server rendering test fixture" }),
+            body: trustedHtml('<h1>Missing</h1>', {
+              reason: 'framework server rendering test fixture',
+            }),
             status: 404,
           };
         },

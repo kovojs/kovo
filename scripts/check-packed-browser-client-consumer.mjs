@@ -50,7 +50,9 @@ export function assertPackedBrowserClientManifest(manifest) {
   }
   const authoring = manifest.exports?.['.'];
   if (authoring?.types !== './dist/index.d.mts' || authoring?.default !== './dist/index.mjs') {
-    throw new Error('Packed browser authoring root does not resolve built runtime and declarations');
+    throw new Error(
+      'Packed browser authoring root does not resolve built runtime and declarations',
+    );
   }
   if (
     manifest.dependencies?.[CORE_PACKAGE] === undefined ||

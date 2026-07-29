@@ -67,7 +67,11 @@ export function analyzeBrowserAuthoringV1Migration({ fileName, source }) {
           const imported = specifier.propertyName?.text ?? specifier.name.text;
           if (imported === 'TrustedOutputMetadataInput') {
             refusals.push(anchorRefusal('app-context', specifier, sourceFile));
-          } else if (imported === 'derive' || imported === 'trustedHtml' || imported === 'trustedUrl') {
+          } else if (
+            imported === 'derive' ||
+            imported === 'trustedHtml' ||
+            imported === 'trustedUrl'
+          ) {
             directBindings.set(specifier.name.text, imported);
           }
         }
@@ -82,8 +86,7 @@ export function analyzeBrowserAuthoringV1Migration({ fileName, source }) {
         (ts.isNamedExports(statement.exportClause) &&
           statement.exportClause.elements.some(
             (element) =>
-              (element.propertyName?.text ?? element.name.text) ===
-              'TrustedOutputMetadataInput',
+              (element.propertyName?.text ?? element.name.text) === 'TrustedOutputMetadataInput',
           )))
     ) {
       refusals.push(anchorRefusal('app-context', statement, sourceFile));
@@ -95,8 +98,7 @@ export function analyzeBrowserAuthoringV1Migration({ fileName, source }) {
       ts.isCallExpression(node) &&
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
       node.arguments.some(
-        (argument) =>
-          ts.isStringLiteral(argument) && argument.text === BROWSER_SPECIFIER,
+        (argument) => ts.isStringLiteral(argument) && argument.text === BROWSER_SPECIFIER,
       )
     ) {
       refusals.push(anchorRefusal('dynamic-import', node, sourceFile));
@@ -106,8 +108,7 @@ export function analyzeBrowserAuthoringV1Migration({ fileName, source }) {
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'require' &&
       node.arguments.some(
-        (argument) =>
-          ts.isStringLiteral(argument) && argument.text === BROWSER_SPECIFIER,
+        (argument) => ts.isStringLiteral(argument) && argument.text === BROWSER_SPECIFIER,
       )
     ) {
       refusals.push(anchorRefusal('dynamic-import', node, sourceFile));
@@ -266,11 +267,7 @@ function applyTextEdits(source, edits) {
   return output;
 }
 
-export function runBrowserAuthoringV1Migration({
-  cwd = process.cwd(),
-  mode,
-  sourcePaths = [],
-}) {
+export function runBrowserAuthoringV1Migration({ cwd = process.cwd(), mode, sourcePaths = [] }) {
   if (mode !== 'check' && mode !== 'write') {
     throw new TypeError('mode must be "check" or "write"');
   }
@@ -313,7 +310,12 @@ export function runBrowserAuthoringV1Migration({
   if (mode === 'write' && summary.refused === 0) {
     for (const entry of prepared) {
       if (entry.analysis.status !== 'rewritten') continue;
-      replaceRegularFile(entry.file.absolutePath, entry.analysis.source, entry.source, entry.before);
+      replaceRegularFile(
+        entry.file.absolutePath,
+        entry.analysis.source,
+        entry.source,
+        entry.before,
+      );
     }
   }
   return { schema: RESULT_SCHEMA, batch: BATCH, mode, files: results, summary };

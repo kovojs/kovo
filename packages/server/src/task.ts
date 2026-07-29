@@ -182,7 +182,9 @@ export interface TaskDefinition<
 
 /** Serialized input type accepted by `request.schedule(task, args)`. */
 export type TaskInput<Task> =
-  Task extends TaskDefinition<string, infer InputSchema, unknown> ? InferSchema<InputSchema> : never;
+  Task extends TaskDefinition<string, infer InputSchema, unknown>
+    ? InferSchema<InputSchema>
+    : never;
 
 /** App-scoped task factory. `createApp()` uses this to contextually type task declarations. */
 export interface TaskFactory {

@@ -95,7 +95,14 @@ describe('runtime coherence', () => {
     const app = createApp({
       clientModules: registry,
       queries: [query('coherence/read', { load: () => ({ ok: true }), reads: [] })],
-      routes: [route('/', { page: () => trustedHtml('<main>coherent</main>', { reason: "framework server rendering test fixture" }) })],
+      routes: [
+        route('/', {
+          page: () =>
+            trustedHtml('<main>coherent</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
+        }),
+      ],
     });
     const handler = createRequestHandler(app);
     const admittedBuild = app.clientModules.buildToken();
@@ -164,7 +171,9 @@ describe('runtime coherence', () => {
           async page() {
             markRenderStarted();
             await renderReleased;
-            return trustedHtml(`<button on:click="${oldHref}#Cart$run">Run</button>`, { reason: "framework server rendering test fixture" });
+            return trustedHtml(`<button on:click="${oldHref}#Cart$run">Run</button>`, {
+              reason: 'framework server rendering test fixture',
+            });
           },
         }),
       ],
@@ -203,7 +212,10 @@ describe('runtime coherence', () => {
   it('stamps configured and fallback error documents with the admitted build', async () => {
     const app = createApp({
       errorShells: {
-        notFound: () => trustedHtml('<main>configured missing</main>', { reason: "framework server rendering test fixture" }),
+        notFound: () =>
+          trustedHtml('<main>configured missing</main>', {
+            reason: 'framework server rendering test fixture',
+          }),
       },
       onError: () => {},
       routes: [
@@ -244,7 +256,10 @@ describe('runtime coherence', () => {
     const app = createApp({
       clientModules: registry,
       errorShells: {
-        serverError: () => trustedHtml('<main>configured failure</main>', { reason: "framework server rendering test fixture" }),
+        serverError: () =>
+          trustedHtml('<main>configured failure</main>', {
+            reason: 'framework server rendering test fixture',
+          }),
       },
       onError: () => {},
       routes: [

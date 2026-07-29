@@ -177,11 +177,7 @@ const appBindingRows = appBindingDeclarations.map((entry) => {
     state: 'public',
     decision: 'keep',
     canonicalHome: entry.specifier,
-    story: postgres
-      ? 'better-auth-postgres'
-      : sqlite
-        ? 'better-auth-sqlite'
-        : 'better-auth-human',
+    story: postgres ? 'better-auth-postgres' : sqlite ? 'better-auth-sqlite' : 'better-auth-human',
     evidence: 'better-auth-contract',
     introduced: {
       releaseNote: APP_BINDINGS_RELEASE_NOTE,
@@ -201,8 +197,7 @@ decisions.symbols = [
 const appBindingSubpaths = [
   {
     specifier: `${PACKAGE}/postgres`,
-    task:
-      'Bind Better Auth to one framework-owned Postgres app runtime while Kovo owns system database and deployment authority.',
+    task: 'Bind Better Auth to one framework-owned Postgres app runtime while Kovo owns system database and deployment authority.',
     owner: 'auth',
     story: 'better-auth-postgres',
     state: 'public',
@@ -210,8 +205,7 @@ const appBindingSubpaths = [
   },
   {
     specifier: `${PACKAGE}/sqlite`,
-    task:
-      'Bind Better Auth to one framework-owned SQLite app runtime while Kovo owns system database and deployment authority.',
+    task: 'Bind Better Auth to one framework-owned SQLite app runtime while Kovo owns system database and deployment authority.',
     owner: 'auth',
     story: 'better-auth-sqlite',
     state: 'public',

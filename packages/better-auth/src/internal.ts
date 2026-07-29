@@ -3228,10 +3228,7 @@ function betterAuthSchemaAnnotationCall(
   return `${annotationCallee}(() => ({ exempt: true }))`;
 }
 
-function betterAuthSchemaColumnReferences(
-  root: string,
-  fields: readonly string[],
-): string[] {
+function betterAuthSchemaColumnReferences(root: string, fields: readonly string[]): string[] {
   const snapshot = betterAuthSnapshotDenseArray(fields, 'Better Auth schema column references');
   const references: string[] = [];
   for (let index = 0; index < snapshot.length; index += 1) {

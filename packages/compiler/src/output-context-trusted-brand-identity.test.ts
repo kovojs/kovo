@@ -120,8 +120,6 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
     expect(
       kv236(STYLE('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.css)')),
     ).toBeGreaterThan(0);
-    expect(
-      kv236(STYLE(REAL, "trustedHtml(cfg.css, { reason: 'reviewed inline style' })")),
-    ).toBe(0);
+    expect(kv236(STYLE(REAL, "trustedHtml(cfg.css, { reason: 'reviewed inline style' })"))).toBe(0);
   });
 });

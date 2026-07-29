@@ -71,7 +71,8 @@ describe('server static export', () => {
       routes: [
         route('/', {
           modulepreloads: [cartHref],
-          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
         }),
       ],
     });
@@ -151,7 +152,10 @@ describe('server static export', () => {
         routes: [
           route('/', {
             modulepreloads: [cartHref],
-            page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main>Home</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       });
@@ -222,11 +226,15 @@ describe('server static export', () => {
       routes: [
         route('/', {
           modulepreloads: [cartHref],
-          page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Home</main>', { reason: 'framework server rendering test fixture' }),
         }),
         route('/docs/intro', {
           stylesheets: ['/assets/docs.css'],
-          page: () => trustedHtml('<main>Intro</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Intro</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
         }),
       ],
     });

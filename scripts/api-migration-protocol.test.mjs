@@ -131,9 +131,9 @@ describe('API migration protocol', () => {
     batch.rules = batch.rules.filter((rule) => rule.action === 'refuse');
     batch.fixtures.rewrites = [];
 
-    expect(validateApiMigrationLedger({ ledger, decisions: decisionSet, repoRoot }).findings).toEqual(
-      [],
-    );
+    expect(
+      validateApiMigrationLedger({ ledger, decisions: decisionSet, repoRoot }).findings,
+    ).toEqual([]);
   });
 
   it('does not allow the old export to disappear before its batch reaches removed', () => {

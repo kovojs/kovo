@@ -54,18 +54,22 @@ export const sendMessage = mutation('chat/send', {
   async *stream({ result }) {
     yield stream.fragment({
       html: trustedHtml(
-        `<article data-message-id="${result.value.userId}" data-role="user"><p>${escapeHtml(result.value.body)}</p></article>`, { reason: "framework integration fixture markup" },
+        `<article data-message-id="${result.value.userId}" data-role="user"><p>${escapeHtml(result.value.body)}</p></article>`,
+        { reason: 'framework integration fixture markup' },
       ),
       mode: 'append',
       target: 'messages',
     });
     yield stream.fragment({
-      html: trustedHtml(`<article data-message-id="${result.value.assistantId}" data-role="assistant" aria-live="polite" aria-atomic="true">
+      html: trustedHtml(
+        `<article data-message-id="${result.value.assistantId}" data-role="assistant" aria-live="polite" aria-atomic="true">
         <p
           data-stream-text="assistant:${escapeHtml(String(result.value.assistantId))}"
           data-stream-renderer="/client.ts#renderMarkdownStream"
         ></p>
-      </article>`, { reason: "framework integration fixture markup" }),
+      </article>`,
+        { reason: 'framework integration fixture markup' },
+      ),
       mode: 'append',
       target: 'messages',
     });

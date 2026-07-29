@@ -8514,11 +8514,7 @@ export function parserStaticTrustedOutputMetadataReason(
       return undefined;
     }
     const normalized = compilerStringTrim(value.text);
-    if (
-      normalized === '' ||
-      normalized !== value.text ||
-      !isCompilerAuditText(normalized)
-    ) {
+    if (normalized === '' || normalized !== value.text || !isCompilerAuditText(normalized)) {
       return undefined;
     }
 

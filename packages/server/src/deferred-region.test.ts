@@ -67,7 +67,11 @@ describe('Defer JSX primitive', () => {
     const placeholder = await html(
       runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
         Defer({
-          fallback: ['Loading ', '<b>raw</b>', trustedHtml('<i>trusted</i>', { reason: "framework server rendering test fixture" })],
+          fallback: [
+            'Loading ',
+            '<b>raw</b>',
+            trustedHtml('<i>trusted</i>', { reason: 'framework server rendering test fixture' }),
+          ],
           priority: 'visible',
           render: () => '<strong>raw region</strong>',
           target: 'rail&details',
@@ -96,7 +100,10 @@ describe('Defer JSX primitive', () => {
       runWithJsxRequestContext({}, { deferredRegions: trustedCollector }, () =>
         Defer({
           priority: 'visible',
-          render: () => trustedHtml('<strong>trusted region</strong>', { reason: "framework server rendering test fixture" }),
+          render: () =>
+            trustedHtml('<strong>trusted region</strong>', {
+              reason: 'framework server rendering test fixture',
+            }),
           target: 'trusted-region',
         }),
       ),

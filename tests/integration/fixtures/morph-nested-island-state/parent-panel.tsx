@@ -12,7 +12,8 @@ export const ParentPanel = component({
         Parent version <output>{parent.version}</output>
       </p>
       {trustedHtml(
-        '<nested-counter kovo-c="nested-counter" kovo-key="nested-counter" kovo-state=\'{"count":0}\'><button type="button" on:click="/client.ts#incrementNested">Nested count <span data-bind="state.count">0</span></button></nested-counter>', { reason: "framework integration fixture markup" },
+        '<nested-counter kovo-c="nested-counter" kovo-key="nested-counter" kovo-state=\'{"count":0}\'><button type="button" on:click="/client.ts#incrementNested">Nested count <span data-bind="state.count">0</span></button></nested-counter>',
+        { reason: 'framework integration fixture markup' },
       )}
     </section>
   ),

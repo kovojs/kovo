@@ -193,14 +193,10 @@ export async function resolveKovoLifecycleRequest<
 
   switch (options.surface) {
     case 'document': {
-      const lifecycleOptions: RequestLifecycleOptions<
-        RawRequest,
-        SessionValue,
-        DbValue,
-        EnvValue
-      > = {
-        dbMode: 'read',
-      };
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue, EnvValue> =
+        {
+          dbMode: 'read',
+        };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
       if (options.env !== undefined) lifecycleOptions.env = options.env;
@@ -214,14 +210,10 @@ export async function resolveKovoLifecycleRequest<
       return resolveLifecycleRequest(request, lifecycleOptions);
     }
     case 'query': {
-      const lifecycleOptions: RequestLifecycleOptions<
-        RawRequest,
-        SessionValue,
-        DbValue,
-        EnvValue
-      > = {
-        dbMode: 'read',
-      };
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue, EnvValue> =
+        {
+          dbMode: 'read',
+        };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
       if (options.env !== undefined) lifecycleOptions.env = options.env;
@@ -235,14 +227,10 @@ export async function resolveKovoLifecycleRequest<
       return resolveLifecycleRequest(request, lifecycleOptions);
     }
     case 'mutation': {
-      const lifecycleOptions: RequestLifecycleOptions<
-        RawRequest,
-        SessionValue,
-        DbValue,
-        EnvValue
-      > = {
-        dbMode: 'write',
-      };
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue, EnvValue> =
+        {
+          dbMode: 'write',
+        };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
       if (options.env !== undefined) lifecycleOptions.env = options.env;

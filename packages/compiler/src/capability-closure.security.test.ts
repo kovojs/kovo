@@ -825,11 +825,7 @@ describe('SPEC §6.6 capability-closed module graph', () => {
         .filter((fact) => fact.kind === 'root')
         .map((fact) => `${fact.rootKind}:${fact.name}`)
         .sort(),
-    ).toEqual([
-      'application:app',
-      'route:/immutable-alias',
-      'serialized-browser-handler:browser',
-    ]);
+    ).toEqual(['application:app', 'route:/immutable-alias', 'serialized-browser-handler:browser']);
     expect(result.diagnostics).toEqual([]);
   });
 

@@ -56,8 +56,12 @@ const homeRoute = route('/', {
     // browser observes the 303 PRG instead of Kovo's enhanced 200 response.
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/engine', name: 'engine', value: engine }), { reason: "framework integration fixture markup" })}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+        {trustedHtml(renderQueryScript({ href: '/_q/engine', name: 'engine', value: engine }), {
+          reason: 'framework integration fixture markup',
+        })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', {
+          reason: 'framework integration fixture markup',
+        })}
         <h1>Engine matrix</h1>
         <p data-bind="greeting">Welcome</p>
         <form id="engine-matrix-form" method="post" action="/_m/engine-matrix/submit">
@@ -73,7 +77,9 @@ const homeRoute = route('/', {
           </button>
         </form>
         <div kovo-fragment-target="engine-matrix-report" kovo-deps="engine">
-          {trustedHtml(await renderInitialReport(request.db), { reason: "framework integration fixture markup" })}
+          {trustedHtml(await renderInitialReport(request.db), {
+            reason: 'framework integration fixture markup',
+          })}
         </div>
         <EngineMatrixCard />
       </main>

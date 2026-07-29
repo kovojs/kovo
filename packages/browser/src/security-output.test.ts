@@ -129,9 +129,7 @@ describe('runtime output-context helpers', () => {
     });
     expect('__kovoTrustedUrl' in imageUrl).toBe(false);
     expect(
-      isKovoTrustedUrl(
-        trustedUrl('data:text/html,x', { reason: 'trusted URL witness fixture' }),
-      ),
+      isKovoTrustedUrl(trustedUrl('data:text/html,x', { reason: 'trusted URL witness fixture' })),
     ).toBe(true);
     expect(isKovoTrustedUrl('data:text/html,x')).toBe(false);
 
@@ -284,9 +282,7 @@ describe('runtime output-context helpers', () => {
       value: '<b>safe</b>',
     });
     expect(
-      isKovoTrustedHtml(
-        trustedHtml('<b>safe</b>', { reason: 'trusted HTML witness fixture' }),
-      ),
+      isKovoTrustedHtml(trustedHtml('<b>safe</b>', { reason: 'trusted HTML witness fixture' })),
     ).toBe(true);
     expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(false);
     expect(isBrowserTrustedHtml({ toString: () => '<i>not branded</i>' })).toBe(false);

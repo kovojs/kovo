@@ -88,10 +88,7 @@ export interface ComponentRegistryEntry {
 }
 
 /** Input accepted by {@link renderRegistry}: tag → component, or tag → `{ component, props }` (SPEC §4.10). */
-export type ComponentRegistryInput = Record<
-  string,
-  ComponentRegistryEntry | Component<never>
->;
+export type ComponentRegistryInput = Record<string, ComponentRegistryEntry | Component<never>>;
 
 declare const componentRegistryBrand: unique symbol;
 

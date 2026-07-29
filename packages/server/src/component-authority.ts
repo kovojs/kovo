@@ -5,9 +5,7 @@ import { formHelperApply, formHelperOwnDataValue } from './jsx-form-helper-intri
 const componentDescriptorVerifierKey = '__kovoIsComponentDescriptor';
 
 /** Verify component provenance through core's module-private descriptor witness. */
-export function isKovoComponentDescriptor(
-  value: unknown,
-): value is Component<any> {
+export function isKovoComponentDescriptor(value: unknown): value is Component<any> {
   const verifier = formHelperOwnDataValue(defineComponent, componentDescriptorVerifierKey);
   return (
     typeof verifier === 'function' && formHelperApply(verifier, defineComponent, [value]) === true

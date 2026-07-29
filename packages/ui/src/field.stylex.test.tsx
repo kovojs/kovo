@@ -71,7 +71,8 @@ describe('@kovojs/ui Field StyleX styles', () => {
       }),
       select: renderUiComponent(FieldSelect, {
         children: trustedHtml(
-          '<option value="starter">Starter</option><option value="team" selected>Team</option>', { reason: "UI rendering test fixture" },
+          '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+          { reason: 'UI rendering test fixture' },
         ) as unknown as string,
         descriptionId: 'plan-description',
         form: 'profile-form',

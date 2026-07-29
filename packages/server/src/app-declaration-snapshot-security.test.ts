@@ -54,7 +54,9 @@ describe('closed app declaration semantics', () => {
       },
     };
     const page = vi.fn(({ params: parsed }: { params: { id: string } }) =>
-      trustedHtml(`<main>${parsed.id}-private-profile</main>`, { reason: "framework server rendering test fixture" }),
+      trustedHtml(`<main>${parsed.id}-private-profile</main>`, {
+        reason: 'framework server rendering test fixture',
+      }),
     );
     const handler = createRequestHandler(
       createApp({
@@ -82,7 +84,9 @@ describe('closed app declaration semantics', () => {
       },
     };
     const page = vi.fn(({ search: parsed }: { search: { account: string } }) =>
-      trustedHtml(`<main>${parsed.account}-private-profile</main>`, { reason: "framework server rendering test fixture" }),
+      trustedHtml(`<main>${parsed.account}-private-profile</main>`, {
+        reason: 'framework server rendering test fixture',
+      }),
     );
     const handler = createRequestHandler(
       createApp({ routes: [route('/search', { page, search })] }),
@@ -98,11 +102,17 @@ describe('closed app declaration semantics', () => {
 
   it('pins route region renderer identities before request dispatch', async () => {
     const regions = {
-      page: () => trustedHtml('<main>safe-region</main>', { reason: "framework server rendering test fixture" }),
+      page: () =>
+        trustedHtml('<main>safe-region</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     };
     const handler = createRequestHandler(createApp({ routes: [route('/regions', { regions })] }));
 
-    regions.page = () => trustedHtml('<main>victim-region-secret</main>', { reason: "framework server rendering test fixture" });
+    regions.page = () =>
+      trustedHtml('<main>victim-region-secret</main>', {
+        reason: 'framework server rendering test fixture',
+      });
     const response = await handler(new Request('https://example.test/regions'));
     const body = await response.text();
 
@@ -113,7 +123,10 @@ describe('closed app declaration semantics', () => {
 
   it('pins route boundary renderer identities before denied requests resolve', async () => {
     const boundaries = {
-      unauthorized: () => trustedHtml('<main>safe-forbidden</main>', { reason: "framework server rendering test fixture" }),
+      unauthorized: () =>
+        trustedHtml('<main>safe-forbidden</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     };
     const handler = createRequestHandler(
       createApp({
@@ -121,13 +134,19 @@ describe('closed app declaration semantics', () => {
           route('/admin', {
             boundaries,
             guard: () => ({ kind: 'forbidden' as const }),
-            page: () => trustedHtml('<main>admin-secret</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main>admin-secret</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
     );
 
-    boundaries.unauthorized = () => trustedHtml('<main>victim-session-secret</main>', { reason: "framework server rendering test fixture" });
+    boundaries.unauthorized = () =>
+      trustedHtml('<main>victim-session-secret</main>', {
+        reason: 'framework server rendering test fixture',
+      });
     const response = await handler(new Request('https://example.test/admin'));
     const body = await response.text();
 
@@ -138,7 +157,10 @@ describe('closed app declaration semantics', () => {
 
   it('pins layout boundary renderer identities before denied requests resolve', async () => {
     const boundaries = {
-      unauthorized: () => trustedHtml('<main>safe-layout-forbidden</main>', { reason: "framework server rendering test fixture" }),
+      unauthorized: () =>
+        trustedHtml('<main>safe-layout-forbidden</main>', {
+          reason: 'framework server rendering test fixture',
+        }),
     };
     const AdminLayout = layout({
       boundaries,
@@ -150,13 +172,19 @@ describe('closed app declaration semantics', () => {
         routes: [
           route('/layout-admin', {
             layout: AdminLayout,
-            page: () => trustedHtml('<main>admin-secret</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main>admin-secret</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
     );
 
-    boundaries.unauthorized = () => trustedHtml('<main>victim-layout-secret</main>', { reason: "framework server rendering test fixture" });
+    boundaries.unauthorized = () =>
+      trustedHtml('<main>victim-layout-secret</main>', {
+        reason: 'framework server rendering test fixture',
+      });
     const response = await handler(new Request('https://example.test/layout-admin'));
     const body = await response.text();
 
@@ -382,7 +410,10 @@ describe('closed app declaration semantics', () => {
         return [
           appRoute('/admin', {
             guard: guards.role('admin'),
-            page: () => trustedHtml('<main>victim-admin-secret</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main>victim-admin-secret</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ];
       },

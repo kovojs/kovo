@@ -81,7 +81,9 @@ describe('derive runtime surface', () => {
       enumerable: true,
       get: () => 'cart',
     });
-    expect(() => derive.query(accessorQuery as { readonly key: string })).toThrow(/own string key/u);
+    expect(() => derive.query(accessorQuery as { readonly key: string })).toThrow(
+      /own string key/u,
+    );
 
     const real = derive.state<{ count: number }>();
     expect(Reflect.ownKeys(real)).toEqual([]);
@@ -93,8 +95,9 @@ describe('derive runtime surface', () => {
       get: () => real,
     });
     expect(() =>
-      derive(accessorMap as { state: DeriveInput<'state', { count: number }> }, ({ state }) =>
-        state.count,
+      derive(
+        accessorMap as { state: DeriveInput<'state', { count: number }> },
+        ({ state }) => state.count,
       ),
     ).toThrow(/own data property/u);
   });

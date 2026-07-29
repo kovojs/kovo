@@ -77,7 +77,9 @@ describe('server static export app replay boundary', () => {
       routes: [
         route('/', {
           page: () =>
-            trustedHtml(`<main><button on:click="${href}#Cart$open">Open</button></main>`, { reason: "framework server rendering test fixture" }),
+            trustedHtml(`<main><button on:click="${href}#Cart$open">Open</button></main>`, {
+              reason: 'framework server rendering test fixture',
+            }),
         }),
         route('/downloads/orders.pdf', {
           page: () =>
@@ -230,7 +232,9 @@ describe('server static export app replay boundary', () => {
       routes: [
         route('/articles/:slug', {
           page: ({ params }) =>
-            trustedHtml(`<main data-article="${String(params.slug)}">Article</main>`, { reason: "framework server rendering test fixture" }),
+            trustedHtml(`<main data-article="${String(params.slug)}">Article</main>`, {
+              reason: 'framework server rendering test fixture',
+            }),
           staticPaths: ['/articles/safe', '/articles/pwned'],
         }),
       ],
@@ -258,7 +262,10 @@ describe('server static export app replay boundary', () => {
       createApp({
         routes: [
           route('/catalog/:section/:id', {
-            page: () => trustedHtml('<main data-decoy="true">Decoy document</main>', { reason: "framework server rendering test fixture" }),
+            page: () =>
+              trustedHtml('<main data-decoy="true">Decoy document</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
           }),
         ],
       }),
@@ -299,7 +306,10 @@ describe('server static export app replay boundary', () => {
       endpoints: [collision],
       routes: [
         route('/catalog/:section/:id', {
-          page: () => trustedHtml('<main data-intended="true">Intended document</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main data-intended="true">Intended document</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
           staticPaths: ['/catalog/private/p1'],
         }),
       ],
@@ -322,7 +332,10 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
-          page: () => trustedHtml('<main>Product</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>Product</main>', {
+              reason: 'framework server rendering test fixture',
+            }),
         }),
       ],
     });
@@ -348,7 +361,8 @@ describe('server static export app replay boundary', () => {
           },
         }),
         route('/products/new', {
-          page: () => trustedHtml('<main>New</main>', { reason: "framework server rendering test fixture" }),
+          page: () =>
+            trustedHtml('<main>New</main>', { reason: 'framework server rendering test fixture' }),
         }),
       ],
     });

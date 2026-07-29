@@ -458,23 +458,17 @@ function isDynamicExpression(expression: JsxExpressionModel): boolean {
  *   - a method/optional-chain/await wrapper (`trustedHtml(x).slice(1)`, `trustedHtml(x) ?? y`) is not
  *     a bare call, so `callName` is undefined and KV236 fires.
  */
-function isTrustedBrandCall(
-  model: ComponentModuleModel,
-  expression: JsxExpressionModel,
-): boolean {
+function isTrustedBrandCall(model: ComponentModuleModel, expression: JsxExpressionModel): boolean {
   const astExpression = expressionAtSpan(
     ts as FrameworkIdentityTypeScript,
     model.sourceFile,
     expression,
   );
   if (!astExpression || !ts.isCallExpression(astExpression)) return false;
-  if (
-    expressionResolvesToTrustedHtmlPureBrand(model.sourceFile, astExpression.expression)
-  ) {
+  if (expressionResolvesToTrustedHtmlPureBrand(model.sourceFile, astExpression.expression)) {
     const metadata = astExpression.arguments[1];
     return (
-      metadata !== undefined &&
-      parserStaticTrustedOutputMetadataReason(metadata) !== undefined
+      metadata !== undefined && parserStaticTrustedOutputMetadataReason(metadata) !== undefined
     );
   }
   return expressionResolvesToTrustedHtmlBrand(model.sourceFile, astExpression.expression);
@@ -1804,11 +1798,7 @@ function attributeExpressionIsTrustedHtmlBrand(
   const expressions = jsxExpressions(model);
   const expressionLength = compilerArrayLength(expressions, 'Trusted HTML attribute expressions');
   for (let index = 0; index < expressionLength; index += 1) {
-    const expression = outputArrayValue(
-      expressions,
-      index,
-      'Trusted HTML attribute expressions',
-    );
+    const expression = outputArrayValue(expressions, index, 'Trusted HTML attribute expressions');
     if (
       expression.start === attribute.expressionStart &&
       expression.end === attribute.expressionEnd

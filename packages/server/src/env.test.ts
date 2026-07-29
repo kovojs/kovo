@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isSecret,
-  trustedReveal,
-  type SecretValue,
-} from '@kovojs/core/security';
+import { isSecret, trustedReveal, type SecretValue } from '@kovojs/core/security';
 import { drainSecretRevealAuditFacts } from '@kovojs/core/internal/security';
 
 import { createApp } from './app.js';

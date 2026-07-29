@@ -126,17 +126,11 @@ describe('framework identity resolver', () => {
       exportName: 'defineKovo',
       module: '@kovojs/server',
     });
-    expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp'),
-    ).toBeUndefined();
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'createApp')).toBeUndefined();
   });
 
   it('catalogs the reviewed server-root app-authoring helpers', () => {
-    for (const exportName of [
-      'mutationFormAttributes',
-      'session',
-      'stylesheet',
-    ] as const) {
+    for (const exportName of ['mutationFormAttributes', 'session', 'stylesheet'] as const) {
       expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', exportName)).toEqual({
         exportName,
         module: '@kovojs/server',
@@ -151,16 +145,16 @@ describe('framework identity resolver', () => {
       exportName: 'runCommand',
       module: '@kovojs/server',
     });
-    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'runCommand')).toBeUndefined();
+    expect(
+      frameworkCatalogExportForModuleSpecifier('@kovojs/server', 'runCommand'),
+    ).toBeUndefined();
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/server/security', 'mintCsrfToken'),
     ).toEqual({
       exportName: 'mintCsrfToken',
       module: '@kovojs/server',
     });
-    expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/server/agent', 'agent'),
-    ).toEqual({
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server/agent', 'agent')).toEqual({
       exportName: 'agent',
       module: '@kovojs/server',
     });
@@ -168,18 +162,16 @@ describe('framework identity resolver', () => {
       exportName: 'task',
       module: '@kovojs/server',
     });
-    expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/server/webhooks', 'webhook'),
-    ).toEqual({
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server/webhooks', 'webhook')).toEqual({
       exportName: 'webhook',
       module: '@kovojs/server',
     });
-    expect(
-      frameworkCatalogExportForModuleSpecifier('@kovojs/server/files', 'rootedFiles'),
-    ).toEqual({
-      exportName: 'rootedFiles',
-      module: '@kovojs/server',
-    });
+    expect(frameworkCatalogExportForModuleSpecifier('@kovojs/server/files', 'rootedFiles')).toEqual(
+      {
+        exportName: 'rootedFiles',
+        module: '@kovojs/server',
+      },
+    );
     expect(
       frameworkCatalogExportForModuleSpecifier('@kovojs/server/storage-keys', 'scopedKey'),
     ).toEqual({
@@ -202,10 +194,7 @@ describe('framework identity resolver', () => {
 
   it('catalogs core storage and scoped keys without server duplicate homes', () => {
     expect(
-      frameworkCatalogExportForModuleSpecifier(
-        '@kovojs/core/storage',
-        'createFileSystemStorage',
-      ),
+      frameworkCatalogExportForModuleSpecifier('@kovojs/core/storage', 'createFileSystemStorage'),
     ).toEqual({
       exportName: 'createFileSystemStorage',
       module: '@kovojs/core',

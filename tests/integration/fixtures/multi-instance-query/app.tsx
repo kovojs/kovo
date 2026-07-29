@@ -40,7 +40,8 @@ const homeRoute = route('/', {
             key: 'product:p1',
             name: 'product',
             value: p1,
-          }), { reason: "framework integration fixture markup" },
+          }),
+          { reason: 'framework integration fixture markup' },
         )}
         {trustedHtml(
           renderQueryScript({
@@ -48,9 +49,12 @@ const homeRoute = route('/', {
             key: 'product:p2',
             name: 'product',
             value: p2,
-          }), { reason: "framework integration fixture markup" },
+          }),
+          { reason: 'framework integration fixture markup' },
         )}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+        {trustedHtml('<script type="module" src="/client.ts"></script>', {
+          reason: 'framework integration fixture markup',
+        })}
         <ProductCard key="p1" productId="p1" />
         <StaticProductCard key="p2" productId="p2" />
         <form mutation={restockProduct} enhance>

@@ -2,10 +2,7 @@ import type { AccessDecision } from '@kovojs/server';
 import type { CsrfOptions } from '@kovojs/server/security';
 import type { Session, User } from 'better-auth';
 
-import type {
-  BetterAuthAppBindingsOptions,
-  BetterAuthAppRequest,
-} from '../app-bindings.js';
+import type { BetterAuthAppBindingsOptions, BetterAuthAppRequest } from '../app-bindings.js';
 import type { BetterAuthSessionMapper } from '../session.js';
 import {
   betterAuthFreezeOwn,
@@ -74,9 +71,7 @@ function requiredOption<Value>(
     `Better Auth ${backend} app binding option ${property}`,
   );
   if (value === undefined) {
-    throw new NativeTypeError(
-      `Better Auth ${backend} app binding option ${property} is required.`,
-    );
+    throw new NativeTypeError(`Better Auth ${backend} app binding option ${property} is required.`);
   }
   return value;
 }

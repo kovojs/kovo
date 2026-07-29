@@ -26,7 +26,9 @@ export const publishPresence = mutation('broadcast-channel-sync/publish', {
 const homeRoute = route('/', {
   page: () => (
     <main>
-      {trustedHtml('<script type="module" src="/client.ts"></script>', { reason: "framework integration fixture markup" })}
+      {trustedHtml('<script type="module" src="/client.ts"></script>', {
+        reason: 'framework integration fixture markup',
+      })}
       <PresencePanel />
     </main>
   ),

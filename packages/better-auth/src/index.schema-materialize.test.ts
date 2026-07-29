@@ -150,7 +150,9 @@ describe('schema.ts materialization', () => {
 
     expect(result?.validation.ok).toBe(true);
     expect(result?.annotatedTables).toEqual(['session']);
-    expect(result?.source).toContain("kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] }))");
+    expect(result?.source).toContain(
+      "kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] }))",
+    );
     expect(generated?.generatedTables).toContainEqual({
       exportName: 'session',
       physicalTable: 'session',

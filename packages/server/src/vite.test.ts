@@ -592,7 +592,10 @@ export default createApp({
           default: createApp({
             routes: [
               route('/cart', {
-                page: () => trustedHtml('<main>Cart</main>', { reason: "framework server rendering test fixture" }),
+                page: () =>
+                  trustedHtml('<main>Cart</main>', {
+                    reason: 'framework server rendering test fixture',
+                  }),
               }),
             ],
           }),
@@ -710,10 +713,16 @@ export const LoginCard = component({
             default: createApp({
               routes: [
                 route('/', {
-                  page: () => trustedHtml('<main>Home</main>', { reason: "framework server rendering test fixture" }),
+                  page: () =>
+                    trustedHtml('<main>Home</main>', {
+                      reason: 'framework server rendering test fixture',
+                    }),
                 }),
                 route('/login', {
-                  page: () => trustedHtml('<main>Login</main>', { reason: "framework server rendering test fixture" }),
+                  page: () =>
+                    trustedHtml('<main>Login</main>', {
+                      reason: 'framework server rendering test fixture',
+                    }),
                 }),
               ],
             }),

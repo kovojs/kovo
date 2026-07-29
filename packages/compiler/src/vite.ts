@@ -721,11 +721,7 @@ function createBoundKovoVitePlugin(
           return null;
         }
         const standaloneRegistrySource = isAuthoredSource
-          ? lowerViteSourceDerivedRegistryDeclarations(
-              transformRoot,
-              fileName,
-              source,
-            )
+          ? lowerViteSourceDerivedRegistryDeclarations(transformRoot, fileName, source)
           : null;
         if (!isCurrent()) {
           finish();

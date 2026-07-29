@@ -6,10 +6,7 @@ import type {
 } from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import { canonicalJsonStringify } from '@kovojs/core/internal/json';
-import {
-  declaredKovoAppId,
-  resolveKovoAppToken,
-} from '@kovojs/server/internal/build';
+import { declaredKovoAppId, resolveKovoAppToken } from '@kovojs/server/internal/build';
 import { runtimePostureFactsFromGraph } from '@kovojs/server/internal/runtime-registry-wire';
 import type { KovoApp } from '@kovojs/server/custom-adapters';
 import { createHash } from 'node:crypto';
@@ -177,10 +174,7 @@ async function assertCurrentAnalysisInputs(
   }
 }
 
-async function assertCurrentLockfile(
-  graph: KovoCheckInput,
-  projectRoot: string,
-): Promise<void> {
+async function assertCurrentLockfile(graph: KovoCheckInput, projectRoot: string): Promise<void> {
   const expected = graph.provenance?.pnpmLock.contentHash;
   if (typeof expected !== 'string' || !sha256Pattern.test(expected)) {
     throw new TypeError('Kovo test artifact lacks exact pnpm lockfile provenance.');

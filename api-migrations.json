@@ -1,10 +1,7 @@
 {
   "schema": "kovo-api-migration-ledger/v1",
   "resultSchema": "kovo-api-migration-result/v1",
-  "modes": [
-    "check",
-    "write"
-  ],
+  "modes": ["check", "write"],
   "refusalCategories": [
     "ambiguous-binding",
     "app-context",
@@ -136,12 +133,8 @@
       "tool": {
         "path": "scripts/migrate-core-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/core-task-topology-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured core migration result.",
@@ -1390,12 +1383,8 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"
-        ],
-        "refusals": [
-          "scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"
-        ]
+        "rewrites": ["scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -1433,12 +1422,8 @@
       "tool": {
         "path": "scripts/migrate-style-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/style-api-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
@@ -1667,12 +1652,8 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"
-        ],
-        "refusals": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"
-        ]
+        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -1728,12 +1709,8 @@
       "tool": {
         "path": "scripts/migrate-ui-headless-icons-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "rules": [
         {
@@ -2180,12 +2157,8 @@
       "tool": {
         "path": "scripts/migrate-browser-client-installer-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/browser-client-installer-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the client bootstrap import and call edits listed by the structured migration result.",
@@ -2380,18 +2353,12 @@
       "id": "browser-authoring-v1",
       "state": "removed",
       "owner": "browser-runtime",
-      "decisions": [
-        "@kovojs/browser#TrustedOutputMetadataInput"
-      ],
+      "decisions": ["@kovojs/browser#TrustedOutputMetadataInput"],
       "tool": {
         "path": "scripts/migrate-browser-authoring-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/browser-authoring-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the trust-metadata edits named by the structured migration result.",
@@ -2442,9 +2409,7 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/browser-authoring-v1/trust-reason.input.ts"
-        ],
+        "rewrites": ["scripts/fixtures/api-migrations/browser-authoring-v1/trust-reason.input.ts"],
         "refusals": [
           "scripts/fixtures/api-migrations/browser-authoring-v1/derive-strings.refusal.ts",
           "scripts/fixtures/api-migrations/browser-authoring-v1/missing-metadata.refusal.ts"
@@ -2906,12 +2871,8 @@
       "tool": {
         "path": "scripts/migrate-server-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/server-task-topology-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured server migration result.",
@@ -8148,12 +8109,8 @@
       "tool": {
         "path": "scripts/migrate-test-harness-v2.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/test-harness-v2.md",
       "rollback": "From a clean worktree, restore the prior Kovo test package and reverse only source changes made after resolving the structured refusal report.",
@@ -8270,9 +8227,7 @@
       ],
       "fixtures": {
         "rewrites": [],
-        "refusals": [
-          "scripts/fixtures/api-migrations/test-harness-v2/legacy-harness.refusal.ts"
-        ]
+        "refusals": ["scripts/fixtures/api-migrations/test-harness-v2/legacy-harness.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -8296,12 +8251,8 @@
       "tool": {
         "path": "scripts/migrate-drizzle-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/drizzle-typed-annotations-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo and Drizzle package versions and reverse only files reported as rewritten by the structured Drizzle migration result.",
@@ -8439,12 +8390,8 @@
       "tool": {
         "path": "scripts/migrate-better-auth-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/better-auth-generated-assembly-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured Better Auth migration result.",

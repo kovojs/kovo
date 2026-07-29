@@ -11,10 +11,7 @@ pnpm add @kovojs/better-auth
 Choose the app-binding task entry for the database runtime your app already owns:
 
 ```ts
-import {
-  betterAuthCsrfFromEnvironment,
-  type BetterAuthAppRequest,
-} from '@kovojs/better-auth';
+import { betterAuthCsrfFromEnvironment, type BetterAuthAppRequest } from '@kovojs/better-auth';
 import { createBetterAuthPostgresAppBindings } from '@kovojs/better-auth/postgres';
 import { publicAccess } from '@kovojs/server';
 import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';

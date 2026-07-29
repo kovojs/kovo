@@ -452,9 +452,9 @@ function buildTrustedCallEscape(
   const justification =
     name === 'trustedHtml' || name === 'trustedUrl'
       ? structuredTrustedOutputReason(args)
-      : optionsObjectJustification(args) ??
+      : (optionsObjectJustification(args) ??
         trailingStringJustification(args) ??
-        leadingJustification(call);
+        leadingJustification(call));
   const owner = TRUSTED_CALL_OWNER[name];
   const site = siteFor(file, call);
   const sourceBinding = sourceBindingForNode(file, call);
@@ -8385,14 +8385,8 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
 ): boolean {
   if (requestCallIsExactBetterAuthAppBindings(call)) return true;
   const identities = [
-    [
-      'createBetterAuthPostgresBindingsFromEnvironment',
-      '@kovojs/better-auth/generated/postgres',
-    ],
-    [
-      'createBetterAuthSqliteBindingsFromEnvironment',
-      '@kovojs/better-auth/generated/sqlite',
-    ],
+    ['createBetterAuthPostgresBindingsFromEnvironment', '@kovojs/better-auth/generated/postgres'],
+    ['createBetterAuthSqliteBindingsFromEnvironment', '@kovojs/better-auth/generated/sqlite'],
   ] as const;
   if (
     !identities.some(([exportName, module]) =>
@@ -32336,16 +32330,18 @@ function requestDrizzleTableReferenceIsExactGeneratedAuthSchemaEntry(
   for (const sourceFile of project.getSourceFiles()) {
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       if (
-        !([
+        !(
           [
-            'createBetterAuthPostgresBindingsFromEnvironment',
-            '@kovojs/better-auth/generated/postgres',
-          ],
-          [
-            'createBetterAuthSqliteBindingsFromEnvironment',
-            '@kovojs/better-auth/generated/sqlite',
-          ],
-        ] as const).some(([exportName, module]) =>
+            [
+              'createBetterAuthPostgresBindingsFromEnvironment',
+              '@kovojs/better-auth/generated/postgres',
+            ],
+            [
+              'createBetterAuthSqliteBindingsFromEnvironment',
+              '@kovojs/better-auth/generated/sqlite',
+            ],
+          ] as const
+        ).some(([exportName, module]) =>
           requestExactPristineDirectImport(call.getExpression(), module, exportName),
         ) ||
         call.getArguments().length !== 1

@@ -76,7 +76,14 @@ describe('Postgres posture app load shedding', () => {
       createApp({
         db: provider,
         requestLimits: { maxBodyBytes: 4 },
-        routes: [route('/document', { page: () => trustedHtml('<main>document</main>', { reason: "framework server rendering test fixture" }) })],
+        routes: [
+          route('/document', {
+            page: () =>
+              trustedHtml('<main>document</main>', {
+                reason: 'framework server rendering test fixture',
+              }),
+          }),
+        ],
       }),
     );
     const body = new ReadableStream<Uint8Array>({
