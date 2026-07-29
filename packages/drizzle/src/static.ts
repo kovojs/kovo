@@ -143,6 +143,16 @@ import {
   frameworkExport,
 } from './static/framework-identity.js';
 import { drizzleDiagnostic, relocateDrizzleDiagnostic } from './static/diagnostics.js';
+import {
+  compilerOwnedAppContractMemberEquals,
+  compilerOwnedAppContractMemberNameForExpression,
+  type CompilerOwnedAppContractStaticFact,
+} from './static/app-contract-static-facts.js';
+/** @internal */
+export type {
+  CompilerOwnedAppContractMemberName,
+  CompilerOwnedAppContractStaticFact,
+} from './static/app-contract-static-facts.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = drizzleStaticReadonlySet([
   'eq',
@@ -812,6 +822,12 @@ function ownerDomainSetFromTables(
 
 /** @internal */
 /** @internal */ export interface TouchGraphProjectOptions {
+  /**
+   * Exact member facts from the compiler-owned app-contract project. Drizzle revalidates every
+   * filename, full source snapshot, bounded property-access span, owner, and member before using
+   * the facts; authored callers cannot opt a structural lookalike into app semantics (SPEC §5.2).
+   */
+  appContractStaticFacts?: readonly CompilerOwnedAppContractStaticFact[];
   compilerOptions?: CompilerOptions;
   files: readonly SourceFileInput[];
 }
@@ -3015,10 +3031,11 @@ function isKovoDrizzleTrustedSqlCallee(callee: Node): boolean {
  * @internal
  */
 export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
-  return expressionResolvesToFrameworkExport(
-    expression,
-    frameworkExport('@kovojs/server', exportName),
-    { legacyGlobals: [frameworkExport('@kovojs/server', exportName)] },
+  return (
+    compilerOwnedAppContractMemberEquals(expression, exportName) ||
+    expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/server', exportName), {
+      legacyGlobals: [frameworkExport('@kovojs/server', exportName)],
+    })
   );
 }
 
@@ -3268,6 +3285,10 @@ interface SqlSink {
 
 function sqlSink(call: CallExpression): SqlSink | null {
   const expression = call.getExpression();
+  // App declaration/access calls are framework control-plane APIs, not raw SQL execution. Only an
+  // exact compiler-owned source fact can take this branch; an ordinary `db.query(...)` spelling
+  // remains a KV422 sink (SPEC §5.2/§10.3).
+  if (compilerOwnedAppContractMemberNameForExpression(expression)) return null;
   if (Node.isPropertyAccessExpression(expression)) {
     const name = expression.getName();
     if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
