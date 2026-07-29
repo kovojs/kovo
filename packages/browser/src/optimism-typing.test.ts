@@ -3,19 +3,8 @@ import { form } from '@kovojs/core';
 
 import { type OptimisticFor } from './optimism.js';
 
-declare module '@kovojs/core' {
-  interface InvalidationSets {
-    'cart/add': 'cart' | 'productGrid';
-  }
-
-  interface QueryRegistry {
-    cart: { count: number };
-    productGrid: { products: { id: string; pending: boolean }[] };
-  }
-}
-
 // SPEC.md §10.4: hand-written optimistic plans are typed from the mutation form
-// input, query value shapes, and generated invalidation sets; split from the
+// input and an explicit app-local query-value map; split from the
 // runtime apply and rebase seams in the sibling optimism-*.test.ts files.
 describe('optimistic query typing', () => {
   it('types hand-written optimistic plans from mutation forms and query shapes', () => {
@@ -46,7 +35,7 @@ describe('optimistic query typing', () => {
     });
   });
 
-  it('requires optimistic coverage from generated invalidation sets by default', () => {
+  it('requires optimistic coverage from an explicit app-local query map', () => {
     const addToCart = form(addToCartMutation);
     const optimistic = {
       transforms: {
@@ -57,7 +46,13 @@ describe('optimistic query typing', () => {
         },
         productGrid: 'await-fragment',
       },
-    } satisfies OptimisticFor<typeof addToCart>;
+    } satisfies OptimisticFor<
+      typeof addToCart,
+      {
+        cart: { count: number };
+        productGrid: { products: { id: string; pending: boolean }[] };
+      }
+    >;
 
     expect(optimistic.transforms.productGrid).toBe('await-fragment');
 
@@ -71,7 +66,13 @@ describe('optimistic query typing', () => {
             };
           },
         },
-      }) satisfies OptimisticFor<typeof addToCart>;
+      }) satisfies OptimisticFor<
+        typeof addToCart,
+        {
+          cart: { count: number };
+          productGrid: { products: { id: string; pending: boolean }[] };
+        }
+      >;
     };
 
     expect(assertMissingCoverageRejected).toBeTypeOf('function');

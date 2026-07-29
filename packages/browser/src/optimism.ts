@@ -1,4 +1,4 @@
-import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
+import type { Form, FormInput } from '@kovojs/core';
 import { diagnosticConstructors } from '@kovojs/core/internal/diagnostics';
 import { reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
@@ -110,12 +110,16 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
   | KeyedOptimisticEntry<Input, Value>;
 
 /**
- * The exhaustiveness-checked optimistic plan for a mutation form. Keyed by the
- * queries the mutation invalidates, each entry is either a pure
+ * The exhaustiveness-checked advanced optimistic plan for a mutation form. Pass
+ * the app-local query-value map explicitly; compiler-generated global registries
+ * are not part of the human API (SPEC §5.2/§10.4). Each entry is either a pure
  * `OptimisticTransform` (predict from input) or `'await-fragment'` (a recorded
  * decision to wait for server truth). TypeScript requires an entry per
- * invalidated query, so deleting a transform turns the `satisfies` clause red
- * (SPEC §10.4, §10.6).
+ * listed query, so deleting a transform turns the `satisfies` clause red.
+ *
+ * Prefer `app.query(...).optimistic(...)` inside `app.mutation({ optimistic })`;
+ * this standalone shape is for advanced generated plans that already own an
+ * explicit query-value contract (SPEC §10.4/§10.6).
  *
  * @example
  * // kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."
@@ -128,17 +132,11 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
  * export const addToCartOptimistic = {
  *   queue: 'cart',
  *   transforms: {},
- * } satisfies OptimisticFor<typeof addToCartForm>;
+ * } satisfies OptimisticFor<typeof addToCartForm, { cart: { count: number } }>;
  */
 export type OptimisticFor<
   Definition extends Form<string, any, any>,
-  QueryValues extends Record<string, unknown> = {
-    [QueryName in Definition extends Form<infer Key, any, any>
-      ? Key extends keyof InvalidationSets
-        ? Extract<InvalidationSets[Key], Extract<keyof QueryRegistry, string>>
-        : never
-      : never]: QueryRegistry[QueryName];
-  },
+  QueryValues extends Record<string, unknown>,
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {
     [QueryName in keyof QueryValues]: OptimisticEntry<
