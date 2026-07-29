@@ -130,7 +130,7 @@
     },
     {
       "path": "@kovojs/compiler/dist/internal.mjs",
-      "sha512": "sha512-FMR5U/aSRcJnCWtkMTArNFW+TLihuSenE/xT2lpCQ0BPOGle3sOn+rmvHETMGKkU4YMGmmlTxGEaKNP2joH5vw=="
+      "sha512": "sha512-jCBw3Ny9jzFb/dJtE6qhmA8uArcm/RHcbqybdaAtu6x2zpYh+7IufVPIftcv4enzQ1Ka/ldY9hYRcU+c2d8PBQ=="
     },
     {
       "path": "@kovojs/compiler/dist/internal/graph.mjs",
@@ -510,7 +510,7 @@
     },
     {
       "path": "@kovojs/server/dist/internal/app-shell-vite.mjs",
-      "sha512": "sha512-Jb5MaRZZTqYBz/ndD3NHkgAQKM4CUBeUSG1Nj74kCwYHLW8tghy5zs2IpDCj6LvZlgEt06THE0JiOkj4UFpI4Q=="
+      "sha512": "sha512-ZRh2CiSkXcqfZKB3Be7Aztqss2hW8jj+WioiWEDfSRJXz51/pqa/dITp50DEeU63AUxmvAeHFmvxXNfiCoQXFw=="
     },
     {
       "path": "@kovojs/server/dist/internal/audit-facts.mjs",
@@ -602,7 +602,7 @@
     },
     {
       "path": "@kovojs/server/dist/internal/vite-security-profile.mjs",
-      "sha512": "sha512-FstciIMjLkCsx3XO4ol4tBrfwL5gxOuShRadHlbMpWmRysi1LjzdehZUI68HA1yZE1lRAGU957Akai7R1ijdOg=="
+      "sha512": "sha512-zxAm3ygIx5F7xTFRIhJbhbJCadJ0mRRQYXS9ni/lXwh4d+1+TBN4ic0hDK+/d++t4G4sV6Gou1K9yFiDk6QLxw=="
     },
     {
       "path": "@kovojs/server/dist/internal/wire.mjs",
@@ -753,8 +753,8 @@
       "sha512": "sha512-s/X4W6U8K3hW0K5S2P3QF2haQSzA7YuIkhkYP+++lwNHG3EpNPmeofYKwZje0WlXCZO/aOJ4ELOguEfSqFKk7g=="
     },
     {
-      "path": "@kovojs/server/dist/vite-dev-B0BrVVOs.mjs",
-      "sha512": "sha512-NBESpK1LPYcradU1Fm5/vf+aCAPS11HphRAg8LGNZpU5iGceKifaaBTJxqB08E4mnJ3kajSzSvjh12gy/43+2w=="
+      "path": "@kovojs/server/dist/vite-dev-DSmtk0im.mjs",
+      "sha512": "sha512-L+4r+zudC5jNKAiX9EpJp82y0AW1sv64YJfC1W/CGXF1741vzmzYG2L+MKLS0EKmf84pSFpwNRFKcDEaV4Ec8A=="
     },
     {
       "path": "@kovojs/server/dist/vite.mjs",

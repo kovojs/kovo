@@ -92,6 +92,14 @@
       "review": "Exact non-keyed SHA-256 digests bind the installed documentation snapshot and version pointer; they acquire no entropy, key material, or keyed operation."
     },
     {
+      "id": "crypto-door-cli-graph-proof",
+      "file": "packages/cli/src/graph-proof.ts",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Domain-separated non-keyed SHA-256 digests bind analyzed source/config identities, completed graph facts, render-plan identity, and active client-module hrefs; they acquire no entropy, key material, or keyed operation."
+    },
+    {
       "id": "crypto-door-012",
       "file": "packages/cli/src/artifact-provenance.ts",
       "kind": "digest",
@@ -534,6 +542,22 @@
       "operations": ["createHash"],
       "tier": "build-tooling",
       "review": "Exact non-keyed SHA-256 digests compare bounded build directories and graph artifacts in an isolated packed-app reproducer; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-golden-journey-artifacts",
+      "file": "scripts/golden-journey/artifacts.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests bind bounded retained failure-artifact directories and their redacted evidence bytes; they acquire no entropy, key material, or keyed operation."
+    },
+    {
+      "id": "crypto-door-golden-journey-packed-app",
+      "file": "scripts/golden-journey/packed-app.mjs",
+      "kind": "digest",
+      "operations": ["createHash"],
+      "tier": "build-tooling",
+      "review": "Exact non-keyed SHA-256 digests compare bounded graph and build-artifact files during authenticated packed-app journeys; they acquire no entropy, key material, or keyed operation."
     },
     {
       "id": "crypto-door-kovo-certificate",
