@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -27,6 +27,8 @@ import { assertRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/inter
 import {
   createFrameworkFileSystemBoundary,
   createFrameworkOutputFileSystemBoundary,
+  type CapturedFileReplacement,
+  type FrameworkFileSystemBoundary,
 } from '@kovojs/core/internal/filesystem';
 
 import {
@@ -314,7 +316,6 @@ async function runAddCommandWithOutputBoundary(
     return { exitCode: 0, output: `${lines.join('\n')}\n` };
   }
 
-  await output.ensureDirectory();
   const stagingRoot = await output.createStagingRoot('.kovo-add-staging-');
   const staging = createFrameworkOutputFileSystemBoundary(stagingRoot);
   let dependencyTransaction:
@@ -332,13 +333,19 @@ async function runAddCommandWithOutputBoundary(
         resolvedOutDir,
       );
       if (!ensuredDependencies.ok) {
+        const installAttempted = ensuredDependencies.reason === 'install-failed';
         return {
           error:
             `${addOutputVersion}\nERROR DEPENDENCIES reason=${ensuredDependencies.reason}` +
             ` packages=${missingDependencies.join(',')}` +
             ` install=${JSON.stringify(ensuredDependencies.installCommand)}` +
-            ' completed=none planned=component-files' +
-            (ensuredDependencies.rolledBack ? ' rolledBack=manifest' : '') +
+            ` completed=${installAttempted ? 'package-manager-attempt' : 'none'} planned=component-files` +
+            (ensuredDependencies.rolledBack === 'complete'
+              ? ' rolledBack=manifest,lockfile'
+              : ensuredDependencies.rolledBack === 'partial'
+                ? ' rolledBack=partial'
+                : '') +
+            (installAttempted ? ' residual=node_modules-possible' : '') +
             (ensuredDependencies.packageJsonPath
               ? ` manifest=${JSON.stringify(ensuredDependencies.packageJsonPath)}`
               : ''),
@@ -360,14 +367,29 @@ async function runAddCommandWithOutputBoundary(
       promoted.push(planned.relativePath);
     }
   } catch (error) {
-    for (const relativePath of promoted.reverse()) await output.deleteFile(relativePath);
-    await dependencyTransaction?.rollback();
+    let componentRollbackComplete = true;
+    for (const relativePath of promoted.reverse()) {
+      try {
+        await output.deleteFile(relativePath);
+      } catch {
+        componentRollbackComplete = false;
+      }
+    }
+    const packageRollback =
+      dependencyTransaction === undefined
+        ? undefined
+        : await dependencyTransaction.rollback().catch(() => 'partial' as const);
     return {
       error:
         `${addOutputVersion}\nERROR TRANSACTION reason=${stableText(
           error instanceof Error ? error.message : String(error),
-        )} completed=none planned=component-files` +
-        (dependencyTransaction === undefined ? '' : ' rolledBack=manifest'),
+        )} completed=${dependencyTransaction === undefined ? 'none' : 'package-manager-install'} planned=component-files` +
+        ` rolledBack=${componentRollbackComplete ? 'component-files' : 'component-files-partial'}` +
+        (packageRollback === undefined
+          ? ''
+          : packageRollback === 'complete'
+            ? ',manifest,lockfile residual=node_modules-possible'
+            : ',package-state-partial residual=node_modules-possible'),
       exitCode: 1,
     };
   } finally {
@@ -397,7 +419,7 @@ type EnsureAddPackageDependenciesResult =
       installCommand: string;
       ok: true;
       packageJsonPath?: string;
-      rollback(): Promise<void>;
+      rollback(): Promise<'complete' | 'partial'>;
       status: 'follow-up' | 'installed';
     }
   | {
@@ -405,8 +427,14 @@ type EnsureAddPackageDependenciesResult =
       ok: false;
       packageJsonPath?: string;
       reason: 'install-failed' | 'invalid-package-json';
-      rolledBack: boolean;
+      rolledBack: 'complete' | 'none' | 'partial';
     };
+
+interface AddRollbackFile {
+  readonly boundary: FrameworkFileSystemBoundary;
+  readonly fileName: string;
+  readonly original?: CapturedFileReplacement;
+}
 
 async function ensureAddPackageDependencies(
   packageNames: readonly string[],
@@ -417,7 +445,7 @@ async function ensureAddPackageDependencies(
     return {
       installCommand: `pnpm add ${packageNames.join(' ')}`,
       ok: true,
-      rollback: async () => {},
+      rollback: async () => 'complete',
       status: 'follow-up',
     };
   }
@@ -429,7 +457,7 @@ async function ensureAddPackageDependencies(
       ok: false,
       packageJsonPath,
       reason: 'invalid-package-json',
-      rolledBack: false,
+      rolledBack: 'none',
     };
   }
   const installCommand = `${packageManagerName(parsed)} install`;
@@ -442,7 +470,7 @@ async function ensureAddPackageDependencies(
       installCommand,
       ok: true,
       packageJsonPath,
-      rollback: async () => {},
+      rollback: async () => 'complete',
       status: 'installed',
     };
   }
@@ -454,21 +482,31 @@ async function ensureAddPackageDependencies(
     ]),
   );
   const nextManifest = addDependenciesToPackageJson(parsed, dependencySpecs);
-  const manifestOutput = await createFrameworkFileSystemBoundary(dirname(packageJsonPath));
-  const originalManifest = await manifestOutput.captureFileForReplacement(
-    basename(packageJsonPath),
-  );
-  if (originalManifest === undefined) {
+  const manifestRollback = await captureAddRollbackFile(packageJsonPath);
+  if (manifestRollback?.original === undefined) {
     return {
       installCommand,
       ok: false,
       packageJsonPath,
       reason: 'invalid-package-json',
-      rolledBack: false,
+      rolledBack: 'none',
     };
   }
-  await manifestOutput.replaceCapturedFile(
-    originalManifest,
+  const lockfileRollback = await captureAddRollbackFile(
+    addPackageManagerLockfilePath(parsed, packageJsonPath),
+  );
+  if (lockfileRollback === undefined) {
+    return {
+      installCommand,
+      ok: false,
+      packageJsonPath,
+      reason: 'invalid-package-json',
+      rolledBack: 'none',
+    };
+  }
+  const rollbackFiles = [manifestRollback, lockfileRollback];
+  await manifestRollback.boundary.replaceCapturedFile(
+    manifestRollback.original,
     `${JSON.stringify(nextManifest, null, 2)}\n`,
   );
 
@@ -479,13 +517,7 @@ async function ensureAddPackageDependencies(
       stdio: 'pipe',
     });
   } catch {
-    const installedManifest = await manifestOutput.captureFileForReplacement(
-      basename(packageJsonPath),
-    );
-    const rolledBack = installedManifest !== undefined;
-    if (installedManifest !== undefined) {
-      await manifestOutput.replaceCapturedFile(installedManifest, originalManifest.body);
-    }
+    const rolledBack = await rollbackAddFiles(rollbackFiles);
     return {
       installCommand,
       ok: false,
@@ -499,16 +531,87 @@ async function ensureAddPackageDependencies(
     installCommand,
     ok: true,
     packageJsonPath,
-    rollback: async () => {
-      const installedManifest = await manifestOutput.captureFileForReplacement(
-        basename(packageJsonPath),
-      );
-      if (installedManifest !== undefined) {
-        await manifestOutput.replaceCapturedFile(installedManifest, originalManifest.body);
-      }
-    },
+    rollback: async () => rollbackAddFiles(rollbackFiles),
     status: 'installed',
   };
+}
+
+async function captureAddRollbackFile(path: string): Promise<AddRollbackFile | undefined> {
+  const boundary = await createFrameworkFileSystemBoundary(dirname(path));
+  const fileName = basename(path);
+  const original = await boundary.captureFileForReplacement(fileName);
+  if (original === undefined && lexicalPathExists(path)) return undefined;
+  return {
+    boundary,
+    fileName,
+    ...(original === undefined ? {} : { original }),
+  };
+}
+
+async function rollbackAddFiles(
+  files: readonly AddRollbackFile[],
+): Promise<'complete' | 'partial'> {
+  const results = await Promise.all(files.map(restoreAddRollbackFile));
+  return results.every(Boolean) ? 'complete' : 'partial';
+}
+
+async function restoreAddRollbackFile(file: AddRollbackFile): Promise<boolean> {
+  try {
+    const current = await file.boundary.captureFileForReplacement(file.fileName);
+    if (file.original === undefined) {
+      if (current !== undefined || lexicalPathExists(join(file.boundary.root, file.fileName))) {
+        await file.boundary.deleteFile(file.fileName);
+      }
+      return !lexicalPathExists(join(file.boundary.root, file.fileName));
+    }
+    if (current !== undefined) {
+      await file.boundary.replaceCapturedFile(current, file.original.body);
+      return true;
+    }
+    if (lexicalPathExists(join(file.boundary.root, file.fileName))) {
+      await file.boundary.deleteFile(file.fileName);
+    }
+    await file.boundary.writeFile(file.fileName, file.original.body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function addPackageManagerLockfilePath(
+  manifest: Record<string, unknown>,
+  packageJsonPath: string,
+): string {
+  const packageRoot = dirname(packageJsonPath);
+  const manager = packageManagerName(manifest);
+  const lockfileName =
+    manager === 'bun'
+      ? 'bun.lock'
+      : manager === 'npm'
+        ? 'package-lock.json'
+        : manager === 'yarn'
+          ? 'yarn.lock'
+          : 'pnpm-lock.yaml';
+  const existing = findNearestFile(packageRoot, lockfileName);
+  if (existing !== undefined) return existing;
+  if (manager === 'bun') {
+    const binaryLockfile = findNearestFile(packageRoot, 'bun.lockb');
+    if (binaryLockfile !== undefined) return binaryLockfile;
+  }
+  if (manager === 'pnpm') {
+    const workspace = findNearestFile(packageRoot, 'pnpm-workspace.yaml');
+    if (workspace !== undefined) return join(dirname(workspace), lockfileName);
+  }
+  return join(packageRoot, lockfileName);
+}
+
+function lexicalPathExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readAddPackageJson(path: string): Promise<Record<string, unknown> | undefined> {

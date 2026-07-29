@@ -264,11 +264,12 @@ versions, migrations, or authored source.
 same registry rather than a second alias table. `kovo add ... --dry-run` performs no filesystem or
 process writes. `--install=never` copies source and reports the dependency follow-up without
 editing the manifest; `--install=auto` stages component files, atomically updates the captured
-manifest, runs the declared package manager, and promotes source only after install succeeds. An
-install or promotion failure restores staged manifest/source edits and reports completed, planned,
-and rolled-back work distinctly. `kovo test` is the app-facing, schema-owned one-shot Vitest
-command; the CLI may delegate to its pinned Vite Plus implementation dependency, but generated
-app scripts and help do not expose that implementation command.
+manifest, captures the package-manager lockfile, runs the declared package manager, and promotes
+source only after install succeeds. An install or promotion failure restores staged
+manifest/lockfile/source edits and reports completed, planned, rolled-back, and possible
+package-manager-owned `node_modules` work distinctly. `kovo test` is the app-facing, schema-owned
+one-shot Vitest command; the CLI may delegate to its pinned Vite Plus implementation dependency,
+but generated app scripts and help do not expose that implementation command.
 
 **Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
 app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,

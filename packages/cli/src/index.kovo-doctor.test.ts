@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -130,6 +138,23 @@ describe('kovo doctor', () => {
     expect(fixed.exitCode).toBe(0);
     expect(fixed.stdout).toContain('FIX cache removed=.kovo/cache');
     expect(existsSync(cache)).toBe(false);
+  });
+
+  it('refuses to follow a cache symlink during safe repair', async () => {
+    const root = healthyFixture();
+    const external = mkdtempSync(join(tmpdir(), 'kovo-doctor-external-cache-'));
+    roots.push(external);
+    mkdirSync(join(root, '.kovo'), { recursive: true });
+    writeFileSync(join(external, 'sentinel'), 'must survive');
+    symlinkSync(external, join(root, '.kovo/cache'), 'dir');
+    vi.spyOn(doctorHost, 'execFileSync').mockReturnValue('10.12.1\n');
+
+    const result = await capture(root, ['doctor', '--fix']);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('ERROR cache cause=');
+    expect(result.stderr).toContain('will not be repaired');
+    expect(existsSync(join(external, 'sentinel'))).toBe(true);
   });
 });
 

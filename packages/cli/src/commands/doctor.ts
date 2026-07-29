@@ -4,14 +4,14 @@ import {
   constants,
   existsSync,
   lstatSync,
-  mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
-  rmSync,
   statSync,
 } from 'node:fs';
-import { basename, join, relative, resolve, sep } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
+
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import {
@@ -35,8 +35,6 @@ const KOVO_PACKAGE_PREFIX = '@kovojs/';
 export const doctorHost = {
   accessSync,
   execFileSync,
-  mkdirSync,
-  rmSync,
 };
 
 export interface KovoDoctorOptions {
@@ -50,6 +48,7 @@ type DoctorParseResult =
   | { readonly message: string; readonly ok: false };
 
 interface DoctorContext {
+  readonly configError?: string;
   readonly configPath?: string;
   readonly configSource?: string;
   readonly env: NodeJS.ProcessEnv;
@@ -116,9 +115,17 @@ export async function runDoctorCommand(
   }
 
   const configPath = findConfig(root);
-  const configSource =
-    configPath === undefined ? undefined : boundedText(configPath, MAX_CONFIG_BYTES);
+  let configError: string | undefined;
+  let configSource: string | undefined;
+  if (configPath !== undefined) {
+    try {
+      configSource = boundedText(configPath, MAX_CONFIG_BYTES);
+    } catch (error) {
+      configError = errorMessage(error);
+    }
+  }
   const context: DoctorContext = {
+    ...(configError === undefined ? {} : { configError }),
     ...(configPath === undefined ? {} : { configPath }),
     ...(configSource === undefined ? {} : { configSource }),
     env: security.invocationEnv,
@@ -137,8 +144,8 @@ export async function runDoctorCommand(
     checkDatabase(context),
     checkMigrations(context),
     checkRetention(context),
-    checkWritablePaths(context),
-    checkCache(context),
+    await checkWritablePaths(context),
+    await checkCache(context),
   ];
   return doctorResult(
     root,
@@ -248,6 +255,13 @@ function checkInstalledPackages(context: DoctorContext): DoctorCheckResult {
 }
 
 function checkConfig(context: DoctorContext): DoctorCheckResult {
+  if (context.configError !== undefined) {
+    return finding(
+      'KOVO_DOCTOR_CONFIG',
+      `Kovo config could not be read safely: ${context.configError}.`,
+      'config',
+    );
+  }
   if (context.configPath === undefined || context.configSource === undefined) {
     return finding(
       'KOVO_DOCTOR_CONFIG',
@@ -344,12 +358,19 @@ function checkRetention(context: DoctorContext): DoctorCheckResult {
   return pass('retention', 'required=true declared=true');
 }
 
-function checkWritablePaths(context: DoctorContext): DoctorCheckResult {
+async function checkWritablePaths(context: DoctorContext): Promise<DoctorCheckResult> {
   try {
     doctorHost.accessSync(context.root, constants.W_OK);
     const kovoRoot = join(context.root, '.kovo');
-    if (existsSync(kovoRoot)) doctorHost.accessSync(kovoRoot, constants.W_OK);
-    else if (context.fix) doctorHost.mkdirSync(kovoRoot, { recursive: false });
+    if (existsSync(kovoRoot)) {
+      const info = lstatSync(kovoRoot);
+      if (info.isSymbolicLink() || !info.isDirectory()) {
+        throw new TypeError('.kovo must be a real project-owned directory');
+      }
+      doctorHost.accessSync(kovoRoot, constants.W_OK);
+    } else if (context.fix) {
+      await createFrameworkOutputFileSystemBoundary(kovoRoot).ensureDirectory();
+    }
   } catch (error) {
     return finding(
       'KOVO_DOCTOR_WRITABLE',
@@ -360,7 +381,7 @@ function checkWritablePaths(context: DoctorContext): DoctorCheckResult {
   return pass('writable', `root=true${context.fix ? ' safe-fix=checked' : ''}`);
 }
 
-function checkCache(context: DoctorContext): DoctorCheckResult {
+async function checkCache(context: DoctorContext): Promise<DoctorCheckResult> {
   const cache = join(context.root, '.kovo/cache');
   if (!existsSync(cache)) return pass('cache', 'state=absent');
   const info = lstatSync(cache);
@@ -381,16 +402,15 @@ function checkCache(context: DoctorContext): DoctorCheckResult {
     return pass('cache', 'state=current');
   }
   if (context.fix) {
-    const canonical = realpathSync(cache);
-    const canonicalRoot = realpathSync(context.root);
-    if (!canonical.startsWith(`${canonicalRoot}${sep}`)) {
+    try {
+      await createFrameworkOutputFileSystemBoundary(cache).removeTree();
+    } catch {
       return finding(
         'KOVO_DOCTOR_CACHE',
-        'Stale cache resolves outside the project and will not be repaired.',
+        'Stale cache could not be removed through the project-confined filesystem boundary.',
         'cache',
       );
     }
-    doctorHost.rmSync(cache, { force: true, recursive: true });
     return { line: 'FIX cache removed=.kovo/cache reason=stale-derived-inputs' };
   }
   return finding(
@@ -533,7 +553,12 @@ function inspectSourceTree(root: string): { readonly usesClientRetention: boolea
     }
     files += 1;
     if (!/\.[cm]?[jt]sx?$/u.test(current)) continue;
-    const text = boundedText(current, MAX_CONFIG_BYTES);
+    let text: string;
+    try {
+      text = boundedText(current, MAX_CONFIG_BYTES);
+    } catch {
+      continue;
+    }
     usesClientRetention =
       /\bisland\s*\(/u.test(text) ||
       /\bclient\s*:\s*(?:true|\{)/u.test(text) ||
@@ -564,9 +589,13 @@ function environmentNameDeclared(context: DoctorContext, name: string): boolean 
   if (kovoInvocationEnvironmentValue(context.env, name) !== undefined) return true;
   const envPath = join(context.root, '.env');
   if (!existsSync(envPath)) return false;
-  return new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`, 'mu').test(
-    boundedText(envPath, MAX_CONFIG_BYTES),
-  );
+  try {
+    return new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`, 'mu').test(
+      boundedText(envPath, MAX_CONFIG_BYTES),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function declaresPackage(manifest: Record<string, unknown>, name: string): boolean {

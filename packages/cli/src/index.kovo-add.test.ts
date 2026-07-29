@@ -938,8 +938,11 @@ describe('kovo add', () => {
       },
       packageManager: 'pnpm@10.12.1',
     })}\n`;
+    const lockfile = "lockfileVersion: '9.0'\n";
     writeFileSync(join(root, 'package.json'), manifest);
+    writeFileSync(join(root, 'pnpm-lock.yaml'), lockfile);
     const install = vi.spyOn(addCommandShell, 'execFileSync').mockImplementation(() => {
+      writeFileSync(join(root, 'pnpm-lock.yaml'), "lockfileVersion: 'mutated-before-failure'\n");
       throw new Error('offline install failure');
     });
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -948,11 +951,16 @@ describe('kovo add', () => {
       await expect(mainAsync(['add', 'toast', '--out', outDir])).resolves.toBe(1);
       expect(install).toHaveBeenCalledOnce();
       expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe(manifest);
+      expect(readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8')).toBe(lockfile);
+      expect(existsSync(outDir)).toBe(false);
       expect(existsSync(join(outDir, 'toast.tsx'))).toBe(false);
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('reason=install-failed');
-      expect(output).toContain('completed=none planned=component-files rolledBack=manifest');
+      expect(output).toContain(
+        'completed=package-manager-attempt planned=component-files rolledBack=manifest,lockfile',
+      );
+      expect(output).toContain('residual=node_modules-possible');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
