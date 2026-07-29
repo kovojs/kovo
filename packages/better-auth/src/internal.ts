@@ -449,7 +449,7 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
       manualBridgeSteps: [
         'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
         'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
-        'If the successor adds or renames tables, add schema.ts kovo({ domain, key }) or kovo({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+        'If the successor adds or renames tables, add schema.ts kovo((columns) => ({ domain, key: columns.id })) or kovo(() => ({ exempt: true })) annotations and declared Better Auth API touches before relying on runtime coverage.',
       ],
       message:
         '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain KV406 until a real metadata path is pinned.',
@@ -506,8 +506,8 @@ export function betterAuthUnavailablePluginMetadataDegradation(options: {
       diagnosticCode: 'KV406',
       manualBridgeSteps: [
         `Install a Better Auth ${pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
-        'If the plugin exposes app-visible tables, add schema.ts kovo({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
-        'If the plugin exposes only protocol/bookkeeping tables, add kovo({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+        'If the plugin exposes app-visible tables, add schema.ts kovo((columns) => ({ domain, key: columns.id })) annotations and declared Better Auth API touches before relying on runtime coverage.',
+        'If the plugin exposes only protocol/bookkeeping tables, add kovo(() => ({ exempt: true })) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
       ],
       message: `${packageName} metadata is not available from the pinned Better Auth dependency set; ${pluginName} writes remain KV406 until real table metadata is pinned.`,
       packageName,
@@ -1822,7 +1822,7 @@ function unsupportedPluginTableDegradation(
     message: `${betterAuthTableLabel(
       table,
       physicalTable,
-    )} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
+    )} is outside the blessed Better Auth schema bridge; add a schema.ts callback annotation and declared touches before relying on runtime coverage.`,
     ...(physicalTable === table ? {} : { physicalTable }),
     reason: 'unsupported-plugin-table',
     suggestedAnnotation,
@@ -1849,12 +1849,12 @@ function unsupportedPluginTableManualBridgeSteps(
         );
   const annotationStep =
     suggestedAnnotation === null
-      ? 'If it is app-visible, add a schema.ts kovo({ domain, key }) annotation; otherwise add kovo({ exempt: true }) with a rationale.'
+      ? 'If it is app-visible, add a schema.ts kovo((columns) => ({ domain, key: columns.id })) annotation; otherwise add kovo(() => ({ exempt: true })) with a rationale.'
       : 'domain' in suggestedAnnotation
         ? `Likely app-visible ownership is kovo(${formatBetterAuthSchemaDomainAnnotation(
             suggestedAnnotation,
-          )}); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.`
-        : 'Likely Better Auth protocol/bookkeeping state is kovo({ exempt: true }); confirm the app never queries it before adding the bridge.';
+          )}); confirm before adding the bridge, otherwise use kovo(() => ({ exempt: true })) with a rationale.`
+        : 'Likely Better Auth protocol/bookkeeping state is kovo(() => ({ exempt: true })); confirm the app never queries it before adding the bridge.';
 
   return [
     `Inspect ${betterAuthTableLabel(
@@ -1943,17 +1943,20 @@ const protocolStateFields = betterAuthSetFromStrings(
 function formatBetterAuthSchemaDomainAnnotation(
   annotation: BetterAuthSchemaBridgeDomainAnnotation,
 ): string {
-  const key = annotation.key === undefined ? '' : `, key: '${annotation.key}'`;
+  const key =
+    annotation.key === undefined
+      ? ''
+      : `, key: ${betterAuthSchemaColumnReference('columns', annotation.key)}`;
   const secret =
     annotation.secret === undefined || annotation.secret.length === 0
       ? ''
       : `, secret: [${joinBetterAuthStrings(
-          quoteBetterAuthStrings(annotation.secret, 'Better Auth schema secret fields'),
+          betterAuthSchemaColumnReferences('columns', annotation.secret),
           ', ',
           'Better Auth schema secret fields',
         )}]`;
 
-  return `{ domain: '${annotation.domain}'${key}${secret} }`;
+  return `(columns) => ({ domain: '${annotation.domain}'${key}${secret} })`;
 }
 
 function betterAuthObservedSchemaAnnotation(
@@ -1971,6 +1974,7 @@ function betterAuthObservedSchemaAnnotation(
   const seen = betterAuthCreateSet<string>();
   for (let index = 0; index < staticSecret.length; index += 1) {
     const column = staticSecret[index]!;
+    if (!betterAuthSetHas(fields, column)) continue;
     betterAuthArrayAppend(secret, column, 'Better Auth schema secret fields');
     betterAuthSetAdd(seen, column);
   }
@@ -2817,7 +2821,7 @@ function generatedSchemaTableManualBridgeSteps(
       : `Inspect Better Auth metadata for ${label} and write the Drizzle declaration manually.`;
   const fieldStep =
     field === undefined
-      ? 'Add the matching kovo({ domain, key }) or kovo({ exempt: true }) annotation once the table declaration is explicit.'
+      ? 'Add the matching kovo((columns) => ({ domain, key: columns.id })) or kovo(() => ({ exempt: true })) annotation once the table declaration is explicit.'
       : `Verify field ${field} in Better Auth metadata before adding the matching Kovo annotation.`;
 
   return [
@@ -3200,7 +3204,10 @@ function betterAuthSchemaAnnotationCall(
 
   if ('domain' in annotation) {
     annotation = betterAuthObservedSchemaAnnotation(annotation, fields);
-    const key = annotation.key === undefined ? '' : `, key: ${quoteTsString(annotation.key)}`;
+    const key =
+      annotation.key === undefined
+        ? ''
+        : `, key: ${betterAuthSchemaColumnReference('columns', annotation.key)}`;
     // bugz-3 M6 / DEC-B (SPEC.md §10.1): emit static bridge secrets unioned with the positive
     // credential classifier over observed Better Auth fields, so KV435 covers plugin-added
     // credentials on already-bridged tables as well as unknown-plugin suggestions.
@@ -3208,15 +3215,39 @@ function betterAuthSchemaAnnotationCall(
       annotation.secret === undefined || annotation.secret.length === 0
         ? ''
         : `, secret: [${joinBetterAuthStrings(
-            quoteTsStrings(annotation.secret),
+            betterAuthSchemaColumnReferences('columns', annotation.secret),
             ', ',
             'Better Auth schema annotation secret fields',
           )}]`;
 
-    return `${annotationCallee}({ domain: ${quoteTsString(annotation.domain)}${key}${secret} })`;
+    return `${annotationCallee}((columns) => ({ domain: ${quoteTsString(
+      annotation.domain,
+    )}${key}${secret} }))`;
   }
 
-  return `${annotationCallee}({ exempt: true })`;
+  return `${annotationCallee}(() => ({ exempt: true }))`;
+}
+
+function betterAuthSchemaColumnReferences(
+  root: string,
+  fields: readonly string[],
+): string[] {
+  const snapshot = betterAuthSnapshotDenseArray(fields, 'Better Auth schema column references');
+  const references: string[] = [];
+  for (let index = 0; index < snapshot.length; index += 1) {
+    betterAuthArrayAppend(
+      references,
+      betterAuthSchemaColumnReference(root, snapshot[index]!),
+      'Better Auth schema column references',
+    );
+  }
+  return references;
+}
+
+function betterAuthSchemaColumnReference(root: string, field: string): string {
+  return isValidTypeScriptIdentifier(field)
+    ? `${root}.${field}`
+    : `${root}[${quoteTsString(field)}]`;
 }
 
 function isBetterAuthSchemaAnnotationText(

@@ -386,7 +386,8 @@ export interface BetterAuthSchemaBridgeDomainAnnotation {
   domain: BetterAuthTouchDomain;
   key?: string;
   // bugz-3 M6 (SPEC.md §10.1): credential/token/bearer columns that must never reach the
-  // client wire. Emitted into the schema.ts `kovo({ ..., secret: [...] })` annotation so the
+  // client wire. Emitted into the schema.ts `kovo((columns) => ({ ..., secret: [...] }))`
+  // annotation so the
   // Drizzle confidentiality gate (KV435) brands any projection that reads them `kind:'secret'`,
   // while legitimate owner-scoped non-secret reads of the same table stay green.
   secret?: readonly string[];

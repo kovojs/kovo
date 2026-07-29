@@ -150,14 +150,14 @@ describe('schema.ts materialization', () => {
 
     expect(result?.validation.ok).toBe(true);
     expect(result?.annotatedTables).toEqual(['session']);
-    expect(result?.source).toContain("kovo({ domain: 'auth', key: 'userId', secret: ['token'] })");
+    expect(result?.source).toContain("kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] }))");
     expect(generated?.generatedTables).toContainEqual({
       exportName: 'session',
       physicalTable: 'session',
       table: 'session',
     });
     expect(generated?.source).toContain(
-      "kovo({ domain: 'auth', key: 'userId', secret: ['token'] })",
+      "kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] }))",
     );
   });
 
@@ -233,7 +233,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  credentialId: text('credential_id').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId })));",
     );
     expect(createBetterAuthDbVerificationConfig(schemaBridge, tables)).toMatchObject({
       domainByTable: {
@@ -304,20 +304,20 @@ describe('schema.ts materialization', () => {
       "export const user = pgTable('user', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  email: text('email').notNull(),\n" +
-        "}, kovo({ domain: 'user', key: 'id' }));",
+        "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
       "export const session = pgTable('session', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  expiresAt: timestamp('expires_at').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -361,7 +361,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  credentialId: text('credential_id').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId })));",
     );
   });
 
@@ -416,7 +416,7 @@ describe('schema.ts materialization', () => {
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
         "  expiresAt: timestamp('expires_at').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -449,7 +449,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  secret: text('secret').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.secret] })));",
     );
   });
 
@@ -506,7 +506,7 @@ describe('schema.ts materialization', () => {
         "  pollingInterval: integer('polling_interval'),\n" +
         "  clientId: text('client_id'),\n" +
         "  scope: text('scope'),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -553,13 +553,13 @@ describe('schema.ts materialization', () => {
       "export const oauthApplication = pgTable('oauthApplication', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['clientSecret'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.clientSecret] })));",
     );
     expect(result.source).toContain(
       "export const oauthAccessToken = pgTable('oauthAccessToken', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['accessToken', 'refreshToken'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.accessToken, columns.refreshToken] })));",
     );
   });
 
@@ -592,7 +592,7 @@ describe('schema.ts materialization', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  address: text('address').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId })));",
     );
   });
 
@@ -649,7 +649,7 @@ describe('schema.ts materialization', () => {
         "  lastLoginMethod: text('last_login_method'),\n" +
         "  phoneNumber: text('phone_number'),\n" +
         "  phoneNumberVerified: boolean('phone_number_verified'),\n" +
-        "}, kovo({ domain: 'user', key: 'id' }));",
+        "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
   });
 
@@ -684,7 +684,7 @@ describe('schema.ts materialization', () => {
         "  publicKey: text('public_key').notNull(),\n" +
         "  privateKey: text('private_key').notNull(),\n" +
         "  expiresAt: timestamp('expires_at'),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -719,7 +719,7 @@ describe('schema.ts materialization', () => {
         "  key: text('key').notNull(),\n" +
         "  count: integer('count').notNull(),\n" +
         "  lastRequest: timestamp('last_request').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -729,7 +729,7 @@ describe('schema.ts materialization', () => {
         "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
         'const auditConfig = () => [];',
-        "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+        "export const user = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
         "export const session = pgTable('session', {}, auditConfig);",
         "export const account = pgTable('account', {});",
       ].join('\n'),
@@ -748,7 +748,7 @@ describe('schema.ts materialization', () => {
     expect(result.existingExtraConfigTables).toEqual(['session']);
     expect(result.missingSourceTables).toEqual(['verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
   });
@@ -792,7 +792,7 @@ describe('schema.ts materialization', () => {
     expect(explicit.annotatedTables).toEqual(['user']);
     expect(explicit.unrecognizedSourceTables).toEqual([]);
     expect(explicit.source).toContain(
-      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
   });
 
@@ -845,12 +845,12 @@ describe('schema.ts materialization', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual(['session', 'verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(result.source).toContain("export const primaryUser = pgTable('user', {});");
     expect(result.source).toContain("export const auditUser = pgTable('user', {});");
     expect(result.source).not.toContain(
-      "export const primaryUser = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const primaryUser = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
   });
 
@@ -880,7 +880,7 @@ describe('schema.ts materialization', () => {
       [
         "import { kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+        "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
       ].join('\n'),
     );
 
@@ -902,7 +902,7 @@ describe('schema.ts materialization', () => {
       suggestedImport: "import { kovo as markKovo } from '@kovojs/drizzle';",
     });
     expect(aliased.source).toContain(
-      "export const account = pgTable('account', {}, markKovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, markKovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
 
     const existingKovoModuleImport = annotateBetterAuthSchemaSource(
@@ -925,7 +925,7 @@ describe('schema.ts materialization', () => {
       [
         "import { domain, kovo } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+        "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
       ].join('\n'),
     );
   });
@@ -957,7 +957,7 @@ describe('schema.ts materialization', () => {
       suggestedImport: "import { kovo as annotateKovo } from '@kovojs/drizzle';",
     });
     expect(first.source).toContain(
-      "export const account = pgTable('account', {}, annotateKovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, annotateKovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(second.source).toBe(first.source);
     expect(second.annotatedTables).toEqual([]);
@@ -991,7 +991,7 @@ describe('schema.ts materialization', () => {
       [
         "import { domain as kovo, kovo as kovoSchema } from '@kovojs/drizzle';",
         "import { pgTable } from 'drizzle-orm/pg-core';",
-        "export const account = pgTable('account', {}, kovoSchema({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+        "export const account = pgTable('account', {}, kovoSchema((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
       ].join('\n'),
     );
   });
@@ -1026,13 +1026,13 @@ describe('schema.ts materialization', () => {
       localName: 'kovo',
     });
     expect(result.source).toContain(
-      "export const user = authPgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const user = authPgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
-      "export const session = sqlite.sqliteTable('session', {}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+      "export const session = sqlite.sqliteTable('session', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
-      "export const verification = sqlite.sqliteTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = sqlite.sqliteTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -1084,7 +1084,7 @@ describe('schema.ts materialization', () => {
         "  email: text('email').notNull(),\n" +
         "  emailVerified: boolean('emailVerified').notNull(),\n" +
         "  name: text('name').notNull(),\n" +
-        "}, kovo({ domain: 'user', key: 'id' }));",
+        "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
       "export const session = pgTable('session', {\n" +
@@ -1092,7 +1092,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  token: text('token').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -1100,7 +1100,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -1147,7 +1147,7 @@ describe('schema.ts materialization', () => {
         "  email: text('email').notNull(),\n" +
         "  emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull(),\n" +
         "  name: text('name').notNull(),\n" +
-        "}, kovo({ domain: 'user', key: 'id' }));",
+        "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
       "export const session = sqliteTable('session', {\n" +
@@ -1155,7 +1155,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: text('expiresAt').notNull(),\n" +
         "  token: text('token').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
       "export const verification = sqliteTable('verification', {\n" +
@@ -1163,7 +1163,7 @@ describe('schema.ts materialization', () => {
         "  expiresAt: text('expiresAt').notNull(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -1208,7 +1208,7 @@ describe('schema.ts materialization', () => {
         "  createdAt: text('createdAt').notNull(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  verified: integer('verified', { mode: 'boolean' }).notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId' }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId })));",
     );
   });
 
@@ -1241,13 +1241,13 @@ describe('schema.ts materialization', () => {
       "export const session = pgTable('session', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
-        "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+        "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
       "export const user = pgTable('user', {\n" +
         "  id: integer('auth_user_id').primaryKey(),\n" +
         "  email: text('email_address').notNull(),\n" +
-        "}, kovo({ domain: 'user', key: 'id' }));",
+        "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
   });
 
@@ -1294,10 +1294,10 @@ describe('schema.ts materialization', () => {
     // The emitted annotation classifies them secret. KV435 fires on any projection that reads
     // these columns once the Drizzle compiler ingests this annotation.
     expect(result.source).toContain(
-      "}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(result.source).toContain(
-      "}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+      "}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     // A non-secret owner-scoped column (provider/account ids) stays unbranded, so legitimate
     // reads still work — only the credential columns are gated.
@@ -1355,11 +1355,11 @@ describe('schema.ts materialization', () => {
         fields: ['credentialId', 'id', 'userId'],
         manualBridgeSteps: [
           'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
-          "Likely app-visible ownership is kovo({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.",
+          "Likely app-visible ownership is kovo((columns) => ({ domain: 'auth', key: columns.userId })); confirm before adding the bridge, otherwise use kovo(() => ({ exempt: true })) with a rationale.",
           'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
         ],
         message:
-          'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+          'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts callback annotation and declared touches before relying on runtime coverage.',
         reason: 'unsupported-plugin-table',
         suggestedAnnotation: { domain: 'auth', key: 'userId' },
         table: 'webauthnCredential',
@@ -1386,7 +1386,7 @@ describe('schema.ts materialization', () => {
       fields: null,
       manualBridgeSteps: [
         'Inspect Better Auth metadata for session and write the Drizzle declaration manually.',
-        'Add the matching kovo({ domain, key }) or kovo({ exempt: true }) annotation once the table declaration is explicit.',
+        'Add the matching kovo((columns) => ({ domain, key: columns.id })) or kovo(() => ({ exempt: true })) annotation once the table declaration is explicit.',
         'Keep observed writes KV406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
       ],
       message:
