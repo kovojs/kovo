@@ -53,9 +53,13 @@ assert.deepEqual(created, [{ email: 'ada@example.test', name: 'Ada' }]);
 
 const ProfileForm = defineProfileForm(csrf);
 assert.equal(
-  await renderComponent(ProfileForm, {}, {
-    slots: { forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } } },
-  }),
+  await renderComponent(
+    ProfileForm,
+    {},
+    {
+      slots: { forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } } },
+    },
+  ),
   '<form><input name="name" value="Ada"><input name="email" type="email"><button type="submit">Save profile</button></form>',
 );
 

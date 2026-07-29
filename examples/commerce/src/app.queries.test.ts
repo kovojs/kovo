@@ -96,9 +96,7 @@ describe('commerce example queries', () => {
     );
 
     await expect(Promise.resolve(executeCartQuery({}, context))).resolves.toEqual({ count: 2 });
-    await expect(
-      Promise.resolve(executeProductGridQuery({ limit: 1 }, context)),
-    ).resolves.toEqual({
+    await expect(Promise.resolve(executeProductGridQuery({ limit: 1 }, context))).resolves.toEqual({
       items: [
         {
           id: 'p1',

@@ -494,6 +494,32 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.parsedFactories).not.toContain('query');
   });
 
+  it('does not treat an app-inferred test harness query as an app declaration factory', async () => {
+    const fixture = await createFixture();
+    const fileName = join(fixture.root, 'app/src/app-inferred-harness.ts');
+    await writeSource(
+      fileName,
+      [
+        "import { app } from './provider.js';",
+        'declare function createHarness(value: typeof app): {',
+        '  query(definition: unknown): Promise<unknown>;',
+        '};',
+        'const harness = createHarness(app);',
+        'export const result = harness.query({ load() { return 1; } });',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [fixture.provider, fileName],
+    });
+    const result = project.compileEntry(fileName);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.resolver.exactNodeCount).toBe(0);
+    expect(result.ownerKey).toBeNull();
+    expect(result.parsedFactories).not.toContain('query');
+  });
+
   it('retains unrelated local/imported members and a same-named defineKovo negative control', async () => {
     const fixture = await createFixture();
     const unrelatedModule = join(fixture.root, 'app/src/unrelated-module.ts');
@@ -964,6 +990,7 @@ async function createServerPackage(root: string): Promise<string> {
       '  readonly query: typeof query;',
       '  readonly route: typeof route;',
       '  readonly task: typeof task;',
+      '  readonly assemble: (options: unknown) => unknown;',
       '};',
       '',
     ].join('\n'),

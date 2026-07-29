@@ -29,11 +29,7 @@ import {
 } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
-import {
-  commerceSignIn,
-  createCommerceAuth,
-  type CommerceAuthBindings,
-} from './auth.js';
+import { commerceSignIn, createCommerceAuth, type CommerceAuthBindings } from './auth.js';
 import { bindCommerceApplicationRequest } from './commerce-context.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
@@ -246,10 +242,15 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
   target?: 'cart-page' | 'form';
 }
 
-const commerceOrigin = 'https://localhost';
+const defaultCommerceOrigin = 'https://localhost';
 export interface CommerceTestApp extends CommerceApplication {
   nodeHandler: ReturnType<typeof toNodeHandler>;
   requestHandler: ReturnType<typeof createExampleTestRequestHandler>;
+}
+
+export interface CommerceScenarioClientOptions {
+  /** Exact origin presented to the public request boundary. */
+  origin?: string;
 }
 
 /** Vitest-only raw dispatch seam; production entries retain the guarded public wrapper. */
@@ -265,7 +266,9 @@ export function createCommerceTestApp(options: CommerceAppOptions = {}): Commerc
 
 export function createCommerceScenarioClient(
   shell = createCommerceTestApp(),
+  options: CommerceScenarioClientOptions = {},
 ): CommerceScenarioClient {
+  const commerceOrigin = new URL(options.origin ?? defaultCommerceOrigin).origin;
   const cookies = new Map<string, string>();
 
   async function dispatch(

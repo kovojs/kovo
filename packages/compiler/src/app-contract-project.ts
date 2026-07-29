@@ -330,7 +330,11 @@ export function createCompilerOwnedAppContractProject(
           });
         }
       }
-      if (ts.isPropertyAccessExpression(node) && isAppContractMemberName(node.name.text)) {
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        isAppContractMemberName(node.name.text) &&
+        receiverTypeCouldBeAppContract(node.expression, context.checker)
+      ) {
         const receiver = proveReceiver(sourceFile, node.expression, context, new Set(), 0);
         if (receiver.kind === 'diagnostic') {
           diagnostics.push(receiver.diagnostic);
@@ -703,6 +707,18 @@ function proveFactoryCall(
 ): FactoryProof {
   const expression = call.expression;
   if (ts.isPropertyAccessExpression(expression) && isDeclarationFamily(expression.name.text)) {
+    if (!receiverTypeCouldBeAppContract(expression.expression, context.checker)) {
+      const namespace = unwrapExpression(expression.expression);
+      if (ts.isIdentifier(namespace) && namespaceResolvesToGeneratedApp(namespace, context)) {
+        return generatedDiagnostic(
+          sourceFile,
+          expression,
+          'D1B008',
+          'generated app factories require a static named import',
+        );
+      }
+      return { kind: 'none' };
+    }
     const receiver = proveReceiver(sourceFile, expression.expression, context, new Set(), 0);
     if (receiver.kind === 'diagnostic') return receiver;
     if (receiver.kind !== 'app') {
@@ -2881,6 +2897,58 @@ function isDeclarationFamily(value: string | undefined): value is AppContractDec
 
 function isAppContractMemberName(value: string): value is AppContractMemberName {
   return (appContractMemberNames as readonly string[]).includes(value);
+}
+
+/**
+ * Negative-only type filter for same-named members on values produced from an app token.
+ *
+ * SPEC §§5.2 rule 12, 6.2.1, and 12 require compiler-owned symbol/receiver provenance for a
+ * declaration while also making `createKovoTestHarness(app).query(...)` an ordinary supported
+ * testing path. Passing an app token to another API does not make every value it returns a
+ * declaration owner. A definitely unrelated receiver (for example `KovoTestContext`, which has
+ * `query` but not the closed declaration-owner surface) can therefore be ignored before the
+ * conservative provenance walk.
+ *
+ * This shape test never grants authority: ambiguous types remain candidates, and a positive result
+ * must still pass `proveReceiver()`'s exact defineKovo symbol, immutable binding, package, and owner
+ * checks.
+ */
+function receiverTypeCouldBeAppContract(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+): boolean {
+  return typeCouldBeAppContract(checker.getTypeAtLocation(expression), checker, new Set(), 0);
+}
+
+function typeCouldBeAppContract(
+  type: ts.Type,
+  checker: ts.TypeChecker,
+  seen: Set<ts.Type>,
+  depth: number,
+): boolean {
+  if (depth > 16 || seen.has(type)) return true;
+  if (
+    (type.flags &
+      (ts.TypeFlags.Any |
+        ts.TypeFlags.Unknown |
+        ts.TypeFlags.TypeParameter |
+        ts.TypeFlags.IndexedAccess |
+        ts.TypeFlags.Conditional |
+        ts.TypeFlags.Substitution)) !==
+    0
+  ) {
+    return true;
+  }
+  const nextSeen = new Set(seen);
+  nextSeen.add(type);
+  if (type.isUnion()) {
+    return type.types.some((candidate) =>
+      typeCouldBeAppContract(candidate, checker, nextSeen, depth + 1),
+    );
+  }
+  return [...appContractDeclarationFamilies, 'assemble'].every(
+    (member) => checker.getPropertyOfType(type, member) !== undefined,
+  );
 }
 
 function normalizeFileName(fileName: string): string {

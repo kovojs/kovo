@@ -1,21 +1,13 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-vi.mock('@kovojs/server', async (importOriginal) => ({
-  ...(await importOriginal()),
-  createRequestHandler: (await import('@kovojs/server/internal/app-shell-vite'))
-    .createRequestHandler,
-}));
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { createReferenceAppShell, routeValueToHtml } from './app-shell.js';
+import { routeValueToHtml } from './app-shell.js';
 
-let server: Server | undefined;
 let referenceServeProcess: ChildProcess | undefined;
 
 afterEach(async () => {
@@ -23,11 +15,6 @@ afterEach(async () => {
     await stopChild(referenceServeProcess);
     referenceServeProcess = undefined;
   }
-  if (!server) return;
-  await new Promise<void>((resolve, reject) => {
-    server?.close((error) => (error ? reject(error) : resolve()));
-  });
-  server = undefined;
 });
 
 describe('reference app shell HTTP entry', () => {
@@ -164,130 +151,133 @@ describe('reference app shell HTTP entry', () => {
     }
   });
 
-  it('serves auth routes and mutations through the shared request shell over HTTP', async () => {
-    const shell = createReferenceAppShell();
+  it('serves auth routes and mutations through the bootstrapped request shell over HTTP', async () => {
+    const served = await startReferenceServeProcess();
+    referenceServeProcess = served.child;
 
-    server = createServer(shell.nodeHandler);
-    await listen(server);
-    const origin = serverOrigin(server);
+    try {
+      const origin = served.origin;
+      const anonymousAccount = await fetch(`${origin}/account`, { redirect: 'manual' });
+      expect(anonymousAccount.status).toBe(303);
+      expect(anonymousAccount.headers.get('location')).toBe('/login?next=%2Faccount');
 
-    const anonymousAccount = await fetch(`${origin}/account`, { redirect: 'manual' });
-    expect(anonymousAccount.status).toBe(303);
-    expect(anonymousAccount.headers.get('location')).toBe('/login?next=%2Faccount');
+      const loginPage = await fetch(`${origin}/login?next=/admin`);
+      const loginPageBody = await loginPage.text();
+      expect(loginPage.status, loginPageBody).toBe(200);
+      expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
+      expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
+      expect(loginPageBody).toContain('name="next" value="/admin"');
+      const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
+      const loginCsrfCookie = cookiePair(loginPage.headers.get('set-cookie') ?? '');
 
-    const loginPage = await fetch(`${origin}/login?next=/admin`);
-    const loginPageBody = await loginPage.text();
-    expect(loginPage.status, loginPageBody).toBe(200);
-    expect(loginPageBody).toContain('<title>Kovo Reference Sign In</title>');
-    expect(loginPageBody).toContain('action="/_m/auth/sign-in"');
-    expect(loginPageBody).toContain('name="next" value="/admin"');
-    const loginCsrf = hiddenInputValue(loginPageBody, 'csrf');
-    const loginCsrfCookie = cookiePair(loginPage.headers.get('set-cookie') ?? '');
+      const otherLoginPage = await fetch(`${origin}/login?next=/admin`);
+      const otherLoginBody = await otherLoginPage.text();
+      const otherLoginCsrfCookie = cookiePair(otherLoginPage.headers.get('set-cookie') ?? '');
+      expect(hiddenInputValue(otherLoginBody, 'csrf')).not.toBe(loginCsrf);
+      expect(otherLoginCsrfCookie).not.toBe(loginCsrfCookie);
+      const crossBoundForm = new URLSearchParams({
+        csrf: loginCsrf,
+        email: 'ada@example.com',
+        next: '/admin',
+        password: 'correct',
+      });
+      const crossBoundLogin = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: crossBoundForm,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: otherLoginCsrfCookie,
+          Origin: origin,
+          Referer: `${origin}/login?next=/admin`,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      expect(crossBoundLogin.status).toBe(422);
+      expect(await crossBoundLogin.text()).toContain('data-error-code="CSRF"');
 
-    const otherLoginPage = await fetch(`${origin}/login?next=/admin`);
-    const otherLoginBody = await otherLoginPage.text();
-    const otherLoginCsrfCookie = cookiePair(otherLoginPage.headers.get('set-cookie') ?? '');
-    expect(hiddenInputValue(otherLoginBody, 'csrf')).not.toBe(loginCsrf);
-    expect(otherLoginCsrfCookie).not.toBe(loginCsrfCookie);
-    const crossBoundForm = new URLSearchParams({
-      csrf: loginCsrf,
-      email: 'ada@example.com',
-      next: '/admin',
-      password: 'correct',
-    });
-    const crossBoundLogin = await fetch(`${origin}/_m/auth/sign-in`, {
-      body: crossBoundForm,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: otherLoginCsrfCookie,
-        Origin: origin,
-        Referer: `${origin}/login?next=/admin`,
-      },
-      method: 'POST',
-      redirect: 'manual',
-    });
-    expect(crossBoundLogin.status).toBe(422);
-    expect(await crossBoundLogin.text()).toContain('data-error-code="CSRF"');
+      const failedForm = new URLSearchParams();
+      failedForm.set('csrf', loginCsrf);
+      failedForm.set('email', 'ada@example.com');
+      failedForm.set('password', 'wrong');
+      failedForm.set('next', '/admin');
+      const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: failedForm,
+        // SPEC §6.6/§9.1: supply the same-origin Origin header the CSRF floor requires (see above).
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: loginCsrfCookie,
+          Origin: origin,
+          Referer: `${origin}/login?next=/admin`,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const failedBody = await failedLogin.text();
+      expect(failedLogin.status, failedBody).toBe(422);
+      expect(failedBody).toContain('data-error-code="INVALID_CREDENTIALS"');
+      expect(failedBody).toContain('name="next" value="/admin"');
 
-    const failedForm = new URLSearchParams();
-    failedForm.set('csrf', loginCsrf);
-    failedForm.set('email', 'ada@example.com');
-    failedForm.set('password', 'wrong');
-    failedForm.set('next', '/admin');
-    const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
-      body: failedForm,
-      // SPEC §6.6/§9.1: supply the same-origin Origin header the CSRF floor requires (see above).
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: loginCsrfCookie,
-        Origin: origin,
-        Referer: `${origin}/login?next=/admin`,
-      },
-      method: 'POST',
-      redirect: 'manual',
-    });
-    const failedBody = await failedLogin.text();
-    expect(failedLogin.status, failedBody).toBe(422);
-    expect(failedBody).toContain('data-error-code="INVALID_CREDENTIALS"');
-    expect(failedBody).toContain('name="next" value="/admin"');
+      const loginForm = new URLSearchParams();
+      loginForm.set('csrf', loginCsrf);
+      loginForm.set('email', 'ada@example.com');
+      loginForm.set('password', 'correct');
+      loginForm.set('next', '/admin');
+      const login = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: loginForm,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: loginCsrfCookie,
+          Origin: origin,
+          Referer: `${origin}/login?next=/admin`,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
 
-    const loginForm = new URLSearchParams();
-    loginForm.set('csrf', loginCsrf);
-    loginForm.set('email', 'ada@example.com');
-    loginForm.set('password', 'correct');
-    loginForm.set('next', '/admin');
-    const login = await fetch(`${origin}/_m/auth/sign-in`, {
-      body: loginForm,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: loginCsrfCookie,
-        Origin: origin,
-        Referer: `${origin}/login?next=/admin`,
-      },
-      method: 'POST',
-      redirect: 'manual',
-    });
-    const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
+      expect(login.status).toBe(303);
+      expect(login.headers.get('location')).toBe('/admin');
+      expect(sessionCookie).toMatch(/^kovo_reference_session=[0-9a-f-]+$/u);
 
-    expect(login.status).toBe(303);
-    expect(login.headers.get('location')).toBe('/admin');
-    expect(sessionCookie).toMatch(/^kovo_reference_session=[0-9a-f-]+$/u);
+      const account = await fetch(`${origin}/account`, {
+        headers: { cookie: sessionCookie },
+        redirect: 'manual',
+      });
+      const accountBody = await account.text();
+      expect(account.status, accountBody).toBe(200);
+      expect(accountBody).toContain('account:ada@example.com');
+      expect(accountBody).toContain('action="/_m/auth/sign-out"');
 
-    const account = await fetch(`${origin}/account`, {
-      headers: { cookie: sessionCookie },
-      redirect: 'manual',
-    });
-    const accountBody = await account.text();
-    expect(account.status, accountBody).toBe(200);
-    expect(accountBody).toContain('account:ada@example.com');
-    expect(accountBody).toContain('action="/_m/auth/sign-out"');
+      const admin = await fetch(`${origin}/admin`, {
+        headers: { cookie: sessionCookie },
+        redirect: 'manual',
+      });
+      const adminBody = await admin.text();
+      expect(admin.status, adminBody).toBe(200);
+      expect(adminBody).toContain('admin:u1');
+      const logoutCsrf = hiddenInputValue(adminBody, 'csrf');
 
-    const admin = await fetch(`${origin}/admin`, {
-      headers: { cookie: sessionCookie },
-      redirect: 'manual',
-    });
-    const adminBody = await admin.text();
-    expect(admin.status, adminBody).toBe(200);
-    expect(adminBody).toContain('admin:u1');
-    const logoutCsrf = hiddenInputValue(adminBody, 'csrf');
+      const logoutForm = new URLSearchParams();
+      logoutForm.set('csrf', logoutCsrf);
+      const logout = await fetch(`${origin}/_m/auth/sign-out`, {
+        body: logoutForm,
+        headers: {
+          cookie: sessionCookie,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Origin: origin,
+          Referer: `${origin}/admin`,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
 
-    const logoutForm = new URLSearchParams();
-    logoutForm.set('csrf', logoutCsrf);
-    const logout = await fetch(`${origin}/_m/auth/sign-out`, {
-      body: logoutForm,
-      headers: {
-        cookie: sessionCookie,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Origin: origin,
-        Referer: `${origin}/admin`,
-      },
-      method: 'POST',
-      redirect: 'manual',
-    });
-
-    expect(logout.status).toBe(303);
-    expect(logout.headers.get('location')).toBe('/login');
-    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
+      expect(logout.status).toBe(303);
+      expect(logout.headers.get('location')).toBe('/login');
+      expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
+    } finally {
+      await stopChild(served.child);
+      referenceServeProcess = undefined;
+    }
   });
 });
 
@@ -315,21 +305,6 @@ function escapeRegExp(value: string): string {
 
 function cookiePair(setCookie: string): string {
   return setCookie.split(';')[0] ?? setCookie;
-}
-
-function listen(target: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    target.once('error', reject);
-    target.listen(0, '127.0.0.1', () => {
-      target.off('error', reject);
-      resolve();
-    });
-  });
-}
-
-function serverOrigin(target: Server): string {
-  const address = target.address() as AddressInfo;
-  return `http://127.0.0.1:${address.port}`;
 }
 
 function formatDevServerFailure(body: string, error: unknown): string {

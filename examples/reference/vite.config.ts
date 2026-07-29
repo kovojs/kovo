@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite-plus';
-import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
+import { kovo } from '@kovojs/server/vite';
 
 export default defineConfig({
-  plugins: [exampleKovoCompilerPlugin({ include: ['src'] }), referenceAppShellDevPlugin()],
+  plugins: [kovo({ app: '/src/app-shell.ts' })],
   run: {
     tasks: {
       export: {
@@ -16,34 +16,8 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    hookTimeout: 120_000,
+    testTimeout: 120_000,
+  },
 });
-
-interface ReferenceDevServer {
-  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
-}
-
-interface ReferenceDevPlugin {
-  configureServer(server: ReferenceDevServer): Promise<unknown>;
-  name: string;
-}
-
-function referenceAppShellDevPlugin(): ReferenceDevPlugin {
-  return {
-    async configureServer(server) {
-      const module = await server.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
-      const createDevIntegration = module.createKovoAppShellViteDevIntegration;
-      if (typeof createDevIntegration !== 'function') {
-        throw new Error(
-          '@kovojs/server/internal/app-shell-vite must export createKovoAppShellViteDevIntegration.',
-        );
-      }
-      const integration = createDevIntegration({
-        moduleId: '/src/app-shell.ts',
-        name: 'kovo-reference-app-shell-dev',
-        order: 'post',
-      }) as { plugin: { configureServer(server: ReferenceDevServer): unknown } };
-      return integration.plugin.configureServer(server);
-    },
-    name: 'kovo-reference-app-shell-dev',
-  };
-}

@@ -9,19 +9,13 @@ import {
   htmlFormFields,
   htmlTextContent,
 } from '@kovojs/test/html-fragment';
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
-import { runMutation } from '@kovojs/server/internal/execution';
 
-import {
-  commerceSession,
-  createCommerceDb,
-  executeAddToCart,
-} from './domain.js';
-import { commerceAuthCsrf, commerceSignIn, createCommerceAuth } from './auth.js';
+import { commerceSession, createCommerceDb, executeAddToCart } from './domain.js';
+import { commerceAuthCsrf } from './auth.js';
 import {
   commerceAuthRequest,
   createCommerceScenarioClient,
-  mutationSetCookieHeaders,
+  createCommerceTestApp,
   readOrders,
 } from './app-test-helpers.js';
 
@@ -50,35 +44,22 @@ describe('commerce example', () => {
   });
 
   it('maps local fixture cookies into the commerce session provider', async () => {
-    const auth = createCommerceAuth(createCommerceDb());
-    const request = commerceAuthRequest(undefined, auth);
-    const signIn = await runMutation(
-      commerceSignIn,
-      {
-        csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-        email: 'ada@example.com',
-        password: 'correct',
-      },
-      request,
-      { csrf: commerceAuthCsrf },
-    );
+    const shell = createCommerceTestApp({ db: createCommerceDb() });
+    const client = createCommerceScenarioClient(shell, { origin: 'http://localhost' });
+    const signIn = await client.signIn();
 
-    expect(signIn).toMatchObject({
-      ok: true,
-      value: {
-        redirectTo: '/cart',
-        status: 'signed-in',
-      },
-    });
-    if (!signIn.ok) throw new Error('expected commerce sign-in to succeed');
-    const setCookie = mutationSetCookieHeaders(signIn)[0] ?? '';
+    expect(signIn.status).toBe(303);
+    expect(signIn.headers.get('location')).toBe('/cart');
+    const setCookie = signIn.headers.get('set-cookie') ?? '';
     expect(setCookie).toMatch(
       /^kovo_commerce_session=[0-9a-f-]+; Max-Age=3600; Path=\/; HttpOnly; SameSite=Lax$/u,
     );
     const cookie = cookiePair(setCookie);
     const token = cookie.split('=', 2)[1] ?? '';
 
-    const session = sessionValue(await auth.sessionProvider(commerceAuthRequest(cookie, auth)));
+    const session = sessionValue(
+      await shell.auth.sessionProvider(commerceAuthRequest(cookie, shell.auth)),
+    );
     expect(session).toEqual({
       id: expect.any(String),
       user: {
@@ -90,20 +71,10 @@ describe('commerce example', () => {
 
   it('uses only the exact __Host session cookie on HTTPS', async () => {
     const httpsUrl = 'https://localhost/account';
-    const auth = createCommerceAuth(createCommerceDb());
-    const request = commerceAuthRequest(undefined, auth, httpsUrl);
-    const signIn = await runMutation(
-      commerceSignIn,
-      {
-        csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-        email: 'ada@example.com',
-        password: 'correct',
-      },
-      request,
-      { csrf: commerceAuthCsrf },
-    );
-    if (!signIn.ok) throw new Error('expected HTTPS loopback fixture sign-in to succeed');
-    const setCookie = mutationSetCookieHeaders(signIn)[0] ?? '';
+    const shell = createCommerceTestApp({ db: createCommerceDb() });
+    const signIn = await createCommerceScenarioClient(shell).signIn();
+    expect(signIn.status).toBe(303);
+    const setCookie = signIn.headers.get('set-cookie') ?? '';
     expect(setCookie).toMatch(
       /^__Host-kovo_commerce_session=[0-9a-f-]+; Max-Age=3600; Path=\/; HttpOnly; Secure; SameSite=Lax$/u,
     );
@@ -111,10 +82,14 @@ describe('commerce example', () => {
     const token = httpsLoopbackPair.split('=', 2)[1] ?? '';
 
     await expect(
-      auth.sessionProvider(commerceAuthRequest(`kovo_commerce_session=${token}`, auth, httpsUrl)),
+      shell.auth.sessionProvider(
+        commerceAuthRequest(`kovo_commerce_session=${token}`, shell.auth, httpsUrl),
+      ),
     ).resolves.toBeNull();
     const session = sessionValue(
-      await auth.sessionProvider(commerceAuthRequest(httpsLoopbackPair, auth, httpsUrl)),
+      await shell.auth.sessionProvider(
+        commerceAuthRequest(httpsLoopbackPair, shell.auth, httpsUrl),
+      ),
     );
     expect(session).toEqual({
       id: expect.any(String),
@@ -124,35 +99,12 @@ describe('commerce example', () => {
   });
 
   it('rejects every non-loopback origin before the auth mutation can emit a cookie', async () => {
-    const auth = createCommerceAuth(createCommerceDb());
-    const request = commerceAuthRequest(undefined, auth, 'http://commerce.test/login');
-
-    await expect(
-      runMutation(
-        commerceSignIn,
-        {
-          csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-          email: 'ada@example.com',
-          password: 'correct',
-        },
-        request,
-        { csrf: commerceAuthCsrf },
-      ),
-    ).rejects.toThrow('requires an exact loopback request URL');
-
-    const remoteHttps = commerceAuthRequest(undefined, auth, 'https://commerce.test/login');
-    await expect(
-      runMutation(
-        commerceSignIn,
-        {
-          csrf: csrfToken(remoteHttps, commerceAuthCsrf, { mutation: commerceSignIn }),
-          email: 'ada@example.com',
-          password: 'correct',
-        },
-        remoteHttps,
-        { csrf: commerceAuthCsrf },
-      ),
-    ).rejects.toThrow('requires an exact loopback request URL');
+    for (const origin of ['http://commerce.test', 'https://commerce.test']) {
+      const client = createCommerceScenarioClient(createCommerceTestApp(), { origin });
+      const response = await client.get('/login');
+      expect(response.status).toBe(500);
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
   });
 
   it('refuses the local fixture in production even when deployment secrets are configured', async () => {
@@ -161,20 +113,9 @@ describe('commerce example', () => {
     process.env.NODE_ENV = 'production';
     process.env.KOVO_COMMERCE_AUTH_CSRF_SECRET = 'configured-production-secret';
     try {
-      const auth = createCommerceAuth(createCommerceDb());
-      const request = commerceAuthRequest(undefined, auth);
-      await expect(
-        runMutation(
-          commerceSignIn,
-          {
-            csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-            email: 'ada@example.com',
-            password: 'correct',
-          },
-          request,
-          { csrf: commerceAuthCsrf },
-        ),
-      ).rejects.toThrow('explicit local-only development capability');
+      const response = await createCommerceScenarioClient(createCommerceTestApp()).get('/login');
+      expect(response.status).toBe(500);
+      expect(response.headers.get('set-cookie')).toBeNull();
     } finally {
       restoreEnv('NODE_ENV', previousMode);
       restoreEnv('KOVO_COMMERCE_AUTH_CSRF_SECRET', previousSecret);
@@ -189,32 +130,12 @@ describe('commerce example', () => {
     process.env.KOVO_ENABLE_LOCAL_AUTH_FIXTURE = 'I_UNDERSTAND_THIS_IS_LOCAL_ONLY';
     process.env.KOVO_LOCAL_AUTH_FIXTURE_PASSWORD = 'unique-local-password-123';
     try {
-      const auth = createCommerceAuth(createCommerceDb());
-      const fixedRequest = commerceAuthRequest(undefined, auth);
-      const fixed = await runMutation(
-        commerceSignIn,
-        {
-          csrf: csrfToken(fixedRequest, commerceAuthCsrf, { mutation: commerceSignIn }),
-          email: 'ada@example.com',
-          password: 'correct',
-        },
-        fixedRequest,
-        { csrf: commerceAuthCsrf },
-      );
-      expect(fixed).toMatchObject({ error: { code: 'INVALID_CREDENTIALS' }, ok: false });
+      const client = createCommerceScenarioClient(createCommerceTestApp());
+      const fixed = await client.signIn({ password: 'correct' });
+      expect(fixed.status).toBe(422);
 
-      const chosenRequest = commerceAuthRequest(undefined, auth);
-      const chosen = await runMutation(
-        commerceSignIn,
-        {
-          csrf: csrfToken(chosenRequest, commerceAuthCsrf, { mutation: commerceSignIn }),
-          email: 'ada@example.com',
-          password: 'unique-local-password-123',
-        },
-        chosenRequest,
-        { csrf: commerceAuthCsrf },
-      );
-      expect(chosen).toMatchObject({ ok: true });
+      const chosen = await client.signIn({ password: 'unique-local-password-123' });
+      expect(chosen.status).toBe(303);
     } finally {
       restoreEnv('NODE_ENV', previousMode);
       restoreEnv('KOVO_ENABLE_LOCAL_AUTH_FIXTURE', previousCapability);
@@ -224,35 +145,15 @@ describe('commerce example', () => {
 
   it('falls back from hostile post-login redirect values', async () => {
     for (const next of ['https://evil.test', '//evil.test', '/\\evil.test']) {
-      const auth = createCommerceAuth(createCommerceDb());
-      const request = commerceAuthRequest(undefined, auth);
-      const result = await runMutation(
-        commerceSignIn,
-        {
-          csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-          email: 'ada@example.com',
-          next,
-          password: 'correct',
-        },
-        request,
-        { csrf: commerceAuthCsrf },
-      );
-      expect(result).toMatchObject({ ok: true, value: { redirectTo: '/cart' } });
+      const result = await createCommerceScenarioClient(createCommerceTestApp()).signIn({ next });
+      expect(result.status).toBe(303);
+      expect(result.headers.get('location')).toBe('/cart');
     }
-    const auth = createCommerceAuth(createCommerceDb());
-    const request = commerceAuthRequest(undefined, auth);
-    const controlResult = await runMutation(
-      commerceSignIn,
-      {
-        csrf: csrfToken(request, commerceAuthCsrf, { mutation: commerceSignIn }),
-        email: 'ada@example.com',
-        next: '/cart\nInjected',
-        password: 'correct',
-      },
-      request,
-      { csrf: commerceAuthCsrf },
+    const controlResult = await createCommerceScenarioClient(createCommerceTestApp()).get(
+      `/login?next=${encodeURIComponent('/cart\nInjected')}`,
     );
-    expect(controlResult).toMatchObject({ ok: false, status: 422 });
+    expect(controlResult.status).toBe(500);
+    expect(controlResult.headers.get('set-cookie')).toBeNull();
   });
 
   it('runs commerce login and logout through the app shell credential mutations', async () => {

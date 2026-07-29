@@ -211,9 +211,7 @@ function stockBadge(stock: number) {
       </span>
     );
   return (
-    <span style={[productGridStyles.badge, productGridStyles.badgeSuccess]}>
-      {stock} in stock
-    </span>
+    <span style={[productGridStyles.badge, productGridStyles.badgeSuccess]}>{stock} in stock</span>
   );
 }
 

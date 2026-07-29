@@ -6,6 +6,8 @@ import type { AddressInfo } from 'node:net';
 import { chromium, type Browser } from 'playwright';
 import { afterEach, describe, expect, it } from 'vitest';
 import axe from 'axe-core';
+import { setCookieValues } from '@kovojs/test/headers';
+import { htmlFormFields } from '@kovojs/test/html-fragment';
 
 import { createCommerceTestApp } from './app-test-helpers.js';
 
@@ -28,11 +30,15 @@ describe('commerce enhanced navigation', () => {
     server = createServer(shell.nodeHandler);
     await listen(server);
     const origin = serverOrigin(server);
-    const targetHtml = await fetch(`${origin}/cart`).then((response) => response.text());
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ bypassCSP: true });
+    await addAuthenticatedCommerceCookie(page.context(), origin);
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
+    const targetHtml = await page.evaluate(async () => {
+      const response = await fetch('/cart', { headers: { Accept: 'text/html' } });
+      return response.text();
+    });
 
     await page.evaluate(() => {
       (window as typeof window & { __kovoEnhancedNavigated?: boolean }).__kovoEnhancedNavigated =
@@ -68,6 +74,9 @@ describe('commerce enhanced navigation', () => {
       clone.querySelectorAll<HTMLInputElement>('input[name="Kovo-Idem"]').forEach((input) => {
         input.value = '<idem>';
       });
+      clone.querySelectorAll<HTMLInputElement>('input[name="csrf"]').forEach((input) => {
+        input.value = '<csrf>';
+      });
       return clone.innerHTML;
     });
     const fullBody = await page.evaluate((html) => {
@@ -78,6 +87,9 @@ describe('commerce enhanced navigation', () => {
       });
       clone.querySelectorAll<HTMLInputElement>('input[name="Kovo-Idem"]').forEach((input) => {
         input.value = '<idem>';
+      });
+      clone.querySelectorAll<HTMLInputElement>('input[name="csrf"]').forEach((input) => {
+        input.value = '<csrf>';
       });
       return clone.innerHTML;
     }, targetHtml);
@@ -111,4 +123,49 @@ function serverOrigin(server: Server): string {
   const address = server.address() as AddressInfo | null;
   if (!address) throw new Error('server is not listening');
   return `http://127.0.0.1:${address.port}`;
+}
+
+async function addAuthenticatedCommerceCookie(
+  context: import('playwright').BrowserContext,
+  origin: string,
+): Promise<void> {
+  const loginPage = await fetch(`${origin}/login?next=/`);
+  const loginHtml = await loginPage.text();
+  const csrf = htmlFormFields(loginHtml, 'csrf')[0]?.value;
+  const csrfCookie = setCookieValues(loginPage.headers)
+    .map((value) => value.split(';', 1)[0] ?? '')
+    .filter(Boolean)
+    .join('; ');
+  if (!csrf || !csrfCookie) throw new Error('Commerce login page did not mint CSRF state.');
+
+  const response = await fetch(`${origin}/_m/auth/sign-in`, {
+    body: new URLSearchParams({
+      csrf,
+      email: 'ada@example.com',
+      next: '/',
+      password: 'correct',
+    }),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Cookie: csrfCookie,
+      Origin: origin,
+      Referer: `${origin}/login?next=/`,
+    },
+    method: 'POST',
+    redirect: 'manual',
+  });
+  const sessionPair = setCookieValues(response.headers)
+    .map((value) => value.split(';', 1)[0] ?? '')
+    .find((value) => value.startsWith('kovo_commerce_session='));
+  if (response.status !== 303 || !sessionPair) {
+    throw new Error(`Commerce sign-in failed with status ${response.status}.`);
+  }
+  const separator = sessionPair.indexOf('=');
+  await context.addCookies([
+    {
+      name: sessionPair.slice(0, separator),
+      url: origin,
+      value: sessionPair.slice(separator + 1),
+    },
+  ]);
 }

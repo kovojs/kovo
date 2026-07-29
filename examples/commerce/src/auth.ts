@@ -7,12 +7,9 @@ import {
   type CommerceRole,
   type CommerceSession,
 } from './domain.js';
-import { app, commerceAuthCsrf, type CommerceAppRequest } from './kovo.js';
+import { app, type CommerceAppRequest } from './kovo.js';
 
-export {
-  commerceAuthCsrf,
-  EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
-} from './kovo.js';
+export { commerceAuthCsrf, EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET } from './kovo.js';
 
 export interface CommerceAuthRequest extends Omit<CommerceRequest, 'db'> {
   authCsrfId?: string | null;

@@ -1,15 +1,18 @@
 import { defineKovo } from '@kovojs/server';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 
-import { commerceContractDbProvider, commerceContractSessionProvider } from './commerce-context.js';
+import {
+  referenceContractDbProvider,
+  referenceContractSessionProvider,
+} from './reference-context.js';
 
-export const EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET';
+export const EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET';
 
-export const commerceAuthCsrf = {
+export const referenceAuthCsrf = {
   field: 'csrf',
   secret: localFixtureCsrfSecret(
-    'KOVO_COMMERCE_AUTH_CSRF_SECRET',
-    EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+    'KOVO_REFERENCE_AUTH_CSRF_SECRET',
+    EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET,
   ),
   sessionId(request: unknown) {
     if (typeof request !== 'object' || request === null) return undefined;
@@ -29,23 +32,19 @@ export const commerceAuthCsrf = {
   },
 };
 
-/** Commerce's one app-scoped provider and declaration contract (SPEC §6.2.1/§9.5). */
+/** Reference app provider and declaration contract (SPEC §6.2.1/§9.5). */
 export const app = defineKovo({
-  appId: '5f45a392-939c-41ad-9866-aec05b7798b8',
-  auth: commerceContractSessionProvider,
-  csrf: commerceAuthCsrf,
-  db: commerceContractDbProvider,
+  appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
+  auth: referenceContractSessionProvider,
+  csrf: referenceAuthCsrf,
+  db: referenceContractDbProvider,
   document: { lang: 'en-US' },
   renderRoute(value) {
-    return routeValueToHtml(value);
+    return `<main>${renderRouteHtml(value)}</main>`;
   },
 });
 
-export type CommerceAppRequest = Parameters<typeof app.authenticated>[0];
-
-function routeValueToHtml(value: unknown): string {
-  return renderRouteHtml(value);
-}
+export type ReferenceAppRequest = Parameters<typeof app.authenticated>[0];
 
 function localFixtureCsrfSecret(envName: string, fallback: string): string {
   const secret = process.env[envName];

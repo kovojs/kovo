@@ -1,11 +1,11 @@
 /** @jsxImportSource @kovojs/server */
-import { guards, route } from '@kovojs/server';
 import { referenceSignIn, referenceSignOut, type ReferenceRequest } from './auth.js';
+import { app } from './kovo.js';
 
 export * from './auth.js';
 
-export const accountRoute = route('/account', {
-  guard: guards.authed<ReferenceRequest>(),
+export const accountRoute = app.route('/account', {
+  access: [app.authenticated],
   page(_input, request) {
     return (
       <>
@@ -16,8 +16,8 @@ export const accountRoute = route('/account', {
   },
 });
 
-export const adminRoute = route('/admin', {
-  guard: guards.role<ReferenceRequest>('admin'),
+export const adminRoute = app.route('/admin', {
+  access: [app.role('admin')],
   page(_input, request) {
     return (
       <>

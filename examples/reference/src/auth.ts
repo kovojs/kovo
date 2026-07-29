@@ -1,12 +1,8 @@
-import {
-  guard,
-  guards,
-  mutation,
-  s,
-  session,
-  type Guard,
-  type SessionProvider,
-} from '@kovojs/server';
+import { guard, s, session, type Guard, type SessionProvider } from '@kovojs/server';
+
+import { app, type ReferenceAppRequest } from './kovo.js';
+
+export { referenceAuthCsrf } from './kovo.js';
 
 export type ReferenceRole = 'admin' | 'member';
 
@@ -65,17 +61,6 @@ export const referenceSession = session(
   }),
 );
 
-export const referenceAuthCsrf = {
-  field: 'csrf',
-  secret: localFixtureCsrfSecret(
-    'KOVO_REFERENCE_AUTH_CSRF_SECRET',
-    'EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET',
-  ),
-  sessionId(request: ReferenceRequest) {
-    return request.session?.id ?? request.authCsrfId ?? undefined;
-  },
-};
-
 const referenceCookieBaseName = 'kovo_reference_session';
 const referenceSessionCapacity = 256;
 const referenceSessionTtlSeconds = 60 * 60;
@@ -116,7 +101,7 @@ export function createReferenceAuthFixture(): ReferenceAuthFixture {
   };
 }
 
-const localReferenceSignInGuard = guard<ReferenceRequest>(
+const localReferenceSignInGuard = guard<ReferenceAppRequest>(
   'local reference auth fixture with app-owned rate limit',
   (request) => {
     assertReferenceFixtureRequest(request);
@@ -126,17 +111,22 @@ const localReferenceSignInGuard = guard<ReferenceRequest>(
 
 // SPEC §4.1/§10.3: these direct top-level exports are the app-authored source identities.
 // `src/auth.ts` + `signIn`/`signOut` derives `auth/sign-in` and `auth/sign-out`.
-export const signIn = mutation({
-  csrf: referenceAuthCsrf,
+export const signIn = app.mutation({
+  access: [localReferenceSignInGuard],
   errors: { INVALID_CREDENTIALS: s.object({}) },
-  guard: localReferenceSignInGuard,
   input: s.object({
     email: s.string(),
     next: optionalReferenceString,
     password: s.string(),
   }),
   redirectTo: (result: { value: { redirectTo: string } }) => result.value.redirectTo,
-  handler(input, request: ReferenceRequest, context) {
+  transaction(
+    request: ReferenceAppRequest,
+    run: (request: ReferenceAppRequest) => Promise<unknown>,
+  ): Promise<unknown> {
+    return run(request);
+  },
+  handler(input, request, context) {
     const secure = assertReferenceFixtureRequest(request);
     const user = referenceUsers.get(input.email);
     if (!user || input.password !== referenceFixturePassword()) {
@@ -152,18 +142,25 @@ export const signIn = mutation({
   },
 });
 
-export const signOut = mutation({
-  csrf: referenceAuthCsrf,
-  guard: guards.all(
-    guard<ReferenceRequest>('local reference auth fixture', (request) => {
-      assertReferenceFixtureRequest(request);
-      return true;
-    }),
-    guards.authed<ReferenceRequest>(),
-  ),
+const localReferenceSignOutGuard = app.all(
+  guard<ReferenceAppRequest>('local reference auth fixture', (request) => {
+    assertReferenceFixtureRequest(request);
+    return true;
+  }),
+  app.authenticated,
+);
+
+export const signOut = app.mutation({
+  access: [localReferenceSignOutGuard],
   input: s.object({}),
   redirectTo: (result: { value: { redirectTo: string } }) => result.value.redirectTo,
-  handler(_input, request: ReferenceRequest, context) {
+  transaction(
+    request: ReferenceAppRequest,
+    run: (request: ReferenceAppRequest) => Promise<unknown>,
+  ): Promise<unknown> {
+    return run(request);
+  },
+  handler(_input, request, context) {
     const secure = assertReferenceFixtureRequest(request);
     const token = readReferenceSessionCookie(request.headers, secure);
     if (token) referenceFixtureFromDb(request.db).sessions.delete(token);
@@ -412,13 +409,4 @@ function readCookie(headers: Headers, name: string): string | undefined {
     if (cookieName === name) return valueParts.join('=');
   }
   return undefined;
-}
-
-function localFixtureCsrfSecret(envName: string, fallback: string): string {
-  const secret = process.env[envName];
-  if (secret && secret !== fallback) return secret;
-  // Auth operations are denied outside test/explicit local development by
-  // assertReferenceFixtureIngress. Keep static/public-shell imports side-effect free in
-  // production mode; this value never authorizes the disabled fixture there.
-  return fallback;
 }

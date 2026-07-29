@@ -5,9 +5,7 @@ import type { AddressInfo } from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
-import { runMutation } from '@kovojs/server/internal/execution';
-import { cookiePair, enhancedMutationHeaders, firstSetCookiePair } from '@kovojs/test/headers';
+import { cookiePair, enhancedMutationHeaders } from '@kovojs/test/headers';
 import {
   kovoQueryJsonValues,
   htmlElementCount,
@@ -18,9 +16,9 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import { addToCart } from './domain.js';
-import { commerceAuthCsrf } from './auth.js';
 import {
   commerceAuthRequest,
+  createCommerceScenarioClient,
   createCommerceTestApp,
 } from './app-test-helpers.js';
 import { routeValueToHtml } from './app.js';
@@ -289,21 +287,16 @@ function expectCommerceShellDocument(html: string): void {
 async function signInSession(shell: ReturnType<typeof createCommerceTestApp>) {
   // SECURITY (SECURITY_FINDINGS.md M7): the helper assigns a distinct loopback client IP,
   // so this request receives its own rate-limit bucket.
-  const request = commerceAuthRequest(undefined, shell.auth);
-  const result = await runMutation(
-    shell.auth.signIn,
-    {
-      csrf: csrfToken(request, commerceAuthCsrf, { mutation: shell.auth.signIn }),
-      email: 'ada@example.com',
-      password: 'correct',
-    },
-    request,
-    { csrf: commerceAuthCsrf },
-  );
-  if (!result.ok) throw new Error(`commerce sign-in failed: ${result.error.code}`);
+  const result = await createCommerceScenarioClient(shell, {
+    origin: 'http://localhost',
+  }).signIn();
+  if (result.status !== 303) {
+    throw new Error(`commerce sign-in failed with HTTP ${result.status}`);
+  }
 
-  const cookie = firstSetCookiePair(result.responseHeaders);
+  const cookie = cookiePair(result.headers.get('set-cookie') ?? '');
   if (!cookie) throw new Error('commerce sign-in did not set a cookie');
+  const request = commerceAuthRequest(undefined, shell.auth);
   const resolved = await shell.auth.sessionProvider({
     headers: new Headers({ cookie }),
     url: request.url,

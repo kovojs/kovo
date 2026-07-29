@@ -23515,7 +23515,7 @@
       "evidence": "test-csrf-contract",
       "introduced": {
         "releaseNote": "docs/releases/test-harness-v2.md",
-        "contractTest": "examples/reference/src/app.test.ts",
+        "contractTest": "packages/cli/src/index.kovo-build.test.ts",
         "nonTestExample": "site/content/guides/testing.md"
       }
     },

@@ -14,12 +14,7 @@ import {
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
-import {
-  createCommerceAuth,
-  signIn,
-  signOut,
-  type CommerceAuthBindings,
-} from './auth.js';
+import { createCommerceAuth, signIn, signOut, type CommerceAuthBindings } from './auth.js';
 import * as style from '@kovojs/style';
 import { LoginForm, LogoutForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';

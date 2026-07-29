@@ -17,19 +17,14 @@ export interface CommerceContractRequest extends Request {
   clientIp?: string;
 }
 
-export function registerCommerceApplicationContext(
-  context: CommerceApplicationContext,
-): string {
+export function registerCommerceApplicationContext(context: CommerceApplicationContext): string {
   const id = crypto.randomUUID();
   commerceApplicationContexts.set(id, context);
   defaultCommerceContextId = id;
   return id;
 }
 
-export function bindCommerceApplicationRequest(
-  request: Request,
-  contextId: string,
-): Request {
+export function bindCommerceApplicationRequest(request: Request, contextId: string): Request {
   if (!commerceApplicationContexts.has(contextId)) {
     throw new TypeError('Unknown commerce application context.');
   }

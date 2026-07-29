@@ -19,31 +19,20 @@ export async function exportReferenceStaticApp({
   });
 
   try {
-    const [appShellModule, serverModule] = await Promise.all([
-      viteServer.ssrLoadModule('/src/app-shell.ts'),
-      viteServer.ssrLoadModule('@kovojs/server'),
+    const [appModule, staticExportModule] = await Promise.all([
+      viteServer.ssrLoadModule(publicOnly ? '/src/public-app.ts' : '/src/app-shell.ts'),
+      viteServer.ssrLoadModule('@kovojs/server/static-export'),
     ]);
-    const { exportStaticApp } = serverModule;
+    const { exportStaticApp } = staticExportModule;
 
     if (typeof exportStaticApp !== 'function') {
-      throw new Error('@kovojs/server must export exportStaticApp.');
-    }
-
-    const app = publicOnly
-      ? appShellModule.referencePublicAppShell?.app
-      : (appShellModule.default ?? appShellModule.referenceAppShell?.app);
-
-    if (!isKovoApp(app)) {
-      throw new Error(
-        publicOnly
-          ? 'src/app-shell.ts must export referencePublicAppShell.app for public export.'
-          : 'src/app-shell.ts must export a Kovo app as default or referenceAppShell.app.',
-      );
+      throw new Error('@kovojs/server/static-export must export exportStaticApp.');
     }
 
     // SPEC.md section 9.5: static export replays the same request shell and
-    // refuses session-dependent routes with KV229 instead of writing HTML.
-    return await exportStaticApp(app, { outDir });
+    // refuses session-dependent routes with KV229 instead of writing HTML. The public
+    // orchestrator owns opaque-token validation; app code cannot inspect a KovoApp.
+    return await exportStaticApp(appModule.default, { outDir });
   } finally {
     await viteServer.close();
   }
@@ -109,15 +98,6 @@ function parseCliOptions(args) {
   }
 
   return options;
-}
-
-function isKovoApp(value) {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Array.isArray(value.routes) &&
-    typeof value.clientModules?.resolve === 'function'
-  );
 }
 
 function isStaticExportDiagnosticError(error) {

@@ -7,59 +7,42 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { htmlDocumentFacts } from '@kovojs/test/html-fragment';
-import { renderPageHints } from '@kovojs/server/internal/html';
 
+import { commerceMessageCatalog, createCommerceDb } from './domain.js';
 import {
-  commerceMessages,
-  commerceMeta,
-  commerceMessageCatalog,
-  createCommerceDb,
-  type CartQueryResult,
-} from './domain.js';
-import { commerceStylesheets } from './app.js';
-import { createCommerceScenarioClient, loadCartQuery, seedCartItems } from './app-test-helpers.js';
+  createCommerceScenarioClient,
+  createCommerceTestApp,
+  loadCartQuery,
+  seedCartItems,
+} from './app-test-helpers.js';
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
-const commercePageHints = renderCommercePageHints();
-
-function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
-  return renderPageHints(
-    {
-      i18n: commerceMessages,
-      meta: commerceMeta,
-      stylesheets: commerceStylesheets,
-    },
-    { queries: { 'queries/cart-query': cart } },
-  );
-}
 
 describe('commerce example', () => {
   it('renders theme-backed stylesheet hints and authored StyleX classes', async () => {
     const cartResponse = await createCommerceScenarioClient().get('/cart');
     const cartPage = await cartResponse.text();
-    const pageHints = htmlDocumentFacts(commercePageHints.html);
+    const pageHints = htmlDocumentFacts(cartPage);
 
     expect(commerceMessageCatalog).toEqual({
       cartLabel: 'Cart',
       productStock: '{count} in stock',
     });
-    expect(commercePageHints.earlyHints).toEqual({
-      Link: '</assets/styles.css>; rel=preload; as=style',
-    });
-    expect(commercePageHints.html).toContain('data-kovo-critical-href="/assets/styles.css"');
-    expect(commercePageHints.html).toContain('--kovo-theme-sys-color-primary');
-    expect(pageHints.title).toBe('Kovo Commerce (0)');
+    expect(cartResponse.headers.get('link')).toBe('</assets/styles.css>; rel=preload; as=style');
+    expect(cartPage).toContain('data-kovo-critical-href="/assets/styles.css"');
+    expect(cartPage).toContain('--kovo-theme-sys-color-primary');
+    expect(pageHints.title).toBe('Kovo Commerce');
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           attrs: expect.objectContaining({
-            content: 'Browse products and checkout with 0 verifiable cart item.',
+            content: 'Browse products and checkout with verifiable cart state.',
             name: 'description',
           }),
         }),
         expect.objectContaining({
           attrs: expect.objectContaining({
-            content: 'Browse products and checkout with 0 verifiable cart item.',
+            content: 'Browse products and checkout with verifiable cart state.',
             property: 'og:description',
           }),
         }),
@@ -80,7 +63,7 @@ describe('commerce example', () => {
     expect(cartPage).toContain('class="kv-style-');
   });
 
-  it('resolves commerce route meta from loaded cart query data', async () => {
+  it('renders loaded cart state through the public app response', async () => {
     const db = createCommerceDb();
     await seedCartItems(db, [
       { productId: 'p1', qty: 3, unitPrice: 1499 },
@@ -88,9 +71,13 @@ describe('commerce example', () => {
     ]);
 
     expect(await loadCartQuery(db)).toEqual({ count: 5 });
-    expect(htmlDocumentFacts(renderCommercePageHints(await loadCartQuery(db)).html).title).toBe(
-      'Kovo Commerce (5)',
+    const cartResponse = await createCommerceScenarioClient(createCommerceTestApp({ db })).get(
+      '/cart',
     );
+    const cartHtml = await cartResponse.text();
+    expect(cartResponse.status, cartHtml).toBe(200);
+    expect(htmlDocumentFacts(cartHtml).title).toBe('Kovo Commerce');
+    expect(cartHtml).toContain('>5</span>');
   });
 
   it('keeps authored global CSS clean without route/component leakage', async () => {

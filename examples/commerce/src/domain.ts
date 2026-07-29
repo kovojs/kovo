@@ -1,11 +1,9 @@
 import { form } from '@kovojs/core';
 import { i18n, s, session } from '@kovojs/server';
-import type { RouteMetaFactory } from '@kovojs/server/rendering';
 import { serverValue } from '@kovojs/server/write-safety';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CommerceDb } from './db.js';
-import { commerceCartPageMeta } from './graph.js';
 import { cart, order, product } from './model.js';
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
@@ -56,10 +54,7 @@ export const commerceCsrf = {
 
 export { cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
-const addToCartAccess = app.all(
-  app.authenticated,
-  app.rateLimit({ max: 10, per: 'session' }),
-);
+const addToCartAccess = app.all(app.authenticated, app.rateLimit({ max: 10, per: 'session' }));
 
 export const addToCart = app.mutation({
   access: [addToCartAccess],
@@ -108,10 +103,7 @@ export async function executeAddToCart(
     session?: CommerceSession | null;
   },
   context: {
-    fail(
-      code: 'OUT_OF_STOCK',
-      payload: { availableQuantity: number },
-    ): AddToCartFailure;
+    fail(code: 'OUT_OF_STOCK', payload: { availableQuantity: number }): AddToCartFailure;
   },
 ): Promise<AddToCartResult> {
   const currentSession = commerceSession.parse(request);
@@ -172,22 +164,6 @@ export const commerceMessageCatalog = {
 } as const;
 
 export const commerceMessages = i18n('en-US', commerceMessageCatalog);
-
-export const commerceMeta: RouteMetaFactory = {
-  queries: [cartQuery.key],
-  resolve(values) {
-    const value = values[cartQuery.key];
-    if (
-      typeof value !== 'object' ||
-      value === null ||
-      !('count' in value) ||
-      typeof value.count !== 'number'
-    ) {
-      throw new TypeError('Commerce cart metadata requires the cart query count.');
-    }
-    return commerceCartPageMeta({ count: value.count });
-  },
-};
 
 function exampleDeploymentSecret(envName: string, fallback: string): string {
   const secret = process.env[envName];

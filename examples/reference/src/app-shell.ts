@@ -1,9 +1,6 @@
-import { createApp, publicAccess, route } from '@kovojs/server';
-import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 import { createRequestHandler } from '@kovojs/server/custom-adapters';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import { toNodeHandler } from '@kovojs/server/node';
-import { type ServerErrorHandler } from '@kovojs/server/diagnostics';
 import { trustedHtml } from '@kovojs/browser';
 
 import {
@@ -11,63 +8,25 @@ import {
   adminRoute,
   createReferenceAuth,
   createReferenceAuthFixture,
+  referenceSignIn,
+  referenceSignOut,
   type ReferenceAuthBindings,
   type ReferenceRequest,
 } from './app.js';
+import { app } from './kovo.js';
+import { registerReferenceApplicationContext } from './reference-context.js';
 import { ReferenceShellLoginForm } from './shell-auth-form.js';
 
 export type ReferenceShellRequest = Request & ReferenceRequest;
 
 export interface ReferenceAppShellOptions {
   auth?: ReferenceAuthBindings;
-  onError?: ServerErrorHandler;
 }
 
-const publicClientModules = createMemoryVersionedClientModuleRegistry();
-
-export const referencePublicClientModuleHref = publicClientModules.put({
-  path: '/c/reference.client.js',
-  source: [
-    'export function Reference$markReady(event) {',
-    '  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : event.target;',
-    '  const root = target instanceof HTMLElement ? target.closest("[data-reference-public-shell]") : null;',
-    '  const output = root ? root.querySelector("#reference-status") : null;',
-    '  if (output) output.textContent = "Reference shell interaction loaded from /c/.";',
-    '}',
-    '',
-  ].join('\n'),
-});
-
-export const referencePublicRoute = route('/', {
-  // Unauthenticated landing page — its KV436 access decision is public (SPEC §10.2).
-  access: publicAccess('unauthenticated landing page'),
-  meta: {
-    description: 'A public Kovo reference app shell exported through synthetic replay.',
-    title: 'Kovo Reference Public Shell',
-  },
-  modulepreloads: [referencePublicClientModuleHref],
-  page() {
-    return trustedHtml(
-      [
-        '<section data-reference-public-shell>',
-        '<h1>Kovo Reference App</h1>',
-        '<p>Public route exported by the shared request shell.</p>',
-        `<button type="button" on:click="${referencePublicClientModuleHref}#Reference$markReady">Check shell</button>`,
-        '<output id="reference-status">Waiting for client module.</output>',
-        '</section>',
-      ].join(''),
-      {
-        reason: 'reference route assembles reviewed static shell markup',
-        source: 'examples/reference/src/app-shell.ts',
-      },
-    );
-  },
-});
-
-export const referenceLoginRoute = route('/login', {
+export const referenceLoginRoute = app.route('/login', {
   // The sign-in page must be reachable before authentication — public by design
   // (KV436 access decision, SPEC §10.2).
-  access: publicAccess('sign-in page reachable before authentication'),
+  access: app.publicAccess('sign-in page reachable before authentication'),
   meta: {
     description: 'Sign in to the Kovo reference app.',
     title: 'Kovo Reference Sign In',
@@ -79,6 +38,11 @@ export const referenceLoginRoute = route('/login', {
       source: 'examples/reference/src/app-shell.ts',
     });
   },
+});
+
+const referenceRuntimeApp = app.assemble({
+  mutations: [referenceSignIn, referenceSignOut],
+  routes: [referenceLoginRoute, accountRoute, adminRoute],
 });
 
 export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) {
@@ -93,38 +57,8 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
 
 export function createReferenceApplication(options: ReferenceAppShellOptions = {}) {
   const auth = options.auth ?? createReferenceAuth(createReferenceAuthFixture());
-  const app = createApp({
-    appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
-    db: () => auth.db,
-    document: { lang: 'en-US' },
-    mutations: [auth.signIn, auth.signOut],
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    renderRoute(value) {
-      return `<main>${routeValueToHtml(value)}</main>`;
-    },
-    routes: [referenceLoginRoute, accountRoute, adminRoute],
-    sessionProvider: (request) => auth.sessionProvider(request as ReferenceShellRequest),
-  });
-  return { app, auth };
-}
-
-export function createReferencePublicAppShell() {
-  const application = createReferencePublicApplication();
-  const requestHandler = createRequestHandler(application.app);
-  return { ...application, nodeHandler: toNodeHandler(requestHandler), requestHandler };
-}
-
-export function createReferencePublicApplication() {
-  const app = createApp({
-    appId: '1f067065-c40a-4579-b35a-7fbcf928e32c',
-    clientModules: publicClientModules,
-    document: { lang: 'en-US' },
-    renderRoute(value) {
-      return `<main>${routeValueToHtml(value)}</main>`;
-    },
-    routes: [referencePublicRoute],
-  });
-  return { app };
+  const appContextId = registerReferenceApplicationContext(auth);
+  return { app: referenceRuntimeApp, appContextId, auth };
 }
 
 export function routeValueToHtml(value: unknown): string {
@@ -132,6 +66,5 @@ export function routeValueToHtml(value: unknown): string {
 }
 
 export const referenceAppShell = createReferenceApplication();
-export const referencePublicAppShell = createReferencePublicApplication();
 
 export default referenceAppShell.app;
