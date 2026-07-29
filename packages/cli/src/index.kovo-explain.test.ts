@@ -1288,14 +1288,14 @@ import { declarePublicRelation } from '@kovojs/server/postgres';`,
     );
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toContain('CAPABILITY kind=serverValue site=admin.ts:2');
-    expect(result.output).toContain('CAPABILITY kind=unsafeRegex site=admin.ts:3');
+    expect(result.output).toContain('CAPABILITY kind=serverValue site=admin.ts:4');
+    expect(result.output).toContain('CAPABILITY kind=unsafeRegex site=admin.ts:5');
     expect(result.output).toContain(
-      'CAPABILITY kind=publicRelation site=admin.ts:4 module=- target=public.totals',
+      'CAPABILITY kind=publicRelation site=admin.ts:6 module=- target=public.totals',
     );
-    expect(result.output).toContain('CAPABILITY kind=acceptUnverified site=admin.ts:5');
+    expect(result.output).toContain('CAPABILITY kind=acceptUnverified site=admin.ts:7');
     expect(result.output).toContain(
-      'CAPABILITY kind=crossOwnerRead site=admin.ts:7 module=- target=public.orders',
+      'CAPABILITY kind=crossOwnerRead site=admin.ts:9 module=- target=public.orders',
     );
   });
 
@@ -1376,7 +1376,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
         downgrade: { sameSite: 'none' },
         justification: 'third-party embed',
         name: 'embed_sid',
-        site: 'embed.ts:2',
+        site: 'embed.ts:3',
       },
     ]);
 
