@@ -12,6 +12,10 @@ import {
   knownFailurePackedEnvironment,
   materializeKnownFailurePackedRelease,
 } from '../lib/known-failure-packed-release.mjs';
+import {
+  DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS,
+  DEV_READY_POST_BIND_BUDGET_MS,
+} from '../lib/dev-ready-probe-contract.mjs';
 import { collectProcessTreeRssKiB } from '../security-cost-budget-runner.mjs';
 
 const MODES = new Set([
@@ -109,10 +113,10 @@ async function devReadyObservation(packedRelease) {
   writeFileSync(entry, minimalAppSource('packed ready probe'), 'utf8');
   const dev = startDevServer(packedRelease, appRoot, port, './src/ready.tsx');
   try {
-    await waitForTcpListener(port, dev, 30_000);
+    await waitForTcpListener(port, dev, DEV_READY_LISTENER_INFRASTRUCTURE_TIMEOUT_MS);
     const listenedAt = Date.now();
     const readyPattern = /Kovo dev ready in \d+ms/u;
-    while (Date.now() - listenedAt <= 5_000) {
+    while (Date.now() - listenedAt <= DEV_READY_POST_BIND_BUDGET_MS) {
       if (readyPattern.test(dev.stdout())) {
         return {
           graceExpired: false,

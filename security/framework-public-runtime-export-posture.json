@@ -363,7 +363,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "bc958f47c0fd7c9ab9b0f0819ecf20890f328c87c9dfbc202dfa6ecf16cdec0e"
+      "sourceTreeSha256": "a0fe14eee8d430116a68c9c8550ba1b7ef4300e04aafa369a656f9b39cf8bb41"
     },
     {
       "manifestVariants": [
@@ -665,7 +665,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "3cf6f8f95a6c5210e92bbbfb222b19ba90251f5c285356e848a086ceb7cfd1d7"
+      "sourceTreeSha256": "393295fc27625acd2a1114bd5bad127162c8022a0f6a9db1f7d144b04bb44556"
     },
     {
       "manifestVariants": [
@@ -765,7 +765,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "7bd253b65f1481034700daa7fdf4cde8c7c0ccfbf6aa69a0f59e87438423debb"
+      "sourceTreeSha256": "414809f16212a419793afb4d3e1d6571194c58b0bdeea50f8c96ea0c3abe07c6"
     },
     {
       "manifestVariants": [
@@ -1607,7 +1607,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "d58932198f0069f2ffd2c5edcd8a4082dd97f18adec3d7a9b78e835294d23f9e"
+      "sourceTreeSha256": "241f1d9ac5bf3348eb06ff190b91925fef361f33d57d117e9fe0699b260bb68c"
     },
     {
       "manifestVariants": [
@@ -1872,7 +1872,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "debf2b0720295b083bd978ff9db98384e84dd803d3fa405539f352fa71d9e1f7"
+      "sourceTreeSha256": "926860336dec20bf5c29383fe1794177b5c367371ee3bcb078c4371225b9208c"
     },
     {
       "manifestVariants": [
@@ -9857,7 +9857,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "4ca54cbb174c87cad2bb0c4915094b747dbf205d2ca8919f4e5f892cfff4ad7f"
+      "sourceTreeSha256": "47a676eaaf105224c775e0011771c7e00710a3a4a1da4e998c573d2569ad2060"
     },
     {
       "manifestVariants": [
@@ -10357,7 +10357,7 @@
           "securityRole": "request-closed"
         }
       ],
-      "sourceTreeSha256": "77ac84fe933d749c8614a373f728b7e22b7f3594a61f80c9076c8a2fb07a0c20"
+      "sourceTreeSha256": "ba0bbf274e6bc4e1470b6de1a58c6a42abb1905bb5d4b6b20b859997c437c9f2"
     },
     {
       "manifestVariants": [
@@ -11067,7 +11067,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "d12dcec06b7709c0afb0f653fdb86d11e41bf834cbd7eaecf1bb807e310ed9df"
+      "sourceTreeSha256": "cfc78eedc9e667098184ce92f62ad125babbe13789e1b0ed2e56e6908061946f"
     },
     {
       "manifestVariants": [

@@ -10,7 +10,7 @@ import { projectQualityCommandShell, runProjectQualityCheck } from './project-qu
 afterEach(() => vi.restoreAllMocks());
 
 describe('framework-owned project quality check', () => {
-  it('runs formatter and linter concurrently and preserves producer-owned source anchors', async () => {
+  it('bounds formatter and linter threads and preserves producer-owned source anchors', async () => {
     const root = fixtureRoot();
     try {
       const source = realpathSync(join(root, 'src/app.ts'));
@@ -46,8 +46,8 @@ describe('framework-owned project quality check', () => {
 
       expect(execute).toHaveBeenCalledTimes(2);
       expect(execute.mock.calls.map((call) => call[1]?.slice(1))).toEqual([
-        ['fmt', '--list-different'],
-        ['lint', '--format=json'],
+        ['fmt', '--list-different', '--threads=2'],
+        ['lint', '--format=json', '--threads=2'],
       ]);
       expect(result).toMatchObject({ exitCode: 1 });
       expect(result.diagnostics).toEqual([

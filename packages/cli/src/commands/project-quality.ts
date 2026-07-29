@@ -11,6 +11,7 @@ import type { CliCommandResult } from '../shared.js';
 import { resolveVitePlusBin } from './vite-plus-bin.js';
 
 const MAX_QUALITY_OUTPUT_BYTES = 16 * 1024 * 1024;
+const PROJECT_QUALITY_THREADS = 2;
 
 /** @internal Boot-captured process seam for exact orchestration tests. */
 export const projectQualityCommandShell = { execFile };
@@ -41,10 +42,21 @@ export async function runProjectQualityCheck(
     return runnerFailure(protocol, error);
   }
 
-  const [format, lint] = await Promise.all([
-    execute(executable, ['fmt', '--list-different'], root, invocationEnv),
-    execute(executable, ['lint', '--format=json'], root, invocationEnv),
-  ]);
+  // Both tools inspect the whole project. Keep their process trees disjoint so copy-in catalogs
+  // remain below the first-loop memory ceiling; concurrency here saved wall time by summing two
+  // independent formatter/linter heaps at the exact point larger apps need bounded behavior.
+  const format = await execute(
+    executable,
+    ['fmt', '--list-different', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
+    root,
+    invocationEnv,
+  );
+  const lint = await execute(
+    executable,
+    ['lint', '--format=json', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
+    root,
+    invocationEnv,
+  );
   if (format.error !== undefined) return runnerFailure(protocol, format.error);
   if (lint.error !== undefined) return runnerFailure(protocol, lint.error);
 

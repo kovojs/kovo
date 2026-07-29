@@ -340,7 +340,12 @@ describe('kovo add', () => {
     ] as const) {
       const source = stripComments(vendoredUiComponents[componentName].source);
       expect(source, componentName).not.toMatch(/\{\s*props\.children(?:\s*\?\?)?/);
-      expect(source, componentName).toMatch(/render\([^)]*,\s*[^)]*,\s*\{\s*children\b/);
+      expect(source, componentName).toMatch(
+        /render\([^)]*,\s*[^)]*,\s*\{\s*children\s*\}:\s*\{\s*children\?:\s*ComponentChild\s*\}/,
+      );
+      expect(source, componentName).toContain(
+        '\n    { children }: { children?: ComponentChild } = { children: props.children },\n  ) {',
+      );
     }
   });
 
