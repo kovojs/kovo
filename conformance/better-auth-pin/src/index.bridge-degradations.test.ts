@@ -80,7 +80,7 @@ describe('Better Auth pinned conformance', () => {
       manualBridgeSteps: [
         'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
         'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
-        'If the successor adds or renames tables, add schema.ts kovo({ domain, key }) or kovo({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+        'If the successor adds or renames tables, add schema.ts kovo((columns) => ({ domain, key: columns.id })) or kovo(() => ({ exempt: true })) annotations and declared Better Auth API touches before relying on runtime coverage.',
       ],
       message:
         '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain KV406 until a real metadata path is pinned.',
@@ -139,8 +139,8 @@ describe('Better Auth pinned conformance', () => {
         diagnosticCode: 'KV406',
         manualBridgeSteps: [
           `Install a Better Auth ${pluginCase.pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
-          'If the plugin exposes app-visible tables, add schema.ts kovo({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
-          'If the plugin exposes only protocol/bookkeeping tables, add kovo({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+          'If the plugin exposes app-visible tables, add schema.ts kovo((columns) => ({ domain, key: columns.id })) annotations and declared Better Auth API touches before relying on runtime coverage.',
+          'If the plugin exposes only protocol/bookkeeping tables, add kovo(() => ({ exempt: true })) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
         ],
         message: `${pluginCase.packageName} metadata is not available from the pinned Better Auth dependency set; ${pluginCase.pluginName} writes remain KV406 until real table metadata is pinned.`,
         packageName: pluginCase.packageName,
@@ -190,7 +190,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.annotatedTables).toEqual(['account', 'jwks', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const jwks = pgTable('jwks', {}, kovo({ exempt: true }));",
+      "export const jwks = pgTable('jwks', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -240,7 +240,7 @@ describe('Better Auth pinned conformance', () => {
       'verification',
     ]);
     expect(result.source).toContain(
-      "export const rateLimit = pgTable('rateLimit', {}, kovo({ exempt: true }));",
+      "export const rateLimit = pgTable('rateLimit', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -276,7 +276,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const verification = pgTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = pgTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -314,7 +314,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const verification = pgTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = pgTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -352,7 +352,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const verification = pgTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = pgTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -452,7 +452,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
   });
 

@@ -3,7 +3,8 @@ import {
   type SourceFileInput,
   type TouchGraphProjectOptions,
 } from '../../../packages/drizzle/src/static.js';
-import type { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
+import { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 
 export function pgDatabaseTypes(methods: readonly string[] = []): SourceFileInput {
   return {
@@ -48,10 +49,50 @@ export function extractQueryFactsFromProject(
   return extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
 }
 
-export function annotatedTable(name: string, annotation: ReturnType<typeof kovo>) {
+export function annotatedTable(
+  name: string,
+  annotation: { domain: string; key: 'cartId' | 'id' | 'productId' },
+) {
+  // SPEC §10.1: even this graph-serialization helper exercises the annotation
+  // against concrete Drizzle column identities. The returned graph row remains
+  // deliberately small, but it is no longer fabricated from string selectors.
+  const table = pgTable(
+    name,
+    {
+      cartId: text('cart_id'),
+      id: text('id'),
+      productId: text('product_id'),
+    },
+    kovo((columns) => ({
+      domain: annotation.domain,
+      key:
+        annotation.key === 'cartId'
+          ? columns.cartId
+          : annotation.key === 'productId'
+            ? columns.productId
+            : columns.id,
+    })),
+  );
+  const tableInternals = table as unknown as Record<symbol, unknown>;
+  const extraConfigBuilder = tableInternals[drizzleSymbol('ExtraConfigBuilder')];
+  const extraConfigColumns = tableInternals[drizzleSymbol('ExtraConfigColumns')] as Record<
+    string,
+    unknown
+  >;
+  if (typeof extraConfigBuilder !== 'function') {
+    throw new TypeError('Expected a Drizzle extra-config callback.');
+  }
+  extraConfigBuilder(extraConfigColumns);
+  const annotationSnapshot = extraConfigBuilder as unknown as Record<string, unknown>;
+  if (typeof annotationSnapshot.domain !== 'string') {
+    throw new TypeError('Expected a domain-bearing Kovo annotation.');
+  }
+  if (annotationSnapshot.key !== extraConfigColumns[annotation.key]) {
+    throw new TypeError('Expected the Kovo key to retain its concrete Drizzle column identity.');
+  }
   return {
-    domain: annotation.domain,
-    ...(annotation.key ? { key: annotation.key } : {}),
+    domain: annotationSnapshot.domain,
+    key: annotation.key,
     name,
   };
 }

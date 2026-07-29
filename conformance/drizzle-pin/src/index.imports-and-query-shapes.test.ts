@@ -43,7 +43,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
-          "}, kovo({ domain: 'product', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
           '',
           'export async function writeSqlite(db: SQLiteAsyncDatabase<any, any, any>, productId: string) {',
           '  await db.update(products).set({ id: productId });',
@@ -88,7 +88,7 @@ describe('Drizzle pinned subset conformance', () => {
               metadata: jsonb('metadata'),
               name: text('name'),
               stock: integer('stock').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product', {
               load(_input, db: PgAsyncDatabase<any, any>) {
@@ -144,7 +144,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = table('products', {
               id: pgText('id').primaryKey(),
               stock: pgInteger('stock').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product/aliased-factories', {
               load(_input, db: PgAsyncDatabase<any, any>) {
@@ -190,7 +190,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = table('products', {
               id: pgText('id').primaryKey(),
               stock: pgInteger('stock').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product/barrel-factories', {
               load(_input, db: PgAsyncDatabase<any, any>) {
@@ -237,7 +237,7 @@ describe('Drizzle pinned subset conformance', () => {
       "  id: pg.text('id').primaryKey(),",
       "  metadata: pg.jsonb('metadata'),",
       "  stock: pg.integer('stock').notNull(),",
-      "}, kovo({ domain: 'product', key: 'id' }));",
+      "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
       '',
       'export async function restock(db: PgAsyncDatabase<any, any>, productId: string) {',
       '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
@@ -306,7 +306,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               stock: integer('stock').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product/wrapped-projection', {
               load(_input, db: PgAsyncDatabase<any, any>) {
@@ -349,7 +349,7 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
               name: text('name').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             function loadProducts(_input: unknown, db: PgAsyncDatabase<any, any>) {
               return db.select({
@@ -392,11 +392,11 @@ describe('Drizzle pinned subset conformance', () => {
             export const products = pgTable('products', {
               id: text('id'),
               name: text('name').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
             export const reviews = pgTable('reviews', {
               productId: text('product_id'),
               rating: integer('rating'),
-            }, kovo({ domain: 'review', key: 'productId' }));
+            }, kovo((columns) => ({ domain: 'review', key: columns.productId })));
 
             export const productQuery = query('product', {
               load(_input, db: PgAsyncDatabase<any, any>) {
@@ -441,15 +441,15 @@ describe('Drizzle pinned subset conformance', () => {
             export const discounts = pgTable('discounts', {
               percent: integer('percent').notNull(),
               productId: text('product_id'),
-            }, kovo({ domain: 'discount', key: 'productId' }));
+            }, kovo((columns) => ({ domain: 'discount', key: columns.productId })));
             export const products = pgTable('products', {
               id: text('id'),
               name: text('name').notNull(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
             export const reviews = pgTable('reviews', {
               productId: text('product_id'),
               rating: integer('rating').notNull(),
-            }, kovo({ domain: 'review', key: 'productId' }));
+            }, kovo((columns) => ({ domain: 'review', key: columns.productId })));
 
             export const discountQuery = query('discount/full', {
               load(_input, db: PgAsyncDatabase<any, any>) {

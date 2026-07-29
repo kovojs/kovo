@@ -63,11 +63,11 @@ describe('Better Auth pinned conformance', () => {
           fields: ['challenge', 'expiresAt', 'id'],
           manualBridgeSteps: [
             'Inspect webauthnChallenge (physical auth_webauthn_challenges) fields (challenge, expiresAt, id) and decide whether the app reads this table.',
-            'Likely Better Auth protocol/bookkeeping state is kovo({ exempt: true }); confirm the app never queries it before adding the bridge.',
+            'Likely Better Auth protocol/bookkeeping state is kovo(() => ({ exempt: true })); confirm the app never queries it before adding the bridge.',
             'Add declared Better Auth API touches for writes that can mutate webauthnChallenge; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
           ],
           message:
-            'webauthnChallenge (physical auth_webauthn_challenges) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+            'webauthnChallenge (physical auth_webauthn_challenges) is outside the blessed Better Auth schema bridge; add a schema.ts callback annotation and declared touches before relying on runtime coverage.',
           physicalTable: 'auth_webauthn_challenges',
           reason: 'unsupported-plugin-table',
           suggestedAnnotation: {
@@ -82,11 +82,11 @@ describe('Better Auth pinned conformance', () => {
           fields: ['credentialId', 'id', 'userId'],
           manualBridgeSteps: [
             'Inspect webauthnCredential (physical auth_webauthn_credentials) fields (credentialId, id, userId) and decide whether the app reads this table.',
-            "Likely app-visible ownership is kovo({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use kovo({ exempt: true }) with a rationale.",
+            "Likely app-visible ownership is kovo((columns) => ({ domain: 'auth', key: columns.userId })); confirm before adding the bridge, otherwise use kovo(() => ({ exempt: true })) with a rationale.",
             'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes KV406 until declared coverage exists.',
           ],
           message:
-            'webauthnCredential (physical auth_webauthn_credentials) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+            'webauthnCredential (physical auth_webauthn_credentials) is outside the blessed Better Auth schema bridge; add a schema.ts callback annotation and declared touches before relying on runtime coverage.',
           physicalTable: 'auth_webauthn_credentials',
           reason: 'unsupported-plugin-table',
           suggestedAnnotation: { domain: 'auth', key: 'userId' },
@@ -139,10 +139,10 @@ describe('Better Auth pinned conformance', () => {
       'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
     ]);
     expect(result.source).toContain(
-      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).not.toContain(
-      "export const user = pgTable('user', {}, kovo({ exempt: true }));",
+      "export const user = pgTable('user', {}, kovo(() => ({ exempt: true })));",
     );
     expect(verifierConfig.domainByTable.user).toBe('user');
     expect(verifierConfig.exemptTables).not.toContain('user');
@@ -216,16 +216,16 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, kovo({ domain: 'auth', key: 'userId', secret: ['clientSecret'] }));",
+      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.clientSecret] })));",
     );
     expect(result.source).toContain(
-      "export const auth_oauth_tokens = pgTable('auth_oauth_tokens', {}, kovo({ domain: 'auth', key: 'userId', secret: ['accessToken', 'refreshToken'] }));",
+      "export const auth_oauth_tokens = pgTable('auth_oauth_tokens', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.accessToken, columns.refreshToken] })));",
     );
     expect(result.source).toContain(
-      "export const auth_two_factors = pgTable('auth_two_factors', {}, kovo({ domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] }));",
+      "export const auth_two_factors = pgTable('auth_two_factors', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.secret, columns.backupCodes] })));",
     );
     expect(result.source).toContain(
-      "export const auth_device_codes = pgTable('auth_device_codes', {}, kovo({ exempt: true }));",
+      "export const auth_device_codes = pgTable('auth_device_codes', {}, kovo(() => ({ exempt: true })));",
     );
     expect(generated.validation.ok).toBe(true);
     expect(generated.skippedTables).toEqual([]);

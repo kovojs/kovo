@@ -61,16 +61,16 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
-      "export const organization = pgTable('organization', {}, kovo({ domain: 'organization', key: 'id' }));",
+      "export const organization = pgTable('organization', {}, kovo((columns) => ({ domain: 'organization', key: columns.id })));",
     );
     expect(result.source).toContain(
-      "export const teamMember = pgTable('teamMember', {}, kovo({ domain: 'organization', key: 'teamId' }));",
+      "export const teamMember = pgTable('teamMember', {}, kovo((columns) => ({ domain: 'organization', key: columns.teamId })));",
     );
     expect(result.source).toContain(
-      "export const verification = pgTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = pgTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -134,7 +134,7 @@ describe('Better Auth pinned conformance', () => {
         "  userId: text('userId').notNull(),\n" +
         "  role: text('role').notNull(),\n" +
         "  createdAt: timestamp('createdAt').notNull(),\n" +
-        "}, kovo({ domain: 'organization', key: 'organizationId' }));",
+        "}, kovo((columns) => ({ domain: 'organization', key: columns.organizationId })));",
     );
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {\n" +
@@ -144,7 +144,7 @@ describe('Better Auth pinned conformance', () => {
         "  expiresAt: timestamp('expiresAt').notNull(),\n" +
         "  createdAt: timestamp('createdAt').notNull(),\n" +
         "  updatedAt: timestamp('updatedAt').notNull(),\n" +
-        '}, kovo({ exempt: true }));',
+        '}, kovo(() => ({ exempt: true })));',
     );
   });
 
@@ -239,13 +239,13 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = authPgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = authPgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(result.source).toContain(
-      "export const invitation = sqlite.sqliteTable('invitation', {}, kovo({ domain: 'organization', key: 'organizationId' }));",
+      "export const invitation = sqlite.sqliteTable('invitation', {}, kovo((columns) => ({ domain: 'organization', key: columns.organizationId })));",
     );
     expect(result.source).toContain(
-      "export const verification = sqlite.sqliteTable('verification', {}, kovo({ exempt: true }));",
+      "export const verification = sqlite.sqliteTable('verification', {}, kovo(() => ({ exempt: true })));",
     );
   });
 
@@ -280,12 +280,12 @@ describe('Better Auth pinned conformance', () => {
     expect(result.duplicateSourceTables).toEqual(['user']);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const account = pgTable('account', {}, kovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      "export const account = pgTable('account', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.password, columns.accessToken, columns.refreshToken, columns.idToken] })));",
     );
     expect(result.source).toContain("export const user = pgTable('user', {});");
     expect(result.source).toContain("export const userShadow = pgTable('user', {});");
     expect(result.source).not.toContain(
-      "export const user = pgTable('user', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const user = pgTable('user', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
   });
 
@@ -349,16 +349,16 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
-      "export const auth_users = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const auth_users = pgTable('auth_users', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(result.source).toContain(
-      "export const auth_sessions = pgTable('auth_sessions', {}, kovo({ domain: 'auth', key: 'userId', secret: ['token'] }));",
+      "export const auth_sessions = pgTable('auth_sessions', {}, kovo((columns) => ({ domain: 'auth', key: columns.userId, secret: [columns.token] })));",
     );
     expect(result.source).toContain(
-      "export const auth_organizations = pgTable('auth_organizations', {}, kovo({ domain: 'organization', key: 'id' }));",
+      "export const auth_organizations = pgTable('auth_organizations', {}, kovo((columns) => ({ domain: 'organization', key: columns.id })));",
     );
     expect(result.source).toContain(
-      "export const auth_verifications = pgTable('auth_verifications', {}, kovo({ exempt: true }));",
+      "export const auth_verifications = pgTable('auth_verifications', {}, kovo(() => ({ exempt: true })));",
     );
     expect(generated.validation.ok).toBe(true);
     expect(generated.skippedTables).toEqual([]);
@@ -434,7 +434,7 @@ describe('Better Auth pinned conformance', () => {
     expect(result.annotatedTables).toEqual(['account', 'verification']);
     expect(result.source).toContain("export const auth_users = pgTable('auth_users', {});");
     expect(result.source).not.toContain(
-      "export const auth_users = pgTable('auth_users', {}, kovo({ domain: 'user', key: 'id' }));",
+      "export const auth_users = pgTable('auth_users', {}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
     );
     expect(verifierConfig.domainByTable).not.toHaveProperty('auth_users');
     expect(verifierConfig.keyByTable).not.toHaveProperty('auth_users');

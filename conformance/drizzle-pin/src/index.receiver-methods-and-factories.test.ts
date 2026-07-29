@@ -52,7 +52,7 @@ describe('Drizzle pinned subset conformance', () => {
             const users = pgTable('users', {
               active: boolean('active').notNull(),
               id: text('id').primaryKey(),
-            }, kovo({ domain: 'user', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'user', key: columns.id })));
 
             export async function countActiveUsers(db: PgAsyncDatabase<any, any>) {
               return db.$count(users, eq(users.active, true));
@@ -164,7 +164,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const users = pgTable('users', {
               id: text('id').primaryKey(),
-            }, kovo({ domain: 'user', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'user', key: columns.id })));
 
             interface FakeDb {
               execute(query: unknown): Promise<void>;
@@ -222,7 +222,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const users = pgTable('users', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'user', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -310,7 +310,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const users = pgTable('users', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'user', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -374,7 +374,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const users = pgTable('users', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'user', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -443,7 +443,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           "export const users = pgTable('users', {",
           "  id: text('id').primaryKey(),",
-          "}, kovo({ domain: 'user', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
           '',
           'declare function makeActions(): { add: ReturnType<typeof write> };',
           'declare function makeQueryOptions(): {',
@@ -501,7 +501,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const users = pgTable('users', {",
           "  id: text('id').primaryKey(),",
           "  name: text('name').notNull(),",
-          "}, kovo({ domain: 'user', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
           '',
           'function loadUsers(_input: unknown, db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: users.id, name: users.name }).from(users);',
@@ -590,7 +590,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const users = pgTable('users', {",
           "  id: text('id').primaryKey(),",
           "  name: text('name').notNull(),",
-          "}, kovo({ domain: 'user', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'user', key: columns.id })));",
           '',
           'function loadUsers(_input: unknown, db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: users.id, name: users.name }).from(users);',

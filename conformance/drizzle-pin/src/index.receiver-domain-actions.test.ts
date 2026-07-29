@@ -19,7 +19,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const products = pgTable('products', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'product', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
             '',
             'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  db.update(products).set({ id: productId }).where(eq(products.id, productId));',
@@ -83,7 +83,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
-          "}, kovo({ domain: 'product', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
           '',
           'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
           '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
@@ -163,7 +163,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
-          "}, kovo({ domain: 'product', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
           '',
           'const readProducts = ((db: PgAsyncDatabase<any, any>) => {',
           '  return db.select({ id: products.id }).from(products);',
@@ -247,7 +247,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const products = pgTable('products', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'product', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
             '',
             'declare const externalActions: {',
             '  addItem(db: PgAsyncDatabase<any, any>, productId: string): Promise<void>;',
@@ -284,7 +284,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', {}, kovo((columns) => ({ domain: 'cart', key: columns.productId })));",
             '',
             'type ActionBag = {',
             '  [name: string]: ReturnType<typeof write>;',
@@ -331,7 +331,7 @@ describe('Drizzle pinned subset conformance', () => {
           "export const products = pgTable('products', {",
           "  id: text('id').primaryKey(),",
           "  stock: integer('stock').notNull(),",
-          "}, kovo({ domain: 'product', key: 'id' }));",
+          "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
           '',
           'export async function syncProduct(context: DrizzleContext, fake: FakeContext, productId: string) {',
           '  let writer;',
@@ -399,10 +399,10 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const auditLog = pgTable('audit_log', {
               id: text('id').primaryKey(),
-            }, kovo({ exempt: true }));
+            }, kovo(() => ({ exempt: true })));
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product/shadowed-db', {
               async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
@@ -447,7 +447,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const products = pgTable('products', {
               id: text('id').primaryKey(),
-            }, kovo({ domain: 'product', key: 'id' }));
+            }, kovo((columns) => ({ domain: 'product', key: columns.id })));
 
             export const productQuery = query('product/detached-methods', {
               async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
@@ -572,7 +572,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const products = pgTable('products', {",
             "  id: text('id').primaryKey(),",
-            "}, kovo({ domain: 'product', key: 'id' }));",
+            "}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
             '',
             "export const productQuery = query('product/spread-carrier', {",
             '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',

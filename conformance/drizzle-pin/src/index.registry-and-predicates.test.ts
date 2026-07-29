@@ -9,14 +9,13 @@ import {
   serializeDomainRegistry,
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
-import { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
 
 import { annotatedTable } from './test-helpers.js';
 
 describe('Drizzle pinned subset conformance', () => {
   it('pins table annotations as the domain registry source', () => {
-    const cartItems = annotatedTable('cart_items', kovo({ domain: 'cart', key: 'cartId' }));
-    const products = annotatedTable('products', kovo({ domain: 'product', key: 'id' }));
+    const cartItems = annotatedTable('cart_items', { domain: 'cart', key: 'cartId' });
+    const products = annotatedTable('products', { domain: 'product', key: 'id' });
 
     expect(serializeDomainRegistry([{ table: products }, { table: cartItems }])).toBe(
       [
@@ -39,7 +38,7 @@ describe('Drizzle pinned subset conformance', () => {
             operation: 'insert-select',
             predicate: 'non-eq',
             site: 'cart.domain.ts:15',
-            table: annotatedTable('products', kovo({ domain: 'product', key: 'id' })),
+            table: annotatedTable('products', { domain: 'product', key: 'id' }),
           },
           {
             branch: 'stock-check',
@@ -47,10 +46,7 @@ describe('Drizzle pinned subset conformance', () => {
             predicate: 'eq',
             readKey: 'arg:productId',
             site: 'cart.domain.ts:21',
-            table: annotatedTable(
-              'inventory_snapshots',
-              kovo({ domain: 'inventory', key: 'productId' }),
-            ),
+            table: annotatedTable('inventory_snapshots', { domain: 'inventory', key: 'productId' }),
           },
         ],
         unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:31' }],
@@ -60,13 +56,13 @@ describe('Drizzle pinned subset conformance', () => {
             operation: 'update',
             predicate: 'non-eq',
             site: 'cart.domain.ts:20',
-            table: annotatedTable('products', kovo({ domain: 'product', key: 'id' })),
+            table: annotatedTable('products', { domain: 'product', key: 'id' }),
             writeKey: 'arg:productId',
           },
           {
             operation: 'insert',
             site: 'cart.domain.ts:16',
-            table: annotatedTable('cart_items', kovo({ domain: 'cart', key: 'cartId' })),
+            table: annotatedTable('cart_items', { domain: 'cart', key: 'cartId' }),
           },
         ],
       }),
@@ -124,9 +120,9 @@ describe('Drizzle pinned subset conformance', () => {
             "import { alias } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
-            'export const prices = pgTable("prices", {}, kovo({ domain: "price", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo((columns) => ({ domain: "cart", key: columns.cartId })));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: columns.id })));',
+            'export const prices = pgTable("prices", {}, kovo((columns) => ({ domain: "price", key: columns.productId })));',
             'const productAlias = alias(products, "p");',
             '',
             'export async function addItem(db: PgAsyncDatabase<any, any>, productId: string, cartIds: string[]) {',
@@ -178,7 +174,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import { gt, sql } from 'drizzle-orm';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: columns.id })));',
             '',
             'export async function scrubPredicate(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));',
@@ -217,8 +213,8 @@ describe('Drizzle pinned subset conformance', () => {
             "import { eq } from 'drizzle-orm';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const archivedProducts = pgTable("archived_products", {}, kovo({ domain: "archive", key: "id" }));',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const archivedProducts = pgTable("archived_products", {}, kovo((columns) => ({ domain: "archive", key: columns.id })));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: columns.id })));',
             'declare const useArchive: boolean;',
             'const writeTarget = useArchive ? archivedProducts : products;',
             '',
@@ -260,9 +256,9 @@ describe('Drizzle pinned subset conformance', () => {
             "import { pgTable } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const archivedProducts = pgTable('archived_products', {}, kovo({ domain: 'archive', key: 'id' }));",
-            "export const prices = pgTable('prices', {}, kovo({ domain: 'price', key: 'productId' }));",
-            "export const products = pgTable('products', {}, kovo({ domain: 'product', key: 'id' }));",
+            "export const archivedProducts = pgTable('archived_products', {}, kovo((columns) => ({ domain: 'archive', key: columns.id })));",
+            "export const prices = pgTable('prices', {}, kovo((columns) => ({ domain: 'price', key: columns.productId })));",
+            "export const products = pgTable('products', {}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
             'const priceSource = useArchive ? archivedProducts : prices;',
             'const writeTarget = useArchive ? archivedProducts : products;',
             '',
@@ -320,7 +316,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            'export const products = pgTable("products", {}, kovo((columns) => ({ domain: "product", key: columns.id })));',
             'declare const useDynamic: boolean;',
             'const writeTarget = useDynamic ? tableFor("archive:products") : products;',
             '',
@@ -362,8 +358,8 @@ describe('Drizzle pinned subset conformance', () => {
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', { id: text('id').primaryKey() }, kovo({ domain: 'product', key: 'id' }));",
-            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const products = pgTable('products', { id: text('id').primaryKey() }, kovo((columns) => ({ domain: 'product', key: columns.id })));",
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo((columns) => ({ domain: 'cart', key: columns.productId })));",
             '',
             'export async function reserveCartProducts(db: PgAsyncDatabase<any, any>) {',
             '  await db.update(products).set({ reserved: true }).where(inArray(products.id, db.select({ productId: cartItems.productId }).from(cartItems)));',
@@ -414,8 +410,8 @@ describe('Drizzle pinned subset conformance', () => {
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', { id: text('id').primaryKey() }, kovo({ domain: 'product', key: 'id' }));",
-            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const products = pgTable('products', { id: text('id').primaryKey() }, kovo((columns) => ({ domain: 'product', key: columns.id })));",
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo((columns) => ({ domain: 'cart', key: columns.productId })));",
             '',
             'export async function pruneOrphanedItems(db: PgAsyncDatabase<any, any>) {',
             '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select({ id: products.id }).from(products)));',
@@ -463,7 +459,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo({ domain: 'cart', key: 'productId' }));",
+            "export const cartItems = pgTable('cart_items', { productId: text('product_id').notNull() }, kovo((columns) => ({ domain: 'cart', key: columns.productId })));",
             '',
             'export async function pruneOrphanedItems(db: PgAsyncDatabase<any, any>) {',
             '  await db.delete(cartItems).where(inArray(cartItems.productId, db.select().from(tableFor("products"))));',
@@ -507,7 +503,7 @@ describe('Drizzle pinned subset conformance', () => {
             "import { pgTable } from 'drizzle-orm/pg-core';",
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            "export const products = pgTable('products', {}, kovo({ domain: 'product', key: 'id' }));",
+            "export const products = pgTable('products', {}, kovo((columns) => ({ domain: 'product', key: columns.id })));",
             "const writeTarget = useDynamic ? tableFor('archive:products') : products;",
             '',
             'export async function syncProduct(db: PgAsyncDatabase<any, any>) {',
@@ -549,7 +545,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: [
             "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
-            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo((columns) => ({ domain: "cart", key: columns.productId })));',
             '',
             'export const cart = domain({',
             '  addItem: write(async (db: PgAsyncDatabase<any, any>, productId: string) => {',

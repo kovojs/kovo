@@ -65,7 +65,7 @@ describe('@kovojs/test touch graph fixture seam', () => {
           source: [
             'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            'export const cartItems = pgTable("cart_items", {}, kovo((columns) => ({ domain: "cart", key: columns.productId })));',
             '',
             'function saveItem(writer: PgAsyncDatabase<any, any>, productId: string) {',
             '  return writer.insert(cartItems).values({ productId });',

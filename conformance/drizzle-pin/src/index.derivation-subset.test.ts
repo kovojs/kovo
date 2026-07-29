@@ -63,7 +63,7 @@ const ITEMS_TABLE = [
   "  qty: integer('qty'),",
   "  stock: integer('stock'),",
   "  tag: text('tag'),",
-  "}, kovo({ domain: 'item', key: 'id' }));",
+  "}, kovo((columns) => ({ domain: 'item', key: columns.id })));",
 ].join('\n');
 
 describe('Drizzle pinned subset conformance — §10.5 derivation subset', () => {

@@ -6,7 +6,7 @@ describe('oracle fixtures', () => {
   it('builds schema table source fixtures with Kovo annotations', () => {
     expect(
       oracleSchemaTableFixture({
-        annotation: "kovo({ domain: 'product', key: 'id' })",
+        annotation: "kovo((columns) => ({ domain: 'product', key: columns.id }))",
         columns: [
           { builder: "text('id').primaryKey()", name: 'id' },
           { builder: "integer('stock').notNull()", name: 'stock' },
@@ -25,7 +25,7 @@ describe('oracle fixtures', () => {
         '  {',
         "    id: text('id').primaryKey(),",
         "    stock: integer('stock').notNull(),",
-        "  }, kovo({ domain: 'product', key: 'id' }),",
+        "  }, kovo((columns) => ({ domain: 'product', key: columns.id })),",
         ');',
         '',
       ].join('\n'),
