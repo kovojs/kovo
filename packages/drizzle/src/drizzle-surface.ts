@@ -168,11 +168,6 @@ export interface KovoViewExtraConfigAnnotation {
   view: KovoViewAnnotation;
 }
 
-type KovoAnnotation<
-  Columns extends Readonly<Record<string, AnyColumn>>,
-  Parent extends Table = Table,
-> = KovoTableAnnotation<Columns, Parent> | KovoViewExtraConfigAnnotation;
-
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation<
   Columns extends Readonly<Record<string, AnyColumn>> = Readonly<Record<string, AnyColumn>>,
@@ -264,7 +259,7 @@ export function kovo<
         readonly key: Key;
       };
     };
-  }) => KovoAnnotation<Columns, Parent>,
+  }) => KovoTableAnnotation<Columns, Parent> | KovoViewExtraConfigAnnotation,
 ): KovoTableExtraConfig<Columns> | KovoViewExtraConfig<Columns> {
   if (typeof annotation !== 'function') {
     throw new TypeError('kovo() requires a direct annotation callback.');
