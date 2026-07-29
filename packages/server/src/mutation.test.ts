@@ -25,25 +25,6 @@ import { s, type Schema } from './schema.js';
 import { task, type TaskSchedulingRequest } from './task.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
-declare module '@kovojs/core' {
-  interface InvalidationSets {
-    'contacts/add': 'activityList' | 'contactList';
-  }
-
-  interface OptimisticDerivationSets {
-    'contacts/add': 'activityList';
-  }
-
-  interface QueryRegistry {
-    activityList: {
-      items: Array<{ id: string; message: string }>;
-    };
-    contactList: {
-      items: Array<{ id: string; name: string }>;
-    };
-  }
-}
-
 function protectedMutationFixture<Input extends Record<string, unknown>>(
   key: string,
   input: Input,
@@ -265,50 +246,23 @@ describe('server mutation lifecycle', () => {
     return handle(state.rows, state.jobs, false);
   }
 
-  it('types inline optimistic transforms from mutation key and input schema', () => {
+  it('types standalone optimistic transforms from the input schema', () => {
     const addContact = mutation('contacts/add', {
       input: s.object({ id: s.string(), name: s.string() }),
       queue: 'crm',
       optimistic: {
-        contactList(draft, input) {
-          draft.items.push({ id: input.id, name: input.name });
+        contactList(_draft, input) {
           // @ts-expect-error input is inferred from the sibling input schema.
-          draft.items.push({ id: input.missing, name: input.name });
+          input.missing;
         },
       },
       handler() {
         return 'ok';
       },
     });
-    const assertUnknownOptimisticKeyRejected = () => {
-      mutation('contacts/add', {
-        input: s.object({ id: s.string(), name: s.string() }),
-        optimistic: {
-          // @ts-expect-error unknownQuery is not invalidated by contacts/add.
-          unknownQuery(_draft, _input) {},
-        },
-        handler() {
-          return 'ok';
-        },
-      });
-    };
-    const assertMissingNonDerivableKeyRejected = () => {
-      mutation('contacts/add', {
-        input: s.object({ id: s.string(), name: s.string() }),
-        // @ts-expect-error contactList is not compiler-derivable and needs a transform or await-fragment.
-        optimistic: {
-          activityList(_draft, _input) {},
-        },
-        handler() {
-          return 'ok';
-        },
-      });
-    };
 
     expect(addContact.queue).toBe('crm');
     expect(Object.keys(addContact.optimistic ?? {})).toEqual(['contactList']);
-    expect(assertUnknownOptimisticKeyRejected).toBeTypeOf('function');
-    expect(assertMissingNonDerivableKeyRejected).toBeTypeOf('function');
   });
 
   it('uses the mutation key for per-mutation queue shorthand', () => {

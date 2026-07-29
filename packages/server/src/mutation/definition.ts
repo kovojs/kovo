@@ -1,10 +1,4 @@
-import type {
-  InvalidationSets,
-  JsonValue,
-  OptimisticDerivationSets,
-  QueryRegistry,
-  Redirect,
-} from '@kovojs/core';
+import type { JsonValue, Redirect } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
 import { transferAppDeclarationOwner } from '../app-declaration-owner.js';
 import {
@@ -215,20 +209,6 @@ export interface MutationRegistry {
   touches?: readonly Domain[];
 }
 
-type MutationInvalidatedQueryNames<Key extends string> = Key extends keyof InvalidationSets
-  ? Extract<InvalidationSets[Key], Extract<keyof QueryRegistry, string>>
-  : never;
-
-type MutationDerivableOptimisticQueryNames<Key extends string> =
-  Key extends keyof OptimisticDerivationSets
-    ? Extract<OptimisticDerivationSets[Key], MutationInvalidatedQueryNames<Key>>
-    : never;
-
-type MutationRequiredOptimisticQueryNames<Key extends string> = Exclude<
-  MutationInvalidatedQueryNames<Key>,
-  MutationDerivableOptimisticQueryNames<Key>
->;
-
 type MutableDraft<Value> = Value extends (...args: any[]) => unknown
   ? Value
   : Value extends readonly (infer Item)[]
@@ -268,23 +248,15 @@ export type MutationOptimisticEntry<Input = unknown, Value = unknown> =
     }
   | 'await-fragment';
 
-type KnownMutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = {
-  [QueryName in MutationRequiredOptimisticQueryNames<Key>]-?: MutationOptimisticEntry<
-    InferSchema<InputSchema>,
-    QueryRegistry[QueryName]
-  >;
-} & {
-  [QueryName in MutationDerivableOptimisticQueryNames<Key>]?: MutationOptimisticEntry<
-    InferSchema<InputSchema>,
-    QueryRegistry[QueryName]
-  >;
-};
-
-export type MutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = [
-  MutationInvalidatedQueryNames<Key>,
-] extends [never]
-  ? Record<string, MutationOptimisticEntry<InferSchema<InputSchema>, any>>
-  : KnownMutationOptimisticMap<Key, InputSchema>;
+/**
+ * Compatibility map for standalone {@link mutation} declarations. Query-value ownership and
+ * optimistic-policy exhaustiveness are enforced by the app-scoped `AppMutationFactory`, whose
+ * `QueryOptimisticBinding[]` values bind exact query handles without a global registry.
+ */
+export type MutationOptimisticMap<
+  _Key extends string,
+  InputSchema extends Schema<unknown>,
+> = Record<string, MutationOptimisticEntry<InferSchema<InputSchema>, any>>;
 
 /**
  * A first-class shared mutation queue name (SPEC §4.1/§10.4): this is conceptual grouping
