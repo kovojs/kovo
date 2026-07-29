@@ -1,8 +1,20 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CREATE_KOVO_REFERENCE } from '../../packages/create-kovo/src/index.ts';
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/u, '.ts'), context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const { CREATE_KOVO_REFERENCE } = await import('../../packages/create-kovo/src/index.ts');
 
 /**
  * Command reference for the standalone `create-kovo` bin.

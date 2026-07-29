@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,127 @@ const copyHref = `${clientHrefs.code}#copy`;
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const genDir = path.join(siteRoot, 'gen');
+const API_REFERENCE_MANIFEST_SCHEMA = 'kovo-api-reference-manifest/v1';
+
+interface ApiReferenceFileRecord {
+  bytes: number;
+  path: string;
+  sha256: string;
+}
+
+interface ApiReferenceManifest {
+  schema: string;
+  digests: {
+    outputs: string;
+    packages: string;
+    publicManifest: string;
+    sources: string;
+  };
+  inputs: {
+    packages: ApiReferenceFileRecord[];
+    publicManifest: ApiReferenceFileRecord;
+    sources: ApiReferenceFileRecord[];
+  };
+  files: ApiReferenceFileRecord[];
+}
+
+function sha256(value: string | Buffer): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function digestRecords(records: readonly ApiReferenceFileRecord[]): string {
+  return sha256(
+    [...records]
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map((record) => `${record.path}\0${record.bytes}\0${record.sha256}`)
+      .join('\n'),
+  );
+}
+
+function assertApiReferenceRecord(
+  record: ApiReferenceFileRecord,
+  root: string,
+  label: string,
+): void {
+  if (
+    !record ||
+    typeof record.path !== 'string' ||
+    typeof record.sha256 !== 'string' ||
+    typeof record.bytes !== 'number'
+  ) {
+    throw new Error(`api-reference: malformed ${label} file-manifest row`);
+  }
+  const filePath = path.resolve(root, record.path);
+  const relativePath = path.relative(root, filePath);
+  if (
+    relativePath === '' ||
+    relativePath.startsWith('..') ||
+    path.isAbsolute(relativePath) ||
+    !existsSync(filePath)
+  ) {
+    throw new Error(`api-reference: ${label} file is missing or escapes its root: ${record.path}`);
+  }
+  const source = readFileSync(filePath);
+  if (source.byteLength !== record.bytes || sha256(source) !== record.sha256) {
+    throw new Error(`api-reference: ${label} digest mismatch for ${record.path}`);
+  }
+}
+
+/**
+ * The generated API directory is ignored build output. A site build therefore
+ * accepts it only when the generator's source/package/public-manifest inputs and
+ * every page/sidebar still match the sealed file manifest.
+ */
+export function verifyApiReferenceManifest({
+  apiDir = path.join(genDir, 'api'),
+  repositoryRoot = repoRoot,
+}: {
+  apiDir?: string;
+  repositoryRoot?: string;
+} = {}): ApiReferenceManifest {
+  const manifestPath = path.join(apiDir, 'api-reference.manifest.json');
+  if (!existsSync(manifestPath)) {
+    throw new Error('api-reference: missing api-reference.manifest.json; run the content pipeline');
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ApiReferenceManifest;
+  if (manifest.schema !== API_REFERENCE_MANIFEST_SCHEMA) {
+    throw new Error(`api-reference: unsupported manifest schema ${String(manifest.schema)}`);
+  }
+
+  assertApiReferenceRecord(manifest.inputs.publicManifest, repositoryRoot, 'public manifest');
+  for (const record of manifest.inputs.packages) {
+    assertApiReferenceRecord(record, repositoryRoot, 'package manifest');
+  }
+  for (const record of manifest.inputs.sources) {
+    assertApiReferenceRecord(record, repositoryRoot, 'source');
+  }
+  for (const record of manifest.files) assertApiReferenceRecord(record, apiDir, 'generated');
+
+  const currentFiles = readdirSync(apiDir)
+    .filter(
+      (name) =>
+        name !== 'api-reference.manifest.json' &&
+        (name.endsWith('.md') || name.endsWith('.sidebar.json')),
+    )
+    .sort();
+  const sealedFiles = manifest.files.map((record) => record.path).sort();
+  if (JSON.stringify(currentFiles) !== JSON.stringify(sealedFiles)) {
+    throw new Error('api-reference: generated file set does not match the sealed manifest');
+  }
+  if (digestRecords(manifest.files) !== manifest.digests.outputs) {
+    throw new Error('api-reference: generated output digest does not match the sealed manifest');
+  }
+  if (digestRecords(manifest.inputs.packages) !== manifest.digests.packages) {
+    throw new Error('api-reference: package-manifest digest does not match the sealed manifest');
+  }
+  if (digestRecords(manifest.inputs.sources) !== manifest.digests.sources) {
+    throw new Error('api-reference: source digest does not match the sealed manifest');
+  }
+  if (manifest.inputs.publicManifest.sha256 !== manifest.digests.publicManifest) {
+    throw new Error('api-reference: public-manifest digest does not match the sealed manifest');
+  }
+  return manifest;
+}
 
 export interface DocPage {
   /** API-reference pages carry their generated sidebar manifest so the route can
@@ -454,6 +576,7 @@ export function loadSiteContent(): Promise<SiteContent> {
 }
 
 async function buildSiteContent(): Promise<SiteContent> {
+  verifyApiReferenceManifest();
   const captures = readJsonIfPresent<Record<string, string>>(
     path.join(genDir, 'captures.json'),
     {},

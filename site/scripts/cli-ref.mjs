@@ -1,14 +1,26 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  COMMANDS_MANIFEST,
-  formatNoArgsMessage,
-} from '../../packages/cli/src/commands-manifest.ts';
-
 import { parseFrontmatter, slugify } from './md.mjs';
+
+// The source manifest follows the package's emitted-JS import convention. Match
+// the supported CLI source runner so a clean docs checkout resolves those local
+// `.js` specifiers to the authored `.ts` files without requiring prebuilt dist.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/u, '.ts'), context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const { COMMANDS_MANIFEST, formatNoArgsMessage } =
+  await import('../../packages/cli/src/commands-manifest.ts');
 
 // Source link for command rows in the API sidebar: the bin's dispatch file. A
 // fixed ref keeps the generated manifest deterministic.

@@ -9,7 +9,7 @@ import { generateApiReference } from './api-ref.mjs';
 
 /**
  * The `@example` gate must extract only the example blocks the generator marks
- * with `**Example**`, never the type-signature fences — otherwise the gate would
+ * with `**Copyable example**`, never the type-signature fences — otherwise the gate would
  * try to compile signatures (which are not standalone programs) and fail, or
  * silently miss examples.
  */
@@ -27,7 +27,7 @@ const SAMPLE = [
   'function component(name: string): unknown;',
   '```',
   '',
-  '**Example**',
+  '**Copyable example**',
   '',
   '```ts',
   "import { component } from '@kovojs/core';",

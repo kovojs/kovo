@@ -1,5 +1,6 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -34,6 +35,33 @@ const MAX_TYPE_LENGTH = 120;
 // Source links in the sidebar manifest point at the real defining file + line on
 // GitHub. A fixed ref keeps output deterministic (no timestamps/abs paths).
 const GITHUB_BASE = 'https://github.com/kovojs/kovo/blob/main';
+export const API_REFERENCE_MANIFEST_SCHEMA = 'kovo-api-reference-manifest/v1';
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function repoRelativePath(filePath) {
+  return path.relative(repoRoot, filePath).split(path.sep).join('/');
+}
+
+async function fileRecord(filePath, displayPath = repoRelativePath(filePath)) {
+  const source = await readFile(filePath);
+  return {
+    bytes: source.byteLength,
+    path: displayPath,
+    sha256: sha256(source),
+  };
+}
+
+function digestRecords(records) {
+  return sha256(
+    [...records]
+      .sort((left, right) => left.path.localeCompare(right.path))
+      .map((record) => `${record.path}\0${record.bytes}\0${record.sha256}`)
+      .join('\n'),
+  );
+}
 
 function createApiProgram(entryFiles) {
   const configPath = path.join(repoRoot, 'tsconfig.json');
@@ -406,6 +434,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
     signature: sanitizeNonPublicTagMarkers(signature),
     sig: signatureTypes(rendered[0], checker),
     sourceHref: sourceHrefOf(declarations[0]),
+    sourcePath: repoRelativePath(declarations[0].getSourceFile().fileName),
   };
 }
 
@@ -494,10 +523,10 @@ function collectExports(sourceFile, checker, packageName) {
   return entries;
 }
 
-/** Render one export: summary prose, a params/returns table, the type
- * signature, then each `@example` as its own fenced `ts` block (the shape the
- * `@example` typecheck gate extracts). Undocumented exports keep the explicit
- * marker so they are flagged, never omitted. */
+/** Render one export: summary prose, then copyable examples before the dense
+ * signature. This keeps the generated reference useful as a task surface while
+ * preserving exact source-derived types below it. Undocumented exports keep the
+ * explicit marker so they are flagged, never omitted. */
 function renderEntry(entry, slug, targets, depth = 4) {
   const parsed = entry.doc === '' ? undefined : parseJsDoc(entry.doc);
   const body = parsed && parsed.summary !== '' ? parsed.summary : entry.doc;
@@ -514,13 +543,13 @@ function renderEntry(entry, slug, targets, depth = 4) {
     if (table.length > 0) lines.push(...table, '');
   }
 
-  lines.push('```ts', entry.signature, '```');
-
   if (parsed) {
     for (const example of parsed.examples) {
-      lines.push('', '**Example**', '', ...renderExample(example));
+      lines.push('', '**Copyable example**', '', ...renderExample(example));
     }
   }
+
+  lines.push('', '**Signature**', '', '```ts', entry.signature, '```');
 
   return lines.join('\n');
 }
@@ -539,12 +568,14 @@ function renderExample(example) {
  * in display order. */
 function categoryGroups(entries) {
   return [
-    { entries: entries.filter((entry) => groupOf(entry.kind) === 'Functions'), title: 'Functions' },
+    {
+      entries: entries.filter((entry) => ['Functions', 'Constants'].includes(groupOf(entry.kind))),
+      title: 'Values',
+    },
     {
       entries: entries.filter((entry) => groupOf(entry.kind) === 'Types & interfaces'),
-      title: 'Types & interfaces',
+      title: 'Supporting types',
     },
-    { entries: entries.filter((entry) => groupOf(entry.kind) === 'Constants'), title: 'Constants' },
   ].filter((group) => group.entries.length > 0);
 }
 
@@ -583,7 +614,7 @@ function renderPage(pkg, subpaths, targets) {
     ...subpaths.flatMap((subpath) => [
       `## \`${subpath.importPath}\``,
       '',
-      subpath.description ?? pkg.description,
+      `**Task:** ${subpath.description ?? pkg.description}`,
       '',
       `Source: [\`${subpath.entryRel}\`](${GITHUB_BASE}/${subpath.entryRel})`,
       '',
@@ -771,6 +802,77 @@ function resolvePackageEntry(pkg, entry) {
   return { absPath, repoRelative: path.relative(repoRoot, absPath) };
 }
 
+async function recordsForRepoPaths(paths) {
+  const records = [];
+  for (const relativePath of [...new Set(paths)].sort()) {
+    const absolutePath = path.join(repoRoot, relativePath);
+    if (!existsSync(absolutePath)) {
+      throw new Error(`api-ref: manifest input is missing: ${relativePath}`);
+    }
+    records.push(await fileRecord(absolutePath, relativePath.split(path.sep).join('/')));
+  }
+  return records;
+}
+
+async function apiOutputRecords(outDir) {
+  const records = [];
+  for (const entry of (await readdir(outDir, { withFileTypes: true })).sort((left, right) =>
+    left.name.localeCompare(right.name),
+  )) {
+    if (!entry.isFile() || entry.name === 'api-reference.manifest.json') continue;
+    if (!entry.name.endsWith('.md') && !entry.name.endsWith('.sidebar.json')) continue;
+    records.push(await fileRecord(path.join(outDir, entry.name), entry.name));
+  }
+  return records;
+}
+
+/**
+ * Seal the generated API directory after all command/family reference
+ * post-processors have run. The manifest is intentionally self-excluding: its
+ * `files` rows cover every generated page/sidebar and the aggregate output
+ * digest covers those exact rows.
+ */
+export async function sealApiReferenceManifest({
+  inputPaths,
+  outDir = path.join(siteRoot, 'gen/api'),
+} = {}) {
+  if (!inputPaths) {
+    throw new Error('api-ref: sealing requires the source/package input paths from generation');
+  }
+  const publicManifest = await fileRecord(
+    path.join(repoRoot, inputPaths.publicManifest),
+    inputPaths.publicManifest,
+  );
+  const packages = await recordsForRepoPaths(inputPaths.packages);
+  const sources = await recordsForRepoPaths(inputPaths.sources);
+  const files = await apiOutputRecords(outDir);
+  if (files.length === 0) {
+    throw new Error('api-ref: refusing to seal an empty generated API directory');
+  }
+
+  const manifest = {
+    schema: API_REFERENCE_MANIFEST_SCHEMA,
+    digests: {
+      outputs: digestRecords(files),
+      packages: digestRecords(packages),
+      publicManifest: publicManifest.sha256,
+      sources: digestRecords(sources),
+    },
+    inputs: {
+      packages,
+      publicManifest,
+      sources,
+    },
+    files,
+  };
+  await writeFile(
+    path.join(outDir, 'api-reference.manifest.json'),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    'utf8',
+  );
+  return manifest;
+}
+
 export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
   const resolvedPackages = PACKAGES.map((pkg) => ({
     pkg,
@@ -872,11 +974,24 @@ export async function generateApiReference({ outDir = path.join(siteRoot, 'gen/a
     }),
     { documented: 0, exports: 0 },
   );
+  const inputPaths = {
+    packages: resolvedPackages.map(({ pkg }) => `packages/${pkg.dir}/package.json`),
+    publicManifest: 'public-packages.json',
+    sources: [
+      ...collected.flatMap(({ subpaths }) =>
+        subpaths.flatMap((subpath) => [
+          subpath.entryRel,
+          ...subpath.entries.map((entry) => entry.sourcePath),
+        ]),
+      ),
+    ],
+  };
+  const manifest = await sealApiReferenceManifest({ inputPaths, outDir });
   process.stdout.write(
     `api-ref/v1 packages=${report.length} exports=${totals.exports} documented=${totals.documented}\n`,
   );
 
-  return { packages: report, ...totals };
+  return { inputPaths, manifest, packages: report, ...totals };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

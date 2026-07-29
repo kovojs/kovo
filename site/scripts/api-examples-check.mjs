@@ -13,7 +13,7 @@ import { documentedApiEntries } from './api-ref.mjs';
  * `extract-snippets.mjs` + `run-steps.mjs`: extract → write → typecheck.
  *
  * The generator (`api-ref.mjs`) renders each `@example` as a fenced `ts` block
- * immediately after an `**Example**` marker. We extract exactly those blocks
+ * immediately after a `**Copyable example**` marker. We extract exactly those blocks
  * (never the type-signature fences), write one `.ts` file per example into a
  * scratch dir inside the repo (so `@kovojs/*` resolve through the workspace), and
  * run `tsgo` once over all of them. Determinism: scratch files are derived only
@@ -27,13 +27,13 @@ const scratchDir = path.join(siteRoot, 'gen/api-examples');
 const stepsTsconfig = path.join(siteRoot, 'tutorial/tsconfig.steps.json');
 
 /** Extract `@example` ts blocks from one generated page. A block counts only
- * when its fence is the first non-blank line after an `**Example**` marker, so
+ * when its fence is the first non-blank line after a copyable-example marker, so
  * the signature fences are never mistaken for examples. */
 export function extractExampleBlocks(markdown) {
   const lines = markdown.split('\n');
   const blocks = [];
   for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index].trim() !== '**Example**') continue;
+    if (!isCopyableExampleMarker(lines[index])) continue;
 
     let cursor = index + 1;
     while (cursor < lines.length && lines[cursor].trim() === '') cursor += 1;
@@ -72,7 +72,7 @@ export function collectApiExamples(dir = apiDir, publicPages = publicApiPageFile
         perHeading = 0;
         continue;
       }
-      if (lines[index].trim() !== '**Example**') continue;
+      if (!isCopyableExampleMarker(lines[index])) continue;
 
       let cursor = index + 1;
       while (cursor < lines.length && lines[cursor].trim() === '') cursor += 1;
@@ -88,11 +88,20 @@ export function collectApiExamples(dir = apiDir, publicPages = publicApiPageFile
       examples.push({
         code: body.join('\n'),
         id: `${slug}__${sanitize(heading)}__${perHeading}`,
+        lang: inferExampleLanguage(body.join('\n')),
       });
       index = cursor;
     }
   }
   return examples;
+}
+
+function isCopyableExampleMarker(line) {
+  return line.trim() === '**Copyable example**';
+}
+
+function inferExampleLanguage(code) {
+  return /<[A-Z][\w.:-]*(?:\s|>|\/>)|<[a-z][\w.:-]*(?:\s|>|\/>)/u.test(code) ? 'tsx' : 'ts';
 }
 
 function sanitize(name) {
@@ -119,7 +128,11 @@ async function main() {
   await mkdir(scratchDir, { recursive: true });
 
   for (const example of examples) {
-    await writeFile(path.join(scratchDir, `${example.id}.ts`), `${example.code}\n`, 'utf8');
+    await writeFile(
+      path.join(scratchDir, `${example.id}.${example.lang}`),
+      `${example.code}\n`,
+      'utf8',
+    );
   }
 
   // Drizzle is not symlinked under site/node_modules; map it to its source so
@@ -127,10 +140,14 @@ async function main() {
   // workspace node_modules). Reuse the tutorial step compiler options verbatim.
   const tsconfig = {
     compilerOptions: {
-      paths: { '@kovojs/drizzle': ['../../../packages/drizzle/src/runtime.ts'] },
+      jsxImportSource: '@kovojs/server',
+      paths: {
+        '@kovojs/drizzle': ['../../../packages/drizzle/src/runtime.ts'],
+        '@kovojs/verify': ['../../../packages/verify/src/index.ts'],
+      },
     },
     extends: path.relative(scratchDir, stepsTsconfig),
-    include: ['*.ts'],
+    include: ['*.ts', '*.tsx'],
   };
   await writeFile(
     path.join(scratchDir, 'tsconfig.json'),

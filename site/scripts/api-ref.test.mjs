@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -257,7 +257,7 @@ describe('api-ref generator', () => {
     );
     expect(verifyPage.match(/^#### `/gmu)).toHaveLength(11);
     expect(verifyPage).not.toContain('*Undocumented.*');
-    expect(verifyPage).toContain('**Example**');
+    expect(verifyPage).toContain('**Copyable example**');
     expect(verifyPage).toContain("import { verifyCertificateDirectory } from '@kovojs/verify';");
   });
 
@@ -291,12 +291,41 @@ describe('api-ref generator', () => {
     expect(corePage).not.toContain(repoRoot);
     const again = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     try {
-      await generateApiReference({ outDir: again });
-      expect(await readFile(path.join(again, 'core.md'), 'utf8')).toBe(corePage);
+      const againResult = await generateApiReference({ outDir: again });
+      const names = (await readdir(outDir)).sort();
+      expect((await readdir(again)).sort()).toEqual(names);
+      for (const name of names) {
+        expect(await readFile(path.join(again, name), 'utf8'), name).toBe(
+          await readFile(path.join(outDir, name), 'utf8'),
+        );
+      }
+      expect(againResult.manifest).toEqual(result.manifest);
     } finally {
       await rm(again, { force: true, recursive: true });
     }
   }, 60_000);
+
+  it('seals source, package, public-manifest, and generated-file digests', () => {
+    expect(result.manifest).toMatchObject({
+      schema: 'kovo-api-reference-manifest/v1',
+      digests: {
+        outputs: expect.stringMatching(/^[a-f0-9]{64}$/),
+        packages: expect.stringMatching(/^[a-f0-9]{64}$/),
+        publicManifest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        sources: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
+      inputs: {
+        publicManifest: {
+          path: 'public-packages.json',
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+      },
+    });
+    expect(result.manifest.inputs.packages).toHaveLength(result.packages.length);
+    expect(result.manifest.inputs.sources.length).toBeGreaterThan(result.packages.length);
+    expect(result.manifest.files.map((file) => file.path)).toContain('core.md');
+    expect(result.manifest.files.map((file) => file.path)).toContain('core.sidebar.json');
+  });
 
   it('renders @param/@returns as a markdown table with a Type column', () => {
     // The `component` export is documented with a param + a returns row.
@@ -409,11 +438,9 @@ describe('api-ref generator', () => {
     );
     expect(manifest.subpaths[0].sourceHref).not.toContain(repoRoot);
 
-    const functions = manifest.subpaths[0].categories.find(
-      (category) => category.title === 'Functions',
-    );
-    expect(functions.anchor).toBe('kovojscore-functions');
-    const component = functions.symbols.find((symbol) => symbol.name === 'component');
+    const values = manifest.subpaths[0].categories.find((category) => category.title === 'Values');
+    expect(values.anchor).toBe('kovojscore-values');
+    const component = values.symbols.find((symbol) => symbol.name === 'component');
     // The anchor matches the page heading id (slugify), so deep links resolve.
     expect(component.anchor).toBe('component');
     expect(component.kind).toBe('function');
@@ -434,15 +461,16 @@ describe('api-ref generator', () => {
     );
   });
 
-  it('renders @example blocks as fenced ts sections after an Example marker', () => {
+  it('renders copyable @example blocks before the source-derived signature', () => {
     const section = corePage.slice(
       corePage.indexOf('#### `component`'),
       corePage.indexOf('#### `route`'),
     );
-    expect(section).toContain('**Example**');
+    expect(section).toContain('**Copyable example**');
     // The example is its own fenced block and imports the real export.
-    const exampleStart = section.indexOf('**Example**');
+    const exampleStart = section.indexOf('**Copyable example**');
     expect(section.slice(exampleStart)).toContain("import { component } from '@kovojs/core';");
+    expect(exampleStart).toBeLessThan(section.indexOf('**Signature**'));
     // Each documented export still has exactly one signature fence.
     expect(section.match(/```ts/g)?.length).toBeGreaterThanOrEqual(2);
   });

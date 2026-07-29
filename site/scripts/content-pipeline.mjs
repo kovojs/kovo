@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { generateApiReference } from './api-ref.mjs';
+import { generateApiReference, sealApiReferenceManifest } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
 import { checkAuthoredCodeSnippets } from './code-snippets-check.mjs';
 import { generateCliReference } from './cli-ref.mjs';
@@ -39,9 +39,13 @@ function captureValues(captures) {
 }
 
 export async function runContentPipeline() {
-  await generateApiReference();
+  const apiReference = await generateApiReference();
   await generateCliReference();
   await generateCreateKovoReference();
+  // The command-first CLI page and create-kovo family landing intentionally
+  // rewrite/add generated API files. Seal only after those owning generators so
+  // the site consumes one exact final file manifest rather than the base pass.
+  await sealApiReferenceManifest({ inputPaths: apiReference.inputPaths });
   await generateDiagnosticsReference();
   await checkAuthoredCodeSnippets();
   await mkdir(genDir, { recursive: true });
