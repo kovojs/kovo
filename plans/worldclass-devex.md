@@ -498,10 +498,13 @@ granularity).
 - [ ] (S) Normalize `kovo explain` on a subcommand/discriminant grammar such as
       `kovo explain access` and `{ view: 'access', ... }`; replace flag-shaped interface families
       with one exhaustive union.
-- [ ] (L) Move lifecycle-policy enforcement, sound-subset analysis, endpoint-posture orchestration,
+- [x] (L) Move lifecycle-policy enforcement, sound-subset analysis, endpoint-posture orchestration,
       and safe parallel scheduling out of the three copied starter scripts (1,413 lines) and into
       versioned Kovo commands built on the command AST; the generated app keeps compact
       declarative config and owns no framework orchestration algorithm.
+  - Evidence: the focused 13-test CLI/starter suite covers the four framework-owned paths and
+    generated-script absence; command-schema tests prove the lifecycle and endpoint-posture
+    discriminants, while source/build orchestration owns the ordered concurrent preflights.
 - [x] (S) Remove `vp` from the app-facing command model: provide `kovo test` (or a generated
       standard Vitest command if no Kovo wrapper is required), and make scaffold scripts use only
       `kovo`, the test runner, and the package manager. Keep Vite Plus an implementation

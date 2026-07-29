@@ -63,8 +63,11 @@ proof; shared root verification belongs in the latest-verification block.
       and production origins explicit, fixed, and HTTPS-validated.
   - Evidence: Better Auth environment/runtime-authority tests plus KF-DEVEX-001 prove the
     post-listen loopback handoff and fail-closed deployment boundary.
-- [ ] Move lifecycle, sound-subset, endpoint-posture, and parallel scheduling algorithms from the
+- [x] Move lifecycle, sound-subset, endpoint-posture, and parallel scheduling algorithms from the
       starter scripts into versioned Kovo commands.
+  - Evidence: the focused 13-test CLI/starter suite proves framework-owned lifecycle,
+    sound-subset, project-quality scheduling, and endpoint-posture orchestration; the generated
+    starter contains no copied `scripts/check-*` implementation.
 - [x] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
       evidence contracts in the same checkpoint.
   - Evidence: the focused creator metadata test and 3-test `kovo test` suite prove the generated
