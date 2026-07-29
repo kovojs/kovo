@@ -1,242 +1,222 @@
 ---
 title: Testing with @kovojs/test
-description: Test handler logic, rendered HTML, and the honesty of your invalidation graph — without starting a browser.
+description: Exercise one imported Kovo app with inferred types and runtime facts from an exact successful build.
 order: 6
 ---
 
 # Testing with @kovojs/test
 
-Most SPA test suites exist to compensate for wiring you can't otherwise trust — does this button
-reach that handler, does that mutation refresh this view. Kovo moves those questions into the type
-system and the graph checks, so your tests concentrate on what's left: handler logic, error paths,
-rendered HTML, and whether the invalidation graph is honest. `@kovojs/test` runs all of that without a
-browser.
+Use the app-scoped harness when you want fast mutation, query, route, and database assertions
+without starting a browser. It has two deliberately separate sources of truth:
 
-## Run it
+| Contract                                                                 | Source                      | Benefit                                             |
+| ------------------------------------------------------------------------ | --------------------------- | --------------------------------------------------- |
+| Mutation input/error/result, query input/result, route keys, request, DB | The imported app token      | Renames and invalid calls fail in TypeScript.       |
+| Query reads, mutation touches, build posture, analyzed inputs            | The explicit build artifact | Tests cannot invent the graph they claim to verify. |
 
-Run the suite that matches the question you are asking:
+## Run an app-scoped harness
+
+Install the test package, build the same app you will import, then run the test:
 
 ```sh
+pnpm add -D @kovojs/test
+kovo build ./src/app.tsx
 kovo test
-pnpm test -- src/cart.mutation.test.ts
 ```
 
-For a graph-backed assertion, build first so the CLI has an artifact to read, then point at it
-explicitly or rely on discovery:
-
-```sh
-kovo build ./src/app.ts
-kovo explain mutation cart/add --optimistic dist/.kovo/graph.json
-```
-
-The graph artifact rules are the same ones the CLI guide documents in
-[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
-
-## Run mutations as functions
-
-`@kovojs/test` runs mutations as functions and pages as strings — no browser, no HTTP server:
+Pass absolute artifact and project-root URLs. The harness does no nearby-file discovery.
 
 ```ts
-// Source: examples/commerce/src/app-test-helpers.ts
+// Source: examples/crm/src/testing.ts
 import { createKovoTestHarness } from '@kovojs/test/harness';
 
-const harness = createKovoTestHarness({
-  db: createCommerceDb(),
-  pages: { '/cart': renderCartPage },
-  request: { session: { id: 's1', user: { id: 'u1' } } },
-  touchGraph: commerceTouchGraph,
-  verification: {
-    domainByTable: { cart_items: 'cart', orders: 'order', products: 'product' },
-  },
+const harness = await createKovoTestHarness(crmApp, {
+  artifact: new URL('../dist/.kovo/graph.json', import.meta.url),
+  db,
+  projectRoot: new URL('../', import.meta.url),
+  // ... typed request and verifier mapping are in the source file
 });
 
-// mutations as functions — full lifecycle, touch-checking automatic on every exec
-const result = await harness.exec(addToCart, { productId: 'p1', quantity: 2 });
-expect(result).toMatchObject({
-  ok: true,
-  changes: [
-    { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
-    { domain: 'order', input: { productId: 'p1', quantity: 2 } },
-    { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
-  ],
-  rerunQueries: ['cart', 'productGrid', 'orderHistory'],
-});
-
-// wire-level: render a page, assert HTML, no browser
-const page = await harness.page('/cart');
-expect(page.fragment('cart-badge')).toContain('data-bind="cart.count"');
+const result = await harness.query(contactListQuery);
+if (result.items.length < 2) throw new Error('Expected seeded contacts.');
 ```
 
-This is the app-level harness shape to use when you want function-level mutation tests. Notice what
-`exec` returns beyond the handler's value: the **change records** (`{domain, keys, input}`) and the
-**rerun query list**. Invalidation behavior is part of every mutation assertion, so you don't need a
-separate integration suite for it. The `kovoTest` wrapper packages the same thing as named cases:
+`result` is inferred from `contactListQuery`; `db` and `request` must match `crmApp`; only route
+keys and mutation/query handles assembled into `crmApp` are accepted.
+
+`page()` and `request()` exercise the wire against the explicit `baseUrl` of a separately
+bootstrapped app. This keeps the app request realm isolated from Vitest's mutable globals. Direct
+`query()` and `exec()` tests stay in-process and do not require `baseUrl`.
+
+Before returning the harness, Kovo verifies:
+
+- a successful, complete graph proof;
+- the compiler, source-set, config-set, lockfile, and runtime-posture digests;
+- every analyzed source/config file against its current bytes;
+- the artifact's stable app identity against the imported app.
+
+A source edit, dependency reinstall, partial build, or artifact copied from another app therefore
+fails before one handler runs. Rebuild instead of weakening that check.
+
+## Execute a mutation
+
+`exec` accepts only a mutation handle from the imported app and infers its input and structured
+result:
 
 ```ts
-// Source: examples/commerce/src/app.add-to-cart.test.ts
-import { kovoTest } from '@kovojs/test/test-case';
-import { it } from 'vitest';
-
-// Bind the harness once, then write `test(name, fn)` per case.
-const test = kovoTest.configure(harnessOptions);
-
-const cartMutations = test('cart mutations', async ({ exec, page }) => {
-  const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
-  expect(res.ok).toBe(true);
+const result = await harness.exec(addContact, {
+  company: 'Analytical Engines',
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
 });
-it(cartMutations.name, cartMutations.run);
+
+if (result.ok) {
+  expect(result.value).toEqual({ ok: true });
+}
+expect(harness.verificationDiagnostics()).toEqual([]);
 ```
 
-## Assert typed error paths
+The harness scopes write verification to the mutation's assembled handle. There is no
+`touchGraphKey` option and no caller-supplied touch graph.
 
-Declared error codes are part of the mutation's type, and `assertMutationError` checks the code and
-payload while narrowing the payload type:
+For a declared application error, assert and narrow its payload:
 
 ```ts
 import { assertMutationError } from '@kovojs/test/assertions';
 
-const fail = await harness.exec(addToCart, { productId: 'p1', quantity: 99 });
-const payload = assertMutationError(addToCart, fail, {
+const result = await harness.exec(addToCart, addToCartInput);
+const payload = assertMutationError(addToCart, result, {
   code: 'OUT_OF_STOCK',
   payload: { availableQuantity: 5 },
 });
-// payload: { availableQuantity: number } — inferred from the declared error schema
+// payload is inferred as { availableQuantity: number }
 ```
 
-## Test against real Postgres with pglite
+Framework-owned failures such as `CSRF`, `UNAUTHORIZED`, `VALIDATION`, `RATE_LIMITED`, and
+`STALE_VERSION` remain explicit in the harness result union.
 
-HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container:
+## Query and render
+
+Queries are app-scoped and their observed SQL reads are compared with artifact-derived read facts:
 
 ```ts
-import { createPgliteTestDb } from '@kovojs/test/pglite';
-
-const db = await createPgliteTestDb();
-await db.exec(`create table cart_items (product_id text, qty int, unit_price int)`);
-await db.write('cart_items', { product_id: 'p1', qty: 2, unit_price: 1499 });
-
-const rows = await db.read('cart_items');
-const totals = await db.query(`select sum(qty * unit_price) as total from cart_items`);
-
-await db.close();
+const contacts = await harness.query(contactListQuery);
+expect(contacts.items[0]?.email).toContain('@');
 ```
 
-Because it's real Postgres, the SQL your domain writes execute in tests is the SQL that runs in
-production — `onConflictDoUpdate`, CTEs, constraint behavior and all.
+Routes use the app's exact route-key union:
 
-## Verify the invalidation graph: observed ⊆ static ∪ declared
-
-The invalidation graph is derived from static analysis, which raises the obvious question: what if
-the analysis is wrong? The verifier answers it at test time. The static pass over-approximates a
-write's touch set (it unions every branch); runtime execution under-approximates it (only the
-branches that ran). The verifier wraps `db`, parses every executed statement with a SQL AST parser,
-and enforces the invariant that makes the invalidation story honest:
-
-> **observed ⊆ static ∪ KV406-declared.** A violation means an analyzer bug or smuggled SQL; either
-> is a CI failure.
-
-You turn it on by giving the harness the committed touch graph and the table→domain mapping (the
-`touchGraph` and `verification` options above). By default the verifier checks observed writes
-against the whole touch graph; when you need mutation-specific coverage in a shared harness, pass the
-matching `touchGraphKey` on `exec`. Then a write to a domain outside that scoped entry fails the
-test. After a run:
-
-In app repos, that touch graph normally comes from a prior `kovo build` at `dist/.kovo/graph.json`,
-copied into the test fixture shape your harness expects.
+<!-- kovo-sample: illustrative reason="Requires the separately bootstrapped app URL and app-local build paths from the test setup." -->
 
 ```ts
-await harness.exec(addToCart, { productId: 'p1', quantity: 2 }, { touchGraphKey: 'cart.addItem' });
+const wireHarness = await createKovoTestHarness(crmApp, {
+  artifact,
+  baseUrl: 'http://127.0.0.1:4173',
+  projectRoot,
+});
+
+const page = await wireHarness.page('/contacts');
+expect(page.html).toContain('<main');
+expect(page.fragment('contacts-region')).toContain('Ada');
 ```
+
+Use `wireHarness.request(request)` when the app declares a custom raw-request contract. Requests
+whose origin differs from `baseUrl` are rejected.
+
+## Exercise real Postgres RLS
+
+The Postgres test helper is separate from the ordinary harness entry. It runs the same
+owner-scoped, admin-read, and audited system postures as the server:
 
 ```ts
-expect(harness.verificationDiagnostics()).toEqual([]);
+import { createPostgresTestRuntime } from '@kovojs/test/postgres';
+import * as schema from './schema.js';
+
+const runtime = await createPostgresTestRuntime({ schema });
+try {
+  await runtime.withPrincipal('u1', async (db) => {
+    await db.insert(schema.contacts).values(contact);
+  });
+  await expect(
+    runtime.withPrincipal('u2', (db) => db.select().from(schema.contacts)),
+  ).resolves.toEqual([]);
+} finally {
+  await runtime.close();
+}
 ```
 
-The read side gets the same treatment: the tables a query's SQL actually selects from are checked
-against its declared read set, and observed result shapes are checked against declared output
-schemas.
+`asAdmin` requires an explicit `crossOwnerReadTables` allowlist. `asSystem` requires a non-empty
+audit reason. Neither is a blanket test bypass.
 
-## The KV402–KV410 family
+For direct engine fixtures, import `@kovojs/test/pglite` or `@kovojs/test/sqlite` and install that
+entry's optional engine peer. The harness package keeps Playwright and native/all-backend database
+engines out of its ordinary install closure.
 
-These are the diagnostic codes the verification layer produces. The pattern is that 4xx codes police
-the boundary between declared dataflow and actual dataflow, from both sides:
+## Mint a focused CSRF token
 
-| Code  | Severity | What it catches                                                                                |
-| ----- | -------- | ---------------------------------------------------------------------------------------------- |
-| KV402 | error    | Write touched an undeclared domain — the silent-stale-UI bug                                   |
-| KV403 | warn     | Declared domain never observed written — stale claim or untested branch                        |
-| KV404 | error    | Write to an unmapped table — map it or mark `exempt` (write-side only)                         |
-| KV405 | error    | Conditional writes on branches never executed under instrumentation                            |
-| KV406 | error    | Statically un-analyzable write site — manual `touches` required, plus `tables:` for raw SQL    |
-| KV407 | error    | Query read from an undeclared domain — missed invalidations                                    |
-| KV408 | error    | Declared row key ≠ observed row predicate                                                      |
-| KV409 | notice   | Non-eq predicate — degraded to table-level invalidation                                        |
-| KV410 | error    | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
+Prefer rendering the real form and reading its hidden token. For a focused request-level test:
 
-Worth knowing alongside these: KV411 fires when a query reads an `exempt` table — caught statically,
-and by the verifier when raw SQL smuggles the read.
+```ts
+import { mutationCsrfTokenForTesting } from '@kovojs/test/csrf';
 
-The severities are deliberately asymmetric. Excess declaration (KV403, KV409) degrades to a warning
-and to over-invalidation — wasteful but correct. Missing declaration (KV402, KV404, KV407) means a
-query somewhere renders stale data with no error anywhere, which is the bug class this whole layer
-exists to kill, so those are errors.
+const token = mutationCsrfTokenForTesting(request, appCsrf, {
+  mutation: addContact,
+});
+```
+
+## Handle a graph mismatch
+
+Runtime observation checks the sound direction:
+
+> observed reads/writes ⊆ artifact-derived reads/touches ∪ reviewed opaque declarations
+
+Excess declarations can over-invalidate and warn. Missing declarations can leave a UI stale and
+fail. Read `harness.verificationDiagnostics()` after a run; the collapsed reference below maps
+each code to the mismatch you need to fix.
 
 ## Property-test optimistic transforms
 
-For every hand-written transform, assert that the prediction deep-equals eventual truth over generated
-states — the commuting diagram as a test:
+Keep pure optimistic transforms honest across generated state/input cases:
 
 ```ts
 import { propertyTest } from '@kovojs/test/assertions';
 
 expect(
   propertyTest({
-    apply: (state, input) => applyAddToCartEffect(state, input), // server effect on real state
-    shape: (state) => shapeCartQuery(state), // state → what the query ships
-    predict: (state, input) => addToCartOptimistic.transforms.cart(shapeCartQuery(state), input),
-    cases: generatedCartStates(), // seeded {state, input} cases
+    apply: (state, input) => applyAddToCartEffect(state, input),
+    cases: generatedCartStates(),
+    predict: (state, input) => addToCartOptimistic.transforms.cart(state, input),
+    shape: (state) => shapeCartQuery(state),
   }),
 ).toEqual({ cases: 18 });
 ```
 
-If `predict(shape(s), i)` ever disagrees with `shape(apply(s, i))`, the case is reported with its
-inputs. See the [optimistic guide](/guides/optimistic/) for the transforms themselves.
+## What still needs a browser?
 
-## What about browser tests?
-
-The framework's own suite owns the irreducibly browser-bound parts — morph's survival contract
-(focus, caret, scroll), L0 platform behaviors, view transitions, and native platform details. That
-integration suite compiles fixture apps, starts the app shell, drives real requests, and asserts
-that generated graphs, mutation responses, and browser behavior agree.
-
-Application wiring is proof-carrying: handler refs, form fields, binding paths, fragment targets,
-and coverage are all checked by `kovo check`, so apps need few or no browser tests of
-their own. The reference commerce app meets exactly that bar: its full behavior surface is tested
-with zero app-level browser tests.
-
-A practical app suite is therefore:
-
-1. **Handler logic** — mutations as functions via `exec`, including `fail()` paths.
-2. **Rendered HTML** — `page()`/`fragment()` string assertions on the contracts that matter
-   (`data-bind` paths present, forms posting to the right action).
-3. **Graph honesty** — the verifier enabled on every `exec`, diagnostics asserted empty.
-4. **Transform soundness** — `propertyTest` per hand-written transform.
-5. **Graph assertions** — product rules over `kovo explain` output, in CI
-   ([the kovo explain guide](/guides/kovo-explain/) shows the recipes).
-
-## Next
-
-- [Reading kovo check & kovo explain](/guides/kovo-explain/) — the static half of verification.
-- [Mutations & forms](/guides/mutations/) — the lifecycle `exec` runs.
+Use browser tests for native platform behavior: focus/caret survival, scroll, view transitions,
+file pickers, and browser accessibility semantics. App wiring, handler logic, rendered HTML,
+typed failures, graph honesty, and optimistic transform soundness belong in the browser-free
+suite.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-The browser-free verification posture: SPEC §11.4 and `rules/v1-acceptance.md`. The test harness and unit/property testing:
-SPEC §12. The unified change record (`{domain, keys, input}`): SPEC §14. Typed error schemas:
-SPEC §6.3. The `observed ⊆ static ∪ declared` invariant and read-side shape verification: SPEC §11.2.
-The KV402–KV410 verification family: SPEC §11.3; manual touches at an opaque write are **KV406**; a
-query reading an `exempt` table is **KV411** (SPEC §10.1); `exempt` tables and the read/write rules:
-SPEC §10.1.
+App/build identity and completion proof: SPEC §5.2.4. Browser-free testing and artifact binding:
+SPEC §12. Mutation lifecycle and typed errors: SPEC §6.3. Database read/write verification:
+SPEC §11.2–§11.4. Postgres owner/admin/system posture: SPEC §10.3.
+
+| Code  | Meaning                                                   |
+| ----- | --------------------------------------------------------- |
+| KV402 | A write touched an undeclared domain.                     |
+| KV403 | A declared write was not observed in this run.            |
+| KV404 | A write reached an unmapped table.                        |
+| KV405 | A statically known conditional branch was not exercised.  |
+| KV406 | An opaque write lacks reviewed touches/tables.            |
+| KV407 | A query read an undeclared domain.                        |
+| KV408 | The observed row key differs from the declared predicate. |
+| KV409 | A non-equality predicate degraded to table invalidation.  |
+| KV410 | An opaque result failed its declared output schema.       |
+| KV411 | A query read an exempt table.                             |
 
 API reference: [@kovojs/test](/api/test/).
 

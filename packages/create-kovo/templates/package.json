@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@kovojs/cli": "{{kovo_cli_version}}",
+    "@kovojs/test": "{{kovo_test_version}}",
     "@types/node": "25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260610.1",
     "typescript": "6.0.3",

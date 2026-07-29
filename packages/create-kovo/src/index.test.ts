@@ -210,6 +210,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('12.0.2');
       expect(packageJson.devDependencies).toMatchObject({
         '@kovojs/cli': expect.stringMatching(/^\d+\.\d+\.\d+/),
+        '@kovojs/test': expect.stringMatching(/^\d+\.\d+\.\d+/),
       });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(readFileSync(join(root, '.npmrc'), 'utf8')).toBe(

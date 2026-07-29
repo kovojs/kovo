@@ -139,29 +139,30 @@ Update snapshots intentionally with
 
 ## Browser-free test API
 
-The browser-free surface mirrors SPEC §12: run mutations as functions, render pages as HTML, assert
-typed errors, and property-test optimistic transforms.
+The browser-free surface mirrors SPEC §12. Import one opaque app, name its exact successful-build
+artifact, and await the harness. App contracts provide types; the artifact provides runtime graph
+facts.
 
 ```ts
-import { kovoTest } from '@kovojs/test/test-case';
+import { createKovoTestHarness } from '@kovojs/test/harness';
 
-const cartMutations = kovoTest('cart mutations', async ({ exec, page, db }) => {
-  await db.seed({ products: [{ id: 'p1', stock: 5 }] });
-
-  const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
-  expect(res.queries.cart.count).toBe(1);
-  expect(res.queries.cart.items[0].qty).toBe(2);
-
-  const fail = await exec(addToCart, { productId: 'p1', quantity: 99 });
-  expect(fail.error.code).toBe('OUT_OF_STOCK');
-
-  const html = await page('/cart');
-  expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
+const harness = await createKovoTestHarness(app, {
+  artifact: new URL('../dist/.kovo/graph.json', import.meta.url),
+  baseUrl: 'http://127.0.0.1:4173',
+  db,
+  projectRoot: new URL('../', import.meta.url),
+  request: { session: { id: 's1', user: { id: 'u1' } } },
 });
-it(cartMutations.name, cartMutations.run);
 
-propertyTest(addToCart, cartQuery);
+const result = await harness.exec(addToCart, { productId: 'p1', quantity: 2 });
+expect(result.ok).toBe(true);
+expect(harness.verificationDiagnostics()).toEqual([]);
+
+const html = await harness.page('/cart');
+expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
 ```
 
-Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)` functions; the
-wire-level test surface stays HTTP and HTML rather than browser-only behavior.
+The harness rejects stale, partial, failed-build, wrong-lockfile, and wrong-app artifacts before
+running a handler. `page()` and `request()` use the separately bootstrapped app at `baseUrl`, so
+Vitest remains an assertion process rather than a mutable app-request realm (SPEC §§6.6, 12). See
+`site/content/guides/testing.md` for typed errors, RLS helpers, and engine-specific fixtures.

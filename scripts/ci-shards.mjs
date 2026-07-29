@@ -22,6 +22,7 @@ const packedStarterWorkspacePackages = [
   { name: '@kovojs/style', dir: 'style' },
   { name: '@kovojs/browser', dir: 'browser' },
   { name: '@kovojs/server', dir: 'server' },
+  { name: '@kovojs/test', dir: 'test' },
   { name: '@kovojs/drizzle', dir: 'drizzle' },
   { name: '@kovojs/headless-ui', dir: 'headless-ui' },
   { name: '@kovojs/icons', dir: 'icons' },

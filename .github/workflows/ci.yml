@@ -161,6 +161,8 @@ jobs:
       - uses: ./.github/actions/kovo-setup
       - name: Publish readiness
         run: vp exec pnpm run check:publish
+      - name: Enforce @kovojs/test install budgets
+        run: vp exec pnpm run check:test-package-budget
       - name: Packed app-public declaration contract
         run: vp exec pnpm run check:api-surface:packed
       - name: Gate available DevEx known-failure probes

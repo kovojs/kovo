@@ -871,6 +871,7 @@ function templateValues(
     kovo_drizzle_version: packageVersion('@kovojs/drizzle'),
     kovo_server_version: packageVersion('@kovojs/server'),
     kovo_style_version: packageVersion('@kovojs/style'),
+    kovo_test_version: packageVersion('@kovojs/test'),
     kovo_ui_version: packageVersion('@kovojs/ui'),
     name,
     package_manager: rootPackageManager(),

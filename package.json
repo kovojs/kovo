@@ -91,6 +91,7 @@
     "check:tcb-boundary": "node scripts/check-tcb-boundary.mjs",
     "check:publish": "node scripts/egress-floor.mjs --policy publish -- node scripts/check-publish.mjs",
     "check:security-test-builds": "node scripts/security-test-build-gate.mjs",
+    "check:test-package-budget": "pnpm --filter @kovojs/test run build:dist && node scripts/check-test-package-budget.mjs && vitest --run scripts/check-test-package-budget.test.mjs --reporter=dot",
     "check:sink-policy": "node scripts/check-sink-policy-gate.mjs",
     "check:single-choke": "node scripts/check-single-choke.mjs",
     "check:spec-index": "node scripts/check-spec-index.mjs",

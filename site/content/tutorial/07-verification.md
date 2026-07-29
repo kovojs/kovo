@@ -100,13 +100,13 @@ query, order-history query, and cart mutation remain visibly guarded. `kovo expl
 reports zero only because no route, query, or mutation is missing a decision — it does not relabel
 public surfaces as authenticated.
 
-### Verify writes in harness tests
+### Verify writes against the built app
 
-`@kovojs/test` executes mutations as functions, with write verification on: every observed write
-must fall inside the declared touch set, or the test fails. If the handler someday writes a table
-the touches don't declare, this test goes red before any user sees a stale page:
-
-{{snippet:07-verification/src/app.test.ts#harness-test}}
+The public `@kovojs/test` harness binds an imported app contract to an explicit successful-build
+artifact. Mutation, query, route, request, and DB types come from the app; touch/read facts come
+from the digest-verified artifact. If source changes after the build or a handler writes outside
+the proved graph, the test fails before a user sees stale data. The runnable pattern lives in
+[Testing with @kovojs/test](/guides/testing/#run-an-app-scoped-harness).
 
 Because application wiring is proof-carrying, the app needs few or no browser tests of its own.
 The framework keeps morph survival and L0 behaviors under its own browser suites; what it removes

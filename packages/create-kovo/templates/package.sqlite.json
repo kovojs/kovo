@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@kovojs/cli": "{{kovo_cli_version}}",
+    "@kovojs/test": "{{kovo_test_version}}",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260610.1",

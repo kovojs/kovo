@@ -564,6 +564,8 @@ async function writeNodeModuleStubs(outDir) {
     './build': KOVO_DTS,
     './jsx-dev-runtime': JSX_RUNTIME_DTS,
     './jsx-runtime': JSX_RUNTIME_DTS,
+    './node': KOVO_DTS,
+    './runtime-bootstrap': KOVO_DTS,
   });
   await writePackageWithDistFallback(outDir, '@kovojs/style', { '.': KOVO_DTS });
   await writePackageWithDistFallback(outDir, '@kovojs/browser', {
@@ -584,9 +586,11 @@ async function writeNodeModuleStubs(outDir) {
   });
   await writePackage(outDir, '@kovojs/test', {
     './assertions': EXTERNAL_DTS,
+    './csrf': EXTERNAL_DTS,
     './harness': EXTERNAL_DTS,
     './pglite': EXTERNAL_DTS,
-    './test-case': EXTERNAL_DTS,
+    './postgres': EXTERNAL_DTS,
+    './sqlite': EXTERNAL_DTS,
   });
   await writePackage(outDir, '@kovojs/drizzle', { '.': EXTERNAL_DTS });
   await writePackage(outDir, '@kovojs/devtool', {
@@ -806,6 +810,7 @@ declare global {
   var contactCard: any;
   var contact: any;
   var contacts: any;
+  var contactListQuery: any;
   var contactsQuery: any;
   var createSession: any;
   var createApp: any;
@@ -1002,6 +1007,7 @@ export const createDevtoolApp: any;
 export const createKovoDrizzle: any;
 export const createKovoTestHarness: any;
 export const createPgliteTestDb: any;
+export const createPostgresTestRuntime: any;
 export const compareAndSet: any;
 export const devtoolMountPlugin: any;
 export const devtoolPlugin: any;
@@ -1018,6 +1024,7 @@ export const sql: any;
 export const sqliteTable: any;
 export const text: any;
 export const mount: any;
+export const mutationCsrfTokenForTesting: any;
 export const role: <Request = any>(...args: any[]) => any;
 declare const defaultExport: any;
 export default defaultExport;
@@ -1318,6 +1325,7 @@ export const cartItems = {} as any;
 export const cartQuery = {} as any;
 export const cart = {} as any;
 export const connectDb = (() => ({})) as any;
+export const contacts = {} as any;
 export const contactTheme = {} as any;
 export const db = {} as any;
 export const domains = {} as any;
