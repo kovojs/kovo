@@ -565,8 +565,9 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
       failure is a statistically significant budget breach under that recorded procedure, not a
       single noisy sample. Name the runner: provision a pinned reference runner or explicitly
       accept GitHub-hosted with a measured noise floor. Budgets bind only after ratification.
-  - Partial evidence: the authenticated packed cold/warm/incremental driver, v2 phase census, RSS,
-    bootstrap-byte capture, and v5 fail-closed budget schema pass. Ready/edit drivers, a pinned
+  - Partial evidence: the authenticated packed N=1 smoke records cold/warm/incremental,
+    direct-child RSS, ready cold/warm, edit-to-KV235, edit-to-served-result, the v3 check census,
+    the v1 dev-transition census, bootstrap bytes, and the v5 fail-closed budget schema. A pinned
     reference runner, N≥5 baseline, noise measurement, and ratification remain open.
 - [x] (M) Fix the inventory before using demand evidence.
   - Exclude nested `**/node_modules/**`, every generated/dist/cache tree, packed fixtures, and

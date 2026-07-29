@@ -53,12 +53,12 @@ reproducer, while the named implementation work item owns retirement.
 ## Benchmark and budgets
 
 - [x] Add a deterministic benchmark driver for cold, warm, and one-file incremental checks.
-  - Evidence: the authenticated N=1 packed smoke in Latest verification proves the v2 cold,
-    warm-prime/timed, and changed-revision incremental phase census.
-- [ ] Record ready, edit-to-diagnostic, edit-to-served-result, phase timings, peak RSS, and browser
+  - Evidence: the authenticated N=1 packed smoke in Latest verification proves the v3 cold,
+    warm-prime/timed, and changed-revision incremental phase census with direct CLI duration/RSS.
+- [x] Record ready, edit-to-diagnostic, edit-to-served-result, phase timings, peak RSS, and browser
       bootstrap bytes.
-  - Partial evidence: check timings, peak RSS, and browser bootstrap bytes are recorded; ready and
-    edit-latency drivers remain absent.
+  - Evidence: the authenticated N=1 command in Latest verification records all eleven benchmark
+    metrics and binds ready/edit observations to exact response, diagnostic, and source digests.
 - [x] Version the budget schema and reject malformed, invented, or unratified binding budgets.
   - Evidence: `pnpm run test:devex-foundation-schema` validates `kovo-devex-budgets/v5` and its
     hostile ratification fixtures while reporting all 16 metrics as unratified.
@@ -73,11 +73,11 @@ reproducer, while the named implementation work item owns retirement.
     exclusion policy.
 - [x] Report authored examples, docs, package internals, generated emit, conformance, and tests as
       separate consumer classes.
-  - Evidence: the inventory reports 90/83/153/18/3/456 files across the six classes.
+  - Evidence: the inventory reports 90/127/153/18/3/456 files across the six classes.
 - [x] Report manifest subpaths, analyzed TypeScript entrypoints, exported declarations, and
       generated-family members as distinct units.
   - Evidence: the current census separates 1,839 manifest subpaths, 102 TypeScript entrypoints,
-    1,842 exported declarations, and 1,737 generated-family members.
+    1,849 exported declarations, and 1,737 generated-family members.
 - [x] Add hostile fixtures proving excluded files cannot create false consumers.
   - Evidence: `scripts/public-api-inventory.test.mjs` passes nested dependency, generated/cache,
     packed-app, and throwaway-app hostile cases.
@@ -94,13 +94,15 @@ reproducer, while the named implementation work item owns retirement.
 
 ## Latest verification
 
-- `pnpm run test:devex-foundation-schema` passed (3 files, 43 tests); register status is 3 retired,
+- `pnpm run test:devex-foundation-schema` passed (4 files, 48 tests); register status is 3 retired,
   1 executable, and 6 pending reproducers.
 - `pnpm run test:devex-known-failures-available` passed: KF-003/008/009 retired-pass, KF-004
   expected-fail, and the six missing reproducers remain `pending-repro`.
 - `pnpm exec vitest run scripts/fcp-harness.test.mjs` passed (17 tests).
-- Authenticated local N=1 smoke: cold 9,831.77 ms / 2,179,629,056 bytes; warm 9,302.31 ms /
-  2,332,835,840 bytes; incremental 9,294.38 ms / 2,305,835,008 bytes; browser bootstrap 2,173
-  bytes. This proves the driver only and is not ratification evidence.
+- `node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1`
+  authenticated commit `f65c080ac`: cold 10,069.35 ms / 2,173,337,600 bytes; warm 9,548.86 ms /
+  2,282,389,504 bytes; incremental 9,809.03 ms / 2,275,278,848 bytes; ready
+  6,528.73/6,608.75 ms cold/warm; edit-to-diagnostic 1,063.01 ms; edit-to-served-result 1,032.01
+  ms; bootstrap 2,173 bytes. This proves the drivers only and is not ratification evidence.
 - `pnpm run check:publish` rebuilt, packed, inspected, and attested all 14 public packages; the
   packed CLI consumer installed with 265 production dependencies and zero advisories.
