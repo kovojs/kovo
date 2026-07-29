@@ -513,26 +513,43 @@ function resolvePackedTarball(manifestPath, recordedPath) {
 }
 
 async function linkExternalDependencies(nodeModulesDir, packedNames) {
-  const sourceRoot = path.join(repoRoot, 'node_modules');
-  if (!statSync(sourceRoot).isDirectory()) throw new TypeError('root node_modules is missing');
-  for (const entry of await readdir(sourceRoot, { withFileTypes: true })) {
-    if (entry.name.startsWith('.') || entry.name === '@kovojs') continue;
-    const source = path.join(sourceRoot, entry.name);
-    if (entry.name.startsWith('@')) {
-      await mkdir(path.join(nodeModulesDir, entry.name), { recursive: true });
-      for (const child of await readdir(source, { withFileTypes: true })) {
-        const name = `${entry.name}/${child.name}`;
-        if (packedNames.has(name)) continue;
-        await symlink(
-          path.join(source, child.name),
-          path.join(nodeModulesDir, entry.name, child.name),
-        );
+  const sourceRoots = await workspaceNodeModulesDirectories();
+  if (sourceRoots.length === 0)
+    throw new TypeError('workspace node_modules directories are missing');
+  for (const sourceRoot of sourceRoots) {
+    for (const entry of await readdir(sourceRoot, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === '@kovojs') continue;
+      const source = path.join(sourceRoot, entry.name);
+      if (entry.name.startsWith('@')) {
+        await mkdir(path.join(nodeModulesDir, entry.name), { recursive: true });
+        for (const child of await readdir(source, { withFileTypes: true })) {
+          const name = `${entry.name}/${child.name}`;
+          const destination = path.join(nodeModulesDir, entry.name, child.name);
+          if (packedNames.has(name) || existsSync(destination)) continue;
+          await symlink(path.join(source, child.name), destination);
+        }
+        continue;
       }
-      continue;
+      const destination = path.join(nodeModulesDir, entry.name);
+      if (packedNames.has(entry.name) || existsSync(destination)) continue;
+      await symlink(source, destination);
     }
-    if (packedNames.has(entry.name)) continue;
-    await symlink(source, path.join(nodeModulesDir, entry.name));
   }
+}
+
+async function workspaceNodeModulesDirectories() {
+  const roots = [path.join(repoRoot, 'node_modules')];
+  for (const workspaceParent of ['packages', 'examples', 'conformance']) {
+    const parent = path.join(repoRoot, workspaceParent);
+    if (!existsSync(parent)) continue;
+    for (const entry of await readdir(parent, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      roots.push(path.join(parent, entry.name, 'node_modules'));
+    }
+  }
+  roots.push(path.join(repoRoot, 'site/node_modules'));
+  roots.push(path.join(repoRoot, 'tests/integration/node_modules'));
+  return roots.filter((root) => existsSync(root) && statSync(root).isDirectory());
 }
 
 function workspaceReadmeSamples(packageDirs, policy) {
@@ -639,7 +656,8 @@ function assertUniqueSamples(samples) {
 }
 
 async function writeTypescriptSamples(projectDir, samples, { authoredSupport }) {
-  await mkdir(path.join(projectDir, 'samples'), { recursive: true });
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(path.join(projectDir, 'package.json'), '{"private":true,"type":"module"}\n');
   if (authoredSupport) {
     await writeAuthoredSnippetSupportFiles(projectDir, { includeNodeModuleStubs: false });
   }
@@ -650,7 +668,7 @@ async function writeTypescriptSamples(projectDir, samples, { authoredSupport }) 
     const extension =
       sample.language === 'tsx' || looksLikeJsx(sample.code) ? 'tsx' : sample.language;
     const source = normalizeModuleSample(sample.code);
-    const file = path.join(projectDir, 'samples', `${sample.id}.${extension}`);
+    const file = path.join(projectDir, `${sample.id}.${extension}`);
     await writeFile(file, source, 'utf8');
     written.push({ ...sample, file });
   }
