@@ -3,6 +3,13 @@ export type {
   CompilerDiagnosticSourceAnchor,
   SourcePosition,
 } from './diagnostics.js';
+export {
+  createCompilerOwnedAppContractProject,
+  type CompilerOwnedAppContractDiagnostic,
+  type CompilerOwnedAppContractEntry,
+  type CompilerOwnedAppContractProject,
+  type CreateCompilerOwnedAppContractProjectOptions,
+} from './app-contract-project.js';
 /** @internal Supported runners call this before evaluating app/plugin modules. */
 export { assertCompilerSecurityIntrinsics } from './compiler-security-intrinsics.js';
 export { snapshotCompileComponentOptions } from './compile-options.js';

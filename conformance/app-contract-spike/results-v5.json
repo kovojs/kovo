@@ -1,0 +1,81 @@
+{
+  "arms": {
+    "arm-a": {
+      "eligible": true,
+      "gates": {
+        "artifacts": {
+          "details": [],
+          "pass": true
+        },
+        "compilerAndGraph": {
+          "details": [],
+          "pass": true
+        },
+        "diagnostics": {
+          "details": [],
+          "pass": true
+        },
+        "matrix": {
+          "details": [],
+          "pass": true
+        },
+        "ownershipAndBindings": {
+          "details": [],
+          "pass": true
+        },
+        "performance": {
+          "details": [],
+          "pass": true
+        },
+        "publicForgery": {
+          "details": [],
+          "pass": true
+        }
+      }
+    },
+    "arm-b": {
+      "eligible": false,
+      "gates": {
+        "artifacts": {
+          "details": [],
+          "pass": true
+        },
+        "compilerAndGraph": {
+          "details": [
+            "existing free-function identity did not recognize generated binding"
+          ],
+          "pass": false
+        },
+        "diagnostics": {
+          "details": [],
+          "pass": true
+        },
+        "matrix": {
+          "details": [],
+          "pass": true
+        },
+        "ownershipAndBindings": {
+          "details": [],
+          "pass": true
+        },
+        "performance": {
+          "details": [],
+          "pass": true
+        },
+        "publicForgery": {
+          "details": [],
+          "pass": true
+        }
+      }
+    }
+  },
+  "criteria": "kovo.app-contract-d1-criteria/v5",
+  "decision": "arm-a",
+  "priorEvidenceDisposition": {
+    "v1": "invalidated",
+    "v2": "invalidated",
+    "v3": "invalidated",
+    "v4": "invalidated"
+  },
+  "schema": "kovo.app-contract-d1-evaluation/v5"
+}

@@ -31,6 +31,7 @@ import { canonicalJson } from './canonical-json.js';
 import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-result.js';
 import { snapshotCompileComponentOptions } from './compile-options.js';
 import { createCompileFactLedger, type CompileFactSnapshot } from './compile-fact-ledger.js';
+import { compilerOwnedAppContractFactoryEquals } from './app-contract-resolver.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
@@ -1802,22 +1803,36 @@ function isKovoQueryCall(model: ComponentModuleModel, call: CallExpressionModel)
 function isKovoMutationCall(model: ComponentModuleModel, call: CallExpressionModel) {
   const astCall = callExpressionAtSpan(ts as FrameworkIdentityTypeScript, model.sourceFile, call);
   return astCall
-    ? expressionResolvesToFrameworkExport(
+    ? compilerOwnedAppContractFactoryEquals(
         ts as FrameworkIdentityTypeScript,
         model.sourceFile,
         astCall.expression,
         KOVO_MUTATION_IDENTITY,
-        { legacyGlobals: [KOVO_MUTATION_IDENTITY] },
-      )
+      ) ||
+        expressionResolvesToFrameworkExport(
+          ts as FrameworkIdentityTypeScript,
+          model.sourceFile,
+          astCall.expression,
+          KOVO_MUTATION_IDENTITY,
+          { legacyGlobals: [KOVO_MUTATION_IDENTITY] },
+        )
     : false;
 }
 
 function isKovoQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    sourceFile,
-    expression,
-    KOVO_QUERY_IDENTITY,
+  return (
+    compilerOwnedAppContractFactoryEquals(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      KOVO_QUERY_IDENTITY,
+    ) ||
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      KOVO_QUERY_IDENTITY,
+    )
   );
 }
 

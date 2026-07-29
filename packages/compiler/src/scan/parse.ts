@@ -20,6 +20,7 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import { reviewedCanonicalClientHandlerImportTarget } from '../client-handler-import-policy.js';
+import { compilerOwnedAppContractFactoryIdentity } from '../app-contract-resolver.js';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   compilerArrayAppend,
@@ -464,12 +465,18 @@ export function parseComponentModule(
       ts.isCallExpression(node) &&
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
-      const factoryIdentity = canonicalFrameworkExportForExpression(
-        ts as FrameworkIdentityTypeScript,
-        sourceFile,
-        node.expression,
-        { legacyGlobals: SERVER_CALL_FACTORY_IDENTITIES },
-      );
+      const factoryIdentity =
+        compilerOwnedAppContractFactoryIdentity(
+          ts as FrameworkIdentityTypeScript,
+          sourceFile,
+          node.expression,
+        ) ??
+        canonicalFrameworkExportForExpression(
+          ts as FrameworkIdentityTypeScript,
+          sourceFile,
+          node.expression,
+          { legacyGlobals: SERVER_CALL_FACTORY_IDENTITIES },
+        );
       const frameworkFactory = frameworkExportEquals(factoryIdentity, ENDPOINT_FACTORY_IDENTITY)
         ? 'endpoint'
         : frameworkExportEquals(factoryIdentity, AGENT_FACTORY_IDENTITY)
