@@ -53,6 +53,7 @@ import {
   type TouchGraphDiagnostic,
   DRIZZLE_SELECT_QUERY_METHODS,
   IGNORED_LOCAL_CALL_NAMES,
+  appendCompilerOwnedAppDbReceiverProof,
   appendProjectDrizzleReceiverBindingsFromBody,
   appendProjectDrizzleReceiverParameterBinding,
   bodySourceStart,
@@ -63,6 +64,7 @@ import {
   isRestBindingElement,
   isQueryCallOnReceiver,
   isQueryReadCallName,
+  isCompilerOwnedAppDbMemberExpression,
   isProjectDrizzleReceiverContainerCallReceiver,
   isProjectDrizzleReceiverMemberExpression,
   propertyAccessCallName,
@@ -962,6 +964,13 @@ function topLevelDescendant(body: Node, candidate: Node): boolean {
 ): QueryReceiverReferences {
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
+  const references = {
+    managedAppDbCarrierNames: new Set<string>(),
+    managedAppDbCarrierSymbolKeys: new Set<string>(),
+    names,
+    projectContainers: mode === 'project',
+    symbolKeys,
+  };
 
   for (const callback of queryLoadCallbackFunctions(body, mode)) {
     const receiverParameter = queryCallbackParameterNodes(callback)[1];
@@ -970,11 +979,11 @@ function topLevelDescendant(body: Node, candidate: Node): boolean {
     appendQueryReceiverParameterReferences(receiverParameter, receiver, mode, names, symbolKeys);
 
     if (mode === 'project') {
-      appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
+      appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), references);
+      appendCompilerOwnedAppDbReceiverProof(body, callback, 'query', references);
     }
   }
 
-  const references = { names, projectContainers: mode === 'project', symbolKeys };
   appendQueryTransactionReceiverAliases(body, references);
   return references;
 }
@@ -1063,7 +1072,8 @@ function topLevelDescendant(body: Node, candidate: Node): boolean {
   if (!Node.isIdentifier(node)) {
     return (
       receiverReferences.projectContainers === true &&
-      isProjectDrizzleReceiverMemberExpression(node)
+      (isCompilerOwnedAppDbMemberExpression(node, receiverReferences) ||
+        isProjectDrizzleReceiverMemberExpression(node))
     );
   }
 
@@ -1304,6 +1314,7 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
 
     const surface = directDrizzleReceiverCallSurface(call);
     if (!surface) return [];
+    if (isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
     if (!isProjectDrizzleReceiverContainerCallReceiver(surface.receiver)) return [];
 
     return [

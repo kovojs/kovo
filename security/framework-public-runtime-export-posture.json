@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.10",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.5",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "fd8f48daf2a289f4c02aa4dd6daa890bff6e1b7f22cc471a34490d0fc94316f2",
+      "sourceTreeSha256": "9046c93aed6531f15f494a93ca5e73f349a979b5a73367d1f510b0fcf73a4728",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -443,7 +443,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "c3d44c0d6d564431e72897d35cec4e91ac46d4cd442feca61e55c54459aa95ef"
+      "sourceTreeSha256": "22f9995cb73508b599d3b3d6ecaf05024191b0bbfbd2259e353a49a1cc765d84"
     },
     {
       "manifestVariants": [
@@ -773,7 +773,7 @@
           "reason": "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "3670f4d67a830526fbc8e1a136489abfbf7fd5b3b2f2221c3a2c56a3569b37fd"
+      "sourceTreeSha256": "4061e28e3f03926e401831ee2df9d5a7cb57af8df50f3d3025ce1a53c7ff8899"
     },
     {
       "manifestVariants": [
@@ -873,7 +873,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "6c8e69aefb00498e67a85b5b926ac28ce839e733e0534216fa21d13ce5dec483"
+      "sourceTreeSha256": "17abbd87443708049c6605ff1e7f01910d67f1464eabe296ac4ad1bae7d0748b"
     },
     {
       "manifestVariants": [
@@ -1714,7 +1714,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "70af7e2b6eb1b19e60afc7a4f757fcb1094fa042f165ce588d33a888c65e209a"
+      "sourceTreeSha256": "6f8ceea3942840fbf0ba3a7c2bb62552c8c6cceae0d380a9f62327c43329ad7e"
     },
     {
       "manifestVariants": [
@@ -2007,7 +2007,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "316cb8d45d3cca5e10c5ee644fb21380f1cf47bdd05a049a44d85a0874864d28"
+      "sourceTreeSha256": "104a2cedbd75dc05d658f8659f245e124f30d043f65b046978aee1935a2d5319"
     },
     {
       "manifestVariants": [
@@ -2696,7 +2696,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "1556744ef6c7679756dae366cc3f15e4a5ccf2514be1a16f12457fa8766c1a0a"
+      "sourceTreeSha256": "a3b65f0fbfff6bbce20395f5e42b3b4fb4f08ed7a8720a24cbfc206d294fd929"
     },
     {
       "manifestVariants": [
@@ -6968,6 +6968,7 @@
           "members": {
             ".": [
               "createMemoryStorage",
+              "defineKovo",
               "Defer",
               "errorBoundary",
               "i18n",
@@ -6981,8 +6982,9 @@
             ]
           },
           "review": {
-            "basis": "@kovojs/server exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; doors, roots, escapes, sinks, and module initialization are split into separate groups.",
+            "basis": "@kovojs/server exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; defineKovo snapshots an inert provider/declaration contract, while its exact app-scoped factory and assemble receiver calls are classified separately by compiler-owned provenance. Doors, roots, escapes, sinks, and module initialization are split into separate groups.",
             "evidence": [
+              "packages/server/src/app-contract.ts",
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
               "packages/server/src/index.ts",
@@ -6995,38 +6997,6 @@
           },
           "rootKind": "none",
           "securityRole": "ordinary-runtime"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-root-factory-runtime-infra-root-application-5b89212da9",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["createApp"]
-          },
-          "review": {
-            "basis": "The exact createApp call creates a application untrusted-data root; root status is independent from raw-capability disposition.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "application",
-          "securityRole": "root-factory"
         },
         {
           "capabilities": [],
@@ -10204,7 +10174,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "83fbc29996709ed1958bd7bccfae57ddcbfb46f0dc952be6a74d3c981d02158d"
+      "sourceTreeSha256": "e0b3d5c4b1c83249a5c78c6d30dc2cdadf2f9adee8d4c07c24fa827206dc5c88"
     },
     {
       "manifestVariants": [
@@ -10637,7 +10607,7 @@
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
         }
       ],
-      "sourceTreeSha256": "4b42737435a26b9f32ebc5ef8df7fb9e7cd7f40e2ef96d93c8a0a6131894a825"
+      "sourceTreeSha256": "27a9ea7d29e88aec448fddaf48d89ac6e6ed10176dcfa27865969bb5d822f114"
     },
     {
       "manifestVariants": [
@@ -11350,7 +11320,7 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "239093b0e1f52a684e3e33f5caeeed3781993525037c95a16f67cd5e40badf7d"
+      "sourceTreeSha256": "f21fb0995980e79b84513d40bd9622175e075072aac498ed0f37e2ce6a6c3d78"
     },
     {
       "manifestVariants": [

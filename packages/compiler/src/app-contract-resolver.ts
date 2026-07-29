@@ -19,6 +19,21 @@ export const appContractDeclarationFamilies = [
 
 export type AppContractDeclarationFamily = (typeof appContractDeclarationFamilies)[number];
 
+export const appContractMemberNames = [
+  ...appContractDeclarationFamilies,
+  'all',
+  'assemble',
+  'authenticated',
+  'integrateMutation',
+  'owns',
+  'publicAccess',
+  'rateLimit',
+  'role',
+  'verifiedAccess',
+] as const;
+
+export type AppContractMemberName = (typeof appContractMemberNames)[number];
+
 /**
  * Compiler-owned proof for one exact declaration-factory property access.
  *
@@ -28,6 +43,12 @@ export type AppContractDeclarationFamily = (typeof appContractDeclarationFamilie
  * unauthenticated caller claim (SPEC.md §5.2).
  */
 export interface CompilerOwnedAppContractResolution {
+  /**
+   * Optional filename spelling authenticated by the compiler-owned Program for the current
+   * consumer. This is not suffix matching: the project adds it only after resolving that exact
+   * caller name back to `sourceFile`.
+   */
+  readonly consumerFileName?: string;
   readonly end: number;
   readonly exportName: AppContractDeclarationFamily;
   readonly node: ts.Node;
@@ -38,8 +59,27 @@ export interface CompilerOwnedAppContractResolution {
   readonly start: number;
 }
 
+/**
+ * Compiler-owned proof for one direct member access on an exact app contract.
+ *
+ * Unlike declaration-family facts, these facts never turn arbitrary member spelling into a root
+ * factory. They let compiler-owned access/posture consumers distinguish `app.publicAccess(...)`
+ * and `app.authenticated` from structural lookalikes after the same receiver proof has succeeded.
+ */
+export interface CompilerOwnedAppContractMemberResolution {
+  readonly consumerFileName?: string;
+  readonly end: number;
+  readonly memberName: AppContractMemberName;
+  readonly node: ts.PropertyAccessExpression;
+  readonly ownerKey: string;
+  readonly serverPackageRoot: string;
+  readonly sourceFile: ts.SourceFile;
+  readonly sourceSnapshot: string;
+  readonly start: number;
+}
+
 export interface AppContractResolverDiagnostic {
-  readonly code: 'D1A101' | 'D1A102' | 'D1A103' | 'D1A104' | 'D1A105' | 'D1A106';
+  readonly code: 'D1A101' | 'D1A102' | 'D1A103' | 'D1A104' | 'D1A105' | 'D1A106' | 'D1A107';
   readonly fileName: string;
   readonly length: number;
   readonly message: string;
@@ -48,6 +88,7 @@ export interface AppContractResolverDiagnostic {
 
 interface ActiveResolutionSession {
   readonly facts: readonly CompilerOwnedAppContractResolution[];
+  readonly members: readonly CompilerOwnedAppContractMemberResolution[];
 }
 
 const activeResolutionSessions: ActiveResolutionSession[] = [];
@@ -68,6 +109,17 @@ export function validateCompilerOwnedAppContractResolutions(
     const normalizedFileName = normalizeComponentFileName(fact.sourceFile.fileName);
     const diagnosticFileName = fact.sourceFile.fileName.replaceAll('\\', '/');
     const length = Math.max(1, fact.end - fact.start);
+    if (fact.consumerFileName !== undefined && fact.consumerFileName.trim().length === 0) {
+      diagnostics.push({
+        code: 'D1A107',
+        fileName: diagnosticFileName,
+        length,
+        message:
+          'D1A107 compiler-owned app-contract resolution refused a blank authenticated consumer filename.',
+        start: fact.start,
+      });
+      continue;
+    }
     if (fact.ownerKey.trim().length === 0) {
       diagnostics.push({
         code: 'D1A105',
@@ -154,15 +206,94 @@ export function validateCompilerOwnedAppContractResolutions(
   return diagnostics;
 }
 
+export function validateCompilerOwnedAppContractMemberResolutions(
+  facts: readonly CompilerOwnedAppContractMemberResolution[],
+): readonly AppContractResolverDiagnostic[] {
+  const diagnostics: AppContractResolverDiagnostic[] = [];
+  const ordered = [...facts].sort((left, right) => {
+    const fileOrder = normalizeComponentFileName(left.sourceFile.fileName).localeCompare(
+      normalizeComponentFileName(right.sourceFile.fileName),
+    );
+    return fileOrder || left.start - right.start || left.end - right.end;
+  });
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const fact = ordered[index]!;
+    const normalizedFileName = normalizeComponentFileName(fact.sourceFile.fileName);
+    const diagnosticFileName = fact.sourceFile.fileName.replaceAll('\\', '/');
+    const length = Math.max(1, fact.end - fact.start);
+    const previous = ordered[index - 1];
+    const invalid =
+      (fact.consumerFileName !== undefined && fact.consumerFileName.trim().length === 0) ||
+      fact.ownerKey.trim().length === 0 ||
+      fact.serverPackageRoot.trim().length === 0 ||
+      fact.sourceSnapshot !== fact.sourceFile.text ||
+      fact.node.getSourceFile() !== fact.sourceFile ||
+      fact.node.getStart(fact.sourceFile) !== fact.start ||
+      fact.node.getEnd() !== fact.end ||
+      fact.node.name.text !== fact.memberName ||
+      !isAppContractMemberName(fact.memberName);
+    if (invalid) {
+      diagnostics.push({
+        code: 'D1A103',
+        fileName: diagnosticFileName,
+        length,
+        message:
+          'D1A103 compiler-owned app-contract member resolution refused an invalid source, owner, package, or exact property-access span.',
+        start: fact.start,
+      });
+      continue;
+    }
+    if (
+      previous &&
+      normalizeComponentFileName(previous.sourceFile.fileName) === normalizedFileName &&
+      previous.start === fact.start &&
+      previous.end === fact.end
+    ) {
+      diagnostics.push({
+        code: 'D1A101',
+        fileName: diagnosticFileName,
+        length,
+        message:
+          'D1A101 compiler-owned app-contract member resolution refused duplicate facts for one exact source span.',
+        start: fact.start,
+      });
+      continue;
+    }
+    if (
+      previous &&
+      normalizeComponentFileName(previous.sourceFile.fileName) === normalizedFileName &&
+      previous.end > fact.start
+    ) {
+      diagnostics.push({
+        code: 'D1A102',
+        fileName: diagnosticFileName,
+        length,
+        message:
+          'D1A102 compiler-owned app-contract member resolution refused overlapping source spans.',
+        start: fact.start,
+      });
+    }
+  }
+  return diagnostics;
+}
+
 export function withCompilerOwnedAppContractResolutions<Value>(
   facts: readonly CompilerOwnedAppContractResolution[],
   operation: () => Value,
+  members: readonly CompilerOwnedAppContractMemberResolution[] = [],
 ): Value {
-  const diagnostics = validateCompilerOwnedAppContractResolutions(facts);
+  const diagnostics = [
+    ...validateCompilerOwnedAppContractResolutions(facts),
+    ...validateCompilerOwnedAppContractMemberResolutions(members),
+  ];
   if (diagnostics.length > 0) {
     throw new TypeError(diagnostics.map((diagnostic) => diagnostic.message).join('\n'));
   }
-  const session: ActiveResolutionSession = { facts: Object.freeze([...facts]) };
+  const session: ActiveResolutionSession = {
+    facts: Object.freeze([...facts]),
+    members: Object.freeze([...members]),
+  };
   activeResolutionSessions.push(session);
   let result!: Value;
   let operationFailed = false;
@@ -211,7 +342,12 @@ export function compilerOwnedAppContractFactoryIdentity(
         ? fact.node.text
         : undefined;
     if (
-      normalizeComponentFileName(fact.sourceFile.fileName) !== fileName ||
+      ![
+        normalizeComponentFileName(fact.sourceFile.fileName),
+        ...(fact.consumerFileName === undefined
+          ? []
+          : [normalizeComponentFileName(fact.consumerFileName)]),
+      ].includes(fileName) ||
       fact.sourceSnapshot !== sourceFile.text ||
       fact.start !== start ||
       fact.end !== end ||
@@ -240,6 +376,50 @@ export function compilerOwnedAppContractFactoryEquals(
   );
 }
 
+export function compilerOwnedAppContractMemberName(
+  typescript: FrameworkIdentityTypeScript,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): AppContractMemberName | undefined {
+  const session = activeResolutionSessions[activeResolutionSessions.length - 1];
+  if (!session || !typescript.isPropertyAccessExpression(expression)) return undefined;
+  const fileName = normalizeComponentFileName(sourceFile.fileName);
+  const start = expression.getStart(sourceFile);
+  const end = expression.getEnd();
+  for (const fact of session.members) {
+    if (
+      ![
+        normalizeComponentFileName(fact.sourceFile.fileName),
+        ...(fact.consumerFileName === undefined
+          ? []
+          : [normalizeComponentFileName(fact.consumerFileName)]),
+      ].includes(fileName) ||
+      fact.sourceSnapshot !== sourceFile.text ||
+      fact.start !== start ||
+      fact.end !== end ||
+      expression.name.text !== fact.memberName ||
+      sourceFile.text.slice(start, end) !== fact.sourceSnapshot.slice(fact.start, fact.end)
+    ) {
+      continue;
+    }
+    return fact.memberName;
+  }
+  return undefined;
+}
+
+export function compilerOwnedAppContractMemberEquals(
+  typescript: FrameworkIdentityTypeScript,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  memberName: AppContractMemberName,
+): boolean {
+  return compilerOwnedAppContractMemberName(typescript, sourceFile, expression) === memberName;
+}
+
 function isDeclarationFamily(value: string): value is AppContractDeclarationFamily {
   return (appContractDeclarationFamilies as readonly string[]).includes(value);
+}
+
+function isAppContractMemberName(value: string): value is AppContractMemberName {
+  return (appContractMemberNames as readonly string[]).includes(value);
 }

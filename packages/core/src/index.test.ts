@@ -16,7 +16,7 @@ import {
   redirect,
   routeRef,
   type Component as KovoComponent,
-  type ComponentDefinitionInput,
+  type ComponentRenderSlots,
   type FormFailure,
   type FormInput,
   type FormValidationFailure,
@@ -33,6 +33,7 @@ import {
 import * as coreRoot from './index.js';
 import { event, type EventPayload } from './internal/event.js';
 import { fragmentTarget } from './internal/fragment-target.js';
+import { componentDefinitionForFramework } from './internal/component-render.js';
 import * as internalQueryDelta from './internal/query-delta.js';
 
 interface TestSchema<Value> {
@@ -102,7 +103,7 @@ declare module './generated.js' {
   }
 
   interface ComponentRegistry {
-    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
+    'components/cart/cart-badge/cart-badge': KovoComponent<Record<string, unknown>>;
   }
 }
 
@@ -147,7 +148,9 @@ describe('core authoring APIs', () => {
     });
 
     expect(CartBadge.name).toBeUndefined();
-    expect(CartBadge.definition.queries?.cart.key).toBe('cart');
+    expect(
+      (componentDefinitionForFramework(CartBadge).queries as { cart: { key: string } }).cart.key,
+    ).toBe('cart');
 
     const assertRegisteredComponent = (
       value: import('./generated.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
@@ -174,7 +177,7 @@ describe('core authoring APIs', () => {
       render: () => null,
     });
 
-    expect(LocalOnlyCartBadge.definition.disableServerRefresh).toBe(true);
+    expect(componentDefinitionForFramework(LocalOnlyCartBadge).disableServerRefresh).toBe(true);
 
     const assertRemovedFragmentTargetOption = () => {
       component({
@@ -278,8 +281,8 @@ describe('core authoring APIs', () => {
       render: () => null,
     });
 
-    expect(IsomorphicCounter.definition.isomorphic).toBe(true);
-    expect(Clocked.definition.clocks).toEqual({ ago: { every: '30s' } });
+    expect(componentDefinitionForFramework(IsomorphicCounter).isomorphic).toBe(true);
+    expect(componentDefinitionForFramework(Clocked).clocks).toEqual({ ago: { every: '30s' } });
     expect(() =>
       component({
         disableServerRefres: true,
@@ -302,7 +305,8 @@ describe('core authoring APIs', () => {
         render: (_queries, state: CounterState) => ({ state }),
         state: (): CounterState => ({ count: 0, filters: [] }),
       });
-      const _state: Serializable<CounterState> = Counter.definition.state();
+      const _state: Serializable<CounterState> = { count: 0, filters: [] };
+      void Counter;
       void _state;
     };
     const assertDateState = () => {
@@ -571,7 +575,7 @@ describe('core authoring APIs', () => {
       },
     });
     const assertUnknownForm = () => {
-      type Slots = Parameters<typeof AddToCartForm.definition.render>[2];
+      type Slots = ComponentRenderSlots<{ addToCart: typeof addToCart }>;
       const slots = {
         forms: {
           addToCart: { failure: null, submitted: { productId: 'p1', quantity: 2 } },
@@ -582,7 +586,13 @@ describe('core authoring APIs', () => {
       return slots.forms.missingForm ?? quantity;
     };
 
-    expect(AddToCartForm.definition.mutations?.addToCart.key).toBe('cart/add');
+    expect(
+      (
+        componentDefinitionForFramework(AddToCartForm).mutations as {
+          addToCart: { key: string };
+        }
+      ).addToCart.key,
+    ).toBe('cart/add');
     expect(assertUnknownForm).toBeTypeOf('function');
   });
 
@@ -744,9 +754,6 @@ describe('core authoring APIs', () => {
     expect(href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
       '/products/p%201?max=500',
     );
-    expect(Link('/products/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
-      href: '/products/p1?sort=price',
-    });
     expect(
       Link({
         children: 'View',
@@ -761,9 +768,6 @@ describe('core authoring APIs', () => {
     // segment after `:`, so a hyphen/dot param name must substitute the whole value
     // rather than stopping at the first non-word char (which dropped the value).
     expect(href('/users/:user-id', { params: { 'user-id': '42' } })).toBe('/users/42');
-    expect(Link('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
-      href: '/users/42',
-    });
     expect(redirect('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
       location: '/users/42',
       status: 303,
@@ -778,6 +782,10 @@ describe('core authoring APIs', () => {
       // @ts-expect-error id is required by the routeRef path.
       href('/products/:id', { search: { max: 500 } });
     };
+    const assertImperativeLinkRemoved = () => {
+      // @ts-expect-error Link is JSX-only; imperative code uses href().
+      Link('/products/:id', { params: { id: 'p1' } });
+    };
     const assertUnknownRoute = () => {
       // @ts-expect-error routeRef hrefs are checked against generated RouteRegistry facts.
       href('/missing', {});
@@ -791,6 +799,7 @@ describe('core authoring APIs', () => {
     };
 
     expect(assertMissingParam).toBeTypeOf('function');
+    expect(assertImperativeLinkRemoved).toBeTypeOf('function');
     expect(assertUnknownRoute).toBeTypeOf('function');
     expect(assertUnknownSearch).toBeTypeOf('function');
   });

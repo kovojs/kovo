@@ -1,11 +1,18 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
+import {
+  compilerOwnedAppContractStaticFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
+  createCompilerOwnedAppContractProject,
+} from './app-contract-project.js';
+import { compileComponentModule } from './compile.js';
+import { componentTaskBSourceOperationFacts } from './security-operation-facts.js';
+import { parseComponentModule } from './scan/parse.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -16,6 +23,366 @@ afterEach(async () => {
 });
 
 describe('D1 compiler-owned exact project resolver', () => {
+  it('accepts the normative appId/provider-descriptor contract without spike-only provider keys', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      "import { app } from './kovo.js';\nexport const item = app.query({ load() { return 1; } });\n",
+    );
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [contract, entry],
+    });
+
+    const result = project.compileEntry(entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ownerKey).toMatch(/^d1v7:[a-f0-9]{64}$/u);
+    expect(result.parsedFactories).toContain('query');
+    expect(result.resolver.exactNodeCount).toBe(1);
+    expect(result.serverPackageRoots).toEqual([fixture.serverA]);
+  });
+
+  it('carries app-scoped handler roots into the finite TASK B semantic carrier', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.tsx');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        '/** @jsxImportSource @kovojs/server */',
+        "import { app } from './kovo.js';",
+        "import * as style from '@kovojs/style';",
+        "const styles = style.create({ shell: { color: 'red' } });",
+        'export function Shell() { return <main style={styles.shell} />; }',
+        'export const item = app.query({',
+        '  load(_input, request) { return request.db.select(); },',
+        '});',
+        "export const health = app.endpoint('/api/health', {",
+        "  access: app.publicAccess('public uptime probe'),",
+        "  auth: { justification: 'public uptime probe', kind: 'none' },",
+        '  csrf: false,',
+        "  csrfJustification: 'read-only machine health probe',",
+        '  handler: () => Response.json({ ok: true }),',
+        "  method: 'GET',",
+        "  reason: 'read-only machine health probe',",
+        "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const finite = project.withEntryResolutions(entry, (source) => ({
+      compiled: compileComponentModule({ fileName: entry, source }),
+      operations: componentTaskBSourceOperationFacts(parseComponentModule(entry, source)),
+    }));
+
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: expect.stringMatching(/^query:.*item$/u),
+      }),
+    );
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: 'endpoint:/api/health',
+      }),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toEqual(
+      expect.arrayContaining(['endpoint:/api/health', expect.stringMatching(/^query:.*item$/u)]),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap((fact) => fact.securityOperations ?? []),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          door: 'handler-root',
+          kind: 'server.handler.root',
+          target: 'endpoint:/api/health',
+        }),
+      ]),
+    );
+  });
+
+  it('recognizes exact app access members and only exempts managed request.db writes', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/app-surfaces.tsx');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'declare const capturedDb: { insert(value?: unknown): unknown };',
+        "export const publicPage = app.route('/public', {",
+        "  access: app.publicAccess('public fixture page'),",
+        '  page: () => <main>Public</main>,',
+        '});',
+        "export const privatePage = app.route('/private', {",
+        '  access: [app.authenticated],',
+        '  page: () => <main>Private</main>,',
+        '});',
+        'export const managed = app.mutation({',
+        '  handler(_input, request) {',
+        '    const transaction = request.db;',
+        '    transaction.insert();',
+        '  },',
+        '});',
+        'export const destructured = app.mutation({',
+        '  handler(_input, { db }) { db.insert(); },',
+        '});',
+        'export const captured = app.mutation({',
+        '  handler() { capturedDb.insert(); },',
+        '});',
+        'export const shadowed = app.mutation({',
+        '  handler(_input, request) {',
+        '    const run = (request) => request.db.insert();',
+        '    return run(request);',
+        '  },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+    const staticFacts = project.staticFacts().filter((fact) => fact.fileName === entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.component?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330'),
+    ).toHaveLength(2);
+    expect(result.component?.handlerWriteSinkFacts).toHaveLength(2);
+    expect(result.component?.handlerWriteSinkFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          canonicalTarget: expect.objectContaining({ identity: 'capturedDb' }),
+        }),
+        expect.objectContaining({
+          canonicalTarget: expect.objectContaining({ identity: 'request.db' }),
+        }),
+      ]),
+    );
+    expect(
+      result.route?.routePageFacts.map((fact) => ({
+        access: fact.access,
+        route: fact.route,
+      })),
+    ).toEqual([
+      { access: { kind: 'public', reason: 'public fixture page' }, route: '/public' },
+      { access: { guards: ['authed'], kind: 'guard-chain' }, route: '/private' },
+    ]);
+    expect(staticFacts.map((fact) => fact.memberName)).toEqual(
+      expect.arrayContaining(['authenticated', 'mutation', 'publicAccess', 'route']),
+    );
+    expect(staticFacts.every((fact) => fact.source === result.source)).toBe(true);
+  });
+
+  it('derives imported mutation-form facts from exact app.mutation and a pristine shared schema', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const mutations = join(fixture.root, 'app/src/mutations.ts');
+    const form = join(fixture.root, 'app/src/form.tsx');
+    const contractSource = [
+      "import { defineKovo } from '@kovojs/server';",
+      'export const app = defineKovo({',
+      "  appId: '00000000-0000-4000-8000-000000000002',",
+      '});',
+      '',
+    ].join('\n');
+    const mutationSource = [
+      "import { s } from '@kovojs/server';",
+      "import { app } from './kovo.js';",
+      'const addContactInput = s.object({',
+      '  name: s.string(),',
+      '  email: s.string().optional(),',
+      '});',
+      'export const addContact = app.mutation({',
+      '  input: addContactInput,',
+      '  handler() { return { ok: true }; },',
+      '});',
+      '',
+    ].join('\n');
+    const formSource = [
+      "import { addContact } from './mutations.js';",
+      'export const binding = addContact;',
+      '',
+    ].join('\n');
+    await writeSource(contract, contractSource);
+    await writeSource(mutations, mutationSource);
+    await writeSource(form, formSource);
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [contract, mutations, form],
+    });
+
+    const facts = project.projectMutationRegistryFacts([
+      { fileName: contract, source: contractSource },
+      { fileName: mutations, source: mutationSource },
+      { fileName: form, source: formSource },
+    ]);
+
+    expect(facts.mutationBindings).toContainEqual(
+      expect.objectContaining({
+        fileName: form,
+        key: expect.stringMatching(/mutations\/add-contact$/u),
+        localName: 'addContact',
+      }),
+    );
+    expect(
+      Object.values(facts.mutationInputs)
+        .flat()
+        .map((field) => ({
+          name: field.name,
+          optional: field.optional,
+        })),
+    ).toEqual([
+      { name: 'name', optional: false },
+      { name: 'email', optional: true },
+    ]);
+
+    expect(() =>
+      project.projectMutationRegistryFacts([
+        { fileName: contract, source: contractSource },
+        { fileName: mutations, source: `${mutationSource}// stale` },
+        { fileName: form, source: formSource },
+      ]),
+    ).toThrow(/stale source snapshot/u);
+
+    const bridged = compilerOwnedProjectMutationRegistryFactsFromFiles(
+      [
+        { fileName: 'kovo.ts', source: contractSource },
+        { fileName: 'mutations.ts', source: mutationSource },
+        { fileName: 'form.tsx', source: formSource },
+        { fileName: 'styles.css', source: ':root { color-scheme: light; }' },
+      ],
+      dirname(contract),
+    );
+    expect(bridged.mutationBindings).toContainEqual(
+      expect.objectContaining({ fileName: 'form.tsx', localName: 'addContact' }),
+    );
+    expect(
+      compilerOwnedAppContractStaticFactsFromFiles(
+        [
+          { fileName: 'kovo.ts', source: contractSource },
+          { fileName: 'mutations.ts', source: mutationSource },
+          { fileName: 'form.tsx', source: formSource },
+        ],
+        dirname(contract),
+      ),
+    ).toContainEqual(
+      expect.objectContaining({
+        fileName: 'mutations.ts',
+        memberName: 'mutation',
+        source: mutationSource,
+      }),
+    );
+  });
+
+  it('keeps finite app-contract facts when build roots are workspace-relative', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'export const item = app.query({',
+        '  load(_input, request) { return request.db.select(); },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const relativeContract = relative(process.cwd(), contract);
+    const relativeEntry = relative(process.cwd(), entry);
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [relativeContract, relativeEntry],
+    });
+
+    const result = project.compileEntry(relativeEntry);
+    const finite = project.withEntryResolutions(relativeEntry, (source) => {
+      const unprovedFileName = join(dirname(relativeEntry), 'unproved-copy.ts');
+      return {
+        compiled: compileComponentModule({ fileName: relativeEntry, source }),
+        operations: componentTaskBSourceOperationFacts(parseComponentModule(relativeEntry, source)),
+        unproved: compileComponentModule({ fileName: unprovedFileName, source }),
+        unprovedOperations: componentTaskBSourceOperationFacts(
+          parseComponentModule(unprovedFileName, source),
+        ),
+      };
+    });
+
+    expect(result.parsedFactories).toContain('query');
+    expect(result.resolver.exactNodeCount).toBe(1);
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: expect.stringMatching(/^query:.*item$/u),
+      }),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toContainEqual(expect.stringMatching(/^query:.*item$/u));
+    expect(finite.unprovedOperations).not.toContainEqual(
+      expect.objectContaining({ kind: 'server.handler.root' }),
+    );
+    expect(
+      finite.unproved.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toEqual([]);
+  });
+
   it('accepts ordinary, named/star re-exported, aliased, and shared-package receivers', async () => {
     const fixture = await createFixture();
     const entries = [fixture.local, fixture.named, fixture.star, fixture.alias, fixture.shared];
@@ -407,6 +774,7 @@ describe('D1 compiler-owned exact project resolver', () => {
         ]),
       ),
     ).toEqual({
+      'blank-consumer-file-name': ['D1A107'],
       'blank-owner-key': ['D1A105'],
       'blank-server-package-root': ['D1A106'],
       'duplicate-span': ['D1A101'],
@@ -586,8 +954,9 @@ async function createServerPackage(root: string): Promise<string> {
       'export declare function publicAccess(reason: string): unknown;',
       'export declare function defineKovo<const AppId extends string>(options: {',
       '  readonly appId: AppId;',
-      '  readonly provider: unknown;',
-      '  readonly providerKey: string;',
+      '  readonly db?: unknown;',
+      '  readonly provider?: unknown;',
+      '  readonly providerKey?: string;',
       '}): {',
       '  readonly endpoint: typeof endpoint;',
       '  readonly layout: typeof layout;',
@@ -649,16 +1018,16 @@ function generatedSourceFor(options: {
 }): string {
   return [
     '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
-    'import { app as app } from "../src/provider.js";',
+    "import { app as app } from '../src/provider.js';",
     "export { publicAccess } from '@kovojs/server';",
     'export const __kovoGeneratedContract = Object.freeze({',
-    '  appId: "00000000-0000-4000-8000-000000000001",',
-    `  compilerSourceSha256: ${JSON.stringify(options.compilerSourceSha256)},`,
-    `  ownerKey: ${JSON.stringify(options.ownerKey)},`,
-    '  providerExportBinding: "contactsProvider",',
-    '  providerImportSpecifier: "./provider-impl.js",',
-    '  providerKey: "contacts",',
-    `  serverPackedContentsSha256: ${JSON.stringify(options.serverPackedContentsSha256)},`,
+    "  appId: '00000000-0000-4000-8000-000000000001',",
+    `  compilerSourceSha256: '${options.compilerSourceSha256}',`,
+    `  ownerKey: '${options.ownerKey}',`,
+    "  providerExportBinding: 'contactsProvider',",
+    "  providerImportSpecifier: './provider-impl.js',",
+    "  providerKey: 'contacts',",
+    `  serverPackedContentsSha256: '${options.serverPackedContentsSha256}',`,
     '});',
     'export const endpoint: typeof app.endpoint = app.endpoint;',
     'export const layout: typeof app.layout = app.layout;',

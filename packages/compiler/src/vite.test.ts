@@ -475,6 +475,56 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(transformed?.code).toContain('"app-shell/order-paid"');
   });
 
+  it('lowers app-scoped declarations only after proving the exact receiver in a Program', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-app-contract-'));
+    const src = join(root, 'src');
+    const serverScope = join(root, 'node_modules/@kovojs');
+    mkdirSync(src, { recursive: true });
+    mkdirSync(serverScope, { recursive: true });
+    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    writeFileSync(
+      join(src, 'provider-impl.ts'),
+      "export const contactsProvider = { key: 'contacts' } as const;\n",
+    );
+    writeFileSync(
+      join(src, 'provider.ts'),
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        "import { contactsProvider } from './provider-impl.js';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000001',",
+        '  provider: contactsProvider,',
+        "  providerKey: 'contacts',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const entry = join(src, 'contacts.ts');
+    const source = [
+      "import { app } from './provider.js';",
+      'export const contacts = app.query({ load() { return []; } });',
+      '',
+    ].join('\n');
+    writeFileSync(entry, source);
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, { include: ['src'] });
+    plugin.configResolved?.({ root });
+
+    try {
+      const transformed = await plugin.transform(source, entry);
+      expect(compileComponentModule).not.toHaveBeenCalled();
+      expect(transformed).toMatchObject({ map: null });
+      expect(transformed?.code).toContain(
+        "import { assignDerivedQueryKey as __kovoAssignDerivedQueryKey } from '@kovojs/server/internal/wire';",
+      );
+      expect(transformed?.code).toContain(
+        'export const contacts = __kovoAssignDerivedQueryKey(app.query({ load() { return []; } }), "contacts/contacts")',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('blocks non-public Kovo subpath imports in non-component authored modules', async () => {
     const compileComponentModule = vi.fn(() => ({ files: [] }));
     const plugin = createKovoVitePlugin(compileComponentModule, {

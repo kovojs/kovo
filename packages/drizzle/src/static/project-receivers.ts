@@ -14,6 +14,7 @@ import {
   extractedFunctionKey,
   writeActionCallbackFunction,
 } from './domain-writes.js';
+import { compilerOwnedAppContractMemberEquals } from './app-contract-static-facts.js';
 import {
   boundReceiverMethodAccessName,
   directDrizzleReceiverCallSurface,
@@ -83,11 +84,15 @@ import {
 }
 
 /** @internal */ export interface ProjectDrizzleReceivers {
+  managedAppDbCarrierNames?: ReadonlySet<string>;
+  managedAppDbCarrierSymbolKeys?: ReadonlySet<string>;
   names: ReadonlySet<string>;
   symbolKeys: ReadonlySet<string>;
 }
 
 /** @internal */ export interface QueryReceiverReferences {
+  managedAppDbCarrierNames?: ReadonlySet<string>;
+  managedAppDbCarrierSymbolKeys?: ReadonlySet<string>;
   names: ReadonlySet<string>;
   projectContainers?: boolean;
   symbolKeys: ReadonlySet<string>;
@@ -297,12 +302,184 @@ function appendMutationHandlerCallbacks(
 
   const names = new Set<string>();
   const symbolKeys = new Set<string>();
+  const receivers = {
+    managedAppDbCarrierNames: new Set<string>(),
+    managedAppDbCarrierSymbolKeys: new Set<string>(),
+    names,
+    symbolKeys,
+  };
   for (const param of callback.getParameters()) {
     appendProjectDrizzleReceiverParameterBinding(param, names, symbolKeys);
   }
-  appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
-  appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
-  return { names, symbolKeys };
+  appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), receivers);
+  const appConfig = compilerOwnedAppConfigForDirectCallback(callback);
+  if (appConfig) {
+    appendCompilerOwnedAppDbReceiverProof(
+      appConfig.config,
+      callback,
+      appConfig.memberName,
+      receivers,
+    );
+  }
+  appendProjectTransactionReceiverAliases(callback, receivers);
+  return receivers;
+}
+
+/**
+ * Seed the exact framework-owned database handle supplied as the second callback parameter of a
+ * compiler-owned `app.query`/`app.mutation` declaration.
+ *
+ * The compiler-owned property-access fact proves the app receiver and exact source snapshot. This
+ * bridge deliberately accepts only the direct config object and only `.db` on that exact parameter;
+ * computed access, forged facades, mutable aliases, and unrelated callback parameters remain
+ * unclassified (SPEC §5.2 rule 10 / §10.3 / §11.1).
+ *
+ * @internal
+ */
+export function appendCompilerOwnedAppDbReceiverProof(
+  config: ObjectLiteralExpression,
+  callback: Node,
+  memberName: 'mutation' | 'query',
+  receivers: {
+    managedAppDbCarrierNames: Set<string>;
+    managedAppDbCarrierSymbolKeys: Set<string>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  if (!compilerOwnedAppConfigIsExact(config, memberName)) return;
+  const parameter = callbackParameters(callback)[1];
+  const parameterName = parameter?.getNameNode();
+  if (!parameter || !parameterName) return;
+
+  if (Node.isIdentifier(parameterName)) {
+    appendCompilerOwnedAppDbCarrierIdentifier(parameterName, receivers);
+  } else if (Node.isObjectBindingPattern(parameterName)) {
+    for (const element of parameterName.getElements()) {
+      if (isRestBindingElement(element) || objectBindingElementPropertyName(element) !== 'db') {
+        continue;
+      }
+      appendProjectDrizzleReceiverAliasIdentifier(element.getNameNode(), receivers);
+    }
+  }
+
+  // A single immutable local projection is ergonomic without turning this source-bound carrier
+  // into general alias authority. Run this after the ordinary type-proven alias pass so an
+  // app-proven alias cannot bootstrap mutable or multi-hop aliases.
+  appendCompilerOwnedAppDbDirectConstAliases(functionBody(callback), receivers);
+}
+
+/** @internal */
+export function isCompilerOwnedAppDbMemberExpression(
+  node: Node | undefined,
+  receivers: {
+    managedAppDbCarrierNames?: ReadonlySet<string>;
+    managedAppDbCarrierSymbolKeys?: ReadonlySet<string>;
+  },
+): boolean {
+  if (!node || !Node.isPropertyAccessExpression(node) || node.getName() !== 'db') return false;
+  if (node.compilerNode.questionDotToken !== undefined) return false;
+
+  const carrier = unwrappedStaticExpressionNode(node.getExpression());
+  if (!Node.isIdentifier(carrier)) return false;
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(carrier));
+  if (symbolKey) return receivers.managedAppDbCarrierSymbolKeys?.has(symbolKey) === true;
+  return receivers.managedAppDbCarrierNames?.has(carrier.getText()) === true;
+}
+
+function compilerOwnedAppConfigForDirectCallback(
+  callback: Node,
+): { config: ObjectLiteralExpression; memberName: 'mutation' | 'query' } | undefined {
+  let property: Node = callback;
+  if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) {
+    const parent = callback.getParent();
+    if (!Node.isPropertyAssignment(parent) || parent.getInitializer() !== callback)
+      return undefined;
+    property = parent;
+  }
+
+  if (!Node.isMethodDeclaration(property) && !Node.isPropertyAssignment(property)) {
+    return undefined;
+  }
+  const propertyName = propertyNameText(property.getNameNode());
+  const memberName =
+    propertyName === 'handler' ? 'mutation' : propertyName === 'load' ? 'query' : undefined;
+  if (!memberName) return undefined;
+
+  const config = property.getParent();
+  return Node.isObjectLiteralExpression(config) ? { config, memberName } : undefined;
+}
+
+function compilerOwnedAppConfigIsExact(
+  config: ObjectLiteralExpression,
+  memberName: 'mutation' | 'query',
+): boolean {
+  const call = config.getParent();
+  if (!Node.isCallExpression(call)) return false;
+  const [firstArgument, secondArgument] = call.getArguments();
+  const directObjectForm = firstArgument === config;
+  const directKeyedForm =
+    secondArgument === config &&
+    !!firstArgument &&
+    (Node.isStringLiteral(firstArgument) || Node.isNoSubstitutionTemplateLiteral(firstArgument));
+  return (
+    (directObjectForm || directKeyedForm) &&
+    compilerOwnedAppContractMemberEquals(call.getExpression(), memberName)
+  );
+}
+
+function callbackParameters(callback: Node): ParameterDeclaration[] {
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
+  ) {
+    return [];
+  }
+  return callback.getParameters();
+}
+
+function appendCompilerOwnedAppDbCarrierIdentifier(
+  identifier: Node,
+  receivers: {
+    managedAppDbCarrierNames: Set<string>;
+    managedAppDbCarrierSymbolKeys: Set<string>;
+  },
+): void {
+  if (!Node.isIdentifier(identifier)) return;
+  receivers.managedAppDbCarrierNames.add(identifier.getText());
+  const symbolKey = resolvedSymbolKey(identifier.getSymbol());
+  if (symbolKey) receivers.managedAppDbCarrierSymbolKeys.add(symbolKey);
+}
+
+function appendCompilerOwnedAppDbDirectConstAliases(
+  body: Node,
+  receivers: {
+    managedAppDbCarrierNames: Set<string>;
+    managedAppDbCarrierSymbolKeys: Set<string>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  for (const declaration of touchBodyVariableDeclarations(body)) {
+    const declarationList = declaration.getParent();
+    if (
+      !Node.isVariableDeclarationList(declarationList) ||
+      (declarationList.getDeclarationKind?.() ?? 'const') !== 'const'
+    ) {
+      continue;
+    }
+    const binding = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!Node.isIdentifier(binding) || !initializer) continue;
+    if (
+      !isCompilerOwnedAppDbMemberExpression(unwrappedStaticExpressionNode(initializer), receivers)
+    ) {
+      continue;
+    }
+    appendProjectDrizzleReceiverAliasIdentifier(binding, receivers);
+  }
 }
 
 /** @internal */ export function projectReceiverParameterRequirements(
@@ -950,7 +1127,7 @@ function relationalReadWithObjectTableExpressions(
     ),
     ...extractOpaqueClosureProjectReceiverCallsFromBody(body, receivers, carrierSymbolKeys),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
-    ...extractProjectDrizzleReceiverContainerCalls(body),
+    ...extractProjectDrizzleReceiverContainerCalls(body, receivers),
   ];
 }
 
@@ -1099,6 +1276,7 @@ function relationalReadWithObjectTableExpressions(
 
 /** @internal */ export function extractProjectDrizzleReceiverContainerCalls(
   body: Node,
+  receivers: ProjectDrizzleReceivers,
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
   const bodyStart = bodySourceStart(body);
@@ -1106,6 +1284,7 @@ function relationalReadWithObjectTableExpressions(
   for (const call of touchBodyCallExpressions(body)) {
     const surface = directDrizzleReceiverCallSurface(call);
     if (!surface) continue;
+    if (isProjectDrizzleReceiverIdentifier(surface.receiver, receivers)) continue;
     if (!isProjectDrizzleReceiverContainerCallReceiver(surface.receiver)) continue;
 
     calls.push({ index: call.getStart() - bodyStart, name: surface.name });
@@ -1284,13 +1463,22 @@ function relationalReadWithObjectTableExpressions(
 
 /** @internal */ export function isProjectDrizzleReceiverIdentifier(
   node: Node | undefined,
-  receivers: { names: ReadonlySet<string>; symbolKeys: ReadonlySet<string> },
+  receivers: {
+    managedAppDbCarrierNames?: ReadonlySet<string>;
+    managedAppDbCarrierSymbolKeys?: ReadonlySet<string>;
+    names: ReadonlySet<string>;
+    symbolKeys: ReadonlySet<string>;
+  },
 ): boolean {
   if (!node) return false;
   if (!Node.isIdentifier(node)) {
     // SPEC §11.1: project-mode member receivers such as `ctx.db` are exact facts when
-    // ts-morph proves the member type is the pinned Postgres Drizzle database type.
-    return isProjectDrizzleReceiverMemberExpression(node);
+    // ts-morph proves the member type is the pinned Postgres Drizzle database type, or when the
+    // compiler-owned app contract proves `.db` on the exact callback carrier.
+    return (
+      isCompilerOwnedAppDbMemberExpression(node, receivers) ||
+      isProjectDrizzleReceiverMemberExpression(node)
+    );
   }
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));

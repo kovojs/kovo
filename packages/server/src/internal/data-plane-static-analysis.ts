@@ -8,7 +8,11 @@ import {
 } from 'node:path';
 
 import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
-import { deriveBrowserPostureManifestFromSourceFiles } from '@kovojs/compiler/internal';
+import {
+  compilerOwnedAppContractStaticFactsFromFiles,
+  deriveBrowserPostureManifestFromSourceFiles,
+  type CompilerOwnedAppContractStaticFact,
+} from '@kovojs/compiler/internal';
 import {
   compilerSourceModuleSpecifiers,
   createCompilerSourceFileSystem,
@@ -94,6 +98,7 @@ export type DataPlaneRuntimeRegistryFacts = RuntimeRegistryWireFacts;
 
 /** @internal Options for CLI build/check static data-plane fact extraction. */
 export interface StaticDataPlaneBuildFactsOptions {
+  appContractStaticFacts?: readonly CompilerOwnedAppContractStaticFact[];
   cache: boolean;
 }
 
@@ -261,12 +266,16 @@ export async function collectDataPlaneAnalysis(options: {
       staticFacts: emptyStaticBuildAnalysisFactsLike(),
     };
   }
-  const identity = dataPlaneAnalysisCacheIdentity(files);
+  const appContractStaticFacts = compilerOwnedAppContractStaticFactsFromFiles(files, options.root);
+  const identity = staticAnalysisCanonicalJson({
+    appContractStaticFacts,
+    sources: dataPlaneAnalysisCacheIdentity(files),
+  });
   let entry = dataPlaneAnalysisCacheEntry;
   if (entry?.identity !== identity) {
     entry = {
       identity,
-      resultPreimage: createDataPlaneAnalysisPreimage(files),
+      resultPreimage: createDataPlaneAnalysisPreimage(files, appContractStaticFacts),
     };
     dataPlaneAnalysisCacheEntry = entry;
   }
@@ -528,6 +537,7 @@ function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
 
 async function createDataPlaneAnalysis(
   files: readonly DataPlaneSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[],
 ): Promise<DataPlaneAnalysis> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Vite static-analysis sources');
   if (sourceFiles.length === 0) {
@@ -537,7 +547,7 @@ async function createDataPlaneAnalysis(
       staticFacts: emptyStaticBuildAnalysisFactsLike(),
     };
   }
-  const staticFacts = await runStaticBuildAnalysisFacts(sourceFiles);
+  const staticFacts = await runStaticBuildAnalysisFacts(sourceFiles, appContractStaticFacts);
   return {
     files: sourceFiles,
     outputQueryShapeFacts: await outputSchemaQueryShapeFactsAsync(sourceFiles),
@@ -547,8 +557,9 @@ async function createDataPlaneAnalysis(
 
 async function createDataPlaneAnalysisPreimage(
   files: readonly DataPlaneSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[],
 ): Promise<string> {
-  return staticAnalysisCanonicalJson(await createDataPlaneAnalysis(files));
+  return staticAnalysisCanonicalJson(await createDataPlaneAnalysis(files, appContractStaticFacts));
 }
 
 async function cachedStaticBuildAnalysisFacts(
@@ -556,17 +567,23 @@ async function cachedStaticBuildAnalysisFacts(
   options: StaticDataPlaneBuildFactsOptions,
 ): Promise<StaticBuildAnalysisFactsLike> {
   const sourceFiles = snapshotDataPlaneSourceFiles(files, 'Cached static-analysis sources');
+  const appContractStaticFacts = options.appContractStaticFacts ?? [];
   const cacheIdentity = namespacedDataPlaneCacheIdentity(
     'build',
-    dataPlaneAnalysisCacheIdentity(sourceFiles),
+    staticAnalysisCanonicalJson({
+      appContractStaticFacts,
+      sources: dataPlaneAnalysisCacheIdentity(sourceFiles),
+    }),
   );
-  if (!options.cache) return runStaticBuildAnalysisFacts(sourceFiles);
+  if (!options.cache) {
+    return runStaticBuildAnalysisFacts(sourceFiles, appContractStaticFacts);
+  }
 
   let entry = staticBuildAnalysisCacheEntry;
   if (entry?.identity !== cacheIdentity) {
     entry = {
       identity: cacheIdentity,
-      resultPreimage: createStaticBuildAnalysisPreimage(sourceFiles),
+      resultPreimage: createStaticBuildAnalysisPreimage(sourceFiles, appContractStaticFacts),
     };
     staticBuildAnalysisCacheEntry = entry;
   }
@@ -587,12 +604,16 @@ async function cachedStaticBuildAnalysisFacts(
 
 async function createStaticBuildAnalysisPreimage(
   files: readonly DataPlaneSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[],
 ): Promise<string> {
-  return staticAnalysisCanonicalJson(await runStaticBuildAnalysisFacts(files));
+  return staticAnalysisCanonicalJson(
+    await runStaticBuildAnalysisFacts(files, appContractStaticFacts),
+  );
 }
 
 async function runStaticBuildAnalysisFacts(
   files: readonly DataPlaneSourceFile[],
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[] = [],
 ): Promise<StaticBuildAnalysisFactsLike> {
   try {
     if (typeof extractStaticBuildAnalysisFactsFromProject !== 'function') {
@@ -601,7 +622,13 @@ async function runStaticBuildAnalysisFacts(
       );
     }
     const facts = snapshotStaticBuildAnalysisFacts(
-      extractStaticBuildAnalysisFactsFromProject({ files }, registerTransferredSqlSafetyDiagnostic),
+      extractStaticBuildAnalysisFactsFromProject(
+        {
+          ...(appContractStaticFacts.length === 0 ? {} : { appContractStaticFacts }),
+          files,
+        },
+        registerTransferredSqlSafetyDiagnostic,
+      ),
       { diagnosticCarrier: 'registered' },
     );
     if (facts === undefined) {

@@ -134,6 +134,7 @@ export async function handleAppMutationRequest(
     // (`resolveRequestClientIp`), never a raw header read in the guard.
     clientIp: (req) => resolveRequestClientIp(app, req),
     ...(mutationDb === undefined ? {} : { db: mutationDb }),
+    env: app.env,
     ...(app.sessionProvider === undefined || csrfExempt
       ? {}
       : { sessionProvider: app.sessionProvider }),

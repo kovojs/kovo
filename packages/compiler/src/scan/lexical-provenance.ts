@@ -60,6 +60,10 @@ interface AnalysisState {
 }
 
 const abstractWorkBudget = 16_384;
+// Effect history protects mutable bindings from opaque calls. Keep the history finite and
+// fail-closed, but leave enough room for an ordinary database-backed handler or composed TSX view.
+// Candidate joins remain capped much more tightly below because they multiply provenance states.
+const effectSiteBudget = 128;
 const loopReanalysisBudget = 16;
 const unmodeledEffectsKey = '\0kovo:unmodeled-effects';
 const valueCandidateBudget = 32;
@@ -91,11 +95,32 @@ const reviewedFrameworkOpaqueValueCalls = new Set([
   frameworkCallModelId('@kovojs/style', '.', 'create'),
 ]);
 const reviewedFrameworkDeclarationFactoryCalls = new Set([
+  frameworkCallModelId('@kovojs/server', '.', 'defineKovo'),
   frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
   frameworkCallModelId('@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry'),
   frameworkCallModelId('@kovojs/server', '.', 'rootedFiles'),
 ]);
 const reviewedFrameworkDeclarationReceiverMethods = new Map([
+  [
+    frameworkCallModelId('@kovojs/server', '.', 'defineKovo'),
+    new Set([
+      'all',
+      'assemble',
+      'endpoint',
+      'integrateMutation',
+      'layout',
+      'mutation',
+      'owns',
+      'publicAccess',
+      'query',
+      'rateLimit',
+      'role',
+      'route',
+      'task',
+      'verifiedAccess',
+    ]),
+  ],
+  [frameworkCallModelId('@kovojs/server', '.', 'query'), new Set(['optimistic'])],
   [
     frameworkCallModelId('@kovojs/server', '.', 'createMemoryStorage'),
     new Set(['delete', 'get', 'put', 'stat', 'stream']),
@@ -1599,11 +1624,36 @@ function isReviewedSchemaValueCallCandidate(candidate: ScannedBindingCandidate):
 }
 
 function isReviewedFrameworkRootFactoryCandidate(candidate: ScannedBindingCandidate): boolean {
-  if (candidate.kind === 'import' && candidate.reviewedDeclarationFactory !== undefined) {
-    return false;
-  }
-  const id = frameworkCallModelIdForCandidate(candidate);
+  const id = reviewedRootFactoryIdForCandidate(candidate);
   return id !== undefined && reviewedFrameworkRootFactoryCalls.has(id);
+}
+
+function reviewedRootFactoryIdForCandidate(candidate: ScannedBindingCandidate): string | undefined {
+  if (candidate.kind !== 'import') return undefined;
+  if (candidate.reviewedDeclarationFactory === undefined) {
+    return frameworkCallModelIdForCandidate(candidate);
+  }
+  const defineKovoId = frameworkCallModelId('@kovojs/server', '.', 'defineKovo');
+  if (candidate.reviewedDeclarationFactory !== defineKovoId) return undefined;
+  const members = candidate.members ?? [];
+  if (members.length !== 1) return undefined;
+  const member = members[0]!;
+  if (
+    member !== 'endpoint' &&
+    member !== 'integrateMutation' &&
+    member !== 'layout' &&
+    member !== 'mutation' &&
+    member !== 'query' &&
+    member !== 'route' &&
+    member !== 'task'
+  ) {
+    return undefined;
+  }
+  return frameworkCallModelId(
+    '@kovojs/server',
+    '.',
+    member === 'integrateMutation' ? 'mutation' : member,
+  );
 }
 
 function candidateCallResultMayContainRoot(candidate: ScannedBindingCandidate): boolean {
@@ -1685,7 +1735,7 @@ function markUnmodeledEffects(
       effectSites.add(`${current.owner}\u0001${site}`);
     }
   }
-  if (effectSites.size > valueCandidateBudget) {
+  if (effectSites.size > effectSiteBudget) {
     state.budgetExhausted = true;
     return env;
   }
@@ -1706,8 +1756,8 @@ function joinEnvironments(
     if (key === unmodeledEffectsKey) {
       const prior = result.get(key);
       const effectSites = [...new Set([...(prior?.effectSites ?? []), ...value.effectSites])];
-      if (effectSites.length > valueCandidateBudget) state.budgetExhausted = true;
-      result.set(key, { ...value, effectSites: effectSites.slice(0, valueCandidateBudget) });
+      if (effectSites.length > effectSiteBudget) state.budgetExhausted = true;
+      result.set(key, { ...value, effectSites: effectSites.slice(0, effectSiteBudget) });
       continue;
     }
     result.set(key, result.has(key) ? joinValues(state, result.get(key)!, value) : value);

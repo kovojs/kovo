@@ -18,7 +18,6 @@ import {
 import { isHtmlWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import { contextualizeCompilerDiagnostic, diagnosticFor } from '../diagnostics.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
-import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import {
   outputContextForAttribute,
   trustedHtmlBrandLocalNames,
@@ -39,6 +38,7 @@ import {
   type JsxIrExpression,
 } from '../jsx-ir.js';
 import {
+  identifierIsShadowedBeforeScope,
   parseComponentModule,
   parserFactFrameworkTrustedUrlReason,
   parserFactFrameworkTrustedUrlValue,
@@ -765,6 +765,352 @@ function mutationSubmitterDirectTransport(element: JsxElementModel): {
   return { formAssociations, hasFormAssociation, overrides };
 }
 
+type ReviewedMutationButtonClassification =
+  | { readonly kind: 'not-reviewed' }
+  | { readonly kind: 'safe' }
+  | {
+      readonly detail: string;
+      readonly kind: 'unsafe';
+      readonly span: SourceSpan;
+    };
+
+/**
+ * The stock Button is the one reviewed component whose direct JSX output may remain opaque inside
+ * a typed mutation form. The exception is deliberately syntax- and binding-exact: SPEC §4.1 keeps
+ * public components opaque by default, while SPEC §5.2 rule 10 permits only compiler-owned facts to
+ * influence mutation ownership. A direct, unshadowed value import is therefore necessary but not
+ * sufficient; caller-controlled props that could name or reassociate the rendered submitter close
+ * the exception again.
+ */
+function reviewedMutationButtonClassification(
+  source: MutationComponentSource,
+  element: JsxElementModel,
+): ReviewedMutationButtonClassification {
+  const identifier = mutationComponentTagIdentifier(source, element);
+  if (identifier === null) return { kind: 'not-reviewed' };
+  const binding = reviewedMutationButtonImportBinding(source.model.sourceFile, identifier.text);
+  if (
+    binding === null ||
+    identifierIsShadowedBeforeScope(identifier, binding, source.model.sourceFile) ||
+    reviewedMutationButtonBindingHasVisibleMutation(source.model.sourceFile, binding)
+  ) {
+    return { kind: 'not-reviewed' };
+  }
+
+  const spreads = compilerSnapshotDenseArray(
+    element.spreadAttributes,
+    'Reviewed Button JSX spreads',
+  );
+  if (spreads.length > 0) {
+    return {
+      detail: `reviewed <${element.tag}> JSX spreads cannot prove mutation submitter ownership; pass explicit non-transport props`,
+      kind: 'unsafe',
+      span: spreads[0]!,
+    };
+  }
+
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Reviewed Button JSX attributes',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    const normalized = compilerStringToLowerCase(attribute.name);
+    if (normalized === 'name' || mutationSubmitterTransportAttributeName(normalized) !== null) {
+      return {
+        detail: `reviewed <${element.tag}> ${attribute.name} makes mutation control ownership caller-configurable; remove it or use a separate native form`,
+        kind: 'unsafe',
+        span: attribute,
+      };
+    }
+  }
+  return { kind: 'safe' };
+}
+
+function mutationComponentTagIdentifier(
+  source: MutationComponentSource,
+  element: JsxElementModel,
+): ts.Identifier | null {
+  let match: ts.Identifier | null = null;
+  const visit = (node: ts.Node): void => {
+    if (match !== null) return;
+    if (
+      ts.isIdentifier(node) &&
+      node.getStart(source.model.sourceFile) === element.openingTagNameStart &&
+      node.getEnd() === element.openingTagNameEnd
+    ) {
+      match = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source.model.sourceFile);
+  return match;
+}
+
+function reviewedMutationButtonImportBinding(
+  sourceFile: ts.SourceFile,
+  localName: string,
+): ts.Identifier | null {
+  let binding: ts.Identifier | null = null;
+  const statements = compilerSnapshotDenseArray(
+    sourceFile.statements,
+    'Reviewed Button module statements',
+  );
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index]!;
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (!clause) continue;
+      if (clause.name?.text === localName) return null;
+      const namedBindings = clause.namedBindings;
+      if (namedBindings && ts.isNamespaceImport(namedBindings)) {
+        if (namedBindings.name.text === localName) return null;
+        continue;
+      }
+      if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+      const elements = compilerSnapshotDenseArray(
+        namedBindings.elements,
+        'Reviewed Button import specifiers',
+      );
+      for (let specifierIndex = 0; specifierIndex < elements.length; specifierIndex += 1) {
+        const specifier = elements[specifierIndex]!;
+        if (specifier.name.text !== localName) continue;
+        const exact =
+          !clause.isTypeOnly &&
+          !specifier.isTypeOnly &&
+          ts.isStringLiteralLike(statement.moduleSpecifier) &&
+          statement.moduleSpecifier.text === '@kovojs/ui/button' &&
+          (specifier.propertyName === undefined
+            ? specifier.name.text === 'Button'
+            : ts.isIdentifier(specifier.propertyName) && specifier.propertyName.text === 'Button');
+        if (!exact || binding !== null) return null;
+        binding = specifier.name;
+      }
+      continue;
+    }
+    if (
+      (ts.isImportEqualsDeclaration(statement) && statement.name.text === localName) ||
+      moduleStatementDeclaresReviewedButtonName(statement, localName)
+    ) {
+      return null;
+    }
+  }
+  return binding;
+}
+
+function moduleStatementDeclaresReviewedButtonName(
+  statement: ts.Statement,
+  localName: string,
+): boolean {
+  if (ts.isVariableStatement(statement)) {
+    const declarations = compilerSnapshotDenseArray(
+      statement.declarationList.declarations,
+      'Reviewed Button module declarations',
+    );
+    for (let index = 0; index < declarations.length; index += 1) {
+      if (bindingNameContainsReviewedButtonName(declarations[index]!.name, localName)) return true;
+    }
+    return false;
+  }
+  if (
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isEnumDeclaration(statement) ||
+    ts.isModuleDeclaration(statement)
+  ) {
+    return statement.name !== undefined && statement.name.text === localName;
+  }
+  return false;
+}
+
+function bindingNameContainsReviewedButtonName(
+  bindingName: ts.BindingName,
+  localName: string,
+): boolean {
+  if (ts.isIdentifier(bindingName)) return bindingName.text === localName;
+  const elements = compilerSnapshotDenseArray(
+    bindingName.elements,
+    'Reviewed Button binding elements',
+  );
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]!;
+    if (
+      !ts.isOmittedExpression(element) &&
+      bindingNameContainsReviewedButtonName(element.name, localName)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function reviewedMutationButtonBindingHasVisibleMutation(
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      reviewedButtonAssignmentTargetMutatesBinding(node.left, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      reviewedButtonExpressionRootsAtBinding(node.operand, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isDeleteExpression(node) &&
+      reviewedButtonExpressionRootsAtBinding(node.expression, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      reviewedButtonKnownMutatorTargetsBinding(node, sourceFile, binding)
+    ) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return mutated;
+}
+
+function reviewedButtonAssignmentTargetMutatesBinding(
+  target: ts.Expression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const expression = unwrapMutationComponentExpression(target);
+  if (reviewedButtonExpressionRootsAtBinding(expression, sourceFile, binding)) return true;
+  if (ts.isArrayLiteralExpression(expression)) {
+    const elements = compilerSnapshotDenseArray(
+      expression.elements,
+      'Reviewed Button assignment array',
+    );
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]!;
+      if (ts.isOmittedExpression(element)) continue;
+      if (
+        reviewedButtonAssignmentTargetMutatesBinding(
+          ts.isSpreadElement(element) ? element.expression : element,
+          sourceFile,
+          binding,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  if (ts.isObjectLiteralExpression(expression)) {
+    const properties = compilerSnapshotDenseArray(
+      expression.properties,
+      'Reviewed Button assignment object',
+    );
+    for (let index = 0; index < properties.length; index += 1) {
+      const property = properties[index]!;
+      if (
+        ts.isShorthandPropertyAssignment(property) &&
+        reviewedButtonIdentifierIsBinding(property.name, sourceFile, binding)
+      ) {
+        return true;
+      }
+      if (
+        ts.isPropertyAssignment(property) &&
+        reviewedButtonAssignmentTargetMutatesBinding(property.initializer, sourceFile, binding)
+      ) {
+        return true;
+      }
+      if (
+        ts.isSpreadAssignment(property) &&
+        reviewedButtonAssignmentTargetMutatesBinding(property.expression, sourceFile, binding)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function reviewedButtonExpressionRootsAtBinding(
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const current = unwrapMutationComponentExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return reviewedButtonIdentifierIsBinding(current, sourceFile, binding);
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return reviewedButtonExpressionRootsAtBinding(current.expression, sourceFile, binding);
+  }
+  return false;
+}
+
+function reviewedButtonIdentifierIsBinding(
+  identifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  return (
+    identifier.text === binding.text &&
+    !identifierIsShadowedBeforeScope(identifier, binding, sourceFile)
+  );
+}
+
+function reviewedButtonKnownMutatorTargetsBinding(
+  call: ts.CallExpression,
+  sourceFile: ts.SourceFile,
+  binding: ts.Identifier,
+): boolean {
+  const target = call.arguments[0];
+  if (!target || !reviewedButtonExpressionRootsAtBinding(target, sourceFile, binding)) return false;
+  const callee = unwrapMutationComponentExpression(call.expression);
+  let owner: string | null = null;
+  let name: string | null = null;
+  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+    owner = callee.expression.text;
+    name = callee.name.text;
+  } else if (
+    ts.isElementAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.argumentExpression &&
+    ts.isStringLiteralLike(callee.argumentExpression)
+  ) {
+    owner = callee.expression.text;
+    name = callee.argumentExpression.text;
+  }
+  if (owner === 'Object') {
+    return (
+      name === 'assign' ||
+      name === 'defineProperties' ||
+      name === 'defineProperty' ||
+      name === 'setPrototypeOf'
+    );
+  }
+  return (
+    owner === 'Reflect' &&
+    (name === 'defineProperty' ||
+      name === 'deleteProperty' ||
+      name === 'set' ||
+      name === 'setPrototypeOf')
+  );
+}
+
 function componentMutationSubmitterOverrideDiagnostics(
   elements: readonly JsxIrElement[],
   model: ComponentModuleModel,
@@ -795,7 +1141,7 @@ function componentMutationSubmitterOverrideDiagnostics(
       }
       inspectMutationComponent(
         project.root,
-        candidate.tag,
+        candidate.element,
         candidate.element,
         compilerCreateSet<string>(),
         project,
@@ -1670,6 +2016,8 @@ function appendMutationDocumentElement(
   } else {
     const invocationSpan = source === project.root ? element : rootSpan;
     if (compilerOwnedMutationFormHelper(source.model, element.tag)) return;
+    const reviewedButton = reviewedMutationButtonClassification(source, element);
+    if (reviewedButton.kind === 'safe') return;
     const implementation = resolveMutationComponent(source, element.tag, project);
     if (implementation === null) {
       appendCompilerFact(
@@ -1896,7 +2244,6 @@ function appendMutationDocumentOutputExpression(
   }
 
   const expression = unwrapMutationComponentExpression(node.expression);
-  if (mutationDocumentExpressionIsReviewedUiRender(node)) return;
   if (ts.isCallExpression(expression)) {
     if (ts.isIdentifier(expression.expression)) {
       const implementation = resolveMutationComponent(
@@ -2111,68 +2458,6 @@ function mutationDocumentComponentCarriesFormAssociation(element: JsxElementMode
   return element.spreadAttributes.length > 0;
 }
 
-/**
- * Recognize the stock framework-owned `Button.definition.render({...})` carrier without granting
- * authority to arbitrary structural `.definition.render` lookalikes. Button is safe for ownership
- * only when its closed literal props cannot name/reassociate a successful control; any spread,
- * computed key, `form`, `name`, or transport override remains opaque and therefore fails closed
- * when nested in a typed form.
- */
-function mutationDocumentExpressionIsReviewedUiRender(
-  node: MutationDocumentExpressionNode,
-): boolean {
-  const expression = unwrapMutationComponentExpression(node.expression);
-  if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) return false;
-  if (!ts.isPropertyAccessExpression(expression.expression)) return false;
-  if (mutationDocumentPropertyName(expression.expression.name) !== 'render') return false;
-  const definition = expression.expression.expression;
-  if (
-    !ts.isPropertyAccessExpression(definition) ||
-    mutationDocumentPropertyName(definition.name) !== 'definition'
-  ) {
-    return false;
-  }
-  if (!ts.isIdentifier(definition.expression)) return false;
-  const localName = definition.expression.text;
-  const imports = compilerSnapshotDenseArray(
-    node.implementation.source.model.namedImports,
-    'Reviewed UI render imports',
-  );
-  let reviewed = false;
-  for (let index = 0; index < imports.length; index += 1) {
-    const imported = imports[index]!;
-    if (
-      imported.localName === localName &&
-      imported.moduleSpecifier === '@kovojs/ui/button' &&
-      isReviewedComponentEventBoundary(imported.moduleSpecifier, imported.importedName) &&
-      imported.importedName === 'Button'
-    ) {
-      if (reviewed) return false;
-      reviewed = true;
-    }
-  }
-  if (!reviewed) return false;
-
-  const props = unwrapMutationComponentExpression(expression.arguments[0]!);
-  if (!ts.isObjectLiteralExpression(props)) return false;
-  const properties = compilerSnapshotDenseArray(props.properties, 'Reviewed Button render props');
-  for (let index = 0; index < properties.length; index += 1) {
-    const property = properties[index]!;
-    if (!ts.isPropertyAssignment(property) || property.name === undefined) return false;
-    const name = mutationDocumentPropertyName(property.name);
-    if (name === null) return false;
-    const normalized = compilerStringToLowerCase(name);
-    if (
-      normalized === 'form' ||
-      normalized === 'name' ||
-      mutationSubmitterTransportAttributeName(normalized) !== null
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function mutationDocumentFormIsTyped(
   source: MutationComponentSource,
   form: JsxElementModel,
@@ -2309,13 +2594,28 @@ function mutationImplementationDisplayName(
 
 function inspectMutationComponent(
   from: MutationComponentSource,
-  tag: string,
+  invocation: JsxElementModel,
   rootSpan: { readonly end: number; readonly start: number },
   seen: Set<string>,
   project: MutationComponentProject,
   options: StructuralJsxLoweringOptions,
   diagnostics: CompilerDiagnostic[],
 ): void {
+  const tag = invocation.tag;
+  const reviewedButton = reviewedMutationButtonClassification(from, invocation);
+  if (reviewedButton.kind === 'safe') return;
+  if (reviewedButton.kind === 'unsafe') {
+    appendCompilerFact(
+      diagnostics,
+      mutationFormProvenanceDiagnostic(
+        options,
+        from === project.root ? reviewedButton.span : rootSpan,
+        reviewedButton.detail,
+      ),
+      'Reviewed Button mutation form diagnostics',
+    );
+    return;
+  }
   if (compilerOwnedMutationFormHelper(from.model, tag)) return;
   const implementation = resolveMutationComponent(from, tag, project);
   if (implementation === null) {
@@ -2369,7 +2669,7 @@ function inspectMutationComponent(
     if (candidate.intrinsicTagName === undefined) {
       inspectMutationComponent(
         implementation.source,
-        candidate.tag,
+        candidate,
         rootSpan,
         seen,
         project,

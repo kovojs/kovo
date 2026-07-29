@@ -185,6 +185,7 @@ export async function dispatchMatchedAppRequest({
       search: requestUrlSearchParams(url),
       clientIp: (req) => resolveRequestClientIp(app, req),
       ...(app.db === undefined ? {} : { db: app.db }),
+      env: app.env,
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     };
 
@@ -227,6 +228,7 @@ export async function dispatchMatchedAppRequest({
     const endpointRequest = await resolveKovoLifecycleRequest(request, {
       clientIp: (req) => resolveRequestClientIp(app, req),
       declaration: match.endpoint,
+      env: app.env,
       stripAuthorization: match.endpoint.csrf?.exempt === true,
       surface: 'endpoint',
     });

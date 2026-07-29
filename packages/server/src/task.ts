@@ -1,5 +1,6 @@
 import { snapshotSchemaForRuntime, type InferSchema, type Schema } from './schema.js';
 import type { ScopedKey } from '@kovojs/core';
+import { transferAppDeclarationOwner } from './app-declaration-owner.js';
 import type { NonRequestPrincipalPosture } from './auth-principal.js';
 import { validateCronExpression } from './task-cron.js';
 import {
@@ -242,7 +243,10 @@ export function assignDerivedTaskKey<Task extends TaskDefinition<string, any, an
       `Cannot assign derived task key "${key}" to task already keyed as "${definition.key}".`,
     );
   }
-  return taskFreeze(snapshotTaskDefinition(key, definition)) as Task;
+  return transferAppDeclarationOwner(
+    definition,
+    taskFreeze(snapshotTaskDefinition(key, definition)) as Task,
+  );
 }
 
 function assertKnownTaskDefinitionKeys(definition: object): void {

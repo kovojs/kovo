@@ -6,6 +6,7 @@ import type {
   Redirect,
 } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
+import { transferAppDeclarationOwner } from '../app-declaration-owner.js';
 import {
   assertUnambiguousAccessDeclaration,
   pinAccessDecision,
@@ -799,7 +800,7 @@ function principalEpochDeclarationOwnDataValue(
  * modules call this before `createApp()` consumes exported declarations so `/_m/<key>`, CSRF
  * audience binding, replay scopes, forms, and invalidation registries observe the derived key.
  */
-export function assignDerivedMutationKey<Mutation extends MutationDefinition<string>>(
+export function assignDerivedMutationKey<Mutation extends object>(
   definition: Mutation,
   key: string,
 ): Mutation {
@@ -830,17 +831,20 @@ export function assignDerivedMutationKey<Mutation extends MutationDefinition<str
   const closedDefinition = snapshotMutationDefinition(definition as MutationDefinitionWithoutKey);
   const queue =
     closedDefinition.queue === true ? boundedKey : normalizeMutationQueue(closedDefinition.queue);
-  return markDeclaredMutationDefinition(
-    pinAccessDecision(
-      {
-        ...closedDefinition,
-        key: boundedKey,
-        ...(queue === undefined ? {} : { queue }),
-      } as MutationDefinition<string> & { key: string },
-      closedDefinition.access,
-    ),
-    { key: boundedKey, state: 'keyed' },
-  ) as Mutation;
+  return transferAppDeclarationOwner(
+    definition,
+    markDeclaredMutationDefinition(
+      pinAccessDecision(
+        {
+          ...closedDefinition,
+          key: boundedKey,
+          ...(queue === undefined ? {} : { queue }),
+        } as MutationDefinition<string> & { key: string },
+        closedDefinition.access,
+      ),
+      { key: boundedKey, state: 'keyed' },
+    ) as Mutation,
+  );
 }
 
 /**

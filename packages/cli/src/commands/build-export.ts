@@ -62,8 +62,10 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
+  createCompilerOwnedAppContractProject,
   createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
   dedupeCss,
@@ -75,6 +77,8 @@ import {
   projectMutationRegistryFactsFromFiles,
   type AppDependencyCapabilityManifest,
   type CompilerGeneratedCapabilityDependency,
+  type CompilerOwnedAppContractProject,
+  type CompilerOwnedAppContractStaticFact,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -92,12 +96,11 @@ import type {
   AccessDecision,
   AppEgressOptions,
   Guard,
-  KovoApp,
   StaticExportCompileDiagnostic,
   StaticExportResult,
   StylesheetAsset,
 } from '@kovojs/server';
-import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import type { KovoApp, KovoNeutralBuild } from '@kovojs/server/internal/build';
 import type {
   KovoBuildPreset,
   KovoBuildPresetContext,
@@ -532,7 +535,7 @@ type ExportArgParseResult =
   | { message: string; ok: false };
 
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
-type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
+type ExportStaticApp = (typeof import('@kovojs/server/internal/static-export'))['exportStaticApp'];
 
 interface KovoBuildOptions {
   appModulePath: string;
@@ -574,6 +577,7 @@ interface LoadedExportAppModule {
   staticExportCompileDiagnosticsFromModule: (
     moduleValue: unknown,
   ) => StaticExportCompileDiagnostic[];
+  resolveKovoAppToken: typeof import('@kovojs/server/internal/build').resolveKovoAppToken;
 }
 
 export interface KovoExportCommandResult extends KovoCheckResult {
@@ -1246,7 +1250,11 @@ async function loadAndCheckBuildApp(
   const execution = loadedBuildApp.serverExecutionModule;
   const { deriveClosedKovoApp, writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
   const appModule = loadedBuildApp.appModule;
-  const app = appFromModule(appModule, options.appModulePath);
+  const app = appFromModule(
+    appModule,
+    options.appModulePath,
+    loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
+  );
   const buildCheck = await runKovoBuildCheckPreflight(app, {
     cache: options.cache,
     execution,
@@ -2426,14 +2434,19 @@ async function staticBuildCheckGraph(
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const files = options.preEvaluationStaticTrust.files;
+  // Reuse the exact compiler-owned app-member proof that authorized pre-evaluation lowering.
+  // Drizzle receives only source-bound spans; it does not rediscover app identity structurally.
+  const sourceGraphFacts = options.preEvaluationStaticTrust.sourceGraphFacts;
   const drizzleFacts =
     files.length === 0
       ? emptyStaticDataPlaneBuildFacts()
-      : await staticDataPlaneBuildFacts(files, { cache: options.cache });
+      : await staticDataPlaneBuildFacts(files, {
+          appContractStaticFacts: sourceGraphFacts.appContractStaticFacts,
+          cache: options.cache,
+        });
   // SPEC §5.2 rule 9 / §6.6: graph assembly consumes the compiler facts that already authorized
   // evaluation. Recompiling or re-reading identity files here would create a second carrier whose
   // verdict could disagree with the exact bytes admitted by the pre-evaluation gate.
-  const sourceGraphFacts = options.preEvaluationStaticTrust.sourceGraphFacts;
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
   // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
@@ -2457,7 +2470,7 @@ async function staticBuildCheckGraph(
   ) as readonly QueryShapeFact[];
   const revealed = mergeBuildRevealFacts(drizzleFacts.revealed ?? [], runtimeReveals);
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
-    queryCheckFact(query, drizzleFacts.queries),
+    queryCheckFact(query, drizzleFacts.queries, options.execution),
   );
   const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
     app.queries,
@@ -2485,7 +2498,9 @@ async function staticBuildCheckGraph(
         status: fact.status,
       })),
   );
-  const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', endpointCheckFact);
+  const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', (endpoint) =>
+    endpointCheckFact(endpoint, options.execution),
+  );
   for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
     buildSecurityArrayAppend(
       endpoints,
@@ -2502,7 +2517,9 @@ async function staticBuildCheckGraph(
     'Build app mutations for optimistic coverage',
     mutationOptimisticCheckFacts,
   );
-  const pages = buildMapDense(app.routes, 'Build app routes', routeCheckFact);
+  const pages = buildMapDense(app.routes, 'Build app routes', (route) =>
+    routeCheckFact(route, options.execution),
+  );
   const authorizationCorrespondence =
     drizzleFacts.runtimeTableSecurityManifest === undefined
       ? []
@@ -2706,6 +2723,7 @@ function compareBuildRevealFacts(
 }
 
 interface SourceGraphFacts {
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[];
   compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
@@ -2929,6 +2947,49 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
   }
 }
 
+function compilerOwnedAppContractProjectForBuild(
+  files: readonly BuildCheckSourceFile[],
+  extraRootNames: readonly string[] = [],
+  absoluteRoots = false,
+): CompilerOwnedAppContractProject | undefined {
+  const rootNames: string[] = [];
+  const seen = buildCreateSet<string>();
+  const sources = buildSnapshotDenseArray(files, 'App-contract compiler source roots');
+  for (let index = 0; index < sources.length; index += 1) {
+    const fileName = absoluteRoots ? resolve(sources[index]!.fileName) : sources[index]!.fileName;
+    const canonicalFileName = resolve(fileName);
+    if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
+    buildSetAdd(seen, canonicalFileName);
+    buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
+  }
+  const extras = buildSnapshotDenseArray(extraRootNames, 'App-contract compiler extra roots');
+  for (let index = 0; index < extras.length; index += 1) {
+    const fileName = absoluteRoots ? resolve(extras[index]!) : extras[index]!;
+    const canonicalFileName = resolve(fileName);
+    if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
+    buildSetAdd(seen, canonicalFileName);
+    buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
+  }
+  return rootNames.length === 0 ? undefined : createCompilerOwnedAppContractProject({ rootNames });
+}
+
+function withBuildAppContractResolutions<Value>(
+  project: CompilerOwnedAppContractProject | undefined,
+  fileName: string,
+  source: string,
+  operation: () => Value,
+): Value {
+  if (project === undefined) return operation();
+  return project.withEntryResolutions(fileName, (programSource) => {
+    if (programSource !== source) {
+      throw new Error(
+        `Kovo app-contract compiler refused a stale source snapshot for ${fileName}.`,
+      );
+    }
+    return operation();
+  });
+}
+
 function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
   const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
@@ -2939,10 +3000,14 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const routePages: SourceRoutePageFacts[] = [];
 
   const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
+  const appContractProject = compilerOwnedAppContractProjectForBuild(sourceFiles);
   // SPEC §5.2 rule 10 / §6.3: derive imported mutation-form ownership once from the same immutable
   // source snapshot used by build/check. Lowering receives only typed, path-scoped facts and never
   // infers authority from a bare identifier or a post-evaluation runtime object.
-  const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
+  const projectMutationFacts =
+    appContractProject?.projectMutationRegistryFacts(sourceFiles) ??
+    projectMutationRegistryFactsFromFiles(sourceFiles);
+  const appContractStaticFacts = appContractProject?.staticFacts(sourceFiles) ?? [];
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
     // Every identity input comes from the same descriptor-bound source census. Supplying the
@@ -2965,16 +3030,31 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       source: file.source,
       sourceProvenance: 'app',
     } as const;
-    const component = compileComponentModule(componentOptions);
+    const resolvedCompilation = withBuildAppContractResolutions(
+      appContractProject,
+      file.fileName,
+      file.source,
+      () => ({
+        component: compileComponentModule(componentOptions),
+        parsedModule: parseComponentModule(
+          file.fileName,
+          file.source,
+          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+        ),
+        routePage: compileRouteModule({ fileName: file.fileName, source: file.source }),
+        standaloneRegistrySource: lowerStandaloneSourceDerivedRegistryDeclarations({
+          fileName: file.fileName,
+          source: file.source,
+        }),
+      }),
+    );
+    const component = resolvedCompilation.component;
     appendBuildTaskBFiniteDiagnostics(
       compilerTaskBBlockingDiagnostics,
       component.diagnostics,
       'TASK B component compiler finite diagnostics',
     );
-    const standaloneRegistrySource = lowerStandaloneSourceDerivedRegistryDeclarations({
-      fileName: file.fileName,
-      source: file.source,
-    });
+    const standaloneRegistrySource = resolvedCompilation.standaloneRegistrySource;
     const compilerLoweredSources = [component.loweredSource, standaloneRegistrySource] as const;
     for (let loweredIndex = 0; loweredIndex < compilerLoweredSources.length; loweredIndex += 1) {
       const generatedDependencies = buildSnapshotDenseArray(
@@ -3002,11 +3082,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       `Compiler semantic graph facts for ${file.fileName}`,
       (fact) => (fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph]),
     );
-    const parsedModule = parseComponentModule(
-      file.fileName,
-      file.source,
-      extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-    );
+    const parsedModule = resolvedCompilation.parsedModule;
     collectRegistryDeclarationAnchors(
       registryDeclarationAnchors,
       file.fileName,
@@ -3022,7 +3098,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       },
       'CLI compiler semantic source carriers',
     );
-    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const routePage = resolvedCompilation.routePage;
     const routeDiagnostics = buildSnapshotDenseArray(
       routePage.diagnostics,
       `Compiler route diagnostics for ${file.fileName}`,
@@ -3103,6 +3179,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   }
 
   return {
+    appContractStaticFacts,
     compilerDependencies,
     compilerSecuritySemanticSources,
     compilerTaskBFiniteVerdict: snapshotCompilerTaskBFiniteVerdict({
@@ -3216,7 +3293,9 @@ function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
 function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
+  execution: BuildExecutionModule,
 ): CoreGraph.QueryReadSet {
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(query), execution);
   const fact = buildFindDense(
     queryFacts,
     'Static query-read facts',
@@ -3242,6 +3321,7 @@ function queryCheckFact(
     isString,
   );
   return {
+    ...(access === undefined ? {} : { access }),
     domains: uniqueSorted(
       appendDense(declaredReadKeys, factReads, `Read domains for ${query.key}`),
     ),
@@ -3467,7 +3547,11 @@ function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
   return unique;
 }
 
-function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
+function routeCheckFact(
+  route: KovoApp['routes'][number],
+  execution: BuildExecutionModule,
+): CoreGraph.PageExplain {
+  const access = routeEndpointAccessFact(route, execution);
   const layoutQueryRecord = route.layout?.queries ?? {};
   const layoutQueryKeys = buildObjectKeys(layoutQueryRecord);
   const layoutQueries: { key: string }[] = [];
@@ -3490,6 +3574,7 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
     }
   }
   return {
+    ...(access === undefined ? {} : { access }),
     ...(route.guard === undefined ? {} : { guards: ['route.guard'] }),
     queries: uniqueSorted(
       buildMapDense(layoutQueries, `Layout query values for ${route.path}`, (query) => query.key),
@@ -3578,7 +3663,11 @@ function isGuardAccessDecisionValue(access: AccessDecision): access is readonly 
   return buildArrayIsArray(access);
 }
 
-function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
+function endpointCheckFact(
+  endpoint: KovoApp['endpoints'][number],
+  execution: BuildExecutionModule,
+): CoreGraph.EndpointExplain {
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(endpoint), execution);
   const csrf = endpointSafeMethod(endpoint.method)
     ? 'safe:read-only'
     : endpoint.csrf?.exempt === true
@@ -3586,6 +3675,7 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
       : 'checked';
   const name = endpointWebhookName(endpoint);
   return {
+    ...(access === undefined ? {} : { access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
     ...(endpoint.auth === undefined
       ? {}
@@ -3915,6 +4005,11 @@ async function loadBuildAppModule(
   dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
+  const appContractProject = compilerOwnedAppContractProjectForBuild(
+    approvedSourceFiles,
+    [appModulePath],
+    true,
+  );
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
@@ -3932,6 +4027,7 @@ async function loadBuildAppModule(
         appModulePath,
         root,
         lowerStandaloneSourceDerivedRegistryDeclarations,
+        appContractProject,
       ),
     ],
     oxc: {
@@ -4040,6 +4136,7 @@ function sourceDerivedRegistryVitePlugin(
   appModulePath: string,
   root: string,
   lowerRegistryDeclarations: typeof lowerStandaloneSourceDerivedRegistryDeclarations,
+  appContractProject: CompilerOwnedAppContractProject | undefined,
 ): Plugin {
   const authoredSourcePaths = buildCreateSet<string>();
   buildSetAdd(authoredSourcePaths, resolve(appModulePath));
@@ -4080,7 +4177,13 @@ function sourceDerivedRegistryVitePlugin(
       if (sourceClaimsKovoBuildCompilerAuthority(fileName, source)) {
         assertKovoBuildAuthoredCompilerAuthority(fileName, source);
       }
-      const code = lowerRegistryDeclarations({ fileName, source });
+      const code = withBuildAppContractResolutions(appContractProject, sourcePath, source, () =>
+        lowerRegistryDeclarations({
+          fileName: sourcePath,
+          identityFileName: fileName,
+          source,
+        }),
+      );
       return code === null ? null : { code, map: null };
     },
   };
@@ -5873,6 +5976,56 @@ function projectMutationRegistryFactsForBuild(
   sourceIdentityRoot: string = buildRoot,
 ): ProjectMutationRegistryFacts {
   const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
+  const exactFacts = compilerOwnedProjectMutationRegistryFactsFromFiles(files, sourceIdentityRoot);
+  const projectFileName = (fileName: string): string =>
+    kovoBuildFilterFileName(resolve(sourceIdentityRoot, fileName), buildRoot);
+  const mutationInputs = buildCreateNullRecord<
+    ProjectMutationRegistryFacts['mutationInputs'][string]
+  >() as ProjectMutationRegistryFacts['mutationInputs'];
+  const mutationInputKeys = buildSnapshotDenseArray(
+    buildObjectKeys(exactFacts.mutationInputs),
+    'Project mutation input keys',
+  );
+  for (let keyIndex = 0; keyIndex < mutationInputKeys.length; keyIndex += 1) {
+    const key = mutationInputKeys[keyIndex]!;
+    const fields = buildSnapshotDenseArray(
+      buildOwnDataValue(
+        exactFacts.mutationInputs,
+        key,
+        `Project mutation input ${key}`,
+      ) as ProjectMutationRegistryFacts['mutationInputs'][string],
+      `Project mutation input ${key}`,
+    );
+    const projectedFields: (typeof fields)[number][] = [];
+    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+      const field = fields[fieldIndex]!;
+      buildSecurityArrayAppend(
+        projectedFields,
+        {
+          ...field,
+          ...(field.source === undefined
+            ? {}
+            : {
+                source: {
+                  ...field.source,
+                  fileName: projectFileName(field.source.fileName),
+                },
+              }),
+        },
+        `Projected mutation input ${key}`,
+      );
+    }
+    (mutationInputs as Record<string, readonly (typeof fields)[number][]>)[key] = projectedFields;
+  }
+  const mutationBindings: ProjectMutationRegistryFacts['mutationBindings'] =
+    exactFacts.mutationBindings.map((binding) => ({
+      ...binding,
+      fileName: projectFileName(binding.fileName),
+      source: {
+        ...binding.source,
+        fileName: projectFileName(binding.source.fileName),
+      },
+    }));
   const viteFiles: BuildCheckSourceFile[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
@@ -5903,7 +6056,12 @@ function projectMutationRegistryFactsForBuild(
       'Project mutation Vite source files',
     );
   }
-  return projectMutationRegistryFactsFromFiles(viteFiles);
+  // Retain the existing exact source census here as a path-remapping integrity check. The
+  // compiler-owned proof above is the only channel allowed to authenticate app.mutation.
+  if (viteFiles.length !== files.length) {
+    throw new TypeError('Project mutation build source census changed during path projection.');
+  }
+  return { mutationBindings, mutationInputs };
 }
 
 function kovoBuildFilterFileName(fileName: string, root: string): string {
@@ -6167,7 +6325,11 @@ export async function runExportCommandStructured(
         preEvaluationStaticTrust.approvedSourceFiles,
         preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
       );
-      const app = appFromModule(loadedExport.appModule, resolvedOptions.appModulePath);
+      const app = appFromModule(
+        loadedExport.appModule,
+        resolvedOptions.appModulePath,
+        loadedExport.resolveKovoAppToken,
+      );
       const realmResult = await loadedExport.exportStaticApp(app, {
         ...(currentManifestPlan.assets.length === 0 ? {} : { assets: currentManifestPlan.assets }),
         ...(resolvedOptions.onNonExportable === undefined
@@ -6438,6 +6600,11 @@ async function loadExportAppModule(
   const resolvedAppModulePath = options.appModulePath;
   const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
+  const appContractProject = compilerOwnedAppContractProjectForBuild(
+    approvedSourceFiles,
+    [resolvedAppModulePath],
+    true,
+  );
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
@@ -6451,6 +6618,12 @@ async function loadExportAppModule(
         dependencyCapabilities,
         'export',
         { sourceRoot: root },
+      ),
+      sourceDerivedRegistryVitePlugin(
+        resolvedAppModulePath,
+        root,
+        lowerStandaloneSourceDerivedRegistryDeclarations,
+        appContractProject,
       ),
     ],
     oxc: {
@@ -6481,6 +6654,7 @@ async function loadExportAppModule(
       exportStaticApp: exportStaticAppFromModule(serverModule),
       isStaticExportDiagnostic: serverModule.isStaticExportDiagnostic,
       isStaticExportDiagnosticError: serverModule.isStaticExportDiagnosticError,
+      resolveKovoAppToken: serverInternalBuildModule.resolveKovoAppToken,
       staticExportCompileDiagnosticsFromModule:
         serverModule.staticExportCompileDiagnosticsFromModule,
     };
@@ -6812,15 +6986,25 @@ function exportManifestAssetHref(file: string, base: string | undefined): string
   return `${normalizedBase}${file}`;
 }
 
-function appFromModule(module: unknown, source: string): KovoApp {
+function appFromModule(
+  module: unknown,
+  source: string,
+  resolveToken: typeof import('@kovojs/server/internal/build').resolveKovoAppToken,
+): KovoApp {
   if (typeof module === 'object' && module !== null) {
     const exports = module as { app?: unknown; default?: unknown };
     const app = exports.default ?? exports.app;
     if (isKovoApp(app)) return app;
+    try {
+      return resolveToken(app, `${source} app export`);
+    } catch {
+      // Fall through to the stable configuration diagnostic.
+    }
   }
 
   throw new KovoCommandConfigurationError(
-    `kovo expected ${source} to export a Kovo app as default or named 'app'.`,
+    `kovo expected ${source} to export the opaque Kovo app returned by app.assemble() ` +
+      `as default or named 'app'.`,
   );
 }
 

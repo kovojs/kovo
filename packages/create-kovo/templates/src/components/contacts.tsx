@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -176,9 +176,8 @@ const styles = style.create({
 });
 
 function renderContactCard(contact: ContactRow): string {
-  return Card.definition.render({
-    style: styles.card,
-    children: (
+  return (
+    <Card style={styles.card}>
       <div style={styles.row}>
         <div style={styles.rowTop}>
           <div style={styles.person}>
@@ -190,21 +189,17 @@ function renderContactCard(contact: ContactRow): string {
               <p style={styles.email}>{contact.email}</p>
             </div>
           </div>
-          {Badge.definition.render({ variant: 'neutral', children: contact.company })}
+          <Badge variant="neutral">{contact.company}</Badge>
         </div>
       </div>
-    ),
-  });
+    </Card>
+  );
 }
 
-type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContact }>;
 interface DuplicateEmailFailure {
   code: 'DUPLICATE_EMAIL';
   payload: { email: string };
 }
-const defaultContactsRenderSlots: ContactsRenderSlots = {
-  forms: { addContact: { failure: null } },
-};
 
 function submittedFieldValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -216,7 +211,7 @@ export const ContactsRegion = component({
   render: (
     { contacts }: { contacts: ContactListResult },
     _state,
-    slots: ContactsRenderSlots = defaultContactsRenderSlots,
+    slots = { forms: { addContact: { failure: null } } },
   ) => {
     const items = contacts.items;
     const submitted = slots.forms.addContact.submitted ?? {};
@@ -231,10 +226,9 @@ export const ContactsRegion = component({
             <h1 style={styles.heading}>Contacts</h1>
             <p style={styles.summary}>Add a teammate, customer, or lead to the shared book.</p>
           </div>
-          {Badge.definition.render({
-            variant: 'outline',
-            children: `${items.length} ${items.length === 1 ? 'contact' : 'contacts'}`,
-          })}
+          <Badge variant="outline">
+            {items.length} {items.length === 1 ? 'contact' : 'contacts'}
+          </Badge>
         </div>
 
         {/* No-JS posts to the typed mutation endpoint; `enhance` upgrades it to a fragment swap. */}
@@ -274,13 +268,9 @@ export const ContactsRegion = component({
                 value={submittedCompany}
               />
             </label>
-            {Button.definition.render({
-              children: 'Add contact',
-              size: 'md',
-              style: styles.submit,
-              type: 'submit',
-              variant: 'primary',
-            })}
+            <Button size="md" style={styles.submit} type="submit" variant="primary">
+              Add contact
+            </Button>
           </div>
           <FormError
             code="DUPLICATE_EMAIL"

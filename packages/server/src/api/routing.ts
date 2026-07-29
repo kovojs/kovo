@@ -9,7 +9,6 @@ export {
 export type {
   DiagnosticCode,
   JsonValue,
-  LinkDescriptor,
   Redirect,
   Route,
   WebhookVerifier,

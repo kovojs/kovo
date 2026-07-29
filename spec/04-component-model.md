@@ -89,6 +89,20 @@ material, examples, and copied source MUST agree with that manifest. Card's anat
 `@kovojs/icons/<glyph>` functions return the canonical `ComponentRenderResult` from
 `@kovojs/core`; an icon package MUST NOT define a weaker parallel render-result type.
 
+The public result is the small opaque `Component<Props>` callable contract. Its call/JSX props are
+the derived call-site props plus framework-owned JSX attributes; it has no public `.definition`,
+query-key metadata, render-slot plumbing, or conditional helper-family fields. The framework keeps
+the definition in module-private identity state and compiler/server internals resolve it through a
+private ABI. Public `AnyFunction`, `IsAny`, `Checked*`, `ComponentCall*`, internal prop/query
+metadata, and `ComponentRenderSlots` are not app API. TypeScript opacity is ergonomics; compiler
+provenance and exact runtime registry membership own definition acceptance.
+
+Mutation slots are inferred from mutation handles named in the component definition or used by a
+typed mutation form in its render. The third render argument exposes only the resulting
+handle-indexed `forms` failures, field errors, children, and named slots; authors do not declare a
+parallel slot-map type or augment a registry. A mutation code or payload-field rename therefore
+turns its exact component use red without exposing framework slot-support types.
+
 ### 4.2 Rendered output (the IR's runtime form)
 
 ```html

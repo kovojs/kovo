@@ -7,6 +7,8 @@ import {
 import { withKovoBuildContext } from './build-context.js';
 
 export { deriveClosedKovoApp } from '../app-snapshot.js';
+export { resolveKovoAppToken } from '../app-token.js';
+export type { KovoApp } from '../app-types.js';
 export { runWithGeneratedLiveTargetRegistry };
 export {
   writeKovoNeutralBuild,

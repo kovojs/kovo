@@ -2,14 +2,13 @@ import './security-bootstrap.js';
 
 import type {
   Component,
-  ComponentDefinitionInput,
-  ComponentProps,
   ComponentRenderSlots,
   ErrorBoundaryProps,
   JsonValue,
 } from '@kovojs/core';
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
@@ -150,9 +149,9 @@ type MaybePromise<Value> = Promise<Value> | Value;
 /** @generated JSX automatic-runtime ABI component type (compiler-emitted). */
 export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
-type KovoJsxComponent = Component<ComponentDefinitionInput>;
+type KovoJsxComponent = Component<any>;
 type KovoJsxComponentProps<Type> =
-  Type extends Component<infer Definition> ? ComponentProps<Definition> : never;
+  Type extends Component<infer Props> ? Props : never;
 
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
 export function Fragment(props: JsxProps): MaybePromise<RenderedHtml> {
@@ -1164,9 +1163,10 @@ async function renderKovoComponent(
 ): Promise<RenderedHtml> {
   const request = currentJsxRequestContext();
   const loadedQueries = await loadComponentQueries(component, props, request);
-  const state = component.definition.state?.() as JsonValue | undefined;
+  const definition = componentDefinitionForFramework(component);
+  const state = definition.state?.() as JsonValue | undefined;
   const slots = componentRenderSlots(component, props, request);
-  const render = component.definition.render as (
+  const render = definition.render as (
     queries: Record<string, unknown>,
     state: JsonValue | undefined,
     slots: ComponentRenderSlots,
@@ -1197,7 +1197,7 @@ async function loadComponentQueries(
   identities: readonly FrameworkQueryDependencyIdentity[];
   values: Record<string, unknown>;
 }> {
-  const queryBindings = component.definition.queries;
+  const queryBindings = componentDefinitionForFramework(component).queries;
   if (!isRecord(queryBindings)) return { identities: [], values: {} };
 
   const values = witnessCreateNullRecord<unknown>() as Record<string, unknown>;
@@ -1252,8 +1252,9 @@ function componentRenderSlots(
   props: JsxProps,
   request: unknown,
 ): ComponentRenderSlots {
-  const forms = isRecord(component.definition.mutations)
-    ? componentMutationDefaultForms(component.definition.mutations)
+  const mutations = componentDefinitionForFramework(component).mutations;
+  const forms = isRecord(mutations)
+    ? componentMutationDefaultForms(mutations)
     : undefined;
 
   let slots: ComponentRenderSlots = {
@@ -1264,13 +1265,13 @@ function componentRenderSlots(
   };
 
   const failureContext = currentJsxFrameworkContext()?.mutationFailure;
-  if (!failureContext || !isRecord(component.definition.mutations)) return slots;
+  if (!failureContext || !isRecord(mutations)) return slots;
 
-  const names = formHelperObjectKeys(component.definition.mutations);
+  const names = formHelperObjectKeys(mutations);
   for (let index = 0; index < names.length; index += 1) {
     const name = formHelperOwnDataValue(names, index);
     if (typeof name !== 'string') continue;
-    const mutation = formHelperOwnDataValue(component.definition.mutations, name);
+    const mutation = formHelperOwnDataValue(mutations, name);
     const retainedMutation = retainedMutationDefinition(mutation);
     if (retainedMutation && retainedMutation.key === failureContext.mutationKey) {
       slots = componentMutationFailureSlots(name, failureContext.failure, slots, {
@@ -1346,7 +1347,7 @@ export declare namespace JSX {
   type Element = any;
   type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
   type LibraryManagedAttributes<ComponentType, Props> =
-    ComponentType extends Component<ComponentDefinitionInput>
+    ComponentType extends Component<any>
       ? KovoJsxComponentProps<ComponentType>
       : Props;
   interface ElementChildrenAttribute {

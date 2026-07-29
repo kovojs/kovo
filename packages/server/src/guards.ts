@@ -613,13 +613,24 @@ export function resolveDbProvider<RawRequest, DbValue, SessionValue = unknown>(
 }
 
 /** Request shape after the framework has installed configured lifecycle channels. */
-export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest &
+export type LifecycleRequest<
+  RawRequest,
+  SessionValue = never,
+  DbValue = never,
+  EnvValue = never,
+> = RawRequest &
   ([SessionValue] extends [never] ? {} : { session: SessionValue | null }) &
-  ([DbValue] extends [never] ? {} : { db: DbValue });
+  ([DbValue] extends [never] ? {} : { db: DbValue }) &
+  ([EnvValue] extends [never] ? {} : { env: Readonly<EnvValue> });
 
 /** Per-request options shared across the lifecycle: error hook plus session/db providers. */
 /** @internal */
-export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
+export interface RequestLifecycleOptions<
+  RawRequest,
+  SessionValue = unknown,
+  DbValue = unknown,
+  EnvValue = unknown,
+> {
   /**
    * @internal SPEC §9.5: optional resolver the request shell uses to attach a trustworthy
    * `req.clientIp` BEFORE the guard chain, so `guards.rateLimit({ per: 'ip' })` keys by IP (see
@@ -630,6 +641,8 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
    */
   clientIp?: (request: RawRequest) => string | undefined;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  /** @internal Validated app environment projected onto lifecycle callback contexts. */
+  env?: Readonly<EnvValue>;
   /** @internal Framework-minted task/webhook/endpoint principal posture for non-request DB work. */
   principalPosture?: NonRequestPrincipalPosture;
   /** @internal Query/list result item ceiling enforced by the query runtime sink (SPEC §9.5). */
@@ -696,7 +709,8 @@ export interface GuardFailureResponseOptions<
   Request,
   SessionValue = unknown,
   DbValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
+  EnvValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue, DbValue, EnvValue> {
   currentUrl?: string;
   loginPath?: string;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
@@ -1480,11 +1494,20 @@ function emitAuthorizationDecision<Request>(
  * `onSessionSetCookie`. Internal to the request shell; re-exported only on the internal
  * `@kovojs/server/internal/execution` subpath for adapter tests.
  */
-export async function resolveLifecycleRequest<Request, SessionValue = unknown, DbValue = unknown>(
+export async function resolveLifecycleRequest<
+  Request,
+  SessionValue = unknown,
+  DbValue = unknown,
+  EnvValue = never,
+>(
   request: Request,
-  options: RequestLifecycleOptions<Request, SessionValue, DbValue> = {},
-): Promise<LifecycleRequest<Request, SessionValue, DbValue>> {
+  options: RequestLifecycleOptions<Request, SessionValue, DbValue, EnvValue> = {},
+): Promise<LifecycleRequest<Request, SessionValue, DbValue, EnvValue>> {
   let lifecycleRequest: unknown = request;
+
+  if (options.env !== undefined) {
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'env', options.env);
+  }
 
   if (options.sessionProvider) {
     const resolved = await options.sessionProvider(request);
@@ -1566,7 +1589,8 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   return pinnedPrivateScopeRequestCarrier(lifecycleRequest) as LifecycleRequest<
     Request,
     SessionValue,
-    DbValue
+    DbValue,
+    EnvValue
   >;
 }
 

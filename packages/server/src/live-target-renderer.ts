@@ -1,12 +1,12 @@
 import type {
   Component,
   ComponentErrorBoundary,
-  ComponentDefinitionInput,
   ComponentRenderResult,
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
 import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import {
   componentMutationFailureSlots,
   renderComponent,
@@ -44,11 +44,11 @@ export interface ComponentLiveTargetQueryBinding<Request = unknown> {
 
 /** @internal Options for compiler-emitted component live-target renderers (SPEC §9.1). */
 export interface ComponentLiveTargetRendererOptions<
-  Definition extends ComponentDefinitionInput = ComponentDefinitionInput,
+  Props extends object = Record<string, never>,
   Request = unknown,
   State extends JsonValue = JsonValue,
 > {
-  component: Component<Definition>;
+  component: Component<Props>;
   componentId: string;
   queries?: readonly ComponentLiveTargetQueryBinding<Request>[];
   renderOptions?: (
@@ -69,13 +69,13 @@ export interface ComponentLiveTargetRendererOptions<
  * (SPEC §9.1).
  */
 export function componentLiveTargetRenderer<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Request = unknown,
   State extends JsonValue = JsonValue,
 >(
-  options: ComponentLiveTargetRendererOptions<Definition, Request, State>,
+  options: ComponentLiveTargetRendererOptions<Props, Request, State>,
 ): LiveTargetRenderer<Request> {
-  const component = requiredOwnRendererValue<Component<Definition>>(
+  const component = requiredOwnRendererValue<Component<Props>>(
     options,
     'component',
     'Live-target renderer options',
@@ -140,7 +140,7 @@ export function componentLiveTargetRenderer<
   } = {
     component: componentId,
     ...componentLiveTargetErrorBoundary(
-      explicitErrorBoundary ?? componentDefinitionValue(component, 'errorBoundary'),
+      explicitErrorBoundary ?? componentDefinitionForFramework(component).errorBoundary,
     ),
     mutationKeys: witnessFreeze(mutationKeys),
     queries: witnessFreeze(queryKeys),
@@ -151,11 +151,11 @@ export function componentLiveTargetRenderer<
       const resolvedRenderOptions = await componentLiveTargetRenderOptions(
         mutationBindings,
         renderOptions as ComponentLiveTargetRendererOptions<
-          Definition,
+          Props,
           Request,
           State
         >['renderOptions'],
-        slots as ComponentLiveTargetRendererOptions<Definition, Request, State>['slots'],
+        slots as ComponentLiveTargetRendererOptions<Props, Request, State>['slots'],
         context,
       );
       const csrf = context.csrf === false ? undefined : context.csrf;
@@ -281,12 +281,13 @@ function renderBoundaryFallback(fallback: ComponentRenderResult): string {
 function componentLiveTargetQueryBindings<Request>(
   component: Component<any>,
 ): ComponentLiveTargetQueryBinding<Request>[] {
-  if (!isRecord(component.definition.queries)) return [];
+  const definition = componentDefinitionForFramework(component);
+  if (!isRecord(definition.queries)) return [];
   const bindings: ComponentLiveTargetQueryBinding<Request>[] = [];
-  const names = witnessObjectKeys(component.definition.queries);
+  const names = witnessObjectKeys(definition.queries);
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
-    const descriptor = witnessGetOwnPropertyDescriptor(component.definition.queries, name);
+    const descriptor = witnessGetOwnPropertyDescriptor(definition.queries, name);
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`Component live-target query ${name} must be an own data property.`);
     }
@@ -368,13 +369,13 @@ function revealLiveTargetValue(value: unknown): unknown {
 }
 
 async function componentLiveTargetRenderOptions<
-  const Definition extends ComponentDefinitionInput,
+  const Props extends object,
   Request,
   State extends JsonValue,
 >(
   mutationBindings: readonly ComponentLiveTargetMutationBinding[],
-  renderOptions: ComponentLiveTargetRendererOptions<Definition, Request, State>['renderOptions'],
-  slots: ComponentLiveTargetRendererOptions<Definition, Request, State>['slots'],
+  renderOptions: ComponentLiveTargetRendererOptions<Props, Request, State>['renderOptions'],
+  slots: ComponentLiveTargetRendererOptions<Props, Request, State>['slots'],
   context: LiveTargetRenderContext<Request>,
 ): Promise<ComponentRenderOptions<State>> {
   const resolvedRenderOptions = (await renderOptions?.(context)) ?? {};
@@ -440,7 +441,7 @@ interface ComponentLiveTargetMutationBinding {
 function componentLiveTargetMutationBindings(
   component: Component<any>,
 ): readonly ComponentLiveTargetMutationBinding[] {
-  const mutations = componentDefinitionValue(component, 'mutations');
+  const mutations = componentDefinitionForFramework(component).mutations;
   if (!isRecord(mutations)) return witnessFreeze([]);
 
   const bindings: ComponentLiveTargetMutationBinding[] = [];
@@ -464,18 +465,6 @@ function componentLiveTargetMutationBindings(
     );
   }
   return witnessFreeze(bindings);
-}
-
-function componentDefinitionValue(component: Component<any>, property: PropertyKey): unknown {
-  const definition = requiredOwnRendererValue<object>(
-    component,
-    'definition',
-    'Live-target component',
-  );
-  if (!isRecord(definition)) {
-    throw new TypeError('Live-target component definition must be a stable object.');
-  }
-  return optionalOwnRendererValue(definition, property, 'Live-target component definition');
 }
 
 function requiredOwnRendererValue<Value>(

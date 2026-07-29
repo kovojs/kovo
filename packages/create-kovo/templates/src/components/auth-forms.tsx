@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import * as style from '@kovojs/style';
 
@@ -82,15 +82,9 @@ const styles = style.create({
   error: { color: style.tokens.sys.color.error, fontSize: 14 },
 });
 
-type LoginFormSlots = ComponentRenderSlots<{ appSignIn: typeof appSignIn }>;
-
-const defaultLoginFormSlots: LoginFormSlots = {
-  forms: { appSignIn: { failure: null } },
-};
-
 export const LoginForm = component({
   mutations: { appSignIn },
-  render: (_queries, _state, _slots: LoginFormSlots = defaultLoginFormSlots) => (
+  render: (_queries, _state) => (
     <form style={styles.form} mutation={appSignIn}>
       <div style={styles.intro}>
         <p style={styles.eyebrow}>Kovo Starter</p>
@@ -117,12 +111,9 @@ export const LoginForm = component({
         code="INVALID_CREDENTIALS"
         message="Invalid email or password."
       />
-      {Button.definition.render({
-        children: 'Sign in',
-        style: styles.submit,
-        type: 'submit',
-        variant: 'primary',
-      })}
+      <Button style={styles.submit} type="submit" variant="primary">
+        Sign in
+      </Button>
     </form>
   ),
 });
@@ -130,13 +121,9 @@ export const LoginForm = component({
 export function SignOutForm(): string {
   return (
     <form style={styles.signOutForm} mutation={appSignOut}>
-      {Button.definition.render({
-        children: 'Sign out',
-        size: 'sm',
-        style: styles.signOutButton,
-        type: 'submit',
-        variant: 'outline',
-      })}
+      <Button size="sm" style={styles.signOutButton} type="submit" variant="outline">
+        Sign out
+      </Button>
     </form>
   );
 }

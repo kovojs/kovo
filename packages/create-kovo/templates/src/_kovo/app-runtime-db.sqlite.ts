@@ -1,5 +1,10 @@
 import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite';
-import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth';
+import {
+  authed,
+  createBetterAuthSqliteBindingsFromEnvironment,
+  type BetterAuthBindingRequest,
+  type BetterAuthCsrfRequestLike,
+} from '@kovojs/better-auth';
 import {
   type AccessDecision,
   type CsrfOptions,
@@ -17,7 +22,7 @@ import {
   verification,
 } from '../schema.js';
 import type { AppReadonlyDb } from '../db.js';
-import type { AppRequest, AppSession } from '../auth.js';
+import type { AppSession } from '../auth.js';
 
 // SPEC §6.6/§10.3: generated source carries only declarative Drizzle tables, structured seed
 // rows, and opaque Kovo capabilities. Filesystem paths, native SQLite clients, Drizzle construction,
@@ -60,10 +65,14 @@ const authSystemDb = appDatabase.systemDb({
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
+type StarterAuthRequest = BetterAuthBindingRequest &
+  BetterAuthCsrfRequestLike & {
+    session?: AppSession | null;
+  };
+
 interface AppAuthBindingOptions {
-  csrf: CsrfOptions<AppRequest>;
+  csrf: CsrfOptions<StarterAuthRequest>;
   signInAccess: AccessDecision;
-  signOutAccess: AccessDecision;
 }
 
 /**
@@ -74,9 +83,9 @@ interface AppAuthBindingOptions {
  */
 export function createAppAuthBindings(options: AppAuthBindingOptions) {
   return createBetterAuthSqliteBindingsFromEnvironment<
-    AppRequest,
+    StarterAuthRequest,
     AppSession,
-    AppRequest & { session: AppSession }
+    StarterAuthRequest & { session: AppSession }
   >({
     csrf: options.csrf,
     mapSession: ({ session: authSession, user }) => ({
@@ -86,7 +95,7 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
     principalEpochStore: appRuntimePrincipalEpochStore,
     schema: authSchema,
     signInAccess: options.signInAccess,
-    signOutAccess: options.signOutAccess,
+    signOutAccess: [authed<StarterAuthRequest>()],
     systemDb: authSystemDb,
   });
 }

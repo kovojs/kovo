@@ -4,10 +4,13 @@ export type {
   SourcePosition,
 } from './diagnostics.js';
 export {
+  compilerOwnedAppContractStaticFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   createCompilerOwnedAppContractProject,
   type CompilerOwnedAppContractDiagnostic,
   type CompilerOwnedAppContractEntry,
   type CompilerOwnedAppContractProject,
+  type CompilerOwnedAppContractStaticFact,
   type CreateCompilerOwnedAppContractProjectOptions,
 } from './app-contract-project.js';
 /** @internal Supported runners call this before evaluating app/plugin modules. */

@@ -6,6 +6,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 
+import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
 import { deriveMutationKey } from '../mutation-names.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
@@ -65,7 +66,8 @@ function mutationInputFactFromVariable(
 
   const [keyArg, optionsArg] = initializer.arguments;
   const key = keyArg && ts.isStringLiteralLike(keyArg) ? keyArg.text : null;
-  const definitionArg = key === null ? keyArg : optionsArg;
+  const rawDefinitionArg = key === null ? keyArg : optionsArg;
+  const definitionArg = unwrapTsExpression(rawDefinitionArg);
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
 
   const input = objectPropertyExpression(definitionArg, 'input');
@@ -80,12 +82,20 @@ function mutationInputFactFromVariable(
 }
 
 function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    sourceFile,
-    expression,
-    MUTATION_FACTORY_IDENTITY,
-    { legacyGlobals: [MUTATION_FACTORY_IDENTITY] },
+  return (
+    compilerOwnedAppContractFactoryEquals(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      MUTATION_FACTORY_IDENTITY,
+    ) ||
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      MUTATION_FACTORY_IDENTITY,
+      { legacyGlobals: [MUTATION_FACTORY_IDENTITY] },
+    )
   );
 }
 
@@ -93,7 +103,7 @@ function mutationInputFields(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
 ): MutationInputFieldFact[] {
-  const input = unwrapTsExpression(expression);
+  const input = resolveMutationInputSchema(sourceFile, expression);
   if (!input || !ts.isCallExpression(input)) return [];
   if (schemaMethodName(sourceFile, input) !== 'object') return [];
 
@@ -122,6 +132,150 @@ function mutationInputFields(
       },
     ];
   });
+}
+
+function resolveMutationInputSchema(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): ts.Expression | null {
+  const input = unwrapTsExpression(expression);
+  if (!input || !ts.isIdentifier(input)) return input;
+
+  let declaration: ts.VariableDeclaration | undefined;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const candidate of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(candidate.name) || candidate.name.text !== input.text) continue;
+      if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+      declaration = candidate;
+    }
+  }
+  if (
+    mutationInputTopLevelValueBindingCount(sourceFile, input.text) !== 1 ||
+    !declaration?.initializer
+  ) {
+    return null;
+  }
+  if (mutationInputSchemaBindingIsMutated(sourceFile, input.text)) return null;
+  const initializer = unwrapTsExpression(declaration.initializer);
+  return initializer && ts.isCallExpression(initializer) ? initializer : null;
+}
+
+function mutationInputTopLevelValueBindingCount(
+  sourceFile: ts.SourceFile,
+  bindingName: string,
+): number {
+  let count = 0;
+  const countBindingName = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) {
+      if (name.text === bindingName) count += 1;
+      return;
+    }
+    for (const element of name.elements) {
+      if (element && ts.isBindingElement(element)) countBindingName(element.name);
+    }
+  };
+  for (const statement of sourceFile.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        countBindingName(declaration.name);
+      }
+      continue;
+    }
+    if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name?.text === bindingName
+    ) {
+      count += 1;
+      continue;
+    }
+    if (!ts.isImportDeclaration(statement)) continue;
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+    if (clause.name?.text === bindingName) count += 1;
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === bindingName) {
+      count += 1;
+    } else if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if (!element.isTypeOnly && element.name.text === bindingName) count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function mutationInputSchemaBindingIsMutated(
+  sourceFile: ts.SourceFile,
+  bindingName: string,
+): boolean {
+  let mutated = false;
+  const containsBinding = (node: ts.Node): boolean => {
+    if (ts.isIdentifier(node) && node.text === bindingName) return true;
+    let found = false;
+    ts.forEachChild(node, (child) => {
+      if (!found && containsBinding(child)) found = true;
+    });
+    return found;
+  };
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const aliasInitializer = unwrapTsExpression(node.initializer);
+      if (
+        aliasInitializer &&
+        ts.isIdentifier(aliasInitializer) &&
+        aliasInitializer.text === bindingName &&
+        (!ts.isIdentifier(node.name) || node.name.text !== bindingName)
+      ) {
+        mutated = true;
+        return;
+      }
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      containsBinding(node.left)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      containsBinding(node.operand)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      ((node.expression.expression.text === 'Object' &&
+        (node.expression.name.text === 'assign' ||
+          node.expression.name.text === 'defineProperty' ||
+          node.expression.name.text === 'defineProperties' ||
+          node.expression.name.text === 'setPrototypeOf')) ||
+        (node.expression.expression.text === 'Reflect' &&
+          (node.expression.name.text === 'defineProperty' ||
+            node.expression.name.text === 'deleteProperty' ||
+            node.expression.name.text === 'set' ||
+            node.expression.name.text === 'setPrototypeOf'))) &&
+      node.arguments[0] &&
+      containsBinding(node.arguments[0])
+    ) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return mutated;
 }
 
 function objectPropertyExpression(

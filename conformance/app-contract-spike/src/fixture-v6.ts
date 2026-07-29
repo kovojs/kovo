@@ -471,12 +471,14 @@ async function generateBoundContract(options: {
   const importedApp = options.appExportName ?? 'app';
   const moduleSource = [
     '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
-    `import { ${importedApp} as app } from ${JSON.stringify(normalizedProviderImport)};`,
+    `import { ${importedApp} as app } from ${singleQuotedTypeScriptString(normalizedProviderImport)};`,
     "export { publicAccess } from '@kovojs/server';",
     'export const __kovoGeneratedContract = Object.freeze({',
-    `  appId: ${JSON.stringify(context.appId)},`,
-    `  compilerSourceSha256: ${JSON.stringify(options.artifacts.packages.compiler.sourceSha256)},`,
-    `  ownerKey: ${JSON.stringify(
+    `  appId: ${singleQuotedTypeScriptString(context.appId)},`,
+    `  compilerSourceSha256: ${singleQuotedTypeScriptString(
+      options.artifacts.packages.compiler.sourceSha256,
+    )},`,
+    `  ownerKey: ${singleQuotedTypeScriptString(
       ownerKeyFor(
         context.appId,
         context.providerKey,
@@ -484,10 +486,10 @@ async function generateBoundContract(options: {
         context.providerImportSpecifier,
       ),
     )},`,
-    `  providerExportBinding: ${JSON.stringify(context.providerExportBinding)},`,
-    `  providerImportSpecifier: ${JSON.stringify(context.providerImportSpecifier)},`,
-    `  providerKey: ${JSON.stringify(context.providerKey)},`,
-    `  serverPackedContentsSha256: ${JSON.stringify(
+    `  providerExportBinding: ${singleQuotedTypeScriptString(context.providerExportBinding)},`,
+    `  providerImportSpecifier: ${singleQuotedTypeScriptString(context.providerImportSpecifier)},`,
+    `  providerKey: ${singleQuotedTypeScriptString(context.providerKey)},`,
+    `  serverPackedContentsSha256: ${singleQuotedTypeScriptString(
       options.artifacts.packages.server.packedContents.digest,
     )},`,
     '});',
@@ -529,6 +531,15 @@ async function generateBoundContract(options: {
     providerFile: options.providerFile,
     serverPackageRoot: options.serverPackageRoot,
   };
+}
+
+function singleQuotedTypeScriptString(value: string): string {
+  const json = JSON.stringify(value);
+  return `'${json
+    .slice(1, -1)
+    .replaceAll("'", "\\'")
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029')}'`;
 }
 
 function providerContext(options: {

@@ -14,11 +14,12 @@ import path from 'node:path';
 
 import { createFrameworkFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 import {
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   deriveBrowserPostureManifestFromSourceFiles,
-  projectMutationRegistryFactsFromFiles,
 } from '@kovojs/compiler/internal';
 import { toNodeHandler } from '@kovojs/server';
 import { shouldHandleKovoAppShellViteRequest } from '@kovojs/server/internal/app-shell-vite';
+import { resolveKovoAppToken } from '@kovojs/server/internal/build';
 import { dataPlaneSourceFiles } from '@kovojs/server/internal/data-plane-static-analysis';
 import { createServer as createViteServer } from 'vite';
 
@@ -113,7 +114,10 @@ export async function bootFixtureInLockedChild(
   // mutation provenance as production Vite and CLI builds. A bare imported identifier never
   // becomes form authority merely because the evaluated runtime object looks mutation-shaped.
   const sourceFiles = dataPlaneSourceFiles(fixtureDir, fixtureDir);
-  const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
+  const projectMutationFacts = compilerOwnedProjectMutationRegistryFactsFromFiles(
+    sourceFiles,
+    fixtureDir,
+  );
   const browserPosture = deriveBrowserPostureManifestFromSourceFiles(sourceFiles);
   const fixtureCompiler = kovoFixtureCompilerPlugin(undefined, projectMutationFacts);
   const vite = await createViteServer({
@@ -223,7 +227,12 @@ export async function bootFixtureInLockedChild(
   const server = createHttpServer((req, res) => {
     void (async () => {
       if (await tryServeBuiltAsset(req.url ?? '/', distAssetsDir, res)) return;
-      if (shouldHandleKovoAppShellViteRequest(req, instance.app)) {
+      if (
+        shouldHandleKovoAppShellViteRequest(
+          req,
+          resolveKovoAppToken(instance.app, 'Kovo fixture request routing'),
+        )
+      ) {
         await nodeHandler(req, res);
         return;
       }

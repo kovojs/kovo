@@ -461,7 +461,7 @@ function componentRegistryFactLines(componentNames: readonly string[]): string {
   return registryMappedLines(
     names,
     (componentName) =>
-      `  ${jsStringLiteral(componentName)}: import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;`,
+      `  ${jsStringLiteral(componentName)}: import('@kovojs/core').Component<Record<string, unknown>>;`,
     'Registry component names',
   );
 }

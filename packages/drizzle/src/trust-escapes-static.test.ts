@@ -7893,6 +7893,52 @@ export const report = query('report', {
     const exact = sinksForFiles(exactEnvironmentBindingFiles);
     expect(exact).toEqual([]);
 
+    const generatedSignOutGuard = exactEnvironmentBindingFiles.map((file) => {
+      if (file.fileName === '_kovo/app-runtime-db.ts') {
+        return {
+          ...file,
+          source: file.source
+            .replace(
+              'import { createBetterAuthSqliteBindingsFromEnvironment }',
+              'import { authed, createBetterAuthSqliteBindingsFromEnvironment }',
+            )
+            .replace('signOutAccess: options.signOutAccess', 'signOutAccess: [authed()]'),
+        };
+      }
+      if (file.fileName === 'app.tsx') {
+        return {
+          ...file,
+          source: file.source
+            .replace(
+              'import { authed, betterAuthCsrfFromEnvironment }',
+              'import { betterAuthCsrfFromEnvironment }',
+            )
+            .replace('const appAuthed = authed();', '')
+            .replace('signOutAccess: [appAuthed],', ''),
+        };
+      }
+      return file;
+    });
+    expect(sinksForFiles(generatedSignOutGuard)).toEqual([]);
+
+    const forgedGeneratedSignOutGuard = generatedSignOutGuard.map((file) =>
+      file.fileName === '_kovo/app-runtime-db.ts'
+        ? {
+            ...file,
+            source: file.source
+              .replace(
+                'import { authed, createBetterAuthSqliteBindingsFromEnvironment }',
+                'import { createBetterAuthSqliteBindingsFromEnvironment }',
+              )
+              .replace(
+                'const APP_TABLES',
+                `function authed() { return (request) => eval(request.url); }\nconst APP_TABLES`,
+              ),
+          }
+        : file,
+    );
+    expect(sinksForFiles(forgedGeneratedSignOutGuard)).not.toEqual([]);
+
     const exactAuthoredProvider = sinksForFiles(
       exactEnvironmentBindingFiles.map((file) =>
         file.fileName === 'app.tsx'
@@ -8694,36 +8740,19 @@ export const report = query('report', {
 
   it('accepts the complete generated runtime, auth, and source-derived query closure', () => {
     const appSource = `
-      import { createApp } from '@kovojs/server';
-      import {
-        appAuthed,
-        appCsrf,
-        appSessionProvider,
-        appSignIn,
-        appSignOut,
-      } from './auth.js';
-      import {
-        appRuntimeDbProvider,
-        appRuntimeMutationReplayStore,
-        appRuntimePrincipalEpochStore,
-      } from './_kovo/app-runtime-db.js';
+      import { app } from './kovo.js';
       import { contactsQuery } from './queries.js';
-      const app = createApp({
-        csrf: appCsrf,
-        db: appRuntimeDbProvider,
-        mutationReplayStore: appRuntimeMutationReplayStore,
-        principalEpochStore: appRuntimePrincipalEpochStore,
-        mutations: [appSignIn, appSignOut],
+      export default app.assemble({
         queries: [contactsQuery],
+        mutations: [],
         routes: [],
-        sessionProvider: appSessionProvider,
       });
-      void appAuthed;
-      export default app;
     `;
     const shared = [
       { fileName: 'model.ts', source: starterTemplateSource('model.ts') },
       { fileName: 'queries.ts', source: starterTemplateSource('queries.ts') },
+      { fileName: 'kovo.ts', source: starterTemplateSource('kovo.ts') },
+      { fileName: 'theme.ts', source: starterTemplateSource('theme.ts') },
       { fileName: 'app.tsx', source: appSource },
     ];
     const postgresFiles = [
@@ -8755,23 +8784,6 @@ export const report = query('report', {
     // raw runtime, system DB, Better Auth adapter, or boot-only seed callable crosses the boundary.
     expect(sinksForFiles(postgresFiles), 'Postgres generated closure').toEqual([]);
     expect(sinksForFiles(sqliteFiles), 'SQLite generated closure').toEqual([]);
-
-    const mutableQueryKey = postgresFiles.map((file) =>
-      file.fileName === 'queries.ts'
-        ? {
-            ...file,
-            source: `${file.source}\n(contactsQuery as { key: string }).key = 'forged';`,
-          }
-        : file,
-    );
-    expect(sinksForFiles(mutableQueryKey)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          sink: 'request-handler.opaque-protocol',
-          source: '<property-setter:contactsQuery>',
-        }),
-      ]),
-    );
 
     for (const [label, replacement] of [
       ['raw runtime export', 'appDatabase'],
@@ -10878,6 +10890,34 @@ export const report = query('report', {
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('accepts the exact inline client-module registry captured by defineKovo', () => {
+    const facts = sinksFor(`
+      import {
+        createMemoryVersionedClientModuleRegistry,
+        defineKovo,
+      } from '@kovojs/server';
+      export const app = defineKovo({
+        appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+        clientModules: createMemoryVersionedClientModuleRegistry(),
+      });
+      export default app.assemble({ routes: [] });
+    `);
+    expect(facts).toEqual([]);
+
+    const lookalike = sinksFor(`
+      import { defineKovo } from '@kovojs/server';
+      function createMemoryVersionedClientModuleRegistry() {
+        return { get put() { return eval('forged-registry'); } };
+      }
+      export const app = defineKovo({
+        appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+        clientModules: createMemoryVersionedClientModuleRegistry(),
+      });
+      export default app.assemble({ routes: [] });
+    `);
+    expect(lookalike).not.toEqual([]);
   });
 
   it.each([
@@ -14537,19 +14577,108 @@ export const report = query('report', {
       const save = mutation({ access: publicAccess('test'), handler() { return { ok: true }; } });
       const Local = component({ render: ({ value }) => <span style={styles.root}>{value}</span> });
       export const view = component({ render: (_props, _slots, context) =>
-        Card.definition.render({ children: <main style={styles.root}>
+        <Card><main style={styles.root}>
           <Local value="starter" />
-          {Badge.definition.render({ variant: 'neutral', children: 'ready' })}
+          <Badge variant="neutral">ready</Badge>
           <form {...mutationFormAttributes(save)}>
             <FormError mutation={save} result={context.mutations?.save} />
-            {Button.definition.render({ type: 'submit', children: 'Save' })}
+            <Button type="submit">Save</Button>
           </form>
-        </main> })
+        </main></Card>
       });
       void theme;
     `);
 
     expect(facts).toEqual([]);
+  });
+
+  it('authenticates only exact pristine reviewed public UI JSX entrypoints', () => {
+    const exact = sinksFor(`
+      import { query } from '@kovojs/server';
+      import { Badge } from '@kovojs/ui/badge';
+      import { Button as SaveButton } from '@kovojs/ui/button';
+      import { Card } from '@kovojs/ui/card';
+      export const view = query({ load() {
+        return <Card>
+          <Badge variant="neutral">ready</Badge>
+          <SaveButton type="submit">Save</SaveButton>
+        </Card>;
+      } });
+    `);
+    expect(exact).toEqual([]);
+
+    const scannedValues = sinksFor(`
+      import { query } from '@kovojs/server';
+      import { Button } from '@kovojs/ui/button';
+      import { execFileSync } from 'node:child_process';
+      export const view = query({ load(_input, context) {
+        const credential = context.request.headers.get('authorization');
+        return <Button title={credential} onClick={() => execFileSync('ui-event')}>
+          {credential}
+        </Button>;
+      } });
+    `);
+    expect(scannedValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sink: 'child_process.execFileSync', source: "'ui-event'" }),
+        expect.objectContaining({ sink: 'client-wire.request.header.Authorization' }),
+      ]),
+    );
+
+    for (const [label, source] of [
+      [
+        'local lookalike',
+        `
+          import { query } from '@kovojs/server';
+          import { execFileSync } from 'node:child_process';
+          function Button() { return execFileSync('local-button'); }
+          export const view = query({ load() { return <Button />; } });
+        `,
+      ],
+      [
+        'local alias',
+        `
+          import { query } from '@kovojs/server';
+          import { Button } from '@kovojs/ui/button';
+          const Alias = Button;
+          export const view = query({ load() { return <Alias />; } });
+        `,
+      ],
+      [
+        'namespace member',
+        `
+          import { query } from '@kovojs/server';
+          import * as UI from '@kovojs/ui/button';
+          export const view = query({ load() { return <UI.Button />; } });
+        `,
+      ],
+      [
+        'unsupported UI entrypoint',
+        `
+          import { query } from '@kovojs/server';
+          import { Button } from '@kovojs/ui';
+          export const view = query({ load() { return <Button />; } });
+        `,
+      ],
+    ] as const) {
+      expect(sinksFor(source), label).not.toEqual([]);
+    }
+
+    const reexport = sinksForFiles([
+      {
+        fileName: 'ui.ts',
+        source: `export { Button } from '@kovojs/ui/button';`,
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { query } from '@kovojs/server';
+          import { Button } from './ui.js';
+          export const view = query({ load() { return <Button />; } });
+        `,
+      },
+    ]);
+    expect(reexport).not.toEqual([]);
   });
 
   it('keeps starter render provenance exact and scans values passed through it', () => {
@@ -14560,16 +14689,18 @@ export const report = query('report', {
       import { Button } from '@kovojs/ui/button';
       import { execFileSync } from 'node:child_process';
       const FormError = ({ value }) => value;
-      const LocalButton = { definition: { render(value) { return value; } } };
+      const LocalButton = ({ children }) => children;
       export const unsafe = query({ load(input, context) {
         const credential = context.request.headers.get('authorization');
         const dynamic = style[input.method];
         void dynamic;
         void style;
         internalStyle.createAtomicStyles({ color: 'red' });
-        Button.definition.render = () => execFileSync('mutated-ui-render');
-        const a = Button.definition.render({ children: credential });
-        const b = LocalButton.definition.render({ children: credential });
+        Object.defineProperty(Button, 'render', {
+          value: () => execFileSync('mutated-ui-render'),
+        });
+        const a = <Button>{credential}</Button>;
+        const b = <LocalButton>{credential}</LocalButton>;
         const c = <FormError value={credential} />;
         return [a, b, c];
       } });
@@ -14660,7 +14791,7 @@ export const report = query('report', {
         fileName: 'mutate.ts',
         source: `
           import { Button } from '@kovojs/ui/button';
-          Object.defineProperty(Button.definition, 'render', {
+          Object.defineProperty(Button, 'render', {
             get() { return () => 'attacker-controlled'; },
           });
         `,
@@ -14672,14 +14803,13 @@ export const report = query('report', {
           import { query } from '@kovojs/server';
           import { Button } from '@kovojs/ui/button';
           export const unsafe = query({ load() {
-            return Button.definition.render({ children: 'unsafe' });
+            return <Button>unsafe</Button>;
           } });
         `,
       },
     ]);
     expect(crossModuleUiMutation).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ sink: 'request-handler.opaque-call' }),
         expect.objectContaining({ sink: 'request-handler.opaque-protocol' }),
       ]),
     );

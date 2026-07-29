@@ -17,29 +17,63 @@ export interface FormValidationFailure {
   fieldErrors: Record<string, string>;
 }
 
-/** Extract the failure type of a `Form`, unioned with the built-in validation failure. */
+/** Extract a form or declaration-handle failure union, including validation failure. */
 export type FormFailure<Definition> =
-  Definition extends Form<string, any, infer Failure> ? Failure | FormValidationFailure : never;
+  Definition extends {
+    input: { parse(input: unknown): unknown };
+    errors?: infer Errors;
+  }
+    ?
+        | (NonNullable<Errors> extends Record<
+            string,
+            { parse(input: unknown): unknown }
+          >
+            ? {
+                [Code in Extract<keyof NonNullable<Errors>, string>]: {
+                  code: Code;
+                  payload: NonNullable<Errors>[Code] extends {
+                    parse(input: unknown): infer Payload;
+                  }
+                    ? Payload
+                    : never;
+                };
+              }[Extract<keyof NonNullable<Errors>, string>]
+            : never)
+        | FormValidationFailure
+    : Definition extends Form<string, any, infer Failure>
+      ? Failure | FormValidationFailure
+      : FormValidationFailure;
 
 /** Render state for one typed mutation form instance. */
 export interface ComponentMutationFormState<
   Failure,
-  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Input extends Record<string, unknown> = Record<string, JsonValue>,
 > {
   failure: Failure | null;
   submitted?: Partial<Input>;
 }
 
 /** @internal Internal building block of `ComponentRenderSlots`; not app-facing. */
-export type ComponentMutationDefinitions = Record<string, Form<string, any, any>>;
+export type ComponentMutationDefinitions = Record<string, { key: string }>;
 
 /**
  * @internal Render state keyed by a component's declared mutation handles.
  * Internal building block of `ComponentRenderSlots` (SPEC §4.5/§6.3); app
  * authors compose slots through `ComponentRenderSlots`, never this map directly.
  */
-export type ComponentMutationForms<Mutations extends ComponentMutationDefinitions> = {
-  [Name in keyof Mutations]: Mutations[Name] extends Form<string, infer Input, unknown>
-    ? ComponentMutationFormState<FormFailure<Mutations[Name]>, Input>
-    : ComponentMutationFormState<FormFailure<Mutations[Name]>>;
+export type ComponentMutationForms<Mutations> = {
+  [Name in keyof Mutations]: Mutations[Name] extends { key: string }
+    ? ComponentMutationFormState<
+        FormFailure<Mutations[Name]>,
+        Mutations[Name] extends {
+          input: { parse(input: unknown): infer Input };
+        }
+          ? Input extends Record<string, unknown>
+            ? Input
+            : Record<string, unknown>
+          : Mutations[Name] extends Form<string, infer Input, unknown>
+            ? Input
+            : Record<string, unknown>
+      >
+    : never;
 };

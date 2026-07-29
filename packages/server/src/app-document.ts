@@ -221,6 +221,7 @@ export async function renderAppRouteDocumentResponse({
         appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'csrf');
       },
       ...(app.db === undefined ? {} : { db: app.db }),
+      env: app.env,
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       onSessionSetCookie: (rawSetCookie) =>
         appendRefreshSetCookie(refreshSetCookies, rawSetCookie, 'session-provider'),

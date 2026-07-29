@@ -49,6 +49,7 @@ const TEMPLATE_FILES = [
   'src/_kovo/app-runtime-db-options.ts',
   'src/_kovo/app-runtime-db.ts',
   'src/auth.ts',
+  'src/kovo.ts',
   'src/model.ts',
   'src/queries.ts',
   'src/mutations.ts',
@@ -388,20 +389,18 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db-options.ts')).toContain(
       'ON CONFLICT (id) DO NOTHING',
     );
-    expect(files.get('src/app.tsx')).toContain('appRuntimeMutationReplayStore');
-    expect(files.get('src/app.tsx')).toContain(
-      'const mutationReplayStore = appRuntimeMutationReplayStore;',
+    expect(files.get('src/kovo.ts')).toContain('appRuntimeMutationReplayStore');
+    expect(files.get('src/kovo.ts')).toContain('appRuntimePrincipalEpochStore');
+    expect(files.get('src/kovo.ts')).toContain(
+      'mutationReplayStore: appRuntimeMutationReplayStore,',
     );
-    expect(files.get('src/app.tsx')).toContain('appRuntimePrincipalEpochStore');
-    expect(files.get('src/app.tsx')).toContain(
-      'const principalEpochStore = appRuntimePrincipalEpochStore;',
+    expect(files.get('src/kovo.ts')).toContain(
+      'principalEpochStore: appRuntimePrincipalEpochStore,',
     );
-    expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
-    expect(files.get('src/app.tsx')).toContain('principalEpochStore,');
-    expect(files.get('src/app.tsx')).toContain("} from './_kovo/app-runtime-db.js'");
+    expect(files.get('src/kovo.ts')).toContain("} from './_kovo/app-runtime-db.js'");
     expect(files.get('src/app.tsx')).not.toContain("import { appDbReady } from './db.js'");
     expect(files.get('src/app.tsx')).not.toContain('appRuntimeDbReady');
-    expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');
+    expect(files.get('src/kovo.ts')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
     expect(files.get('src/app.test.ts')).toContain("spawn('kovo', ['dev', './src/app.tsx']");
     expect(files.get('src/app.test.ts')).toContain('await fetch(');
@@ -591,8 +590,8 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain("field: 'csrf',");
     expect(files.get('src/auth.ts')).not.toContain('sessionId(');
-    expect(files.get('src/app.tsx')).toContain('appCsrf,');
-    expect(files.get('src/app.tsx')).toContain('csrf: appCsrf,');
+    expect(files.get('src/kovo.ts')).toContain('appCsrf,');
+    expect(files.get('src/kovo.ts')).toContain('csrf: appCsrf,');
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
@@ -1213,7 +1212,7 @@ describe('create-kovo starter (metadata)', () => {
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       // Idiomatic TSX, not hand-authored lowered IR (SPEC.md §5.2 / KV235).
       expect(appSource).toContain('@jsxImportSource @kovojs/server');
-      expect(appSource).toContain('createApp(');
+      expect(appSource).toContain('app.assemble({');
       expect(appSource).not.toContain('/c/__v/');
       expect(appSource).not.toContain('Starter$announce');
 
@@ -1242,7 +1241,7 @@ describe('create-kovo starter (metadata)', () => {
 
       for (const file of project.files) {
         // Both contain fresh per-project security material for each independent scaffold call.
-        if (file.path === '.env' || file.path === 'src/app.tsx') continue;
+        if (file.path === '.env' || file.path === 'src/kovo.ts') continue;
         if (file.symlinkTarget) {
           expect(readlinkSync(join(root, file.path))).toBe(file.symlinkTarget);
           continue;
@@ -1254,8 +1253,8 @@ describe('create-kovo starter (metadata)', () => {
       const secret = /^KOVO_CSRF_SECRET=(.+)$/m.exec(envSource)?.[1] ?? '';
       expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(secret).not.toBe('replace-with-a-deployed-secret');
-      const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
-      expect(appSource).toMatch(
+      const contractSource = readFileSync(join(root, 'src/kovo.ts'), 'utf8');
+      expect(contractSource).toMatch(
         /appId: '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'/u,
       );
       const demoPassword =
@@ -1694,7 +1693,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(stdout).toContain('Kovo app created');
       expect(stdout).toContain(`Files       ${ALL_FILES.length}`);
       expect(readFileSync(join(target, 'package.json'), 'utf8')).toContain('"name": "packed-app"');
-      expect(readFileSync(join(target, 'src/app.tsx'), 'utf8')).toContain('createApp(');
+      expect(readFileSync(join(target, 'src/app.tsx'), 'utf8')).toContain('app.assemble({');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }

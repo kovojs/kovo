@@ -1,4 +1,5 @@
-import type { Component, ComponentDefinitionInput } from '@kovojs/core';
+import type { Component } from '@kovojs/core';
+import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 
 import { isKovoComponentDescriptor } from './component-authority.js';
 import { escapeText, renderedHtml, renderHtmlValue } from './html.js';
@@ -82,14 +83,14 @@ export class ComponentXmlError extends Error {
  * through as strings (still attribute-escaped and URL-scheme-checked at emission by the JSX runtime).
  */
 export interface ComponentRegistryEntry {
-  component: Component<ComponentDefinitionInput>;
+  component: Component<any>;
   props?: Schema<Record<string, unknown>>;
 }
 
 /** Input accepted by {@link renderRegistry}: tag → component, or tag → `{ component, props }` (SPEC §4.10). */
 export type ComponentRegistryInput = Record<
   string,
-  ComponentRegistryEntry | Component<ComponentDefinitionInput>
+  ComponentRegistryEntry | Component<any>
 >;
 
 declare const componentRegistryBrand: unique symbol;
@@ -111,7 +112,7 @@ export interface RenderTreeOptions {
 }
 
 interface ClosedRegistryEntry {
-  readonly component: Component<ComponentDefinitionInput>;
+  readonly component: Component<any>;
   readonly props?: Schema<Record<string, unknown>>;
 }
 
@@ -487,15 +488,8 @@ function validationIssueKeys(error: object): string[] {
   return keys;
 }
 
-function componentIsIsomorphic(component: Component<ComponentDefinitionInput>): boolean {
-  const definition = stableOwnDataValue(component, 'definition', 'Kovo component definition');
-  if (typeof definition !== 'object' || definition === null || witnessIsArray(definition)) {
-    throw new TypeError('Kovo component definition must be a stable own-data record.');
-  }
-  return (
-    stableOwnDataValue(definition, 'isomorphic', 'Kovo component definition.isomorphic', false) ===
-    true
-  );
+function componentIsIsomorphic(component: Component<any>): boolean {
+  return componentDefinitionForFramework(component).isomorphic === true;
 }
 
 function stableObjectKeys(value: object, label: string): string[] {

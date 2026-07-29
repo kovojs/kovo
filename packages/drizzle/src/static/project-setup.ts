@@ -1,6 +1,7 @@
 import { isAbsolute, join } from 'node:path';
 import { Node, Project, SyntaxKind, ts, type CompilerOptions, type SourceFile } from 'ts-morph';
 import { registerFrameworkIdentityProject } from '@kovojs/core/internal/framework-identity';
+import { registerCompilerOwnedAppContractStaticFacts } from './app-contract-static-facts.js';
 import { extractedFunctionKey, functionReceiverParametersByKey } from './domain-writes.js';
 import {
   extractLocalFunctionCallsFromBody,
@@ -123,6 +124,11 @@ interface ProjectExtractionMemo {
       sourceFiles.map((file) => file.compilerNode),
     );
   }
+  const disposeAppContractStaticFacts = registerCompilerOwnedAppContractStaticFacts(
+    options.appContractStaticFacts,
+    options.files,
+    sourceFiles,
+  );
   const tableNamesBySymbol = new Map(projectTableNamesBySymbol(sourceFiles));
   const unmodeledRelationNamesBySymbol = new Map(
     projectUnmodeledRelationNamesBySymbol(sourceFiles),
@@ -140,6 +146,7 @@ interface ProjectExtractionMemo {
     columnShapesByTable,
     conditionalTableTargetsBySyntheticName,
     dispose: () => {
+      disposeAppContractStaticFacts();
       for (const sourceFile of sourceFiles) sourceFile.forget();
       // Drop memoized derivations so the cached ExtractedFunction objects and table facts
       // are released with the forgotten ts-morph source files instead of outliving them.

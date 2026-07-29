@@ -1,45 +1,17 @@
 /** @jsxImportSource @kovojs/server */
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  endpoint,
-  layout,
-  publicAccess,
-  redirect,
-  route,
-  stylesheet,
-} from '@kovojs/server';
+import { redirect } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { LoginForm, SignOutForm } from './components/auth-forms.js';
 import { ContactsRegion } from './components/contacts.js';
-import {
-  appAuthed,
-  appCsrf,
-  appSessionProvider,
-  appSignIn,
-  appSignOut,
-  type AppRequest,
-} from './auth.js';
-import {
-  appRuntimeDbProvider,
-  appRuntimeMutationReplayStore,
-  appRuntimePrincipalEpochStore,
-} from './_kovo/app-runtime-db.js';
+import { appSignIn, appSignOut } from './auth.js';
+import { app, appStylesheets } from './kovo.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
-import { appTheme } from './theme.js';
 
 // The whole app in one file: a contact book over a real Drizzle database, gated
 // by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and `kovo
 // build ./src/app.tsx` both load this default export (SPEC.md §9.5).
-
-const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
-const clientModules = createMemoryVersionedClientModuleRegistry();
-// SPEC §10.3: duplicate same-principal enhanced POSTs reserve and replay through durable
-// system-role Postgres truth, including across process restart and multiple replicas.
-const mutationReplayStore = appRuntimeMutationReplayStore;
-const principalEpochStore = appRuntimePrincipalEpochStore;
 
 const styles = style.create({
   shell: {
@@ -118,12 +90,12 @@ const styles = style.create({
   },
 });
 
-const AppLayout = layout({
+const AppLayout = app.layout({
   render: (_queries, _state, { children }) => <div style={styles.shell}>{children}</div>,
 });
 
-const healthEndpoint = endpoint('/api/health', {
-  access: publicAccess('public uptime probe'),
+const healthEndpoint = app.endpoint('/api/health', {
+  access: app.publicAccess('public uptime probe'),
   auth: { justification: 'public uptime probe', kind: 'none' },
   csrf: false,
   csrfJustification: 'read-only machine health probe',
@@ -164,55 +136,54 @@ function HomePage({ userName }: { userName: string }): string {
   );
 }
 
-const app = createApp({
-  appId: '{{app_id}}',
-  clientModules,
-  csrf: appCsrf,
-  db: appRuntimeDbProvider,
-  document: { lang: 'en' },
-  endpoints: [healthEndpoint],
-  mutationReplayStore,
-  principalEpochStore,
-  mutations: [addContact, appSignIn, appSignOut],
-  queries: [contactsQuery],
-  sessionProvider: appSessionProvider,
-  routes: [
-    route('/', {
-      // The contact book is the signed-in user's data, so this route's KV436 access
-      // decision is the session-presence guard (SPEC §10.2). The redirect below is
-      // the no-JS UX for an unauthenticated visitor.
-      access: [appAuthed],
-      meta: {
-        description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
-        title: 'Kovo Starter',
-      },
-      layout: AppLayout,
-      stylesheets,
-      page(_context, request: AppRequest) {
-        // The read is public-shaped, but the page requires a session so the guarded
-        // add-contact form always has one (SPEC.md §9.5 redirect outcome).
-        if (!request.session) return redirect('/login', {});
-        return <HomePage userName={request.session.user.name} />;
-      },
-    }),
-    route('/login', {
-      // Sign-in page reachable before authentication — public by design (KV436, §10.2).
-      access: publicAccess('sign-in page reachable before authentication'),
-      meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
-      layout: AppLayout,
-      stylesheets,
-      page(_context, request: AppRequest) {
-        // A session transition deliberately performs a full document reload (SPEC §9.3).
-        // Complete sign-in by moving an already-authenticated reload to the guarded home route.
-        if (request.session) return redirect('/', {});
-        return (
-          <main style={styles.loginMain}>
-            <LoginForm />
-          </main>
-        );
-      },
-    }),
-  ],
+const homeRoute = app.route('/', {
+  // The contact book is the signed-in user's data, so this route's KV436 access
+  // decision is the session-presence guard (SPEC §10.2). The redirect below is
+  // the no-JS UX for an unauthenticated visitor.
+  access: [app.authenticated],
+  meta: {
+    description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
+    title: 'Kovo Starter',
+  },
+  layout: AppLayout,
+  stylesheets: appStylesheets,
+  page(_context, request) {
+    // The read is public-shaped, but the page requires a session so the guarded
+    // add-contact form always has one (SPEC.md §9.5 redirect outcome).
+    if (!request.session) return redirect('/login', {});
+    return <HomePage userName={request.session.user.name} />;
+  },
 });
 
-export default app;
+const loginRoute = app.route('/login', {
+  // Sign-in page reachable before authentication — public by design (KV436, §10.2).
+  access: app.publicAccess('sign-in page reachable before authentication'),
+  meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
+  layout: AppLayout,
+  stylesheets: appStylesheets,
+  page(_context, request) {
+    // A session transition deliberately performs a full document reload (SPEC §9.3).
+    // Complete sign-in by moving an already-authenticated reload to the guarded home route.
+    if (request.session) return redirect('/', {});
+    return (
+      <main style={styles.loginMain}>
+        <LoginForm />
+      </main>
+    );
+  },
+});
+
+// Better Auth credential mutations retain their package-owned fixed identity and private
+// capability; the app contract accepts only their opaque adapter witness.
+const signInMutation = app.integrateMutation(appSignIn);
+const signOutMutation = app.integrateMutation(appSignOut);
+
+const assembledApp = app.assemble({
+  endpoints: [healthEndpoint],
+  layouts: [AppLayout],
+  mutations: [addContact, signInMutation, signOutMutation],
+  queries: [contactsQuery],
+  routes: [homeRoute, loginRoute],
+});
+
+export default assembledApp;

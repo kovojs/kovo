@@ -161,7 +161,7 @@ export function runStarterTypecheck(root: string): void {
       : []),
     'src/_kovo/app-runtime-db.ts',
   ];
-  execFileSync(
+  execStarterCommand(
     resolveStarterBin(root, 'tsc'),
     [
       '--ignoreConfig',
@@ -187,6 +187,7 @@ export function runStarterTypecheck(root: string): void {
       'src/db.ts',
       ...generatedRuntimeFiles,
       'src/auth.ts',
+      'src/kovo.ts',
       'src/queries.ts',
       'src/mutations.ts',
       'src/components/contacts.tsx',

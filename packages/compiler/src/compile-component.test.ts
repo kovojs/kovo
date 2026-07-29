@@ -288,7 +288,7 @@ export const Evil = component({
     );
     expect(registry?.source).toContain("'components/cart/cart-badge/cart-badge': {};");
     expect(registry?.source).toContain(`export interface ComponentRegistry {
-  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<Record<string, unknown>>;
 }`);
     expect(registry?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -1077,7 +1077,7 @@ export const CartBadge = component({
 }`);
     expect(registry).toContain(`declare module '@kovojs/core/generated' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
-  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
+  'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<Record<string, unknown>>;
   }`);
     expect(registry).toContain(`  interface FragmentTargets {
   'components/cart/cart-badge/cart-badge': {};
