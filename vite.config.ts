@@ -102,6 +102,10 @@ export default defineConfig({
       'packages/browser/src/inline-loader.ts',
       'packages/conformance-fixtures/**',
       'packages/create-kovo/templates/**',
+      // This source is a packed-consumer fixture. Its @kovojs dependencies are deliberately
+      // absent from the workspace path and are authenticated + installed only inside
+      // scripts/devex-benchmark.mjs before the fixture is typechecked, checked, and built.
+      'scripts/devex-workloads/kovo-packed-check/package/**',
       'site/tutorial/steps/**',
       'tests/**',
       // These benchmark entrants are intentionally isolated from the root workspace
