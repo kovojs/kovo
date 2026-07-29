@@ -343,6 +343,47 @@ describe('offline agent process and package posture', () => {
     expect(seenChecks.flat()).not.toContain('build');
   });
 
+  it('preserves a bounded redacted app when the aggregate offline journey fails', () => {
+    const parent = temporaryRoot('failed-journey');
+    const artifacts = path.join(parent, 'artifacts');
+    const packages = packedPackageFixtures(parent);
+    const secret = 'offline-agent-super-secret';
+    const report = runOfflineAgentJourney({
+      artifactRoot: artifacts,
+      commandRunner: (_file, args) => {
+        if (args[0]?.endsWith('/create-kovo/dist/index.mjs')) {
+          const appRoot = args[1];
+          mkdirSync(path.join(appRoot, 'src'), { recursive: true });
+          writeFileSync(
+            path.join(appRoot, 'package.json'),
+            '{"dependencies":{"@kovojs/core":"0.2.0"}}\n',
+          );
+          writeFileSync(path.join(appRoot, '.env'), `KOVO_CSRF_SECRET=${secret}\n`);
+          writeFileSync(
+            path.join(appRoot, 'src/queries.ts'),
+            `export const leaked = '${secret}';\n`,
+          );
+          return observation({ status: 0 });
+        }
+        return observation({ status: 1, stderr: `TOKEN=${secret}` });
+      },
+      packedPackages: packages,
+      temporaryParent: parent,
+    });
+
+    expect(report.pass).toBe(false);
+    expect(report.failure.artifact).toMatchObject({
+      directory: 'failed/offline-agent',
+      manifest: 'failed/offline-agent/redaction-manifest.json',
+    });
+    const preserved = path.join(artifacts, report.failure.artifact.directory);
+    expect(readFileSync(path.join(preserved, 'app/src/queries.ts'), 'utf8')).not.toContain(secret);
+    expect(readFileSync(path.join(preserved, 'redaction-manifest.json'), 'utf8')).toContain(
+      'exactDiscoveredSecretsAbsent',
+    );
+    expect(report.failure.message).not.toContain(secret);
+  });
+
   it('sets hard package-manager offline mode and denies loopback as well as remote egress', () => {
     const env = offlineCommandEnvironment({ PATH: process.env.PATH });
     expect(env).toMatchObject({

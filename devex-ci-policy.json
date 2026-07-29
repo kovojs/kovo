@@ -70,7 +70,7 @@
       "runnerCount": 1,
       "commands": [
         "vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario",
-        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate"
+        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate --require-ratified"
       ],
       "prVisible": false,
       "preserveReportOnFailure": true,
@@ -85,8 +85,11 @@
       "budgetMinutes": 90,
       "timeoutMinutes": 90,
       "runnerCount": 1,
-      "commands": ["vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1"],
+      "commands": [
+        "vp exec node scripts/golden-journey.mjs --scenario release-scorecard --samples 5 --report \"$RUNNER_TEMP/kovo-devex-golden/report.json\" --artifacts \"$RUNNER_TEMP/kovo-devex-golden/failures\" --budgets devex-budgets.json --evaluate --require-ratified"
+      ],
       "prVisible": false,
+      "preserveReportOnFailure": true,
       "requiresBrowser": true,
       "releaseRequired": true
     },

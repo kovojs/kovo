@@ -126,6 +126,7 @@ export async function runPackedAppVariant({
   const transcripts = [];
   const phases = [];
   let devServer;
+  let devTranscriptPhase = 'dev';
   let secretInventory = Object.freeze({ keys: Object.freeze([]), values: Object.freeze([]) });
   let screenshot = null;
   let accessibility = null;
@@ -188,6 +189,7 @@ export async function runPackedAppVariant({
       port,
       secretValues: secretInventory.values,
     });
+    devTranscriptPhase = 'dev';
     concepts = conceptCensus(appRoot, {
       ...scaffoldSnapshot,
       beforeCrudEnvDigest: digestFile(path.join(appRoot, '.env')),
@@ -227,6 +229,28 @@ export async function runPackedAppVariant({
     await devServer.stop();
     transcripts.push({
       phase: 'dev',
+      signal: devServer.exit()?.signal ?? null,
+      status: devServer.exit()?.status ?? 0,
+      stderr: devServer.transcript().stderr,
+      stdout: devServer.transcript().stdout,
+    });
+    devServer = undefined;
+
+    devServer = startDevServer({
+      appRoot,
+      port,
+      secretValues: secretInventory.values,
+    });
+    devTranscriptPhase = 'dev-warm';
+    const warmReady = await devServer.waitForReady(READY_TIMEOUT_MS);
+    phases.push({
+      durationMs: warmReady.durationMs,
+      name: 'ready-warm',
+      status: 0,
+    });
+    await devServer.stop();
+    transcripts.push({
+      phase: 'dev-warm',
       signal: devServer.exit()?.signal ?? null,
       status: devServer.exit()?.status ?? 0,
       stderr: devServer.transcript().stderr,
@@ -275,7 +299,7 @@ export async function runPackedAppVariant({
     if (devServer !== undefined) {
       await devServer.stop();
       transcripts.push({
-        phase: 'dev',
+        phase: devTranscriptPhase,
         signal: devServer.exit()?.signal ?? null,
         status: devServer.exit()?.status ?? null,
         stderr: devServer.transcript().stderr,
@@ -536,6 +560,7 @@ export function validatePackedAppsReport(report) {
         'create',
         'install',
         'ready',
+        'ready-warm',
         'first-200',
         'login',
         'crud',
@@ -550,6 +575,45 @@ export function validatePackedAppsReport(report) {
       if (variant.failure !== null) findings.push(`${label}.failure must be null on success`);
       if (variant.accessibility?.violations !== 0) {
         findings.push(`${label} did not prove an axe-clean styled UI`);
+      }
+      if (
+        variant.accessibility?.schema !== 'kovo.golden-journey/accessibility/v1' ||
+        !Array.isArray(variant.accessibility?.states) ||
+        !['login', 'authenticated-crud'].every((state) =>
+          variant.accessibility.states.some(
+            (entry) => entry?.name === state && Array.isArray(entry?.violations),
+          ),
+        )
+      ) {
+        findings.push(`${label} did not retain both accessibility terminal states`);
+      }
+      if (
+        !Number.isSafeInteger(variant.styledUi?.bytes) ||
+        variant.styledUi.bytes < 1 ||
+        !/^evidence\/(?:postgres|sqlite)-\d+\/styled-ui\.png$/u.test(
+          variant.styledUi?.path ?? '',
+        ) ||
+        !/^sha256:[0-9a-f]{64}$/u.test(variant.styledUi?.sha256 ?? '') ||
+        !Number.isSafeInteger(variant.styledUi?.styled?.styleSheets) ||
+        variant.styledUi.styled.styleSheets < 1 ||
+        typeof variant.styledUi?.styled?.fontFamily !== 'string' ||
+        variant.styledUi.styled.fontFamily.trim().length === 0
+      ) {
+        findings.push(`${label} did not retain an authenticated styled-UI screenshot`);
+      }
+      if (
+        !Number.isFinite(variant.install?.durationMs) ||
+        variant.install.durationMs < 0 ||
+        !Number.isSafeInteger(variant.install?.installedBytes) ||
+        variant.install.installedBytes < 1 ||
+        !Number.isSafeInteger(variant.install?.installedFiles) ||
+        variant.install.installedFiles < 1 ||
+        !Number.isSafeInteger(variant.install?.directProductionDependencies) ||
+        variant.install.directProductionDependencies < 1 ||
+        !Number.isSafeInteger(variant.install?.transitiveProductionDependencies) ||
+        variant.install.transitiveProductionDependencies < 0
+      ) {
+        findings.push(`${label} did not retain bounded install and dependency evidence`);
       }
       if (variant.concepts?.counts?.environmentEdits !== 0) {
         findings.push(`${label} required an undocumented environment edit`);

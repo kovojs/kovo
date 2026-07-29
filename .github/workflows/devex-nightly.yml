@@ -66,7 +66,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/kovo-devex-baseline"
           vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
-          vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output "$RUNNER_TEMP/kovo-devex-baseline/benchmark.json" --evaluate
+          vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output "$RUNNER_TEMP/kovo-devex-baseline/benchmark.json" --evaluate --require-ratified
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -88,6 +88,16 @@ jobs:
       - uses: ./.github/actions/kovo-setup
         with:
           rebuild-better-sqlite3: 'true'
+      - name: Identify the accepted hosted runner
+        run: |
+          runner_digest="$(
+            {
+              printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+              cat /etc/os-release
+            } | sha256sum | cut -d' ' -f1
+          )"
+          echo "KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:$runner_digest" >> "$GITHUB_ENV"
+          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: kovo-devex-packed-release
@@ -99,11 +109,9 @@ jobs:
           browsers: chromium
           cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
           restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
-      - name: Exercise both packed starter variants
+      - name: Exercise both packed starters and the strict-offline agent
         run: >-
-          vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1
-          --report "$RUNNER_TEMP/kovo-devex-golden/report.json"
-          --artifacts "$RUNNER_TEMP/kovo-devex-golden/failures"
+          vp exec node scripts/golden-journey.mjs --scenario release-scorecard --samples 5 --report "$RUNNER_TEMP/kovo-devex-golden/report.json" --artifacts "$RUNNER_TEMP/kovo-devex-golden/failures" --budgets devex-budgets.json --evaluate --require-ratified
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

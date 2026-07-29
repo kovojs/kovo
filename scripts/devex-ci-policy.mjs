@@ -160,18 +160,50 @@ export function validateDevexCiPolicy(policy, options = {}) {
     }
     if (
       gate.preserveReportOnFailure === true &&
-      (!segment.includes('if: always()') || !segment.includes('name: kovo-devex-baseline'))
+      (!segment.includes('if: always()') ||
+        !segment.includes(
+          gate.id === 'nightly-packed-journeys'
+            ? 'name: kovo-devex-golden-journey'
+            : 'name: kovo-devex-baseline',
+        ))
     ) {
-      findings.push(`${label} must preserve its benchmark report after a budget breach`);
+      findings.push(`${label} must preserve its report after a budget breach`);
     }
     if (
-      ['nightly-benchmark', 'pr-scorecard'].includes(gate.id) &&
+      ['nightly-benchmark', 'nightly-packed-journeys', 'pr-scorecard'].includes(gate.id) &&
       (!segment.includes('${ImageOS:-unknown}') ||
         !segment.includes('${ImageVersion:-unknown}') ||
         !segment.includes('cat /etc/os-release') ||
         !segment.includes('KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-accepted'))
     ) {
       findings.push(`${label} must identify the exact accepted hosted-runner fingerprint`);
+    }
+    if (
+      gate.id === 'nightly-benchmark' &&
+      !gate.commands.some(
+        (command) => command.includes('--samples 5') && command.includes('--require-ratified'),
+      )
+    ) {
+      findings.push(`${label} must collect N>=5 and fail closed before runner budget ratification`);
+    }
+    if (
+      gate.id === 'nightly-packed-journeys' &&
+      (gate.preserveReportOnFailure !== true ||
+        !gate.commands.some(
+          (command) =>
+            command.includes('--scenario release-scorecard') &&
+            command.includes('--samples 5') &&
+            command.includes('--evaluate') &&
+            command.includes('--require-ratified') &&
+            command.includes('--report ') &&
+            command.includes('--artifacts '),
+        ) ||
+        !segment.includes('path: ${{ runner.temp }}/kovo-devex-golden') ||
+        !segment.includes('include-hidden-files: true'))
+    ) {
+      findings.push(
+        `${label} must bind both packed starters and the offline agent to one retained N>=5 release scorecard`,
+      );
     }
     if (gate.requiresBrowser) {
       const browserAction = segment.indexOf('./.github/actions/playwright-install');
@@ -296,7 +328,10 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
     findings.push('blockers must be a substantive array');
   }
   const runnerBoundRatifications = Object.values(budgets?.metrics ?? {}).filter(
-    (metric) => metric?.ratification !== null && metric?.binding !== 'packed-artifact',
+    (metric) =>
+      metric?.source === 'benchmark' &&
+      metric?.ratification !== null &&
+      metric?.binding !== 'packed-artifact',
   );
   if (policy?.referenceRunner?.binding !== true && runnerBoundRatifications.length > 0) {
     findings.push('a non-binding runner cannot produce runner-bound metric ratifications');

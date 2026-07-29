@@ -12,6 +12,12 @@ const budgets = {
   metrics: {
     'check.cold.durationMs': { provisionalTarget: 30_000 },
     'check.warm.durationMs': { provisionalTarget: 10_000 },
+    'docs.snapshot.compressedBytes': {
+      ratification: { threshold: 1_310_720 },
+    },
+    'docs.snapshot.installedBytes': {
+      ratification: { threshold: 5_242_880 },
+    },
   },
 };
 
@@ -30,6 +36,7 @@ describe('DevEx PR report', () => {
     expect(report.schema).toBe(DEVEX_PR_REPORT_SCHEMA);
     expect(report.pass).toBe(true);
     expect(report.docs.status).toBe('current');
+    expect(report.docs.budgetStatus).toBe('pass');
     expect(report.speed).toMatchObject({
       status: 'reported',
       comparison: 'nightly-candidate',
@@ -43,6 +50,7 @@ describe('DevEx PR report', () => {
     });
     expect(markdown).toContain('## Kovo DevEx scorecard');
     expect(markdown).toContain('1,842 declarations');
+    expect(markdown).toContain('current/pass');
     expect(markdown).toContain('-8.3%');
     expect(markdown.length).toBeLessThan(8_000);
   });
@@ -63,6 +71,27 @@ describe('DevEx PR report', () => {
     expect(stale.speed).toMatchObject({
       status: 'unavailable',
       comparison: 'none',
+    });
+  });
+
+  it('fails closed when the current packed docs payload exceeds its ratified cap', () => {
+    const tinyDocsBudget = structuredClone(budgets);
+    tinyDocsBudget.metrics['docs.snapshot.compressedBytes'].ratification.threshold = 1;
+    const report = buildDevexPrReport({
+      budgets: tinyDocsBudget,
+      currentBenchmark: benchmark([100]),
+      freshDocs: docs(),
+      installedDocs: docs().snapshot,
+      inventory: inventory(),
+    });
+
+    expect(report.pass).toBe(false);
+    expect(report.docs.budgetStatus).toBe('breach');
+    expect(report.docs.budgets).toContainEqual({
+      metric: 'docs.snapshot.compressedBytes',
+      observed: 25,
+      status: 'breach',
+      threshold: 1,
     });
   });
 

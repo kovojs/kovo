@@ -27,7 +27,7 @@
     "noiseStatistic": "median-absolute-deviation",
     "sampleUnit": "fresh-process phase over an authenticated packed workload with restored source revisions",
     "hostVariancePosture": "excluded by exact runner fingerprint; cross-fingerprint comparisons are report-only",
-    "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate"
+    "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output \"$RUNNER_TEMP/kovo-devex-baseline/benchmark.json\" --evaluate --require-ratified"
   },
   "ratification": {
     "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
@@ -37,8 +37,8 @@
     "thresholdFormula": "budget + noiseMultiplier * noise"
   },
   "blockers": [
-    "Run the accepted GitHub-hosted ubuntu-24.04 collector and commit its authenticated five-sample report before binding runner-scoped budgets.",
+    "Run the accepted GitHub-hosted ubuntu-24.04 collectors and commit their authenticated five-sample benchmark and dual-dialect journey reports before binding runner-scoped budgets.",
     "Review product targets and noise multipliers against that measured baseline before writing any statistical ratification.",
-    "Extend authenticated baseline provenance to the golden-journey install, docs snapshot, and full-catalog reports before those cross-report metrics can bind."
+    "Ratify golden-journey install and readiness metrics from the aggregate release-scorecard report; retain full-catalog RSS as non-binding until its own authenticated report schema lands."
   ]
 }
