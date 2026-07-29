@@ -9,8 +9,8 @@ as possible.
 pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
 pnpm run check       # type/lint + sound-subset + current-source proof; no deploy artifacts
 pnpm run test        # vp test
-pnpm run build:prod  # kovo build ./src/app.tsx → dist/server (node preset)
-npm start            # NODE_ENV=production node dist/server/server.mjs
+pnpm run build:prod  # kovo build ./src/app.tsx → {{deployment_target}} preset output
+{{production_start_command}}
 ```
 
 For local development, sign in at `/login` with `demo@example.com` and the
@@ -30,6 +30,12 @@ development does not need `BETTER_AUTH_URL`.
 | `src/components/*.tsx` | `@kovojs/ui` components (`Card`, `Button`, `Badge`) composing the contact list, add-contact form, and auth forms.                                                                                    |
 | `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export.                  |
 | `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                                 |
+
+## Supported development hosts
+
+Kovo technical preview policy-tests this scaffold on Linux and macOS. Native Windows and WSL are
+not currently supported development hosts. Generated deployment behavior is governed separately by
+the selected `{{deployment_target}}` preset.
 
 `kovo dev` bootstraps Kovo before loading the Vite config; `vp check` and `vp test`
 retain the `kovo()` config integration, which
@@ -93,11 +99,13 @@ checks; do not put it in the app process. The app boots with the ordinary runtim
 dedicated `kovo_system` login, never the owner/admin connection. `kovo db check` prefers that same
 system URL when both authorities are present.
 
+This scaffold selected the `{{deployment_target}}` preset with retention posture
+`{{retention_posture}}`.
+
 `kovo build ./src/app.tsx` reruns the same source proof, then checks the selected
 deployment preset, least-privilege posture, and deploy-skew retention before it
-emits a Node server under `dist/server` using the preset in `kovo.config.ts`
-(Node by default; uncomment Vercel or Cloudflare). The generated `serve` and
-`start` scripts set `NODE_ENV=production`; keep that posture in your process
+emits the selected preset output using `kovo.config.ts`. A Node scaffold includes generated
+`serve` and `start` scripts that set `NODE_ENV=production`; keep that posture in your process
 manager so production blocks private-network egress by default, emits `Secure`
 host-bound CSRF cookies, and refuses weak signing secrets. Production also
 requires every non-loopback `BETTER_AUTH_URL` to be the app's canonical public HTTPS origin (for

@@ -21,10 +21,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   CREATE_KOVO_HELP,
+  CREATE_KOVO_HOST_POSTURE,
   CREATE_KOVO_REFERENCE,
+  createKovoCommandShell,
   createKovoProject,
   demoPasswordEnvVar,
   main,
+  mainAsync,
+  readInteractiveCreateKovoOptions,
   renderCreateKovoHelp,
   type WriteKovoProjectOptions,
   writeKovoProject,
@@ -460,6 +464,43 @@ describe('create-kovo starter (metadata)', () => {
       </main>`);
     expect(files.get('src/app.tsx')).not.toContain('<span style={styles.who}>');
     expect(files.get('src/app.tsx')).toContain("if (request.session) return redirect('/', {});");
+  });
+
+  it('emits the selected deployment and honest retention posture', () => {
+    const project = createKovoProject({
+      deploymentTarget: 'vercel',
+      dialect: 'postgres',
+      name: 'Vercel App',
+      retention: 'retained-24h',
+    });
+    const files = new Map(project.files.map((file) => [file.path, file.source]));
+    const config = files.get('kovo.config.ts') ?? '';
+    const readme = files.get('README.md') ?? '';
+    const manifest = JSON.parse(files.get('package.json') ?? '{}') as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(config).toContain("import { defineConfig, vercel } from '@kovojs/server/build';");
+    expect(config).toContain('preset: vercel({');
+    expect(config).toContain('hours: 24');
+    expect(config).toContain("immutableClientModules: 'retained'");
+    expect(config).toContain("priorTokenQueryReads: 'retained'");
+    expect(readme).toContain('selected the `vercel` preset');
+    expect(readme).toContain('retention posture\n`retained-24h`');
+    expect(readme).toContain('not currently supported development hosts');
+    expect(manifest.scripts).not.toHaveProperty('serve');
+    expect(manifest.scripts).not.toHaveProperty('start');
+
+    const unconfigured = createKovoProject({
+      deploymentTarget: 'node',
+      name: 'Node App',
+      retention: 'unconfigured',
+    });
+    const unconfiguredConfig =
+      unconfigured.files.find((file) => file.path === 'kovo.config.ts')?.source ?? '';
+    expect(unconfiguredConfig).toContain('preset: node()');
+    expect(unconfiguredConfig).toContain('build remains fail-closed');
+    expect(unconfiguredConfig).not.toContain('hours: 24');
   });
 
   it('keeps deployment environment access out of generated production source', () => {
@@ -1313,6 +1354,17 @@ describe('create-kovo starter (CLI)', () => {
         'create-kovo my-app --dialect sqlite --experimental-sqlite',
       );
       expect(CREATE_KOVO_HELP).toContain('--disable-git');
+      expect(CREATE_KOVO_HELP).toContain('--install[=auto|never]');
+      expect(CREATE_KOVO_HELP).toContain('--deployment <node|vercel|cloudflare>');
+      expect(CREATE_KOVO_HELP).toContain('--retention <unconfigured|retained-24h>');
+      expect(CREATE_KOVO_REFERENCE.sections).toContainEqual(
+        expect.objectContaining({ anchor: 'development-host-support' }),
+      );
+      expect(CREATE_KOVO_HOST_POSTURE).toEqual({
+        supported: ['Linux', 'macOS'],
+        unsupported:
+          'Native Windows and WSL are not policy-tested development hosts in the technical preview.',
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1351,6 +1403,10 @@ describe('create-kovo starter (CLI)', () => {
       );
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Next steps'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`cd '${root}'`));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm install'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run dev'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run check'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Install     skipped'));
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -1389,6 +1445,11 @@ describe('create-kovo starter (CLI)', () => {
     try {
       expect(main([root, '--sqlite', '--experimental-sqlite'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
+      expect(stdout).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'WARNING SQLite is experimental and single-principal/local-dev only.',
+        ),
+      );
       expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain(
         'const authBindings = createAppAuthBindings({',
       );
@@ -1437,6 +1498,105 @@ describe('create-kovo starter (CLI)', () => {
       expect(main([root, '--disable-git'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo app created'));
       expect(existsSync(join(root, '.git'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('installs only when selected and omits install from completed next steps', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-install-'));
+    const root = join(parent, 'Installed App');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const install = vi
+      .spyOn(createKovoCommandShell, 'execFileSync')
+      .mockImplementation(() => Buffer.alloc(0));
+
+    try {
+      expect(main([root, '--install', '--disable-git'])).toBe(0);
+      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+        cwd: root,
+        stdio: 'inherit',
+      });
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('Install     complete');
+      expect(output).toContain('pnpm run dev');
+      expect(output).toContain('pnpm run check');
+      expect(output).not.toContain('  pnpm install\n');
+    } finally {
+      install.mockRestore();
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('reports a partial install precisely without claiming creator success', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-install-failure-'));
+    const root = join(parent, 'Install Failure');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const install = vi.spyOn(createKovoCommandShell, 'execFileSync').mockImplementation(() => {
+      throw new Error('network unavailable');
+    });
+
+    try {
+      expect(main([root, '--install', '--disable-git'])).toBe(1);
+      expect(existsSync(join(root, 'package.json'))).toBe(true);
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('project files were created');
+      expect(output).toContain('pnpm install');
+      expect(output).toContain('pnpm run dev');
+      expect(output).toContain('pnpm run check');
+      expect(output).not.toContain('Kovo app created');
+    } finally {
+      install.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('projects interactive answers through the same semantic option shape', async () => {
+    const answers = ['interactive-app', 'Interactive App', '2', '2', '2', '2', '1'];
+    const questions: string[] = [];
+    const options = await readInteractiveCreateKovoOptions(async (question) => {
+      questions.push(question);
+      return answers.shift() ?? '';
+    });
+
+    expect(options).toEqual({
+      deploymentTarget: 'vercel',
+      dialect: 'sqlite',
+      disableGit: true,
+      experimentalSqlite: true,
+      install: 'never',
+      name: 'Interactive App',
+      retention: 'unconfigured',
+      targetDirectory: 'interactive-app',
+    });
+    expect(questions).toHaveLength(7);
+    expect(questions.join('\n')).toContain('SQLite (experimental)');
+    expect(questions.join('\n')).toContain('Not configured yet');
+  });
+
+  it('runs an injected interactive scaffold with no hidden environment edit', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-interactive-'));
+    const root = join(parent, 'Prompt App');
+    const answers = [root, 'Prompt App', '1', '2', '2', '3', '1'];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      await expect(
+        mainAsync([], {
+          ask: async () => answers.shift() ?? '',
+        }),
+      ).resolves.toBe(0);
+      expect(existsSync(join(root, 'package.json'))).toBe(true);
+      expect(readFileSync(join(root, 'kovo.config.ts'), 'utf8')).toContain(
+        "import { defineConfig, cloudflare } from '@kovojs/server/build';",
+      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Deploy      cloudflare'));
     } finally {
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });
@@ -1546,7 +1706,9 @@ describe('create-kovo starter (CLI)', () => {
       expect(main(['app', '--local-kovo', '../kovo'])).toBe(1);
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --template'));
-      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unsupported dialect: mysql.'));
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('Unsupported value for --dialect: mysql.'),
+      );
       expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Unknown option: --local-kovo'));
       expect(stderr).toHaveBeenCalledWith(
         expect.stringContaining('supported options and defaults'),

@@ -16,6 +16,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -25,12 +26,23 @@ import {
 } from '@kovojs/core/internal/agent-docs';
 
 import {
+  CREATE_KOVO_CREATOR_SCHEMA,
   assertCreateKovoSqliteScaffoldAllowed,
+  creatorChoiceValues,
   readCreateKovoCliOptions,
+  type CreateKovoCliOptions,
+  type CreateKovoDeploymentTarget,
   type CreateKovoDialect,
+  type CreateKovoInstallChoice,
+  type CreateKovoRetentionPosture,
 } from './cli-schema.js';
 
-export type { CreateKovoDialect } from './cli-schema.js';
+export type {
+  CreateKovoDeploymentTarget,
+  CreateKovoDialect,
+  CreateKovoInstallChoice,
+  CreateKovoRetentionPosture,
+} from './cli-schema.js';
 
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
@@ -38,9 +50,14 @@ const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativeObjectIs = NativeObject.is;
 const nativeReflectApply = NativeReflect.apply;
 
+/** Boot-captured process sink kept injectable for exact creator/install tests. */
+export const createKovoCommandShell = { execFileSync };
+
 export interface CreateKovoOptions {
+  deploymentTarget?: CreateKovoDeploymentTarget;
   dialect?: CreateKovoDialect;
   name: string;
+  retention?: CreateKovoRetentionPosture;
 }
 
 export interface GeneratedFile {
@@ -63,6 +80,12 @@ export interface WriteKovoProjectResult {
 export interface WriteKovoProjectOptions extends Partial<CreateKovoOptions> {
   disableGit?: boolean;
 }
+
+export const CREATE_KOVO_HOST_POSTURE = {
+  supported: ['Linux', 'macOS'],
+  unsupported:
+    'Native Windows and WSL are not policy-tested development hosts in the technical preview.',
+} as const;
 
 /** Usage line emitted by the `create-kovo` bin and consumed by the docs generator. */
 export const CREATE_KOVO_USAGE = 'create-kovo <target-directory> [options]';
@@ -101,15 +124,17 @@ export const CREATE_KOVO_REFERENCE = {
   usage: CREATE_KOVO_USAGE,
   options: [
     {
-      flag: '--name <name>',
-      description: 'Package name for package.json.',
+      flag: `${CREATE_KOVO_CREATOR_SCHEMA.name.flags[0]} <name>`,
+      description: CREATE_KOVO_CREATOR_SCHEMA.name.description,
       defaultText: 'normalized target directory name.',
       docsDescription:
         'Override the generated `package.json` name. Names are normalized to lowercase npm-compatible words and dashes.',
     },
     {
-      flag: '--dialect <postgres|sqlite>',
-      description: 'Database scaffold to generate.',
+      flag: `${CREATE_KOVO_CREATOR_SCHEMA.dialect.flags[0]} <${creatorChoiceValues('dialect').join(
+        '|',
+      )}>`,
+      description: CREATE_KOVO_CREATOR_SCHEMA.dialect.description,
       defaultText: 'postgres.',
       docsDescription: 'Select the database starter. Defaults to `postgres`.',
     },
@@ -130,10 +155,46 @@ export const CREATE_KOVO_REFERENCE = {
         'Required for `--sqlite` or `--dialect sqlite` unless `KOVO_EXPERIMENTAL_SQLITE=1` is set. SQLite is a single-principal local-development scaffold and does not provide Kovo authorization/confidentiality guarantees.',
     },
     {
-      flag: '--disable-git',
-      description: 'Do not initialize a Git repository.',
+      flag: '--git, --no-git',
+      description: CREATE_KOVO_CREATOR_SCHEMA.git.description,
       docsDescription:
-        'Skip Git repository initialization. By default, `create-kovo` runs `git init` unless the target is already inside a Git or Mercurial repository.',
+        'Choose Git initialization explicitly. `--disable-git` remains a spelling alias for `--no-git`. By default, `create-kovo` runs `git init` unless the target is already inside a Git or Mercurial repository.',
+    },
+    {
+      flag: '--disable-git',
+      description: 'Alias for --no-git.',
+      docsDescription: 'Alternate spelling for `--no-git`.',
+    },
+    {
+      flag: '--install[=auto|never]',
+      description: CREATE_KOVO_CREATOR_SCHEMA.install.description,
+      defaultText: 'never for explicit non-interactive invocations.',
+      docsDescription:
+        'Run the policy-pinned `pnpm install` after scaffolding, or select `never`. `--no-install` selects `never`. Interactive use defaults to `auto`.',
+    },
+    {
+      flag: '--no-install',
+      description: 'Write files without installing dependencies.',
+      docsDescription: 'Alias for `--install=never`.',
+    },
+    {
+      flag: `--deployment <${creatorChoiceValues('deploymentTarget').join('|')}>`,
+      description: CREATE_KOVO_CREATOR_SCHEMA.deploymentTarget.description,
+      defaultText: `${CREATE_KOVO_CREATOR_SCHEMA.deploymentTarget.nonInteractiveDefault}.`,
+      docsDescription: 'Select the built-in deployment preset emitted into `kovo.config.ts`.',
+    },
+    {
+      flag: `--retention <${creatorChoiceValues('retention').join('|')}>`,
+      description: CREATE_KOVO_CREATOR_SCHEMA.retention.description,
+      defaultText: `${CREATE_KOVO_CREATOR_SCHEMA.retention.nonInteractiveDefault}.`,
+      docsDescription:
+        'Keep the build fail-closed with `unconfigured`, or assert the exact SPEC §14 floor with `retained-24h` only when the serving layer really retains both required artifact classes.',
+    },
+    {
+      flag: '--yes',
+      description: 'Accept schema defaults without interactive prompts.',
+      docsDescription:
+        'Use deterministic schema defaults. A target directory is still required; pass explicit flags to override any default.',
     },
     {
       flag: '-h, --help',
@@ -143,13 +204,17 @@ export const CREATE_KOVO_REFERENCE = {
   ],
   examples: [
     'create-kovo my-app',
+    'create-kovo my-app --yes --no-install',
     'create-kovo my-app --name acme-todos',
+    'create-kovo my-app --deployment node --retention retained-24h',
     'create-kovo my-app --dialect sqlite --experimental-sqlite',
   ],
   defaults: [
     { label: 'target-directory', value: 'Required.' },
     { label: 'name', value: 'basename(target-directory), normalized for npm.' },
     { label: 'dialect', value: 'postgres.' },
+    { label: 'install (non-interactive)', value: 'never.' },
+    { label: 'deployment', value: 'node; retention unconfigured.' },
     { label: 'package manager', value: `${rootPackageManager()}.` },
   ],
   sections: [
@@ -160,6 +225,15 @@ export const CREATE_KOVO_REFERENCE = {
         'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
         'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholders visible and documents the required production `BETTER_AUTH_URL`, generated-Node public-origin posture, Postgres runtime/admin URL split, PGlite data dir, and driver overrides. Framework bootstrap loads and pins that environment before generated app modules run, and the Better Auth constructors fail closed when required secrets or production origin are missing or invalid.',
         'SQLite scaffolds are explicit opt-in: pass `--experimental-sqlite` with `--sqlite` or `--dialect sqlite`, or set `KOVO_EXPERIMENTAL_SQLITE=1`. The generated SQLite README repeats that it is a single-principal local-development scaffold, not the Postgres authorization/confidentiality posture.',
+      ],
+    },
+    {
+      title: 'Development host support',
+      anchor: 'development-host-support',
+      body: [
+        `The technical preview policy-tests local development on ${CREATE_KOVO_HOST_POSTURE.supported.join(
+          ' and ',
+        )}. ${CREATE_KOVO_HOST_POSTURE.unsupported} Generated application runtime behavior remains portable where the selected deployment preset supports it; this statement is about the scaffolded local-development journey.`,
       ],
     },
     {
@@ -331,7 +405,10 @@ const gitignoreEntries = [
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);
   const dialect = options.dialect ?? 'postgres';
-  const values = templateValues(packageName, generateAppId());
+  const deploymentTarget =
+    options.deploymentTarget ?? CREATE_KOVO_CREATOR_SCHEMA.deploymentTarget.nonInteractiveDefault;
+  const retention = options.retention ?? CREATE_KOVO_CREATOR_SCHEMA.retention.nonInteractiveDefault;
+  const values = templateValues(packageName, generateAppId(), deploymentTarget, retention);
   const docsVersion = packageVersion('@kovojs/core');
   const csrfSecret = generateCsrfSecret();
   const demoPassword = generateDemoPassword();
@@ -356,7 +433,10 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
         .filter((file) => dialect === 'postgres' || file.postgresOnly !== true)
         .map((file) => ({
           path: file.path,
-          source: renderProjectTemplate(file, dialect, values),
+          source: renderProjectTemplate(file, dialect, values, {
+            deploymentTarget,
+            retention,
+          }),
         })),
       // Generated (non-template) project files: a per-project random CSRF secret and the
       // ignore rules that keep the real secret out of version control.
@@ -372,15 +452,67 @@ function renderProjectTemplate(
   file: TemplateFile,
   dialect: CreateKovoDialect,
   values: Readonly<Record<string, string>>,
+  deployment: {
+    deploymentTarget: CreateKovoDeploymentTarget;
+    retention: CreateKovoRetentionPosture;
+  },
 ): string {
+  if (file.path === 'kovo.config.ts') {
+    return renderKovoConfig(deployment.deploymentTarget, deployment.retention);
+  }
   const source = renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values);
   // The repository stores JSON templates under its own formatter configuration, while a generated
   // app formats the rendered manifest under its Vite+ project configuration. Canonicalize only at
   // this trusted template boundary so placeholder length and dialect-specific arrays cannot make a
   // brand-new app fail its first `vp check`.
-  return file.path === 'package.json'
-    ? `${JSON.stringify(JSON.parse(source) as unknown, null, 2)}\n`
-    : source;
+  if (file.path !== 'package.json') return source;
+  const manifest = JSON.parse(source) as { scripts?: Record<string, string> };
+  if (deployment.deploymentTarget !== 'node' && manifest.scripts !== undefined) {
+    delete manifest.scripts.serve;
+    delete manifest.scripts.start;
+  }
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+function renderKovoConfig(
+  deploymentTarget: CreateKovoDeploymentTarget,
+  retention: CreateKovoRetentionPosture,
+): string {
+  const retained =
+    retention === 'retained-24h'
+      ? [
+          '    retention: {',
+          '      hours: 24,',
+          "      immutableClientModules: 'retained',",
+          "      priorTokenQueryReads: 'retained',",
+          '    },',
+        ]
+      : [];
+  const preset =
+    retained.length === 0
+      ? `${deploymentTarget}()`
+      : [`${deploymentTarget}({`, ...retained, '  })'].join('\n');
+  return [
+    `import { defineConfig, ${deploymentTarget} } from '@kovojs/server/build';`,
+    '',
+    'export default defineConfig({',
+    `  preset: ${preset},`,
+    '});',
+    ...(retention === 'unconfigured'
+      ? [
+          '',
+          '// SPEC §14: this build remains fail-closed for client islands until your serving layer',
+          '// retains prior immutable /c/__v/... modules and prior-token /_q reads for at least 24',
+          '// hours. Re-run create-kovo with --retention retained-24h only when that is true, or',
+          '// configure the equivalent reviewed retention proof here.',
+        ]
+      : [
+          '',
+          '// SPEC §14: this declaration is a deployment assertion. Keep it only while the serving',
+          '// layer retains both named artifact classes for the full 24-hour window.',
+        ]),
+    '',
+  ].join('\n');
 }
 
 export function writeKovoProject(
@@ -390,6 +522,8 @@ export function writeKovoProject(
   const root = resolve(targetDirectory);
   const configuredName = ownScaffoldOption(options, 'name');
   const configuredDialect = ownScaffoldOption(options, 'dialect');
+  const configuredDeploymentTarget = ownScaffoldOption(options, 'deploymentTarget');
+  const configuredRetention = ownScaffoldOption(options, 'retention');
   const disableGit = ownScaffoldOption(options, 'disableGit');
   if (configuredName !== undefined && typeof configuredName !== 'string') {
     throw new TypeError("create-kovo option 'name' must be a string.");
@@ -404,10 +538,28 @@ export function writeKovoProject(
   if (disableGit !== undefined && typeof disableGit !== 'boolean') {
     throw new TypeError("create-kovo option 'disableGit' must be a boolean.");
   }
+  if (
+    configuredDeploymentTarget !== undefined &&
+    !creatorChoiceValues('deploymentTarget').includes(configuredDeploymentTarget)
+  ) {
+    throw new TypeError(
+      "create-kovo option 'deploymentTarget' must be 'node', 'vercel', or 'cloudflare'.",
+    );
+  }
+  if (
+    configuredRetention !== undefined &&
+    !creatorChoiceValues('retention').includes(configuredRetention)
+  ) {
+    throw new TypeError("create-kovo option 'retention' must be 'unconfigured' or 'retained-24h'.");
+  }
   const name = configuredName ?? basename(root);
   const project = createKovoProject({
+    ...(configuredDeploymentTarget === undefined
+      ? {}
+      : { deploymentTarget: configuredDeploymentTarget }),
     ...(configuredDialect === undefined ? {} : { dialect: configuredDialect }),
     name,
+    ...(configuredRetention === undefined ? {} : { retention: configuredRetention }),
   });
 
   assertWritableTarget(root);
@@ -522,18 +674,159 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   try {
     const options = readCreateKovoCliOptions(args);
-    assertCreateKovoSqliteScaffoldAllowed(options);
-    const result = writeKovoProject(options.targetDirectory, {
-      ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
-      ...(options.name === undefined ? {} : { name: options.name }),
-      ...(options.disableGit === undefined ? {} : { disableGit: options.disableGit }),
-    });
-    process.stdout.write(renderSuccess(result, options.dialect ?? 'postgres'));
-    return 0;
+    return runCreateKovoCli(options);
   } catch (error) {
     process.stderr.write(renderCliError(error));
     return 1;
   }
+}
+
+export type CreateKovoPrompt = (question: string) => Promise<string>;
+
+/**
+ * Interactive bin adapter. Explicit argv always uses the same deterministic parser as `main`;
+ * prompt answers are projected into that parser's semantic result shape before any filesystem
+ * write. Tests and embedders may inject `ask` without replacing stdin/stdout globals.
+ */
+export async function mainAsync(
+  args: readonly string[] = process.argv.slice(2),
+  { ask }: { ask?: CreateKovoPrompt } = {},
+): Promise<number> {
+  if (args.length > 0 || ask === undefined) return main(args);
+
+  try {
+    const options = await readInteractiveCreateKovoOptions(ask);
+    return runCreateKovoCli(options);
+  } catch (error) {
+    process.stderr.write(renderCliError(error));
+    return 1;
+  }
+}
+
+export async function readInteractiveCreateKovoOptions(
+  ask: CreateKovoPrompt,
+): Promise<CreateKovoCliOptions> {
+  const targetDirectory = await promptText(
+    ask,
+    'Target directory',
+    CREATE_KOVO_CREATOR_SCHEMA.name.interactiveDefault,
+  );
+  const name = await promptText(
+    ask,
+    CREATE_KOVO_CREATOR_SCHEMA.name.label,
+    basename(targetDirectory),
+  );
+  const dialect = await promptChoice(ask, 'dialect');
+  const install = await promptChoice(ask, 'install');
+  const git = await promptChoice(ask, 'git');
+  const deploymentTarget = await promptChoice(ask, 'deploymentTarget');
+  const retention = await promptChoice(ask, 'retention');
+  return {
+    deploymentTarget,
+    disableGit: git === 'skip',
+    dialect,
+    ...(dialect === 'sqlite' ? { experimentalSqlite: true } : {}),
+    install,
+    name,
+    retention,
+    targetDirectory,
+  };
+}
+
+function runCreateKovoCli(options: CreateKovoCliOptions): number {
+  const dialect = options.dialect ?? CREATE_KOVO_CREATOR_SCHEMA.dialect.nonInteractiveDefault;
+  const install = options.install ?? CREATE_KOVO_CREATOR_SCHEMA.install.nonInteractiveDefault;
+  const deploymentTarget =
+    options.deploymentTarget ?? CREATE_KOVO_CREATOR_SCHEMA.deploymentTarget.nonInteractiveDefault;
+  const retention = options.retention ?? CREATE_KOVO_CREATOR_SCHEMA.retention.nonInteractiveDefault;
+  const resolvedOptions: CreateKovoCliOptions = {
+    ...options,
+    deploymentTarget,
+    dialect,
+    install,
+    retention,
+  };
+  assertCreateKovoSqliteScaffoldAllowed(resolvedOptions);
+  const result = writeKovoProject(options.targetDirectory, {
+    deploymentTarget,
+    dialect,
+    ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.disableGit === undefined ? {} : { disableGit: options.disableGit }),
+    retention,
+  });
+  if (install === 'auto') installKovoProject(result.root);
+  process.stdout.write(
+    renderSuccess(result, {
+      deploymentTarget,
+      dialect,
+      install,
+      retention,
+    }),
+  );
+  return 0;
+}
+
+function installKovoProject(root: string): void {
+  const packageManager = packageManagerCommand();
+  try {
+    createKovoCommandShell.execFileSync(packageManager, ['install'], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+  } catch (error) {
+    throw new CreateKovoInstallError(
+      root,
+      `${packageManager} install failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+class CreateKovoInstallError extends Error {
+  readonly root: string;
+
+  constructor(root: string, message: string) {
+    super(message);
+    this.root = root;
+  }
+}
+
+async function promptText(
+  ask: CreateKovoPrompt,
+  label: string,
+  defaultValue: string,
+): Promise<string> {
+  const answer = (await ask(`${label} [${defaultValue}]: `)).trim();
+  return answer.length === 0 ? defaultValue : answer;
+}
+
+async function promptChoice<
+  Key extends keyof Pick<
+    typeof CREATE_KOVO_CREATOR_SCHEMA,
+    'deploymentTarget' | 'dialect' | 'git' | 'install' | 'retention'
+  >,
+>(
+  ask: CreateKovoPrompt,
+  key: Key,
+): Promise<(typeof CREATE_KOVO_CREATOR_SCHEMA)[Key]['choices'][number]['value']> {
+  const field = CREATE_KOVO_CREATOR_SCHEMA[key];
+  const choices = field.choices;
+  const lines = choices.map(
+    (choice, index) => `${String(index + 1)}. ${choice.label} — ${choice.description}`,
+  );
+  const defaultIndex = choices.findIndex((choice) => choice.value === field.interactiveDefault);
+  const answer = (
+    await ask(`${field.label}\n${lines.join('\n')}\nChoice [${String(defaultIndex + 1)}]: `)
+  ).trim();
+  const selectedIndex = answer.length === 0 ? defaultIndex : Number(answer) - 1;
+  const selected = choices[selectedIndex];
+  if (selected === undefined || !Number.isInteger(selectedIndex)) {
+    throw new Error(
+      `Invalid ${field.label.toLowerCase()} choice: ${answer || '<empty>'}. Expected 1-${String(
+        choices.length,
+      )}.`,
+    );
+  }
+  return selected.value;
 }
 
 function readTemplate(path: string): string {
@@ -554,9 +847,15 @@ function renderTemplate(source: string, values: Readonly<Record<string, string>>
   });
 }
 
-function templateValues(name: string, appId: string): Record<string, string> {
+function templateValues(
+  name: string,
+  appId: string,
+  deploymentTarget: CreateKovoDeploymentTarget,
+  retention: CreateKovoRetentionPosture,
+): Record<string, string> {
   return {
     app_id: appId,
+    deployment_target: deploymentTarget,
     kovo_better_auth_version: packageVersion('@kovojs/better-auth'),
     kovo_browser_version: packageVersion('@kovojs/browser'),
     kovo_cli_version: packageVersion('@kovojs/cli'),
@@ -567,6 +866,11 @@ function templateValues(name: string, appId: string): Record<string, string> {
     kovo_ui_version: packageVersion('@kovojs/ui'),
     name,
     package_manager: rootPackageManager(),
+    production_start_command:
+      deploymentTarget === 'node'
+        ? 'npm start            # NODE_ENV=production node dist/server/server.mjs'
+        : `# deploy dist/ with the generated ${deploymentTarget} preset output`,
+    retention_posture: retention,
   };
 }
 
@@ -720,19 +1024,40 @@ function isInsideVersionControl(root: string): boolean {
   }
 }
 
-function renderSuccess(result: WriteKovoProjectResult, dialect: CreateKovoDialect): string {
+function renderSuccess(
+  result: WriteKovoProjectResult,
+  options: {
+    deploymentTarget: CreateKovoDeploymentTarget;
+    dialect: CreateKovoDialect;
+    install: CreateKovoInstallChoice;
+    retention: CreateKovoRetentionPosture;
+  },
+): string {
+  const packageManager = packageManagerCommand();
   return [
     'Kovo app created',
     '',
     `  Directory   ${result.root}`,
     `  Name        ${result.name}`,
-    `  Dialect     ${dialect}`,
+    `  Dialect     ${options.dialect}`,
+    `  Deploy      ${options.deploymentTarget}`,
+    `  Retention   ${options.retention}`,
+    `  Install     ${options.install === 'auto' ? 'complete' : 'skipped'}`,
+    `  Git         ${existsSync(resolve(result.root, '.git')) ? 'initialized' : 'not initialized'}`,
     `  Files       ${result.files.length}`,
+    ...(options.dialect === 'sqlite'
+      ? [
+          '',
+          '  WARNING SQLite is experimental and single-principal/local-dev only.',
+          '  It does not provide Kovo authorization or confidentiality guarantees.',
+        ]
+      : []),
     '',
     'Next steps',
     `  cd ${shellQuote(result.root)}`,
-    `  ${packageManagerCommand()} install`,
-    `  ${packageManagerCommand()} run dev`,
+    ...(options.install === 'never' ? [`  ${packageManager} install`] : []),
+    `  ${packageManager} run dev`,
+    `  ${packageManager} run check`,
     '',
   ].join('\n');
 }
@@ -750,7 +1075,17 @@ function renderCliError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const lines = [`create-kovo: ${message}`];
 
-  if (message === 'Missing target directory.') {
+  if (error instanceof CreateKovoInstallError) {
+    lines.push(
+      '',
+      'The project files were created, but dependency installation did not complete.',
+      '',
+      `  cd ${shellQuote(error.root)}`,
+      `  ${packageManagerCommand()} install`,
+      `  ${packageManagerCommand()} run dev`,
+      `  ${packageManagerCommand()} run check`,
+    );
+  } else if (message === 'Missing target directory.') {
     lines.push(
       '',
       `Usage: ${CREATE_KOVO_USAGE}`,
@@ -775,7 +1110,8 @@ function renderCliError(error: unknown): string {
     );
   } else if (
     message.startsWith('SQLite scaffold is experimental') ||
-    message.startsWith('Unsupported dialect: ') ||
+    message.startsWith('Unsupported value for ') ||
+    message.startsWith('Option ') ||
     message.startsWith('Unknown option: ') ||
     message.startsWith('Missing value for ') ||
     message.startsWith('Unexpected argument: ')
@@ -797,5 +1133,16 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  process.exitCode = main();
+  if (process.argv.length === 2 && process.stdin.isTTY && process.stdout.isTTY) {
+    const prompts = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      process.exitCode = await mainAsync([], {
+        ask: (question) => prompts.question(question),
+      });
+    } finally {
+      prompts.close();
+    }
+  } else {
+    process.exitCode = main();
+  }
 }
