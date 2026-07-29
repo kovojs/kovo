@@ -1080,11 +1080,7 @@ export async function runBuildCommand(
     );
     const graphWithProof: CoreGraph.KovoCheckInput = {
       ...graphWithProvenance,
-      proof: createKovoGraphProof(
-        graphWithProvenance,
-        appBuildToken,
-        declaredKovoAppId(app),
-      ),
+      proof: createKovoGraphProof(graphWithProvenance, appBuildToken, declaredKovoAppId(app)),
     };
     const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
     const completedCheckGraph: CoreGraph.KovoCheckInput = {
@@ -2491,7 +2487,7 @@ async function staticBuildCheckGraph(
   // evaluation. Recompiling or re-reading identity files here would create a second carrier whose
   // verdict could disagree with the exact bytes admitted by the pre-evaluation gate.
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
-  // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
+  // (`kovo explain capabilities`) and credential-cookie downgrade (`cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
   // still enumerates its whole intentional-security-hole surface for a reviewer. (The runtime
   // `drain*Facts()` collectors only fire during live requests and never populate a built graph.)

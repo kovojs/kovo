@@ -1081,7 +1081,7 @@ export const save = mutation('cart/save', {
     `);
   });
 
-  it('lists every mutation CSRF posture in --endpoints alongside endpoints (SPEC §11.4)', () => {
+  it('lists every mutation CSRF posture in the endpoints view (SPEC §11.4)', () => {
     const result = kovoExplain(
       {
         endpoints: [
@@ -1121,7 +1121,7 @@ export const save = mutation('cart/save', {
     `);
   });
 
-  it('accepts kovo explain --endpoints as a CLI audit mode', () => {
+  it('accepts kovo explain endpoints as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-endpoints-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -1218,8 +1218,8 @@ export const save = mutation('cart/save', {
   });
 
   // SPEC §6.6 (KV426, audit-only): the trust-escape producer rides through deriveAppGraph and
-  // `kovo explain --trust` enumerates an app `trustedHtml(...)` call site.
-  it('surfaces an app trust escape end-to-end through --trust', async () => {
+  // `kovo explain trust` enumerates an app `trustedHtml(...)` call site.
+  it('surfaces an app trust escape end-to-end through the trust view', async () => {
     const { collectTrustEscapesFromProject } = await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
@@ -1247,9 +1247,9 @@ export const save = mutation('cart/save', {
   });
 
   // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: the capability-escape producer rides through
-  // deriveAppGraph and `kovo explain --capabilities` enumerates every app-authored escape CALL SITE
+  // deriveAppGraph and `kovo explain capabilities` enumerates every app-authored escape CALL SITE
   // from REAL source — not a hand-injected graph. This is the end-to-end proof for M3.
-  it('surfaces app escape-hatch call sites end-to-end through --capabilities', async () => {
+  it('surfaces app escape-hatch call sites end-to-end through the capabilities view', async () => {
     const { collectCapabilityEscapesFromProject } = await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
@@ -1303,9 +1303,9 @@ import { declarePublicRelation } from '@kovojs/server/postgres';`,
   });
 
   // SPEC §6.6 (audit-only): a typed boot credential reveal uses the existing reveal-fact graph.
-  // `--capabilities` may fold the same fact for a combined audit, but there is no parallel
+  // `capabilities` may fold the same fact for a combined audit, but there is no parallel
   // capability producer for the declassification call.
-  it('surfaces a typed declassification policy end-to-end through --revealed', async () => {
+  it('surfaces a typed declassification policy end-to-end through the revealed view', async () => {
     const { collectRuntimeRevealFactsFromProject } =
       await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
@@ -1351,9 +1351,9 @@ import { declarePublicRelation } from '@kovojs/server/postgres';`,
   });
 
   // SPEC §6.6/§9.1 (audit-only), M3: the cookie-downgrade producer rides through deriveAppGraph and
-  // `kovo explain --cookies` surfaces a `serializeCookie(..., { unsafe: unsafeCookie(...) })` from
+  // `kovo explain cookies` surfaces a `serializeCookie(..., { unsafe: unsafeCookie(...) })` from
   // REAL source (this field previously had no static producer at all).
-  it('surfaces a credential-cookie downgrade end-to-end through --cookies', async () => {
+  it('surfaces a credential-cookie downgrade end-to-end through the cookies view', async () => {
     const { collectCookieDowngradesFromProject } = await import('@kovojs/drizzle/internal/static');
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
@@ -1402,9 +1402,9 @@ import { unsafeCookie } from '@kovojs/server/security';`,
   // `postgresRoleTopology`, `authAdapterDb`) that have NO per-app call site and so no static
   // producer (they are tracked by the capability-surface census gate; see threat-matrix-plan.md M3).
   // The REAL app-authored producer path is proven separately by the source-driven
-  // `--capabilities`/`--cookies` end-to-end tests above (collectCapabilityEscapesFromProject →
+  // `capabilities`/`cookies` end-to-end tests above (collectCapabilityEscapesFromProject →
   // deriveAppGraph → kovo explain).
-  it('renders the held dangerous-capability audit table for every capability kind (--capabilities)', () => {
+  it('renders the held dangerous-capability audit table for every capability kind', () => {
     const result = kovoExplain(
       {
         capabilities: [
@@ -1598,7 +1598,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     expect(result.output).not.toMatch(/liveStatus=(?:fresh|renewing|shed)/);
   });
 
-  it('prints the cookie downgrade audit table (--cookies)', () => {
+  it('prints the cookie downgrade audit table', () => {
     const result = kovoExplain(
       {
         cookieDowngrades: [
@@ -1711,7 +1711,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     `);
   });
 
-  it('accepts kovo explain --revealed as a CLI audit mode', () => {
+  it('accepts kovo explain revealed as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-revealed-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -1756,7 +1756,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     );
   });
 
-  it('accepts kovo explain --trust as a CLI audit mode', () => {
+  it('accepts kovo explain trust as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-trust-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -1872,7 +1872,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     `);
   });
 
-  it('accepts kovo explain --access as a CLI audit mode', () => {
+  it('accepts kovo explain access as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -1913,7 +1913,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     `);
   });
 
-  it('fails kovo explain --access when requested and missing decisions exist', () => {
+  it('fails kovo explain access when requested and missing decisions exist', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -2036,7 +2036,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     `);
   });
 
-  it('accepts kovo explain --unscoped as a CLI audit mode', () => {
+  it('accepts kovo explain unscoped as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
@@ -2077,7 +2077,7 @@ import { unsafeCookie } from '@kovojs/server/security';`,
     `);
   });
 
-  it('fails kovo explain --unscoped when requested and findings exist', () => {
+  it('fails kovo explain unscoped when requested and findings exist', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';

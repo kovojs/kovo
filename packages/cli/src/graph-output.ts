@@ -425,7 +425,7 @@ export type KovoExplainInput = unknown;
  * Run the `kovo explain` verifier in-process against an extracted graph.
  *
  * Prints the stable `kovo-explain/v1` graph view selected by `options`: a single
- * component, mutation, query, or page subject; the `--endpoints` machine-ingress
+ * component, mutation, query, or page subject; the `endpoints` machine-ingress
  * audit; or an access audit (SPEC.md §5.3 and §11.4).
  * The printed format is stable so agents and graph queries can answer intent-level
  * questions over it (SPEC.md §1.1 proof claims). Returns the text plus an exit

@@ -355,7 +355,7 @@ export interface KovoExplainInput extends KovoCheckInput {
   pages?: readonly PageExplain[];
 }
 
-/** @internal Compiler-owned exact tool closure consumed by `kovo explain --agent`. */
+/** @internal Compiler-owned exact tool closure consumed by `kovo explain agent`. */
 export interface AgentToolExplainFact {
   minimumIntegrity: import('./internal/security-operation-ir.js').AgentIntegrity;
   mutation: string;
@@ -379,7 +379,7 @@ export type GrantRightKind = 'delegate' | 'delegated-owner' | 'owner' | 'policy'
 
 /**
  * @internal Compiler-derived grant model and transition verdicts consumed by
- * `kovo check` and `kovo explain --grants` (SPEC §10.3).
+ * `kovo check` and `kovo explain grants` (SPEC §10.3).
  */
 export type GrantExplainFact =
   | {
@@ -792,7 +792,7 @@ export interface OwnerDomainFact {
 export interface ScopeAuditFact {
   detail?: string;
   domain: string;
-  /** SPEC §10.3: a recorded public-read justification — suppresses KV414 in `kovo check` while still surfaced by `kovo explain --unscoped`. */
+  /** SPEC §10.3: a recorded public-read justification — suppresses KV414 in `kovo check` while still surfaced by `kovo explain unscoped`. */
   justification?: string;
   /** SPEC §10.3: exact client-visible owner key this `args` scope fact is about, e.g. `arg:id`. */
   key?: string;
@@ -897,7 +897,7 @@ export interface ToctouFact {
 
 /**
  * @internal Closed runtime registry for every trust-escape kind rendered by
- * `kovo explain --trust` (SPEC.md §2). The threat-matrix liveness gate consumes
+ * `kovo explain trust` (SPEC.md §2). The threat-matrix liveness gate consumes
  * this value so widening the audit surface cannot silently outgrow its matrix cell.
  */
 export const AUDITED_TRUST_ESCAPE_KINDS = freezeSecurityValue([
@@ -994,7 +994,7 @@ export interface UnregisteredSinkFact {
 
 /**
  * @internal Closed runtime registry for every dangerous capability kind rendered
- * by `kovo explain --capabilities` (SPEC.md §2/§6.6). The threat-matrix
+ * by `kovo explain capabilities` (SPEC.md §2/§6.6). The threat-matrix
  * liveness gate consumes this value as the audited escape/capability denominator.
  */
 export const AUDITED_CAPABILITY_KINDS = freezeSecurityValue([
@@ -1019,7 +1019,7 @@ export const AUDITED_CAPABILITY_KINDS = freezeSecurityValue([
 ] as const);
 
 /**
- * @internal A held dangerous *capability* surfaced by `kovo explain --capabilities` (SPEC §6.6,
+ * @internal A held dangerous *capability* surfaced by `kovo explain capabilities` (SPEC §6.6,
  * audit-only, threat-matrix M3). One row per declared escape: a `publishToClient` secret-emit escape
  * (KV437), an egress `allowInternal` private-network entry, a confidentiality `trustedReveal`, an
  * audited `crossOwnerRead`/`rawRead`, a `serverValue`/`trustedAssign` privileged-write escape
@@ -1070,7 +1070,7 @@ export interface StructuredAuditObligationFact {
  * `root` rows census every untrusted-data surface. `summary` rows pin the exact installed package
  * verdict. `door` rows show a reviewed framework capability reached from a root, and `closed` rows
  * preserve the KV448 provenance that stopped the build. The path is ordered root → transfers →
- * terminal module/package so `kovo explain --capabilities` and diagnostics share one proof object.
+ * terminal module/package so `kovo explain capabilities` and diagnostics share one proof object.
  *
  * @internal
  */
@@ -1181,7 +1181,7 @@ export interface AppDependencyCapabilityManifest {
 }
 
 /**
- * @internal A recorded insecure cookie downgrade surfaced by `kovo explain --cookies` (SPEC
+ * @internal A recorded insecure cookie downgrade surfaced by `kovo explain cookies` (SPEC
  * §6.6/§9.1, audit-only). Mirrors `@kovojs/server`'s runtime `CookieDowngradeFact` so the renderer
  * can read it off the graph without importing server. One row per `serializeCookie` call that
  * intentionally weakens a credential cookie's floor through `unsafeCookie`.

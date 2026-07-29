@@ -602,6 +602,10 @@ describe('diagnostic registry', () => {
         },
         "KV402": {
           "code": "KV402",
+          "help": "Would lower to: a mutation whose declared writes and invalidations cover every domain observed by the static and runtime touch graphs.
+      Blocked reason: the write reached a domain outside the declared mutation touch set, so affected queries could remain silently stale.
+      Fixes: add the observed domain to the mutation writes/invalidates declaration, move the write behind the correct domain operation, or remove the unintended write; then rerun kovo check.
+      SPEC §10.3/§11.2 makes the derived touch graph a superset check over declared mutation domains.",
           "message": "Write touched an undeclared domain.",
           "severity": "error",
         },
@@ -612,6 +616,10 @@ describe('diagnostic registry', () => {
         },
         "KV404": {
           "code": "KV404",
+          "help": "Would lower to: a Drizzle table mapped to one Kovo domain, or an explicit write-only exempt table that no query reads.
+      Blocked reason: a write reached an unmapped table, so Kovo cannot assign its invalidation domain or prove which query data became stale.
+      Fixes: add kovo((columns) => ({ domain: "name" })) metadata to the table, or mark a genuinely write-only table exempt; then rerun kovo check.
+      SPEC §10.1/§11.2 requires every written table to be mapped or explicitly exempt, and rejects queries over exempt tables with KV411.",
           "message": "Write to unmapped table.",
           "severity": "error",
         },
@@ -675,7 +683,7 @@ describe('diagnostic registry', () => {
           "help": "Would lower to: an owner-scoped read/write whose key predicate is traceable to req.session or an owns() ownership guard.
       Blocked reason: this query or write reaches an owner-annotated table through a client-visible key that is not tied to the session principal, so one user could read or mutate another user's rows (IDOR).
       Fixes: scope the predicate by a session field (e.g. eq(table.id, req.session.userId)), add an owns() ownership guard, or record a public-read justification if the table is genuinely public.
-      SPEC §10.1/§10.3/§11.2 make the --unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.",
+      SPEC §10.1/§10.3/§11.2 make the unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.",
           "message": "Owner-table access is not scoped to the session principal (IDOR).",
           "severity": "error",
         },
@@ -782,7 +790,7 @@ describe('diagnostic registry', () => {
         "KV426": {
           "code": "KV426",
           "help": "Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
-      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
+      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain trust.
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
       SPEC §4.8/§9.1 and fundamental-fixes-followup-3 DEC-D/DEC-F: KV426 is an auditable static provenance signal; contextual renderer/header/URL runtime chokes and unforgeable trusted constructors remain the security boundary when static provenance is incomplete.",
           "message": "Trust escape hatch lacks auditable provenance.",
@@ -792,7 +800,7 @@ describe('diagnostic registry', () => {
           "code": "KV428",
           "help": "Would lower to: an upload served Content-Disposition: attachment + X-Content-Type-Options: nosniff, with the served Content-Type minted from sniffed bytes (server truth), not the client-declared MIME.
       Blocked reason: rendering an upload inline (disposition inline, or trusting the client Content-Type) lets attacker-controlled bytes — HTML/SVG/polyglots — execute as active content same-origin.
-      Fixes: serve attachment + nosniff (the default), or opt into inline only for verified-safe bytes (deep-sniffed or framework re-encoded/rasterized); use accept.unverified() as the audited escape, surfaced in kovo explain --capabilities.
+      Fixes: serve attachment + nosniff (the default), or opt into inline only for verified-safe bytes (deep-sniffed or framework re-encoded/rasterized); use accept.unverified() as the audited escape, surfaced in kovo explain capabilities.
       SPEC §6.6/§9.1 and secure-framework Phase 6: the guarantee is "attacker bytes are never rendered inline as active content", a runtime defense-in-depth floor, not "the sniffed type is unspoofable".",
           "message": "Inline rendering of an unverified-content-type upload.",
           "severity": "error",
@@ -828,7 +836,7 @@ describe('diagnostic registry', () => {
           "code": "KV432",
           "help": "Would lower to: a Set-Cookie minted through the typed cookie builder with HttpOnly + Secure(prod) + an explicit SameSite derived from the cookie class.
       Blocked reason: an insecure downgrade (HttpOnly/Secure false, or SameSite=None) of a session/auth-reachable cookie strips the floor that defends the session id against XSS theft, MITM, and CSRF.
-      Fixes: keep the class-derived secure floor, or record the downgrade explicitly with unsafeCookie({ downgrade, justification }), surfaced in kovo explain --cookies.
+      Fixes: keep the class-derived secure floor, or record the downgrade explicitly with unsafeCookie({ downgrade, justification }), surfaced in kovo explain cookies.
       SPEC §6.6/§9.1 and secure-framework Phase 5: the cookie-attribute floor is by-construction at the single Set-Cookie sink; the downgrade path is audit-grade.",
           "message": "Insecure cookie downgrade without a recorded justification.",
           "severity": "error",
@@ -846,7 +854,7 @@ describe('diagnostic registry', () => {
           "code": "KV434",
           "help": "Would lower to: a wire string validator backed by a blessed linear matcher (email/url/uuid/slug) or a compile-visible literal pattern with known exponential structures rejected; runtime also applies an input-size cap, not a CPU bound.
       Blocked reason: a non-linear-safe or non-literal pattern in a wire string validator is a ReDoS vector — catastrophic backtracking turns a short input into unbounded CPU.
-      Fixes: use a blessed format, give pattern() a compile-visible literal with no nested/overlapping quantifiers, or take the ReDoS risk explicitly with unsafeRegex(re, justification), surfaced in kovo explain --capabilities.
+      Fixes: use a blessed format, give pattern() a compile-visible literal with no nested/overlapping quantifiers, or take the ReDoS risk explicitly with unsafeRegex(re, justification), surfaced in kovo explain capabilities.
       SPEC §6.6/§9.5 and secure-framework Phase 6: blessed formats are by-construction; pattern() is by-construction-ish (literal structural reject + runtime input-size cap); a full linear engine is deferred.",
           "message": "Non-linear-safe pattern literal in a wire string validator.",
           "severity": "error",
@@ -864,7 +872,7 @@ describe('diagnostic registry', () => {
           "code": "KV436",
           "help": "Would lower to: a query, mutation, route, endpoint, or webhook with a total access decision recorded in the app graph.
       Blocked reason: the surface has no explicit access decision, so review cannot distinguish an intentional public or machine-verified entry from an accidentally reachable handler.
-      Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain --access to inspect the ledger before enabling the strict gate.
+      Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain access to inspect the ledger before enabling the strict gate.
       SPEC §10.2/§11.3 and the secure-by-construction Phase 2 plan require authorization to be default-deny through explicit access decisions, not through inferred defaults.",
           "message": "Missing explicit access decision.",
           "severity": "error",
@@ -873,7 +881,7 @@ describe('diagnostic registry', () => {
           "code": "KV437",
           "help": "Would lower to: a client handler module whose captured imports and same-file module constants are explicitly proven client-safe before emission.
       Blocked reason: a client handler closure that captures a server-only binding (a secret/process.env-derived value, any cross-module import not provably client-safe, or a same-file literal not explicitly public) re-emits it verbatim into the client bundle, leaking confidential server state to the browser.
-      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain --capabilities.
+      Fixes: do not capture the server value in client code; pass a server-computed safe value as a prop, or use publishToClient(value, { reason }) as the audited escape, surfaced in kovo explain capabilities.
       SPEC §6.6/§6.2 and secure-framework Phase 4/Tier 0: the emit filter is fail-closed whole-channel (a narrow process.env/brand-only gate is unsound — call-wrapped secrets escape).",
           "message": "Server-only value captured into a client handler reaches the client bundle.",
           "severity": "error",
@@ -882,7 +890,7 @@ describe('diagnostic registry', () => {
           "code": "KV438",
           "help": "Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo((columns) => ({ governed: [columns.role] }))) receive only server-derived, literal, or explicitly-asserted values — never raw request input.
       Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).
-      Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, { invariant: 'governed-write.authorized-principal', why: ..., evidence: ... }) with the exact inline structured obligation (surfaced in kovo explain --capabilities and emitted for detached review). App analyzer summaries cannot declare server provenance.
+      Fixes: assign the column from a structurally proven server/private value (req.session/guard/tenant) or a literal; serverValue(value, reason) accepts only an independently proven non-input value and rejects opaque helpers; for a deliberate privileged write use trustedAssign(input.x, { invariant: 'governed-write.authorized-principal', why: ..., evidence: ... }) with the exact inline structured obligation (surfaced in kovo explain capabilities and emitted for detached review). App analyzer summaries cannot declare server provenance.
       SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).",
           "message": "Request input reaches a governed column (mass assignment).",
           "severity": "error",

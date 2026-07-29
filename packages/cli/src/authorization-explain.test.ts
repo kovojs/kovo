@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { parseExplainArgs } from './graph-args.js';
 import { kovoExplain } from './graph-output.js';
 
-describe('kovo explain --authorization', () => {
+describe('kovo explain authorization', () => {
   it('prints deterministic quoted non-correspondence records and one dead-role warning', () => {
     const result = kovoExplain(
       { authorizationCorrespondence: [authorizationFact()] },

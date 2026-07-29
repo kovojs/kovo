@@ -133,7 +133,7 @@ Every source/sink census row MUST also declare one closed residency posture:
 multiple runtime sinks takes the least erasable posture of any covered sink; it cannot hide retained
 task, replay, client, adapter, or external-recipient state behind a transient member. The C9 inventory
 gate MUST fail on a missing or unknown posture, an empty or malformed `unerasable` reason, or an
-`unerasable` count of zero. `kovo explain --sources-sinks`, `kovo check sources-sinks`, and the
+`unerasable` count of zero. `kovo explain sources-sinks`, `kovo check sources-sinks`, and the
 versioned inventory artifact MUST publish each row's posture, and the text summaries MUST publish the
 current `unerasable` count. This count is an honesty metric and erasure-work denominator, not a claim
 that the enumerable postures already implement principal erasure.
@@ -206,7 +206,7 @@ For a Kovo app, the following are checkable **without executing a browser**:
    followed by touch-graph consistency, optimistic exhaustiveness (KV310), update coverage (KV311),
    fixpoint + render-equivalence invariants, capability closure (KV448), and unguarded and unscoped
    audits.
-3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including each component's finite operation rows and the `--capabilities` root/door/package/closed provenance ledger from §6.6.
+3. Graph queries over `kovo explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs, including each component's finite operation rows and the `capabilities` root/door/package/closed provenance ledger from §6.6.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms and derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 
@@ -383,7 +383,7 @@ Every verdict MUST print a non-claim: this command detects authenticated advisor
 published for the artifact posture; even NOT-AFFECTED is not proof that the artifact has no
 vulnerability or no impact outside the feed's version-and-schema scope.
 
-`kovo explain --attest` is the deployment-review composition surface. It first recomputes the
+`kovo explain attest` is the deployment-review composition surface. It first recomputes the
 reviewed graph's artifact subject and posture digest. If the graph contains a `trustedAssign`
 capability, `--escape-reviews <reviews.json>` is mandatory. The detached file has schema
 `kovo.escape-obligation-reviews/v1` and contains one exact signed envelope per graph-derived
@@ -439,7 +439,7 @@ Only then are verified root signatures counted as reviewed and subtracted from u
 The signature authenticates the pinned key holder and those exact bytes; it does not prove the
 asserted custody or human independence true, identify the reviewer, or establish review correctness.
 
-`kovo explain --endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook, every `mutation()`, plus every route that returns `respond.file()`/`respond.stream()`: source-derived registry identity where applicable, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF/effect posture, and for webhooks the write→domain chain. Endpoint posture is `safe:read-only` for the closed `GET`/`HEAD`/`OPTIONS` set from §9.1, `checked` when an unsafe method receives the default synchronizer-token check, or `exempt:<justification>` when an unsafe endpoint explicitly opts out. Mutation posture remains `checked` or `exempt:<justification>`; a `csrf: false` mutation appears here with the latter posture, and KV418 (§6.6) guarantees it references no ambient session. The pre-dispatch coarse limiter posture (§9.5) is enrolled and printed here too. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
+`kovo explain endpoints` is the stable machine-ingress audit. Its diffable table lists every declared endpoint and webhook, every `mutation()`, plus every route that returns `respond.file()`/`respond.stream()`: source-derived registry identity where applicable, method, path, mount mode, auth scheme (`session+guard`, `verifier:<resolved scheme>`, `custom:<name>`, or `none:<justification>`), CSRF/effect posture, and for webhooks the write→domain chain. Endpoint posture is `safe:read-only` for the closed `GET`/`HEAD`/`OPTIONS` set from §9.1, `checked` when an unsafe method receives the default synchronizer-token check, or `exempt:<justification>` when an unsafe endpoint explicitly opts out. Mutation posture remains `checked` or `exempt:<justification>`; a `csrf: false` mutation appears here with the latter posture, and KV418 (§6.6) guarantees it references no ambient session. The pre-dispatch coarse limiter posture (§9.5) is enrolled and printed here too. The command is snapshot-locked with the rest of P8 output so security review can answer "what can reach this app, and what can it touch?" without executing a browser.
 
 Browser tests are a first-class part of the **framework's** own suite: morph runs on every mutation response, and its survival contract (focus, caret, scroll, transitions) plus L0 platform behaviors are irreducibly browser-bound. The reconciliation suite splits accordingly: a browser-free structural property suite (`morph(a, b) ≡ b` with keyed-node identity preserved — runs in jsdom-class DOM), and a named browser suite for the survival contract. The claim is bounded: **application wiring is proof-carrying**, so apps need few or no browser tests of their own — most SPA testing exists to compensate for unverifiable wiring, and Kovo removes that category, not testing itself.
 

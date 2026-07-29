@@ -867,7 +867,7 @@ export interface PublishToClientOptions {
   /**
    * Why this captured cross-module value is safe to ship into the client bundle. Keep the text
    * reviewable and non-sensitive; the compiler records it (with the capture site) for
-   * `kovo explain --capabilities`.
+   * `kovo explain capabilities`.
    */
   reason: string;
 }
@@ -889,7 +889,7 @@ export interface DeclareOffWireOptions {
  * evaluate that module in the browser, so the compiler refuses it even when wrapped. The only
  * accepted client-handler shape is a unique, pristine same-file `const` initialized directly from
  * the finite primitive grammar; the compiler snapshots that literal and records the site + reason
- * for `kovo explain --capabilities`.
+ * for `kovo explain capabilities`.
  *
  * This is the analogue of {@link trustedReveal} for the closure-capture channel: an assertion the
  * reviewer can see. Reach for it only for inert same-file constants the handler needs in the
@@ -1049,7 +1049,7 @@ export type TrustedRevealValue<T> = T extends Secret<infer Value> ? Value : T;
  *
  * The static Drizzle projection analyzer recognizes this function only with an inline,
  * compiler-visible `DeclassifyPolicy.forTrustedReveal({ ownerScope: ... })` call and records the
- * reveal for `kovo explain --revealed`. A policy cannot be selected by request data, reused at a
+ * reveal for `kovo explain revealed`. A policy cannot be selected by request data, reused at a
  * different door, or replaced by caller prose. The runtime constructor/registry is a fail-closed
  * floor; compiler provenance and capability closure own the by-construction checks (SPEC §6.6).
  */

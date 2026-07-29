@@ -86,7 +86,7 @@ export default createApp({
       );
 
       stdout.mockClear();
-      expect(main(['explain', '--endpoints', graphPath])).toBe(0);
+      expect(main(['explain', 'endpoints', graphPath])).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
         'ENDPOINT /download/report.txt surface=route-file method=GET path=/download/report.txt',
@@ -177,7 +177,7 @@ export default createApp({
       );
 
       stdout.mockClear();
-      expect(main(['explain', '--endpoints', graphPath])).toBe(0);
+      expect(main(['explain', 'endpoints', graphPath])).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
         'ENDPOINT /docs/readme.txt surface=route-stream method=GET path=/docs/readme.txt',

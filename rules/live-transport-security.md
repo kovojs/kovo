@@ -15,5 +15,5 @@ Kovo does not currently ship such a channel; this rule is a pre-implementation g
       same-origin CORS posture unless an audited non-browser verifier owns the channel.
 - [ ] Backpressure, retry, reconnect, and replay behavior have byte/rate caps and cannot replay
       one principal's event to another principal.
-- [ ] `kovo explain --endpoints` or its successor reports the live surface, auth scheme, cache
+- [ ] `kovo explain endpoints` or its successor reports the live surface, auth scheme, cache
       posture, channel binding, and write/read domains before release.

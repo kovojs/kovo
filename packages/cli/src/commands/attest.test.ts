@@ -38,7 +38,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
 });
 
-describe('kovo explain --attest', () => {
+describe('kovo explain attest', () => {
   it('reads local evidence through a bounded regular-file descriptor', () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-attest-input-'));
     roots.push(root);

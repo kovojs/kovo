@@ -52,6 +52,8 @@ interface DoctorContext {
   readonly configPath?: string;
   readonly configSource?: string;
   readonly env: NodeJS.ProcessEnv;
+  readonly envPath: string;
+  readonly envSource?: string;
   readonly fix: boolean;
   readonly manifest: Record<string, unknown>;
   readonly manifestPath: string;
@@ -124,11 +126,23 @@ export async function runDoctorCommand(
       configError = errorMessage(error);
     }
   }
+  const envPath = join(root, '.env');
+  let envSource: string | undefined;
+  if (existsSync(envPath)) {
+    try {
+      envSource = boundedText(envPath, MAX_CONFIG_BYTES);
+    } catch {
+      // The finding below remains safe and points at the expected configuration target. Never
+      // copy an environment-file read failure because host paths can contain sensitive context.
+    }
+  }
   const context: DoctorContext = {
     ...(configError === undefined ? {} : { configError }),
     ...(configPath === undefined ? {} : { configPath }),
     ...(configSource === undefined ? {} : { configSource }),
     env: security.invocationEnv,
+    envPath,
+    ...(envSource === undefined ? {} : { envSource }),
     fix: options.fix,
     manifest,
     manifestPath,
@@ -141,6 +155,7 @@ export async function runDoctorCommand(
     checkInstalledPackages(context),
     checkConfig(context),
     checkOrigin(context),
+    checkSecret(context),
     checkDatabase(context),
     checkMigrations(context),
     checkRetention(context),
@@ -282,9 +297,9 @@ function checkConfig(context: DoctorContext): DoctorCheckResult {
 }
 
 function checkOrigin(context: DoctorContext): DoctorCheckResult {
-  const raw =
-    kovoInvocationEnvironmentValue(context.env, 'BETTER_AUTH_URL') ??
-    kovoInvocationEnvironmentValue(context.env, 'KOVO_ORIGIN');
+  const betterAuthOrigin = kovoInvocationEnvironmentValue(context.env, 'BETTER_AUTH_URL');
+  const originName = betterAuthOrigin === undefined ? 'KOVO_ORIGIN' : 'BETTER_AUTH_URL';
+  const raw = betterAuthOrigin ?? kovoInvocationEnvironmentValue(context.env, 'KOVO_ORIGIN');
   if (raw === undefined) return pass('origin', 'mode=loopback-auto');
   let url: URL;
   try {
@@ -294,6 +309,7 @@ function checkOrigin(context: DoctorContext): DoctorCheckResult {
       'KOVO_DOCTOR_ORIGIN',
       'Configured application origin is not a valid URL.',
       'origin',
+      sourceForEnvironment(context, originName),
     );
   }
   const loopback =
@@ -305,9 +321,29 @@ function checkOrigin(context: DoctorContext): DoctorCheckResult {
         ? 'Loopback development origin must use http.'
         : 'Non-loopback application origin must use fixed https.',
       'origin',
+      sourceForEnvironment(context, originName),
     );
   }
   return pass('origin', `mode=${loopback ? 'loopback-explicit' : 'deployment-https'}`);
+}
+
+function checkSecret(context: DoctorContext): DoctorCheckResult {
+  const required =
+    declaresPackage(context.manifest, '@kovojs/better-auth') ||
+    declaresPackage(context.manifest, 'better-auth');
+  if (!required) return pass('secret', 'required=false');
+  if (
+    environmentNameDeclared(context, 'BETTER_AUTH_SECRET') ||
+    environmentNameDeclared(context, 'KOVO_CSRF_SECRET')
+  ) {
+    return pass('secret', 'required=true configured=true');
+  }
+  return finding(
+    'KOVO_DOCTOR_SECRET',
+    'Better Auth requires a framework signing secret, but neither BETTER_AUTH_SECRET nor KOVO_CSRF_SECRET is configured.',
+    'secret',
+    sourceForEnvironment(context, 'KOVO_CSRF_SECRET'),
+  );
 }
 
 function checkDatabase(context: DoctorContext): DoctorCheckResult {
@@ -326,6 +362,7 @@ function checkDatabase(context: DoctorContext): DoctorCheckResult {
       'KOVO_DOCTOR_DATABASE',
       `Database role configuration is incomplete (runtime=${runtime ? 'set' : 'missing'}, system=${system ? 'set' : 'missing'}).`,
       'database',
+      sourceForEnvironment(context, runtime ? 'KOVO_DB_SYSTEM_URL' : 'KOVO_RUNTIME_DATABASE_URL'),
     );
   }
   return pass('database', 'mode=postgres roles=runtime+system');
@@ -339,6 +376,7 @@ function checkMigrations(context: DoctorContext): DoctorCheckResult {
       'KOVO_DOCTOR_MIGRATIONS',
       'No generated migration directory was found.',
       'migrations',
+      configurationInsertionAnchor(context.root, join(context.root, 'migrations')),
     );
   }
   return pass('migrations', `path=${found}`);
@@ -352,7 +390,8 @@ function checkRetention(context: DoctorContext): DoctorCheckResult {
       'KOVO_DOCTOR_RETENTION',
       'Client-bearing source requires an explicit deploy-skew retention declaration.',
       'retention',
-      sourceForConfig(context, 'preset'),
+      sourceForConfig(context, 'preset') ??
+        configurationInsertionAnchor(context.root, join(context.root, 'kovo.config.ts')),
     );
   }
   return pass('retention', 'required=true declared=true');
@@ -586,16 +625,13 @@ function newestMtime(root: string): number {
 }
 
 function environmentNameDeclared(context: DoctorContext, name: string): boolean {
-  if (kovoInvocationEnvironmentValue(context.env, name) !== undefined) return true;
-  const envPath = join(context.root, '.env');
-  if (!existsSync(envPath)) return false;
-  try {
-    return new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=`, 'mu').test(
-      boundedText(envPath, MAX_CONFIG_BYTES),
-    );
-  } catch {
-    return false;
-  }
+  const invocationValue = kovoInvocationEnvironmentValue(context.env, name);
+  if (invocationValue !== undefined) return invocationValue.trim().length > 0;
+  if (context.envSource === undefined) return false;
+  const match = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=([^\\r\\n]*)$`, 'mu').exec(
+    context.envSource,
+  );
+  return match !== null && (match[1] ?? '').trim().length > 0;
 }
 
 function declaresPackage(manifest: Record<string, unknown>, name: string): boolean {
@@ -615,6 +651,23 @@ function sourceForConfig(
   return context.configPath === undefined || context.configSource === undefined
     ? undefined
     : sourceAnchor(context.root, context.configPath, context.configSource, key);
+}
+
+function sourceForEnvironment(context: DoctorContext, key: string): KovoDiagnosticSourceAnchor {
+  return (
+    (context.envSource === undefined
+      ? undefined
+      : sourceAnchor(context.root, context.envPath, context.envSource, key)) ??
+    configurationInsertionAnchor(context.root, context.envPath)
+  );
+}
+
+function configurationInsertionAnchor(root: string, path: string): KovoDiagnosticSourceAnchor {
+  return Object.freeze({
+    end: 0,
+    file: relativeLabel(root, path),
+    start: 0,
+  });
 }
 
 function sourceAnchor(

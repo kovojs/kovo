@@ -146,9 +146,10 @@ The compiler's decision tree, on demand. `explain` has one discriminated grammar
 `explain` is always a view (`component`, `mutation`, `query`, `page`, `context`, `task`,
 `access`, `agent`, `authorization`, `auth-lifecycle`, `capabilities`, `cookies`, `document`,
 `endpoints`, `grants`, `model-boundaries`, `revealed`, `sources-sinks`, `tasks`, `trust`,
-`unguarded`, or `unscoped`). Programmatic callers use the corresponding exhaustive `{ view, ... }`
-union. Flag-shaped view selectors are not a second grammar. All output remains stable, diffable text
-and agents consume the same artifact humans read:
+`unguarded`, `unscoped`, or the deployment-review view `attest`). Programmatic command callers use
+the corresponding exhaustive discriminated request union; graph explanation callers use its
+non-attestation `{ view, ... }` subset. Flag-shaped view selectors are not a second grammar. All
+output remains stable, diffable text and agents consume the same artifact humans read:
 
 ```bash
 kovo explain component cart        # lowerings: extracted handlers, derives, capture channels, platform substitutions, attribute merges, triggers

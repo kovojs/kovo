@@ -38,6 +38,7 @@ describe('kovo doctor', () => {
       'packages',
       'config',
       'origin',
+      'secret',
       'database',
       'migrations',
       'retention',
@@ -152,6 +153,12 @@ describe('kovo doctor', () => {
         mutate() {},
       },
       {
+        code: 'KOVO_DOCTOR_SECRET',
+        mutate(root) {
+          updateManifest(root, { dependencies: { '@kovojs/better-auth': '0.1.0' } });
+        },
+      },
+      {
         code: 'KOVO_DOCTOR_DATABASE',
         mutate(root) {
           updateManifest(root, { dependencies: { pg: '8.22.0' } });
@@ -187,12 +194,40 @@ describe('kovo doctor', () => {
       const result = await capture(root, ['doctor', '--format', 'json'], testCase.env);
       expect(result.exitCode, testCase.code).toBe(1);
       const envelope = JSON.parse(result.stderr) as {
-        readonly diagnostics: readonly { readonly code: string }[];
+        readonly diagnostics: readonly {
+          readonly code: string;
+          readonly help?: string;
+          readonly message: string;
+          readonly source?: { readonly end: number; readonly file: string; readonly start: number };
+          readonly version: string;
+        }[];
+        readonly version: string;
       };
-      expect(
-        envelope.diagnostics.map((diagnostic) => diagnostic.code),
-        testCase.code,
-      ).toContain(testCase.code);
+      const diagnostic = envelope.diagnostics.find((entry) => entry.code === testCase.code);
+      expect(diagnostic, testCase.code).toEqual(expect.objectContaining({ code: testCase.code }));
+      if (
+        [
+          'KOVO_DOCTOR_DATABASE',
+          'KOVO_DOCTOR_MIGRATIONS',
+          'KOVO_DOCTOR_ORIGIN',
+          'KOVO_DOCTOR_RETENTION',
+          'KOVO_DOCTOR_SECRET',
+        ].includes(testCase.code)
+      ) {
+        expect(diagnostic, testCase.code).toEqual(
+          expect.objectContaining({
+            help: expect.stringMatching(/`(?:kovo|pnpm) /u),
+            message: expect.stringMatching(/\S/u),
+            source: expect.objectContaining({
+              end: expect.any(Number),
+              file: expect.stringMatching(/\S/u),
+              start: expect.any(Number),
+            }),
+            version: 'kovo-diagnostic/v1',
+          }),
+        );
+      }
+      expect(envelope.version, testCase.code).toBe('kovo-diagnostic/v1');
     }
   });
 

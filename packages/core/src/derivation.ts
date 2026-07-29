@@ -274,7 +274,7 @@ export interface PatchProgram {
 /**
  * §10.5 PUNT list. A punt is *derivation metadata*, never optimistic coverage: it
  * explains why a pair still needs a hand-written transform or `'await-fragment'`,
- * and is rendered inline by `kovo explain --optimistic` (e.g. `PUNTED (Opaque:
+ * and is rendered inline by `kovo explain mutation <name> --optimistic` (e.g. `PUNTED (Opaque:
  * compute_discount)`). The `code` set mirrors the SPEC PUNT list one-for-one.
  *
  * @internal
@@ -346,7 +346,7 @@ export function punt(reason: PuntReason): DerivationResult {
 }
 
 /**
- * Human-readable punt label for `kovo explain --optimistic` (SPEC.md §10.6 example
+ * Human-readable punt label for `kovo explain mutation <name> --optimistic` (SPEC.md §10.6 example
  * `PUNTED (Opaque: compute_discount)`). Surfaces wrap this as `PUNTED (<label>)`.
  *
  * @internal

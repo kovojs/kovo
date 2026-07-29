@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parseExplainArgs } from './graph-args.js';
 import { kovoExplain } from './graph-output.js';
 
-describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
+describe('kovo explain auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
   it('parses as a graph-independent exclusive explain mode without changing model boundaries', () => {
     expect(parseExplainArgs(['auth-lifecycle'])).toEqual({
       artifact: false,

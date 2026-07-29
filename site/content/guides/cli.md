@@ -129,11 +129,11 @@ the production feed's rollback floor.
 
 ### `kovo explain` — print the decision tree
 
-`kovo explain` is the compiler's decision tree on demand. It has two shapes: explain a single subject,
-or run a stable security review mode over the graph.
+`kovo explain` is the compiler's decision tree on demand. It has one grammar: the first token is
+always a view. Targeted views take a subject; stable security-review views take an optional graph.
 
 **Explain a subject** — `kovo explain <kind> <target> [graph.json]`, where `<kind>` is one of
-`component`, `mutation`, `query`, `page`, `context`:
+`component`, `mutation`, `query`, `page`, `context`, `task`:
 
 ```sh
 kovo explain component cart          # extracted handlers, derives, capture channels, platform substitutions, attribute merges, triggers

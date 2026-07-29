@@ -21,7 +21,7 @@ import type {
 } from '@kovojs/core/internal/mcp-stdio';
 
 import { DOCS_RESULT_PROTOCOL, parseKovoCommandInvocation } from '../commands-manifest.js';
-import { kovoCommandExitCode } from '../command-schema.js';
+import { KOVO_EXPLAIN_VIEW_SCHEMA, kovoCommandExitCode } from '../command-schema.js';
 import {
   checkFamilyArg,
   explainOutputVersion,
@@ -345,34 +345,20 @@ function explainOptionsSchema(): Record<string, unknown> {
     required,
     type: 'object',
   });
-  const auditMode = (view: 'access' | 'unguarded' | 'unscoped') =>
+  const auditMode = (view: string) =>
     exactMode({ failOnFindings: { type: 'boolean' }, view: { const: view } }, ['view']);
   return {
     oneOf: [
-      ...[
-        'agent',
-        'auth-lifecycle',
-        'authorization',
-        'capabilities',
-        'cookies',
-        'document',
-        'endpoints',
-        'grants',
-        'model-boundaries',
-        'revealed',
-        'sources-sinks',
-        'tasks',
-        'trust',
-      ].map((view) => exactMode({ view: { const: view } }, ['view'])),
-      auditMode('access'),
-      auditMode('unguarded'),
-      auditMode('unscoped'),
+      ...KOVO_EXPLAIN_VIEW_SCHEMA.simple.map((view) =>
+        exactMode({ view: { const: view } }, ['view']),
+      ),
+      ...KOVO_EXPLAIN_VIEW_SCHEMA.audit.map(auditMode),
       exactMode(
         {
           layouts: { type: 'boolean' },
           optimistic: { type: 'boolean' },
           target: { minLength: 1, type: 'string' },
-          view: { enum: ['component', 'context', 'mutation', 'page', 'query', 'task'] },
+          view: { enum: KOVO_EXPLAIN_VIEW_SCHEMA.targeted },
         },
         ['target', 'view'],
       ),

@@ -1190,21 +1190,21 @@ async function runCompileDrizzleStaticCommand(
     }
     if (extract.has('trustEscapes')) {
       // SPEC §6.6 (audit-only): every app-authored trust escape (trustedHtml/Url/Sql, raw
-      // endpoint(), webhook({verify:'none'})) rides into `graph.trustEscapes` so `kovo explain
-      // --trust` enumerates the trust surface and KV426 surfaces missing justifications.
+      // endpoint(), webhook({verify:'none'})) rides into `graph.trustEscapes` so
+      // `kovo explain trust` enumerates the trust surface and KV426 surfaces missing justifications.
       output.trustEscapes = collectTrustEscapesFromProject({ files });
     }
     if (extract.has('capabilities')) {
       // SPEC §6.6 (audit-only), threat-matrix-plan.md M3: every app-authored escape-hatch CALL SITE
       // (serverValue/trustedAssign/unsafeRegex/declarePublicRelation/usePostgresSystemDb/
       // accept.unverified/unsafeCookie/crossOwnerRead/rawRead/actAs/declareSystemRead|Write/egress
-      // allowInternal) rides into `graph.capabilities` so `kovo explain --capabilities` enumerates
+      // allowInternal) rides into `graph.capabilities` so `kovo explain capabilities` enumerates
       // the whole intentional-security-hole surface from one place, mirroring `publishToClient`.
       output.capabilities = collectCapabilityEscapesFromProject({ files });
     }
     if (extract.has('cookieDowngrades')) {
       // SPEC §6.6/§9.1 (audit-only): every `serializeCookie(..., { unsafe: unsafeCookie(...) })`
-      // credential-cookie downgrade rides into `graph.cookieDowngrades` so `kovo explain --cookies`
+      // credential-cookie downgrade rides into `graph.cookieDowngrades` so `kovo explain cookies`
       // surfaces the weakened floor statically (previously only the runtime drain populated it).
       output.cookieDowngrades = collectCookieDowngradesFromProject({ files });
     }

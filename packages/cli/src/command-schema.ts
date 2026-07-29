@@ -1497,6 +1497,64 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
   },
 ] as const satisfies readonly KovoCommandSchemaEntry[]);
 
+/**
+ * @internal Runtime projection of the `kovo explain` discriminants.
+ *
+ * The command node remains the authority. MCP schemas and parity gates consume
+ * this projection instead of maintaining a second list of view names
+ * (SPEC §5.3 and §11.4).
+ */
+export const KOVO_EXPLAIN_VIEW_SCHEMA = deriveExplainViewSchema();
+
+function deriveExplainViewSchema(): Readonly<{
+  audit: readonly string[];
+  simple: readonly string[];
+  subcommands: readonly string[];
+  targeted: readonly string[];
+}> {
+  const explain = KOVO_COMMAND_SCHEMA.find((entry) => entry.name === 'explain');
+  if (explain === undefined) throw new TypeError('Missing kovo explain command schema.');
+
+  const audit: string[] = [];
+  const simple: string[] = [];
+  const subcommands: string[] = [];
+  const targeted: string[] = [];
+  for (const form of explain.usage) {
+    if (form.id === 'target') {
+      const kind = form.tokens.find((token) => token.kind === 'argument' && token.name === 'kind');
+      if (kind?.kind !== 'argument' || kind.value.values === undefined) {
+        throw new TypeError('kovo explain target form must own a finite kind enum.');
+      }
+      for (const view of kind.value.values) {
+        targeted.push(view);
+        subcommands.push(view);
+      }
+      continue;
+    }
+
+    const literal = form.tokens[0];
+    if (literal?.kind !== 'literal' || literal.value !== form.id) {
+      throw new TypeError(`kovo explain form ${form.id} must start with its literal view.`);
+    }
+    subcommands.push(literal.value);
+    if (form.id === 'attest') continue;
+    if (form.tokens.some((token) => token.kind === 'option' && token.option === 'failOnFindings')) {
+      audit.push(literal.value);
+    } else {
+      simple.push(literal.value);
+    }
+  }
+
+  // JSON schema oneOf order is observable in MCP tool listings. Retain the v1 lexical order while
+  // deriving membership from the command node so this normalization does not churn snapshots.
+  return deepFreezeSemanticSchema({
+    audit: audit.sort(),
+    simple: simple.sort(),
+    subcommands,
+    targeted: targeted.sort(),
+  });
+}
+
 const capabilityAndMetaCommandNames = [
   ...KOVO_COMMAND_SCHEMA.map((entry) => entry.name),
   'completion',

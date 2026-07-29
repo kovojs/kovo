@@ -1,5 +1,9 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
-import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
+import type {
+  DiagnosticCode,
+  DiagnosticSeverity,
+  RegisteredDiagnostic,
+} from '@kovojs/core/diagnostics';
 import {
   assertRegisteredDiagnostic,
   diagnosticDefinitions,
@@ -9,7 +13,13 @@ import {
 /** Stable wire version accepted by Kovo's public human, JSON, and GitHub renderers. */
 export const KOVO_DIAGNOSTIC_VERSION = 'kovo-diagnostic/v1' as const;
 
-/** Exact authored-source anchor using zero-based UTF-16 offsets and an exclusive end. */
+/**
+ * Exact source/configuration anchor using zero-based UTF-16 offsets and an exclusive end.
+ *
+ * A zero-width range is the insertion point for a missing configuration value; this lets a
+ * first-run failure name the file that must change without pretending nonexistent bytes were
+ * authored.
+ */
 export interface KovoDiagnosticSourceAnchor {
   readonly end: number;
   readonly file: string;
@@ -52,7 +62,7 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
   },
   KOVO_DOCTOR_ORIGIN: {
     category: 'config',
-    help: 'Use automatic loopback development origin, or set one fixed HTTPS deployment origin.',
+    help: 'Use automatic loopback development origin or set one fixed HTTPS deployment origin, then rerun `kovo doctor`.',
     severity: 'error',
   },
   KOVO_DOCTOR_PACKAGE_MANAGER: {
@@ -68,6 +78,11 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
   KOVO_DOCTOR_RETENTION: {
     category: 'config',
     help: 'Declare the preset retention proof in `kovo.config.ts`, then run `kovo build`.',
+    severity: 'error',
+  },
+  KOVO_DOCTOR_SECRET: {
+    category: 'config',
+    help: 'Generate a strong secret, set `KOVO_CSRF_SECRET` in `.env`, then rerun `kovo doctor`.',
     severity: 'error',
   },
   KOVO_DOCTOR_WRITABLE: {
@@ -118,6 +133,11 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
   KOVO_USAGE: {
     category: 'usage',
     help: 'Run `kovo --help` or `kovo help <command>` for generated usage.',
+    severity: 'error',
+  },
+  KOVO_DEV_PORT: {
+    category: 'runtime',
+    help: 'Release the occupied port or rerun the same `kovo dev` invocation with `--port 0` to bind an available loopback port.',
     severity: 'error',
   },
 } as const satisfies Readonly<
@@ -342,6 +362,17 @@ export function doctorFindingDiagnostic(
   source?: KovoDiagnosticSourceAnchor,
 ): KovoDiagnosticRecord {
   return createCliDiagnostic(code, message, source);
+}
+
+/** @internal Mint the safe first-run port-collision record. */
+export function devPortCollisionDiagnostic(
+  source: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic(
+    'KOVO_DEV_PORT',
+    'The requested development port is already in use.',
+    source,
+  );
 }
 
 /** @internal Mint one dependency-lifecycle policy finding from the finite CLI registry. */

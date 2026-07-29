@@ -31,8 +31,11 @@ proof; shared root verification belongs in the latest-verification block.
 - [x] Make usage/config errors exit 2 and proof/build findings exit 1.
   - Evidence: `packages/cli/src/commands/build-export-exit-contract.test.ts` plus the CLI exit suite
     prove configuration failures exit 2 and findings exit 1.
-- [ ] Normalize `kovo explain` on one subcommand/discriminant grammar while preserving or
+- [x] Normalize `kovo explain` on one subcommand/discriminant grammar while preserving or
       explicitly versioning `kovo-explain/v1`.
+  - Evidence: `packages/cli/src/explain-command-contract.test.ts` plus the command-manifest and MCP
+    suites prove one AST-derived view set, rejection of flag-shaped selectors, adapter parity, and
+    the unchanged `kovo-explain/v1` protocol.
 
 ## Source truth and transactional output
 
@@ -108,9 +111,13 @@ proof; shared root verification belongs in the latest-verification block.
 
 ## Diagnostics, doctor, add, deploy, and speed
 
-- [ ] Cover the seven first-run failures with one safe cause, source/config anchor, and executable
+- [x] Cover the seven first-run failures with one safe cause, source/config anchor, and executable
       next step.
-- [ ] Cover the top 20 authoring diagnostics with the same three fields.
+  - Evidence: `packages/cli/src/diagnostic-empathy.test.ts`, doctor, and lifecycle-policy suites
+    pass the exact seven-class matrix through human, JSON, and GitHub adapters.
+- [x] Cover the top 20 authoring diagnostics with the same three fields.
+  - Evidence: the diagnostic-empathy and core diagnostic-registry suites pass the exact 20-code
+    access/CSRF/trusted-output/Drizzle/optimism matrix through `kovo-diagnostic/v1`.
 - [x] Add `kovo doctor` checks for toolchain, duplicate packages, peers, config/preset, origin, DB
       roles, migrations, retention, writable paths, and stale caches.
   - Evidence: `packages/cli/src/index.kovo-doctor.test.ts` passes 6 tests covering the complete
@@ -143,6 +150,9 @@ proof; shared root verification belongs in the latest-verification block.
   passed (11 files, 67 tests).
 - **CLI exit suite:** `pnpm exec vitest run` over command-contract, build/export-exit, and export
   behavior passed (3 files, 34 tests).
+- **Command/diagnostic closeout:** focused explain, diagnostic-empathy, doctor, lifecycle, MCP,
+  manifest, renderer, and core-registry suites passed (8 files, 61 tests); scoped `vp check` passed
+  for all ten behavior-owning files.
 - **Starter scaffold census:** focused `packages/create-kovo/src/index.test.ts` passed (1 test,
   35 skipped).
 - **Creator contract:** `packages/create-kovo/src/{cli-schema,index}.test.ts` passed (2 files,

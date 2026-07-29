@@ -4,7 +4,7 @@ import { parseExplainArgs } from './graph-args.js';
 import { kovoExplain } from './index.js';
 
 // @kovo-security-classifier-corpus finite-security-operation-ir
-describe('kovo explain --agent', () => {
+describe('kovo explain agent', () => {
   it('prints the exact per-integrity effect closure', () => {
     expect(parseExplainArgs(['agent'])).toEqual({
       artifact: false,

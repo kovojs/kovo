@@ -91,8 +91,8 @@ GREEN (no longer pending).
   the emitted server refuses missing runtime configuration before serving;
   `packages/compiler/src/client-secret-capture.test.ts` proves KV437 artifact refusal. The behavioral
   mutant `server-schema/drop-runtime-secret-boxing` kills removal of the runtime box. The reviewed
-  typed declassification exit is visible through the existing `kovo explain --revealed` fact graph
-  (and its folded `--capabilities` view); this audit trail is not a proof that revealed plaintext
+  typed declassification exit is visible through the existing `kovo explain revealed` fact graph
+  (and its folded `capabilities` view); this audit trail is not a proof that revealed plaintext
   cannot later be misused. Reordered literal policy fields remain visible, dynamic policies fail
   with KV426, and cross-analyzer dedupe uses exact call identity rather than line number. KV448 also
   closes the policy constructor and reveal doors from every request-reachable module, including
@@ -200,7 +200,7 @@ infrastructure-level (L3/L4) DDoS.
 | Cell                                  | State | Owner / next step                                                                                                                                             |
 | ------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **M2** Auth × C — adapter non-egress  | GREEN | Closed: exact runtime consumer door + fail-closed path/consumer census TCB-enrolled; complete Better Auth package suite 228 pass; C9/C13/mutation gates green |
-| **M3** Escape-hatch visibility        | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain --capabilities`/`--cookies`                                          |
+| **M3** Escape-hatch visibility        | GREEN | Closed by followup-16: static capability producers surface every escape in `kovo explain capabilities`/`cookies`                                              |
 | **M6** Deps / supply chain            | GREEN | Closed by followup-16 M6: exact pins + `--frozen-lockfile` + `trustedDependencySurfaces` (`check:tcb-boundary`) + `rules/dependency-policy.md`                |
 | **M35** Wire × I — authority identity | GREEN | Closed by `766aa8c57`: canonical byte identity across real HTTP/2, live/generated Node and Vercel before Web `Request` construction                           |
 

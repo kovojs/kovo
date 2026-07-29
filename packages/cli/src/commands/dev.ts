@@ -18,6 +18,7 @@ import type {
 type DevPluginEnvironment = Parameters<NonNullable<Plugin['applyToEnvironment']>>[0];
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
+import { devPortCollisionDiagnostic, type KovoDiagnosticSourceAnchor } from '../diagnostic.js';
 import { kovoInvocationEnvironmentValue } from '../invocation-environment.js';
 import type { CliCommandResult } from '../shared.js';
 import {
@@ -59,10 +60,13 @@ const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectFreeze = NativeObject.freeze;
 const nativeObjectCreate = NativeObject.create;
 const nativeObjectDefineProperty = NativeObject.defineProperty;
+const nativeObjectGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectDeleteProperty = NativeReflect.deleteProperty;
+const nativeStringIncludes = NativeString.prototype.includes;
 const nativeStringReplace = NativeString.prototype.replace;
+const nativeStringStartsWith = NativeString.prototype.startsWith;
 const isolatedAuthoredPlugin = Symbol('Kovo isolated authored Vite plugin');
 
 const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
@@ -266,11 +270,24 @@ export async function runDevCommand(
     const handle = await startKovoDevServer(options, security);
     return { exitCode: 0, output: handle.readyReport };
   } catch (error) {
+    return devFailureResult(error, options);
+  }
+}
+
+/** @internal Normalize first-run failures without copying host exception text into diagnostics. */
+export function devFailureResult(error: unknown, options: KovoDevOptions): CliCommandResult {
+  if (isPortCollision(error)) {
+    const source = devPortConfigurationAnchor(options);
     return {
-      error: `kovo dev failed: ${error instanceof Error ? error.message : String(error)}`,
+      diagnostics: [devPortCollisionDiagnostic(source)],
+      error: `kovo dev failed: the requested development port is already in use. Check ${source.file}[${source.start}:${source.end}], release the port, or rerun the same command with \`--port 0\`.`,
       exitCode: 2,
     };
   }
+  return {
+    error: `kovo dev failed: ${error instanceof Error ? error.message : String(error)}`,
+    exitCode: 2,
+  };
 }
 
 interface KovoDevReadyReportOptions {
@@ -317,6 +334,58 @@ function boundDevServerOrigin(server: ViteDevServer): string {
   // Preserve `localhost` when it resolves to ::1 so every printed URL remains usable.
   const host = configuredHost === '::1' || configuredHost === '[::1]' ? '[::1]' : configuredHost;
   return address.port === 80 ? `http://${host}` : `http://${host}:${address.port}`;
+}
+
+function devPortConfigurationAnchor(options: KovoDevOptions): KovoDiagnosticSourceAnchor {
+  const configPath = options.configFile ?? resolve(options.root, 'kovo.config.ts');
+  const file = nativeApply<string>(nativeStringReplace, relative(options.root, configPath), [
+    /\\/gu,
+    '/',
+  ]);
+  return nativeObjectFreeze({
+    end: 0,
+    file:
+      file === '' || nativeApply<boolean>(nativeStringStartsWith, file, ['../'])
+        ? 'kovo.config.ts'
+        : file,
+    start: 0,
+  });
+}
+
+function isPortCollision(value: unknown): boolean {
+  let current = value;
+  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth += 1) {
+    const code = ownStringData(current, 'code');
+    if (code === 'EADDRINUSE') return true;
+    const message = ownStringData(current, 'message');
+    if (
+      message !== undefined &&
+      (nativeApply<boolean>(nativeStringIncludes, message, ['EADDRINUSE']) ||
+        (nativeApply<boolean>(nativeStringIncludes, message, ['Port ']) &&
+          nativeApply<boolean>(nativeStringIncludes, message, ['is already in use'])))
+    ) {
+      return true;
+    }
+    const cause = nativeApply<PropertyDescriptor | undefined>(
+      nativeObjectGetOwnPropertyDescriptor,
+      NativeObject,
+      [current, 'cause'],
+    );
+    if (cause === undefined || !('value' in cause)) return false;
+    current = cause.value;
+  }
+  return false;
+}
+
+function ownStringData(value: object, key: string): string | undefined {
+  const descriptor = nativeApply<PropertyDescriptor | undefined>(
+    nativeObjectGetOwnPropertyDescriptor,
+    NativeObject,
+    [value, key],
+  );
+  return descriptor !== undefined && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
 }
 
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {

@@ -876,7 +876,7 @@ function trustEscapeSourceBindingText(escape: CoreGraph.TrustEscapeExplain): str
 }
 
 /**
- * Collect the held dangerous-capability facts for `kovo explain --capabilities` (SPEC §6.6,
+ * Collect the held dangerous-capability facts for `kovo explain capabilities` (SPEC §6.6,
  * audit-only). Reads the explicit `graph.capabilities` rows produced by the merged slices AND folds
  * in two capability families already modeled elsewhere in the graph: audit-grade confidentiality
  * reveals (`graph.revealed` with `grade:'audit'`, i.e. `trustedReveal`) and the trustedReveal-class
@@ -944,7 +944,7 @@ export function postgresPostureLeaseContractLines(): readonly string[] {
   ];
 }
 
-/** Stable root-to-authority proof rows for `kovo explain --capabilities` (SPEC §6.6). */
+/** Stable root-to-authority proof rows for `kovo explain capabilities` (SPEC §6.6). */
 export function compareCapabilityClosureFact(
   left: CoreGraph.CapabilityClosureExplainFact,
   right: CoreGraph.CapabilityClosureExplainFact,
@@ -1178,7 +1178,7 @@ function endpointDefaultCsrf(method: string | undefined): 'checked' | 'safe:read
 }
 
 /**
- * SPEC §6.6/§11.4: render a mutation's CSRF posture for the `--endpoints` audit. `checked`
+ * SPEC §6.6/§11.4: render a mutation's CSRF posture for the `endpoints` audit. `checked`
  * (the default) verifies the synchronizer token before the guard chain; `exempt:<justification>`
  * is the `csrf: false` opt-out (KV418 guarantees such a mutation references no ambient session).
  */
@@ -1188,7 +1188,7 @@ export function mutationCsrf(mutation: CoreGraph.MutationExplain): string {
 }
 
 /**
- * SPEC §11.4: every `mutation()` appears in the `kovo explain --endpoints` machine-ingress audit
+ * SPEC §11.4: every `mutation()` appears in the `kovo explain endpoints` machine-ingress audit
  * alongside endpoints and webhooks, with its CSRF posture and session/guard authority. Mutations
  * dispatch as a single keyed POST (§9.5), so `method` is always POST. `auth` folds the guard chain
  * the same way `endpointAuth` does, and `session` surfaces the ambient-session read that KV418 gates.
