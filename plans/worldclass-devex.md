@@ -681,13 +681,11 @@ size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
 - [x] (S) Generate `llms.txt`/`llms-full.txt` from the same snapshot — `site/scripts/llms.mjs`
       already exists; cite and reuse it.
   - Evidence: `site/scripts/llms.test.mjs` and snapshot-generator tests prove one canonical corpus.
-- [ ] (S) Add the agent-journey fixture (G12) to the golden-journey runner: scaffold→edit→check→fix
+- [x] (S) Add the agent-journey fixture (G12) to the golden-journey runner: scaffold→edit→check→fix
       using only JSON diagnostics and local docs, offline.
-  - Partial evidence: the packed runner reaches the diagnostic step after authenticated scaffold,
-    offline install, and installed-doc selection; its 20-test adversarial suite rejects prose
-    diagnostics, live/stale docs, digest mismatches, and all network including loopback. G12 remains
-    open until packed JSON build/check supplies the registry-owned KV436 source anchor and the fixed
-    empty envelope.
+  - Evidence: `pnpm run test:devex-offline-agent` passes 26 tests for the packed registry-owned
+    KV436 source anchor, installed authenticated docs, source-only repair, empty fixed envelope,
+    rejection of prose/stale/hostile inputs, and denial of all network including loopback.
   - Standing rule for Track 5 (not a one-shot checkbox — each batch's own checklist carries the
     proof): every breaking batch regenerates the snapshot in the same checkpoint.
 

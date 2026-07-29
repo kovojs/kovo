@@ -62,9 +62,10 @@ reproducer, while the named implementation work item owns retirement.
 - [x] Capture cold install duration, installed bytes, and direct/transitive dependency counts.
   - Evidence: both exact reports record install time/RSS, physical bytes/files, and direct plus
     transitive production dependency counts.
-- [ ] Integrate the offline agent journey owned by `plans/devex-agent-loop.md`.
-  - The authenticated packed runner and adversarial fixture are present; the child ledger records
-    the remaining structured-diagnostic integration dependency and proving command.
+- [x] Integrate the offline agent journey owned by `plans/devex-agent-loop.md`.
+  - Evidence: `pnpm run test:devex-offline-agent` passes 3 files and 26 tests for the exact
+    scaffold/edit/check/fix protocol, structured diagnostic boundary, installed-doc boundary, and
+    deny-all-network posture.
 
 ## Benchmark and budgets
 
