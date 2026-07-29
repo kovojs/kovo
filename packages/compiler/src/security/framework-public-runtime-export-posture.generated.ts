@@ -5695,9 +5695,6 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
     [".",["createBetterAuthPostgresBindings"]],
   ]],
   ["@kovojs/browser", "authority-free", [], "none", null, [
-    ["./client",["createBrowserKovoRoot","createQueryStore","installKovoLoader"]],
-  ]],
-  ["@kovojs/browser", "authority-free", [], "none", null, [
     [".",["<module>"]],
   ]],
   ["@kovojs/browser", "authority-free", [], "none", null, [
@@ -5715,8 +5712,8 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ["@kovojs/browser", "authority-free", [], "none", null, [
     [".",["trustedUrl"]],
   ]],
-  ["@kovojs/browser", "request-closed", ["network"], "none", "The browser bootstrap captures arbitrary-URL platform fetch authority and is not available inside serialized handlers.", [
-    ["./client",["<module>","defaultEnhancedFetch"]],
+  ["@kovojs/browser", "request-closed", ["dynamic-loader","network"], "none", "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers.", [
+    ["./client",["<module>","installKovoClient"]],
   ]],
   ["@kovojs/cli", "request-closed", ["database-driver","dynamic-loader","filesystem","network","process","vm","worker"], "none", "The CLI library surface is build-time authority and is not a request-handler capability door.", [
     [".",["<module>","kovoCheck","kovoExplain","runKovoCommand"]],

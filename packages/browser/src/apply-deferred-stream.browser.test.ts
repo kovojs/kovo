@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { applyDeferredStreamResponseToRuntime } from './generated.js';
 import { DomMorphRoot, keyedDomMorph } from './morph.js';
 

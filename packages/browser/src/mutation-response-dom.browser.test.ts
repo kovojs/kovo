@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { DomMorphRoot, keyedDomMorph } from './morph.js';
 
 afterEach(() => {

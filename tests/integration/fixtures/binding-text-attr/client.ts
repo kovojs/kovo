@@ -1,4 +1,4 @@
-import { createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { createQueryStore, installKovoLoader } from '@kovojs/browser/generated';
 import { installInlineQueryEventHydration } from '@kovojs/test/internal/integration/fixture-browser-abi';
 import { kovoFixtureQueryPlans } from 'virtual:kovo-fixture-generated-query-plans';
 

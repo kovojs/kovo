@@ -5,7 +5,7 @@ import {
   installKovoLoader,
   type EnhancedMutationFetch,
   type QueryStore,
-} from '@kovojs/browser/client';
+} from '@kovojs/browser/generated';
 import {
   applyCompiledQueryUpdatePlan,
   type KovoGeneratedEnhancedMutationOptions,

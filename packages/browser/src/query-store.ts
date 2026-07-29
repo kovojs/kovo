@@ -65,12 +65,10 @@ export interface QueryIdentity {
  * hydrates from `<kovo-query>` scripts and that bindings and optimistic updates
  * read and write (SPEC §9.4).
  *
- * @returns A fresh `QueryStore`.
- * @example
- * import { createQueryStore } from '@kovojs/browser/client';
+ * Compiler-emitted bootstraps consume this generated ABI. Custom shells use
+ * `installKovoClient`, which owns and clears the store internally.
  *
- * const store = createQueryStore();
- * store.set('cart', { count: 1 });
+ * @returns A fresh `QueryStore`.
  */
 export function createQueryStore(): QueryStore {
   // SPEC §6.6/§9.4: decoded server truth, subscriptions, and optimistic baselines remain

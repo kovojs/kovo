@@ -9,7 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { installInlineKovoLoader } from './inline-loader.js';
 import { DomMorphRoot, DomMorphTarget, keyedDomMorph } from './morph.js';
 import { applyStateBindings } from './query-bindings.js';

@@ -324,7 +324,9 @@ export class GeneratedFixtureMorphRoot {
 export interface GeneratedRuntimeModule {
   applyCompiledQueryUpdatePlan?: unknown;
   applyDeferredStreamResponseToRuntime?: (options: unknown) => unknown;
+  createBrowserKovoRoot?: (options: { documentRoot: unknown }) => unknown;
   createQueryStore?: () => unknown;
+  defaultEnhancedFetch?: (url: string, options: Record<string, unknown>) => unknown;
   derive?: unknown;
   handler?: unknown;
   installKovoLoader?: (options: unknown) => unknown;
@@ -649,7 +651,9 @@ const rewriteGeneratedRuntimeImports = (
         return (
           imported === 'applyCompiledQueryUpdatePlan' ||
           imported === 'applyDeferredStreamResponseToRuntime' ||
+          imported === 'createBrowserKovoRoot' ||
           imported === 'createQueryStore' ||
+          imported === 'defaultEnhancedFetch' ||
           imported === 'derive' ||
           imported === 'DomMorphTarget' ||
           imported === 'handler' ||
@@ -1149,7 +1153,11 @@ export function generatedBootstrapDeferredBehaviorFact(
   bootstrapRuntime: Required<
     Pick<
       GeneratedRuntimeModule,
-      'applyDeferredStreamResponseToRuntime' | 'createQueryStore' | 'installKovoLoader'
+      | 'applyDeferredStreamResponseToRuntime'
+      | 'createBrowserKovoRoot'
+      | 'createQueryStore'
+      | 'defaultEnhancedFetch'
+      | 'installKovoLoader'
     >
   >,
 ): GeneratedBootstrapDeferredBehaviorFact {
@@ -1168,9 +1176,6 @@ export function generatedBootstrapDeferredBehaviorFact(
   const installed = runtime.executeBootstrapModule(
     bootstrap.source,
     {
-      '@kovojs/browser/client': {
-        defaultEnhancedFetch: runtime.runtime.defaultEnhancedFetch,
-      },
       '../components/cart-badge.client.js': {
         CartBadge$queryUpdatePlans: queryUpdatePlans,
       },
@@ -1189,9 +1194,6 @@ export function generatedBootstrapDeferredBehaviorFact(
   const applyingRuntime = runtime.executeBootstrapModule(
     bootstrap.source,
     {
-      '@kovojs/browser/client': {
-        defaultEnhancedFetch: runtime.runtime.defaultEnhancedFetch,
-      },
       '../components/cart-badge.client.js': {
         CartBadge$queryUpdatePlans: queryUpdatePlans,
       },
@@ -1465,8 +1467,14 @@ export function executeGeneratedBootstrapModule(
         deferredApplications.push(options);
         return runtime.applyDeferredStreamResponseToRuntime(options);
       },
+      createBrowserKovoRoot(options: { documentRoot: unknown }) {
+        return runtime.createBrowserKovoRoot(options);
+      },
       createQueryStore() {
         return store;
+      },
+      defaultEnhancedFetch(url: string, options: Record<string, unknown>) {
+        return runtime.defaultEnhancedFetch(url, options);
       },
       installKovoLoader(options: unknown) {
         calls.push(options);

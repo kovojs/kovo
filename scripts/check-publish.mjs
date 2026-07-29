@@ -43,6 +43,15 @@ export function checkPublish({ exec = execFileSync } = {}) {
   });
   exec(
     process.execPath,
+    [path.join(repoRoot, 'scripts', 'check-packed-browser-client-consumer.mjs')],
+    {
+      cwd: repoRoot,
+      env: deterministicPackEnvironment(process.env),
+      stdio: 'inherit',
+    },
+  );
+  exec(
+    process.execPath,
     [
       path.join(repoRoot, 'scripts', 'egress-floor.mjs'),
       '--policy',

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import * as runtime from './client.js';
+import * as runtime from './generated.js';
 import { dispatchDelegatedEvent, handler, securityHandler } from './handlers.js';
 import type { HandlerContext } from './handler-context.js';
 import {

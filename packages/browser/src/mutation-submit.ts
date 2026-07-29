@@ -80,6 +80,8 @@ export interface EnhancedMutationLoaderOptions {
    * hook is the enhanced path's reporting seam for failed fragment submissions.
    */
   onError?: (error: unknown, form: EnhancedFormElementLike) => void;
+  /** @internal Dispose document-scoped client state before mandatory transition recovery. */
+  onSessionTransition?: () => void;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
   pendingRoot?: PendingRoot;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -169,6 +171,7 @@ export async function dispatchEnhancedFormSubmit(
         idem,
         importModule: options.importModule,
         morph: options.morph,
+        onSessionTransition: options.onSessionTransition,
         pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('kovo-deps')) : undefined,
         pendingRoot: options.pendingRoot,
         queryPlans: options.queryPlans,
@@ -255,6 +258,8 @@ export interface EnhancedMutationSubmitOptions {
   onError?: (error: unknown) => void;
   /** @internal Framework-owned observation of already-membraned response facts. */
   onResponseSnapshot?: FetchEnhancedMutationOptions['onResponseSnapshot'];
+  /** @internal Dispose document-scoped client state before mandatory transition recovery. */
+  onSessionTransition?: () => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   pendingQueries?: readonly PendingQuerySelector[];
   pendingRoot?: PendingRoot;
@@ -279,12 +284,16 @@ export async function submitEnhancedMutation(
   }
   options = { ...options, expectedBuildToken };
   const retirePrincipal = captureSessionTransitionPrincipalRetirement(options);
+  const retireTransitionRuntime = (): void => {
+    retirePrincipal();
+    options.onSessionTransition?.();
+  };
   stampEnhancedMutationPending(options, true);
 
   try {
     const fetched = await fetchEnhancedMutation({
       ...options,
-      onSessionTransition: retirePrincipal,
+      onSessionTransition: retireTransitionRuntime,
       onSessionTransitionReload: reloadSessionTransitionDocument,
       streaming: isStreamingEnhancedMutationForm(options.form),
     });

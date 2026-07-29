@@ -68,23 +68,23 @@ function runBootstrap(
 
   const runtime = {
     applyDeferredStreamResponseToRuntime: () => ({}),
+    createBrowserKovoRoot: ({ documentRoot }: { documentRoot: unknown }) => ({
+      documentRoot,
+      kind: 'browser-root',
+    }),
     createQueryStore: () => ({ kind: 'store' }),
+    defaultEnhancedFetch: () => 'boot-pinned-fetch',
     installKovoLoader: (options: InstalledLoader) => {
       calls.push(options);
       return { islandSignalScope: {} };
     },
   };
-  const runtimeClient = {
-    defaultEnhancedFetch: () => 'boot-pinned-fetch',
-  };
-
   runInNewContext(rewritten, {
     document: {},
     exports: {},
     fetch: () => {},
     planModules,
     runtime,
-    runtimeClient,
   });
 
   const installed = calls[0];
@@ -177,7 +177,7 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
   it('wires the boot-pinned framework mutation transport instead of a late global fetch lookup', () => {
     const bootstrap = emitQueryPlanBootstrapModule([]);
     expect(bootstrap.source).toContain(
-      "import { defaultEnhancedFetch } from '@kovojs/browser/client';",
+      "import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '@kovojs/browser/generated';",
     );
     expect(bootstrap.source).toContain('fetch: defaultEnhancedFetch,');
     expect(bootstrap.source).not.toContain('=> fetch(');

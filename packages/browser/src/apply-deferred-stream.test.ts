@@ -4,7 +4,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { applyDeferredStreamResponseToRuntime } from './generated.js';
 import {
   FakeMorphRoot,

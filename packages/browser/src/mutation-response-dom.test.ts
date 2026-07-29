@@ -5,7 +5,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import {
   FakeMorphRoot,
   FakeMorphTarget,

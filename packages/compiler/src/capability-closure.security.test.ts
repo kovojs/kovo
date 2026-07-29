@@ -3092,30 +3092,34 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     ]);
   });
 
-  it('request-closes arbitrary browser fetch from a serialized handler', () => {
+  it('request-closes custom-shell bootstrap authority from a serialized handler', () => {
     const result = analyze([
       {
         fileName: 'browser.ts',
         source: `
           import { handler } from '@kovojs/browser';
-          import { defaultEnhancedFetch } from '@kovojs/browser/client';
-          export const submit = handler((url) => defaultEnhancedFetch(url, {
-            headers: {}, keepalive: false, method: 'POST'
-          }));
+          import { installKovoClient } from '@kovojs/browser/client';
+          export const submit = handler(() => installKovoClient());
         `,
       },
     ]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.facts).toContainEqual(
-      expect.objectContaining({
-        capability: 'network',
-        kind: 'closed',
-        rootKind: 'serialized-browser-handler',
-      }),
-    );
-    expect(result.diagnostics[0]!.message).toContain(
-      'browser bootstrap captures arbitrary-URL platform fetch authority',
-    );
+    expect(result.diagnostics).toHaveLength(2);
+    for (const capability of ['dynamic-loader', 'network']) {
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({
+          capability,
+          kind: 'closed',
+          rootKind: 'serialized-browser-handler',
+        }),
+      );
+    }
+    expect(
+      result.diagnostics.every((diagnostic) =>
+        diagnostic.message.includes(
+          'custom-shell browser installer captures framework-bounded network and dynamic-loader authority',
+        ),
+      ),
+    ).toBe(true);
   });
 
   it('treats toNodeHandler as an exact low-level request root', () => {

@@ -5,7 +5,7 @@ import {
   kovoStyleProperty,
   runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
-import { createQueryStore } from '@kovojs/browser/client';
+import { createQueryStore } from '@kovojs/browser/generated';
 import { createDbVerifier } from '@kovojs/test/internal/verifier';
 import { describe, expect, it } from 'vitest';
 

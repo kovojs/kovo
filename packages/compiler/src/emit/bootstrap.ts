@@ -11,7 +11,6 @@ import {
 import { compilerIrHeader } from '../ir.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
-const RUNTIME_CLIENT_IMPORT = '@kovojs/browser/client';
 
 /**
  * One compiled query-update-plan module to wire into the app bootstrap: the module's
@@ -165,10 +164,10 @@ export function emitQueryPlanBootstrapModule(
     fileName,
     kind: 'client',
     source: `${compilerIrHeader}
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '${RUNTIME_GENERATED_IMPORT}';
-import { defaultEnhancedFetch } from '${RUNTIME_CLIENT_IMPORT}';
+import { applyDeferredStreamResponseToRuntime, createBrowserKovoRoot, createQueryStore, defaultEnhancedFetch, installKovoLoader } from '${RUNTIME_GENERATED_IMPORT}';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();
+const runtimeRoot = createBrowserKovoRoot({ documentRoot: document });
 // SPEC.md §4.8: merge same-query-name appliers so a query bound by multiple components keeps
 // every component's update plan instead of clobbering all but the last.
 function mergeKovoQueryPlans(plans) {
@@ -205,7 +204,7 @@ const loader = installKovoLoader({
     // authored component modules cannot replace globalThis.fetch before a later form submit.
     fetch: defaultEnhancedFetch,
     queryPlans,
-    root: document,
+    root: runtimeRoot,
     store,
   },
 });

@@ -1,4 +1,4 @@
-import { installKovoLoader } from '@kovojs/browser/client';
+import { installKovoLoader } from '@kovojs/browser/generated';
 import { installOptimisticFixtureClient } from '@kovojs/test/internal/integration/optimistic-client';
 
 import { applyCartDerives } from './cart-derive';

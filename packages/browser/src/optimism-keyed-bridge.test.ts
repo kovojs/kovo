@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import {
   applyOptimisticTransforms,
   canonicalInstanceKeyValue,

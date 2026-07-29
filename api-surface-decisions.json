@@ -9,7 +9,10 @@
     },
     "browser-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/browser/src/index.test.ts"]
+      "contractTests": [
+        "packages/browser/src/client-installer.test.ts",
+        "packages/browser/src/index.test.ts"
+      ]
     },
     "cli-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
@@ -674,187 +677,250 @@
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "BrowserEnhancedMutationOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#BrowserKovoRoot",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "BrowserKovoRoot",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#createBrowserKovoRoot",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "createBrowserKovoRoot",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#CreateBrowserKovoRootOptions",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "CreateBrowserKovoRootOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#createQueryStore",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "createQueryStore",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#defaultEnhancedFetch",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "defaultEnhancedFetch",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#EnhancedMutationFetch",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "EnhancedMutationFetch",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#EnhancedMutationFetchOptions",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "EnhancedMutationFetchOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#EnhancedMutationResponseLike",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "EnhancedMutationResponseLike",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#installKovoLoader",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "installKovoLoader",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#KovoLoader",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "KovoLoader",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#KovoLoaderOptions",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "KovoLoaderOptions",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#QueryIdentity",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "QueryIdentity",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#QuerySnapshot",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "QuerySnapshot",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#QueryStore",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "QueryStore",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#QueryUpdatePlan",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "QueryUpdatePlan",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
     },
     {
       "id": "@kovojs/browser/client#UploadProgress",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser/client",
       "symbol": "UploadProgress",
-      "state": "public",
+      "state": "removed",
       "decision": "internalize",
       "canonicalHome": "internal:@kovojs/browser",
       "story": "browser-assembly",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-client-installer-v1"
+    },
+    {
+      "id": "@kovojs/browser/client#InstallKovoClientOptions",
+      "package": "@kovojs/browser",
+      "specifier": "@kovojs/browser/client",
+      "symbol": "InstallKovoClientOptions",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/browser/client",
+      "story": "browser-assembly",
+      "evidence": "browser-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/browser-client-installer-v1.md",
+        "contractTest": "packages/browser/src/client-installer.test.ts"
+      }
+    },
+    {
+      "id": "@kovojs/browser/client#installKovoClient",
+      "package": "@kovojs/browser",
+      "specifier": "@kovojs/browser/client",
+      "symbol": "installKovoClient",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/browser/client",
+      "story": "browser-assembly",
+      "evidence": "browser-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/browser-client-installer-v1.md",
+        "contractTest": "packages/browser/src/client-installer.test.ts",
+        "nonTestExample": "packages/browser/README.md"
+      }
+    },
+    {
+      "id": "@kovojs/browser/client#KovoClient",
+      "package": "@kovojs/browser",
+      "specifier": "@kovojs/browser/client",
+      "symbol": "KovoClient",
+      "state": "public",
+      "decision": "keep",
+      "canonicalHome": "@kovojs/browser/client",
+      "story": "browser-assembly",
+      "evidence": "browser-contract",
+      "introduced": {
+        "releaseNote": "docs/releases/browser-client-installer-v1.md",
+        "contractTest": "packages/browser/src/client-installer.test.ts"
+      }
     },
     {
       "id": "@kovojs/browser#BrowserTrustedHTML",

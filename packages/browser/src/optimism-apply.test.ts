@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore } from './client.js';
+import { createQueryStore } from './generated.js';
 import { applyOptimisticTransforms, installPagehideOptimismCleanup } from './optimism.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 

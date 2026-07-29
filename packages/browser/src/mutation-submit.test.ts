@@ -4,7 +4,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
+import { createQueryStore, type EnhancedMutationFetchOptions } from './generated.js';
 import { installMutationBroadcast } from './broadcast.js';
 import { familyPendingQuerySelector } from './pending.js';
 import {

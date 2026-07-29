@@ -52,9 +52,9 @@ Use the public roots and subpaths that appear in the generated API reference and
 `public-packages.json`. Do not import private packages, `@internal` symbols, raw `./src/**`, or
 compiler-emitted runtime ABI such as `@kovojs/browser/generated`.
 
-Author-authored browser helpers come from `@kovojs/browser`. The `@kovojs/browser/client` subpath is
-for an app-owned browser entry that manually installs the runtime loader; ordinary app components do
-not import it. `@kovojs/headless-ui` has no public root import; import primitive behavior from
+Author-authored browser helpers come from `@kovojs/browser`. The `@kovojs/browser/client` subpath
+contains one experimental `installKovoClient` API for a custom application shell. Compiler-built
+apps and ordinary components do not import it. `@kovojs/headless-ui` has no public root import; import primitive behavior from
 subpaths such as `@kovojs/headless-ui/select` or `@kovojs/headless-ui/dialog`. `@kovojs/ui` keeps
 component symbols on direct component subpaths such as `@kovojs/ui/button`. The root `@kovojs/ui`
 entry intentionally exports no components.

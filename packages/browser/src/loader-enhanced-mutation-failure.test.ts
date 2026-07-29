@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installKovoLoader } from './client.js';
+import { createQueryStore, installKovoLoader } from './generated.js';
 import {
   FakeFormElement,
   FakeMorphRoot,
