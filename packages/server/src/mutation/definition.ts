@@ -34,7 +34,6 @@ import type {
   PrincipalEpochStore,
   PrincipalEpochTombstoneReason,
 } from '../principal-epoch.js';
-import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 import { validateMutationCsrfPosture } from './csrf-posture.js';
 
 declare const mutationRequestDbBrand: unique symbol;
@@ -292,14 +291,12 @@ export function queue<const Name extends string>(
 ): {
   readonly [mutationQueueValueBrand]: Name;
   readonly name: Name;
-} {
+};
+export function queue<const Name extends string>(name: Name): unknown {
   if (typeof name !== 'string' || name.length === 0) {
     throw new TypeError('queue(name) requires a non-empty queue name.');
   }
-  return MutationQueue.create(name) as {
-    readonly [mutationQueueValueBrand]: Name;
-    readonly name: Name;
-  };
+  return MutationQueue.create(name);
 }
 
 function isMutationQueue(value: unknown): value is MutationQueue {
@@ -307,10 +304,13 @@ function isMutationQueue(value: unknown): value is MutationQueue {
 }
 
 function normalizeMutationQueue(
-  queueValue: string | true | MutationQueue | undefined,
+  queueValue: string | true | ReturnType<typeof queue> | undefined,
 ): string | true | undefined {
+  if (typeof queueValue === 'string' || queueValue === true || queueValue === undefined) {
+    return queueValue;
+  }
   if (isMutationQueue(queueValue)) return queueValue.name;
-  return queueValue;
+  throw new TypeError('mutation() queue must be true, a string, or the exact value from queue().');
 }
 
 /**
@@ -438,7 +438,53 @@ export interface MutationDefinition<
     input: InferSchema<InputSchema>;
     request: GuardedRequest;
     result: MutationSuccess<Value, InferSchema<InputSchema>>;
-  }) => AsyncIterable<unknown> | Iterable<unknown>;
+  }) =>
+    | AsyncIterable<
+        | { kind: 'done'; reason?: string }
+        | {
+            html: ServerFragmentRenderable;
+            kind: 'fragment';
+            mode?: 'append' | 'replace';
+            target: string;
+          }
+        | {
+            delta?: boolean;
+            key?: string;
+            kind: 'query';
+            name: string;
+            value: unknown;
+            version?: number | string;
+          }
+        | {
+            kind: 'text';
+            mode?: 'append' | 'checkpoint';
+            target: string;
+            text: string;
+          }
+      >
+    | Iterable<
+        | { kind: 'done'; reason?: string }
+        | {
+            html: ServerFragmentRenderable;
+            kind: 'fragment';
+            mode?: 'append' | 'replace';
+            target: string;
+          }
+        | {
+            delta?: boolean;
+            key?: string;
+            kind: 'query';
+            name: string;
+            value: unknown;
+            version?: number | string;
+          }
+        | {
+            kind: 'text';
+            mode?: 'append' | 'checkpoint';
+            target: string;
+            text: string;
+          }
+      >;
   transaction?: <Result>(
     request: Request,
     run: (transactionRequest: GuardedRequest) => Promise<Result>,

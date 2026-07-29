@@ -944,8 +944,10 @@ describe('server app-shell public API barrels', () => {
       './internal/managed-db': './src/internal/managed-db.ts',
     });
     expect(moduleValueKeys(packageInternalManagedDbCapabilitiesApi)).toEqual([
+      'createFrameworkManagedSqlDispatchProxy',
       'kovoDeclaredWriteDbHandle',
       'kovoReadonlyDbHandle',
+      'registerFrameworkManagedDbHooks',
     ]);
     expect(packageInternalManagedDbCapabilitiesApi).toEqual(internalManagedDbCapabilitiesApi);
   });

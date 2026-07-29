@@ -224,15 +224,6 @@ export type EndpointDbHandler<Db = unknown, Method extends EndpointMethod = Endp
   context: EndpointDbContext<Db, Method>,
 ) => Promise<Response> | Response;
 
-interface EndpointDefinitionBase<Method extends EndpointMethod> {
-  access?: AccessDecision;
-  auth?: EndpointAuthDeclaration;
-  db?: false;
-  handler: EndpointHandler;
-  method: Method;
-  response: EndpointResponsePosture;
-}
-
 /** Endpoint definition branch for handlers that opt into `ctx.actAs(id)` managed DB access. */
 export interface EndpointDbDefinitionBase<Method extends EndpointMethod, Db = unknown> {
   access?: AccessDecision;
@@ -248,26 +239,24 @@ export type EndpointMountDefinition<Mount extends EndpointMount> = Mount extends
   ? { mount: Mount; mountJustification: string }
   : { mount?: Mount; mountJustification?: never };
 
-interface EndpointCsrfDefault {
-  csrf?: true;
-  csrfJustification?: never;
-}
-
-interface EndpointCsrfExempt {
-  csrf: false;
-  csrfJustification: string;
-}
-
 /** The body passed to `endpoint()`: handler, method/mount, and the unsafe-method CSRF choice. */
 export type EndpointDefinition<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
   Db = unknown,
 > =
-  | (EndpointDefinitionBase<Method> & { reason: string } & EndpointMountDefinition<Mount> &
-      (EndpointCsrfDefault | EndpointCsrfExempt))
+  | ({
+      access?: AccessDecision;
+      auth?: EndpointAuthDeclaration;
+      db?: false;
+      handler: EndpointHandler;
+      method: Method;
+      reason: string;
+      response: EndpointResponsePosture;
+    } & EndpointMountDefinition<Mount> &
+      ({ csrf?: true; csrfJustification?: never } | { csrf: false; csrfJustification: string }))
   | (EndpointDbDefinitionBase<Method, Db> & { reason: string } & EndpointMountDefinition<Mount> &
-      (EndpointCsrfDefault | EndpointCsrfExempt));
+      ({ csrf?: true; csrfJustification?: never } | { csrf: false; csrfJustification: string }));
 
 /** An endpoint with its path attached, as returned by `endpoint()`. */
 export interface EndpointDeclaration<

@@ -734,7 +734,9 @@ export interface StoredFileUpload {
 }
 
 /** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
-export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
+export interface StoredFileSchema extends Schema<StoredFileUpload> {
+  parseAsync(input: unknown): Promise<StoredFileUpload>;
+}
 
 /**
  * Options for `s.file().store(...)`: storage capability, an optional key namespace, and metadata

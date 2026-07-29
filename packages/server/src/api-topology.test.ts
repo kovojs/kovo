@@ -31,6 +31,8 @@ import * as writeSafetyApi from '@kovojs/server/write-safety';
 import type { InferKovoAppTypes, KovoApp } from '@kovojs/server/custom-adapters';
 import type { AppDbProvider, Reader, Writer } from '@kovojs/server/data';
 import type { MutationReplayBody } from '@kovojs/server/replay';
+import type { EndpointDefinition } from '@kovojs/server/routing';
+import type { FileLike, FileSchema, StoredFileSchema, StoredFileUpload } from '@kovojs/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 const taskValues = [
@@ -118,6 +120,44 @@ describe('@kovojs/server public topology', () => {
     expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().toHaveProperty('select');
     expectTypeOf<Reader<{ select(): unknown; insert(): unknown }>>().not.toHaveProperty('insert');
     expectTypeOf<Writer<{ select(): unknown; insert(): unknown }>>().toHaveProperty('insert');
+    expectTypeOf<FileSchema['parseAsync']>().returns.toEqualTypeOf<Promise<FileLike>>();
+    expectTypeOf<StoredFileSchema['parseAsync']>().returns.toEqualTypeOf<
+      Promise<StoredFileUpload>
+    >();
+    expectTypeOf<{
+      csrf?: true;
+      handler(request: Request): Response;
+      method: 'POST';
+      reason: string;
+      response: {
+        appOwnedSafety: true;
+        body: 'json';
+        cache: 'no-store';
+      };
+    }>().toMatchTypeOf<EndpointDefinition<'POST'>>();
+    expectTypeOf<{
+      csrf: false;
+      csrfJustification: string;
+      handler(request: Request): Response;
+      method: 'POST';
+      reason: string;
+      response: {
+        appOwnedSafety: true;
+        body: 'json';
+        cache: 'no-store';
+      };
+    }>().toMatchTypeOf<EndpointDefinition<'POST'>>();
+    expectTypeOf<{
+      csrf: false;
+      handler(request: Request): Response;
+      method: 'POST';
+      reason: string;
+      response: {
+        appOwnedSafety: true;
+        body: 'json';
+        cache: 'no-store';
+      };
+    }>().not.toMatchTypeOf<EndpointDefinition<'POST'>>();
     expectTypeOf<postgresApi.KovoPostgresAppRuntimeDb['db']>().toEqualTypeOf<
       AppDbProvider<postgresApi.KovoPostgresRuntimeDb>
     >();
