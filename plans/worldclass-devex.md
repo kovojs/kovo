@@ -93,13 +93,13 @@ fresh scaffold dogfooding. The throwaway apps were tested through local package 
 tarball acceptance remains a required Track 2 fixture; link-only TypeScript and dependency-install
 failures were excluded from product findings.
 
-The corrected Track 2 inventory analyzes 102 TypeScript public entrypoints and finds 1,842 exported
+The corrected Track 2 inventory analyzes 102 TypeScript public entrypoints and finds 1,849 exported
 declarations. Separately, `public-packages.json` declares 1,839 public subpaths because 1,737 are
 generated icon glyph paths. Those are different units and are now reported independently. (The
 same unit discipline applies to `@kovojs/server`: 524 root export names vs 554 exported declarations
 across all public subpaths — both correct, different units.) The consumer scan excludes nested
 dependencies and generated/dist/cache/packed/throwaway trees, then reports 90 authored-example,
-83 authored-doc, 153 package-internal, 18 generated-emit, 3 conformance, and 456 test files as
+127 authored-doc, 153 package-internal, 18 generated-emit, 3 conformance, and 456 test files as
 separate classes. The earlier 1,212 zero-consumer and 583 example-consumer figures remain excluded
 because they came from the contaminated scanner.
 
@@ -432,13 +432,19 @@ granularity).
       (G5).
   - Evidence: the 34-test CLI exit suite covers the stdout/zero matrix and build/export
     configuration-versus-finding split.
-- [ ] (S) Give `kovo dev` a framework-owned reporter that always prints the local/network URL,
+- [x] (S) Give `kovo dev` a framework-owned reporter that always prints the local/network URL,
       mode, app entry, DB posture, devtool URL, and readiness duration after the socket is bound
       (G2). Keep framework noise collapsible under `--debug`; do not suppress the readiness line
       with Vite log-level configuration.
-- [ ] (S) Auto-mount the existing `@kovojs/devtool` graph at `/__kovo` in development (the
+  - Evidence: `packages/cli/src/index.kovo-dev.test.ts` and
+    `packages/server/src/dev-database-posture.test.ts` prove the post-bind ready report, configured
+    host/socket URL, exact framework-minted DB posture, and `--debug` behavior.
+- [x] (S) Auto-mount the existing `@kovojs/devtool` graph at `/__kovo` in development (the
       mountable route is already implemented per `plans/devtools.md`), linked from the ready line,
       with no app Vite configuration; add the production/static-export absence census (G15).
+  - Evidence: the dev/export/runtime fixtures and `pnpm run check:publish` prove the automatic
+    development mount and ready-line link while rejecting the route and implementation from
+    production, static-export, and packed runtime artifacts.
 - [ ] (M) Generate a complete loopback development origin or derive it from the actual bound URL;
       make Better Auth work at the printed local URL without hand-editing `BETTER_AUTH_URL`.
       Non-loopback and production origins remain explicit, fixed, HTTPS-validated configuration.
