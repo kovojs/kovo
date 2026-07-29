@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -46,6 +46,18 @@ interface CapturedReport {
 
 const APP_ENTRY = '/src/app.tsx';
 const APP_SOURCE = `import { createApp } from '@kovojs/server';\nexport default createApp({ routes: [] });\n`;
+const APP_CONTRACT_SOURCE = `
+import { defineKovo } from '@kovojs/server';
+
+export const app = defineKovo({
+  appId: 'b17ead9a-6b5d-4b4c-80bf-05e1594ad22f',
+});
+export const status = app.query({
+  access: app.publicAccess('Vite source-authentication regression fixture'),
+  load: () => ({ ok: true }),
+});
+export default app.assemble({ queries: [status] });
+`;
 
 // KV422: request-derived data concatenated into executable SQL text at a managed sink.
 const KV422_INJECTION = `
@@ -621,6 +633,22 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     expect(registrySource).toContain(
       `registerGeneratedTableSecurityManifest({"tables":[{"authzPolicy":{"kind":"sql","sql":"TRUE"},"authorizationClassifications":["authzPolicy"],"columns":[{"key":"id","name":"id"}],"dialect":"postgres","domain":"contact","governedColumnKeys":["id"],"key":{"columnKey":"id","columnName":"id","uniqueness":"primary"},"name":"contacts","secretColumnKeys":[],"secretDeclared":false}]});`,
     );
+  });
+
+  it('injects the runtime registry after exact app-contract source authentication', async () => {
+    const root = await fixture({ 'src/app.tsx': APP_CONTRACT_SOURCE });
+    await mkdir(join(root, 'node_modules/@kovojs'), { recursive: true });
+    await symlink(
+      join(process.cwd(), 'packages/server'),
+      join(root, 'node_modules/@kovojs/server'),
+    );
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    const transformed = await plugin.transform(APP_CONTRACT_SOURCE, join(root, 'src/app.tsx'));
+
+    expect(transformed?.code).toContain('virtual:kovo-runtime-registry:/src/app.tsx');
+    expect(transformed?.code).toContain('assignDerivedQueryKey as __kovoAssignDerivedQueryKey');
   });
 
   it('skips runtime registry injection while the CLI derives the build graph', async () => {

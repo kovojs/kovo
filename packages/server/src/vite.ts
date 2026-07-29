@@ -487,18 +487,30 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return (await compilerPlugin()).load?.(id) ?? null;
     },
     async transform(source, id) {
-      const transformedSource = shouldInjectRuntimeRegistryImport(root, app, id)
+      const runtimeRegistrySource = shouldInjectRuntimeRegistryImport(root, app, id)
         ? insertAfterJsxImportSourcePragma(
             source,
             `import ${buildSecuritySourceLiteral(runtimeRegistryPublicId)};\n`,
           )
         : source;
       if (externalCompilerPlugin !== undefined) {
-        return transformedSource === source ? null : { code: transformedSource, map: null };
+        return runtimeRegistrySource === source ? null : { code: runtimeRegistrySource, map: null };
       }
-      const transformed = await (await compilerPlugin()).transform?.(transformedSource, id);
-      if (transformed !== null && transformed !== undefined) return transformed;
-      if (transformedSource !== source) return { code: transformedSource, map: null };
+      // SPEC §5.2/§6.2.1: app-scoped receiver lowering authenticates the exact on-disk source
+      // snapshot. Keep framework-generated imports outside that proof boundary and inject them
+      // only after the compiler has returned its lowered source.
+      const transformed = await (await compilerPlugin()).transform?.(source, id);
+      if (transformed !== null && transformed !== undefined) {
+        const code =
+          runtimeRegistrySource === source
+            ? transformed.code
+            : insertAfterJsxImportSourcePragma(
+                transformed.code,
+                `import ${buildSecuritySourceLiteral(runtimeRegistryPublicId)};\n`,
+              );
+        return code === transformed.code ? transformed : { code, map: null };
+      }
+      if (runtimeRegistrySource !== source) return { code: runtimeRegistrySource, map: null };
       return null;
     },
     async handleHotUpdate(context) {

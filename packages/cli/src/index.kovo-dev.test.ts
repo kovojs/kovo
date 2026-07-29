@@ -175,11 +175,11 @@ throw new Error('undeclared Vite config executed');
         "default-src 'none'",
       );
       expect(devtoolHtml).toContain('<title>Kovo Dataflow Devtool</title>');
-      expect(devtoolHtml).toContain('live closed createApp() runtime registry');
+      expect(devtoolHtml).toContain('live closed app.assemble() runtime registry');
       expect(devtoolHtml).toContain('Coverage limitations');
-      expect(devtoolHtml).toContain('data-node-id="mutation:inventory/add"');
+      expect(devtoolHtml).toContain('data-node-id="mutation:app/add-inventory"');
       expect(devtoolHtml).toContain('data-node-id="domain:inventory"');
-      expect(devtoolHtml).toContain('data-node-id="query:inventory"');
+      expect(devtoolHtml).toContain('data-node-id="query:app/inventory-query"');
       expect(devtoolHtml).toContain('Optimistic coverage (SPEC §10.6)');
       expect(devtoolHtml).toContain('hand-written');
       expect(devtoolHtml).toContain('data-node-id="page:/"');
@@ -357,7 +357,7 @@ throw new Error('undeclared Vite config executed');
         port,
       });
       expect.soft(authenticatedSource.status).toBe(200);
-      expect.soft(authenticatedSource.body).toContain('createApp');
+      expect.soft(authenticatedSource.body).toContain('defineKovo');
 
       const unauthenticatedExtensionlessSource = await rawDevHttpRequest({
         authority,
@@ -663,7 +663,7 @@ export default {
       join(root, 'src/app.ts'),
       `import { createHmac } from 'node:crypto';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { createApp, mintCsrfToken, publicAccess, route } from '@kovojs/server';
+import { defineKovo, mintCsrfToken } from '@kovojs/server';
 
 const nativeApply = Reflect.apply;
 const mutableCrypto = createRequire(import.meta.url)('node:crypto');
@@ -710,13 +710,17 @@ const csrf = {
   sessionId() { return undefined; },
 };
 
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('C69 runtime process-restart proof'),
+export const app = defineKovo({
+  appId: '33333333-3333-4333-8333-333333333333',
+});
+const entropyRoute = app.route('/', {
+    access: app.publicAccess('C69 runtime process-restart proof'),
     page: () => mintCsrfToken(new Request('https://kovo.invalid/'), csrf, {
       audience: 'runtime-restart',
     }).token,
-  })],
+});
+export default app.assemble({
+  routes: [entropyRoute],
 });
 `,
       'utf8',
@@ -763,39 +767,48 @@ function devFixture(name: string, richGraph = false): string {
   writeFileSync(
     join(root, 'src/app.ts'),
     richGraph
-      ? `import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
+      ? `import { defineKovo, domain, s } from '@kovojs/server';
 
+export const app = defineKovo({
+  appId: '22222222-2222-4222-8222-222222222222',
+});
 const inventoryDomain = domain('inventory');
-const inventoryQuery = query('inventory', {
-  access: publicAccess('devtool graph fixture'),
+export const inventoryQuery = app.query({
+  access: app.publicAccess('devtool graph fixture'),
   load: () => ({ count: 0 }),
   output: s.object({ count: s.number() }),
   reads: [inventoryDomain],
 });
-const addInventory = mutation('inventory/add', {
-  access: publicAccess('devtool graph fixture'),
+const inventoryInput = s.object({ count: s.number() });
+export const addInventory = app.mutation({
+  access: app.publicAccess('devtool graph fixture'),
   handler: () => ({}),
-  input: s.object({ count: s.number() }),
-  optimistic: { inventory: (draft) => draft },
+  input: inventoryInput,
+  optimistic: [inventoryQuery.optimistic(inventoryInput, (value) => value)],
   registry: { queries: [inventoryQuery], touches: [inventoryDomain] },
 });
+const homeRoute = app.route('/', {
+  access: app.publicAccess('bootstrap ordering fixture'),
+  page: () => '<main>Bootstrap safe</main>',
+});
 
-export default createApp({
+export default app.assemble({
   mutations: [addInventory],
   queries: [inventoryQuery],
-  routes: [route('/', {
-    access: publicAccess('bootstrap ordering fixture'),
-    page: () => '<main>Bootstrap safe</main>',
-  })],
+  routes: [homeRoute],
 });
 `
-      : `import { createApp, publicAccess, route } from '@kovojs/server';
+      : `import { defineKovo } from '@kovojs/server';
 
-export default createApp({
-  routes: [route('/', {
-    access: publicAccess('bootstrap ordering fixture'),
-    page: () => '<main>Bootstrap safe</main>',
-  })],
+export const app = defineKovo({
+  appId: '22222222-2222-4222-8222-222222222222',
+});
+const homeRoute = app.route('/', {
+  access: app.publicAccess('bootstrap ordering fixture'),
+  page: () => '<main>Bootstrap safe</main>',
+});
+export default app.assemble({
+  routes: [homeRoute],
 });
 `,
     'utf8',

@@ -1302,7 +1302,11 @@ async function deriveCurrentSourceCheck(
   );
   // Stylesheet compilation is source proof even though asset placement is deployment proof.
   await withBuildGraphDerivationContext(() => kovoBuildStylesheetCss(resolvedAppModulePath));
-  const app = appFromModule(loadedBuildApp.appModule, resolvedAppModulePath);
+  const app = appFromModule(
+    loadedBuildApp.appModule,
+    resolvedAppModulePath,
+    loadedBuildApp.serverInternalBuildModule.resolveKovoAppToken,
+  );
   const artifacts = await buildCheckGraph(app, {
     cache,
     execution: loadedBuildApp.serverExecutionModule,

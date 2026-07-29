@@ -9,7 +9,7 @@ const OPTIONS = Object.freeze<KovoDevtoolPluginOptions>({
   appShellModuleId: 'app-shell',
   debug: false,
   securityProfileModuleId: 'profile',
-  serverModuleId: 'server-root',
+  serverBuildModuleId: 'server-build',
 });
 
 describe('inspectKovoDevDatabasePosture', () => {
@@ -20,8 +20,13 @@ describe('inspectKovoDevDatabasePosture', () => {
     const server = {
       ssrLoadModule: vi.fn(async (id: string) => {
         loads.push(id);
-        if (id === OPTIONS.serverModuleId) {
-          return { isKovoApp: (value: unknown) => value === app };
+        if (id === OPTIONS.serverBuildModuleId) {
+          return {
+            resolveKovoAppToken: (value: unknown) => {
+              if (value !== app) throw new TypeError('wrong app token');
+              return app;
+            },
+          };
         }
         if (id === OPTIONS.appShellModuleId) {
           return {
@@ -55,13 +60,15 @@ describe('inspectKovoDevDatabasePosture', () => {
     } satisfies Pick<ViteDevServer, 'ssrLoadModule'>;
 
     await expect(inspectKovoDevDatabasePosture(server, OPTIONS)).resolves.toBe('none configured');
-    expect(loads).toEqual(['server-root', 'app-shell', 'app', 'profile']);
+    expect(loads).toEqual(['server-build', 'app-shell', 'app', 'profile']);
   });
 
   it('fails closed when the app-shell registry control is unavailable', async () => {
     const server = {
       ssrLoadModule: vi.fn(async (id: string) => {
-        if (id === OPTIONS.serverModuleId) return { isKovoApp: () => true };
+        if (id === OPTIONS.serverBuildModuleId) {
+          return { resolveKovoAppToken: (value: unknown) => value };
+        }
         if (id === OPTIONS.appShellModuleId) {
           return { runWithGeneratedLiveTargetRegistry: 'not callable' };
         }

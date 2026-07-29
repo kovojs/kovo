@@ -157,22 +157,24 @@ function appPath(root: string): string {
 function sourceCheckApp(withAccess = true): string {
   return `
 import { trustedHtml } from '@kovojs/browser';
-import { createApp, query, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 
 const proof: string = 'ok';
-export const currentSourceQuery = query({
+export const app = defineKovo({
+  appId: '11111111-1111-4111-8111-111111111111',
+});
+export const currentSourceQuery = app.query({
 ${withAccess ? "  access: { kind: 'public', reason: 'current-source proof fixture' },\n" : ''}
   load: () => ({ proof }),
 });
+const currentSourceRoute = app.route('/', {
+  access: app.publicAccess('current-source route fixture'),
+  page: () => trustedHtml('<main>Current source</main>'),
+});
 
-export default createApp({
+export default app.assemble({
   queries: [currentSourceQuery],
-  routes: [
-    route('/', {
-      access: { kind: 'public', reason: 'current-source route fixture' },
-      page: () => trustedHtml('<main>Current source</main>'),
-    }),
-  ],
+  routes: [currentSourceRoute],
 });
 `;
 }

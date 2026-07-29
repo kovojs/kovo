@@ -309,20 +309,31 @@ describe('kovo check', () => {
   });
 
   it('fails KV436 and explains missing for a sparse executable access carrier', async () => {
-    const [{ accessFactsFromApp }, { createApp, query }] = await Promise.all([
+    const [
+      { accessFactsFromApp },
+      { resolveKovoAppToken },
+      { assignDerivedQueryKey },
+      { defineKovo },
+    ] = await Promise.all([
       import('@kovojs/server/internal/execution'),
+      import('@kovojs/server/internal/build'),
+      import('@kovojs/server/internal/wire'),
       import('@kovojs/server'),
     ]);
     const sparseAccess: ((request: unknown) => true)[] = [];
     sparseAccess.length = 1;
-    const app = createApp({
-      queries: [
-        query('private-sparse', {
-          access: sparseAccess,
-          load: () => ({ secret: true }),
-        }),
-      ],
-    });
+    const contract = defineKovo({});
+    const definition = assignDerivedQueryKey(
+      contract.query({
+        access: sparseAccess,
+        load: () => ({ secret: true }),
+      }),
+      'private-sparse',
+    );
+    const app = resolveKovoAppToken(
+      contract.assemble({ queries: [definition] }),
+      'kovo-check sparse-access test',
+    );
     const input = { access: accessFactsFromApp(app) };
 
     const check = kovoCheck(input);
@@ -335,13 +346,29 @@ describe('kovo check', () => {
   });
 
   it('keeps KV436 audit and runtime guard enforcement aligned after mutation attempts', async () => {
-    const [{ accessFactsFromApp, runQuery }, { createApp, guard, publicAccess, query }] =
-      await Promise.all([import('@kovojs/server/internal/execution'), import('@kovojs/server')]);
-    const definition = query('private-pinned', {
-      access: [guard('pinned-deny', () => ({ kind: 'forbidden' as const }))],
-      load: () => ({ secret: true }),
-    });
-    const app = createApp({ queries: [definition] });
+    const [
+      { accessFactsFromApp, runQuery },
+      { resolveKovoAppToken },
+      { assignDerivedQueryKey },
+      { defineKovo, guard, publicAccess },
+    ] = await Promise.all([
+      import('@kovojs/server/internal/execution'),
+      import('@kovojs/server/internal/build'),
+      import('@kovojs/server/internal/wire'),
+      import('@kovojs/server'),
+    ]);
+    const contract = defineKovo({});
+    const definition = assignDerivedQueryKey(
+      contract.query({
+        access: [guard('pinned-deny', () => ({ kind: 'forbidden' as const }))],
+        load: () => ({ secret: true }),
+      }),
+      'private-pinned',
+    );
+    const app = resolveKovoAppToken(
+      contract.assemble({ queries: [definition] }),
+      'kovo-check pinned-access test',
+    );
 
     expect(Reflect.set(definition, 'access', undefined)).toBe(false);
     expect(Reflect.deleteProperty(definition, 'access')).toBe(false);

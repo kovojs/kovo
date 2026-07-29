@@ -165,7 +165,7 @@ export async function startKovoDevServer(
       appModulePath: options.appModulePath,
       debug: options.debug === true,
       securityProfileModuleId: profile.securityProfileModuleId,
-      serverModuleId: profile.serverModuleId,
+      serverBuildModuleId: profile.serverBuildModuleId,
     });
     const devtoolPlugin = freezeFrameworkPlugin(createKovoDevtoolPlugin(devtoolOptions));
     const authoredConfig = snapshotSupportedAuthoredDevConfig(
@@ -322,7 +322,7 @@ function boundDevServerOrigin(server: ViteDevServer): string {
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
   appShellModuleId: string;
   securityProfileModuleId: string;
-  serverModuleId: string;
+  serverBuildModuleId: string;
   trustedKovoVitePlugin(options: {
     app: string;
     paranoidStaticAdvisory: boolean;
@@ -393,6 +393,11 @@ async function preloadDevSecurityProfile(
   );
   const serverModuleId = viteSsrModuleId(serverRootPath, root);
   await server.ssrLoadModule(serverModuleId);
+  const serverBuildModuleId = viteSsrModuleId(
+    requireFromApp.resolve('@kovojs/server/internal/build'),
+    root,
+  );
+  await server.ssrLoadModule(serverBuildModuleId);
   const appShellModuleId = viteSsrModuleId(
     requireFromApp.resolve('@kovojs/server/internal/app-shell-vite'),
     root,
@@ -433,7 +438,7 @@ async function preloadDevSecurityProfile(
     rejectNodeRequestPreloadIngress:
       rejectNodeRequestPreloadIngress as DevSecurityProfileModule['rejectNodeRequestPreloadIngress'],
     securityProfileModuleId,
-    serverModuleId,
+    serverBuildModuleId,
     trustedKovoVitePlugin:
       trustedKovoVitePlugin as DevSecurityProfileModule['trustedKovoVitePlugin'],
   });

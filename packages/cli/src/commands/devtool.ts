@@ -3,7 +3,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { dirname } from 'node:path';
 
-import type { KovoApp } from '@kovojs/server';
+import type { KovoApp } from '@kovojs/server/internal/build';
 import type { Plugin, ViteDevServer } from 'vite-plus';
 
 import { buildBundle, renderPage } from '../../../devtool/src/index.js';
@@ -70,7 +70,7 @@ export interface KovoDevtoolPluginOptions {
   appModulePath: string;
   debug: boolean;
   securityProfileModuleId: string;
-  serverModuleId: string;
+  serverBuildModuleId: string;
 }
 
 /** @internal Framework-owned, Vite-dev-only mount for the reusable Kovo dataflow renderer. */
@@ -189,7 +189,7 @@ async function buildKovoDevtoolBundle(
       'Compiler-only guards, inferred schema fields, derivations, provenance, and unresolved facts are omitted.',
       'Input fields list only explicit file fields. Use kovo explain for authoritative source and proof facts.',
     ],
-    provenance: 'live closed createApp() runtime registry',
+    provenance: 'live closed app.assemble() runtime registry',
     srcRoot: dirname(options.appModulePath),
     view: 'runtime-registry',
   });
@@ -199,12 +199,13 @@ async function loadKovoDevtoolApp(
   server: Pick<ViteDevServer, 'ssrLoadModule'>,
   options: KovoDevtoolPluginOptions,
 ): Promise<KovoApp> {
-  // Load the server root before the authored module in this exact live SSR realm. Its identity
-  // guard then recognizes only the createApp() aggregate minted by that realm (SPEC §6.6/§9.5).
-  const serverModule = await server.ssrLoadModule(options.serverModuleId);
-  const isKovoApp = serverModule.isKovoApp;
-  if (typeof isKovoApp !== 'function') {
-    throw new TypeError('@kovojs/server must export isKovoApp.');
+  // Resolve the public opaque token only through the private build adapter loaded in this exact
+  // live SSR realm. Structural inspection and a public isKovoApp assertion would expose the
+  // aggregate that SPEC §6.2.1/§9.5 deliberately keeps behind module-private identity.
+  const serverBuildModule = await server.ssrLoadModule(options.serverBuildModuleId);
+  const resolveKovoAppToken = serverBuildModule.resolveKovoAppToken;
+  if (typeof resolveKovoAppToken !== 'function') {
+    throw new TypeError('@kovojs/server/internal/build must export resolveKovoAppToken.');
   }
   const appShellModule = await server.ssrLoadModule(options.appShellModuleId);
   const runWithGeneratedLiveTargetRegistry = appShellModule.runWithGeneratedLiveTargetRegistry;
@@ -230,12 +231,16 @@ async function loadKovoDevtoolApp(
   // module binding through the boot-captured intrinsic; the stricter authored-data helper below is
   // intentionally reserved for app-owned registry records.
   const app = nativeReflectApply(nativeReflectGet, NativeReflect, [appModule, 'default']);
-  if (nativeReflectApply(isKovoApp, undefined, [app]) !== true) {
+  try {
+    return nativeReflectApply(resolveKovoAppToken, undefined, [
+      app,
+      'Kovo devtool app module default export',
+    ]) as KovoApp;
+  } catch {
     throw new TypeError(
-      'Kovo devtool requires the app module to default-export a closed createApp() aggregate.',
+      'Kovo devtool requires the app module to default-export the exact opaque KovoApp returned by app.assemble().',
     );
   }
-  return app as KovoApp;
 }
 
 /**
