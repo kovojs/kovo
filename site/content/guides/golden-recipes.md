@@ -47,7 +47,7 @@ export const contactRoute = route('/contacts/:contactId', {
 });
 ```
 
-A path rename and its param-schema rename travel together. `vp check` catches a stale
+A path rename and its param-schema rename travel together. `kovo check` catches a stale
 `params.contactId`.
 
 ## Load a query

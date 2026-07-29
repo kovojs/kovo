@@ -65,8 +65,11 @@ proof; shared root verification belongs in the latest-verification block.
     post-listen loopback handoff and fail-closed deployment boundary.
 - [ ] Move lifecycle, sound-subset, endpoint-posture, and parallel scheduling algorithms from the
       starter scripts into versioned Kovo commands.
-- [ ] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
+- [x] Remove `vp` from the app-facing command vocabulary and update the three standing-rule
       evidence contracts in the same checkpoint.
+  - Evidence: the focused creator metadata test and 3-test `kovo test` suite prove the generated
+    scripts use `kovo check`, `kovo test`, and `kovo build`; the template/docs/rule census found no
+    app-facing `vp` command, and the 201-snippet packed-docs gate passed.
 - [x] Make framework test bootstrap establish runtime ordering before eager app evaluation, then
       remove the starter classifier mock and `isKovoApp` assertion.
   - Evidence: the starter scaffold census proves the generated test owns a bootstrap-first public

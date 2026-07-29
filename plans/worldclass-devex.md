@@ -502,13 +502,16 @@ granularity).
       and safe parallel scheduling out of the three copied starter scripts (1,413 lines) and into
       versioned Kovo commands built on the command AST; the generated app keeps compact
       declarative config and owns no framework orchestration algorithm.
-- [ ] (S) Remove `vp` from the app-facing command model: provide `kovo test` (or a generated
+- [x] (S) Remove `vp` from the app-facing command model: provide `kovo test` (or a generated
       standard Vitest command if no Kovo wrapper is required), and make scaffold scripts use only
       `kovo`, the test runner, and the package manager. Keep Vite Plus an implementation
       dependency; do not require an app author to understand which proof phases happen under
       `vp check`, copied scripts, or `kovo build`; update the `vp`-naming evidence in
       `rules/v1-acceptance.md` 16.6,
       `rules/prelaunch-checklist.md`, and `rules/docs-style.md` when the scaffold changes.
+  - Evidence: focused creator metadata and `kovo test` suites prove the generated script vocabulary
+    and internal runner adapter; the template/docs/rule census found no app-facing `vp`, and the
+    201-snippet packed-docs gate passed.
 - [x] (M) Make Kovo's Vitest/test bootstrap establish the real framework runtime ordering before
       eager app evaluation, then delete the starter's internal classifier mock and `isKovoApp`
       implementation assertion. Until Track 4 lands, the starter uses a packed black-box HTTP
