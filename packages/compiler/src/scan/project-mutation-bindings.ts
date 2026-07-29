@@ -99,10 +99,6 @@ interface ProjectIndex {
   readonly authFactoryResolving: Set<string>;
 }
 
-const BETTER_AUTH_BINDING_CONSTRUCTORS = new Set([
-  'createBetterAuthPostgresBindingsFromEnvironment',
-  'createBetterAuthSqliteBindingsFromEnvironment',
-]);
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 
 const BETTER_AUTH_SIGN_IN_FIELDS: readonly MutationInputFieldFact[] = [
@@ -502,14 +498,25 @@ function directGeneratedAuthFactory(module: ProjectModule, name: string): boolea
   if (!returned || !ts.isCallExpression(returned)) return false;
   const callee = unwrapExpression(returned.expression);
   if (!callee || !ts.isIdentifier(callee)) return false;
-  if (!BETTER_AUTH_BINDING_CONSTRUCTORS.has(callee.text)) return false;
+  const constructorModule = generatedBetterAuthConstructorModule(callee.text);
+  if (constructorModule === null) return false;
   if (returned.arguments.length !== 1) return false;
   const options = unwrapExpression(returned.arguments[0]);
   if (!options || !ts.isObjectLiteralExpression(options)) return false;
   return (
-    hasExactPackageImport(module, callee.text, '@kovojs/better-auth') &&
+    hasExactPackageImport(module, callee.text, constructorModule) &&
     !bindingHasVisibleMutation(module.sourceFile, callee.text)
   );
+}
+
+function generatedBetterAuthConstructorModule(name: string): string | null {
+  if (name === 'createBetterAuthPostgresBindingsFromEnvironment') {
+    return '@kovojs/better-auth/generated/postgres';
+  }
+  if (name === 'createBetterAuthSqliteBindingsFromEnvironment') {
+    return '@kovojs/better-auth/generated/sqlite';
+  }
+  return null;
 }
 
 function hasExactPackageImport(

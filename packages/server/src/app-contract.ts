@@ -107,25 +107,6 @@ declare const kovoContractBrand: unique symbol;
 
 type AppId = string | undefined;
 type OptimisticFunction = (...args: unknown[]) => unknown;
-type AppOwnedDeclarationHandle<
-  Kind extends AppDeclarationKind,
-  Owner extends string | undefined,
-> = {
-  readonly [appDeclarationHandleBrand]: {
-    readonly kind: Kind;
-    readonly owner: Owner;
-  };
-};
-type AppOwnedQueryHandle<Owner extends string | undefined> = AppOwnedDeclarationHandle<
-  'query',
-  Owner
-> & {
-  readonly key: string;
-};
-type QueryHandleValue<Handle> =
-  Handle extends QueryHandle<infer _Input, infer Value, infer _Owner, infer _Request>
-    ? Awaited<Value>
-    : unknown;
 
 /** Named app-scoped route handle. */
 export interface RouteHandle<
@@ -437,7 +418,12 @@ export interface AppRouteFactory<Request, Owner extends string | undefined> {
       boundaries?: unknown;
       guard?: never;
       i18n?: unknown;
-      layout?: AppOwnedDeclarationHandle<'layout', Owner>;
+      layout?: {
+        readonly [appDeclarationHandleBrand]: {
+          readonly kind: 'layout';
+          readonly owner: Owner;
+        };
+      };
       meta?: unknown;
       modulepreloads?: readonly string[];
       onUnauthenticated?: unknown;
@@ -466,9 +452,18 @@ export interface AppRouteFactory<Request, Owner extends string | undefined> {
 export interface AppLayoutFactory<Request, Owner extends string | undefined> {
   <
     const Access extends AccessDecision | undefined = undefined,
-    const Queries extends Readonly<Record<string, AppOwnedQueryHandle<Owner>>> = Readonly<
-      Record<never, never>
-    >,
+    const Queries extends Readonly<
+      Record<
+        string,
+        {
+          readonly [appDeclarationHandleBrand]: {
+            readonly kind: 'query';
+            readonly owner: Owner;
+          };
+          readonly key: string;
+        }
+      >
+    > = Readonly<Record<never, never>>,
     Page extends LayoutRenderResult = LayoutRenderResult,
     Regions extends LayoutRegionResults = LayoutRegionResults,
   >(definition: {
@@ -479,14 +474,26 @@ export interface AppLayoutFactory<Request, Owner extends string | undefined> {
     i18n?: unknown;
     meta?: unknown;
     modulepreloads?: readonly string[];
-    parent?: AppOwnedDeclarationHandle<'layout', Owner>;
+    parent?: {
+      readonly [appDeclarationHandleBrand]: {
+        readonly kind: 'layout';
+        readonly owner: Owner;
+      };
+    };
     prefetch?: 'conservative' | 'moderate' | false;
     prefetchJustification?: string;
     prerenderUrls?: readonly string[];
     queries?: Queries;
     render?: (
       queries: {
-        [Name in keyof Queries]: QueryHandleValue<Queries[Name]>;
+        [Name in keyof Queries]: Queries[Name] extends QueryHandle<
+          infer _Input,
+          infer Value,
+          infer _Owner,
+          infer _Request
+        >
+          ? Awaited<Value>
+          : unknown;
       },
       state: undefined,
       slots: {
@@ -637,12 +644,42 @@ export type DefinedKovoContract<
 
 /** Explicit declaration inventory consumed once by `app.assemble()`. */
 export interface AppAssemblyOptions<Request, DbValue, Owner extends string | undefined> {
-  endpoints?: readonly AppOwnedDeclarationHandle<'endpoint', Owner>[];
-  layouts?: readonly AppOwnedDeclarationHandle<'layout', Owner>[];
-  mutations?: readonly AppOwnedDeclarationHandle<'mutation', Owner>[];
-  queries?: readonly AppOwnedDeclarationHandle<'query', Owner>[];
-  routes?: readonly AppOwnedDeclarationHandle<'route', Owner>[];
-  tasks?: readonly AppOwnedDeclarationHandle<'task', Owner>[];
+  endpoints?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'endpoint';
+      readonly owner: Owner;
+    };
+  }[];
+  layouts?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'layout';
+      readonly owner: Owner;
+    };
+  }[];
+  mutations?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'mutation';
+      readonly owner: Owner;
+    };
+  }[];
+  queries?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'query';
+      readonly owner: Owner;
+    };
+  }[];
+  routes?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'route';
+      readonly owner: Owner;
+    };
+  }[];
+  tasks?: readonly {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'task';
+      readonly owner: Owner;
+    };
+  }[];
 }
 
 /** App request refined by the executable `app.authenticated` guard. */
@@ -691,7 +728,12 @@ export interface KovoContract<
   readonly verifiedAccess: typeof verifiedAccess;
   integrateMutation<Definition extends { key: string }>(
     adapter: AppMutationAdapter<Definition>,
-  ): Definition & AppOwnedDeclarationHandle<'mutation', Owner>;
+  ): Definition & {
+    readonly [appDeclarationHandleBrand]: {
+      readonly kind: 'mutation';
+      readonly owner: Owner;
+    };
+  };
   all<const Items extends readonly Guard<Request, Request>[]>(
     ...items: Items
   ): Guard<Request, AppRequestForAccess<Request, Items>>;
