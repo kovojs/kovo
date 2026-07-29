@@ -69,14 +69,14 @@ export const frameworkExportPosturePackages: readonly FrameworkExportPosturePack
   ["@kovojs/cli", "0.2.0", [
     ["sha256:7b28433b398f349e38f7f7916aee45f6d34d9540a9c531fd96571ed30e2db134", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:f1681e3f120aa19be713e3c65833cfab3a3a830b938f36eb06a57153fc6bd05b"]],
+    ], []],
     ["sha256:971cbc49aac49b3169170045bf1b91d0d3e69d60c5edc8e909b33fdcba526a85", [
       [".",["default"]],
-    ], ["kovo-source-tree-sha256:15426084c5243ac22f172544375963167edf0c66db87dec58b36220f25b14b10"]],
+    ], []],
     ["sha256:e3d8d6b0ac34c1e039c8584ac63d7423a78026170fcc7ed3a8af90c7335ac658", [
       [".",["default","types"]],
-    ], ["kovo-packed-tree-sha256:f1681e3f120aa19be713e3c65833cfab3a3a830b938f36eb06a57153fc6bd05b"]],
-  ], "exact-implementation"],
+    ], []],
+  ], "unconditional-request-closure"],
   ["@kovojs/core", "0.2.0", [
     ["sha256:357b58eb71e2dacbb6d9976384102ddcb37f724abbed99a46725abfc1cd1e570", [
       [".",["default","types"]],
@@ -5721,7 +5721,7 @@ export const frameworkExportPostureGroups: readonly FrameworkExportPostureGroup[
   ["@kovojs/cli", "request-closed", ["database-driver","dynamic-loader","filesystem","network","process","vm","worker"], "none", "The CLI library surface is build-time authority and is not a request-handler capability door.", [
     [".",["<module>","kovoCheck","kovoExplain","runKovoCommand"]],
   ]],
-  ["@kovojs/cli", "authority-free", [], "none", "The diagnostic schema constant is an authority-free protocol identifier.", [
+  ["@kovojs/cli", "request-closed", [], "none", "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority.", [
     [".",["KOVO_DIAGNOSTIC_VERSION"]],
   ]],
   ["@kovojs/core", "authority-free", [], "none", null, [

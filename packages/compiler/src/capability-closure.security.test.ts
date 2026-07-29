@@ -2526,15 +2526,17 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
   });
 
-  it('requires exact bytes for a mixed-posture tool package', () => {
+  it('rejects the wholly request-closed CLI without depending on bundled certificate bytes', () => {
     const result = analyze(
       [
         {
           fileName: 'app.ts',
           source: `
-            import { kovoCheck } from '@kovojs/cli';
+            import { KOVO_DIAGNOSTIC_VERSION } from '@kovojs/cli';
             import { route } from '@kovojs/server';
-            export const page = route('/tool-import', { render() { return kovoCheck; } });
+            export const page = route('/tool-import', {
+              render() { return KOVO_DIAGNOSTIC_VERSION; },
+            });
           `,
         },
       ],
@@ -2550,13 +2552,16 @@ describe('SPEC §6.6 capability-closed module graph', () => {
 
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]!.message).toContain(
-      'compiler-owned @kovojs/cli posture has no compiler-derived installed implementation digest',
+      'compiler-owned @kovojs/cli is unconditionally request-closed',
     );
-    expect(result.diagnostics[0]!.message).not.toContain('unconditionally request-closed');
+    expect(result.diagnostics[0]!.message).not.toContain('implementation digest');
   });
 
   // @kovo-security-certifies C13 request-closed-package-identity-before-digest-omission
-  it.each([['@kovojs/verify', 'verifyCertificate']] as const)(
+  it.each([
+    ['@kovojs/cli', 'KOVO_DIAGNOSTIC_VERSION'],
+    ['@kovojs/verify', 'verifyCertificate'],
+  ] as const)(
     'requires reviewed installed identity before applying %s digest-free request closure',
     (packageName, importedName) => {
       const files = [

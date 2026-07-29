@@ -388,8 +388,9 @@ describe('framework public runtime export posture gate', () => {
     };
 
     const cli = packageBlock('@kovojs/cli');
-    expect(cli).toContain('"exact-implementation"');
-    expect(cli).toContain('kovo-source-tree-sha256:');
+    expect(cli).toContain('"unconditional-request-closure"');
+    expect(cli).not.toContain('kovo-source-tree-sha256:');
+    expect(cli).not.toContain('kovo-packed-tree-sha256:');
 
     expect(generated).toContain(
       "frameworkZeroPublicRequestClosedPackages: readonly string[] = ['@kovojs/compiler']",
@@ -400,17 +401,16 @@ describe('framework public runtime export posture gate', () => {
     expect(server).toContain('"exact-implementation"');
     expect(server).toContain('kovo-source-tree-sha256:');
 
-    const whollyRequestClosed = clone(ledger);
-    const diagnosticGroup = packageRow(whollyRequestClosed, '@kovojs/cli').postureGroups.find(
+    const widenedCliLedger = clone(ledger);
+    const diagnosticGroup = packageRow(widenedCliLedger, '@kovojs/cli').postureGroups.find(
       (group) => group.members['.']?.includes('KOVO_DIAGNOSTIC_VERSION'),
     );
-    diagnosticGroup.disposition = 'request-closed';
-    const closedGenerated = renderFrameworkExportPostureGenerated(whollyRequestClosed, actual);
-    const closedStart = closedGenerated.indexOf('  ["@kovojs/cli",');
-    const closedEnd = closedGenerated.indexOf('\n  ["@kovojs/', closedStart + 1);
-    const closedCli = closedGenerated.slice(closedStart, closedEnd);
-    expect(closedCli).toContain('"unconditional-request-closure"');
-    expect(closedCli).not.toContain('kovo-source-tree-sha256:');
-    expect(closedCli).not.toContain('kovo-packed-tree-sha256:');
+    diagnosticGroup.disposition = 'authority-free';
+    const widenedGenerated = renderFrameworkExportPostureGenerated(widenedCliLedger, actual);
+    const widenedStart = widenedGenerated.indexOf('  ["@kovojs/cli",');
+    const widenedEnd = widenedGenerated.indexOf('\n  ["@kovojs/', widenedStart + 1);
+    const widenedCli = widenedGenerated.slice(widenedStart, widenedEnd);
+    expect(widenedCli).toContain('"exact-implementation"');
+    expect(widenedCli).toContain('kovo-source-tree-sha256:');
   });
 });

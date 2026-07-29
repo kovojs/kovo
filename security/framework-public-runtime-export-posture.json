@@ -849,8 +849,8 @@
         },
         {
           "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-ordinary-runtime-build-compiler-diagnostic-schema-v1",
+          "disposition": "request-closed",
+          "id": "request-closed-request-closed-build-compiler-diagnostic-schema-v1",
           "matrix": {
             "cells": {
               "A": "public-runtime-export-posture-control",
@@ -864,13 +864,13 @@
             ".": ["KOVO_DIAGNOSTIC_VERSION"]
           },
           "review": {
-            "basis": "The immutable diagnostic wire-version literal carries no raw capability and creates no request root, framework door, trust escape, or sink.",
+            "basis": "The diagnostic wire-version literal belongs to the build-time CLI protocol; the CLI package is not a request-handler runtime dependency.",
             "evidence": ["packages/cli/src/api.ts", "packages/cli/src/diagnostic.ts"],
             "id": "first-party-runtime-posture/2026-07-28"
           },
           "rootKind": "none",
-          "securityRole": "ordinary-runtime",
-          "reason": "The diagnostic schema constant is an authority-free protocol identifier."
+          "securityRole": "request-closed",
+          "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
       "sourceTreeSha256": "15426084c5243ac22f172544375963167edf0c66db87dec58b36220f25b14b10"
