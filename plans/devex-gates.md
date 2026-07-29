@@ -103,10 +103,16 @@ reproducer, while the named implementation work item owns retirement.
 
 ## CI posture
 
-- [ ] Set a total DevEx CI minute budget and classify every new gate as per-PR, nightly, or manual.
-- [ ] Publish bounded PR reports for public surface, docs freshness, and speed deltas.
-- [ ] Keep one compact current scorecard-status block in the charter rather than appending
+- [x] Set a total DevEx CI minute budget and classify every new gate as per-PR, nightly, or manual.
+  - Evidence: `pnpm run test:devex-track2` reports 65/65 per-PR and 290/300 nightly
+    runner-minutes and validates every declared gate against its workflow.
+- [x] Publish bounded PR reports for public surface, docs freshness, and speed deltas.
+  - Evidence: `pnpm run test:devex-track2` proves the always-run, fail-closed
+    `kovo-devex-pr-report/v1` workflow and renderer.
+- [x] Keep one compact current scorecard-status block in the charter rather than appending
       historical transcripts.
+  - Evidence: `plans/worldclass-devex.md` carries one replace-in-place current-status paragraph
+    immediately above the atomic scorecard.
 - [ ] Track 2 exit: packed journeys deterministic, known-failure mappings complete, budgets
       ratified, and PR reports visible.
 

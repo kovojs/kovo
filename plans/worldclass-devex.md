@@ -52,6 +52,11 @@ baselines on the named runner and ratifies each number with a recorded derivatio
 `devex-budgets.json`; performance gates run on a named runner and pinned packed-tarball fixtures so
 hardware and workspace linking do not make the numbers meaningless.
 
+Current scorecard status (2026-07-29): per-PR DevEx gates use 65/65 budgeted runner-minutes and
+nightly gates use 290/300; every pull request publishes bounded public-surface, docs-freshness, and
+speed evidence. Runner-bound performance gates remain non-binding until an accepted
+`ubuntu-24.04` N≥5 baseline and its reviewed noise-derived thresholds are committed.
+
 | ID  | Tier | Gate                                                                                                                                                                                              | Proof                                                |
 | --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | G1  | 1    | Both packed scaffold variants pass create→install→dev→login→CRUD→test→check→build with only creator-emitted instructions                                                                          | golden-journey runner exit 0                         |
@@ -618,12 +623,16 @@ consumes lives here; everything else moved next to the work it proves. Seeds chi
   - Evidence: `pnpm run test:devex-known-failures-available` executes KF-DEVEX-007 from attested
     tarballs and keeps the reproduced full-catalog memory failure explicitly expected until its
     Track 1 fix lands.
-- [ ] (S) CI meta-budget: total added per-PR minutes for all DevEx gates, with an explicit per-PR
+- [x] (S) CI meta-budget: total added per-PR minutes for all DevEx gates, with an explicit per-PR
       vs nightly split.
-- [ ] (S) Wire the PR-visible reports: public-surface counts, docs freshness, and speed deltas
+  - Evidence: `pnpm run test:devex-track2` reports 65/65 per-PR and 290/300 nightly
+    runner-minutes and rejects unbudgeted or workflow-drifted gates.
+- [x] (S) Wire the PR-visible reports: public-surface counts, docs freshness, and speed deltas
       posted on every pull request. Record Track 2 results in one compact scorecard-status block
       at the top of this plan and replace, rather than append to, that evidence as later tracks
       supersede it.
+  - Evidence: `pnpm run test:devex-track2` passes the always-run PR workflow/report contract and
+    its fail-closed, bounded public-surface/docs/speed renderer (11 files, 83 tests).
 
 - [ ] **Track 2 exit:** packed journeys are deterministic; every known-failure-register entry is
       represented by a failing test; budgets are baseline-derived and ratified; public-surface,
