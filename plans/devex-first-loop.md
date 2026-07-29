@@ -108,8 +108,11 @@ proof; shared root verification belongs in the latest-verification block.
 - [ ] Cover the seven first-run failures with one safe cause, source/config anchor, and executable
       next step.
 - [ ] Cover the top 20 authoring diagnostics with the same three fields.
-- [ ] Add `kovo doctor` checks for toolchain, duplicate packages, peers, config/preset, origin, DB
+- [x] Add `kovo doctor` checks for toolchain, duplicate packages, peers, config/preset, origin, DB
       roles, migrations, retention, writable paths, and stale caches.
+  - Evidence: `packages/cli/src/index.kovo-doctor.test.ts` passes 6 tests covering the complete
+    healthy inventory, a fail-closed negative for every named axis, safe cache repair, symlink
+    refusal, credential non-disclosure, and human/JSON/GitHub parity.
 - [ ] Add `kovo add --list`, typo suggestions, `--dry-run`, and `--install=auto|never`.
 - [ ] Prove `kovo add --dry-run` performs zero filesystem or process writes.
 - [ ] Stage add/install mutations so output distinguishes completed work from planned work after

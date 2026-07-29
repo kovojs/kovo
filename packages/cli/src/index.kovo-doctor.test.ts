@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -118,6 +119,83 @@ describe('kovo doctor', () => {
     expect(`${result.stdout}\n${result.stderr}`).not.toContain('SECRET_RUNTIME');
   });
 
+  it('fails each package, config, origin, database, migration, retention, and path axis closed', async () => {
+    const cases: readonly {
+      readonly code: string;
+      readonly env?: NodeJS.ProcessEnv;
+      readonly mutate: (root: string) => void;
+    }[] = [
+      {
+        code: 'KOVO_DOCTOR_PACKAGE_MANAGER',
+        mutate() {
+          vi.spyOn(doctorHost, 'execFileSync').mockReturnValue('9.0.0\n');
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_PEER',
+        mutate(root) {
+          installedKovoPackage(root, 'core', '@kovojs/core', '0.2.0');
+          installedKovoPackage(root, 'server', '@kovojs/server', '0.2.0', {
+            peerDependencies: { '@kovojs/core': '^0.3.0' },
+          });
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_CONFIG',
+        mutate(root) {
+          rmSync(join(root, 'kovo.config.ts'));
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_ORIGIN',
+        env: { KOVO_ORIGIN: 'http://deploy.example.com' },
+        mutate() {},
+      },
+      {
+        code: 'KOVO_DOCTOR_DATABASE',
+        mutate(root) {
+          updateManifest(root, { dependencies: { pg: '8.22.0' } });
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_MIGRATIONS',
+        mutate(root) {
+          rmSync(join(root, 'drizzle'), { recursive: true });
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_RETENTION',
+        mutate(root) {
+          writeFileSync(join(root, 'src/app.tsx'), 'export const app = island(Component);\n');
+        },
+      },
+      {
+        code: 'KOVO_DOCTOR_WRITABLE',
+        mutate() {
+          vi.spyOn(doctorHost, 'accessSync').mockImplementation(() => {
+            throw new Error('read-only fixture');
+          });
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      vi.restoreAllMocks();
+      const root = healthyFixture();
+      vi.spyOn(doctorHost, 'execFileSync').mockReturnValue('10.12.1\n');
+      testCase.mutate(root);
+      const result = await capture(root, ['doctor', '--format', 'json'], testCase.env);
+      expect(result.exitCode, testCase.code).toBe(1);
+      const envelope = JSON.parse(result.stderr) as {
+        readonly diagnostics: readonly { readonly code: string }[];
+      };
+      expect(
+        envelope.diagnostics.map((diagnostic) => diagnostic.code),
+        testCase.code,
+      ).toContain(testCase.code);
+    }
+  });
+
   it('repairs only a stale real cache and reports the fix as completed', async () => {
     const root = healthyFixture();
     const cache = join(root, '.kovo/cache');
@@ -184,7 +262,13 @@ function healthyFixture(overrides: Record<string, unknown> = {}): string {
   return root;
 }
 
-function installedKovoPackage(root: string, store: string, name: string, version: string): void {
+function installedKovoPackage(
+  root: string,
+  store: string,
+  name: string,
+  version: string,
+  manifest: Record<string, unknown> = {},
+): void {
   const path = join(
     root,
     'node_modules/.pnpm',
@@ -193,7 +277,13 @@ function installedKovoPackage(root: string, store: string, name: string, version
     name.slice('@kovojs/'.length),
   );
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, 'package.json'), JSON.stringify({ name, version }));
+  writeFileSync(join(path, 'package.json'), JSON.stringify({ name, version, ...manifest }));
+}
+
+function updateManifest(root: string, patch: Record<string, unknown>): void {
+  const path = join(root, 'package.json');
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  writeFileSync(path, `${JSON.stringify({ ...manifest, ...patch }, null, 2)}\n`);
 }
 
 async function capture(

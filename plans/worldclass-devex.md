@@ -555,9 +555,11 @@ granularity).
 - [ ] (M) One blessed deploy-to-URL journey (G11): create→build→deploy→200 on one named Node host
       with artifact retention solved by the preset; the scaffold's deployment-target prompt emits
       the matching config so the prompt pays off.
-- [ ] (M) Add `kovo doctor` for environment and package coherence: Node/package-manager versions,
+- [x] (M) Add `kovo doctor` for environment and package coherence: Node/package-manager versions,
       duplicate Kovo copies, peer mismatches, config/preset, local origin, DB roles, migrations,
       retention, writable paths, and stale caches.
+  - Evidence: the 6-test doctor suite proves all ten checks, structured adapter parity, bounded
+    project-confined cache repair, symlink refusal, and credential non-disclosure.
 - [ ] (M) Extend `kovo add` with `--list`, typo suggestions, `--dry-run`, and `--install=auto|never`;
       stage file and package edits so an install failure cannot make the reported result ambiguous.
   - `--dry-run` performs zero filesystem/process writes, catalog/list equals the registry, and
