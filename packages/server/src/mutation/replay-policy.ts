@@ -1,4 +1,5 @@
-import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
+import { type ScopedKey } from '@kovojs/core';
 
 import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import { provenPrincipalFromRequest } from '../auth-principal.js';

@@ -1,4 +1,4 @@
-import { hmacSignature } from '@kovojs/core';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 import { describe, expect, it } from 'vitest';
 

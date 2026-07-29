@@ -1,4 +1,5 @@
-import type { ScopedKey, StorageReadCapability } from '@kovojs/core';
+import type { ScopedKey } from '@kovojs/core';
+import type { StorageReadCapability } from '@kovojs/core/storage';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 import {

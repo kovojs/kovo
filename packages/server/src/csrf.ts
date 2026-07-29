@@ -1,4 +1,4 @@
-import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 
 import {

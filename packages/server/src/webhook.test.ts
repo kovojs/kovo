@@ -1,6 +1,6 @@
 // @kovo-security-classifier-corpus egress-ip
 import { createHmac } from 'node:crypto';
-import { customVerifier, hmacSignature } from '@kovojs/core';
+import { customVerifier, hmacSignature } from '@kovojs/core/webhooks';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { describe, expect, it, vi } from 'vitest';
 

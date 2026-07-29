@@ -1,15 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
 import { inspect } from 'node:util';
-import {
-  isSecret,
-  revealSecret,
-  type JsonValue,
-  type ScopedKey,
-  type Secret,
-  type StorageCapability,
-  type StorageReadCapability,
-} from '@kovojs/core';
+import { isSecret, revealSecret, type Secret } from '@kovojs/core/security';
+import { type JsonValue, type ScopedKey } from '@kovojs/core';
+import { type StorageCapability, type StorageReadCapability } from '@kovojs/core/storage';
 import {
   createMemoryStorage,
   scopedKeyFactsFor,

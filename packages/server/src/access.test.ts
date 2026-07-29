@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { hmacSignature, type HmacSignatureOptions, type HmacSignatureVerifier } from '@kovojs/core';
+import { hmacSignature, type HmacSignatureOptions, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import {

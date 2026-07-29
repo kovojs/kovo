@@ -1,6 +1,6 @@
 import { inspect, types as utilTypes } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { isUntrusted, revealUntrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
 
 import { query, renderQueryEndpointResponse } from './query.js';
 import { parseRouteRequest, route } from './route.js';

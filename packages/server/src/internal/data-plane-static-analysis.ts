@@ -7,7 +7,7 @@ import {
   resolve as builtinResolve,
 } from 'node:path';
 
-import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
 import {
   compilerOwnedAppContractStaticFactsFromFiles,
   deriveBrowserPostureManifestFromSourceFiles,

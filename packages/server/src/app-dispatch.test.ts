@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { trustedHtml } from '@kovojs/browser';
-import { customVerifier, hmacSignature } from '@kovojs/core';
+import { customVerifier, hmacSignature } from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';

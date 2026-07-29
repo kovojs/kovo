@@ -1,8 +1,4 @@
-import type {
-  CustomWebhookVerifier,
-  WebhookVerificationRequest,
-  WebhookVerifier,
-} from '@kovojs/core';
+import type { CustomWebhookVerifier, WebhookVerificationRequest, WebhookVerifier } from '@kovojs/core/webhooks';
 import {
   hasFrameworkDurableReplayStoreReceipt,
   propagateFrameworkDurableReplayStoreReceipt,

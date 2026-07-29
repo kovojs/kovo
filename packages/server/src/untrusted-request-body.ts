@@ -1,4 +1,4 @@
-import { isUntrusted, revealUntrusted, untrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted, untrusted } from '@kovojs/core/security';
 
 import {
   requestApply,

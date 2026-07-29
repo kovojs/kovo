@@ -1,4 +1,4 @@
-import { isSecret } from '@kovojs/core';
+import { isSecret } from '@kovojs/core/security';
 
 import {
   loggingCreateError,

@@ -1,4 +1,5 @@
-import { isUntrusted, revealUntrusted, type JsonValue } from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
+import { type JsonValue } from '@kovojs/core';
 
 import { accessDecisionFor } from './access.js';
 import { provenPrincipalFromRequest, requestPrincipalSnapshot } from './auth-principal.js';

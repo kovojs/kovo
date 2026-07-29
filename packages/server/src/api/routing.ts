@@ -1,18 +1,8 @@
-export {
-  customVerifier,
-  hmacSignature,
-  Link,
-  href,
-  redirect,
-  standardWebhooks,
-} from '@kovojs/core';
-export type {
-  DiagnosticCode,
-  JsonValue,
-  Redirect,
-  Route,
-  WebhookVerifier,
-} from '@kovojs/core';
+export { customVerifier, hmacSignature, standardWebhooks } from '@kovojs/core/webhooks';
+export { Link, href, redirect } from '@kovojs/core';
+export type { DiagnosticCode } from '@kovojs/core/diagnostics';
+export type { JsonValue, Redirect, Route } from '@kovojs/core';
+export type { WebhookVerifier } from '@kovojs/core/webhooks';
 export { publicAccess, verifiedAccess } from '../access.js';
 export type { AccessDecision, PublicAccess, VerifiedMachineAccess } from '../access.js';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';

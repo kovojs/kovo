@@ -341,11 +341,9 @@ describe('create-kovo starter (build integration: production security artifacts)
 
         const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
         expect(proofQueries).toContain(
-          "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.create({",
+          "trustedReveal(secret('runtime-secret-value'), DeclassifyPolicy.forTrustedReveal({",
         );
-        expect(proofQueries).toContain("door: 'trustedReveal'");
         expect(proofQueries).toContain("ownerScope: 'application'");
-        expect(proofQueries).toContain("purpose: 'public-projection'");
 
         const output = captureBuildFailure(() => buildParanoidProductionArtifact(root));
         expect(output).toContain('KV448');

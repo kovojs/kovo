@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { describe, expect, it } from 'vitest';
-import { publicScopedKey, secret } from '@kovojs/core';
+import { publicScopedKey } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
 import { principalScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import {

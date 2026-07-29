@@ -1,4 +1,4 @@
-import { secret } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import { snapshotAuditJustification, snapshotAuditText } from './audit-justification.js';
 import {

@@ -16,7 +16,7 @@ import {
   type S3CompatiblePutObjectInput,
   type S3CompatiblePutObjectOutput,
 } from '@kovojs/core/internal/storage';
-import type { StorageCapability } from '@kovojs/core';
+import type { StorageCapability } from '@kovojs/core/storage';
 import { kovo } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';

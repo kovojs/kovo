@@ -1,4 +1,5 @@
-import { isUntrusted, revealUntrusted, type ScopedKey } from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
+import { type ScopedKey } from '@kovojs/core';
 import {
   hasFrameworkDurableReplayStoreReceipt,
   propagateFrameworkDurableReplayStoreReceipt,

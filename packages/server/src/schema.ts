@@ -1,13 +1,6 @@
-import {
-  isUntrusted,
-  revealUntrusted,
-  secret,
-  type JsonValue,
-  type SecretValue,
-  type ScopedKey,
-  type StorageObjectInfo,
-  type StoragePutCapability,
-} from '@kovojs/core';
+import { isUntrusted, revealUntrusted, secret, type SecretValue } from '@kovojs/core/security';
+import { type JsonValue, type ScopedKey } from '@kovojs/core';
+import { type StorageObjectInfo, type StoragePutCapability } from '@kovojs/core/storage';
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import { frameworkScopedKey } from '@kovojs/core/internal/storage';
 

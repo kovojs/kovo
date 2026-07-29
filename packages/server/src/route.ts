@@ -1,11 +1,5 @@
-import {
-  isUntrusted,
-  revealUntrusted,
-  type ComponentChild,
-  type JsonValue,
-  type Redirect,
-  type RouteSearchValue,
-} from '@kovojs/core';
+import { isUntrusted, revealUntrusted } from '@kovojs/core/security';
+import { type ComponentChild, type JsonValue, type Redirect, type RouteSearchValue } from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import { substituteRoutePatternParams } from '@kovojs/core/internal/route-pattern';
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';

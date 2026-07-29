@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { secret, trustedReveal, type Secret } from '@kovojs/core';
+import { secret, trustedReveal, type Secret } from '@kovojs/core/security';
 
 import { accessDecisionFor, publicAccess } from './access.js';
 import { domain } from './domain.js';

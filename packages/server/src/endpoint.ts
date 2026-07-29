@@ -1,4 +1,4 @@
-import type { WebhookVerifier } from '@kovojs/core';
+import type { WebhookVerifier } from '@kovojs/core/webhooks';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import {
   accessDecisionFor,

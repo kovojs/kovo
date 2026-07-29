@@ -1,4 +1,4 @@
-import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticCode, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
 import type {
   VersionedClientModuleRegistry,
   VersionedClientModuleStore,

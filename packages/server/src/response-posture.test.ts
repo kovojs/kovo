@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { secret } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
 
 import {
   blessRedirectResponse,

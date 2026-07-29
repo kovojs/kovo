@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { publicScopedKey, untrusted } from '@kovojs/core';
+import { publicScopedKey } from '@kovojs/core';
+import { untrusted } from '@kovojs/core/security';
 import { restoreScopedKey, scopedKeyFactsFor } from '@kovojs/core/internal/storage';
 
 import { registerFrameworkSessionPrincipalSnapshot } from './auth-principal.js';

@@ -3,14 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
-import {
-  publicScopedKey,
-  type ScopedKey,
-  type StorageBody,
-  type StorageCapability,
-  type StoragePutOptions,
-  type StorageReadCapability,
-} from '@kovojs/core';
+import { publicScopedKey, type ScopedKey } from '@kovojs/core';
+import { type StorageBody, type StorageCapability, type StoragePutOptions, type StorageReadCapability } from '@kovojs/core/storage';
 import {
   createFileSystemStorage as createFileSystemStorageCapability,
   createMemoryStorage as createMemoryStorageCapability,

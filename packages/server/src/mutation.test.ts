@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Secret } from '@kovojs/core';
+import type { Secret } from '@kovojs/core/security';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 

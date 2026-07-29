@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { customVerifier } from '@kovojs/core';
+import { customVerifier } from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';

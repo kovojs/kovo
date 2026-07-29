@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { customVerifier, hmacSignature, type HmacSignatureVerifier } from '@kovojs/core';
+import { customVerifier, hmacSignature, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
 import { describe, expect, it } from 'vitest';
 
 import { mintCsrfToken } from './csrf.js';

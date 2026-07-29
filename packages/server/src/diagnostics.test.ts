@@ -1,4 +1,4 @@
-import { secret } from '@kovojs/core';
+import { secret } from '@kovojs/core/security';
 import { describe, expect, it, vi } from 'vitest';
 
 import { reportServerError } from './diagnostics.js';

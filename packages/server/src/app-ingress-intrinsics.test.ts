@@ -1,4 +1,4 @@
-import { customVerifier } from '@kovojs/core';
+import { customVerifier } from '@kovojs/core/webhooks';
 import { trustedHtml } from '@kovojs/browser';
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 import { describe, expect, it } from 'vitest';

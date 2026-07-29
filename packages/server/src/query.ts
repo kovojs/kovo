@@ -1,4 +1,5 @@
-import { isSecret, type JsonValue } from '@kovojs/core';
+import { isSecret } from '@kovojs/core/security';
+import { type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import {

@@ -1,4 +1,4 @@
-export type { Secret } from '@kovojs/core';
+export type { Secret } from '@kovojs/core/security';
 export { publicScopedKey } from '@kovojs/core';
 export type { ScopedKey } from '@kovojs/core';
 export { derived } from '../derived-dataset.js';

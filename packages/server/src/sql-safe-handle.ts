@@ -40,7 +40,7 @@ import {
   type SqlClassifierVerdict,
   type SqlWriteTargets,
 } from './sql-write-allowlist.js';
-import { isSecret } from '@kovojs/core';
+import { isSecret } from '@kovojs/core/security';
 import {
   createWitnessMap,
   createWitnessSet,

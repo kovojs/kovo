@@ -1,4 +1,4 @@
-import type { StorageCapability } from '@kovojs/core';
+import type { StorageCapability } from '@kovojs/core/storage';
 import {
   countPrincipalStorageObjects,
   erasePrincipalStorageObjects,

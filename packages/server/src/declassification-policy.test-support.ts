@@ -1,25 +1,19 @@
-import { DeclassifyPolicy } from '@kovojs/core';
+import { DeclassifyPolicy } from '@kovojs/core/security';
 
-export const testSecretRevealPolicy = DeclassifyPolicy.create({
-  door: 'secret.reveal',
+export const testSecretRevealPolicy = DeclassifyPolicy.forSecretValue({
   ownerScope: 'application',
   purpose: 'server-computation',
 });
 
-export const testRevealSecretPolicy = DeclassifyPolicy.create({
-  door: 'revealSecret',
+export const testRevealSecretPolicy = DeclassifyPolicy.forRevealSecret({
   ownerScope: 'application',
   purpose: 'server-computation',
 });
 
-export const testTrustedRevealPolicy = DeclassifyPolicy.create({
-  door: 'trustedReveal',
+export const testTrustedRevealPolicy = DeclassifyPolicy.forTrustedReveal({
   ownerScope: 'application',
-  purpose: 'public-projection',
 });
 
-export const testRevealUntrustedPolicy = DeclassifyPolicy.create({
-  door: 'revealUntrusted',
+export const testRevealUntrustedPolicy = DeclassifyPolicy.forRevealUntrusted({
   ownerScope: 'application',
-  purpose: 'request-validation',
 });

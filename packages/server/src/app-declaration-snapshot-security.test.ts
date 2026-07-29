@@ -1,5 +1,5 @@
 import { trustedHtml } from '@kovojs/browser';
-import { customVerifier } from '@kovojs/core';
+import { customVerifier } from '@kovojs/core/webhooks';
 import { describe, expect, it, vi } from 'vitest';
 
 import { publicAccess } from './access.js';

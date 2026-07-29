@@ -1,4 +1,5 @@
-import { DeclassifyPolicy, publicScopedKey, secret } from '@kovojs/core';
+import { publicScopedKey } from '@kovojs/core';
+import { DeclassifyPolicy, secret } from '@kovojs/core/security';
 import {
   createMemoryStorage,
   installCoreSecurityDecisionBridge,
@@ -128,18 +129,15 @@ describe('security-decision production emission coverage (SPEC §11.2)', () => {
     await runAccessDecisionGuards(publicAccess('emission coverage test'), undefined, {});
     await runAccessDecisionGuards([() => false], undefined, {});
 
-    const declassifyPolicy = DeclassifyPolicy.create({
-      door: 'secret.reveal',
+    const declassifyPolicy = DeclassifyPolicy.forSecretValue({
       ownerScope: 'framework',
       purpose: 'server-computation',
     });
     expect(secret('server-owned').reveal(declassifyPolicy)).toBe('server-owned');
     expect(() =>
       secret('server-owned').reveal(
-        DeclassifyPolicy.create({
-          door: 'trustedReveal',
+        DeclassifyPolicy.forTrustedReveal({
           ownerScope: 'framework',
-          purpose: 'public-projection',
         }) as never,
       ),
     ).toThrow(/exact door/u);

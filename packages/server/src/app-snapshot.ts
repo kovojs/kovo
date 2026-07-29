@@ -1,8 +1,4 @@
-import {
-  type CustomWebhookVerifier,
-  type WebhookVerificationRequest,
-  type WebhookVerifier,
-} from '@kovojs/core';
+import { type CustomWebhookVerifier, type WebhookVerificationRequest, type WebhookVerifier } from '@kovojs/core/webhooks';
 import { isFrameworkHmacSignatureVerifier } from '@kovojs/core/internal/verifier';
 import { assertHtmlElementWireValueStable } from '@kovojs/core/internal/semantic-attributes';
 import {

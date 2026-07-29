@@ -31,7 +31,8 @@
  * Every mint is observed by a bounded runtime capability collector (SF-WIRE below).
  */
 
-import type { ScopedKey, StorageReadCapability } from '@kovojs/core';
+import type { ScopedKey } from '@kovojs/core';
+import type { StorageReadCapability } from '@kovojs/core/storage';
 import {
   normalizeStorageKey,
   restoreScopedKey,

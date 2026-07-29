@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { connect as connectHttp2, createServer as createHttp2Server } from 'node:http2';
 import type { AddressInfo } from 'node:net';
-import { customVerifier } from '@kovojs/core';
+import { customVerifier } from '@kovojs/core/webhooks';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';

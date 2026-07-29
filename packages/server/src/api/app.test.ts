@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import {
-  createFileSystemStorage as coreCreateFileSystemStorage,
-  createMemoryStorage as coreCreateMemoryStorage,
-  createS3CompatibleStorage as coreCreateS3CompatibleStorage,
-  customVerifier as coreCustomVerifier,
-  hmacSignature as coreHmacSignature,
-  standardWebhooks as coreStandardWebhooks,
-  type SecretValue,
-} from '@kovojs/core';
+import { createFileSystemStorage as coreCreateFileSystemStorage, createMemoryStorage as coreCreateMemoryStorage, createS3CompatibleStorage as coreCreateS3CompatibleStorage } from '@kovojs/core/storage';
+import { customVerifier as coreCustomVerifier, hmacSignature as coreHmacSignature, standardWebhooks as coreStandardWebhooks } from '@kovojs/core/webhooks';
+import { type SecretValue } from '@kovojs/core/security';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageTestingApi from '@kovojs/server/testing';
