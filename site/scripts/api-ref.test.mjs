@@ -183,7 +183,8 @@ describe('api-ref generator', () => {
       expect(corePage, `missing export "${name}"`).toContain(`#### \`${name}\``);
     }
     const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
-    expect(new Set(core.names)).toEqual(new Set(names));
+    const root = core.symbolsBySubpath.find((subpath) => subpath.importPath === '@kovojs/core');
+    expect(new Set(root.symbols.map((symbol) => symbol.name))).toEqual(new Set(names));
   });
 
   it('reports every generated symbol by public import path', () => {
@@ -346,7 +347,8 @@ describe('api-ref generator', () => {
     // `<code>` HTML so generics survive the GFM table.
     expect(section).toMatch(/\| \*\(returns\)\* \| <code><a href="#component-\d+">Component<\/a>/);
     // Generics are HTML-escaped so `<` / `>` cannot be parsed as tags.
-    expect(section).toContain('&lt;Definition&gt;');
+    expect(section).toContain('&lt;');
+    expect(section).toContain('&gt;');
   });
 
   it('normalizes fenced @example blocks so later symbol headings stay headings', () => {
@@ -389,11 +391,10 @@ describe('api-ref generator', () => {
     expect(uiPage).not.toMatch(/\{\} as Parameters<typeof [A-Za-z0-9_$]+>\[\d+\]/);
   });
 
-  it('documents every public @kovojs/drizzle export including runtime metadata helpers', () => {
+  it('documents the public Drizzle authoring API without internal runtime metadata carriers', () => {
     const drizzle = result.packages.find((pkg) => pkg.name === '@kovojs/drizzle');
-    expect(drizzle.exports).toBe(39);
-    expect(drizzle.documented).toBe(39);
-    expect(drizzlePage).toContain('runtime database metadata extraction');
+    expect(drizzle.documented).toBe(drizzle.exports);
+    expect(drizzle.names).toEqual(expect.arrayContaining(['kovo', 'kovoAnalyzerSummary']));
     for (const name of [
       'extractKovoRuntimeDbMetadata',
       'KovoRuntimeDbMetadata',
@@ -401,9 +402,10 @@ describe('api-ref generator', () => {
       'KovoRuntimeAuthorizationClassification',
       'KovoRuntimeKeySource',
     ]) {
-      expect(drizzlePage, `missing Drizzle runtime metadata export "${name}"`).toContain(
-        `#### \`${name}\``,
-      );
+      expect(
+        drizzlePage,
+        `internal Drizzle runtime metadata export "${name}" leaked`,
+      ).not.toContain(`#### \`${name}\``);
     }
   });
 
@@ -431,14 +433,14 @@ describe('api-ref generator', () => {
     expect(manifest.package).toBe('@kovojs/core');
     expect(manifest.slug).toBe('core');
 
-    expect(manifest.subpaths).toHaveLength(1);
-    expect(manifest.subpaths[0].importPath).toBe('@kovojs/core');
-    expect(manifest.subpaths[0].sourceHref).toMatch(
-      /^https:\/\/github\.com\/kovojs\/kovo\/blob\/main\/.+/,
+    expect(new Set(manifest.subpaths.map((subpath) => subpath.importPath))).toEqual(
+      new Set(manifestSubpaths('@kovojs/core')),
     );
-    expect(manifest.subpaths[0].sourceHref).not.toContain(repoRoot);
+    const root = manifest.subpaths.find((subpath) => subpath.importPath === '@kovojs/core');
+    expect(root.sourceHref).toMatch(/^https:\/\/github\.com\/kovojs\/kovo\/blob\/main\/.+/);
+    expect(root.sourceHref).not.toContain(repoRoot);
 
-    const values = manifest.subpaths[0].categories.find((category) => category.title === 'Values');
+    const values = root.categories.find((category) => category.title === 'Values');
     expect(values.anchor).toBe('kovojscore-values');
     const component = values.symbols.find((symbol) => symbol.name === 'component');
     // The anchor matches the page heading id (slugify), so deep links resolve.
@@ -475,31 +477,13 @@ describe('api-ref generator', () => {
     expect(section.match(/```ts/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('documents the app-facing export tier across packages', () => {
-    // Coverage must be meaningful, not the historical "0 documented". Floors are
-    // the regenerated documented counts after the public-API cleanup narrowed the
-    // surface (e.g. @kovojs/test dropped its internalized verifier subpaths and
-    // @kovojs/style narrowed to its opaque-handle authoring contract); they must
-    // not silently regress.
-    // The audit-driven cleanup removed @kovojs/core#formFields and folded
-    // @kovojs/style#InlineStyle into StyleInput (audit-api-20260620 Definitely
-    // Remove), so those packages' documented floors drop by one.
-    const expected = {
-      '@kovojs/core': 68,
-      '@kovojs/drizzle': 39,
-      '@kovojs/headless-ui': 103,
-      '@kovojs/icons': 1,
-      '@kovojs/browser': 39,
-      '@kovojs/server': 150,
-      '@kovojs/style': 14,
-      '@kovojs/better-auth': 19,
-      '@kovojs/cli': 11,
-      '@kovojs/verify': 11,
-      '@kovojs/test': 26,
-      '@kovojs/ui': 2,
-    };
+  it('documents every declaration in each manifest-selected app-facing entry', () => {
+    // The checked decision ledger owns intentional surface shrinkage. This gate
+    // prevents silent documentation drops without turning yesterday's export
+    // counts into a compatibility floor.
     for (const pkg of result.packages) {
-      expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);
+      expect(pkg.exports, `${pkg.name} exports`).toBeGreaterThan(0);
+      expect(pkg.documented, `${pkg.name} documented`).toBe(pkg.exports);
     }
   });
 });

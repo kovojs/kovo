@@ -52,6 +52,11 @@
         "description": "Component model, routes, queries, forms, and render contracts.",
         "entries": [
           {
+            "path": ".",
+            "slug": "core",
+            "description": "Daily component, route, query, form, and serializable authoring values."
+          },
+          {
             "path": "./diagnostics",
             "slug": "core-diagnostics"
           },
