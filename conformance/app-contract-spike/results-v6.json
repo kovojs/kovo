@@ -1,7 +1,7 @@
 {
   "arms": {
     "arm-a": {
-      "eligible": false,
+      "eligible": true,
       "gates": {
         "artifacts": {
           "details": [],
@@ -24,10 +24,8 @@
           "pass": true
         },
         "performance": {
-          "details": [
-            "warm completion p95 exceeds threshold"
-          ],
-          "pass": false
+          "details": [],
+          "pass": true
         },
         "publicForgery": {
           "details": [],
@@ -70,7 +68,7 @@
     }
   },
   "criteria": "kovo.app-contract-d1-criteria/v6",
-  "decision": "arm-b",
+  "decision": "arm-a",
   "priorEvidenceDisposition": {
     "v1": "invalidated",
     "v2": "invalidated",
