@@ -30,7 +30,10 @@ const signingKeys = createSigningKeyRing({
 });
 const csrf = { anonymousCookie: false, secret: signingKeys, sessionId: () => undefined };
 
-assert.equal(SaveButton.definition.render({ label: 'Save' }, undefined, {}).type, 'button');
+assert.equal(
+  String(SaveButton.definition.render({ label: 'Save' }, undefined, {})),
+  '<button type="submit">Save</button>',
+);
 assert.equal(contactRoute.path, '/contacts/:contactId');
 assert.deepEqual(await contactQuery.load({ contactId: 'contact-1' }), {
   displayName: 'Ada Lovelace',
@@ -48,10 +51,12 @@ assert.deepEqual(created, [{ email: 'ada@example.test', name: 'Ada' }]);
 
 const ProfileForm = defineProfileForm(csrf);
 assert.equal(
-  ProfileForm.definition.render({}, undefined, {
-    forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } },
-  }).type,
-  'form',
+  String(
+    ProfileForm.definition.render({}, undefined, {
+      forms: { updateProfile: { failure: null, submitted: { name: 'Ada' } } },
+    }),
+  ),
+  '<form><input name="name" value="Ada"><input name="email" type="email"><button type="submit">Save profile</button></form>',
 );
 
 const health = await healthEndpoint.handler(new Request('https://app.example/healthz'));
@@ -60,11 +65,13 @@ assert.deepEqual(await health.json(), { ok: true });
 
 assert.equal(accountRoute.path, '/account');
 assert.equal(
-  accountRoute.page(
-    { params: {}, search: {} },
-    { session: { id: 'session-1', user: { email: 'ada@example.test', id: 'user-1' } } },
-  ).type,
-  'main',
+  String(
+    accountRoute.page(
+      { params: {}, search: {} },
+      { session: { id: 'session-1', user: { email: 'ada@example.test', id: 'user-1' } } },
+    ),
+  ),
+  '<main>Signed in as ada@example.test</main>',
 );
 
 const avatarBytes = new Uint8Array([137, 80, 78, 71]);
@@ -94,7 +101,16 @@ assert.deepEqual(delivered, { delivered: 'ada@example.test' });
 assert.equal(emailCalls[0].url, 'https://api.resend.com/emails');
 
 assert.equal(invoiceDownload.contentDisposition, 'attachment; filename="invoice-42.csv"');
-assert.equal(avatarUpload.file, true);
+const uploadedAvatar = await avatarUpload.parseAsync(
+  new File(
+    [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02])],
+    'avatar.png',
+    { type: 'image/png' },
+  ),
+);
+assert.equal(uploadedAvatar.storage.contentType, 'image/png');
+assert.equal(uploadedAvatar.storage.metadata.filename, 'avatar.png');
+assert.match(uploadedAvatar.storage.key, /^avatars\//u);
 assert.equal(String(articleBody.value), '<p>Hello <strong>reader</strong>.</p>');
 
 const capabilityLink = await receiptRoute.page({
@@ -106,7 +122,10 @@ const capabilityLink = await receiptRoute.page({
     url: '/downloads/receipt-42?token=opaque',
   }),
 });
-assert.equal(capabilityLink.props.href, '/downloads/receipt-42?token=opaque');
-assert.equal(deployConfig.preset?.name, 'node');
+assert.equal(
+  String(capabilityLink),
+  '<a href="/downloads/receipt-42?token=opaque">Download receipt</a>',
+);
+assert.equal(Object.isFrozen(deployConfig.preset), true);
 
 process.stdout.write('golden-recipes/v1 tasks=16 OK\n');

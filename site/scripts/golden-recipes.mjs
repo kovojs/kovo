@@ -121,6 +121,7 @@ export async function compileAndExecuteGoldenRecipes({ nodeModulesDir, projectRo
   const outputDir = path.join(projectRoot, 'dist');
   await rm(projectRoot, { force: true, recursive: true });
   await mkdir(sourceDir, { recursive: true });
+  await writeFile(path.join(projectRoot, 'package.json'), '{"private":true,"type":"module"}\n');
 
   for (const recipe of recipes) {
     await cp(confinedSourcePath(recipe), path.join(sourceDir, path.basename(recipe.sourcePath)));

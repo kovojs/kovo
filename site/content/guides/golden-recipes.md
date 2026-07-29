@@ -444,20 +444,20 @@ contact.load().displayName;
 
 <!-- kovo-sample: type-error -->
 
-```ts
+```tsx
 // kovo-expected-error: Property 'id' does not exist
 import { route, s } from '@kovojs/server';
 route('/contacts/:contactId', {
   params: s.object({ contactId: s.string() }),
-  page: ({ params }) => params.id,
+  page: ({ params }) => <main>{params.id}</main>,
 });
 ```
 
-```ts
+```tsx
 import { route, s } from '@kovojs/server';
 route('/contacts/:contactId', {
   params: s.object({ contactId: s.string() }),
-  page: ({ params }) => params.contactId,
+  page: ({ params }) => <main>{params.contactId}</main>,
 });
 ```
 
