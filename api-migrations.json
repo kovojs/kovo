@@ -1,7 +1,10 @@
 {
   "schema": "kovo-api-migration-ledger/v1",
   "resultSchema": "kovo-api-migration-result/v1",
-  "modes": ["check", "write"],
+  "modes": [
+    "check",
+    "write"
+  ],
   "refusalCategories": [
     "ambiguous-binding",
     "app-context",
@@ -44,8 +47,12 @@
       "tool": {
         "path": "scripts/migrate-style-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": ["--check"],
-        "writeArgs": ["--write"]
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
       },
       "releaseNote": "docs/releases/style-api-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
@@ -53,164 +60,712 @@
         {
           "id": "attrs-result-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "AttrsResult" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "AttrsResult"
+          },
           "category": "app-context",
           "reason": "The function return shape is inferred now; preserving a named public carrier requires an app-owned type design."
         },
         {
           "id": "create-theme-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "createTheme" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "createTheme"
+          },
           "category": "app-context",
           "reason": "Variable overrides and seed-generated themes have different semantics, so selecting defineTheme requires app intent."
         },
         {
           "id": "keyframes-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "Keyframes" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "Keyframes"
+          },
           "category": "app-context",
           "reason": "The keyframes argument is inferred now; preserving a named public carrier requires an app-owned type design."
         },
         {
           "id": "style-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "Style" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "Style"
+          },
           "category": "app-context",
           "reason": "Choosing between one opaque handle and the recursive StyleInput aggregate depends on the application field contract."
         },
         {
           "id": "style-namespaces-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "StyleNamespaces" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "StyleNamespaces"
+          },
           "category": "app-context",
           "reason": "The create return type is inferred from its input now; a replacement named alias depends on the application schema."
         },
         {
           "id": "style-primitive-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "StylePrimitive" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "StylePrimitive"
+          },
           "category": "app-context",
           "reason": "Choosing CssValue or an application-specific scalar alias depends on whether nullable style values are intended."
         },
         {
           "id": "style-record-to-handle",
           "action": "rewrite",
-          "from": { "specifier": "@kovojs/style", "symbol": "StyleRecord" },
-          "to": { "specifier": "@kovojs/style", "symbol": "StyleHandle" }
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "StyleRecord"
+          },
+          "to": {
+            "specifier": "@kovojs/style",
+            "symbol": "StyleHandle"
+          }
         },
         {
           "id": "theme-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "Theme" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "Theme"
+          },
           "category": "app-context",
           "reason": "The retired variable override carrier has no equivalent in the supported seed-generated theme contract."
         },
         {
           "id": "theme-custom-color-group-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorGroup" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeCustomColorGroup"
+          },
           "category": "app-context",
           "reason": "Use-site inference from ThemeTokens replaces this helper; exporting a local alias is an application design choice."
         },
         {
           "id": "theme-custom-color-input-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorInput" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeCustomColorInput"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions owns this input shape now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-custom-colors-input-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeCustomColorsInput" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeCustomColorsInput"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions owns this input map now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-from-seed-options-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeFromSeedOptions" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeFromSeedOptions"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions is the supported aggregate, but removing or requiring its seed field changes caller intent."
         },
         {
           "id": "theme-reference-palette-name-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeReferencePaletteName" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeReferencePaletteName"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns the palette keys now; extracting a local key alias depends on the application's boundary."
         },
         {
           "id": "theme-reference-palettes-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeReferencePalettes" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeReferencePalettes"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns the palette map now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-scheme-values-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSchemeValues" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeSchemeValues"
+          },
           "category": "app-context",
           "reason": "KovoTheme owns generated scheme values now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-seed-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSeed" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeSeed"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions owns seed validation now; choosing a local scalar alias depends on application intent."
         },
         {
           "id": "theme-shape-input-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeInput" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeShapeInput"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions owns shape input now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-shape-token-name-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeTokenName" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeShapeTokenName"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns shape keys now; extracting a local key alias depends on the application's boundary."
         },
         {
           "id": "theme-shape-values-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeShapeValues" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeShapeValues"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns shape values now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-system-color-name-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSystemColorName" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeSystemColorName"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns system color keys now; extracting a local key alias depends on the application's boundary."
         },
         {
           "id": "theme-system-color-values-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeSystemColorValues" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeSystemColorValues"
+          },
           "category": "app-context",
           "reason": "ThemeTokens owns system color values now; extracting a local alias depends on the application's boundary."
         },
         {
           "id": "theme-variant-refusal",
           "action": "refuse",
-          "from": { "specifier": "@kovojs/style", "symbol": "ThemeVariant" },
+          "from": {
+            "specifier": "@kovojs/style",
+            "symbol": "ThemeVariant"
+          },
           "category": "app-context",
           "reason": "DefineThemeOptions owns variant selection now; extracting a local alias depends on the application's boundary."
         }
       ],
       "fixtures": {
-        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
-        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
+        "rewrites": [
+          "scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"
+        ]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node --experimental-strip-types scripts/migrate-style-api-v1.mjs --check scripts/fixtures/api-migrations/style-opaque-handles"
+      }
+    },
+    {
+      "id": "ui-headless-icons-v1",
+      "state": "removed",
+      "owner": "ui-platform",
+      "decisions": [
+        "@kovojs/headless-ui/accordion#accordionItemOpen",
+        "@kovojs/headless-ui/autocomplete#autocompleteOptionHighlighted",
+        "@kovojs/headless-ui/autocomplete#autocompleteOptionSelected",
+        "@kovojs/headless-ui/autocomplete#autocompleteSuggestions",
+        "@kovojs/headless-ui/avatar#avatarImageState",
+        "@kovojs/headless-ui/checkbox-group#checkboxGroupItemChecked",
+        "@kovojs/headless-ui/combobox#comboboxFilteredItems",
+        "@kovojs/headless-ui/combobox#comboboxOptionHighlighted",
+        "@kovojs/headless-ui/combobox#comboboxOptionSelected",
+        "@kovojs/headless-ui/command#commandFilteredItems",
+        "@kovojs/headless-ui/command#commandItemHighlighted",
+        "@kovojs/headless-ui/command#commandItemSelected",
+        "@kovojs/headless-ui/context-menu#contextMenuFocusElement",
+        "@kovojs/headless-ui/context-menu#contextMenuItemHighlighted",
+        "@kovojs/headless-ui/dropdown-menu#dropdownMenuFocusElement",
+        "@kovojs/headless-ui/dropdown-menu#dropdownMenuItemHighlighted",
+        "@kovojs/headless-ui/menubar#menubarFocusElement",
+        "@kovojs/headless-ui/menubar#menubarItemHighlighted",
+        "@kovojs/headless-ui/menubar#menubarItemOpen",
+        "@kovojs/headless-ui/meter#meterValueState",
+        "@kovojs/headless-ui/navigation-menu#navigationMenuFocusElement",
+        "@kovojs/headless-ui/navigation-menu#navigationMenuItemHighlighted",
+        "@kovojs/headless-ui/navigation-menu#navigationMenuItemOpen",
+        "@kovojs/headless-ui/otp-field#otpFieldComplete",
+        "@kovojs/headless-ui/otp-field#otpFieldSlotValue",
+        "@kovojs/headless-ui/otp-field#otpFieldValueFromString",
+        "@kovojs/headless-ui/progress#progressValueState",
+        "@kovojs/headless-ui/radio-group#radioGroupItemChecked",
+        "@kovojs/headless-ui/radio-group#radioGroupMoveValue",
+        "@kovojs/headless-ui/scroll-area#scrollAreaCornerState",
+        "@kovojs/headless-ui/scroll-area#scrollAreaScrollbarState",
+        "@kovojs/headless-ui/scroll-area#scrollAreaThumbGeometry",
+        "@kovojs/headless-ui/scroll-area#scrollAreaViewportState",
+        "@kovojs/headless-ui/select#selectItemSelected",
+        "@kovojs/headless-ui/slider#sliderValueState",
+        "@kovojs/headless-ui/tabs#tabsItemSelected",
+        "@kovojs/headless-ui/toggle-group#toggleGroupItemPressed",
+        "@kovojs/headless-ui/toolbar#toolbarRovingIndex",
+        "@kovojs/icons#IconRenderResult",
+        "@kovojs/ui"
+      ],
+      "tool": {
+        "path": "scripts/migrate-ui-headless-icons-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": [
+          "--check"
+        ],
+        "writeArgs": [
+          "--write"
+        ]
+      },
+      "rules": [
+        {
+          "id": "icon-render-result-to-core",
+          "action": "rewrite",
+          "from": {
+            "specifier": "@kovojs/icons",
+            "symbol": "IconRenderResult"
+          },
+          "to": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentRenderResult"
+          }
+        },
+        {
+          "id": "ui-root-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/ui"
+          },
+          "category": "ambiguous-binding",
+          "reason": "The empty root does not identify which component subpath owns each imported binding, so a mechanical guess could change code."
+        },
+        {
+          "id": "internal-accordion-item-open",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/accordion",
+            "symbol": "accordionItemOpen"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-autocomplete-option-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/autocomplete",
+            "symbol": "autocompleteOptionHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-autocomplete-option-selected",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/autocomplete",
+            "symbol": "autocompleteOptionSelected"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-autocomplete-suggestions",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/autocomplete",
+            "symbol": "autocompleteSuggestions"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-avatar-image-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/avatar",
+            "symbol": "avatarImageState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-checkbox-group-item-checked",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/checkbox-group",
+            "symbol": "checkboxGroupItemChecked"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-combobox-filtered-items",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/combobox",
+            "symbol": "comboboxFilteredItems"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-combobox-option-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/combobox",
+            "symbol": "comboboxOptionHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-combobox-option-selected",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/combobox",
+            "symbol": "comboboxOptionSelected"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-command-filtered-items",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/command",
+            "symbol": "commandFilteredItems"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-command-item-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/command",
+            "symbol": "commandItemHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-command-item-selected",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/command",
+            "symbol": "commandItemSelected"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-context-menu-focus-element",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/context-menu",
+            "symbol": "contextMenuFocusElement"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-context-menu-item-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/context-menu",
+            "symbol": "contextMenuItemHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-dropdown-menu-focus-element",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/dropdown-menu",
+            "symbol": "dropdownMenuFocusElement"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-dropdown-menu-item-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/dropdown-menu",
+            "symbol": "dropdownMenuItemHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-menubar-focus-element",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/menubar",
+            "symbol": "menubarFocusElement"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-menubar-item-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/menubar",
+            "symbol": "menubarItemHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-menubar-item-open",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/menubar",
+            "symbol": "menubarItemOpen"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-meter-value-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/meter",
+            "symbol": "meterValueState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-navigation-menu-focus-element",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/navigation-menu",
+            "symbol": "navigationMenuFocusElement"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-navigation-menu-item-highlighted",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/navigation-menu",
+            "symbol": "navigationMenuItemHighlighted"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-navigation-menu-item-open",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/navigation-menu",
+            "symbol": "navigationMenuItemOpen"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-otp-field-complete",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/otp-field",
+            "symbol": "otpFieldComplete"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-otp-field-slot-value",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/otp-field",
+            "symbol": "otpFieldSlotValue"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-otp-field-value-from-string",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/otp-field",
+            "symbol": "otpFieldValueFromString"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-progress-value-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/progress",
+            "symbol": "progressValueState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-radio-group-item-checked",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/radio-group",
+            "symbol": "radioGroupItemChecked"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-radio-group-move-value",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/radio-group",
+            "symbol": "radioGroupMoveValue"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-scroll-area-corner-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/scroll-area",
+            "symbol": "scrollAreaCornerState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-scroll-area-scrollbar-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/scroll-area",
+            "symbol": "scrollAreaScrollbarState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-scroll-area-thumb-geometry",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/scroll-area",
+            "symbol": "scrollAreaThumbGeometry"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-scroll-area-viewport-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/scroll-area",
+            "symbol": "scrollAreaViewportState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-select-item-selected",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/select",
+            "symbol": "selectItemSelected"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-slider-value-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/slider",
+            "symbol": "sliderValueState"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-tabs-item-selected",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/tabs",
+            "symbol": "tabsItemSelected"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-toggle-group-item-pressed",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/toggle-group",
+            "symbol": "toggleGroupItemPressed"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        },
+        {
+          "id": "internal-toolbar-roving-index",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/headless-ui/toolbar",
+            "symbol": "toolbarRovingIndex"
+          },
+          "category": "app-context",
+          "reason": "Selecting the public attribute builder and its render inputs depends on the application anatomy, so the tool cannot preserve this projection safely."
+        }
+      ],
+      "fixtures": {
+        "rewrites": [
+          "scripts/fixtures/api-migrations/ui-headless-icons-v1/icon-render-result.input.ts"
+        ],
+        "refusals": [
+          "scripts/fixtures/api-migrations/ui-headless-icons-v1/headless-helper.refusal.ts",
+          "scripts/fixtures/api-migrations/ui-headless-icons-v1/ui-root.refusal.ts"
+        ]
+      },
+      "releaseNote": "docs/releases/ui-headless-icons-v1.md",
+      "rollback": "From a clean worktree, restore the prior package versions and reverse only the import edits listed by this migration result.",
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-ui-headless-icons-v1.mjs --check scripts/fixtures/api-migrations/ui-headless-icons-v1"
       }
     }
   ]

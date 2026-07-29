@@ -360,9 +360,10 @@ function wildcardTargetPattern(target) {
 }
 
 export function allowedPublishedSourceFiles(pkgJson) {
+  if (pkgJson.name === '@kovojs/icons') return ['catalog.json'];
   if (pkgJson.name !== '@kovojs/ui') return [];
 
-  const files = new Set();
+  const files = new Set(['catalog.json', 'registry.json']);
   for (const [subpath, target] of Object.entries(normalizePackageExports(pkgJson.exports))) {
     if (subpath === '.' || !subpath.startsWith('./')) continue;
     const sourceTarget = resolveSourceExportTarget(target);

@@ -654,20 +654,31 @@ interface ExampleSearchManifest {
   title: string;
 }
 
-function componentSearchEntries(): SearchEntry[] {
-  return galleryComponentCatalog.map((entry) => ({
-    section: 'Components',
-    text: [
-      entry.title,
-      entry.component,
-      entry.summary,
-      `@kovojs/ui/${entry.component}`,
-      `kovo add ${entry.component}`,
-      `packages/ui/src/${entry.component}.tsx`,
-      `examples/gallery/src/interactive/${entry.component}-demo.tsx`,
-    ].join(' '),
+interface ComponentIconCatalogEntry {
+  id: string;
+  kind: 'component' | 'icon';
+  name: string;
+  searchText: string;
+  title: string;
+}
+
+/** @internal Build the global ⌘K component/icon slice from the shared generated catalog. */
+export function componentSearchEntries(): SearchEntry[] {
+  const catalog = readJsonIfPresent<{ entries: ComponentIconCatalogEntry[] }>(
+    path.join(repoRoot, 'catalog/component-icon-catalog.json'),
+    { entries: [] },
+  );
+  if (catalog.entries.length !== 1_781) {
+    throw new Error(
+      `content: combined component/icon catalog must contain 1781 entries, got ${catalog.entries.length}`,
+    );
+  }
+  return catalog.entries.map((entry) => ({
+    kind: entry.kind,
+    section: entry.kind === 'component' ? 'Components' : 'Icons',
+    text: entry.searchText,
     title: entry.title,
-    url: `/components/${entry.component}/`,
+    url: entry.kind === 'component' ? `/components/${entry.name}/` : `/guides/components/#icons`,
   }));
 }
 

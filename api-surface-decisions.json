@@ -5,79 +5,117 @@
   "evidence": {
     "better-auth-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/better-auth/src/index.session.test.ts"]
+      "contractTests": [
+        "packages/better-auth/src/index.session.test.ts"
+      ]
     },
     "browser-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/browser/src/index.test.ts"]
+      "contractTests": [
+        "packages/browser/src/index.test.ts"
+      ]
     },
     "cli-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/cli/src/api.test.ts"]
+      "contractTests": [
+        "packages/cli/src/api.test.ts"
+      ]
     },
     "core-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/core/src/index.test.ts"]
+      "contractTests": [
+        "packages/core/src/index.test.ts"
+      ]
     },
     "core-diagnostics-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/core/src/diagnostics.test.ts"]
+      "contractTests": [
+        "packages/core/src/diagnostics.test.ts"
+      ]
     },
     "core-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/core/src/secret.test.ts"]
+      "contractTests": [
+        "packages/core/src/secret.test.ts"
+      ]
     },
     "core-storage-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/core/src/storage.test.ts"]
+      "contractTests": [
+        "packages/core/src/storage.test.ts"
+      ]
     },
     "core-webhook-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/core/src/verifier.test.ts"]
+      "contractTests": [
+        "packages/core/src/verifier.test.ts"
+      ]
     },
     "drizzle-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/drizzle/src/runtime-surface.test.ts"]
+      "contractTests": [
+        "packages/drizzle/src/runtime-surface.test.ts"
+      ]
     },
     "headless-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/headless-ui/src/tooling/lint-primitives.test.ts"]
+      "contractTests": [
+        "packages/headless-ui/src/tooling/lint-primitives.test.ts"
+      ]
     },
     "icons-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/icons/src/icons.test.ts"]
+      "contractTests": [
+        "packages/icons/src/icons.test.ts"
+      ]
     },
     "server-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/server/src/app.test.ts"]
+      "contractTests": [
+        "packages/server/src/app.test.ts"
+      ]
     },
     "server-build-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/server/src/build.test.ts"]
+      "contractTests": [
+        "packages/server/src/build.test.ts"
+      ]
     },
     "server-data-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"]
+      "contractTests": [
+        "packages/server/src/managed-db.mass-assignment-lifecycle.test.ts"
+      ]
     },
     "server-security-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/server/src/access.test.ts"]
+      "contractTests": [
+        "packages/server/src/access.test.ts"
+      ]
     },
     "style-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/style/src/index.test.ts"]
+      "contractTests": [
+        "packages/style/src/index.test.ts"
+      ]
     },
     "test-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/test/src/harness.test.ts"]
+      "contractTests": [
+        "packages/test/src/harness.test.ts"
+      ]
     },
     "ui-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/ui/src/manifest-generation.test.ts"]
+      "contractTests": [
+        "packages/ui/src/manifest-generation.test.ts"
+      ]
     },
     "verify-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/verify/src/index.test.ts"]
+      "contractTests": [
+        "packages/verify/src/index.test.ts"
+      ]
     }
   },
   "stories": {
@@ -3589,11 +3627,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/accordion",
       "symbol": "accordionItemOpen",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/accordion",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/accordion#AccordionItemOptions",
@@ -3908,22 +3947,24 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/autocomplete",
       "symbol": "autocompleteOptionHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/autocomplete",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/autocomplete#autocompleteOptionSelected",
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/autocomplete",
       "symbol": "autocompleteOptionSelected",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/autocomplete",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/autocomplete#AutocompletePrimitiveAttributes",
@@ -3974,11 +4015,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/autocomplete",
       "symbol": "autocompleteSuggestions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/autocomplete",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/autocomplete#AutocompleteTypeaheadOptions",
@@ -4095,11 +4137,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/avatar",
       "symbol": "avatarImageState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/avatar",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/avatar#AvatarImageStatus",
@@ -4227,11 +4270,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/checkbox-group",
       "symbol": "checkboxGroupItemChecked",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/checkbox-group",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/checkbox-group#CheckboxGroupLabelAttributeOptions",
@@ -4447,11 +4491,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/combobox",
       "symbol": "comboboxFilteredItems",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/combobox",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/combobox#ComboboxInputAttributeOptions",
@@ -4546,22 +4591,24 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/combobox",
       "symbol": "comboboxOptionHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/combobox",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/combobox#comboboxOptionSelected",
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/combobox",
       "symbol": "comboboxOptionSelected",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/combobox",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/combobox#ComboboxPrimitiveAttributes",
@@ -4733,11 +4780,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/command",
       "symbol": "commandFilteredItems",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/command",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/command#CommandInputAttributeOptions",
@@ -4799,22 +4847,24 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/command",
       "symbol": "commandItemHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/command",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/command#commandItemSelected",
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/command",
       "symbol": "commandItemSelected",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/command",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/command#CommandListboxAttributeOptions",
@@ -4953,11 +5003,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/context-menu",
       "symbol": "contextMenuFocusElement",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/context-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/context-menu#ContextMenuFocusEvent",
@@ -5041,11 +5092,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/context-menu",
       "symbol": "contextMenuItemHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/context-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/context-menu#ContextMenuMoveResult",
@@ -5349,11 +5401,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/dropdown-menu",
       "symbol": "dropdownMenuFocusElement",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/dropdown-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/dropdown-menu#DropdownMenuFocusEvent",
@@ -5437,11 +5490,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/dropdown-menu",
       "symbol": "dropdownMenuItemHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/dropdown-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/dropdown-menu#DropdownMenuMoveResult",
@@ -5778,11 +5832,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/menubar",
       "symbol": "menubarFocusElement",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/menubar",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/menubar#MenubarFocusEvent",
@@ -5866,22 +5921,24 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/menubar",
       "symbol": "menubarItemHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/menubar",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/menubar#menubarItemOpen",
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/menubar",
       "symbol": "menubarItemOpen",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/menubar",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/menubar#MenubarMoveOptions",
@@ -6075,11 +6132,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/meter",
       "symbol": "meterValueState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/meter",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/navigation-menu#NavigationMenuContentAttributeOptions",
@@ -6108,11 +6166,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/navigation-menu",
       "symbol": "navigationMenuFocusElement",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/navigation-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/navigation-menu#NavigationMenuFocusEvent",
@@ -6196,22 +6255,24 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/navigation-menu",
       "symbol": "navigationMenuItemHighlighted",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/navigation-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/navigation-menu#navigationMenuItemOpen",
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/navigation-menu",
       "symbol": "navigationMenuItemOpen",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/navigation-menu",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/navigation-menu#NavigationMenuLinkAttributeOptions",
@@ -6515,11 +6576,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/otp-field",
       "symbol": "otpFieldComplete",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/otp-field",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/otp-field#OtpFieldHiddenInputAttributeOptions",
@@ -6625,11 +6687,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/otp-field",
       "symbol": "otpFieldSlotValue",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/otp-field",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/otp-field#OtpFieldState",
@@ -6647,11 +6710,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/otp-field",
       "symbol": "otpFieldValueFromString",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/otp-field",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/popover#PopoverAttributeOptions",
@@ -6779,11 +6843,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/progress",
       "symbol": "progressValueState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/progress",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/radio-group#RadioGroupItem",
@@ -6823,11 +6888,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/radio-group",
       "symbol": "radioGroupItemChecked",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/radio-group",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/radio-group#RadioGroupLabelAttributeOptions",
@@ -6867,11 +6933,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/radio-group",
       "symbol": "radioGroupMoveValue",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/radio-group",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/radio-group#RadioGroupPrimitiveAttributes",
@@ -6966,11 +7033,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/scroll-area",
       "symbol": "scrollAreaCornerState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/scroll-area",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/scroll-area#ScrollAreaOrientation",
@@ -7065,11 +7133,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/scroll-area",
       "symbol": "scrollAreaScrollbarState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/scroll-area",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/scroll-area#ScrollAreaScrollPosition",
@@ -7175,11 +7244,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/scroll-area",
       "symbol": "scrollAreaThumbGeometry",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/scroll-area",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/scroll-area#ScrollAreaThumbGeometry",
@@ -7252,11 +7322,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/scroll-area",
       "symbol": "scrollAreaViewportState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/scroll-area",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/scroll-area#ScrollAreaViewportTarget",
@@ -7362,11 +7433,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/select",
       "symbol": "selectItemSelected",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/select",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/select#SelectMoveResult",
@@ -7747,11 +7819,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/slider",
       "symbol": "sliderValueState",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/slider",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/switch#SwitchPrimitiveAttributes",
@@ -7813,11 +7886,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/tabs",
       "symbol": "tabsItemSelected",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/tabs",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/tabs#TabsListAttributeOptions",
@@ -8319,11 +8393,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/toggle-group",
       "symbol": "toggleGroupItemPressed",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/toggle-group",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/toggle-group#ToggleGroupMoveResult",
@@ -8550,11 +8625,12 @@
       "package": "@kovojs/headless-ui",
       "specifier": "@kovojs/headless-ui/toolbar",
       "symbol": "toolbarRovingIndex",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/headless-ui/toolbar",
+      "state": "removed",
+      "decision": "internalize",
+      "canonicalHome": "internal:@kovojs/headless-ui",
       "story": "headless-primitives",
-      "evidence": "headless-contract"
+      "evidence": "headless-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/headless-ui/toolbar#ToolbarState",
@@ -8726,11 +8802,12 @@
       "package": "@kovojs/icons",
       "specifier": "@kovojs/icons",
       "symbol": "IconRenderResult",
-      "state": "public",
-      "decision": "move",
-      "canonicalHome": "@kovojs/core",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "icon-glyphs",
-      "evidence": "icons-contract"
+      "evidence": "icons-contract",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "id": "@kovojs/server/build#cloudflare",
@@ -16472,7 +16549,8 @@
       "task": "Discover copy-in UI packages while Track 5 removes the empty import root.",
       "owner": "ui-platform",
       "story": "ui-components",
-      "state": "public"
+      "state": "removed",
+      "migrationBatch": "ui-headless-icons-v1"
     },
     {
       "specifier": "@kovojs/verify",
@@ -17976,7 +18054,17 @@
       "@kovojs/ui/button#ButtonSize",
       "@kovojs/ui/button#ButtonVariant",
       "@kovojs/ui/card#Card",
+      "@kovojs/ui/card#CardContent",
+      "@kovojs/ui/card#CardContentProps",
+      "@kovojs/ui/card#CardDescription",
+      "@kovojs/ui/card#CardDescriptionProps",
+      "@kovojs/ui/card#CardFooter",
+      "@kovojs/ui/card#CardFooterProps",
+      "@kovojs/ui/card#CardHeader",
+      "@kovojs/ui/card#CardHeaderProps",
       "@kovojs/ui/card#CardProps",
+      "@kovojs/ui/card#CardTitle",
+      "@kovojs/ui/card#CardTitleProps",
       "@kovojs/ui/checkbox-group#CheckboxGroup",
       "@kovojs/ui/checkbox-group#CheckboxGroupControl",
       "@kovojs/ui/checkbox-group#CheckboxGroupControlProps",

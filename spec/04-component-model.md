@@ -80,6 +80,15 @@ attributes such as `key`, `kovo-key`, `style`, and `styles`.
 - Declared `clocks` are part of the component definition contract. They describe named `now.*`
   inputs for time-dependent render positions and derives; undeclared clock reads remain KV312/KV315.
 
+**Framework component-library contract (normative).** `@kovojs/ui` exposes components through
+task-specific subpaths such as `@kovojs/ui/card`; it has no root barrel. The same manifest owns each
+component's package import, copy-in command, parts, slots, IDs, state inputs, enhancement tier,
+roles, keyboard behavior, and accessibility note, and generated registries, catalogs, reference
+material, examples, and copied source MUST agree with that manifest. Card's anatomy is exactly
+`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, and `CardFooter`. Generated
+`@kovojs/icons/<glyph>` functions return the canonical `ComponentRenderResult` from
+`@kovojs/core`; an icon package MUST NOT define a weaker parallel render-result type.
+
 ### 4.2 Rendered output (the IR's runtime form)
 
 ```html

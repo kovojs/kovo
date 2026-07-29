@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertPackedCliDependencyClosure,
+  assertPackedComponentCatalogJourney,
   assertPackedCliProcessContract,
   assertPackedDocsJourney,
   assertPackedMcpLifecycle,
@@ -175,6 +176,70 @@ describe('packed CLI consumer proof', () => {
       expect(() =>
         assertPackedDocsJourney(update, docs.replace(digest, `sha256:${'c'.repeat(64)}`), root),
       ).toThrow('does not match the selected snapshot');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('requires packed catalogs and copies the complete direct-subpath Card anatomy', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'kovo-packed-catalog-proof-'));
+    const uiRoot = path.join(root, 'node_modules', '@kovojs', 'ui');
+    const iconsRoot = path.join(root, 'node_modules', '@kovojs', 'icons');
+    const names = ['card', ...Array.from({ length: 43 }, (_, index) => `fixture-${index}`)];
+    try {
+      mkdirSync(uiRoot, { recursive: true });
+      mkdirSync(iconsRoot, { recursive: true });
+      writeFileSync(
+        path.join(uiRoot, 'package.json'),
+        `${JSON.stringify({ exports: { './card': './dist/card.mjs' } })}\n`,
+      );
+      writeFileSync(
+        path.join(uiRoot, 'catalog.json'),
+        `${JSON.stringify({
+          schema: 'kovo-component-catalog/v1',
+          entries: names.map((name) => ({ name })),
+        })}\n`,
+      );
+      writeFileSync(
+        path.join(uiRoot, 'registry.json'),
+        `${JSON.stringify({ components: names.map((name) => ({ name })) })}\n`,
+      );
+      writeFileSync(
+        path.join(iconsRoot, 'catalog.json'),
+        `${JSON.stringify({
+          schema: 'kovo-component-catalog/v1',
+          entries: Array.from({ length: 1_737 }, (_, index) => ({ name: `icon-${index}` })),
+        })}\n`,
+      );
+
+      expect(() =>
+        assertPackedComponentCatalogJourney(root, {
+          run(_command, args, cwd) {
+            const outIndex = args.indexOf('--out');
+            const outDir = args[outIndex + 1];
+            mkdirSync(outDir, { recursive: true });
+            for (const name of names) {
+              writeFileSync(
+                path.join(outDir, `${name}.tsx`),
+                name === 'card'
+                  ? [
+                      'Card',
+                      'CardHeader',
+                      'CardTitle',
+                      'CardDescription',
+                      'CardContent',
+                      'CardFooter',
+                    ]
+                      .map((symbol) => `export const ${symbol} = component({`)
+                      .join('\n')
+                  : 'export const Fixture = component({',
+              );
+            }
+            expect(cwd).toBe(root);
+            return { stdout: 'SUMMARY total=44\n' };
+          },
+        }),
+      ).not.toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

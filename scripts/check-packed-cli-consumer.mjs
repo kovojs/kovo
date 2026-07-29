@@ -309,6 +309,7 @@ export async function checkPackedCliConsumer() {
       'bounded local docs retrieval',
     );
     assertPackedDocsJourney(updateDocs.stdout, docs.stdout, consumerRoot);
+    assertPackedComponentCatalogJourney(consumerRoot);
 
     const lifecycle = runCommand(
       'pnpm',
@@ -341,6 +342,58 @@ export async function checkPackedCliConsumer() {
     );
   } finally {
     rmSync(consumerRoot, { force: true, recursive: true });
+  }
+}
+
+export function assertPackedComponentCatalogJourney(consumerRoot, { run = runCommand } = {}) {
+  const uiRoot = path.join(consumerRoot, 'node_modules', '@kovojs', 'ui');
+  const iconsRoot = path.join(consumerRoot, 'node_modules', '@kovojs', 'icons');
+  const uiManifest = JSON.parse(readFileSync(path.join(uiRoot, 'package.json'), 'utf8'));
+  const uiCatalog = JSON.parse(readFileSync(path.join(uiRoot, 'catalog.json'), 'utf8'));
+  const uiRegistry = JSON.parse(readFileSync(path.join(uiRoot, 'registry.json'), 'utf8'));
+  const iconCatalog = JSON.parse(readFileSync(path.join(iconsRoot, 'catalog.json'), 'utf8'));
+  if (Object.hasOwn(uiManifest.exports ?? {}, '.')) {
+    throw new Error('Packed @kovojs/ui unexpectedly exposes an empty root entry');
+  }
+  if (
+    uiCatalog?.schema !== 'kovo-component-catalog/v1' ||
+    uiCatalog.entries?.length !== 44 ||
+    uiRegistry.components?.length !== 44 ||
+    iconCatalog?.schema !== 'kovo-component-catalog/v1' ||
+    iconCatalog.entries?.length !== 1_737
+  ) {
+    throw new Error('Packed component/icon catalogs do not cover 44 components and 1737 glyphs');
+  }
+
+  const componentNames = uiCatalog.entries.map((entry) => entry.name);
+  const outDir = path.join(consumerRoot, 'src', 'components', 'ui');
+  const result = run(
+    'pnpm',
+    ['exec', 'kovo', 'add', ...componentNames, '--out', outDir],
+    consumerRoot,
+    'all-44 component copy-in',
+  );
+  if (!result.stdout.includes('SUMMARY total=44')) {
+    throw new Error('Packed kovo add did not report all 44 copied components');
+  }
+  for (const component of componentNames) {
+    const source = readFileSync(path.join(outDir, `${component}.tsx`), 'utf8');
+    if (/from ['"]@kovojs\/ui(?:\/|['"])/u.test(source)) {
+      throw new Error(`Packed copied ${component}.tsx recursively imports @kovojs/ui`);
+    }
+  }
+  const card = readFileSync(path.join(outDir, 'card.tsx'), 'utf8');
+  for (const symbol of [
+    'Card',
+    'CardHeader',
+    'CardTitle',
+    'CardDescription',
+    'CardContent',
+    'CardFooter',
+  ]) {
+    if (!card.includes(`export const ${symbol} = component({`)) {
+      throw new Error(`Packed copied Card anatomy is missing ${symbol}`);
+    }
   }
 }
 

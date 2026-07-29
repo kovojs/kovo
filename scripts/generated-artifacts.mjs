@@ -12,12 +12,24 @@ export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
   cliSemanticCommandRequest: 'cli-semantic-command-request',
   diagnosticRegistry: 'diagnostic-registry',
   frameworkExportPosture: 'framework-export-posture',
+  componentCatalog: 'component-catalog',
   icons: 'icons',
   uiRegistry: 'ui-registry',
   prodEmit: 'prod-emit',
 });
 
 export const generatedArtifactInventory = Object.freeze([
+  {
+    id: 'combined-component-icon-catalog',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.componentCatalog,
+    generatorCheckCommand: Object.freeze(['node', 'scripts/build-component-catalog.mjs']),
+    pathPatterns: Object.freeze([/^catalog\/component-icon-catalog\.json$/]),
+    spec: 'SPEC.md §13.1 component and icon discovery',
+  },
   {
     id: 'example-app-local-generated',
     categories: Object.freeze([
@@ -130,8 +142,26 @@ export const generatedArtifactInventory = Object.freeze([
       '--',
       '--check',
     ]),
-    pathPatterns: Object.freeze([/^packages\/icons\/package\.json$/, /^public-packages\.json$/]),
+    pathPatterns: Object.freeze([
+      /^packages\/icons\/catalog\.json$/,
+      /^packages\/icons\/package\.json$/,
+      /^public-packages\.json$/,
+    ]),
     spec: 'rules/api-surface.md distribution metadata',
+  },
+  {
+    id: 'headless-ui-generated-api-audits',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.uiRegistry,
+    generatorCheckCommand: Object.freeze(['node', 'packages/ui/scripts/build-registry.mjs']),
+    pathPatterns: Object.freeze([
+      /^packages\/headless-ui\/runtime-helper-audit\.json$/,
+      /^packages\/headless-ui\/transition-abi-audit\.json$/,
+    ]),
+    spec: 'rules/api-surface.md public reachability and consumer-evidence review',
   },
   {
     id: 'headless-ui-generated-source',
@@ -163,7 +193,10 @@ export const generatedArtifactInventory = Object.freeze([
     ]),
     generatorId: GENERATED_ARTIFACT_GENERATORS.uiRegistry,
     generatorCheckCommand: Object.freeze(['node', 'packages/ui/scripts/build-registry.mjs']),
-    pathPatterns: Object.freeze([/^packages\/ui\/registry\.json$/]),
+    pathPatterns: Object.freeze([
+      /^packages\/ui\/catalog\.json$/,
+      /^packages\/ui\/registry\.json$/,
+    ]),
     spec: 'rules/api-surface.md starter/package metadata',
   },
   {

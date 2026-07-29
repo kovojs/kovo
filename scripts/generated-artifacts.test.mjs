@@ -16,16 +16,36 @@ describe('generated-artifacts policy manifest', () => {
   it('classifies generated artifact paths by policy category', () => {
     const cases = [
       {
+        path: 'catalog/component-icon-catalog.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
+      },
+      {
         path: 'examples/commerce/src/generated/graph.json',
         categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
+      },
+      {
+        path: 'packages/icons/catalog.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
       },
       {
         path: 'site/src/generated/kovo-ui.css',
         categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
+        path: 'packages/headless-ui/runtime-helper-audit.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
+      },
+      {
+        path: 'packages/headless-ui/transition-abi-audit.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
+      },
+      {
         path: 'site/tutorial/steps/02-islands/src/generated/product-actions.tsx',
         categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
+      },
+      {
+        path: 'packages/ui/catalog.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
       },
       {
         path: 'packages/create-kovo/templates/graph.json',
@@ -105,6 +125,15 @@ describe('generated-artifacts policy manifest', () => {
 
   it('routes committed generated framework artifacts to their generator checks', () => {
     expect(
+      generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.componentCatalog).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['combined-component-icon-catalog']);
+    expect(
+      generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.componentCatalog),
+    ).toEqual(['node', 'scripts/build-component-catalog.mjs']);
+
+    expect(
       generatedArtifactPoliciesForGenerator(
         GENERATED_ARTIFACT_GENERATORS.cliSemanticCommandRequest,
       ).map((entry) => entry.id),
@@ -153,6 +182,7 @@ describe('generated-artifacts policy manifest', () => {
         (entry) => entry.id,
       ),
     ).toEqual([
+      'headless-ui-generated-api-audits',
       'headless-ui-generated-source',
       'gallery-primitive-actions-generated-source',
       'ui-generated-registry',

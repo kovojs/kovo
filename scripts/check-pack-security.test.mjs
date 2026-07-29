@@ -210,6 +210,38 @@ describe('pack-security gate', () => {
     expect(findings.some((finding) => finding.includes('src/button.tsx'))).toBe(false);
   });
 
+  it('allows package-owned UI and icon catalog metadata only when explicitly modeled', () => {
+    expect(
+      validateFixture(
+        [
+          { path: 'package.json', text: '{}' },
+          { path: 'dist/index.mjs', text: 'export {};' },
+          { path: 'dist/index.d.mts', text: 'export {};' },
+          { path: 'catalog.json', text: '{"schema":"kovo-component-catalog/v1"}' },
+          { path: 'registry.json', text: '{"components":[]}' },
+        ],
+        {
+          allowedSourceFiles: ['catalog.json', 'registry.json'],
+          packageName: '@kovojs/ui',
+        },
+      ),
+    ).toEqual([]);
+    expect(
+      validateFixture(
+        [
+          { path: 'package.json', text: '{}' },
+          { path: 'dist/index.mjs', text: 'export {};' },
+          { path: 'dist/index.d.mts', text: 'export {};' },
+          { path: 'catalog.json', text: '{"schema":"kovo-component-catalog/v1"}' },
+        ],
+        {
+          allowedSourceFiles: ['catalog.json'],
+          packageName: '@kovojs/icons',
+        },
+      ),
+    ).toEqual([]);
+  });
+
   it('rejects declaration and source maps that expose absolute local paths', () => {
     const findings = validateFixture([
       { path: 'package.json', text: '{}' },

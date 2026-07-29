@@ -21,15 +21,37 @@ ratchet segment, and release note in one checkpoint.
 
 ## UI, headless, and icons
 
-- [ ] Extend the owning UI/headless manifests with parts, slots, IDs, state inputs, enhancement
+- [x] Extend the owning UI/headless manifests with parts, slots, IDs, state inputs, enhancement
       tier, roles, and keyboard behavior.
-- [ ] Resolve Card anatomy consistently across source, registry, README, API generation, and
+  - Evidence: `node packages/ui/scripts/build-registry.mjs` validates all 44 entries and
+    regenerates `packages/ui/catalog.json` plus `packages/ui/registry.json` from the owning
+    manifest.
+
+- [x] Resolve Card anatomy consistently across source, registry, README, API generation, and
       copy-in output.
-- [ ] Move CLI discovery off the empty UI root and remove or deliberately reclassify that root.
-- [ ] Reconcile the orphan transition ABI count and remove only zero-reachable public types.
-- [ ] Audit the 38 weak-evidence runtime helpers.
-- [ ] Replace broad `IconRenderResult = object` with the canonical render contract.
+  - Evidence: `packages/ui/src/card-contract.test.ts` and
+    `packages/cli/src/index.kovo-add.test.ts` assert the same six-part Card contract.
+
+- [x] Move CLI discovery off the empty UI root and remove or deliberately reclassify that root.
+  - Evidence: `scripts/public-packages.test.mjs` and the CLI add tests prove discovery through a
+    real component subpath and the absence of `@kovojs/ui` root exports.
+
+- [x] Reconcile the orphan transition ABI count and remove only zero-reachable public types.
+  - Evidence: `packages/headless-ui/transition-abi-audit.json` records 225 implementation
+    declarations and zero names reachable through public or generated facades.
+
+- [x] Audit the 38 weak-evidence runtime helpers.
+  - Evidence: `packages/headless-ui/runtime-helper-audit.json` classifies exactly 29 as internal
+    and nine as generated-only; `public-api-reachability.test.ts` proves the public facades.
+
+- [x] Replace broad `IconRenderResult = object` with the canonical render contract.
+  - Evidence: the icon generator and all 1,737 glyph sources return
+    `@kovojs/core#ComponentRenderResult`; the old alias is absent from package exports.
+
 - [ ] Pass all-glyph generation/typecheck, icon timing, and packed 44-component gates.
+  - Current evidence: icon generation check, icon `tsc --noEmit`, and the 5-second timing gate
+    pass; the packed journey test covers the 44-component copy-in/catalog contract. The full
+    release-manifest packed consumer remains an integration gate.
 
 ## Verifier
 
@@ -72,4 +94,7 @@ ratchet segment, and release note in one checkpoint.
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+- `pnpm run check:api-surface`
+- Focused UI, gallery, headless reachability, component-catalog, icon, and packed-policy tests
+- Actual `pnpm pack --config.ignore-scripts=true` inspection for `@kovojs/ui` and
+  `@kovojs/icons`
