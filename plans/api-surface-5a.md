@@ -66,11 +66,20 @@ ratchet segment, and release note in one checkpoint.
 
 ## Verifier
 
-- [ ] Add runtime-independent packed API and CLI fixtures plus README/reference/examples.
-- [ ] Make verifier help/version exit 0 on stdout and accept documented flag orderings.
-- [ ] Enforce 0 verified, 1 findings, and 2 usage/I/O/parse-indeterminate exits.
-- [ ] Prove versioned JSON and human output carry identical findings.
-- [ ] Prove the tarball has no Kovo runtime dependency.
+- [x] Add runtime-independent packed API and CLI fixtures plus README/reference/examples.
+  - Evidence: the canonical packed acceptance and docs/API-reference suites pass against the
+    attested standalone tarball.
+- [x] Make verifier help/version exit 0 on stdout and accept documented flag orderings.
+  - Evidence: the packed acceptance exercises all 24 documented flag orders and every
+    help/version path.
+- [x] Enforce 0 verified, 1 findings, and 2 usage/I/O/parse-indeterminate exits.
+  - Evidence: the packed acceptance observes all three exit classes.
+- [x] Prove versioned JSON and human output carry identical findings.
+  - Evidence: the 92-test verifier suite proves exact ordered
+    `{ obligation, code, message }` parity under `kovo.verify-report/v1`.
+- [x] Prove the tarball has no Kovo runtime dependency.
+  - Evidence: the packed consumer reports 11 public declarations and zero Kovo runtime
+    dependencies.
 
 ## Browser
 

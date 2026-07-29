@@ -831,7 +831,7 @@ waits for D1; 5c waits only on its own SPEC decision:
   - Replace `IconRenderResult = object` with `ComponentRenderResult` or another canonical
     non-leaking contract; run the all-glyph generator/typecheck and existing icon timing
     benchmark.
-- [ ] (M) **5a — verifier batch.** Keep all 11 `@kovojs/verify` certificate/verifier exports as one
+- [x] (M) **5a — verifier batch.** Keep all 11 `@kovojs/verify` certificate/verifier exports as one
       independent family; add a packed, runtime-independent API/CLI acceptance suite and a public
       README/reference/examples (G21).
   - `kovo-verify -h`, `--help`, and `--version` write to stdout and exit 0; documented flags work
@@ -839,7 +839,9 @@ waits for D1; 5c waits only on its own SPEC decision:
     is 2.
   - Versioned JSON and human output carry identical findings, and the tarball has no Kovo runtime
     dependency.
-- [ ] (L) **5a — browser batch.** Replace `@kovojs/browser/client` assembly with one experimental
+  - Evidence: the packed verifier acceptance proves 11 declarations, zero Kovo runtime
+    dependencies, all 24 flag orders, exact human/JSON finding parity, and exits 0/1/2.
+- [x] (L) **5a — browser batch.** Replace `@kovojs/browser/client` assembly with one experimental
       custom-shell installer (G20), shaped like
       `installKovoClient({ root, importModule?, fetch?, onError?, onUploadProgress?, onLifecycle? })`
       returning `{ ready: Promise<void>, dispose(): Promise<void> }` — a readiness signal, defined
@@ -858,6 +860,9 @@ waits for D1; 5c waits only on its own SPEC decision:
     authorable manual derive IR and parity with compiler-generated derive ABI.
   - Require structured non-empty review metadata for browser `trustedHtml`/`trustedUrl`
     constructors, with adversarial sink tests and `kovo explain` evidence.
+  - Evidence: the Browser, compiler/security, migration/API, and declaration-build slices pass
+    43, 384, and 27 tests while proving the three-export installer facade, generated parity,
+    handle-backed derives, and exact `{ reason, source? }` trust metadata.
 - [ ] (L) **5a — core batch.** Land the `@kovojs/core` topology in the target table.
   - Remove the 39 definite-removal helpers from app-public API by deleting, redesigning,
     inlining/inferring, or moving them internal/generated only when no retained public signature
