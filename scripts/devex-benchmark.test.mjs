@@ -43,6 +43,10 @@ const kovoPackedProfileSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/profile.mjs'),
   'utf8',
 );
+const kovoPackedDevProfileSource = readFileSync(
+  path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/dev-profile.mjs'),
+  'utf8',
+);
 const kovoPackedWorkloadSource = readFileSync(
   path.join(repoRoot, 'scripts/devex-workloads/kovo-packed-check/package/workload.mjs'),
   'utf8',
@@ -69,7 +73,7 @@ describe('DevEx benchmark foundation', () => {
     expect(medianAbsoluteDeviation([8, 9, 10, 11, 40])).toBe(1);
   });
 
-  it('records cold, warm, one-file, RSS, and browser-byte metrics as separate units', () => {
+  it('records check, ready, edit, RSS, and browser-byte metrics as separate units', () => {
     const phaseValues = {
       cold: { durationMs: 30, peakRssBytes: 3000 },
       warm: { durationMs: 10, peakRssBytes: 2000 },
@@ -108,6 +112,18 @@ describe('DevEx benchmark foundation', () => {
           error: null,
         };
       },
+      measureDev(command, context) {
+        expect(command).toEqual(['node', 'dev-profile.mjs']);
+        expect(context).toMatchObject({
+          executionPhase: 'dev',
+          phase: 'dev',
+          role: 'timed',
+        });
+        expect(readFileSync(path.join(context.cwd, 'dev-profile.mjs'), 'utf8')).toContain(
+          'kovo-dev-profile/v1',
+        );
+        return fixtureDevProfileResult(context.sampleIndex);
+      },
     });
 
     expect(report.schema).toBe(DEVEX_BENCHMARK_REPORT_SCHEMA);
@@ -140,10 +156,14 @@ describe('DevEx benchmark foundation', () => {
       medianAbsoluteDeviation: 1,
     });
     expect(report.metrics['check.oneFileIncremental.durationMs'].summary.median).toBe(4);
+    expect(report.metrics['dev.ready.cold.durationMs'].samples).toEqual([12, 13, 14, 15, 16]);
+    expect(report.metrics['dev.ready.warm.durationMs'].samples).toEqual([5, 6, 7, 8, 9]);
+    expect(report.metrics['dev.editToDiagnostic.durationMs'].samples).toEqual([3, 4, 5, 6, 7]);
+    expect(report.metrics['dev.editToServedResult.durationMs'].samples).toEqual([4, 5, 6, 7, 8]);
     expect(stageRoots.size).toBe(15);
     expect(invocations.filter((item) => item.role === 'prime')).toHaveLength(10);
     expect(report.phaseCensus).toEqual({
-      schema: 'kovo-devex-phase-census/v2',
+      schema: 'kovo-devex-phase-census/v3',
       samples: 5,
       counts: {
         cold: { prime: 0, timed: 5 },
@@ -152,6 +172,11 @@ describe('DevEx benchmark foundation', () => {
       },
       incrementalRevisions: [1, 0, 1, 0, 1],
       analysisInputs: fixtureAnalysisInputs(5),
+    });
+    expect(report.devPhaseCensus).toEqual({
+      schema: 'kovo-devex-dev-phase-census/v1',
+      samples: 5,
+      observations: fixtureDevObservations(5),
     });
     expect(report.metrics['browser.bootstrapBytes']).toEqual({
       unit: 'bytes',
@@ -176,6 +201,7 @@ describe('DevEx benchmark foundation', () => {
         command: ['node', 'profile.mjs', 'oneFileIncremental'],
         cwd: '.',
       },
+      dev: { command: ['node', 'dev-profile.mjs'], cwd: '.' },
     });
   });
 
@@ -311,7 +337,7 @@ describe('DevEx benchmark foundation', () => {
       const fakeWorkload = {
         schema: 'kovo-devex-packed-workload/v2',
         profile: {
-          id: 'kovo-packed-check/v2',
+          id: 'kovo-packed-check/v3',
           commandDigest: DEVEX_PACKED_PROFILE_COMMAND_DIGEST,
         },
         entrypoint: 'profile.mjs',
@@ -401,6 +427,46 @@ describe('DevEx benchmark foundation', () => {
       expect(report.metrics[`check.${phase}.durationMs`].samples).toHaveLength(1);
       expect(report.metrics[`check.${phase}.durationMs`].samples[0]).toBeGreaterThan(0);
     }
+    for (const metric of [
+      'dev.ready.cold.durationMs',
+      'dev.ready.warm.durationMs',
+      'dev.editToDiagnostic.durationMs',
+      'dev.editToServedResult.durationMs',
+    ]) {
+      expect(report.metrics[metric].samples).toHaveLength(1);
+      expect(report.metrics[metric].samples[0]).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('rejects forged dev transition evidence before it reaches report metrics', () => {
+    const forged = fixtureDevEvidence(0);
+    forged.served.sourceDigest = forged.diagnostic.sourceDigest;
+    expect(() =>
+      runBenchmarkScenario(scenario, {
+        root: fixtureRoot,
+        samples: 1,
+        observedEnvironment,
+        allowFixtureScenario: true,
+        measure: () => ({
+          durationMs: 1,
+          peakRssBytes: 1024,
+          exitCode: 0,
+          signal: null,
+          error: null,
+          stderr: '',
+          stdout: '',
+        }),
+        measureDev: () => ({
+          durationMs: 1,
+          peakRssBytes: 1024,
+          exitCode: 0,
+          signal: null,
+          error: null,
+          stderr: '',
+          stdout: `kovo-dev-profile/v1 ${JSON.stringify(forged)}\n`,
+        }),
+      }),
+    ).toThrow('returned invalid transition evidence');
   });
 
   it('keeps fixture scenarios behind an explicit test-only seam', () => {
@@ -419,7 +485,7 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoScenarioRecipe).toEqual({
       schema: 'kovo-devex-scenario-recipe/v1',
       name: 'kovo-packed-check',
-      profile: 'kovo-packed-check/v2',
+      profile: 'kovo-packed-check/v3',
       producer: 'kovo-clean-source-pack/v1',
       consumerSource: 'scripts/devex-workloads/kovo-packed-check/package',
       output: '.release/devex/kovo-packed-scenario.json',
@@ -431,7 +497,13 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain("'build', './src/app.tsx'");
     expect(kovoPackedWorkloadSource).toContain("'dist/.kovo/graph.json'");
     expect(kovoPackedProfileSource).toContain("phase === 'oneFileIncremental'");
-    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v2');
+    expect(kovoPackedProfileSource).toContain('kovo-benchmark-phase/v3');
+    expect(kovoPackedProfileSource).toContain('duration=');
+    expect(kovoPackedProfileSource).toContain('rss=');
+    expect(kovoPackedDevProfileSource).toContain("'dev',");
+    expect(kovoPackedDevProfileSource).toContain('kovo-dev-profile/v1');
+    expect(kovoPackedDevProfileSource).toContain('KV235');
+    expect(kovoPackedDevProfileSource).toContain('data-revision');
     expect(kovoPackedProfileSource).not.toContain('packages/cli');
     expect(kovoPackedWorkloadSource).not.toContain("writeFileSync('graph.json'");
     expect(kovoPackedBrowserBuildSource).toContain('emitQueryPlanBootstrapModule');
@@ -514,6 +586,7 @@ describe('DevEx benchmark foundation', () => {
       ...[
         'benchmark-lock.yaml',
         'build-browser.mjs',
+        'dev-profile.mjs',
         'profile.mjs',
         'src/app.tsx',
         'src/components/counter-island.tsx',
@@ -826,6 +899,23 @@ describe('DevEx benchmark foundation', () => {
     expect(() => evaluateBudgets(ratified, forgedPhaseCensus, validationOptions)).toThrow(
       'report.phaseCensus.incrementalRevisions must prove alternating restored source edits',
     );
+
+    const forgedPhaseMetric = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+    });
+    forgedPhaseMetric.metrics['check.cold.durationMs'].samples[0] = 1;
+    expect(() => evaluateBudgets(ratified, forgedPhaseMetric, validationOptions)).toThrow(
+      'report.metrics.check.cold.durationMs does not match its phase census',
+    );
+
+    const forgedDevMetric = benchmarkReport({
+      'check.cold.durationMs': [90, 91, 92, 93, 94],
+      'dev.editToDiagnostic.durationMs': [3, 4, 5, 6, 7],
+    });
+    forgedDevMetric.metrics['dev.editToDiagnostic.durationMs'].samples[0] = 999;
+    expect(() => evaluateBudgets(ratified, forgedDevMetric, validationOptions)).toThrow(
+      'report.metrics.dev.editToDiagnostic.durationMs does not match its dev phase census',
+    );
   });
 
   it('gates only ratified metrics and detects a statistically derived breach', () => {
@@ -888,7 +978,12 @@ describe('DevEx benchmark foundation', () => {
   });
 });
 
-function fixtureAnalysisInputs(sampleCount) {
+function fixtureAnalysisInputs(sampleCount, metricSamples = {}) {
+  const phaseValues = {
+    cold: { durationMs: 30, peakRssBytes: 3000 },
+    warm: { durationMs: 10, peakRssBytes: 2000 },
+    oneFileIncremental: { durationMs: 2, peakRssBytes: 1000 },
+  };
   const inputs = [];
   for (const phase of ['cold', 'warm', 'oneFileIncremental']) {
     for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
@@ -902,9 +997,17 @@ function fixtureAnalysisInputs(sampleCount) {
           revision,
           analysisDigest: `sha256:${String(revision).repeat(64)}`,
           clientDigest: 'f'.repeat(64),
+          durationMs: phaseValues[phase].durationMs + sampleIndex,
+          peakRssBytes: phaseValues[phase].peakRssBytes + sampleIndex,
         });
       }
       const revision = phase === 'oneFileIncremental' ? (baseline === 0 ? 1 : 0) : 0;
+      const duration =
+        metricSamples[`check.${phase}.durationMs`]?.[sampleIndex] ??
+        phaseValues[phase].durationMs + sampleIndex;
+      const peakRss =
+        metricSamples[`check.${phase}.peakRssBytes`]?.[sampleIndex] ??
+        phaseValues[phase].peakRssBytes + sampleIndex;
       inputs.push({
         phase,
         role: 'timed',
@@ -912,10 +1015,56 @@ function fixtureAnalysisInputs(sampleCount) {
         revision,
         analysisDigest: `sha256:${String(revision).repeat(64)}`,
         clientDigest: 'f'.repeat(64),
+        durationMs: duration,
+        peakRssBytes: peakRss,
       });
     }
   }
   return inputs;
+}
+
+function fixtureDevEvidence(sampleIndex) {
+  return {
+    cold: {
+      bodyDigest: `sha256:${'a'.repeat(64)}`,
+      durationMs: 12 + sampleIndex,
+    },
+    diagnostic: {
+      bodyDigest: `sha256:${'c'.repeat(64)}`,
+      code: 'KV235',
+      durationMs: 3 + sampleIndex,
+      sourceDigest: `sha256:${'e'.repeat(64)}`,
+    },
+    served: {
+      bodyDigest: `sha256:${'d'.repeat(64)}`,
+      durationMs: 4 + sampleIndex,
+      revision: 1,
+      sourceDigest: `sha256:${'f'.repeat(64)}`,
+    },
+    warm: {
+      bodyDigest: `sha256:${'b'.repeat(64)}`,
+      durationMs: 5 + sampleIndex,
+    },
+  };
+}
+
+function fixtureDevObservations(sampleCount) {
+  return Array.from({ length: sampleCount }, (_, sampleIndex) => ({
+    sampleIndex,
+    ...fixtureDevEvidence(sampleIndex),
+  }));
+}
+
+function fixtureDevProfileResult(sampleIndex) {
+  return {
+    durationMs: 100 + sampleIndex,
+    peakRssBytes: 10_000 + sampleIndex,
+    exitCode: 0,
+    signal: null,
+    error: null,
+    stderr: '',
+    stdout: `kovo-dev-profile/v1 ${JSON.stringify(fixtureDevEvidence(sampleIndex))}\n`,
+  };
 }
 
 function benchmarkReport(metricSamples, options = {}) {
@@ -956,7 +1105,7 @@ function benchmarkReport(metricSamples, options = {}) {
     }),
     sampleCount,
     phaseCensus: {
-      schema: 'kovo-devex-phase-census/v2',
+      schema: 'kovo-devex-phase-census/v3',
       samples: sampleCount,
       counts: {
         cold: { prime: 0, timed: sampleCount },
@@ -966,7 +1115,12 @@ function benchmarkReport(metricSamples, options = {}) {
       incrementalRevisions: Array.from({ length: sampleCount }, (_, index) =>
         index % 2 === 0 ? 1 : 0,
       ),
-      analysisInputs: fixtureAnalysisInputs(sampleCount),
+      analysisInputs: fixtureAnalysisInputs(sampleCount, metricSamples),
+    },
+    devPhaseCensus: {
+      schema: 'kovo-devex-dev-phase-census/v1',
+      samples: sampleCount,
+      observations: fixtureDevObservations(sampleCount),
     },
     commands: {
       cold: { command: ['node', 'profile.mjs', 'cold'], cwd: '.' },
@@ -975,6 +1129,7 @@ function benchmarkReport(metricSamples, options = {}) {
         command: ['node', 'profile.mjs', 'oneFileIncremental'],
         cwd: '.',
       },
+      dev: { command: ['node', 'dev-profile.mjs'], cwd: '.' },
     },
     metrics: Object.fromEntries(
       Object.entries(metricSamples).map(([metric, samples]) => [

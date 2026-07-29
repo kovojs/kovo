@@ -63,8 +63,45 @@ export const CounterIsland = component({
 `,
 ]);
 
+export const SOURCE_DIAGNOSTIC_VARIANT = `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { publicAccess, query, s } from '@kovojs/server';
+
+export const benchmarkRevision = -1;
+export const benchmarkQuery = query({
+  access: publicAccess('DevEx packed reference query'),
+  load: () => ({ label: 'ready' }),
+  output: s.object({ label: s.string() }),
+});
+
+export const CounterIsland = component({
+  queries: { benchmark: benchmarkQuery },
+  state: () => ({ count: 0 }),
+  render: ({ benchmark }, state) =>
+    \`<button data-revision="diagnostic">\${benchmark.label}: \${state.count}</button>\`,
+});
+`;
+
 function sha256(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+function timeInvocation(command) {
+  if (process.platform === 'darwin') return ['/usr/bin/time', ['-l', ...command]];
+  if (process.platform === 'linux') return ['/usr/bin/time', ['-v', ...command]];
+  return null;
+}
+
+function peakRssBytes(stderr) {
+  if (process.platform === 'darwin') {
+    const match = /^\s*(\d+)\s+maximum resident set size\s*$/mu.exec(stderr);
+    return match ? Number(match[1]) : null;
+  }
+  if (process.platform === 'linux') {
+    const match = /^\s*Maximum resident set size \(kbytes\):\s*(\d+)\s*$/mu.exec(stderr);
+    return match ? Number(match[1]) * 1024 : null;
+  }
+  return null;
 }
 
 function sourceAnalysisDigest(source) {
@@ -100,12 +137,18 @@ function materializeAuthenticatedLockfile() {
 export function runVerifiedBuild() {
   materializeAuthenticatedLockfile();
   const cli = path.resolve('node_modules/@kovojs/cli/dist/bin.mjs');
-  const result = spawnSync(process.execPath, [cli, 'build', './src/app.tsx', '--out', './dist'], {
+  const command = [process.execPath, cli, 'build', './src/app.tsx', '--out', './dist'];
+  const invocation = timeInvocation(command);
+  const executable = invocation?.[0] ?? command[0];
+  const args = invocation?.[1] ?? command.slice(1);
+  const started = process.hrtime.bigint();
+  const result = spawnSync(executable, args, {
     cwd: process.cwd(),
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
   failBuild(result);
   if (!/^kovo-build\/v1\r?\n/mu.test(result.stdout ?? '')) {
     throw new Error('packed Kovo app build returned an unrecognized result');
@@ -147,5 +190,7 @@ export function runVerifiedBuild() {
     analysisDigest,
     clientDigest: clientModule.digest,
     clientFile: clientModule.file,
+    durationMs,
+    peakRssBytes: invocation === null ? null : peakRssBytes(result.stderr ?? ''),
   };
 }

@@ -37,7 +37,9 @@ try {
 }
 
 process.stdout.write(
-  `kovo-benchmark-phase/v2 phase=${phase} revision=${revision} edit=${
+  `kovo-benchmark-phase/v3 phase=${phase} revision=${revision} edit=${
     phase === 'oneFileIncremental' ? 'applied' : 'baseline'
-  } analysis=${evidence.analysisDigest} client=${evidence.clientDigest}\n`,
+  } analysis=${evidence.analysisDigest} client=${evidence.clientDigest} duration=${evidence.durationMs.toFixed(
+    6,
+  )} rss=${evidence.peakRssBytes ?? 'none'}\n`,
 );

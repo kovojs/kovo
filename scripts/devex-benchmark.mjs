@@ -40,16 +40,17 @@ import { releasePackages } from './release-packages.mjs';
 
 export const DEVEX_BUDGETS_SCHEMA = 'kovo-devex-budgets/v5';
 export const DEVEX_BENCHMARK_SCENARIO_SCHEMA = 'kovo-devex-benchmark-scenario/v4';
-export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v4';
+export const DEVEX_BENCHMARK_REPORT_SCHEMA = 'kovo-devex-benchmark-report/v5';
 export const DEVEX_BUDGET_PROPOSAL_SCHEMA = 'kovo-devex-budget-proposal/v5';
 export const DEVEX_PACKED_WORKLOAD_SCHEMA = 'kovo-devex-packed-workload/v2';
 export const DEVEX_SCENARIO_RECIPE_SCHEMA = 'kovo-devex-scenario-recipe/v1';
 
 const PHASES = Object.freeze(['cold', 'warm', 'oneFileIncremental']);
-const PACKED_PROFILE_ID = 'kovo-packed-check/v2';
+const PACKED_PROFILE_ID = 'kovo-packed-check/v3';
 const KOVO_FRESH_PACK_PRODUCER_ID = 'kovo-clean-source-pack/v1';
 const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
-const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v2';
+const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v3';
+const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
 const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const authenticatedProductionScenarios = new WeakSet();
@@ -71,6 +72,16 @@ const PACKED_PROFILE_COMMANDS = Object.freeze(
     ]),
   ),
 );
+const PACKED_DEV_PROFILE_COMMAND = Object.freeze({
+  command: Object.freeze(['node', 'dev-profile.mjs']),
+  cwd: '.',
+});
+const DEV_PROFILE_METRICS = Object.freeze([
+  'dev.ready.cold.durationMs',
+  'dev.ready.warm.durationMs',
+  'dev.editToDiagnostic.durationMs',
+  'dev.editToServedResult.durationMs',
+]);
 const DEVEX_METRIC_CONTRACT = Object.freeze({
   'browser.bootstrapBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
   'check.cold.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
@@ -157,6 +168,7 @@ export const DEVEX_PACKED_PROFILE_COMMAND_DIGEST = sha256(
   Buffer.from(
     canonicalJson({
       browserBuild: BROWSER_BUILD_COMMAND,
+      dev: PACKED_DEV_PROFILE_COMMAND,
       phases: PACKED_PROFILE_COMMANDS,
     }),
   ),
@@ -730,6 +742,7 @@ export function validateKovoBrowserWorkload(manifest, consumerFiles) {
   const requiredConsumerFiles = new Set([
     'benchmark-lock.yaml',
     'build-browser.mjs',
+    'dev-profile.mjs',
     'profile.mjs',
     'src/app.tsx',
     'src/components/counter-island.tsx',
@@ -977,7 +990,7 @@ function assertProfileInvocation(result, context, requireMarker) {
   }
   if (!requireMarker) return null;
   const marker =
-    /^kovo-benchmark-phase\/v2 phase=(cold|warm|oneFileIncremental) revision=([01]) edit=(baseline|applied) analysis=(sha256:[0-9a-f]{64}) client=([0-9a-f]{64})\r?\n?$/u.exec(
+    /^kovo-benchmark-phase\/v3 phase=(cold|warm|oneFileIncremental) revision=([01]) edit=(baseline|applied) analysis=(sha256:[0-9a-f]{64}) client=([0-9a-f]{64}) duration=([0-9]+(?:\.[0-9]+)?) rss=(none|[0-9]+)\r?\n?$/u.exec(
       result.stdout ?? '',
     );
   if (!marker || marker[1] !== context.executionPhase) {
@@ -992,11 +1005,83 @@ function assertProfileInvocation(result, context, requireMarker) {
       `${context.phase} ${context.role} sample ${context.sampleIndex + 1} returned the wrong edit revision`,
     );
   }
+  const durationMs = Number(marker[6]);
+  const peakRssBytes = marker[7] === 'none' ? null : Number(marker[7]);
+  if (
+    !finiteNonNegative(durationMs) ||
+    (peakRssBytes !== null && !finiteNonNegative(peakRssBytes))
+  ) {
+    throw new Error(
+      `${context.phase} ${context.role} sample ${context.sampleIndex + 1} returned invalid process cost evidence`,
+    );
+  }
   return {
     analysisDigest: marker[4],
     clientDigest: marker[5],
+    durationMs,
+    peakRssBytes,
     revision,
   };
+}
+
+function validDigest(value) {
+  return /^sha256:[0-9a-f]{64}$/u.test(value ?? '');
+}
+
+function exactOwnKeys(value, expected) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    sameJson(Object.keys(value).sort(compareStrings), [...expected].sort(compareStrings))
+  );
+}
+
+function assertDevProfileInvocation(result, context) {
+  if (result.exitCode !== 0 || result.signal || result.error) {
+    throw new Error(
+      `dev timed sample ${context.sampleIndex + 1} failed: exit=${String(
+        result.exitCode,
+      )} signal=${String(result.signal)} ${result.error ?? result.stderr ?? ''}`.trim(),
+    );
+  }
+  const marker = /^kovo-dev-profile\/v1 ([^\r\n]+)\r?\n?$/u.exec(result.stdout ?? '');
+  if (!marker) {
+    throw new Error(
+      `dev timed sample ${context.sampleIndex + 1} did not return the code-owned dev marker`,
+    );
+  }
+  let evidence;
+  try {
+    evidence = JSON.parse(marker[1]);
+  } catch {
+    throw new Error(`dev timed sample ${context.sampleIndex + 1} returned malformed JSON evidence`);
+  }
+  if (
+    !exactOwnKeys(evidence, ['cold', 'diagnostic', 'served', 'warm']) ||
+    !exactOwnKeys(evidence.cold, ['bodyDigest', 'durationMs']) ||
+    !exactOwnKeys(evidence.warm, ['bodyDigest', 'durationMs']) ||
+    !exactOwnKeys(evidence.diagnostic, ['bodyDigest', 'code', 'durationMs', 'sourceDigest']) ||
+    !exactOwnKeys(evidence.served, ['bodyDigest', 'durationMs', 'revision', 'sourceDigest']) ||
+    !finiteNonNegative(evidence.cold.durationMs) ||
+    !finiteNonNegative(evidence.warm.durationMs) ||
+    !finiteNonNegative(evidence.diagnostic.durationMs) ||
+    !finiteNonNegative(evidence.served.durationMs) ||
+    !validDigest(evidence.cold.bodyDigest) ||
+    !validDigest(evidence.warm.bodyDigest) ||
+    !validDigest(evidence.diagnostic.bodyDigest) ||
+    !validDigest(evidence.diagnostic.sourceDigest) ||
+    !validDigest(evidence.served.bodyDigest) ||
+    !validDigest(evidence.served.sourceDigest) ||
+    evidence.diagnostic.code !== 'KV235' ||
+    evidence.served.revision !== 1 ||
+    evidence.diagnostic.sourceDigest === evidence.served.sourceDigest
+  ) {
+    throw new Error(
+      `dev timed sample ${context.sampleIndex + 1} returned invalid transition evidence`,
+    );
+  }
+  return evidence;
 }
 
 function phaseCensus(observations, samples) {
@@ -1047,6 +1132,8 @@ function phaseCensus(observations, samples) {
       revision: observation.revision,
       analysisDigest: observation.analysisDigest,
       clientDigest: observation.clientDigest,
+      durationMs: observation.durationMs,
+      peakRssBytes: observation.peakRssBytes,
     })),
   };
 }
@@ -1120,6 +1207,12 @@ function validatePhaseCensus(census, sampleCount, label) {
       if (!/^[0-9a-f]{64}$/u.test(observed.clientDigest ?? '')) {
         findings.push(`${label}.analysisInputs[${index}].clientDigest is invalid`);
       }
+      if (!finiteNonNegative(observed.durationMs)) {
+        findings.push(`${label}.analysisInputs[${index}].durationMs is invalid`);
+      }
+      if (observed.peakRssBytes !== null && !finiteNonNegative(observed.peakRssBytes)) {
+        findings.push(`${label}.analysisInputs[${index}].peakRssBytes is invalid`);
+      }
       const previous = digestByRevision.get(observed.revision);
       if (previous !== undefined && previous !== observed.analysisDigest) {
         findings.push(`${label}.analysisInputs maps one revision to multiple source digests`);
@@ -1129,6 +1222,102 @@ function validatePhaseCensus(census, sampleCount, label) {
     if (digestByRevision.size !== 2 || digestByRevision.get(0) === digestByRevision.get(1)) {
       findings.push(`${label}.analysisInputs must prove two distinct analyzed source revisions`);
     }
+  }
+  return findings;
+}
+
+function devPhaseCensus(observations, samples) {
+  if (observations.length !== samples) {
+    throw new Error('dev phase census does not contain every timed sample');
+  }
+  const sourceDigests = new Map();
+  for (const observation of observations) {
+    for (const [kind, digest] of [
+      ['diagnostic', observation.diagnostic.sourceDigest],
+      ['served', observation.served.sourceDigest],
+    ]) {
+      const previous = sourceDigests.get(kind);
+      if (previous !== undefined && previous !== digest) {
+        throw new Error(`dev ${kind} source mapped to inconsistent digests`);
+      }
+      sourceDigests.set(kind, digest);
+    }
+  }
+  if (sourceDigests.get('diagnostic') === sourceDigests.get('served')) {
+    throw new Error(
+      'dev edit census did not prove distinct diagnostic and served source revisions',
+    );
+  }
+  return {
+    schema: KOVO_DEV_PHASE_CENSUS_SCHEMA,
+    samples,
+    observations: observations.map((observation) => structuredClone(observation)),
+  };
+}
+
+function validateDevPhaseCensus(census, sampleCount, label) {
+  const findings = [];
+  if (
+    census?.schema !== KOVO_DEV_PHASE_CENSUS_SCHEMA ||
+    !Number.isInteger(sampleCount) ||
+    census?.samples !== sampleCount
+  ) {
+    findings.push(`${label} must bind the report sample count`);
+    return findings;
+  }
+  if (!Array.isArray(census.observations) || census.observations.length !== sampleCount) {
+    findings.push(`${label}.observations must census every dev sample`);
+    return findings;
+  }
+  const sourceDigests = new Map();
+  for (let index = 0; index < sampleCount; index += 1) {
+    const observation = census.observations[index];
+    if (
+      !exactOwnKeys(observation, ['cold', 'diagnostic', 'sampleIndex', 'served', 'warm']) ||
+      observation.sampleIndex !== index
+    ) {
+      findings.push(`${label}.observations[${index}] does not match the dev sample census`);
+      continue;
+    }
+    for (const kind of ['cold', 'warm']) {
+      if (
+        !exactOwnKeys(observation[kind], ['bodyDigest', 'durationMs']) ||
+        !validDigest(observation[kind]?.bodyDigest) ||
+        !finiteNonNegative(observation[kind]?.durationMs)
+      ) {
+        findings.push(`${label}.observations[${index}].${kind} is invalid`);
+      }
+    }
+    if (
+      !exactOwnKeys(observation.diagnostic, ['bodyDigest', 'code', 'durationMs', 'sourceDigest']) ||
+      observation.diagnostic?.code !== 'KV235' ||
+      !validDigest(observation.diagnostic?.bodyDigest) ||
+      !validDigest(observation.diagnostic?.sourceDigest) ||
+      !finiteNonNegative(observation.diagnostic?.durationMs)
+    ) {
+      findings.push(`${label}.observations[${index}].diagnostic is invalid`);
+    }
+    if (
+      !exactOwnKeys(observation.served, ['bodyDigest', 'durationMs', 'revision', 'sourceDigest']) ||
+      observation.served?.revision !== 1 ||
+      !validDigest(observation.served?.bodyDigest) ||
+      !validDigest(observation.served?.sourceDigest) ||
+      !finiteNonNegative(observation.served?.durationMs)
+    ) {
+      findings.push(`${label}.observations[${index}].served is invalid`);
+    }
+    for (const kind of ['diagnostic', 'served']) {
+      const digest = observation[kind]?.sourceDigest;
+      if (!validDigest(digest)) continue;
+      const previous = sourceDigests.get(kind);
+      if (previous !== undefined && previous !== digest) {
+        findings.push(`${label}.observations maps ${kind} to multiple source digests`);
+      }
+      sourceDigests.set(kind, digest);
+    }
+  }
+  if (sourceDigests.size === 2 && sourceDigests.get('diagnostic') === sourceDigests.get('served')) {
+    findings.push(`${label}.observations must prove distinct diagnostic and served source edits`);
   }
   return findings;
 }
@@ -1206,6 +1395,7 @@ export function runBenchmarkScenario(scenario, options = {}) {
     const metrics = {};
     const commands = expectedScenarioCommands();
     const observations = [];
+    const devObservations = [];
     const requireMarker = executionScenario.name === 'kovo-packed-check';
 
     for (const phase of PHASES) {
@@ -1245,6 +1435,9 @@ export function runBenchmarkScenario(scenario, options = {}) {
               revision,
               analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
               clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
+              durationMs: evidence?.durationMs ?? prime.durationMs,
+              peakRssBytes:
+                evidence === null ? (prime.peakRssBytes ?? null) : evidence.peakRssBytes,
               sampleIndex: index,
             });
           }
@@ -1267,17 +1460,21 @@ export function runBenchmarkScenario(scenario, options = {}) {
             revision,
             analysisDigest: evidence?.analysisDigest ?? `sha256:${String(revision).repeat(64)}`,
             clientDigest: evidence?.clientDigest ?? 'f'.repeat(64),
+            durationMs: evidence?.durationMs ?? result.durationMs,
+            peakRssBytes: evidence === null ? (result.peakRssBytes ?? null) : evidence.peakRssBytes,
             sampleIndex: index,
           });
-          if (!finiteNonNegative(result.durationMs)) {
+          const measuredDuration = evidence?.durationMs ?? result.durationMs;
+          const measuredPeakRss = evidence === null ? result.peakRssBytes : evidence.peakRssBytes;
+          if (!finiteNonNegative(measuredDuration)) {
             throw new Error(`${phase} sample ${index + 1} returned an invalid duration`);
           }
-          durationSamples.push(result.durationMs);
-          if (result.peakRssBytes !== null && result.peakRssBytes !== undefined) {
-            if (!finiteNonNegative(result.peakRssBytes)) {
+          durationSamples.push(measuredDuration);
+          if (measuredPeakRss !== null && measuredPeakRss !== undefined) {
+            if (!finiteNonNegative(measuredPeakRss)) {
               throw new Error(`${phase} sample ${index + 1} returned invalid peak RSS`);
             }
-            rssSamples.push(result.peakRssBytes);
+            rssSamples.push(measuredPeakRss);
           }
         } finally {
           rmSync(staged.stageRoot, { recursive: true, force: true });
@@ -1292,6 +1489,41 @@ export function runBenchmarkScenario(scenario, options = {}) {
         unit: 'bytes',
         samples: rssSamples,
         summary: rssSamples.length === 0 ? null : sampleSummary(rssSamples),
+      };
+    }
+
+    const measureDev = options.measureDev ?? measure;
+    const devMetricSamples = Object.fromEntries(
+      DEV_PROFILE_METRICS.map((metricId) => [metricId, []]),
+    );
+    for (let index = 0; index < samples; index += 1) {
+      const staged = stagePackedWorkload(executionScenario, executionRoot, executionRepositoryRoot);
+      try {
+        const context = {
+          cwd: commandCwdInsideStage(staged.stageRoot, PACKED_DEV_PROFILE_COMMAND.cwd),
+          executionPhase: 'dev',
+          phase: 'dev',
+          role: 'timed',
+          sampleIndex: index,
+          stageRoot: staged.stageRoot,
+        };
+        const result = measureDev(PACKED_DEV_PROFILE_COMMAND.command, context);
+        const evidence = assertDevProfileInvocation(result, context);
+        devMetricSamples['dev.ready.cold.durationMs'].push(evidence.cold.durationMs);
+        devMetricSamples['dev.ready.warm.durationMs'].push(evidence.warm.durationMs);
+        devMetricSamples['dev.editToDiagnostic.durationMs'].push(evidence.diagnostic.durationMs);
+        devMetricSamples['dev.editToServedResult.durationMs'].push(evidence.served.durationMs);
+        devObservations.push({ sampleIndex: index, ...evidence });
+      } finally {
+        rmSync(staged.stageRoot, { recursive: true, force: true });
+      }
+    }
+    for (const metricId of DEV_PROFILE_METRICS) {
+      const metricSamples = devMetricSamples[metricId];
+      metrics[metricId] = {
+        unit: 'ms',
+        samples: metricSamples,
+        summary: sampleSummary(metricSamples),
       };
     }
 
@@ -1344,6 +1576,7 @@ export function runBenchmarkScenario(scenario, options = {}) {
       runner: environmentRunnerFingerprint(observedEnvironment),
       sampleCount: samples,
       phaseCensus: census,
+      devPhaseCensus: devPhaseCensus(devObservations, samples),
       commands,
       metrics,
     };
@@ -1353,7 +1586,10 @@ export function runBenchmarkScenario(scenario, options = {}) {
 }
 
 function expectedScenarioCommands() {
-  return structuredClone(PACKED_PROFILE_COMMANDS);
+  return structuredClone({
+    ...PACKED_PROFILE_COMMANDS,
+    dev: PACKED_DEV_PROFILE_COMMAND,
+  });
 }
 
 function expectedReportProvenance(scenario) {
@@ -1374,6 +1610,68 @@ function expectedReportProvenance(scenario) {
       ? {}
       : { producerAttestation: structuredClone(scenario.provenance.producerAttestation) }),
   };
+}
+
+function reportMetricCensusFindings(report, label) {
+  const findings = [];
+  const metrics = report?.metrics;
+  if (metrics === null || typeof metrics !== 'object' || Array.isArray(metrics)) {
+    return [`${label}.metrics must be an object`];
+  }
+  for (const phase of PHASES) {
+    const timed =
+      report.phaseCensus?.analysisInputs?.filter(
+        (observation) => observation?.phase === phase && observation?.role === 'timed',
+      ) ?? [];
+    const expected = [
+      [`check.${phase}.durationMs`, 'ms', timed.map((observation) => observation.durationMs)],
+      [
+        `check.${phase}.peakRssBytes`,
+        'bytes',
+        timed.map((observation) => observation.peakRssBytes).filter((value) => value !== null),
+      ],
+    ];
+    for (const [metricId, unit, samples] of expected) {
+      const metric = metrics[metricId];
+      if (metric === undefined) continue;
+      if (metric?.unit !== unit || !sameJson(metric.samples, samples)) {
+        findings.push(`${label}.metrics.${metricId} does not match its phase census`);
+      }
+    }
+  }
+  const devSamples = [
+    ['dev.ready.cold.durationMs', 'cold'],
+    ['dev.ready.warm.durationMs', 'warm'],
+    ['dev.editToDiagnostic.durationMs', 'diagnostic'],
+    ['dev.editToServedResult.durationMs', 'served'],
+  ];
+  for (const [metricId, phase] of devSamples) {
+    const metric = metrics[metricId];
+    if (metric === undefined) continue;
+    const samples =
+      report.devPhaseCensus?.observations?.map((observation) => observation?.[phase]?.durationMs) ??
+      [];
+    if (metric?.unit !== 'ms' || !sameJson(metric.samples, samples)) {
+      findings.push(`${label}.metrics.${metricId} does not match its dev phase census`);
+    }
+  }
+  const browser = metrics['browser.bootstrapBytes'];
+  if (browser !== undefined) {
+    const files = browser?.files;
+    const bytes =
+      Array.isArray(files) &&
+      files.every(
+        (file) => safeRepositoryRelativePath(file?.path) && finiteNonNegative(file?.bytes),
+      )
+        ? files.reduce((total, file) => total + file.bytes, 0)
+        : null;
+    if (browser?.unit !== 'bytes' || bytes === null || !sameJson(browser.samples, [bytes])) {
+      findings.push(
+        `${label}.metrics.browser.bootstrapBytes must match its emitted-asset byte census`,
+      );
+    }
+  }
+  return findings;
 }
 
 function validateBenchmarkReportIdentity(report, label = 'report') {
@@ -1407,7 +1705,13 @@ function validateBenchmarkReportIdentity(report, label = 'report') {
   } else {
     findings.push(
       ...validatePhaseCensus(report.phaseCensus, report.sampleCount, `${label}.phaseCensus`),
+      ...validateDevPhaseCensus(
+        report.devPhaseCensus,
+        report.sampleCount,
+        `${label}.devPhaseCensus`,
+      ),
     );
+    findings.push(...reportMetricCensusFindings(report, label));
   }
   return findings;
 }

@@ -39,7 +39,7 @@
     "check:declassification-census": "node scripts/security-cost-budget-runner.mjs --gate declassification-census",
     "check:decided-surface": "node scripts/security-cost-budget-runner.mjs --gate decided-surface",
     "check:decided-surface-artifact": "node scripts/decided-surface-gate.mjs --check-artifact",
-    "test:devex-foundation-schema": "node scripts/devex-benchmark.mjs --check-budgets && node scripts/public-api-inventory.mjs --check && node scripts/known-failure-register.mjs --validate-schema && vitest --run scripts/devex-benchmark.test.mjs scripts/public-api-inventory.test.mjs scripts/known-failure-register.test.mjs --reporter=dot",
+    "test:devex-foundation-schema": "node scripts/devex-benchmark.mjs --check-budgets && node scripts/public-api-inventory.mjs --check && node scripts/known-failure-register.mjs --validate-schema && vitest --run scripts/devex-benchmark.test.mjs scripts/devex-dev-profile.test.mjs scripts/public-api-inventory.test.mjs scripts/known-failure-register.test.mjs --reporter=dot",
     "test:devex-known-failures-available": "node scripts/known-failure-register.mjs --run-available --packed-manifest .release/packed-packages.json",
     "test:devex-offline-agent": "vitest --run scripts/golden-journey.test.mjs scripts/golden-journey/offline-agent.test.mjs scripts/egress-floor.test.mjs --reporter=dot",
     "test:devex-offline-agent:packed": "node scripts/golden-journey.mjs --scenario offline-agent --packed-manifest .release/packed-packages.json",

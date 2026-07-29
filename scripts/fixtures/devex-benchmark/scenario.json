@@ -2,8 +2,8 @@
   "schema": "kovo-devex-benchmark-scenario/v4",
   "name": "deterministic-harness-fixture",
   "profile": {
-    "id": "kovo-packed-check/v2",
-    "commandDigest": "sha256:b94057b8feffac33d32a833c1c9cc62a66eba93864e19bf19000183f222ede0b"
+    "id": "kovo-packed-check/v3",
+    "commandDigest": "sha256:b02f4667763091a05da3129a00623d894f926fa15763f082e9b11605cd21e52c"
   },
   "environment": {
     "runnerName": "fixture-runner",
@@ -19,13 +19,13 @@
     "sourceTree": "clean",
     "workloadManifest": {
       "path": "packed-workload.json",
-      "sha256": "sha256:73037c182388f1645abd3188d1b4c12845d56bb013556309a3a8d870482eb92f"
+      "sha256": "sha256:2ef2605edee020a47389759d1c3c03bb9d180d132dd6ea5bd816d7baeebfb736"
     },
     "packedArtifacts": [
       {
         "name": "@fixture/kovo-packed-benchmark",
         "path": "packed-fixture.tgz",
-        "sha256": "sha256:e102fd10e63a4393cd62f0a4375272604c09bcb016b2f43c5c8bf31742513aa7"
+        "sha256": "sha256:a3c70af0815d39d8021016d42a2339c9377911f5f0f87fc5caf42194ef3f0d91"
       }
     ],
     "supportFiles": [
@@ -37,6 +37,11 @@
       {
         "path": "bootstrap-b.css",
         "sha256": "sha256:25e8ca1220810764d6705aee5efae670904cb0a8b56059f49b6e7d0659662a8f",
+        "executable": false
+      },
+      {
+        "path": "dev-profile.mjs",
+        "sha256": "sha256:7ce9df884b6c802ce9195b75e30d3d15478f3616b711fb81411201e9296530cb",
         "executable": false
       },
       {
