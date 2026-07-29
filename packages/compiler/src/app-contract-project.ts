@@ -2119,16 +2119,16 @@ function expectedGeneratedModuleSource(
     : `./${relativeProvider}`;
   return [
     '/* kovo-app-contract-prototype/v6: compiler generated; do not edit */',
-    `import { ${identity.providerAppExportName} as app } from ${JSON.stringify(providerImport)};`,
+    `import { ${identity.providerAppExportName} as app } from ${singleQuotedTypeScriptString(providerImport)};`,
     "export { publicAccess } from '@kovojs/server';",
     'export const __kovoGeneratedContract = Object.freeze({',
-    `  appId: ${JSON.stringify(identity.appId)},`,
-    `  compilerSourceSha256: ${JSON.stringify(compilerSourceSha256)},`,
-    `  ownerKey: ${JSON.stringify(identity.ownerKey)},`,
-    `  providerExportBinding: ${JSON.stringify(identity.providerExportBinding)},`,
-    `  providerImportSpecifier: ${JSON.stringify(identity.providerImportSpecifier)},`,
-    `  providerKey: ${JSON.stringify(identity.providerKey)},`,
-    `  serverPackedContentsSha256: ${JSON.stringify(serverPackedContentsSha256)},`,
+    `  appId: ${singleQuotedTypeScriptString(identity.appId)},`,
+    `  compilerSourceSha256: ${singleQuotedTypeScriptString(compilerSourceSha256)},`,
+    `  ownerKey: ${singleQuotedTypeScriptString(identity.ownerKey)},`,
+    `  providerExportBinding: ${singleQuotedTypeScriptString(identity.providerExportBinding)},`,
+    `  providerImportSpecifier: ${singleQuotedTypeScriptString(identity.providerImportSpecifier)},`,
+    `  providerKey: ${singleQuotedTypeScriptString(identity.providerKey)},`,
+    `  serverPackedContentsSha256: ${singleQuotedTypeScriptString(serverPackedContentsSha256)},`,
     '});',
     'export const endpoint: typeof app.endpoint = app.endpoint;',
     'export const layout: typeof app.layout = app.layout;',
@@ -2138,6 +2138,15 @@ function expectedGeneratedModuleSource(
     'export const task: typeof app.task = app.task;',
     '',
   ].join('\n');
+}
+
+function singleQuotedTypeScriptString(value: string): string {
+  const json = JSON.stringify(value);
+  return `'${json
+    .slice(1, -1)
+    .replaceAll("'", "\\'")
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029')}'`;
 }
 
 function exactObjectKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
