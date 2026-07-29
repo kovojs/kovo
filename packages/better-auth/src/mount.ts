@@ -19,6 +19,10 @@ import type { BetterAuthMountAdapter } from './mount-adapter.js';
  * Disabling CSRF on this prefix does NOT relax protection on the app's own credential
  * mutations, which keep CSRF on. The framework hardcodes GET: an unsafe-method callback needs a
  * separate framework-owned, self-verifying adapter rather than widening this prefix authority.
+ *
+ * @experimental The redirect boundary is enforced, but generated bindings do not yet expose a
+ * supported social-provider configuration workflow. Email/password auth is mature; production
+ * OAuth remains experimental until a real provider round-trip conformance journey ships.
  */
 export function mount<const Path extends string>(
   path: Path,

@@ -1,14 +1,12 @@
-import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { type AccessDecision } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
+import { postgresSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
+import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { type MutationReplayStore } from '@kovojs/server/replay';
 import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
-import {
-  authed,
-  createBetterAuthPostgresBindingsFromEnvironment,
-  type BetterAuthBindingRequest,
-  type BetterAuthCsrfRequestLike,
-} from '@kovojs/better-auth';
+import type { CsrfOptions } from '@kovojs/server/security';
+import { authed, type BetterAuthCsrfRequestLike } from '@kovojs/better-auth';
+import type { BetterAuthGeneratedRequest } from '@kovojs/better-auth/generated';
+import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth/generated/postgres';
 
 import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
 import type { AppReadonlyDb } from '../db.js';
@@ -18,7 +16,7 @@ import type { AppSession } from '../auth.js';
 // auth capability. Generated runtime exports below project only app-safe values; the system
 // capability and raw Better Auth/Drizzle objects never cross this module.
 const appDatabase = createPostgresAppRuntimeDb(appRuntimeDbOptions);
-const authSystemDb = appDatabase.systemDb({
+const authSystemDb = postgresSystemDbForGeneratedIntegration(appDatabase, {
   operation: 'write',
   reason: 'Better Auth adapter manages session tables before an app session exists',
   surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
@@ -28,7 +26,7 @@ const authSystemDb = appDatabase.systemDb({
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
-type StarterAuthRequest = BetterAuthBindingRequest &
+type StarterAuthRequest = BetterAuthGeneratedRequest &
   BetterAuthCsrfRequestLike & {
     session?: AppSession | null;
   };

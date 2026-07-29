@@ -4,7 +4,7 @@ import {
 } from '@kovojs/server/internal/runtime-environment';
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import { createSigningKeyRing } from '@kovojs/server/signing';
-import { type CsrfOptions } from '@kovojs/server/security';
+import type { CsrfOptions } from '@kovojs/server/security';
 import { frameworkCsrfRequestSnapshot } from '@kovojs/server/internal/csrf';
 import { createFrameworkCsrfSigningSecret } from '@kovojs/server/internal/keyring';
 

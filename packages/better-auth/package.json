@@ -11,6 +11,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./generated": "./src/generated.ts",
+    "./generated/postgres": "./src/generated-postgres.ts",
+    "./generated/sqlite": "./src/generated-sqlite.ts",
     "./internal": "./src/internal.ts",
     "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
   },
@@ -19,6 +22,18 @@
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./generated": {
+        "types": "./dist/generated.d.mts",
+        "default": "./dist/generated.mjs"
+      },
+      "./generated/postgres": {
+        "types": "./dist/generated-postgres.d.mts",
+        "default": "./dist/generated-postgres.mjs"
+      },
+      "./generated/sqlite": {
+        "types": "./dist/generated-sqlite.d.mts",
+        "default": "./dist/generated-sqlite.mjs"
       },
       "./internal": {
         "types": "./dist/internal.d.mts",
@@ -31,7 +46,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts --dts",
+    "build:dist": "vp pack src/index.ts src/generated.ts src/generated-postgres.ts src/generated-sqlite.ts src/internal.ts src/internal/runtime-lock.ts src/internal/server-mount-adapter.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

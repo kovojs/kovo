@@ -2,6 +2,7 @@ import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { csrfToken } from '@kovojs/server/internal/csrf';
 import { usePostgresSystemDb } from '@kovojs/server/internal/postgres-capability';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
+import { createPostgresAppRuntimeDb } from '@kovojs/server/postgres';
 import { createSqliteAppRuntime } from '@kovojs/server/sqlite';
 import { kovo } from '../../drizzle/src/index.js';
 import { runMutation } from '../../server/src/mutation.js';

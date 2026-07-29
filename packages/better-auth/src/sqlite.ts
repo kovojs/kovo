@@ -1,16 +1,22 @@
 import { snapshotSqliteSchemaRecord } from '@kovojs/server/internal/sqlite';
 import { useSqliteSystemDb } from '@kovojs/server/internal/sqlite-capability';
+import { type AccessDecision, type SessionProvider } from '@kovojs/server';
 import {
   initializePrincipalEpoch,
   type PrincipalEpochStore,
 } from '@kovojs/server/principal-epochs';
-import { type AccessDecision, type SessionProvider } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
+import type { CsrfOptions } from '@kovojs/server/security';
 import type { KovoSqliteSystemDb } from '@kovojs/server/sqlite';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { BetterAuthBindingRequest } from './internal.js';
+import type {
+  BetterAuthBindings,
+  BetterAuthBindingsOptions,
+  BetterAuthDevelopmentSeed,
+  BetterAuthEnvironmentBindingsOptions,
+  BetterAuthGeneratedRequest,
+} from './bindings-contract.js';
 import {
   betterAuthEnvironmentIsProduction,
   resolveBetterAuthEnvironment,
@@ -36,7 +42,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
 } from './mutations.js';
-import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
+import { createBetterAuthMountAdapter } from './mount-adapter.js';
 import {
   optionalBetterAuthPasswordResetFeature,
   type BetterAuthPasswordResetOptions,
@@ -49,12 +55,20 @@ const betterAuthSqliteSecretMinimumLength = 32;
 
 declare const betterAuthSqliteSecretBrand: unique symbol;
 
-/** Better Auth signing material that cleared Kovo's 32-character SQLite binding floor. */
+/**
+ * Better Auth signing material that cleared Kovo's 32-character SQLite binding floor.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
 export type BetterAuthSqliteSecret = string & {
   readonly [betterAuthSqliteSecretBrand]: 'better-auth-sqlite-secret';
 };
 
-/** Validate signing material before it can reach the Better Auth SQLite constructor. */
+/**
+ * Validate signing material before it can reach the Better Auth SQLite constructor.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
+ */
 export function betterAuthSqliteSecret(value: string): BetterAuthSqliteSecret {
   if (typeof value !== 'string' || value.length < betterAuthSqliteSecretMinimumLength) {
     throw new NativeTypeError(
@@ -64,81 +78,51 @@ export function betterAuthSqliteSecret(value: string): BetterAuthSqliteSecret {
   return value as BetterAuthSqliteSecret;
 }
 
-/** A fixed development-only account that the SQLite binding may create. */
-export interface BetterAuthSqliteDevelopmentSeed {
-  /** Email address for the local development account. */
-  email: string;
-  /** Display name for the local development account. */
-  name: string;
-  /** Password for the local account; absent/null disables seeding. */
-  password?: string | null;
-}
+/**
+ * SQLite spelling of the backend-neutral generated development seed.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
+export type BetterAuthSqliteDevelopmentSeed = BetterAuthDevelopmentSeed;
 
-/** Options for the framework-owned Better Auth/SQLite construction boundary. */
-export interface BetterAuthSqliteBindingsOptions<
-  Request extends BetterAuthBindingRequest,
+/**
+ * Options for the framework-owned Better Auth/SQLite construction boundary.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
+export type BetterAuthSqliteBindingsOptions<
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
-> {
-  /** Absolute Better Auth base URL for this local app. */
-  baseURL: string;
-  /** Kovo CSRF configuration shared by generated credential mutations. */
-  csrf: CsrfOptions<Request>;
-  /** Optional fixed local account; ignored when `NODE_ENV=production`. */
-  developmentSeed?: BetterAuthSqliteDevelopmentSeed;
-  /** Sanitized projection from Better Auth's credential-free session/user records. */
-  mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
-  /** Persistent revocation authority initialized from each authenticated provider identity. */
-  principalEpochStore?: PrincipalEpochStore;
-  /** Optional account-recovery mutation plus its purpose-closed mail capability. */
-  passwordReset?: BetterAuthPasswordResetOptions;
-  /** Exact Better Auth Drizzle table record from the app's SQLite schema. */
-  schema: Record<string, unknown>;
-  /** Better Auth signing secret. */
-  secret: BetterAuthSqliteSecret;
-  /** Explicit pre-auth access decision for sign-in. */
-  signInAccess: AccessDecision;
-  /** Explicit authenticated access decision for sign-out. */
-  signOutAccess: AccessDecision;
-  /** Opaque framework-minted capability; no raw client is structurally reachable from it. */
-  systemDb: KovoSqliteSystemDb;
-}
+> = BetterAuthBindingsOptions<Request, SessionValue, BetterAuthSqliteSecret>;
 
-/** Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env. */
+/**
+ * Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
 export type BetterAuthSqliteEnvironmentBindingsOptions<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
-> = Omit<
-  BetterAuthSqliteBindingsOptions<Request, SessionValue>,
-  'baseURL' | 'developmentSeed' | 'secret'
->;
+> = BetterAuthEnvironmentBindingsOptions<Request, SessionValue, BetterAuthSqliteSecret>;
 
-/** Sanitized bindings produced by `createBetterAuthSqliteBindings`. */
-export interface BetterAuthSqliteBindings<
-  Request extends BetterAuthBindingRequest,
+/**
+ * Sanitized bindings produced by `createBetterAuthSqliteBindings`.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
+export type BetterAuthSqliteBindings<
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
-> {
-  /** Opaque provider/callback router token accepted only by `mount()`. */
-  mountAdapter: BetterAuthMountAdapter;
-  /** Create the configured fixed development account, or do nothing when disabled/production. */
-  seedDemoUser(): Promise<void>;
-  /** Runtime-sanitized Better Auth session provider. */
-  sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
-  /** Present only when `passwordReset` configured the purpose-closed mail feature. */
-  requestPasswordReset?: ReturnType<
-    typeof betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request, Request>
-  >;
-  /** CSRF-protected email/password sign-in mutation. */
-  signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
-  /** CSRF-protected sign-out mutation. */
-  signOut: ReturnType<
-    typeof betterAuthSignOutMutation<'auth/sign-out', Request, AuthenticatedRequest>
-  >;
-}
+> = BetterAuthBindings<Request, SessionValue, AuthenticatedRequest>;
 
-/** Construct SQLite bindings without exposing raw operator environment values to generated code. */
+/**
+ * Construct SQLite bindings without exposing raw operator environment values to generated code.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
+ */
 export function createBetterAuthSqliteBindingsFromEnvironment<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -185,9 +169,11 @@ export function createBetterAuthSqliteBindingsFromEnvironment<
  * The public result is a frozen record of sanitized Kovo bindings. The raw Drizzle/native client,
  * Better Auth instance, and capability consumer never cross this function's boundary (SPEC
  * §6.6/§10.3 C9).
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
  */
 export function createBetterAuthSqliteBindings<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -390,7 +376,7 @@ function requireBetterAuthRateLimitSchema(schema: object): unknown {
 
 function requiredOption<Value>(
   options: object,
-  property: keyof BetterAuthSqliteBindingsOptions<BetterAuthBindingRequest, unknown>,
+  property: keyof BetterAuthSqliteBindingsOptions<BetterAuthGeneratedRequest, unknown>,
 ): Value {
   const value = betterAuthOwnDataOption<Value>(
     options,

@@ -1,18 +1,24 @@
+import { type AccessDecision, type SessionProvider } from '@kovojs/server';
+import {
+  usePostgresSystemDb,
+  type KovoPostgresSystemDb,
+} from '@kovojs/server/internal/postgres-capability';
 import {
   initializePrincipalEpoch,
   type PrincipalEpochStore,
 } from '@kovojs/server/principal-epochs';
 import { postgresSchemaModule } from '@kovojs/server/postgres';
-import { type AccessDecision, type SessionProvider } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
-import {
-  type KovoPostgresSystemDb,
-  usePostgresSystemDb,
-} from '@kovojs/server/internal/postgres-capability';
+import type { CsrfOptions } from '@kovojs/server/security';
 import { betterAuth, type Session, type User } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { BetterAuthBindingRequest } from './internal.js';
+import type {
+  BetterAuthBindings,
+  BetterAuthBindingsOptions,
+  BetterAuthDevelopmentSeed,
+  BetterAuthEnvironmentBindingsOptions,
+  BetterAuthGeneratedRequest,
+} from './bindings-contract.js';
 import {
   betterAuthEnvironmentIsProduction,
   resolveBetterAuthEnvironment,
@@ -38,7 +44,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
 } from './mutations.js';
-import { createBetterAuthMountAdapter, type BetterAuthMountAdapter } from './mount-adapter.js';
+import { createBetterAuthMountAdapter } from './mount-adapter.js';
 import {
   optionalBetterAuthPasswordResetFeature,
   type BetterAuthPasswordResetOptions,
@@ -56,6 +62,8 @@ declare const betterAuthPostgresSecretBrand: unique symbol;
  *
  * The brand is an author-time guardrail. `createBetterAuthPostgresBindings` repeats the runtime
  * validation, so a cast or value crossing an untyped boundary cannot bypass the sink (SPEC §6.6).
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
  */
 export type BetterAuthPostgresSecret = string & {
   readonly [betterAuthPostgresSecretBrand]: 'better-auth-postgres-secret';
@@ -66,6 +74,8 @@ export type BetterAuthPostgresSecret = string & {
  *
  * Generate a high-entropy value with `crypto.randomBytes(32).toString('base64url')`; this
  * constructor enforces the same 32-character absolute floor as Kovo's app signing-secret gate.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
  */
 export function betterAuthPostgresSecret(value: string): BetterAuthPostgresSecret {
   if (typeof value !== 'string' || value.length < betterAuthPostgresSecretMinimumLength) {
@@ -76,93 +86,50 @@ export function betterAuthPostgresSecret(value: string): BetterAuthPostgresSecre
   return value as BetterAuthPostgresSecret;
 }
 
-/** A fixed development-only account that the Postgres binding may create after database boot. */
-export interface BetterAuthDevelopmentSeed {
-  /** Email address for the local development account. */
-  email: string;
-  /** Display name for the local development account. */
-  name: string;
-  /** Password for the local development account. An absent value disables seeding. */
-  password?: string | null;
-}
-
 /**
  * Options for the framework-owned Better Auth/Postgres construction boundary.
  *
  * The database input is an opaque system capability rather than a Drizzle handle. The constructor
  * consumes it internally, snapshots the schema/options it retains, and returns only sanitized Kovo
  * session and credential-mutation bindings (SPEC §6.6 and §10.3 capability ownership/C9).
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
  */
-export interface BetterAuthPostgresBindingsOptions<
-  Request extends BetterAuthBindingRequest,
+export type BetterAuthPostgresBindingsOptions<
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
-> {
-  /** Absolute Better Auth base URL for this deployment. */
-  baseURL: string;
-  /** Kovo CSRF configuration shared by the generated credential mutations. */
-  csrf: CsrfOptions<Request>;
-  /** Optional fixed local account; ignored when `NODE_ENV=production`. */
-  developmentSeed?: BetterAuthDevelopmentSeed;
-  /** Sanitized projection from Better Auth's credential-free session/user records. */
-  mapSession: BetterAuthSessionMapper<Session, User, SessionValue>;
-  /** Persistent revocation authority initialized from each authenticated provider identity. */
-  principalEpochStore?: PrincipalEpochStore;
-  /** Optional account-recovery mutation plus its purpose-closed mail capability. */
-  passwordReset?: BetterAuthPasswordResetOptions;
-  /** Exact Better Auth Drizzle table record from the app's pinned Postgres schema. */
-  schema: Record<string, unknown>;
-  /** Better Auth signing secret. */
-  secret: BetterAuthPostgresSecret;
-  /** Explicit pre-auth access decision for the sign-in mutation. */
-  signInAccess: AccessDecision;
-  /** Explicit authenticated access decision for the sign-out mutation. */
-  signOutAccess: AccessDecision;
-  /** Opaque framework-minted database capability consumed only by this constructor. */
-  systemDb: KovoPostgresSystemDb;
-}
+> = BetterAuthBindingsOptions<Request, SessionValue, BetterAuthPostgresSecret>;
 
-/** Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env. */
+/**
+ * Generated-app binding options whose secrets/URL/demo seed come from boot-pinned operator env.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
+ */
 export type BetterAuthPostgresEnvironmentBindingsOptions<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
-> = Omit<
-  BetterAuthPostgresBindingsOptions<Request, SessionValue>,
-  'baseURL' | 'developmentSeed' | 'secret'
->;
+> = BetterAuthEnvironmentBindingsOptions<Request, SessionValue, BetterAuthPostgresSecret>;
 
 /**
  * Sanitized bindings produced by `createBetterAuthPostgresBindings`.
  *
  * The raw Better Auth instance, Drizzle adapter, and system database never appear on this object.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not name it.
  */
-export interface BetterAuthPostgresBindings<
-  Request extends BetterAuthBindingRequest,
+export type BetterAuthPostgresBindings<
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
-> {
-  /** Opaque provider/callback router token accepted only by `mount()`. */
-  mountAdapter: BetterAuthMountAdapter;
-  /** Create the configured fixed development account, or do nothing when disabled/production. */
-  seedDemoUser(): Promise<void>;
-  /** Runtime-sanitized Better Auth session provider for `session(schema).provider(...)`. */
-  sessionProvider: SessionProvider<BetterAuthBindingRequest, SessionValue>;
-  /** Present only when `passwordReset` configured the purpose-closed mail feature. */
-  requestPasswordReset?: ReturnType<
-    typeof betterAuthRequestPasswordResetMutation<'auth/request-password-reset', Request, Request>
-  >;
-  /** CSRF-protected Better Auth email/password sign-in mutation. */
-  signIn: ReturnType<typeof betterAuthSignInEmailMutation<'auth/sign-in', Request, Request>>;
-  /** CSRF-protected Better Auth sign-out mutation. */
-  signOut: ReturnType<
-    typeof betterAuthSignOutMutation<'auth/sign-out', Request, AuthenticatedRequest>
-  >;
-}
+> = BetterAuthBindings<Request, SessionValue, AuthenticatedRequest>;
 
 /**
  * Construct Postgres bindings without exposing raw operator environment values to generated code.
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
  */
 export function createBetterAuthPostgresBindingsFromEnvironment<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -208,14 +175,15 @@ export function createBetterAuthPostgresBindingsFromEnvironment<
 /**
  * Construct the Better Auth/Postgres adapter behind one framework-owned capability door.
  *
- * Only the opaque `KovoPostgresSystemDb` capability crosses generated app source. The raw Drizzle
- * database is revealed inside this package just long enough to construct Better Auth's adapter;
- * the returned frozen record contains only an opaque GET callback adapter, a sanitized session
- * provider, Kovo credential mutations, and a fixed development seed operation (SPEC §6.6 and
- * §10.3 C9).
+ * Only the inferred framework-minted database authority crosses generated app source; its
+ * implementation-only nominal carrier is absent from this generated signature. The raw Drizzle
+ * database is revealed inside this package just long enough to construct Better Auth's adapter,
+ * and the runtime WeakMap lookup rejects every unminted value (SPEC §6.6/§10.3 C9).
+ *
+ * @generated Compiler-emitted authentication assembly ABI; app-authored modules should not call it.
  */
 export function createBetterAuthPostgresBindings<
-  Request extends BetterAuthBindingRequest,
+  Request extends BetterAuthGeneratedRequest,
   SessionValue,
   AuthenticatedRequest extends Request = Request,
 >(
@@ -417,7 +385,7 @@ function requireBetterAuthRateLimitSchema(schema: object): unknown {
 
 function requiredOption<Value>(
   options: object,
-  property: keyof BetterAuthPostgresBindingsOptions<BetterAuthBindingRequest, unknown>,
+  property: keyof BetterAuthPostgresBindingsOptions<BetterAuthGeneratedRequest, unknown>,
 ): Value {
   const value = betterAuthOwnDataOption<Value>(
     options,

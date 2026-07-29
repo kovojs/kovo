@@ -15,8 +15,8 @@ describe('Better Auth pinned conformance', () => {
     expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignInEmailMutation');
     expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignOutMutation');
     expect(publicBetterAuthApi).not.toHaveProperty('betterAuthSignUpEmailMutation');
-    expect(publicBetterAuthApi.createBetterAuthPostgresBindings).toBeTypeOf('function');
-    expect(publicBetterAuthApi.createBetterAuthSqliteBindings).toBeTypeOf('function');
+    expect(publicBetterAuthApi).not.toHaveProperty('createBetterAuthPostgresBindings');
+    expect(publicBetterAuthApi).not.toHaveProperty('createBetterAuthSqliteBindings');
   });
 
   it('pins the real better-auth server API shape consumed by the adapter', () => {

@@ -8,7 +8,7 @@ describe('publish readiness orchestration', () => {
 
     checkPublish({ exec });
 
-    expect(exec).toHaveBeenCalledTimes(8);
+    expect(exec).toHaveBeenCalledTimes(9);
     expect(exec.mock.calls.slice(0, 2).map((call) => call[1][0])).toEqual([
       expect.stringMatching(/scripts\/build-publish\.mjs$/u),
       expect.stringMatching(/scripts\/pack-public-packages\.mjs$/u),
@@ -33,9 +33,17 @@ describe('publish readiness orchestration', () => {
       'install',
       '--',
       process.execPath,
-      expect.stringMatching(/scripts\/check-packed-server-consumer\.mjs$/u),
+      expect.stringMatching(/scripts\/check-packed-better-auth-consumer\.mjs$/u),
     ]);
     expect(exec.mock.calls[7][1]).toEqual([
+      expect.stringMatching(/scripts\/egress-floor\.mjs$/u),
+      '--policy',
+      'install',
+      '--',
+      process.execPath,
+      expect.stringMatching(/scripts\/check-packed-server-consumer\.mjs$/u),
+    ]);
+    expect(exec.mock.calls[8][1]).toEqual([
       expect.stringMatching(/scripts\/egress-floor\.mjs$/u),
       '--policy',
       'install',

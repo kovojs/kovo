@@ -1,7 +1,7 @@
 import { publicAccess } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
 import { csrfToken } from '@kovojs/server/internal/csrf';
 import { runMutation } from '@kovojs/server/internal/execution';
+import type { CsrfOptions } from '@kovojs/server/security';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { describe, expect, it, vi } from 'vitest';

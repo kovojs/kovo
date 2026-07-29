@@ -2299,7 +2299,7 @@
       "kind": "library",
       "apiBoundary": {
         "public": ["."],
-        "generated": [],
+        "generated": ["./generated", "./generated/postgres", "./generated/sqlite"],
         "internal": ["./internal", "./internal/server-mount-adapter"]
       },
       "apiRef": {

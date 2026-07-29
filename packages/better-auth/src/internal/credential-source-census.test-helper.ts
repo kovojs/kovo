@@ -547,9 +547,9 @@ function addSeed(result: Set<Provenance>, moduleName: string, imported: string):
   const normalized = moduleName.replace(/\\/g, '/');
   if (normalized === 'better-auth' && imported === 'betterAuth') {
     result.add('raw:better-auth.constructor');
-  } else if (normalized === '@kovojs/server' && imported === 'hashPassword') {
+  } else if (normalized === '@kovojs/server/password' && imported === 'hashPassword') {
     result.add('raw:password.hash');
-  } else if (normalized === '@kovojs/server' && imported === 'verifyPassword') {
+  } else if (normalized === '@kovojs/server/password' && imported === 'verifyPassword') {
     result.add('raw:password.verify');
   } else if (
     normalized.endsWith('/postgres-rate-limit-storage.js') &&

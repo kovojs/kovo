@@ -5,7 +5,7 @@ const passwordMocks = vi.hoisted(() => ({
   verifyPassword: vi.fn(),
 }));
 
-vi.mock('@kovojs/server', () => passwordMocks);
+vi.mock('@kovojs/server/password', () => passwordMocks);
 
 import { betterAuthHashPassword, betterAuthVerifyPassword } from './password.js';
 

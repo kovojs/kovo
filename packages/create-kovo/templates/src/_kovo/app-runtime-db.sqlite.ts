@@ -1,14 +1,12 @@
 import { createSqliteAppRuntime, type KovoSqliteSeed } from '@kovojs/server/sqlite';
-import {
-  authed,
-  createBetterAuthSqliteBindingsFromEnvironment,
-  type BetterAuthBindingRequest,
-  type BetterAuthCsrfRequestLike,
-} from '@kovojs/better-auth';
+import { sqliteSystemDbForGeneratedIntegration } from '@kovojs/server/generated/db-capabilities';
+import { authed, type BetterAuthCsrfRequestLike } from '@kovojs/better-auth';
+import type { BetterAuthGeneratedRequest } from '@kovojs/better-auth/generated';
+import { createBetterAuthSqliteBindingsFromEnvironment } from '@kovojs/better-auth/generated/sqlite';
 import { type AccessDecision } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
 import { type MutationReplayStore } from '@kovojs/server/replay';
 import { type PrincipalEpochStore } from '@kovojs/server/principal-epochs';
+import type { CsrfOptions } from '@kovojs/server/security';
 
 import {
   account,
@@ -53,7 +51,7 @@ const APP_SEED = [
 ] as const satisfies readonly KovoSqliteSeed[];
 
 const appDatabase = createSqliteAppRuntime({ seed: APP_SEED, tables: APP_TABLES });
-const authSystemDb = appDatabase.systemDb({
+const authSystemDb = sqliteSystemDbForGeneratedIntegration(appDatabase, {
   operation: 'write',
   reason: 'Better Auth adapter manages local session tables before an app session exists',
   surface: 'src/_kovo/app-runtime-db.ts#createAppAuthBindings',
@@ -63,7 +61,7 @@ const authSystemDb = appDatabase.systemDb({
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
-type StarterAuthRequest = BetterAuthBindingRequest &
+type StarterAuthRequest = BetterAuthGeneratedRequest &
   BetterAuthCsrfRequestLike & {
     session?: AppSession | null;
   };

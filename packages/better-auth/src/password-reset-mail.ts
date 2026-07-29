@@ -35,7 +35,12 @@ const passwordResetCrypto = createBetterAuthPasswordResetCryptoHandle();
 declare const betterAuthPasswordResetMailDoorBrand: unique symbol;
 declare const betterAuthPasswordResetMailAttemptBrand: unique symbol;
 
-/** The only data Kovo permits to cross its password-reset email-egress door (SPEC §6.6/§9.2). */
+/**
+ * The only data Kovo permits to cross its password-reset email-egress door (SPEC §6.6/§9.2).
+ *
+ * @experimental Request-mail safety is proven, but password completion is not yet a supported
+ * typed Kovo mutation.
+ */
 export interface BetterAuthPasswordResetMailMessage {
   /** Validated recipient selected by the fixed Better Auth account-recovery operation. */
   readonly to: string;
@@ -43,7 +48,12 @@ export interface BetterAuthPasswordResetMailMessage {
   readonly resetUrl: string;
 }
 
-/** A deployer-owned mail sender invoked only with a password-reset message. */
+/**
+ * A deployer-owned mail sender invoked only with a password-reset message.
+ *
+ * @experimental Request-mail safety is proven, but password completion is not yet a supported
+ * typed Kovo mutation.
+ */
 export type BetterAuthPasswordResetMailSender = (
   message: Readonly<BetterAuthPasswordResetMailMessage>,
 ) => Promise<void>;
@@ -53,12 +63,19 @@ export type BetterAuthPasswordResetMailSender = (
  *
  * Construct it with {@link betterAuthPasswordResetMailDoor}; structural objects and callbacks
  * cannot be supplied directly to a fixed binding (SPEC §6.6 C9-C10).
+ *
+ * @experimental Request-mail safety is proven, but password completion is not yet a supported
+ * typed Kovo mutation.
  */
 export interface BetterAuthPasswordResetMailDoor {
   readonly [betterAuthPasswordResetMailDoorBrand]: 'better-auth-password-reset-mail-door';
 }
 
-/** Feature-conditional password-reset options accepted by fixed SQLite/Postgres bindings. */
+/**
+ * Feature-conditional password-reset options accepted by fixed SQLite/Postgres bindings.
+ *
+ * @experimental This enables only the request-and-mail half of account recovery.
+ */
 export interface BetterAuthPasswordResetOptions {
   /** Explicit pre-auth access decision for the CSRF-protected request mutation. */
   access: AccessDecision;
@@ -97,6 +114,9 @@ const requestMailAttempts = betterAuthCreateMap<object, object>();
  * Validate and capture a deployer mail sender behind an opaque password-reset-only capability.
  *
  * The type brand is ergonomics; exact registry membership is the runtime authority.
+ *
+ * @experimental Request-mail safety is proven, but password completion is not yet a supported
+ * typed Kovo mutation.
  */
 export function betterAuthPasswordResetMailDoor(
   send: BetterAuthPasswordResetMailSender,
