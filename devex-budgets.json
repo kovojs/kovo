@@ -110,6 +110,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "binding": "packed-artifact",
       "provisionalTarget": null,
       "ratification": null
     },
@@ -117,6 +118,7 @@
       "unit": "bytes",
       "direction": "max",
       "sampling": "deterministic",
+      "binding": "packed-artifact",
       "provisionalTarget": null,
       "ratification": null
     },

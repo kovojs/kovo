@@ -14,6 +14,7 @@ import {
   parseDiagnosticObservation,
   repairMissingAccess,
   rewriteScaffoldDependenciesToPackedTarballs,
+  runOfflineAgentJourney,
   validateInstalledDocsObservation,
 } from './offline-agent.mjs';
 
@@ -83,6 +84,12 @@ describe('offline agent diagnostic boundary', () => {
         sourceRoot,
       }),
     ).toThrow(/at least one diagnostic/);
+    expect(() =>
+      parseDiagnosticObservation(observation({ status: 1, stderr: diagnosticJson([valid]) }), {
+        expectedExitCode: 0,
+        sourceRoot,
+      }),
+    ).toThrow(/KV436/);
   });
 
   it('rejects source anchors that escape the scaffold root', () => {
@@ -220,6 +227,122 @@ describe('offline agent edit and repair', () => {
 });
 
 describe('offline agent process and package posture', () => {
+  it('runs the edit and repair loop through current-source check rather than deployment build', () => {
+    const parent = temporaryRoot('journey');
+    const packages = packedPackageFixtures(parent);
+    const source = [
+      "import { appAuthed } from './auth.js';",
+      '',
+      '// Its KV436 access decision is the session-presence guard.',
+      'export const contactsQuery = query({',
+      '  access: [appAuthed],',
+      '  async load() { return { items: [] }; },',
+      '});',
+      '',
+    ].join('\n');
+    const expectedCheckArgs = [
+      'exec',
+      'kovo',
+      'check',
+      'source',
+      './src/app.tsx',
+      '--no-cache',
+      '--format',
+      'json',
+    ];
+    const seenChecks = [];
+    let appRoot;
+    let docsFixture;
+
+    const commandRunner = (_file, args, { cwd }) => {
+      if (args[0]?.endsWith('/create-kovo/dist/index.mjs')) {
+        appRoot = args[1];
+        mkdirSync(path.join(appRoot, 'src'), { recursive: true });
+        writeFileSync(
+          path.join(appRoot, 'package.json'),
+          `${JSON.stringify({
+            dependencies: { '@kovojs/core': '0.2.0' },
+            devDependencies: { '@kovojs/cli': '0.2.0' },
+          })}\n`,
+        );
+        writeFileSync(path.join(appRoot, 'src/queries.ts'), source);
+        return observation({ status: 0 });
+      }
+      if (args[0] === 'install') return observation({ status: 0 });
+      if (args.join(' ') === 'exec kovo update-docs') {
+        docsFixture = writeInstalledDocsFixture(
+          appRoot,
+          'KV436 requires an explicit access decision. Use access: [guard] or publicAccess(...).\n',
+        );
+        return observation({
+          status: 0,
+          stdout: [
+            'kovo-update-docs/v1',
+            'OK source=installed-package version=1.2.3 files=7',
+            `OK snapshot=${docsFixture.snapshotDigest} current=.kovo/docs/current.json`,
+            '',
+          ].join('\n'),
+        });
+      }
+      if (args[2] === 'check') {
+        seenChecks.push(args);
+        const edited = readFileSync(path.join(cwd, 'src/queries.ts'), 'utf8');
+        return edited === source
+          ? observation({ status: 0, stdout: diagnosticJson([]) })
+          : observation({
+              status: 1,
+              stderr: diagnosticJson([
+                diagnosticRecord({
+                  source: {
+                    end: edited.indexOf('async load'),
+                    file: 'src/queries.ts',
+                    start: edited.indexOf('export const contactsQuery'),
+                  },
+                }),
+              ]),
+            });
+      }
+      if (args[2] === 'docs') {
+        const content = readFileSync(
+          path.join(
+            appRoot,
+            '.kovo/docs/snapshots',
+            docsFixture.snapshotDigest.slice('sha256:'.length),
+            docsFixture.path,
+          ),
+          'utf8',
+        );
+        return observation({
+          status: 0,
+          stdout: `${JSON.stringify({
+            results: [
+              {
+                excerpt: content,
+                path: docsFixture.path,
+                sha256: docsFixture.sha256,
+                snapshotDigest: docsFixture.snapshotDigest,
+                version: docsFixture.version,
+              },
+            ],
+            version: docsResultVersion,
+          })}\n`,
+        });
+      }
+      throw new Error(`Unexpected offline-agent command: ${args.join(' ')}`);
+    };
+
+    const report = runOfflineAgentJourney({
+      commandRunner,
+      packedPackages: packages,
+      temporaryParent: parent,
+    });
+
+    expect(report.pass).toBe(true);
+    expect(report.diagnostics.code).toBe('KV436');
+    expect(seenChecks).toEqual([expectedCheckArgs, expectedCheckArgs]);
+    expect(seenChecks.flat()).not.toContain('build');
+  });
+
   it('sets hard package-manager offline mode and denies loopback as well as remote egress', () => {
     const env = offlineCommandEnvironment({ PATH: process.env.PATH });
     expect(env).toMatchObject({
@@ -270,6 +393,10 @@ describe('offline agent process and package posture', () => {
 
 function installedDocsFixture(content) {
   const appRoot = temporaryRoot('docs');
+  return writeInstalledDocsFixture(appRoot, content);
+}
+
+function writeInstalledDocsFixture(appRoot, content) {
   const snapshotDigest = digest('snapshot');
   const version = '1.2.3';
   const relativePath = 'spec/11-diagnostics.md';

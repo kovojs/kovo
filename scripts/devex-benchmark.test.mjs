@@ -23,6 +23,7 @@ import {
   evaluateBudgets,
   median,
   medianAbsoluteDeviation,
+  packedArtifactBinding,
   percentile,
   ratifyBudgets,
   runBenchmarkScenario,
@@ -655,10 +656,128 @@ describe('DevEx benchmark foundation', () => {
         unit: 'bytes',
         direction: 'max',
         sampling: 'deterministic',
+        binding: 'packed-artifact',
         provisionalTarget: null,
         ratification: null,
       });
     }
+    const forgedStatisticalBinding = structuredClone(budgets);
+    forgedStatisticalBinding.metrics['check.cold.durationMs'].binding = 'packed-artifact';
+    expect(validateBudgets(forgedStatisticalBinding)).toEqual(
+      expect.arrayContaining([
+        'check.cold.durationMs.binding must be runner',
+        'check.cold.durationMs cannot claim packed-artifact binding unless deterministic',
+      ]),
+    );
+  });
+
+  it('binds docs bytes to packed evidence without ratifying a runner', () => {
+    const docsScenario = structuredClone(scenario);
+    const cliSha = `sha256:${'c'.repeat(64)}`;
+    docsScenario.provenance.packedArtifacts.push({
+      name: '@kovojs/cli',
+      path: 'kovojs-cli-0.2.0.tgz',
+      sha256: cliSha,
+    });
+    const evidence = {
+      schema: 'kovo-devex-packed-docs-evidence/v1',
+      workloadManifestSha256: docsScenario.provenance.workloadManifest.sha256,
+      package: {
+        name: '@kovojs/cli',
+        sha256: cliSha,
+        version: '0.2.0',
+      },
+      snapshot: {
+        compressedBytes: 1_000,
+        files: 77,
+        installedBytes: 4_000,
+        publicManifestDigest: `sha256:${'d'.repeat(64)}`,
+        snapshotDigest: `sha256:${'e'.repeat(64)}`,
+        sourceCommit: docsScenario.provenance.sourceCommit,
+        version: '0.2.0',
+      },
+    };
+    const report = benchmarkReport(
+      {
+        'docs.snapshot.compressedBytes': [evidence.snapshot.compressedBytes],
+        'docs.snapshot.installedBytes': [evidence.snapshot.installedBytes],
+      },
+      { definition: docsScenario },
+    );
+    report.metrics['docs.snapshot.compressedBytes'].evidence = structuredClone(evidence);
+    report.metrics['docs.snapshot.installedBytes'].evidence = structuredClone(evidence);
+    const source = baselineOptions(report);
+    const artifactBudgets = unratifiedBudgetFixture();
+    for (const [metricId, budget] of [
+      ['docs.snapshot.compressedBytes', 1_100],
+      ['docs.snapshot.installedBytes', 4_500],
+    ]) {
+      const samples = report.metrics[metricId].samples;
+      artifactBudgets.metrics[metricId].ratification = {
+        baseline: samples[0],
+        baselineReport: {
+          path: source.ratificationOptions.baselineReportPath,
+          sha256: digest(source.ratificationOptions.baselineReportBytes),
+          schema: report.schema,
+          scenarioName: report.scenario.name,
+          scenarioDigest: report.scenario.digest,
+        },
+        binding: packedArtifactBinding(evidence),
+        budget,
+        noise: 0,
+        noiseMultiplier: 0,
+        noiseStatistic: artifactBudgets.procedure.noiseStatistic,
+        runnerFingerprint: null,
+        sampleCount: 1,
+        statistic: 'median',
+        targetRationale:
+          'Bound the exact packed documentation payload with reviewed growth headroom.',
+        threshold: budget,
+        workloadIdentity: null,
+      };
+    }
+
+    expect(artifactBudgets.runner).toEqual({ status: 'unratified', fingerprint: null });
+    expect(validateBudgets(artifactBudgets, source.validationOptions)).toEqual([]);
+
+    const anotherRunnerScenario = structuredClone(docsScenario);
+    anotherRunnerScenario.environment.runnerName = 'another-fixture-runner';
+    anotherRunnerScenario.environment.cpuModel = 'another-fixture-cpu';
+    anotherRunnerScenario.environment.osImage =
+      'another-fixture-linux@sha256:2222222222222222222222222222222222222222222222222222222222222222';
+    const anotherRunnerReport = benchmarkReport(
+      {
+        'docs.snapshot.compressedBytes': [evidence.snapshot.compressedBytes],
+        'docs.snapshot.installedBytes': [evidence.snapshot.installedBytes],
+      },
+      { definition: anotherRunnerScenario },
+    );
+    anotherRunnerReport.metrics['docs.snapshot.compressedBytes'].evidence =
+      structuredClone(evidence);
+    anotherRunnerReport.metrics['docs.snapshot.installedBytes'].evidence =
+      structuredClone(evidence);
+    const evaluation = evaluateBudgets(
+      artifactBudgets,
+      anotherRunnerReport,
+      source.validationOptions,
+    );
+    expect(evaluation.pass).toBe(true);
+    expect(
+      evaluation.results.filter((result) => result.metric.startsWith('docs.snapshot')),
+    ).toEqual([
+      expect.objectContaining({ status: 'pass' }),
+      expect.objectContaining({ status: 'pass' }),
+    ]);
+
+    for (const metricId of ['docs.snapshot.compressedBytes', 'docs.snapshot.installedBytes']) {
+      anotherRunnerReport.metrics[metricId].evidence.snapshot.snapshotDigest =
+        `sha256:${'f'.repeat(64)}`;
+    }
+    expect(
+      evaluateBudgets(artifactBudgets, anotherRunnerReport, source.validationOptions).results.find(
+        (result) => result.metric === 'docs.snapshot.compressedBytes',
+      ),
+    ).toMatchObject({ status: 'artifact-mismatch' });
   });
 
   it('rejects bootstrap traversal, direct symlinks, and symlink-parent escapes', () => {
@@ -1153,7 +1272,7 @@ function baselineOptions(report) {
 
 function ratifyFixtureBudgets(report, metrics) {
   const source = baselineOptions(report);
-  const ratified = structuredClone(budgets);
+  const ratified = unratifiedBudgetFixture();
   const workloadIdentity = {
     scenario: {
       name: report.scenario.name,
@@ -1207,6 +1326,14 @@ function ratifyFixtureBudgets(report, metrics) {
     ratified,
     validationOptions: source.validationOptions,
   };
+}
+
+function unratifiedBudgetFixture() {
+  const value = structuredClone(budgets);
+  value.runner = { status: 'unratified', fingerprint: null };
+  value.workload = { status: 'unratified', identity: null };
+  for (const metric of Object.values(value.metrics)) metric.ratification = null;
+  return value;
 }
 
 function digest(bytes) {

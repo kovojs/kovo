@@ -66,7 +66,7 @@ describe('DevEx CI and baseline policy', () => {
     const prematurelyRatified = structuredClone(budgets);
     prematurelyRatified.metrics['check.cold.durationMs'].ratification = {};
     expect(validateDevexBaselinePolicy(baseline, prematurelyRatified, ci)).toContain(
-      'an observational runner cannot produce binding metric ratifications',
+      'an observational runner cannot produce runner-bound metric ratifications',
     );
   });
 });

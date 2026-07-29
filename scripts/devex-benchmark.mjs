@@ -21,6 +21,11 @@ import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
 import {
+  agentDocsSnapshotFileName,
+  decodeAgentDocsSnapshot,
+  digestPublicManifest,
+} from './agent-docs-snapshot.mjs';
+import {
   readPackageTarballSnapshot,
   validatedPackageTarballEntries,
 } from './lib/deterministic-tarball.mjs';
@@ -51,9 +56,12 @@ const KOVO_FRESH_PACK_PRODUCER_ID = 'kovo-clean-source-pack/v1';
 const KOVO_PRODUCER_ATTESTATION_SCHEMA = 'kovo-devex-producer-attestation/v1';
 const KOVO_PHASE_CENSUS_SCHEMA = 'kovo-devex-phase-census/v3';
 const KOVO_DEV_PHASE_CENSUS_SCHEMA = 'kovo-devex-dev-phase-census/v1';
+const KOVO_PACKED_DOCS_EVIDENCE_SCHEMA = 'kovo-devex-packed-docs-evidence/v1';
+const KOVO_PACKED_ARTIFACT_BINDING_SCHEMA = 'kovo-devex-packed-artifact-binding/v1';
 const KOVO_BENCHMARK_CONSUMER = '@kovojs/devex-packed-check-consumer';
 const KOVO_PACKED_RECIPE_PATH = 'scripts/devex-scenarios/kovo-packed-check.json';
 const authenticatedProductionScenarios = new WeakSet();
+const authenticatedProductionDocsEvidence = new WeakMap();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
@@ -114,10 +122,22 @@ const DEVEX_METRIC_CONTRACT = Object.freeze({
   }),
   'dev.ready.cold.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
   'dev.ready.warm.durationMs': Object.freeze({ sampling: 'statistical', unit: 'ms' }),
-  'docs.snapshot.compressedBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
-  'docs.snapshot.installedBytes': Object.freeze({ sampling: 'deterministic', unit: 'bytes' }),
+  'docs.snapshot.compressedBytes': Object.freeze({
+    binding: 'packed-artifact',
+    sampling: 'deterministic',
+    unit: 'bytes',
+  }),
+  'docs.snapshot.installedBytes': Object.freeze({
+    binding: 'packed-artifact',
+    sampling: 'deterministic',
+    unit: 'bytes',
+  }),
   'ui.fullCatalog.peakRssBytes': Object.freeze({ sampling: 'statistical', unit: 'bytes' }),
 });
+
+function metricBinding(metricId) {
+  return DEVEX_METRIC_CONTRACT[metricId]?.binding ?? 'runner';
+}
 
 function compareStrings(left, right) {
   return left.localeCompare(right);
@@ -158,6 +178,27 @@ function canonicalJson(value) {
       .join(',')}}`;
   }
   throw new TypeError('benchmark identity contains a non-JSON value');
+}
+
+export function packedArtifactBinding(evidence) {
+  if (
+    evidence === null ||
+    typeof evidence !== 'object' ||
+    evidence.package === null ||
+    typeof evidence.package !== 'object' ||
+    evidence.snapshot === null ||
+    typeof evidence.snapshot !== 'object'
+  ) {
+    return null;
+  }
+  return {
+    schema: KOVO_PACKED_ARTIFACT_BINDING_SCHEMA,
+    kind: 'packed-artifact',
+    evidenceSha256: sha256(canonicalJson(evidence)),
+    packedArtifactSha256: evidence.package.sha256,
+    snapshotDigest: evidence.snapshot.snapshotDigest,
+    workloadManifestSha256: evidence.workloadManifestSha256,
+  };
 }
 
 export function benchmarkScenarioDigest(scenario) {
@@ -885,6 +926,66 @@ function observedTarballFiles(entries) {
   }));
 }
 
+/**
+ * Measure the docs payload only after authenticating the exact CLI tarball in the packed
+ * workload. The evidence deliberately carries workload, package, and snapshot identities so a
+ * deterministic budget can bind artifact bytes without pretending wall-clock runner identity is
+ * relevant.
+ */
+export function packedDocsSnapshotEvidence(
+  scenario,
+  { repositoryRoot = defaultRepoRoot, root = defaultRepoRoot } = {},
+) {
+  const { manifest } = readPackedWorkloadManifest(scenario, root);
+  const artifact = manifest.artifacts.find((candidate) => candidate.name === '@kovojs/cli');
+  if (artifact === undefined) return null;
+  const absolute = regularFileInsideRoot(root, artifact.path, 'packed CLI artifact');
+  const tarballBytes = readPackageTarballSnapshot(absolute);
+  if (sha256(tarballBytes) !== artifact.sha256) {
+    throw new Error('packed CLI artifact digest does not match the workload manifest');
+  }
+  const entries = validatedPackageTarballEntries(tarballBytes);
+  if (!sameJson(observedTarballFiles(entries), artifact.files)) {
+    throw new Error('packed CLI artifact file census does not match the workload manifest');
+  }
+  const packageManifestEntry = entries.find((entry) => entry.name === 'package/package.json');
+  const snapshotEntry = entries.find(
+    (entry) => entry.name === `package/dist/${agentDocsSnapshotFileName}`,
+  );
+  if (packageManifestEntry === undefined || snapshotEntry === undefined) {
+    throw new Error('packed CLI artifact is missing its manifest or authenticated docs snapshot');
+  }
+  const packageManifest = JSON.parse(packageManifestEntry.data.toString('utf8'));
+  if (packageManifest.name !== '@kovojs/cli' || typeof packageManifest.version !== 'string') {
+    throw new Error('packed CLI package identity is invalid');
+  }
+  const snapshot = decodeAgentDocsSnapshot(snapshotEntry.data, {
+    expectedPublicManifestDigest: digestPublicManifest(repositoryRoot),
+    expectedVersion: packageManifest.version,
+  });
+  if (snapshot.sourceCommit !== scenario.provenance.sourceCommit) {
+    throw new Error('packed docs snapshot source commit does not match the benchmark workload');
+  }
+  return Object.freeze({
+    schema: KOVO_PACKED_DOCS_EVIDENCE_SCHEMA,
+    workloadManifestSha256: scenario.provenance.workloadManifest.sha256,
+    package: Object.freeze({
+      name: '@kovojs/cli',
+      sha256: artifact.sha256,
+      version: packageManifest.version,
+    }),
+    snapshot: Object.freeze({
+      compressedBytes: snapshotEntry.data.byteLength,
+      files: snapshot.files.length,
+      installedBytes: snapshot.files.reduce((total, file) => total + file.bytes, 0),
+      publicManifestDigest: snapshot.publicManifestDigest,
+      snapshotDigest: snapshot.snapshotDigest,
+      sourceCommit: snapshot.sourceCommit,
+      version: snapshot.version,
+    }),
+  });
+}
+
 function stagePackedWorkload(scenario, root, repositoryRoot) {
   const { manifest } = readPackedWorkloadManifest(scenario, root);
   const stageRoot = mkdtempSync(path.join(os.tmpdir(), 'kovo-devex-benchmark-'));
@@ -1522,6 +1623,26 @@ export function runBenchmarkScenario(scenario, options = {}) {
       summary: sampleSummary([browser.bytes]),
       files: browser.files,
     };
+    const docsEvidence = packedDocsSnapshotEvidence(executionScenario, {
+      repositoryRoot: executionRepositoryRoot,
+      root: executionRoot,
+    });
+    if (executionScenario.name === 'kovo-packed-check' && docsEvidence === null) {
+      throw new Error('production Kovo benchmark workload has no packed CLI docs snapshot');
+    }
+    if (docsEvidence !== null) {
+      for (const [metricId, value] of [
+        ['docs.snapshot.compressedBytes', docsEvidence.snapshot.compressedBytes],
+        ['docs.snapshot.installedBytes', docsEvidence.snapshot.installedBytes],
+      ]) {
+        metrics[metricId] = {
+          unit: 'bytes',
+          samples: [value],
+          summary: sampleSummary([value]),
+          evidence: structuredClone(docsEvidence),
+        };
+      }
+    }
     const { manifest } = readPackedWorkloadManifest(executionScenario, executionRoot);
     const consumer = manifest.artifacts.find((artifact) => artifact.role === 'consumer');
     const census = phaseCensus(observations, samples);
@@ -1641,6 +1762,55 @@ function reportMetricCensusFindings(report, label) {
     if (browser?.unit !== 'bytes' || bytes === null || !sameJson(browser.samples, [bytes])) {
       findings.push(
         `${label}.metrics.browser.bootstrapBytes must match its emitted-asset byte census`,
+      );
+    }
+  }
+  const compressedDocs = metrics['docs.snapshot.compressedBytes'];
+  const installedDocs = metrics['docs.snapshot.installedBytes'];
+  if (report?.scenario?.name === 'kovo-packed-check' && (!compressedDocs || !installedDocs)) {
+    findings.push(`${label}.metrics must include both packed docs snapshot byte metrics`);
+  }
+  if (compressedDocs !== undefined || installedDocs !== undefined) {
+    const evidence = compressedDocs?.evidence;
+    const snapshot = evidence?.snapshot;
+    const packageEvidence = evidence?.package;
+    const cliArtifact = report.provenance?.packedArtifacts?.find(
+      (artifact) => artifact?.name === '@kovojs/cli',
+    );
+    const validEvidence =
+      exactOwnKeys(evidence, ['package', 'schema', 'snapshot', 'workloadManifestSha256']) &&
+      evidence.schema === KOVO_PACKED_DOCS_EVIDENCE_SCHEMA &&
+      evidence.workloadManifestSha256 === report.provenance?.workloadManifest?.sha256 &&
+      exactOwnKeys(packageEvidence, ['name', 'sha256', 'version']) &&
+      packageEvidence.name === '@kovojs/cli' &&
+      validDigest(packageEvidence.sha256) &&
+      packageEvidence.sha256 === cliArtifact?.sha256 &&
+      typeof packageEvidence.version === 'string' &&
+      exactOwnKeys(snapshot, [
+        'compressedBytes',
+        'files',
+        'installedBytes',
+        'publicManifestDigest',
+        'snapshotDigest',
+        'sourceCommit',
+        'version',
+      ]) &&
+      finiteNonNegative(snapshot.compressedBytes) &&
+      Number.isSafeInteger(snapshot.files) &&
+      snapshot.files > 0 &&
+      finiteNonNegative(snapshot.installedBytes) &&
+      validDigest(snapshot.publicManifestDigest) &&
+      validDigest(snapshot.snapshotDigest) &&
+      snapshot.sourceCommit === report.provenance?.sourceCommit &&
+      snapshot.version === packageEvidence.version &&
+      sameJson(installedDocs?.evidence, evidence) &&
+      compressedDocs?.unit === 'bytes' &&
+      installedDocs?.unit === 'bytes' &&
+      sameJson(compressedDocs?.samples, [snapshot.compressedBytes]) &&
+      sameJson(installedDocs?.samples, [snapshot.installedBytes]);
+    if (!validEvidence) {
+      findings.push(
+        `${label}.metrics packed docs bytes must match one workload/package/snapshot evidence record`,
       );
     }
   }
@@ -1831,14 +2001,16 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   ) {
     findings.push(`${metricId}.ratification baseline report identity does not match provenance`);
   }
-  if (!sameJson(report.runner, record.runnerFingerprint)) {
+  const binding = metricBinding(metricId);
+  if (binding === 'runner' && !sameJson(report.runner, record.runnerFingerprint)) {
     findings.push(`${metricId}.ratification runner does not match its baseline report`);
   }
   const reportWorkloadIdentity = workloadIdentity(report);
-  if (!sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
+  if (binding === 'runner' && !sameJson(reportWorkloadIdentity, record.workloadIdentity)) {
     findings.push(`${metricId}.ratification workload does not match its baseline report`);
   }
   if (
+    binding === 'runner' &&
     budgets?.workload?.status === 'ratified' &&
     !sameJson(reportWorkloadIdentity, budgets.workload.identity)
   ) {
@@ -1847,6 +2019,12 @@ function validateRatificationProvenance(metricId, metric, record, budgets, optio
   const baselineMetric = report.metrics?.[metricId];
   if (baselineMetric?.unit !== metric.unit) {
     findings.push(`${metricId}.ratification baseline metric unit does not match budget unit`);
+  }
+  if (
+    binding === 'packed-artifact' &&
+    !sameJson(record.binding, packedArtifactBinding(baselineMetric?.evidence))
+  ) {
+    findings.push(`${metricId}.ratification packed-artifact binding does not match its report`);
   }
   const samples = baselineMetric?.samples;
   const requiredSamples =
@@ -1946,6 +2124,14 @@ export function validateBudgets(budgets, options = {}) {
         `${metricId} must retain unit=${contract.unit} and sampling=${contract.sampling}`,
       );
     }
+    const expectedBinding = metricBinding(metricId);
+    const declaredBinding = metric?.binding ?? 'runner';
+    if (declaredBinding !== expectedBinding) {
+      findings.push(`${metricId}.binding must be ${expectedBinding}`);
+    }
+    if (declaredBinding === 'packed-artifact' && metric?.sampling !== 'deterministic') {
+      findings.push(`${metricId} cannot claim packed-artifact binding unless deterministic`);
+    }
     if (!METRIC_UNITS.has(metric?.unit)) findings.push(`${metricId}.unit must be bytes or ms`);
     if (metric?.direction !== 'max') findings.push(`${metricId}.direction must be max`);
     if (!['deterministic', 'statistical'].includes(metric?.sampling)) {
@@ -1989,26 +2175,62 @@ export function validateBudgets(budgets, options = {}) {
     if (!finiteNonNegative(record.baseline)) {
       findings.push(`${metricId}.ratification.baseline invalid`);
     }
-    findings.push(
-      ...validateRunnerFingerprint(
-        record.runnerFingerprint,
-        `${metricId}.ratification.runnerFingerprint`,
-        { requireNamed: true },
-      ),
-    );
-    findings.push(
-      ...validateWorkloadIdentity(
-        record.workloadIdentity,
-        `${metricId}.ratification.workloadIdentity`,
-      ),
-    );
+    if (expectedBinding === 'packed-artifact') {
+      if (record.runnerFingerprint !== null) {
+        findings.push(
+          `${metricId}.ratification.runnerFingerprint must be null for packed-artifact binding`,
+        );
+      }
+      if (record.workloadIdentity !== null) {
+        findings.push(
+          `${metricId}.ratification.workloadIdentity must be null for packed-artifact binding`,
+        );
+      }
+      if (
+        !exactOwnKeys(record.binding, [
+          'evidenceSha256',
+          'kind',
+          'packedArtifactSha256',
+          'schema',
+          'snapshotDigest',
+          'workloadManifestSha256',
+        ]) ||
+        record.binding.schema !== KOVO_PACKED_ARTIFACT_BINDING_SCHEMA ||
+        record.binding.kind !== 'packed-artifact' ||
+        !validDigest(record.binding.evidenceSha256) ||
+        !validDigest(record.binding.packedArtifactSha256) ||
+        !validDigest(record.binding.snapshotDigest) ||
+        !validDigest(record.binding.workloadManifestSha256)
+      ) {
+        findings.push(`${metricId}.ratification.binding must bind exact packed docs evidence`);
+      }
+    } else {
+      if (record.binding !== undefined) {
+        findings.push(`${metricId}.ratification.binding is reserved for packed artifacts`);
+      }
+      findings.push(
+        ...validateRunnerFingerprint(
+          record.runnerFingerprint,
+          `${metricId}.ratification.runnerFingerprint`,
+          { requireNamed: true },
+        ),
+      );
+      findings.push(
+        ...validateWorkloadIdentity(
+          record.workloadIdentity,
+          `${metricId}.ratification.workloadIdentity`,
+        ),
+      );
+    }
     if (
+      expectedBinding === 'runner' &&
       budgets?.runner?.status === 'ratified' &&
       !sameJson(record.runnerFingerprint, budgets.runner.fingerprint)
     ) {
       findings.push(`${metricId}.ratification runner differs from budgets.runner`);
     }
     if (
+      expectedBinding === 'runner' &&
       budgets?.workload?.status === 'ratified' &&
       !sameJson(record.workloadIdentity, budgets.workload.identity)
     ) {
@@ -2016,14 +2238,16 @@ export function validateBudgets(budgets, options = {}) {
     }
     findings.push(...validateRatificationProvenance(metricId, metric, record, budgets, options));
   }
-  const ratifiedMetricCount = Object.values(budgets.metrics).filter(
-    (metric) => metric?.ratification !== null,
+  const runnerRatifiedMetricCount = Object.entries(budgets.metrics).filter(
+    ([metricId, metric]) => metricBinding(metricId) === 'runner' && metric?.ratification !== null,
   ).length;
-  if (budgets?.runner?.status === 'unratified' && ratifiedMetricCount > 0) {
-    findings.push('runner.status cannot be unratified while metric ratifications exist');
+  if (budgets?.runner?.status === 'unratified' && runnerRatifiedMetricCount > 0) {
+    findings.push(
+      'runner.status cannot be unratified while runner-bound metric ratifications exist',
+    );
   }
-  if (budgets?.runner?.status === 'ratified' && ratifiedMetricCount === 0) {
-    findings.push('runner.status cannot be ratified without at least one metric ratification');
+  if (budgets?.runner?.status === 'ratified' && runnerRatifiedMetricCount === 0) {
+    findings.push('runner.status cannot be ratified without a runner-bound metric ratification');
   }
   return findings;
 }
@@ -2091,13 +2315,18 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   if (!sameJson(baselineReport.runner, proposal.runnerFingerprint)) {
     throw new Error('baseline runner fingerprint does not match proposal.runnerFingerprint');
   }
+  const runnerBoundProposal = Object.keys(proposal.metrics).some(
+    (metricId) => metricBinding(metricId) === 'runner',
+  );
   if (
+    runnerBoundProposal &&
     budgets.runner.status === 'ratified' &&
     !sameJson(budgets.runner.fingerprint, baselineReport.runner)
   ) {
     throw new Error('baseline runner fingerprint does not match the existing ratified runner');
   }
   if (
+    runnerBoundProposal &&
     budgets.workload.status === 'ratified' &&
     !sameJson(budgets.workload.identity, workloadIdentity(baselineReport))
   ) {
@@ -2105,14 +2334,16 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   }
 
   const updated = structuredClone(budgets);
-  updated.runner = {
-    status: 'ratified',
-    fingerprint: structuredClone(baselineReport.runner),
-  };
-  updated.workload = {
-    status: 'ratified',
-    identity: workloadIdentity(baselineReport),
-  };
+  if (runnerBoundProposal) {
+    updated.runner = {
+      status: 'ratified',
+      fingerprint: structuredClone(baselineReport.runner),
+    };
+    updated.workload = {
+      status: 'ratified',
+      identity: workloadIdentity(baselineReport),
+    };
+  }
   const baselineReportSource = {
     path: options.baselineReportPath.split(path.sep).join('/'),
     sha256: sha256(options.baselineReportBytes),
@@ -2128,6 +2359,18 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     const samples = baselineMetric?.samples;
     if (baselineMetric?.unit !== metric.unit) {
       throw new Error(`${metricId} baseline unit does not match the budget unit`);
+    }
+    const binding = metricBinding(metricId);
+    if (
+      binding === 'packed-artifact' &&
+      !sameJson(
+        baselineMetric?.evidence,
+        authenticatedProductionDocsEvidence.get(options.authenticatedProductionScenario),
+      )
+    ) {
+      throw new Error(
+        `${metricId} baseline evidence does not match the authenticated packed CLI snapshot`,
+      );
     }
     if (
       !Array.isArray(samples) ||
@@ -2161,9 +2404,13 @@ export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
     const noise = metric.sampling === 'deterministic' ? 0 : medianAbsoluteDeviation(samples);
     const budget = proposed.budget;
     metric.ratification = {
-      runnerFingerprint: structuredClone(baselineReport.runner),
-      workloadIdentity: workloadIdentity(baselineReport),
+      runnerFingerprint:
+        binding === 'packed-artifact' ? null : structuredClone(baselineReport.runner),
+      workloadIdentity: binding === 'packed-artifact' ? null : workloadIdentity(baselineReport),
       baselineReport: structuredClone(baselineReportSource),
+      ...(binding === 'packed-artifact'
+        ? { binding: packedArtifactBinding(baselineMetric.evidence) }
+        : {}),
       sampleCount: samples.length,
       statistic,
       baseline: statisticValue(samples, statistic),
@@ -2199,7 +2446,23 @@ export function evaluateBudgets(budgets, report, options = {}) {
       results.push({ metric: metricId, status: 'unratified' });
       continue;
     }
-    if (!sameJson(reportWorkload, metric.ratification.workloadIdentity)) {
+    const binding = metricBinding(metricId);
+    if (
+      binding === 'packed-artifact' &&
+      !sameJson(
+        packedArtifactBinding(report.metrics?.[metricId]?.evidence),
+        metric.ratification.binding,
+      )
+    ) {
+      results.push({
+        metric: metricId,
+        status: 'artifact-mismatch',
+        expectedBinding: metric.ratification.binding,
+        actualBinding: packedArtifactBinding(report.metrics?.[metricId]?.evidence),
+      });
+      continue;
+    }
+    if (binding === 'runner' && !sameJson(reportWorkload, metric.ratification.workloadIdentity)) {
       results.push({
         metric: metricId,
         status: 'scenario-mismatch',
@@ -2208,7 +2471,7 @@ export function evaluateBudgets(budgets, report, options = {}) {
       });
       continue;
     }
-    if (!sameJson(report.runner, metric.ratification.runnerFingerprint)) {
+    if (binding === 'runner' && !sameJson(report.runner, metric.ratification.runnerFingerprint)) {
       results.push({
         metric: metricId,
         status: 'runner-mismatch',
@@ -2261,6 +2524,7 @@ export function evaluateBudgets(budgets, report, options = {}) {
       (result) =>
         ![
           'breach',
+          'artifact-mismatch',
           'insufficient-samples',
           'missing',
           'runner-mismatch',
@@ -2624,6 +2888,13 @@ function acquireFreshKovoScenario(environment, options = {}) {
   try {
     const materialized = materializeFreshKovoScenario(produced.repositoryRoot, environment);
     authenticatedProductionScenarios.add(materialized.scenario);
+    authenticatedProductionDocsEvidence.set(
+      materialized.scenario,
+      packedDocsSnapshotEvidence(materialized.scenario, {
+        repositoryRoot: produced.repositoryRoot,
+        root: materialized.outputRoot,
+      }),
+    );
     return {
       ...materialized,
       dispose: produced.dispose,

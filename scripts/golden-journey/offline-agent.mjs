@@ -104,7 +104,7 @@ export function runOfflineAgentJourney({
 
     const failingCheck = commandRunner(
       'pnpm',
-      ['exec', 'kovo', 'build', './src/app.tsx', '--check', '--format', 'json'],
+      ['exec', 'kovo', 'check', 'source', './src/app.tsx', '--no-cache', '--format', 'json'],
       { cwd: appRoot },
     );
     const failingDiagnostics = parseDiagnosticObservation(failingCheck, {
@@ -134,7 +134,7 @@ export function runOfflineAgentJourney({
 
     const passingCheck = commandRunner(
       'pnpm',
-      ['exec', 'kovo', 'build', './src/app.tsx', '--check', '--format', 'json'],
+      ['exec', 'kovo', 'check', 'source', './src/app.tsx', '--no-cache', '--format', 'json'],
       { cwd: appRoot },
     );
     const passingDiagnostics = parseDiagnosticObservation(passingCheck, {
@@ -253,7 +253,7 @@ export function parseDiagnosticObservation(observation, { expectedExitCode, sour
   assertProcessObservation(observation, 'diagnostic command');
   if (observation.status !== expectedExitCode) {
     throw new Error(
-      `Diagnostic command exited ${String(observation.status)}; expected ${String(expectedExitCode)}.`,
+      `Diagnostic command exited ${String(observation.status)}; expected ${String(expectedExitCode)}:\n${boundedFailureOutput(observation)}`,
     );
   }
   if (expectedExitCode !== 0 && expectedExitCode !== 1) {

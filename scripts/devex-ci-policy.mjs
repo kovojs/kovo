@@ -189,11 +189,11 @@ export function validateDevexBaselinePolicy(policy, budgets, ciPolicy) {
   if (!Array.isArray(policy?.blockers) || policy.blockers.some((item) => item.length < 40)) {
     findings.push('blockers must be a substantive array');
   }
-  const ratifiedMetrics = Object.values(budgets?.metrics ?? {}).filter(
-    (metric) => metric?.ratification !== null,
+  const runnerBoundRatifications = Object.values(budgets?.metrics ?? {}).filter(
+    (metric) => metric?.ratification !== null && metric?.binding !== 'packed-artifact',
   );
-  if (policy?.referenceRunner?.binding === false && ratifiedMetrics.length > 0) {
-    findings.push('an observational runner cannot produce binding metric ratifications');
+  if (policy?.referenceRunner?.binding === false && runnerBoundRatifications.length > 0) {
+    findings.push('an observational runner cannot produce runner-bound metric ratifications');
   }
   return findings;
 }
