@@ -233,12 +233,12 @@ surface ships before the MCP tools, which then drop onto the same model.
     `packages/devtool/src/graph-model.test.mjs`, and
     `packages/devtool/src/source-slice.security.test.mjs` pass in Latest verification.
 - [x] Backfill compiler anchors for domain, handler, derive, trigger, binding-position,
-      diagnostic-suppression, and runtime-registry facts, including imported/shared declaration
-      sites and fail-closed missing/ambiguous association.
+      diagnostic-suppression, and query/mutation/page/endpoint/webhook registry facts, including
+      imported/shared declaration sites and fail-closed missing/ambiguous association.
   - Evidence: `packages/compiler/src/feedback-source-anchors.test.ts` and
     `packages/cli/src/source-anchors.test.ts` pass in Latest verification.
-- [ ] Prove and remove any remaining fallback symbol heuristics, then consider shiki for the
-      highlighter.
+- [ ] Backfill agent/task/tool graph carriers, prove and remove any remaining fallback symbol
+      heuristics, then consider shiki for the highlighter.
 
 ### Phase 2 — Visual graph UI (the lead surface) — shipped
 
@@ -279,8 +279,8 @@ surface ships before the MCP tools, which then drop onto the same model.
 ## Risks / open questions
 
 - **Diagnostic-family completeness**: fine-grained graph positions now retain compiler anchors, but
-  each remaining diagnostic family still needs fixture-level projection proof before fallback
-  symbol heuristics can be declared absent.
+  agent/task/tool carriers and each remaining diagnostic family still need fixture-level
+  projection proof before fallback symbol heuristics can be declared absent.
 - **Edge explosion on large apps**: the visual layout needs collapse/focus modes;
   the MCP side avoids this by being navigational (neighbors, not dumps).
 - **Live overlay & deploy skew**: frames carry the render-plan version token

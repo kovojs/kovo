@@ -13,12 +13,12 @@ compiler/runtime facts; none may become a second analyzer.
   - Evidence: the focused source-anchor/compiler/devtool suites in Latest verification prove exact
     authored slices, node/edge propagation, and fail-closed root confinement.
 - [x] Complete source anchors for domains, handlers, derives, triggers, binding positions,
-      suppressions, imported/shared declarations, and fail-closed runtime-declaration
-      association.
+      suppressions, imported/shared query/mutation/page/endpoint/webhook declarations, and
+      fail-closed runtime-declaration association.
   - Evidence: the focused compiler and CLI source-anchor suites in Latest verification assert exact
     authored slices and reject missing, duplicate, and endpoint/webhook-ambiguous associations.
-- [ ] Prove exact source/config anchors across every remaining diagnostic family and presentation
-      adapter.
+- [ ] Prove exact source/config anchors across every remaining diagnostic family,
+      agent/task/tool graph carrier, and presentation adapter.
 - [x] Add safe trusted-boundary cause taxonomy, correlation ID, remediation, and source/config
       anchors while retaining secret-redacted raw causes server-side.
   - Evidence: the focused runtime-failure suites in Latest verification prove the finite KTB001–008
