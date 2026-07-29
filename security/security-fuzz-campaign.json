@@ -25,7 +25,7 @@
   },
   "profiles": {
     "nightly": {
-      "maxWallMs": 1800000,
+      "maxWallMs": 3600000,
       "replayTimeoutMs": 300000,
       "families": {
         "egress": {
@@ -41,7 +41,7 @@
           "generatedInputBudget": 5000
         },
         "headers": { "maxWallMs": 180000, "caseExecutionBudget": 1 },
-        "mutations": { "maxWallMs": 720000, "caseExecutionBudget": 1 },
+        "mutations": { "maxWallMs": 1800000, "caseExecutionBudget": 1 },
         "analyzer-soundness": { "maxWallMs": 180000, "caseExecutionBudget": 4 }
       }
     },

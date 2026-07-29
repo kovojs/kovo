@@ -115,7 +115,7 @@ const expectedDifferentialMarkers = Object.freeze({
 
 const expectedProfiles = Object.freeze({
   nightly: Object.freeze({
-    maxWallMs: 1_800_000,
+    maxWallMs: 3_600_000,
     replayTimeoutMs: 300_000,
     families: Object.freeze({
       egress: Object.freeze({
@@ -131,7 +131,9 @@ const expectedProfiles = Object.freeze({
         generatedInputBudget: 5_000,
       }),
       headers: Object.freeze({ maxWallMs: 180_000, caseExecutionBudget: 1 }),
-      mutations: Object.freeze({ maxWallMs: 720_000, caseExecutionBudget: 1 }),
+      // Nightly and release execute the same complete enrolled-mutant denominator. Keep the
+      // per-family wall equal so the nightly campaign cannot time out an otherwise valid proof.
+      mutations: Object.freeze({ maxWallMs: 1_800_000, caseExecutionBudget: 1 }),
       'analyzer-soundness': Object.freeze({
         maxWallMs: 180_000,
         caseExecutionBudget: 4,
