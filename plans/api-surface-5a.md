@@ -9,15 +9,26 @@ ratchet segment, and release note in one checkpoint.
 
 ## Style
 
-- [ ] Replace public style representation records and raw tuples with runtime-validated opaque
+- [x] Replace public style representation records and raw tuples with runtime-validated opaque
       handles.
-- [ ] Decide the vars-override `createTheme` user story and rename or remove it while retaining
+  - Evidence: `packages/style/src/engine.test.ts` and `public-types.test.ts` prove fieldless,
+    same-instance WeakMap handles and the recursive handle-only `StyleInput`.
+- [x] Decide the vars-override `createTheme` user story and rename or remove it while retaining
       seed-based `defineTheme`.
-- [ ] Remove `$$css`, `data-style-src`, `__rules`, `__styleKey`, and raw tuples from packed public
+  - Evidence: `packages/style/src/index.test.ts` pins `defineTheme` as the sole theme constructor;
+    `spec/04-component-model.md` §13.1 records the clean-break decision.
+- [x] Remove `$$css`, `data-style-src`, `__rules`, `__styleKey`, and raw tuples from packed public
       declarations.
-- [ ] Reject literal/cast forgeries at runtime and prove extracted CSS/source maps/artifacts remain
+  - Evidence: `packages/style/src/packed-api.test.ts` inspects the built declaration graph and exact
+    14-name root.
+- [x] Reject literal/cast forgeries at runtime and prove extracted CSS/source maps/artifacts remain
       equivalent.
+  - Evidence: `packages/style/src/packed-api.test.ts` loads two independent built copies, rejects a
+    foreign handle, and compares CSS, rule artifacts, attrs, and nonempty source maps.
 - [ ] Pass packed starter and copied-UI consumers.
+  - Current evidence: the focused Style suite passes 43 tests; the repository-wide packed journey
+    is blocked before consumers by pre-existing pack-security hash drift in Better Auth, CLI,
+    compiler, core, and server artifacts. No Style artifact drift was reported.
 
 ## UI, headless, and icons
 
