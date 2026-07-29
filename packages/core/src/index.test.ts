@@ -11,7 +11,6 @@ import {
   redirect,
   routeRef,
   type Component as KovoComponent,
-  type ComponentRenderSlots,
   type FormFailure,
   type FormInput,
   type FormValidationFailure,
@@ -523,6 +522,11 @@ describe('core authoring APIs', () => {
     const AddToCartForm = component({
       mutations: { addToCart },
       render: (_queries, _state, { forms }) => {
+        const assertUnknownForm = () => {
+          // @ts-expect-error missingForm is not declared in component mutations.
+          return forms.missingForm;
+        };
+        expect(assertUnknownForm).toBeTypeOf('function');
         const failure = forms.addToCart.failure;
         if (failure?.code === 'OUT_OF_STOCK') {
           return failure.payload.availableQuantity;
@@ -533,17 +537,6 @@ describe('core authoring APIs', () => {
         return null;
       },
     });
-    const assertUnknownForm = () => {
-      type Slots = ComponentRenderSlots<{ addToCart: typeof addToCart }>;
-      const slots = {
-        forms: {
-          addToCart: { failure: null, submitted: { productId: 'p1', quantity: 2 } },
-        },
-      } satisfies Slots;
-      const quantity: number | undefined = slots.forms.addToCart.submitted?.quantity;
-      // @ts-expect-error missingForm is not declared in component mutations.
-      return slots.forms.missingForm ?? quantity;
-    };
 
     expect(
       (
@@ -552,7 +545,6 @@ describe('core authoring APIs', () => {
         }
       ).addToCart.key,
     ).toBe('cart/add');
-    expect(assertUnknownForm).toBeTypeOf('function');
   });
 
   it('derives form facts directly from mutation definition values', () => {

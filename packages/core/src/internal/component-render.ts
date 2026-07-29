@@ -27,6 +27,18 @@ export interface ComponentRuntimeDefinition {
   state?: (() => unknown) | undefined;
 }
 
+/**
+ * @internal Runtime slot carrier shared by framework renderers.
+ *
+ * The app-facing `component()` signature spells its inferred mutation-form slots inline so this
+ * framework plumbing never becomes recursive public API (SPEC §4.1/§6.3).
+ */
+export interface ComponentRuntimeRenderSlots {
+  children?: unknown;
+  forms?: Record<string, unknown>;
+  [slot: string]: unknown;
+}
+
 const componentDefinitions = securityWeakMap<object, ComponentRuntimeDefinition>();
 
 /** @internal Mint the one definition association for an exact component handle. */
@@ -41,9 +53,7 @@ export function registerComponentDefinition(
 }
 
 /** @internal Resolve an exact framework-minted component handle for rendering. */
-export function componentDefinitionForFramework(
-  component: object,
-): ComponentRuntimeDefinition {
+export function componentDefinitionForFramework(component: object): ComponentRuntimeDefinition {
   const definition = securityWeakMapGet(componentDefinitions, component);
   if (definition === undefined) {
     throw new TypeError('Kovo refused a component descriptor without framework provenance.');

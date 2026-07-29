@@ -1,9 +1,8 @@
-import type {
-  Component,
-  ComponentRenderSlots,
-  JsonValue,
-} from '@kovojs/core';
-import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
+import type { Component, JsonValue } from '@kovojs/core';
+import {
+  componentDefinitionForFramework,
+  type ComponentRuntimeRenderSlots,
+} from '@kovojs/core/internal/component-render';
 import { isRenderedHtml, renderedHtmlContent, renderHtmlValue } from './html.js';
 import { isKovoComponentDescriptor } from './component-authority.js';
 import type { MutationFail } from './mutation.js';
@@ -27,7 +26,7 @@ import {
  */
 export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
   /** Named slot renderers hoisted from fragment-target children. */
-  slots?: ComponentRenderSlots;
+  slots?: ComponentRuntimeRenderSlots;
   /** Serializable component state for stateful server component renders. */
   state?: State;
 }
@@ -74,7 +73,7 @@ export function renderComponent<
   const render = definition.render as (
     queries: Queries,
     state: State | undefined,
-    slots: ComponentRenderSlots,
+    slots: ComponentRuntimeRenderSlots,
   ) => unknown;
 
   return renderComponentValue(render(queries, state, slots));
@@ -125,9 +124,9 @@ export function renderComponentMutationFailure<
 export function componentMutationFailureSlots(
   formName: string,
   failure: MutationFail,
-  slots: ComponentRenderSlots = {},
+  slots: ComponentRuntimeRenderSlots = {},
   options: { submitted?: unknown } = {},
-): ComponentRenderSlots {
+): ComponentRuntimeRenderSlots {
   const forms = isRecord(slots.forms) ? slots.forms : {};
   const submitted = componentMutationSubmittedValues(options.submitted);
 

@@ -2,9 +2,9 @@ import type {
   Component,
   ComponentErrorBoundary,
   ComponentRenderResult,
-  ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
+import type { ComponentRuntimeRenderSlots } from '@kovojs/core/internal/component-render';
 import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
 import {
@@ -56,7 +56,7 @@ export interface ComponentLiveTargetRendererOptions<
   ) => ComponentRenderOptions<State> | Promise<ComponentRenderOptions<State>>;
   slots?: (
     context: LiveTargetRenderContext<Request>,
-  ) => ComponentRenderSlots | Promise<ComponentRenderSlots>;
+  ) => ComponentRuntimeRenderSlots | Promise<ComponentRuntimeRenderSlots>;
   errorBoundary?: ComponentErrorBoundary;
 }
 
@@ -72,9 +72,7 @@ export function componentLiveTargetRenderer<
   const Props extends object,
   Request = unknown,
   State extends JsonValue = JsonValue,
->(
-  options: ComponentLiveTargetRendererOptions<Props, Request, State>,
-): LiveTargetRenderer<Request> {
+>(options: ComponentLiveTargetRendererOptions<Props, Request, State>): LiveTargetRenderer<Request> {
   const component = requiredOwnRendererValue<Component<Props>>(
     options,
     'component',
@@ -150,11 +148,7 @@ export function componentLiveTargetRenderer<
       const loadedQueries = await loadLiveTargetQueries(queryBindings, context);
       const resolvedRenderOptions = await componentLiveTargetRenderOptions(
         mutationBindings,
-        renderOptions as ComponentLiveTargetRendererOptions<
-          Props,
-          Request,
-          State
-        >['renderOptions'],
+        renderOptions as ComponentLiveTargetRendererOptions<Props, Request, State>['renderOptions'],
         slots as ComponentLiveTargetRendererOptions<Props, Request, State>['slots'],
         context,
       );
@@ -394,11 +388,11 @@ async function componentLiveTargetRenderOptions<
 function componentLiveTargetDefaultSlots<Request>(
   mutationBindings: readonly ComponentLiveTargetMutationBinding[],
   context: LiveTargetRenderContext<Request>,
-): ComponentRenderSlots {
+): ComponentRuntimeRenderSlots {
   const forms =
     mutationBindings.length === 0 ? undefined : componentMutationDefaultForms(mutationBindings);
 
-  let slots: ComponentRenderSlots = {
+  let slots: ComponentRuntimeRenderSlots = {
     ...(forms === undefined ? {} : { forms }),
     ...(context.request === undefined ? {} : { request: context.request }),
   };

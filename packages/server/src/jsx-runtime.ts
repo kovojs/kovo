@@ -1,14 +1,12 @@
 import './security-bootstrap.js';
 
-import type {
-  Component,
-  ComponentRenderSlots,
-  ErrorBoundaryProps,
-  JsonValue,
-} from '@kovojs/core';
+import type { Component, ErrorBoundaryProps, JsonValue } from '@kovojs/core';
 import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
-import { componentDefinitionForFramework } from '@kovojs/core/internal/component-render';
+import {
+  componentDefinitionForFramework,
+  type ComponentRuntimeRenderSlots,
+} from '@kovojs/core/internal/component-render';
 import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import type { FrameworkQueryDependencyIdentity } from '@kovojs/core/internal/wire-input-grammar';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
@@ -150,8 +148,7 @@ type MaybePromise<Value> = Promise<Value> | Value;
 export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
 type KovoJsxComponent = Component<any>;
-type KovoJsxComponentProps<Type> =
-  Type extends Component<infer Props> ? Props : never;
+type KovoJsxComponentProps<Type> = Type extends Component<infer Props> ? Props : never;
 
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
 export function Fragment(props: JsxProps): MaybePromise<RenderedHtml> {
@@ -1169,7 +1166,7 @@ async function renderKovoComponent(
   const render = definition.render as (
     queries: Record<string, unknown>,
     state: JsonValue | undefined,
-    slots: ComponentRenderSlots,
+    slots: ComponentRuntimeRenderSlots,
   ) => unknown;
   const rendered = render({ ...props, ...loadedQueries.values }, state, slots) as JsxNode;
   const html = await renderJsxChildren(rendered);
@@ -1251,13 +1248,11 @@ function componentRenderSlots(
   component: KovoJsxComponent,
   props: JsxProps,
   request: unknown,
-): ComponentRenderSlots {
+): ComponentRuntimeRenderSlots {
   const mutations = componentDefinitionForFramework(component).mutations;
-  const forms = isRecord(mutations)
-    ? componentMutationDefaultForms(mutations)
-    : undefined;
+  const forms = isRecord(mutations) ? componentMutationDefaultForms(mutations) : undefined;
 
-  let slots: ComponentRenderSlots = {
+  let slots: ComponentRuntimeRenderSlots = {
     ...(props.children === undefined ? {} : { children: props.children }),
     ...(forms === undefined ? {} : { forms }),
     ...jsxPropsToSlots(props),
@@ -1283,8 +1278,8 @@ function componentRenderSlots(
   return slots;
 }
 
-function jsxPropsToSlots(props: JsxProps): ComponentRenderSlots {
-  const slots = formHelperCreateRecord() as ComponentRenderSlots;
+function jsxPropsToSlots(props: JsxProps): ComponentRuntimeRenderSlots {
+  const slots = formHelperCreateRecord() as ComponentRuntimeRenderSlots;
   const names = formHelperObjectKeys(props);
   for (let index = 0; index < names.length; index += 1) {
     const name = formHelperOwnDataValue(names, index);
@@ -1347,9 +1342,7 @@ export declare namespace JSX {
   type Element = any;
   type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
   type LibraryManagedAttributes<ComponentType, Props> =
-    ComponentType extends Component<any>
-      ? KovoJsxComponentProps<ComponentType>
-      : Props;
+    ComponentType extends Component<any> ? KovoJsxComponentProps<ComponentType> : Props;
   interface ElementChildrenAttribute {
     children: {};
   }

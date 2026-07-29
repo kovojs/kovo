@@ -108,6 +108,29 @@ describe('core API v1 migration executable', () => {
     expect(result.refusals[0]?.category).toBe(category);
   });
 
+  it.each([
+    'ComponentDefinitionInput',
+    'ComponentMutationFormState',
+    'ComponentProps',
+    'GetForm',
+    'GetFormDescriptor',
+    'GetFormInput',
+    'GetFormInputHelper',
+    'GetFormInputProps',
+    'GetFormProps',
+    'LinkDescriptor',
+  ])('refuses retired inferred authoring helper %s', (symbol) => {
+    const result = analyzeCoreApiV1Migration({
+      fileName: 'retired-helper.ts',
+      source: `import type { ${symbol} } from '@kovojs/core';\n`,
+    });
+
+    expect(result).toMatchObject({
+      refusals: [{ category: 'app-context' }],
+      status: 'refused',
+    });
+  });
+
   it('serializes refusal anchors as UTF-8 byte ranges', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'kovo-core-api-v1-'));
     const sourcePath = path.join(root, 'registry.ts');

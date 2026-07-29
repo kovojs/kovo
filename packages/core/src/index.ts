@@ -1,8 +1,4 @@
-import type {
-  ComponentMutationFormState,
-  Form,
-  FormFailure,
-} from './forms-types.js';
+import type { Form, FormFailure } from './forms-types.js';
 import type { JsonValue } from './json.js';
 import { blessSink } from './internal/sink-policy.js';
 import { buildRoutePatternHref } from './internal/route-pattern.js';
@@ -25,12 +21,7 @@ import {
 } from './internal/security-witness-intrinsics.js';
 
 export type { JsonValue } from './json.js';
-export type {
-  ComponentMutationFormState,
-  Form,
-  FormFailure,
-  FormValidationFailure,
-} from './forms-types.js';
+export type { Form, FormFailure, FormValidationFailure } from './forms-types.js';
 export type { ScopedKey } from './scoped-key.js';
 export { publicScopedKey } from './scoped-key.js';
 
@@ -75,76 +66,13 @@ export interface ComponentErrorBoundary {
   target?: string;
 }
 
-/** Render-time composition values for `children`, named slots, and mutation form state (SPEC §4.5/§6.3). */
-export type ComponentRenderSlots<
-  Mutations = Record<never, never>,
-> = {
-  children?: ComponentChild;
-  [slot: string]: unknown;
-} & (keyof Mutations extends never
-  ? {
-      forms?: {
-        [Name in keyof Mutations]: Mutations[Name] extends { key: string }
-          ? ComponentMutationFormState<
-              FormFailure<Mutations[Name]>,
-              Mutations[Name] extends {
-                input: { parse(input: unknown): infer Input };
-              }
-                ? Input extends Record<string, unknown>
-                  ? Input
-                  : Record<string, unknown>
-                : Mutations[Name] extends Form<string, infer Input, unknown>
-                  ? Input
-                  : Record<string, unknown>
-            >
-          : never;
-      };
-    }
-  : {
-      forms: {
-        [Name in keyof Mutations]: Mutations[Name] extends { key: string }
-          ? ComponentMutationFormState<
-              FormFailure<Mutations[Name]>,
-              Mutations[Name] extends {
-                input: { parse(input: unknown): infer Input };
-              }
-                ? Input extends Record<string, unknown>
-                  ? Input
-                  : Record<string, unknown>
-                : Mutations[Name] extends Form<string, infer Input, unknown>
-                  ? Input
-                  : Record<string, unknown>
-            >
-          : never;
-      };
-    });
-
-/** Framework-level attributes accepted by component call sites in addition to rendered props. */
-export interface ComponentAttributes {
-  [attribute: `aria-${string}`]: unknown;
-  [attribute: `data-${string}`]: unknown;
-  [attribute: `on${string}`]: unknown;
-  checked?: unknown;
-  class?: string;
-  className?: string;
-  disabled?: unknown;
-  form?: unknown;
-  hidden?: unknown;
-  id?: unknown;
-  'kovo-key'?: number | string;
-  key?: number | string;
-  name?: unknown;
-  required?: unknown;
-  role?: unknown;
-  style?: unknown;
-  styles?: unknown;
-  tabIndex?: unknown;
-  value?: unknown;
-};
+const componentHandleWitness: unique symbol = Symbol('kovo.component.handle');
 
 /**
  * Opaque callable component handle. `Props` is the complete JSX/call-site contract; the authored
- * definition is retained only in a module-private framework registry (SPEC §4.1/§6.6).
+ * definition is retained only in a module-private framework registry. The unexported unique-symbol
+ * witness prevents ordinary functions from structurally matching this author-time handle; exact
+ * WeakMap membership remains the runtime authority (SPEC §4.1/§6.6).
  */
 export interface Component<Props extends object = Record<string, never>> {
   <const Input extends Props>(
@@ -153,7 +81,8 @@ export interface Component<Props extends object = Record<string, never>> {
     }[keyof Props] extends never
       ? [props?: Input & Record<Exclude<keyof Input, keyof Props>, never>]
       : [props: Input & Record<Exclude<keyof Input, keyof Props>, never>]
-  ): any;
+  ): ComponentRenderResult;
+  readonly [componentHandleWitness]: typeof componentHandleWitness;
   name?: string;
 }
 
@@ -196,45 +125,115 @@ export function component<
   const Mutations extends Record<string, { key: string }> = Record<never, never>,
   const Queries extends Readonly<Record<string, unknown>> = Record<never, never>,
   const RenderInput extends object = Record<never, never>,
->(
-  definition: {
-    /** Declared clock inputs for time-dependent rendered positions and derives (SPEC §4.8/§4.9). */
-    clocks?: Record<string, unknown>;
-    /** Co-located component CSS scoped by the compiler to this component's host. */
-    css?: string;
-    /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
-    disableServerRefresh?: boolean;
-    /** Removed: query-backed components infer refresh targets; use `disableServerRefresh`. */
-    fragmentTarget?: never;
-    /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
-    errorBoundary?: ComponentErrorBoundary;
-    /** Force the compiler to keep server and client render output equivalent. */
-    isomorphic?: boolean;
-    mutations?: Mutations;
-    /** Static metadata used by generated live-target renderers to serialize component props. */
-    props?: Record<
-      string,
-      ArrayConstructor | BooleanConstructor | NumberConstructor | ObjectConstructor | StringConstructor
-    >;
-    queries?: Queries;
-    render: (
-      queries: RenderInput,
-      state: State,
-      slots: ComponentRenderSlots<Mutations>,
-    ) => ComponentRenderResult;
-    state?: State extends Serializable<State> ? () => State : () => never;
-  },
-): Component<
+>(definition: {
+  /** Declared clock inputs for time-dependent rendered positions and derives (SPEC §4.8/§4.9). */
+  clocks?: Record<string, unknown>;
+  /** Co-located component CSS scoped by the compiler to this component's host. */
+  css?: string;
+  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
+  disableServerRefresh?: boolean;
+  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh`. */
+  fragmentTarget?: never;
+  /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
+  errorBoundary?: ComponentErrorBoundary;
+  /** Force the compiler to keep server and client render output equivalent. */
+  isomorphic?: boolean;
+  mutations?: Mutations;
+  /** Static metadata used by generated live-target renderers to serialize component props. */
+  props?: Record<
+    string,
+    | ArrayConstructor
+    | BooleanConstructor
+    | NumberConstructor
+    | ObjectConstructor
+    | StringConstructor
+  >;
+  queries?: Queries;
+  render: (
+    queries: RenderInput,
+    state: State,
+    slots: {
+      children?: ComponentChild;
+      [slot: string]: unknown;
+    } & (keyof Mutations extends never
+      ? {
+          forms?: {
+            [Name in keyof Mutations]: Mutations[Name] extends { key: string }
+              ? {
+                  failure: FormFailure<Mutations[Name]> | null;
+                  submitted?: Partial<
+                    Mutations[Name] extends {
+                      input: { parse(input: unknown): infer Input };
+                    }
+                      ? Input extends Record<string, unknown>
+                        ? Input
+                        : Record<string, unknown>
+                      : Mutations[Name] extends Form<string, infer Input, unknown>
+                        ? Input
+                        : Record<string, unknown>
+                  >;
+                }
+              : never;
+          };
+        }
+      : {
+          forms: {
+            [Name in keyof Mutations]: Mutations[Name] extends { key: string }
+              ? {
+                  failure: FormFailure<Mutations[Name]> | null;
+                  submitted?: Partial<
+                    Mutations[Name] extends {
+                      input: { parse(input: unknown): infer Input };
+                    }
+                      ? Input extends Record<string, unknown>
+                        ? Input
+                        : Record<string, unknown>
+                      : Mutations[Name] extends Form<string, infer Input, unknown>
+                        ? Input
+                        : Record<string, unknown>
+                  >;
+                }
+              : never;
+          };
+        }),
+  ) => ComponentRenderResult;
+  state?: State extends Serializable<State> ? () => State : () => never;
+}): Component<
   (0 extends 1 & RenderInput
     ? Record<never, never>
     : unknown extends RenderInput
       ? Record<never, never>
-      : Omit<RenderInput, Extract<keyof Queries, string>>) &
-    ComponentAttributes
+      : Omit<RenderInput, Extract<keyof Queries, string>>) & {
+    [attribute: `aria-${string}`]: unknown;
+    [attribute: `data-${string}`]: unknown;
+    [attribute: `on${string}`]: unknown;
+    checked?: unknown;
+    class?: string;
+    className?: string;
+    disabled?: unknown;
+    form?: unknown;
+    hidden?: unknown;
+    id?: unknown;
+    'kovo-key'?: number | string;
+    key?: number | string;
+    name?: unknown;
+    required?: unknown;
+    role?: unknown;
+    style?: unknown;
+    styles?: unknown;
+    tabIndex?: unknown;
+    value?: unknown;
+  }
 >;
 export function component(definition: any): Component<any> {
   assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
-  const descriptor: Component<any> = () => undefined;
+  const descriptor = () => undefined;
+  securityDefineProperty(descriptor, componentHandleWitness, {
+    configurable: false,
+    enumerable: false,
+    value: componentHandleWitness,
+    writable: false,
+  });
   securityDefineProperty(descriptor, 'name', {
     configurable: true,
     enumerable: true,
@@ -242,7 +241,7 @@ export function component(definition: any): Component<any> {
     writable: true,
   });
   registerComponentDefinition(descriptor, snapshotComponentDefinition(definition));
-  return descriptor;
+  return descriptor as Component<any>;
 }
 
 const componentDescriptorVerifierKey = '__kovoIsComponentDescriptor';

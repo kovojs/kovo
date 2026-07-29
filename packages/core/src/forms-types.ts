@@ -18,31 +18,27 @@ export interface FormValidationFailure {
 }
 
 /** Extract a form or declaration-handle failure union, including validation failure. */
-export type FormFailure<Definition> =
-  Definition extends {
-    input: { parse(input: unknown): unknown };
-    errors?: infer Errors;
-  }
-    ?
-        | (NonNullable<Errors> extends Record<
-            string,
-            { parse(input: unknown): unknown }
-          >
-            ? {
-                [Code in Extract<keyof NonNullable<Errors>, string>]: {
-                  code: Code;
-                  payload: NonNullable<Errors>[Code] extends {
-                    parse(input: unknown): infer Payload;
-                  }
-                    ? Payload
-                    : never;
-                };
-              }[Extract<keyof NonNullable<Errors>, string>]
-            : never)
-        | FormValidationFailure
-    : Definition extends Form<string, any, infer Failure>
-      ? Failure | FormValidationFailure
-      : FormValidationFailure;
+export type FormFailure<Definition> = Definition extends {
+  input: { parse(input: unknown): unknown };
+  errors?: infer Errors;
+}
+  ?
+      | (NonNullable<Errors> extends Record<string, { parse(input: unknown): unknown }>
+          ? {
+              [Code in Extract<keyof NonNullable<Errors>, string>]: {
+                code: Code;
+                payload: NonNullable<Errors>[Code] extends {
+                  parse(input: unknown): infer Payload;
+                }
+                  ? Payload
+                  : never;
+              };
+            }[Extract<keyof NonNullable<Errors>, string>]
+          : never)
+      | FormValidationFailure
+  : Definition extends Form<string, any, infer Failure>
+    ? Failure | FormValidationFailure
+    : FormValidationFailure;
 
 /** Render state for one typed mutation form instance. */
 export interface ComponentMutationFormState<
@@ -53,13 +49,13 @@ export interface ComponentMutationFormState<
   submitted?: Partial<Input>;
 }
 
-/** @internal Internal building block of `ComponentRenderSlots`; not app-facing. */
+/** @internal Mutation declarations retained only for framework render-slot plumbing. */
 export type ComponentMutationDefinitions = Record<string, { key: string }>;
 
 /**
  * @internal Render state keyed by a component's declared mutation handles.
- * Internal building block of `ComponentRenderSlots` (SPEC §4.5/§6.3); app
- * authors compose slots through `ComponentRenderSlots`, never this map directly.
+ * The app-facing `component()` signature infers and spells this shape inline; authors do not name a
+ * parallel slot-support type (SPEC §4.5/§6.3).
  */
 export type ComponentMutationForms<Mutations> = {
   [Name in keyof Mutations]: Mutations[Name] extends { key: string }

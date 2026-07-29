@@ -1,10 +1,7 @@
 {
   "schema": "kovo-api-migration-ledger/v1",
   "resultSchema": "kovo-api-migration-result/v1",
-  "modes": [
-    "check",
-    "write"
-  ],
+  "modes": ["check", "write"],
   "refusalCategories": [
     "ambiguous-binding",
     "app-context",
@@ -27,8 +24,11 @@
         "@kovojs/core#CheckedComponentQueryBindings",
         "@kovojs/core#ComponentCallArgs",
         "@kovojs/core#ComponentCallSiteAttributes",
+        "@kovojs/core#ComponentDefinitionInput",
+        "@kovojs/core#ComponentMutationFormState",
         "@kovojs/core#ComponentPropMetadataType",
         "@kovojs/core#ComponentPropMetadataValue",
+        "@kovojs/core#ComponentProps",
         "@kovojs/core#ComponentQueryBindingProps",
         "@kovojs/core#ComponentQueryKeys",
         "@kovojs/core#ComponentRenderInput",
@@ -51,6 +51,12 @@
         "@kovojs/core#drainSecretRevealAuditFacts",
         "@kovojs/core#ExactProps",
         "@kovojs/core#FileSystemStorageOptions",
+        "@kovojs/core#GetForm",
+        "@kovojs/core#GetFormDescriptor",
+        "@kovojs/core#GetFormInput",
+        "@kovojs/core#GetFormInputHelper",
+        "@kovojs/core#GetFormInputProps",
+        "@kovojs/core#GetFormProps",
         "@kovojs/core#HmacMultiSignature",
         "@kovojs/core#HmacSecret",
         "@kovojs/core#hmacSignature",
@@ -66,6 +72,7 @@
         "@kovojs/core#isRedacted",
         "@kovojs/core#isSecret",
         "@kovojs/core#isUntrusted",
+        "@kovojs/core#LinkDescriptor",
         "@kovojs/core#MemoryStorageOptions",
         "@kovojs/core#MutationRegistry",
         "@kovojs/core#OptimisticDerivationSets",
@@ -126,12 +133,8 @@
       "tool": {
         "path": "scripts/migrate-core-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/core-task-topology-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only files reported as rewritten by the structured core migration result.",
@@ -197,6 +200,26 @@
           "reason": "ComponentCallSiteAttributes was an inferred or implementation-inspection carrier with no supported public replacement."
         },
         {
+          "id": "internalize-component-definition-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentDefinitionInput"
+          },
+          "category": "app-context",
+          "reason": "ComponentDefinitionInput exposed authored-definition plumbing now inferred by component()."
+        },
+        {
+          "id": "internalize-component-mutation-form-state",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentMutationFormState"
+          },
+          "category": "app-context",
+          "reason": "ComponentMutationFormState is inferred from mutation handles and has no parallel app-authored replacement."
+        },
+        {
           "id": "internalize-component-prop-metadata-type",
           "action": "refuse",
           "from": {
@@ -215,6 +238,16 @@
           },
           "category": "app-context",
           "reason": "ComponentPropMetadataValue was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-component-props",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "ComponentProps"
+          },
+          "category": "app-context",
+          "reason": "ComponentProps was a conditional inference helper; component() now returns the opaque inferred Component<Props> directly."
         },
         {
           "id": "internalize-component-query-binding-props",
@@ -457,6 +490,66 @@
           "reason": "ExactProps was an inferred or implementation-inspection carrier with no supported public replacement."
         },
         {
+          "id": "internalize-get-form",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetForm"
+          },
+          "category": "app-context",
+          "reason": "GetForm is inferred from form.get() and is not a separately authored contract."
+        },
+        {
+          "id": "internalize-get-form-descriptor",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetFormDescriptor"
+          },
+          "category": "app-context",
+          "reason": "GetFormDescriptor is implementation plumbing inferred from form.get()."
+        },
+        {
+          "id": "internalize-get-form-input",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetFormInput"
+          },
+          "category": "app-context",
+          "reason": "GetFormInput is implementation plumbing inferred from form.get()."
+        },
+        {
+          "id": "internalize-get-form-input-helper",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetFormInputHelper"
+          },
+          "category": "app-context",
+          "reason": "GetFormInputHelper is implementation plumbing inferred from form.get()."
+        },
+        {
+          "id": "internalize-get-form-input-props",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetFormInputProps"
+          },
+          "category": "app-context",
+          "reason": "GetFormInputProps is implementation plumbing inferred from form.get()."
+        },
+        {
+          "id": "internalize-get-form-props",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "GetFormProps"
+          },
+          "category": "app-context",
+          "reason": "GetFormProps is implementation plumbing inferred from form.get()."
+        },
+        {
           "id": "move-file-system-storage-options",
           "action": "rewrite",
           "from": {
@@ -605,6 +698,16 @@
           },
           "category": "app-context",
           "reason": "IsAny was an inferred or implementation-inspection carrier with no supported public replacement."
+        },
+        {
+          "id": "internalize-link-descriptor",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/core",
+            "symbol": "LinkDescriptor"
+          },
+          "category": "app-context",
+          "reason": "Link is JSX-only and no longer exposes a separately authorable descriptor."
         },
         {
           "id": "move-is-redacted",
@@ -1280,12 +1383,8 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"
-        ],
-        "refusals": [
-          "scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"
-        ]
+        "rewrites": ["scripts/fixtures/api-migrations/core-task-topology-v1/task-imports.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/core-task-topology-v1/registry.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -1323,12 +1422,8 @@
       "tool": {
         "path": "scripts/migrate-style-api-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "releaseNote": "docs/releases/style-api-v1.md",
       "rollback": "From a clean worktree, restore the prior Kovo package versions and reverse only the StyleRecord-to-StyleHandle edits named by the structured migration result.",
@@ -1557,12 +1652,8 @@
         }
       ],
       "fixtures": {
-        "rewrites": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"
-        ],
-        "refusals": [
-          "scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"
-        ]
+        "rewrites": ["scripts/fixtures/api-migrations/style-opaque-handles/style-record.input.ts"],
+        "refusals": ["scripts/fixtures/api-migrations/style-opaque-handles/create-theme.refusal.ts"]
       },
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
@@ -1618,12 +1709,8 @@
       "tool": {
         "path": "scripts/migrate-ui-headless-icons-v1.mjs",
         "resultSchema": "kovo-api-migration-result/v1",
-        "checkArgs": [
-          "--check"
-        ],
-        "writeArgs": [
-          "--write"
-        ]
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
       },
       "rules": [
         {

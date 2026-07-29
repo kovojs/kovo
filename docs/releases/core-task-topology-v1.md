@@ -11,7 +11,9 @@ Kovo's core API now has one canonical home per task:
 
 The root no longer re-exports task APIs. S3 provider request/response records, HMAC resolved
 inspection, inferred registry helper graphs, and destructive reveal-audit drains are internal
-implementation contracts with no public replacement.
+implementation contracts with no public replacement. `component()` now returns the sole opaque
+`Component<Props>` handle; component definition, mutation-slot, GET-form, and link descriptor
+support types are inferred and cannot be imported as parallel authoring contracts.
 
 Run the migration in check mode first:
 
