@@ -404,6 +404,11 @@ export const LiteralUrlPayloads = component({
             "length": 26,
             "message": "Literal href or form action matches no declared route. javascript:alert(1)",
             "severity": "error",
+            "source": {
+              "end": 323,
+              "file": "literal-url-payloads.tsx",
+              "start": 296,
+            },
             "start": {
               "column": 10,
               "line": 8,
@@ -418,6 +423,11 @@ export const LiteralUrlPayloads = component({
             "length": 43,
             "message": "Unsafe output context requires an explicit trusted Kovo escape hatch. href="https://example.com/missing-external" is an external literal URL without external",
             "severity": "error",
+            "source": {
+              "end": 259,
+              "file": "literal-url-payloads.tsx",
+              "start": 215,
+            },
             "start": {
               "column": 10,
               "line": 7,
@@ -432,6 +442,11 @@ export const LiteralUrlPayloads = component({
             "length": 26,
             "message": "Unsafe output context requires an explicit trusted Kovo escape hatch. href="javascript:alert(1)" uses an unsafe URL scheme",
             "severity": "error",
+            "source": {
+              "end": 323,
+              "file": "literal-url-payloads.tsx",
+              "start": 296,
+            },
             "start": {
               "column": 10,
               "line": 8,

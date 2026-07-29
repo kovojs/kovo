@@ -492,7 +492,7 @@ function renderSemanticElement(
   const formError = semanticMutationFormErrorExpression(model, element);
   if (formError) return formError;
 
-  const primitiveChild = semanticPrimitiveChild(model, element, options.index);
+  const primitiveChild = semanticPrimitiveChild(model, element, options);
   if (primitiveChild) {
     return renderSemanticElement(model, primitiveChild.child, { ...options, ...primitiveChild });
   }
@@ -689,21 +689,24 @@ function isQueryExpressionAttribute(
 function semanticPrimitiveChild(
   model: ComponentModuleModel,
   element: JsxElementModel,
-  index: SemanticRenderIndex,
+  options: SemanticRenderState,
 ): { child: JsxElementModel; forcedAttributes: string } | null {
   if (semanticAttribute(element, 'asChild') === undefined) return null;
   const attrs = semanticAttribute(element, 'attrs')?.expressionObjectEntries;
   if (!attrs) return null;
   const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
   if (!primitiveAttributes) return null;
-  const child = directChildElements(index, element)[0];
+  const child = directChildElements(options.index, element)[0];
   if (!child) return null;
   const merge = mergePrimitiveAndAuthorAttributes(
     primitiveAttributes,
     authorJsxAttributes(child.attributes),
     {
-      fileName: 'semantic-render',
-      source: '',
+      // The merge result's diagnostics are not surfaced by the equivalence renderer, but its
+      // fail-closed constructor still requires the parser-owned authored range to be bound to the
+      // exact source that minted the attribute spans (SPEC §5.2/§11).
+      fileName: options.fileName ?? model.sourceFile.fileName,
+      source: model.sourceFile.text,
     },
   );
   const forcedAttributes = renderMergedAttributes(merge.attributes);

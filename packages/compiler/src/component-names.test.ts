@@ -34,6 +34,11 @@ export const Cart_Badge = component({
           "length": 10,
           "message": "Duplicate component effective wire name. components/cart/cart-badge is used by CartBadge and Cart_Badge.",
           "severity": "error",
+          "source": {
+            "end": 110,
+            "file": "components/cart.tsx",
+            "start": 99,
+          },
           "start": {
             "column": 14,
             "line": 6,
@@ -74,6 +79,11 @@ export const Cart_Badge = component({
           "length": 10,
           "message": "Duplicate component effective wire name. components/cart/cart-badge is used by CartBadge and Cart_Badge.",
           "severity": "error",
+          "source": {
+            "end": 110,
+            "file": "components/cart.tsx",
+            "start": 99,
+          },
           "start": {
             "column": 14,
             "line": 6,
@@ -128,6 +138,11 @@ export const CartBadge = component({
           "length": 9,
           "message": "Duplicate component effective wire name. components/cart/cart-badge is already present in registry facts and is reused by CartBadge.",
           "severity": "error",
+          "source": {
+            "end": 24,
+            "file": "components/cart.tsx",
+            "start": 14,
+          },
           "start": {
             "column": 14,
             "line": 2,

@@ -288,6 +288,11 @@ export const PrimitiveConflict = component({
         code: 'KV231',
         message:
           'Unmergeable attribute conflict in primitive composition. commandfor (writers: primitive attrs, author JSX)',
+        source: {
+          end: 161,
+          file: 'primitive-conflict.tsx',
+          start: 141,
+        },
         start: { column: 15, line: 5 },
       }),
     );

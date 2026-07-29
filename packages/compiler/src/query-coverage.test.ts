@@ -759,6 +759,11 @@ export const CartBadge = component({
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
+      source: {
+        end: 268,
+        file: 'cart-badge.tsx',
+        start: 255,
+      },
       start: { column: 26, line: 10 },
     });
   });
@@ -1139,6 +1144,11 @@ export const CartBadge = component({
       message:
         'Query/state-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
+      source: {
+        end: 331,
+        file: 'cart-badge.tsx',
+        start: 318,
+      },
       start: { column: 26, line: 12 },
     });
   });

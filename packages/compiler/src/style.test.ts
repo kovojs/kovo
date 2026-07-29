@@ -591,6 +591,11 @@ export const Button = component({
           "length": 17,
           "message": "Unmergeable attribute conflict in primitive composition. class (writers: author JSX, style lowerer)",
           "severity": "error",
+          "source": {
+            "end": 250,
+            "file": "components/button.tsx",
+            "start": 233,
+          },
           "start": {
             "column": 38,
             "line": 12,

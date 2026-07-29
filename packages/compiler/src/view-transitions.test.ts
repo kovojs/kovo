@@ -57,6 +57,11 @@ export const ProductCard = component({
           "length": 37,
           "message": "Duplicate static view-transition name. product-p1-image is used by ProductCard <img> and ProductCard <a>.",
           "severity": "error",
+          "source": {
+            "end": 185,
+            "file": "product-card.tsx",
+            "start": 147,
+          },
           "start": {
             "column": 10,
             "line": 6,
@@ -116,6 +121,11 @@ export const ProductCard = component({
           "length": 37,
           "message": "Duplicate static view-transition name. product-p1-image is already present in registry facts and is reused by ProductCard <img>.",
           "severity": "error",
+          "source": {
+            "end": 99,
+            "file": "product-card.tsx",
+            "start": 61,
+          },
           "start": {
             "column": 22,
             "line": 3,

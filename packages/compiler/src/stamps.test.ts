@@ -177,6 +177,11 @@ export const StampConflict = component({
           "length": 18,
           "message": "Unmergeable attribute conflict in primitive composition. data-p-id (writers: author JSX, event handler param lowering)",
           "severity": "error",
+          "source": {
+            "end": 239,
+            "file": "stamp-conflict.tsx",
+            "start": 221,
+          },
           "start": {
             "column": 15,
             "line": 7,
@@ -192,6 +197,11 @@ export const StampConflict = component({
           "length": 21,
           "message": "Unmergeable attribute conflict in primitive composition. kovo-c (writers: author JSX, host identity stamp)",
           "severity": "error",
+          "source": {
+            "end": 167,
+            "file": "stamp-conflict.tsx",
+            "start": 146,
+          },
           "start": {
             "column": 14,
             "line": 6,
@@ -207,6 +217,11 @@ export const StampConflict = component({
           "length": 37,
           "message": "Unmergeable attribute conflict in primitive composition. kovo-state (writers: author JSX, host state stamp)",
           "severity": "error",
+          "source": {
+            "end": 205,
+            "file": "stamp-conflict.tsx",
+            "start": 168,
+          },
           "start": {
             "column": 36,
             "line": 6,

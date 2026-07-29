@@ -78,6 +78,11 @@ export const CartButton = component({
           "length": 26,
           "message": "Unmergeable attribute conflict in primitive composition. commandfor (writers: author JSX, platform behavior lowering)",
           "severity": "error",
+          "source": {
+            "end": 111,
+            "file": "cart-button.tsx",
+            "start": 85,
+          },
           "start": {
             "column": 15,
             "line": 5,
@@ -93,6 +98,11 @@ export const CartButton = component({
           "length": 26,
           "message": "Unmergeable attribute conflict in primitive composition. commandfor",
           "severity": "error",
+          "source": {
+            "end": 112,
+            "file": "cart-button.tsx",
+            "start": 85,
+          },
           "start": {
             "column": 15,
             "line": 5,

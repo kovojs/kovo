@@ -53,7 +53,7 @@ const transferredSqlSafetyDiagnosticRegistrarDoor =
 const diagnosticFactoryDoor = `${compilerDiagnosticsPath}#diagnosticAt`;
 const generatedDiagnosticConstructorDoor = `${coreDiagnosticsPath}#createDiagnosticConstructor`;
 const expectedDiagnosticEmissionSiteDigest =
-  '005590d643e9e65a019d9bdce6c8cd3e0b6199e2a041fd5700cb73935e90a377';
+  '1eb2cd6c206e4537b3bfeb42457391abcc5955ba3b401d3c04ebdca79f179f2e';
 const expectedRootDiagnosticDoorDigest =
   '1660c7877e7a533c282cf38c291a10181bc2e7484d76f479f1d1f41cd51dac77';
 const expectedRegisteredDiagnosticGuardDigest =
@@ -81,11 +81,11 @@ const expectedRegisteredDiagnosticDefinitionFactoryDigest =
 const expectedDiagnosticFactoryConstructorDigest =
   'f6a630771e31fc07f420b1b67a62c8d9f0400b369c9d04b95f52d2172622bde6';
 const expectedDiagnosticFactorySinkDigest =
-  '74213deb854487b068017e285bc57791f0fcd5ec333c8971b3bcf22df832befd';
+  '96999736c35834ba759c757cd71ed3c17515c7246041565b4c751b8f1964dd58';
 const expectedDiagnosticEvidenceWitnessDigest =
   'ed2e57b02f1764e0e6cddb6e64ddb759f1e9dac59f6cfcd236c7e466a7b5ff8c';
 const expectedDiagnosticActualLayerReviewDigest =
-  'a614ffd2da85939d2592fa4e2ebeaf7155011861441fa1d50457f531bc377420';
+  '42277510287a54c68bc0f1a89c4b280990985d4f6dcfeb57bc31ba133f2866df';
 const expectedBlockingStaticExportCollectionDigest =
   '3541644c641aec62abd0743093c653abd953e634f6042b941877b699666c4fdd';
 const expectedCompilerValidatorPipelineDigest =
@@ -107,7 +107,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/compiler/src/security-analyzer-soundness-oracle.ts#0048287d53f5a3f4e61cbde913fefa97f5e81446c50e067a72832594fe65526c#7c8fe398cd82d5ea80560281e00f6154b09b15615233da0a8b56ac03f861e51b',
   'packages/compiler/src/vite-config-source.ts#4b88f6e8e7657d91dbaffe6d75cf4c4bf5863b455fd5cafb901a5c8a1a577d52#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
-  'packages/server/src/sqlite.ts#cb9e237f018341e5691068e518d914311e3699a6b214f34e54dfb399b5f80e50#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
+  'packages/server/src/sqlite.ts#5ae4b492509f7482fd6eb5b6fca9b86585f68631e3e3e81cf924e79edb3584e9#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
   'packages/test/src/integration/optimistic-client.ts#e54d1c166f3e8fd585b9c65bbdf6281a7fc5b25644415776589ef44dda89d943#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
@@ -126,15 +126,15 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    '33739c3fb100f75bd57885ee2cbc4c11b337501e0402ab9f4280bca318849968',
+    'e8284f9d5ea2c101bdb70e3580eb7ad0761bf5ee536f583be8da4ea10d915e4a',
   ],
   [
     'packages/cli/src/commands/compile.ts',
-    'c464b2a0c841eace08931f042803719f5ad2733e7f8e82045357171874361977',
+    '1739a4ca5d5dcb16166f6271026c7a313e86e0a33645d504cbc629fa64df8617',
   ],
   [
     'packages/cli/src/commands/dev.ts',
-    '1ae1b70bf19271ab1c9ee007184c4080e752c1f663534774009618c73a1be01e',
+    '71b62e027f6cb60448a5e14c4c6deef4c246e382ed2a226f8076c189b0147fc9',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',
@@ -174,7 +174,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ],
   [
     'packages/server/src/sqlite.ts',
-    'cb9e237f018341e5691068e518d914311e3699a6b214f34e54dfb399b5f80e50',
+    '5ae4b492509f7482fd6eb5b6fca9b86585f68631e3e3e81cf924e79edb3584e9',
   ],
   [
     'packages/server/src/vite-source.ts',
@@ -197,16 +197,12 @@ const reviewedExcludedSourceReachability = new Set([
 // outer-owner digests; any new shape or owner edit must be reviewed explicitly.
 const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
-    'packages/cli/src/diagnostic.ts#literal#74be49f28556e2044cf422927305cac86f122d481acc1743dd23066e9c6245a6#5bf626e300991ec51af8087f8dd448707e3bfca3067fe1a22d30d7d6649b8f4f',
-    'Module-private kovo-diagnostic/v1 constructor; exact own data is copied into a frozen record whose authority is realm-local registry membership, with registered KV severity/help owned by the core registry.',
+    'packages/cli/src/diagnostic.ts#literal#a63a20d87448bddbe07cfb8d25cc8cd9d3bb1477d534578e388823ea8fcc9d5d#1f9244dd7dc9751d1b029138f54482682b48d36f52d1a4f3cfff32bd9dae1c84',
+    'Registry-authenticated KV projection into the module-private kovo-diagnostic/v1 constructor; exact own data is normalized before the frozen record receives realm-local registry membership.',
   ],
   [
-    'packages/cli/src/diagnostic.ts#literal#34451147e5e32b9200d3542bc28e57a9df9d336aa4b9c9428601e5ba339b5170#da1c062242e8492954ca9ba18856be3ed89831f697a06081eff40fe28aff4083',
-    'Invocation-error projection into the module-private kovo-diagnostic/v1 constructor.',
-  ],
-  [
-    'packages/cli/src/diagnostic.ts#literal#6469ce0e5e5ba5a70063e8b2c9e081dc2b2be75400017a5ad7875cf03afde043#80d3b843265fbbf3e9ff3188dfaba07ec29bb21a96ea4e3194ce5c5637dee8df',
-    'Framework command-finding projection into the module-private kovo-diagnostic/v1 constructor.',
+    'packages/cli/src/diagnostic.ts#literal#8a49bc9b614be96446a262b6d627540558d1503dc68b91a7482964a8af80fcff#d70da82b82f70860880ac445ac3a1d2c1a9628aeb6e82f25f262e56ed1412291',
+    'Finite CLI-registry projection into the module-private kovo-diagnostic/v1 constructor; the code selects fixed category, help, and severity while the message and optional source are validated.',
   ],
   [
     'packages/cli/src/commands/build-export.ts#literal#5a87391d0ef0e56239bd18530c212e8579a9935ef567ce1b48212149b66d386b#58a0b16ea437f43a43903be9c7b70f0cd5f652b934c66534eed982e5efca03b2',
@@ -219,10 +215,6 @@ const reviewedDynamicDiagnosticShapeSummaries = new Map([
   [
     'packages/cli/src/commands/compile.ts#literal#d6f772521c5d7f3a2068579f07b0229f2633d14d0b05ac3024033fb17c10a633#285e010de3a30b636431bae8b63296487e078f1aa8d94a0584bd5d2af957af63',
     'Registry-derived compiler diagnostic projection for the compile command result protocol.',
-  ],
-  [
-    'packages/cli/src/commands/mcp.ts#literal#6affac251930fd2eed1ebe17b0bf9a2cedbf622fb6edbe4baab81d3366695b9f#0bb344d352f0d6ba65d4e80613da9e036382483da6972a526f956cf42734a970',
-    'Non-Kovo JSON-RPC response envelope with protocol-defined code and message fields.',
   ],
   [
     'packages/cli/src/commands/mcp.ts#literal#b6188b2dc75cde7ed04e5dffc1bb8cc23ff69c7bac827d79d3963f2166cad02b#2b1864d1eea92c670f67d773404460999b0f0a1bb7d5151aa8e23a8432cd9438',

@@ -71,6 +71,11 @@ export const Cart_Row = component({
           "length": 8,
           "message": "Duplicate fragment-target wire name. cart-row/cart-row is used by CartRow and Cart_Row.",
           "severity": "error",
+          "source": {
+            "end": 176,
+            "file": "cart-row.tsx",
+            "start": 167,
+          },
           "start": {
             "column": 14,
             "line": 8,
@@ -134,6 +139,11 @@ export const CartRow = component({
           "length": 7,
           "message": "Duplicate fragment-target wire name. cart-row/cart-row is already present in registry facts and is reused by CartRow.",
           "severity": "error",
+          "source": {
+            "end": 22,
+            "file": "cart-row.tsx",
+            "start": 14,
+          },
           "start": {
             "column": 14,
             "line": 2,
