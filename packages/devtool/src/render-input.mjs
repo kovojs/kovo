@@ -323,7 +323,24 @@ function snapshotBundle(value) {
     counts: freeze(counts),
     edges,
     label: text(required(record, 'label', 'renderPage options.bundle'), 'renderPage bundle.label'),
+    limitations: stringList(
+      optional(record, 'limitations', 'renderPage options.bundle'),
+      'renderPage bundle.limitations',
+    ),
     nodes: freeze(nodes),
+    provenance: optionalText(
+      optional(record, 'provenance', 'renderPage options.bundle'),
+      'renderPage bundle.provenance',
+      'derived from generated/graph.json',
+    ),
+    view:
+      optional(record, 'view', 'renderPage options.bundle') === undefined
+        ? 'source-graph'
+        : enumText(
+            optional(record, 'view', 'renderPage options.bundle'),
+            freeze(['source-graph', 'runtime-registry']),
+            'renderPage bundle.view',
+          ),
   });
 }
 

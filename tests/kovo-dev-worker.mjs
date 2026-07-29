@@ -31,6 +31,7 @@ try {
     const response = input.probeUrl === undefined ? undefined : await fetch(input.probeUrl);
     result = {
       ok: true,
+      readyReport: handle.readyReport,
       response:
         response === undefined
           ? undefined

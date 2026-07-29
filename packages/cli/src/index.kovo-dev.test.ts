@@ -37,6 +37,7 @@ describe('kovo dev', () => {
       '--strict-port',
       '--mode',
       'test-dev',
+      '--debug',
     ]);
 
     expect(parsed).toEqual({
@@ -44,6 +45,7 @@ describe('kovo dev', () => {
       options: {
         appModulePath: join(repoRoot, 'fixture/src/app.ts'),
         configFile: join(repoRoot, 'fixture/vite.config.ts'),
+        debug: true,
         host: '127.0.0.1',
         mode: 'test-dev',
         port: 4173,
@@ -53,7 +55,7 @@ describe('kovo dev', () => {
     });
     expect(parseDevArgs(['./src/app.ts', '--port', '65536'])).toEqual({
       message:
-        'kovo: dev --port must be an integer from 0 through 65535.\nusage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>]',
+        'kovo: dev --port must be an integer from 0 through 65535.\nusage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>] [--debug]',
       ok: false,
     });
   });
@@ -68,6 +70,7 @@ describe('kovo dev', () => {
         ok: true,
         options: {
           appModulePath: join(repoRoot, 'fixture/src/app.ts'),
+          debug: false,
           mode: 'development',
           root: join(repoRoot, 'fixture'),
           strictPort: false,
@@ -134,7 +137,7 @@ describe('kovo dev', () => {
   });
 
   it('ignores undeclared Vite config in the real default CLI path', async () => {
-    const root = devFixture('undeclared-config');
+    const root = devFixture('undeclared-config', true);
     const marker = join(root, 'undeclared-config-ran.marker');
     writeFileSync(
       join(root, 'vite.config.ts'),
@@ -154,6 +157,43 @@ throw new Error('undeclared Vite config executed');
       expect(response.status, output.combined()).toBe(200);
       expect(body).toContain('<main>Bootstrap safe</main>');
       expect(existsSync(marker)).toBe(false);
+
+      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
+      expect(output.stdout).toContain(`  Local URL    http://127.0.0.1:${port}/`);
+      expect(output.stdout).toContain(`  Network URL  http://127.0.0.1:${port}/ (loopback only)`);
+      expect(output.stdout).toContain('  Mode         development');
+      expect(output.stdout).toContain('  App          src/app.ts');
+      expect(output.stdout).toContain('  Database     none configured');
+      expect(output.stdout).toContain(`  Devtool      http://127.0.0.1:${port}/__kovo`);
+      expect(output.stdout).not.toMatch(/(?:VITE|Local:|press h to show help)/u);
+
+      const devtoolResponse = await fetch(`http://127.0.0.1:${port}/__kovo`);
+      const devtoolHtml = await devtoolResponse.text();
+      expect(devtoolResponse.status, `${devtoolHtml}\n${output.combined()}`).toBe(200);
+      expect(devtoolResponse.headers.get('cache-control')).toBe('no-store');
+      expect(devtoolResponse.headers.get('content-security-policy')).toContain(
+        "default-src 'none'",
+      );
+      expect(devtoolHtml).toContain('<title>Kovo Dataflow Devtool</title>');
+      expect(devtoolHtml).toContain('live closed createApp() runtime registry');
+      expect(devtoolHtml).toContain('Coverage limitations');
+      expect(devtoolHtml).toContain('data-node-id="mutation:inventory/add"');
+      expect(devtoolHtml).toContain('data-node-id="domain:inventory"');
+      expect(devtoolHtml).toContain('data-node-id="query:inventory"');
+      expect(devtoolHtml).toContain('Optimistic coverage (SPEC §10.6)');
+      expect(devtoolHtml).toContain('hand-written');
+      expect(devtoolHtml).toContain('data-node-id="page:/"');
+      expect(devtoolHtml).toContain('src="/__kovo/client.js"');
+
+      const devtoolCookie = devtoolResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
+      expect(devtoolCookie).toMatch(/^Kovo-Dev-Auth=/u);
+      const devtoolClientResponse = await fetch(`http://127.0.0.1:${port}/__kovo/client.js`, {
+        headers: { Cookie: devtoolCookie },
+      });
+      const devtoolClientSource = await devtoolClientResponse.text();
+      expect(devtoolClientResponse.status).toBe(200);
+      expect(devtoolClientResponse.headers.get('cache-control')).toBe('no-store');
+      expect(devtoolClientSource).toContain('const kovoDevtoolInit = function');
     } finally {
       await stopChild(child);
     }
@@ -190,6 +230,27 @@ throw new Error('undeclared Vite config executed');
     });
   }, 30_000);
 
+  it('restores verbose Vite lifecycle output under --debug without hiding readiness', async () => {
+    const root = devFixture('debug-output');
+    writeFileSync(
+      join(root, 'package.json'),
+      '{"private":true,"type":"module","dependencies":{"better-sqlite3":"12.11.1"}}\n',
+      'utf8',
+    );
+    const port = await reservePort();
+    const child = spawnKovoDev(root, port, false, true);
+    const output = collectChildOutput(child);
+    try {
+      const response = await fetchWhenReady(`http://127.0.0.1:${port}/`, output, 30_000);
+      expect(response.status, output.combined()).toBe(200);
+      await waitForOutput(output, /Kovo dev ready in \d+ms/u, 5_000);
+      expect(output.combined()).toContain('Local:');
+      expect(output.stdout).toContain('  Database     none configured');
+    } finally {
+      await stopChild(child);
+    }
+  }, 40_000);
+
   // @kovo-security-classifier-corpus dev-host-door
   // @kovo-security-certifies C13 dev-host-http-websocket-rebinding-closed
   it('closes the real HTTP and HMR websocket dev-host door against DNS rebinding', async () => {
@@ -205,7 +266,28 @@ throw new Error('undeclared Vite config executed');
     });
     expect.soft(defaultPosture, workerFailure(defaultPosture)).toMatchObject({
       ok: true,
+      readyReport: expect.stringMatching(/Local URL\s+http:\/\/127\.0\.0\.1:(?!0\/)\d+\//u),
       server: { host: '127.0.0.1' },
+    });
+
+    const localhostPort = await reservePort('localhost');
+    const localhostPosture = await runKovoDevWorker(
+      {
+        appModulePath: join(root, 'src/app.ts'),
+        host: 'localhost',
+        mode: 'development',
+        port: localhostPort,
+        root,
+        strictPort: true,
+      },
+      undefined,
+      `http://localhost:${localhostPort}/`,
+    );
+    expect.soft(localhostPosture, workerFailure(localhostPosture)).toMatchObject({
+      ok: true,
+      readyReport: expect.stringContaining(`Local URL    http://localhost:${localhostPort}/`),
+      response: { body: expect.stringContaining('<main>Bootstrap safe</main>'), status: 200 },
+      server: { host: 'localhost' },
     });
 
     const exposedPosture = await runKovoDevWorker({
@@ -241,6 +323,14 @@ throw new Error('undeclared Vite config executed');
       });
       expect.soft(crossOriginDocument).toMatchObject({ status: 403 });
       expect.soft(crossOriginDocument.headers['set-cookie']).toBeUndefined();
+
+      const crossOriginDevtool = await rawDevHttpRequest({
+        authority,
+        origin: 'http://attacker.example',
+        path: '/__kovo',
+        port,
+      });
+      expect.soft(crossOriginDevtool).toMatchObject({ status: 403 });
 
       const unauthenticatedSource = await rawDevHttpRequest({
         authority,
@@ -654,7 +744,7 @@ export default createApp({
   }, 60_000);
 });
 
-function devFixture(name: string): string {
+function devFixture(name: string, richGraph = false): string {
   const root = mkdtempSync(join(repoRoot, `.tmp-kovo-dev-${name}-`));
   temporaryRoots.push(root);
   mkdirSync(join(root, 'src'), { recursive: true });
@@ -665,10 +755,41 @@ function devFixture(name: string): string {
       join(root, `node_modules/@kovojs/${packageName}`),
     );
   }
-  writeFileSync(join(root, 'package.json'), '{"private":true,"type":"module"}\n', 'utf8');
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"private":true,"type":"module","dependencies":{"@electric-sql/pglite":"0.5.1","pg":"8.22.0"}}\n',
+    'utf8',
+  );
   writeFileSync(
     join(root, 'src/app.ts'),
-    `import { createApp, publicAccess, route } from '@kovojs/server';
+    richGraph
+      ? `import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
+
+const inventoryDomain = domain('inventory');
+const inventoryQuery = query('inventory', {
+  access: publicAccess('devtool graph fixture'),
+  load: () => ({ count: 0 }),
+  output: s.object({ count: s.number() }),
+  reads: [inventoryDomain],
+});
+const addInventory = mutation('inventory/add', {
+  access: publicAccess('devtool graph fixture'),
+  handler: () => ({}),
+  input: s.object({ count: s.number() }),
+  optimistic: { inventory: (draft) => draft },
+  registry: { queries: [inventoryQuery], touches: [inventoryDomain] },
+});
+
+export default createApp({
+  mutations: [addInventory],
+  queries: [inventoryQuery],
+  routes: [route('/', {
+    access: publicAccess('bootstrap ordering fixture'),
+    page: () => '<main>Bootstrap safe</main>',
+  })],
+});
+`
+      : `import { createApp, publicAccess, route } from '@kovojs/server';
 
 export default createApp({
   routes: [route('/', {
@@ -716,6 +837,7 @@ type KovoDevWorkerResult =
   | { error: string; ok: false }
   | {
       ok: true;
+      readyReport: string;
       response?: { body: string; status: number };
       server: { host?: boolean | string; port?: number; strictPort?: boolean };
     };
@@ -755,6 +877,7 @@ function spawnKovoDev(
   root: string,
   port: number,
   explicitConfig = false,
+  debug = false,
 ): ChildProcessWithoutNullStreams {
   const args = ['dev', './src/app.ts', '--root', root];
   if (explicitConfig) {
@@ -766,6 +889,7 @@ function spawnKovoDev(
   args[args.length] = '--port';
   args[args.length] = String(port);
   args[args.length] = '--strict-port';
+  if (debug) args[args.length] = '--debug';
   return spawn(
     process.execPath,
     [
@@ -800,11 +924,11 @@ function collectChildOutput(child: ChildProcessWithoutNullStreams): {
   return output;
 }
 
-async function reservePort(): Promise<number> {
+async function reservePort(host = '127.0.0.1'): Promise<number> {
   const server = createNetServer();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(0, host, resolve);
   });
   const address = server.address();
   if (address === null || typeof address === 'string') throw new Error('Unable to reserve port.');
@@ -922,6 +1046,19 @@ async function fetchWhenReady(
     }
   }
   throw new Error(`Timed out waiting for ${url}.\n${output.combined()}`);
+}
+
+async function waitForOutput(
+  output: { combined(): string },
+  pattern: RegExp,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (pattern.test(output.combined())) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for output ${pattern}.\n${output.combined()}`);
 }
 
 async function waitForChildExit(

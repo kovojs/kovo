@@ -1,6 +1,8 @@
 import type { ServerResponse } from 'node:http';
 
 import type { KovoVitePlugin, KovoVitePluginOptions } from '../vite.js';
+import type { KovoApp } from '../app-types.js';
+import { frameworkManagedDbProviderDevelopmentPosture } from '../guards.js';
 import { kovo } from '../vite.js';
 import { createKovoAppShellViteDevIntegration } from '../vite-dev.js';
 export { nodeRequestPreloadIngressRejection, rejectNodeRequestPreloadIngress } from '../node.js';
@@ -14,6 +16,16 @@ import {
 interface TrustedKovoVitePluginOptions extends KovoVitePluginOptions {
   paranoidStaticAdvisory: boolean;
   responseSetCookieValues?(response: ServerResponse): readonly string[];
+}
+
+/** @internal Stable readiness labels projected only from the active app's pinned DB provider. */
+export function kovoDevDatabasePosture(app: KovoApp): string {
+  if (app.db === undefined) return 'none configured';
+  const posture = frameworkManagedDbProviderDevelopmentPosture(app.db);
+  if (posture === 'postgres-pglite') return 'Postgres (PGlite embedded development driver)';
+  if (posture === 'postgres-external') return 'Postgres (external node-postgres driver)';
+  if (posture === 'sqlite') return 'SQLite (experimental single-principal driver)';
+  return 'application-defined (active driver not introspectable)';
 }
 
 /**

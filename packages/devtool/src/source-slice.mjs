@@ -36,17 +36,36 @@ const MAX_SOURCE_FILE_BYTES = 8 * 1024 * 1024;
 const SOURCE_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0);
 
 /**
- * @param {{ app: string, label?: string, blurb?: string, graph: any, srcRoot: string }} opts
- * @returns {{ app: string, label: string, blurb: string, nodes: any[], edges: any[], counts: Record<string, number> }}
+ * @param {{ app: string, label?: string, blurb?: string, graph: any, limitations?: string[], provenance?: string, srcRoot: string, view?: 'source-graph'|'runtime-registry' }} opts
+ * @returns {{ app: string, label: string, blurb: string, limitations: string[], provenance: string, view: 'source-graph'|'runtime-registry', nodes: any[], edges: any[], counts: Record<string, number> }}
  */
-export function buildBundle({ app, label, blurb, graph, srcRoot }) {
+export function buildBundle({
+  app,
+  label,
+  blurb,
+  graph,
+  limitations = [],
+  provenance,
+  srcRoot,
+  view = 'source-graph',
+}) {
   const g = buildDataflowGraph(graph);
   const canonicalSrcRoot = canonicalSourceRoot(srcRoot);
   const files = listSources(canonicalSrcRoot);
   for (const node of g.nodes) node.source = resolveSource(node, canonicalSrcRoot, files);
   const counts = {};
   for (const n of g.nodes) counts[n.kind] = (counts[n.kind] ?? 0) + 1;
-  return { app, label: label ?? app, blurb: blurb ?? '', nodes: g.nodes, edges: g.edges, counts };
+  return {
+    app,
+    label: label ?? app,
+    blurb: blurb ?? '',
+    limitations,
+    provenance: provenance ?? 'derived from generated/graph.json',
+    view,
+    nodes: g.nodes,
+    edges: g.edges,
+    counts,
+  };
 }
 
 export function resolveSource(node, srcRoot, files) {

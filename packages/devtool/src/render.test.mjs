@@ -29,6 +29,33 @@ function baseRenderOptions() {
 }
 
 describe('devtool renderPage', () => {
+  it('labels the graph provenance supplied by its host', () => {
+    const options = baseRenderOptions();
+    options.bundle.provenance = 'live normalized createApp() registry';
+
+    expect(renderPage(options)).toContain('live normalized createApp() registry');
+  });
+
+  it('labels runtime-registry limitations without claiming compiler/MCP graph parity', () => {
+    const options = baseRenderOptions();
+    options.bundle.limitations = [
+      'Compiler-only guards and unresolved facts are omitted.',
+      'Use kovo explain for proof facts.',
+    ];
+    options.bundle.provenance = 'live closed createApp() runtime registry';
+    options.bundle.view = 'runtime-registry';
+
+    const html = renderPage(options);
+    expect(html).toContain('Coverage limitations');
+    expect(html).toContain('Compiler-only guards and unresolved facts are omitted.');
+    expect(html).toContain('bounded runtime-registry view');
+    expect(html).not.toContain('This is the same graph the MCP');
+  });
+
+  it('keeps source-graph hosts aligned with MCP graph parity', () => {
+    expect(renderPage(baseRenderOptions())).toContain('This is the same graph the MCP');
+  });
+
   it('escapes hostile input at HTML attribute sinks', () => {
     const hostile = `x" autofocus onfocus="alert(1)`;
     const html = renderPage({

@@ -35,6 +35,9 @@ export interface DataflowBundle {
   app: string;
   label: string;
   blurb: string;
+  limitations?: string[];
+  provenance?: string;
+  view?: 'source-graph' | 'runtime-registry';
   nodes: DataflowNode[];
   edges: DataflowEdge[];
   counts: Record<string, number>;
@@ -72,7 +75,10 @@ export function buildBundle(opts: {
   label?: string;
   blurb?: string;
   graph: GraphJson;
+  limitations?: string[];
+  provenance?: string;
   srcRoot: string;
+  view?: 'source-graph' | 'runtime-registry';
 }): DataflowBundle;
 export function resolveSource(
   node: DataflowNode,

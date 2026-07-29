@@ -511,8 +511,15 @@ export type DbProvider<RawRequest, DbValue, SessionValue = unknown> =
   | ((request: LifecycleRequest<RawRequest, SessionValue, never>) => Promise<DbValue> | DbValue);
 
 type FrameworkManagedDbResolver = (request: unknown) => unknown;
+/** @internal Exact framework-owned DB posture available to trusted development tooling. */
+export type FrameworkManagedDbDevelopmentPosture =
+  | 'postgres-external'
+  | 'postgres-pglite'
+  | 'sqlite';
+
 interface FrameworkManagedDbRegistration {
   readonly admit?: () => Promise<void> | void;
+  readonly developmentPosture?: FrameworkManagedDbDevelopmentPosture;
   readonly resolver: FrameworkManagedDbResolver;
 }
 const frameworkManagedDbProviders = createWitnessWeakMap<object, FrameworkManagedDbRegistration>();
@@ -522,7 +529,10 @@ export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionVal
   resolver: (
     request: LifecycleRequest<RawRequest, SessionValue, never>,
   ) => Promise<DbValue> | DbValue,
-  options: { readonly admit?: () => Promise<void> | void } = {},
+  options: {
+    readonly admit?: () => Promise<void> | void;
+    readonly developmentPosture?: FrameworkManagedDbDevelopmentPosture;
+  } = {},
 ): FrameworkManagedDbProvider<DbValue> {
   const token = witnessFreeze(witnessCreateNullRecord());
   witnessWeakMapSet(
@@ -530,12 +540,29 @@ export function createFrameworkManagedDbProvider<RawRequest, DbValue, SessionVal
     token,
     witnessFreeze({
       ...(options.admit === undefined ? {} : { admit: options.admit }),
+      ...(options.developmentPosture === undefined
+        ? {}
+        : { developmentPosture: options.developmentPosture }),
       resolver: resolver as FrameworkManagedDbResolver,
     }),
   );
   // The private WeakMap is the runtime proof; this assertion only carries the already-minted
   // provider's DB type through createApp authoring without placing a forgeable brand on the token.
   return token as unknown as FrameworkManagedDbProvider<DbValue>;
+}
+
+/**
+ * @internal Read the exact posture attached while minting a framework-owned provider.
+ *
+ * An undefined result deliberately covers both application-defined providers and older
+ * framework-owned providers that did not declare a tooling posture. Callers must report that
+ * boundary as unknown rather than inferring a driver from package inventory.
+ */
+export function frameworkManagedDbProviderDevelopmentPosture(
+  provider: unknown,
+): FrameworkManagedDbDevelopmentPosture | undefined {
+  if (typeof provider !== 'object' || provider === null) return undefined;
+  return witnessWeakMapGet(frameworkManagedDbProviders, provider)?.developmentPosture;
 }
 
 /** @internal Return whether a value is an exact framework-minted opaque DB provider token. */

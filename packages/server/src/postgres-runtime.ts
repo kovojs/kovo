@@ -1861,6 +1861,7 @@ export function createPostgresAppRuntimeDb(
           await ready;
           await postureLease?.admit();
         },
+        developmentPosture: config.driver === 'pglite' ? 'postgres-pglite' : 'postgres-external',
       },
     ),
     mutationReplayStore: mutationStore,

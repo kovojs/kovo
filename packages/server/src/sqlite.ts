@@ -454,6 +454,7 @@ export function createSqliteAppRuntime(
     });
     const dbProvider = createFrameworkManagedDbProvider<globalThis.Request, BetterSQLite3Database>(
       () => runtime.providerDb,
+      { developmentPosture: 'sqlite' },
     );
     const mutationReplayStore = createMemoryMutationReplayStore();
     const principalEpochStore = createMemoryPrincipalEpochStore();

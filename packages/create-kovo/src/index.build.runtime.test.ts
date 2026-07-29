@@ -49,6 +49,8 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       expect(generatedDemoPassword).toBeTruthy();
       expect(productionArtifactText).not.toContain(generatedCsrfSecret);
       expect(productionArtifactText).not.toContain(generatedDemoPassword);
+      expect(productionArtifactText).not.toContain('/__kovo/client.js');
+      expect(productionArtifactText).not.toContain('Kovo Dataflow Devtool');
 
       prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -91,6 +93,9 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       linkStarterBuildDependencies(root);
 
       buildReusableProductionArtifact(root);
+      const productionArtifactText = readUtf8Tree(join(root, 'dist'));
+      expect(productionArtifactText).not.toContain('/__kovo/client.js');
+      expect(productionArtifactText).not.toContain('Kovo Dataflow Devtool');
 
       const origin = `http://127.0.0.1:${port}`;
 
@@ -125,6 +130,11 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       );
       expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       expect(await stylesheetResponse.text()).toContain('--kovo-theme');
+
+      const devtoolResponse = await fetch(`${origin}/__kovo`);
+      const devtoolBody = await devtoolResponse.text();
+      expect(devtoolResponse.status, `${devtoolBody}\n${output()}`).toBe(404);
+      expect(devtoolBody).not.toContain('Kovo Dataflow Devtool');
 
       // SPEC §10.3: a pre-auth enhanced mutation has no session principal, so replay must bind
       // to the framework-owned anonymous CSRF cookie instead of the rotating submitted token.

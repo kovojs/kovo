@@ -765,9 +765,23 @@ function overviewInspector(bundle) {
     ' ',
     'devtool optimistic coverage badges',
   );
+  const limitations = joinStrings(
+    arrayMap(
+      bundle.limitations,
+      (limitation) =>
+        `<div style="font-size:13px;line-height:1.5;color:var(--dim);margin-bottom:8px">${esc(limitation)}</div>`,
+      'devtool graph limitations',
+    ),
+    '',
+    'devtool graph limitation rows',
+  );
+  const parity =
+    bundle.view === 'runtime-registry'
+      ? 'This bounded runtime-registry view is for live navigation. Use <code style="font-family:var(--mono);color:var(--teal)">kovo explain</code> for the authoritative source and proof graph.'
+      : 'This is the same graph the MCP <code style="font-family:var(--mono);color:var(--teal)">kovo_explain</code> tool returns to an agent.';
   return (
     `<div class="insp-head"><span class="insp-kind" style="color:var(--dim)">◫ overview</span>` +
-    `<div class="insp-title">${esc(bundle.label)}</div><div class="insp-meta">${bundle.nodes.length} nodes · ${bundle.edges.length} edges · derived from generated/graph.json</div></div>` +
+    `<div class="insp-title">${esc(bundle.label)}</div><div class="insp-meta">${bundle.nodes.length} nodes · ${bundle.edges.length} edges · ${esc(bundle.provenance)}</div></div>` +
     `<div class="insp-body">` +
     section('Graph', 0, counts) +
     (cov
@@ -777,10 +791,11 @@ function overviewInspector(bundle) {
           `<div class="kv" style="align-items:center">${cov}</div>`,
         )
       : '') +
+    (limitations ? section('Coverage limitations', 0, limitations) : '') +
     section(
       'How to read this',
       0,
-      `<div style="font-size:13px;line-height:1.6;color:var(--dim)">Data flows left → right: a <b style="color:var(--mutation)">mutation</b> writes <b style="color:var(--domain)">domains</b>, which back <b style="color:var(--query)">queries</b>, which feed <b style="color:var(--component)">components</b>. The under-arc is a component <b>emitting</b> a mutation — the feedback loop. Click any node to trace it. This is the same graph the MCP <code style="font-family:var(--mono);color:var(--teal)">kovo_explain</code> tool returns to an agent.</div>`,
+      `<div style="font-size:13px;line-height:1.6;color:var(--dim)">Data flows left → right: a <b style="color:var(--mutation)">mutation</b> writes <b style="color:var(--domain)">domains</b>, which back <b style="color:var(--query)">queries</b>, which feed <b style="color:var(--component)">components</b>. The under-arc is a component <b>emitting</b> a mutation — the feedback loop. Click any node to trace it. ${parity}</div>`,
     ) +
     `</div>`
   );

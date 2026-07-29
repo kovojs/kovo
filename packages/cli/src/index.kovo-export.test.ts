@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -93,7 +94,8 @@ describe('kovo export', () => {
         'utf8',
       );
 
-      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+      const exitCode = await mainAsync(['export', appPath, '--out', outDir]);
+      expect(exitCode, stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -104,6 +106,10 @@ describe('kovo export', () => {
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<main data-export-cli>CLI export</main>',
       );
+      const artifactText = readUtf8Tree(outDir);
+      expect(existsSync(join(outDir, '__kovo'))).toBe(false);
+      expect(artifactText).not.toContain('/__kovo/client.js');
+      expect(artifactText).not.toContain('Kovo Dataflow Devtool');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -132,7 +138,7 @@ describe('kovo export', () => {
         outDir,
       });
 
-      expect('error' in result).toBe(false);
+      expect('error' in result, 'error' in result ? result.error : undefined).toBe(false);
       if ('error' in result) return;
       expect(result.exitCode).toBe(0);
       expect(result.output).toContain('SUMMARY html=1 clientModules=1 assets=0 diagnostics=0');
@@ -144,6 +150,8 @@ describe('kovo export', () => {
       expect(result.staticExport.clientModules).toHaveLength(1);
       expect(result.staticExport.assets).toHaveLength(0);
       expect(result.staticExport.diagnostics).toHaveLength(0);
+      expect(JSON.stringify(result.staticExport)).not.toContain('/__kovo/client.js');
+      expect(JSON.stringify(result.staticExport)).not.toContain('Kovo Dataflow Devtool');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -926,3 +934,13 @@ describe('kovo export', () => {
     },
   );
 });
+
+function readUtf8Tree(root: string): string {
+  const chunks: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) chunks.push(readUtf8Tree(path));
+    else if (entry.isFile()) chunks.push(readFileSync(path, 'utf8'));
+  }
+  return chunks.join('\n');
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -214,7 +214,7 @@ export function assertPackedSemanticApiBoundary(stdout) {
   }
 }
 
-export function checkPackedCliConsumer() {
+export async function checkPackedCliConsumer() {
   const rootManifest = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
   const packedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   const packedPackages = validatePackedReleaseManifest(packedManifest, releasePackages());
@@ -318,6 +318,7 @@ export function checkPackedCliConsumer() {
       finiteMcpLifecycleInput(),
     );
     assertPackedMcpLifecycle(lifecycle.stdout);
+    await assertPackedDevJourney(consumerRoot);
 
     const auditResult = spawnSync('pnpm', ['audit', '--prod', '--json'], {
       cwd: consumerRoot,
@@ -417,15 +418,133 @@ function packedCliConsumerManifest(packedPackages, packageManager) {
     ]),
   );
   const cliTarball = tarballs['@kovojs/cli'];
+  const serverTarball = tarballs['@kovojs/server'];
   if (cliTarball === undefined) throw new Error('Packed release manifest is missing @kovojs/cli');
+  if (serverTarball === undefined) {
+    throw new Error('Packed release manifest is missing @kovojs/server');
+  }
   return {
-    dependencies: { '@kovojs/cli': cliTarball },
+    dependencies: { '@kovojs/cli': cliTarball, '@kovojs/server': serverTarball },
     name: 'kovo-packed-cli-consumer',
     packageManager,
     pnpm: { overrides: tarballs },
     private: true,
     version: '0.0.0',
   };
+}
+
+async function assertPackedDevJourney(consumerRoot) {
+  mkdirSync(path.join(consumerRoot, 'src'), { recursive: true });
+  writeFileSync(
+    path.join(consumerRoot, 'src', 'app.ts'),
+    `import '@kovojs/server/runtime-bootstrap';
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/', {
+      access: publicAccess('packed devtool smoke'),
+      page: () => '<main>Packed dev ready</main>',
+    }),
+  ],
+});
+`,
+    'utf8',
+  );
+
+  const child = spawn(
+    process.execPath,
+    [
+      path.join(consumerRoot, 'node_modules', '@kovojs', 'cli', 'dist', 'bin.mjs'),
+      'dev',
+      './src/app.ts',
+      '--root',
+      consumerRoot,
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '0',
+      '--strict-port',
+    ],
+    {
+      cwd: consumerRoot,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => {
+    stdout += String(chunk);
+  });
+  child.stderr.on('data', (chunk) => {
+    stderr += String(chunk);
+  });
+
+  try {
+    const localUrl = await waitForPackedDevReady(
+      () => ({ stderr, stdout }),
+      () => child.exitCode,
+    );
+    const page = await fetch(`${localUrl}__kovo`);
+    const html = await page.text();
+    if (
+      page.status !== 200 ||
+      !html.includes('<title>Kovo Dataflow Devtool</title>') ||
+      !html.includes('live closed createApp() runtime registry')
+    ) {
+      throw new Error(
+        `Packed kovo dev did not serve its devtool page (${page.status}).\n${stdout}\n${stderr}`,
+      );
+    }
+    const cookie = page.headers.get('set-cookie')?.split(';', 1)[0];
+    if (cookie === undefined) {
+      throw new Error('Packed kovo dev did not mint its browser authentication cookie');
+    }
+    const client = await fetch(`${localUrl}__kovo/client.js`, {
+      headers: { Cookie: cookie },
+    });
+    const clientSource = await client.text();
+    if (client.status !== 200 || !clientSource.includes('const kovoDevtoolInit = function')) {
+      throw new Error(
+        `Packed kovo dev did not serve its bundled client island (${client.status}).\n${stdout}\n${stderr}`,
+      );
+    }
+  } finally {
+    await stopPackedDev(child);
+  }
+}
+
+async function waitForPackedDevReady(output, exitCode) {
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const current = output();
+    const match = /Local URL\s+(http:\/\/127\.0\.0\.1:(?!0\/)\d+\/)/u.exec(current.stdout);
+    if (match?.[1] !== undefined) return match[1];
+    if (exitCode() !== null) {
+      throw new Error(
+        `Packed kovo dev exited before readiness.\n${current.stdout}\n${current.stderr}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const current = output();
+  throw new Error(`Packed kovo dev readiness timed out.\n${current.stdout}\n${current.stderr}`);
+}
+
+async function stopPackedDev(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode === null) child.kill('SIGKILL');
+      resolve();
+    }, 5_000);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 function finiteMcpLifecycleInput() {

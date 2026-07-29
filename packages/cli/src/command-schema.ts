@@ -927,6 +927,9 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         missingValueMessage: 'kovo: dev --mode requires a mode.\n',
         value: value('string', 'mode', { default: 'development' }),
       }),
+      flag('debug', ['--debug'], 'Show verbose Vite development logs.', {
+        category: 'advanced',
+      }),
     ],
     order: 70,
     processLifecycle: 'long-lived',
@@ -947,6 +950,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('port'),
           option('strictPort'),
           option('mode'),
+          option('debug'),
         ],
       },
     ],

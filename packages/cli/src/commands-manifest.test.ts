@@ -159,7 +159,7 @@ describe('commands manifest', () => {
       'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache] [--format <human|json|github>]',
     );
     expect(DEV_USAGE).toBe(
-      'usage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>]',
+      'usage: kovo dev <app-module> [--root <dir>] [--config <file>] [--host <host>] [--port <port>] [--strict-port] [--mode <mode>] [--debug]',
     );
     expect(DB_USAGE).toBe(
       'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--system-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',

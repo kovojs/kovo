@@ -1,6 +1,9 @@
+/* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
+
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isAbsolute, relative, resolve } from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -22,6 +25,7 @@ import {
   type KovoCommandSecurityDisposition,
 } from './security-disposition.js';
 import {
+  buildArrayJoin,
   buildSecurityArrayAppend,
   buildArrayIsArray,
   buildObjectKeys,
@@ -35,14 +39,21 @@ import {
   kovoDevResponseSetCookieValues,
   type KovoDevNodeIngressProfile,
 } from './dev-host-door.js';
+import {
+  createKovoDevtoolPlugin,
+  inspectKovoDevDatabasePosture,
+  type KovoDevtoolPluginOptions,
+} from './devtool.js';
 
 const NativeFunction = globalThis.Function;
+const NativeMath = globalThis.Math;
 const NativeNumber = globalThis.Number;
 const NativeObject = globalThis.Object;
 const NativePromise = globalThis.Promise;
 const NativeReflect = globalThis.Reflect;
 const NativeString = globalThis.String;
 const nativeFunctionHasInstance = NativeFunction.prototype[Symbol.hasInstance];
+const nativeMathRound = NativeMath.round;
 const nativeNumberParseInt = NativeNumber.parseInt;
 const nativeNumberIsSafeInteger = NativeNumber.isSafeInteger;
 const nativeObjectFreeze = NativeObject.freeze;
@@ -51,6 +62,7 @@ const nativeObjectDefineProperty = NativeObject.defineProperty;
 const nativePromiseThen = NativePromise.prototype.then;
 const nativeReflectApply = NativeReflect.apply;
 const nativeReflectDeleteProperty = NativeReflect.deleteProperty;
+const nativeStringReplace = NativeString.prototype.replace;
 const isolatedAuthoredPlugin = Symbol('Kovo isolated authored Vite plugin');
 
 const AUTHORITY_BEARING_AUTHORED_PLUGIN_HOOKS = [
@@ -72,6 +84,7 @@ const IGNORED_NON_DEV_CONFIG_KEYS = ['build', 'fmt', 'lint', 'run', 'test'] as c
 export interface KovoDevOptions {
   appModulePath: string;
   configFile?: string;
+  debug?: boolean;
   host?: string;
   mode: string;
   port?: number;
@@ -82,6 +95,7 @@ export interface KovoDevOptions {
 /** @internal A live supported dev server plus its complete two-graph cleanup. */
 export interface KovoDevServerHandle {
   close(): Promise<void>;
+  readyReport: string;
   server: ViteDevServer;
 }
 
@@ -103,6 +117,7 @@ export function parseDevArgs(
     options: {
       appModulePath: resolve(root, app),
       ...(config === undefined ? {} : { configFile: resolve(root, config) }),
+      debug: parsed.value.options.debug,
       ...(host === undefined ? {} : { host }),
       mode: parsed.value.options.mode,
       ...(port === undefined ? {} : { port }),
@@ -117,13 +132,14 @@ export async function startKovoDevServer(
   options: KovoDevOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<KovoDevServerHandle> {
+  const startedAt = performance.now();
   const { createServer } = await import('vite-plus');
   const root = resolve(security.invocationCwd, options.root);
   const configFile = resolveDevConfigFile(root, options.configFile);
   const bootstrapServer = await createServer({
     appType: 'custom',
     configFile: false,
-    logLevel: 'error',
+    logLevel: options.debug === true ? 'info' : 'error',
     root,
     server: { hmr: false },
     ssr: { noExternal: [/^@kovojs\//] },
@@ -143,13 +159,22 @@ export async function startKovoDevServer(
       throw new TypeError('@kovojs/server/vite kovo() must return a plugin object.');
     }
     const kovoPlugin = freezeFrameworkPlugin(createdPlugin) as PluginOption;
+    const devtoolOptions = nativeObjectFreeze<KovoDevtoolPluginOptions>({
+      appModuleId: viteAppModuleId(options.appModulePath, root),
+      appModulePath: options.appModulePath,
+      debug: options.debug === true,
+      securityProfileModuleId: profile.securityProfileModuleId,
+      serverModuleId: profile.serverModuleId,
+    });
+    const devtoolPlugin = freezeFrameworkPlugin(createKovoDevtoolPlugin(devtoolOptions));
     const authoredConfig = snapshotSupportedAuthoredDevConfig(
       await loadAuthoredDevConfig(bootstrapServer, configFile, root, options.mode),
     );
     const authoredPlugins = isolateAuthoredDevPluginOptions(authoredConfig.plugins);
-    const securityProfile = createDevSecurityProfilePlugins(kovoPlugin, profile);
+    const securityProfile = createDevSecurityProfilePlugins(kovoPlugin, devtoolPlugin, profile);
     const livePlugins = fixedDevPluginArray(
       securityProfile.prePlugin,
+      devtoolPlugin,
       kovoPlugin,
       authoredPlugins,
       securityProfile.postPlugin,
@@ -165,7 +190,15 @@ export async function startKovoDevServer(
     liveServer = await createServer(liveConfig);
     lockLiveDevEnvironmentPluginLists(liveServer.config);
     await liveServer.listen();
-    liveServer.printUrls();
+    if (options.debug === true) liveServer.printUrls();
+    const readyReport = formatKovoDevReadyReport({
+      appModulePath: options.appModulePath,
+      database: await inspectKovoDevDatabasePosture(liveServer, devtoolOptions),
+      durationMs: nativeApply<number>(nativeMathRound, NativeMath, [performance.now() - startedAt]),
+      localUrl: boundDevServerUrl(liveServer),
+      mode: options.mode,
+      root,
+    });
 
     let closed = false;
     const close = async (): Promise<void> => {
@@ -188,7 +221,7 @@ export async function startKovoDevServer(
       if (!closed) void close();
     });
 
-    return { close, server: liveServer };
+    return { close, readyReport, server: liveServer };
   } catch (error) {
     try {
       await liveServer?.close();
@@ -205,8 +238,8 @@ export async function runDevCommand(
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
   try {
-    await startKovoDevServer(options, security);
-    return { exitCode: 0, output: '' };
+    const handle = await startKovoDevServer(options, security);
+    return { exitCode: 0, output: handle.readyReport };
   } catch (error) {
     return {
       error: `kovo dev failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -215,7 +248,55 @@ export async function runDevCommand(
   }
 }
 
+interface KovoDevReadyReportOptions {
+  appModulePath: string;
+  database: string;
+  durationMs: number;
+  localUrl: string;
+  mode: string;
+  root: string;
+}
+
+/** @internal Stable framework-owned readiness output, independent of Vite's logger. */
+export function formatKovoDevReadyReport(options: KovoDevReadyReportOptions): string {
+  const relativeEntry = relative(options.root, options.appModulePath);
+  const appEntry = nativeApply<string>(nativeStringReplace, relativeEntry, [/\\/gu, '/']);
+  return (
+    buildArrayJoin(
+      [
+        `Kovo dev ready in ${options.durationMs}ms`,
+        `  Local URL    ${options.localUrl}`,
+        `  Network URL  ${options.localUrl} (loopback only)`,
+        `  Mode         ${options.mode}`,
+        `  App          ${appEntry}`,
+        `  Database     ${options.database}`,
+        `  Devtool      ${options.localUrl}${DEVTOOL_READY_PATH}`,
+      ],
+      '\n',
+    ) + '\n'
+  );
+}
+
+const DEVTOOL_READY_PATH = '__kovo';
+
+function boundDevServerUrl(server: ViteDevServer): string {
+  const address = server.httpServer?.address();
+  if (address === null || address === undefined || typeof address === 'string') {
+    throw new Error('kovo dev could not read the bound HTTP socket address.');
+  }
+  const configuredHost = server.config.server.host;
+  if (typeof configuredHost !== 'string') {
+    throw new Error('kovo dev could not read its configured loopback host.');
+  }
+  // The host door authorizes this configured authority, not Node's resolved socket address.
+  // Preserve `localhost` when it resolves to ::1 so every printed URL remains usable.
+  const host = configuredHost === '::1' || configuredHost === '[::1]' ? '[::1]' : configuredHost;
+  return `http://${host}:${address.port}/`;
+}
+
 interface DevSecurityProfileModule extends KovoDevNodeIngressProfile {
+  securityProfileModuleId: string;
+  serverModuleId: string;
   trustedKovoVitePlugin(options: {
     app: string;
     paranoidStaticAdvisory: boolean;
@@ -268,10 +349,13 @@ async function preloadDevSecurityProfile(
       root,
     ),
   );
-  await server.ssrLoadModule(viteSsrModuleId(serverRootPath, root));
-  const module = await server.ssrLoadModule(
-    viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/vite-security-profile'), root),
+  const serverModuleId = viteSsrModuleId(serverRootPath, root);
+  await server.ssrLoadModule(serverModuleId);
+  const securityProfileModuleId = viteSsrModuleId(
+    requireFromApp.resolve('@kovojs/server/internal/vite-security-profile'),
+    root,
   );
+  const module = await server.ssrLoadModule(securityProfileModuleId);
   // The complete trusted graph captures descriptor-based Web/Node controls first. Lock the realm
   // at the last trusted boundary, immediately before constructing the framework plugin and loading
   // the authored config; modules that intentionally capture data descriptors must not observe the
@@ -301,6 +385,8 @@ async function preloadDevSecurityProfile(
       nodeRequestPreloadIngressRejection as DevSecurityProfileModule['nodeRequestPreloadIngressRejection'],
     rejectNodeRequestPreloadIngress:
       rejectNodeRequestPreloadIngress as DevSecurityProfileModule['rejectNodeRequestPreloadIngress'],
+    securityProfileModuleId,
+    serverModuleId,
     trustedKovoVitePlugin:
       trustedKovoVitePlugin as DevSecurityProfileModule['trustedKovoVitePlugin'],
   });
@@ -464,7 +550,7 @@ function trustedLiveDevConfig(
     define: {},
     environments: { ssr: trustedSsrEnvironmentConfig() },
     experimental: { bundledDev: false },
-    logLevel: 'error',
+    logLevel: options.debug === true ? 'info' : 'error',
     mode: options.mode,
     plugins,
     resolve: trustedRootResolveConfig(),
@@ -502,12 +588,13 @@ function trustedSsrEnvironmentConfig(): NonNullable<
 
 function fixedDevPluginArray(
   prePlugin: Plugin,
+  devtoolPlugin: Plugin,
   kovoPlugin: PluginOption,
   authoredPlugins: readonly PluginOption[],
   postPlugin: Plugin,
 ): PluginOption[] {
   const source = buildSnapshotDenseArray(authoredPlugins, 'Isolated authored Vite plugins');
-  const result: PluginOption[] = [prePlugin, kovoPlugin];
+  const result: PluginOption[] = [prePlugin, devtoolPlugin, kovoPlugin];
   for (let index = 0; index < source.length; index += 1) {
     buildSecurityArrayAppend(
       result,
@@ -690,6 +777,7 @@ function snapshotClientPluginHook(value: Record<string, unknown>, hookName: stri
 
 function createDevSecurityProfilePlugins(
   kovoPlugin: PluginOption,
+  devtoolPlugin: Plugin,
   nodeIngress: KovoDevNodeIngressProfile,
 ): {
   postPlugin: Plugin;
@@ -735,7 +823,12 @@ function createDevSecurityProfilePlugins(
         const isolated: PluginOption[] = [];
         for (let index = 0; index < configuredPlugins.length; index += 1) {
           const candidate = configuredPlugins[index]!;
-          if (candidate === kovoPlugin || candidate === prePlugin || candidate === postPlugin) {
+          if (
+            candidate === kovoPlugin ||
+            candidate === devtoolPlugin ||
+            candidate === prePlugin ||
+            candidate === postPlugin
+          ) {
             continue;
           }
           buildSecurityArrayAppend(
@@ -744,7 +837,13 @@ function createDevSecurityProfilePlugins(
             'CLI packages/cli/src/commands/dev.ts collection',
           );
         }
-        config.plugins = fixedDevPluginArray(prePlugin, kovoPlugin, isolated, postPlugin);
+        config.plugins = fixedDevPluginArray(
+          prePlugin,
+          devtoolPlugin,
+          kovoPlugin,
+          isolated,
+          postPlugin,
+        );
       },
     },
     configureServer: {
