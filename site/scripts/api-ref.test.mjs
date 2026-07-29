@@ -81,6 +81,7 @@ function packageManifest(overrides = {}) {
 describe('api-ref generator', () => {
   let outDir;
   let result;
+  let browserPage;
   let corePage;
   let drizzlePage;
   let headlessUiPage;
@@ -89,6 +90,7 @@ describe('api-ref generator', () => {
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
     result = await generateApiReference({ outDir });
+    browserPage = await readFile(path.join(outDir, 'browser.md'), 'utf8');
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
     drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
     headlessUiPage = await readFile(path.join(outDir, 'headless-ui.md'), 'utf8');
@@ -181,6 +183,52 @@ describe('api-ref generator', () => {
     expect(new Set(core.names)).toEqual(new Set(names));
   });
 
+  it('reports every generated symbol by public import path', () => {
+    for (const pkg of result.packages) {
+      expect(pkg.symbolsBySubpath.map((subpath) => subpath.importPath)).toEqual(pkg.subpaths);
+      expect(pkg.symbolsBySubpath.flatMap((subpath) => subpath.symbols)).toHaveLength(pkg.exports);
+      for (const subpath of pkg.symbolsBySubpath) {
+        expect(subpath.symbols.every((symbol) => symbol.name && symbol.kind)).toBe(true);
+      }
+    }
+  });
+
+  it('emits every full public signature as valid TypeScript', async () => {
+    let signatures = 0;
+    for (const pkg of result.packages) {
+      const page = await readFile(path.join(outDir, pkg.file), 'utf8');
+      const lines = page.split('\n');
+      for (let index = 0; index < lines.length; index += 1) {
+        if (!lines[index].startsWith('#### `')) continue;
+        const fence = lines.indexOf('```ts', index + 1);
+        const close = lines.indexOf('```', fence + 1);
+        expect(fence, `${pkg.file}:${index + 1} has no signature fence`).toBeGreaterThan(index);
+        expect(close, `${pkg.file}:${index + 1} has no signature close`).toBeGreaterThan(fence);
+        const signature = lines.slice(fence + 1, close).join('\n');
+        const diagnostics = [ts.ScriptKind.TS, ts.ScriptKind.TSX].map(
+          (kind) =>
+            ts.createSourceFile(
+              `${pkg.file}-${index + 1}.${kind === ts.ScriptKind.TSX ? 'tsx' : 'ts'}`,
+              signature,
+              ts.ScriptTarget.Latest,
+              true,
+              kind,
+            ).parseDiagnostics,
+        );
+        expect(
+          diagnostics.some((attempt) => attempt.length === 0)
+            ? []
+            : diagnostics[0].map((diagnostic) =>
+                ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
+              ),
+          `${pkg.file}:${index + 1} emitted malformed signature`,
+        ).toEqual([]);
+        signatures += 1;
+      }
+    }
+    expect(signatures).toBe(result.exports);
+  });
+
   it('flags undocumented exports with an explicit marker, never omits them', () => {
     const core = result.packages.find((pkg) => pkg.name === '@kovojs/core');
     const headings = corePage.match(/^#### `/gm) ?? [];
@@ -247,6 +295,15 @@ describe('api-ref generator', () => {
     );
     expect(drizzlePage).not.toContain('```ts\n```ts');
     expect(headlessUiPage).not.toContain('```ts\n```ts');
+  });
+
+  it('renders reviewed JSDoc skips as non-visible directives outside the code fence', () => {
+    expect(browserPage).toContain(
+      '<!-- kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry." -->',
+    );
+    expect(browserPage).not.toContain(
+      '```ts\n// kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."',
+    );
   });
 
   it('omits generated transition machinery and UI style tables from public docs', () => {

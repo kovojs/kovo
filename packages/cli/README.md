@@ -6,7 +6,7 @@ audits, update agent docs, add copy-in UI, and export static output.
 
 ```sh
 pnpm add -D @kovojs/cli
-pnpm exec kovo explain graph.json
+pnpm exec kovo explain query cart graph.json
 ```
 
 ```ts

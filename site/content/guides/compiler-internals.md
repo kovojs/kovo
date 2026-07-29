@@ -16,7 +16,7 @@ You author in TSX: JSX renders, inline closures, one component per file. The com
 `.tsx` module and emits a small set of plain files with a 1:1 mapping — `x.tsx` produces exactly
 `x.server.js` and `x.client.js`, plus shared generated registry types.
 
-```
+```text
 cart-badge.tsx ──► cart-badge.server.js   (render with derived stamps)
                ──► cart-badge.client.js   (named handler exports, update plans)
                ──► generated/registries.d.ts

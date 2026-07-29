@@ -272,11 +272,13 @@ function assertOptionalCookieString(value: unknown, label: string): asserts valu
  * allowed and recorded for `kovo explain --cookies`.
  *
  * @example
- * serializeCookie('embed_sid', value, {
+ * import { unsafeCookie, type CookieOptions } from '@kovojs/server';
+ *
+ * const embeddedSessionCookie: CookieOptions = {
  *   class: 'session',
  *   sameSite: 'none',
  *   unsafe: unsafeCookie({ downgrade: { sameSite: 'none' }, justification: 'third-party embed' }),
- * });
+ * };
  */
 export function unsafeCookie(downgrade: UnsafeCookieDowngradeInput): UnsafeCookieDowngrade {
   const closed = snapshotUnsafeCookieDowngradeInput(downgrade);

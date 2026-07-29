@@ -46,7 +46,9 @@ export const appAuthed = authed<AppRequest>();
 
 The same module asks the generated runtime boundary for sanitized bindings:
 
-```text
+<!-- kovo-sample: illustrative reason="The generated app-local auth boundary is created during the scaffold build and is not a public package export." -->
+
+```ts
 import { publicAccess } from '@kovojs/server';
 
 import { appRuntimeDbReady, createAppAuthBindings } from './_kovo/app-runtime-db.js';

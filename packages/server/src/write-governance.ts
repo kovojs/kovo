@@ -51,7 +51,13 @@ const trustedAssignFacts = createBoundedRuntimeAuditCollector<TrustedAssignFact>
  * @param reason - A short justification, surfaced in review.
  * @returns `value`, unchanged.
  * @example
- * await db.insert(users).values({ role: serverValue('member', 'default role'), ... });
+ * import { serverValue } from '@kovojs/server';
+ *
+ * declare const db: any;
+ * declare const input: { userId: string };
+ * declare const users: any;
+ *
+ * await db.insert(users).values({ id: input.userId, role: serverValue('member', 'default role') });
  */
 export function serverValue<T>(value: T, reason: string): T {
   snapshotAuditReason(reason, 'serverValue() (KV438)');
@@ -68,6 +74,12 @@ export function serverValue<T>(value: T, reason: string): T {
  * @param obligation - A required structured invariant/basis/evidence record, recorded for audit.
  * @returns `value`, unchanged.
  * @example
+ * import { trustedAssign } from '@kovojs/server';
+ *
+ * declare const db: any;
+ * declare const input: { role: string };
+ * declare const users: any;
+ *
  * await db.update(users).set({
  *   role: trustedAssign(input.role, {
  *     evidence: {
@@ -78,7 +90,7 @@ export function serverValue<T>(value: T, reason: string): T {
  *     invariant: 'governed-write.authorized-principal',
  *     why: { guard: 'guards.role:admin', kind: 'guard-chain' },
  *   }),
- * })...;
+ * });
  */
 export function trustedAssign<T>(value: T, obligation: TrustedAssignObligation): T {
   const carrier = witnessCreateNullRecord<unknown>();

@@ -14,35 +14,39 @@ an attribute record, and the compiler merges that record into your element befor
 
 The base form is an attrs builder plus your own element:
 
-```text
+```tsx
 import { tooltipTriggerAttributes } from '@kovojs/headless-ui/tooltip';
 
 const attrs = tooltipTriggerAttributes({ contentId: 'pricing-tip', open: false });
-<a {...attrs} href="/pricing" class="nav-link">Pricing</a>;
+<a {...attrs} href="/pricing" class="nav-link">
+  Pricing
+</a>;
 ```
 
 That is the core idea. The primitive computes ARIA, `data-state`, IDs, and handler refs. Your
 element still owns the tag, text, href, and author styling.
 
-## Use asChild
+## Use the styled trigger
 
-When a component family offers `asChild`, it is just sugar for the same merge:
+Use the styled trigger when its button semantics and visual treatment already match:
 
-```text
-<TooltipTrigger asChild>
-  <a href="/pricing">Pricing</a>
-</TooltipTrigger>
+```tsx
+import { TooltipTrigger } from '@kovojs/ui/tooltip';
+
+<TooltipTrigger contentId="pricing-tip">Pricing</TooltipTrigger>;
 ```
 
-Use it when the child is one static element. If the child is dynamic or plural, drop back to the
-explicit attrs form so the merge target stays obvious.
+Use the explicit attrs builder when you need another element such as an anchor. That keeps the
+primitive behavior and the merge target visible in the same expression.
 
 ## Use behavior attributes
 
 For trigger-shaped cases, you can annotate the element directly:
 
-```text
-<button type="button" kovo-tooltip="pricing-tip">Pricing</button>
+```tsx
+<button type="button" kovo-tooltip="pricing-tip">
+  Pricing
+</button>
 ```
 
 This is the only form that still works on markup Kovo did not render for you, such as CMS or

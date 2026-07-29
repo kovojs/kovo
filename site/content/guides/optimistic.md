@@ -18,17 +18,18 @@ A transform is a pure `(draft, input) => void` function over a query's result ty
 optimistic map on the mutation, next to the write it predicts:
 
 ```ts
+import { mutation, s } from '@kovojs/server';
+
 export const addToCart = mutation({
-  input: addToCartInput,
+  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
   queue: true,
   optimistic: {
     cart(draft, input) {
       draft.count = (draft.count ?? 0) + input.quantity;
     },
-    orderHistory: 'await-fragment',
     productGrid: 'await-fragment',
   },
-  handler: addToCartHandler,
+  handler: async () => ({ ok: true }),
 });
 ```
 

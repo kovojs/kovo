@@ -24,7 +24,10 @@ const stepsTsconfig = path.join(siteRoot, 'tutorial/tsconfig.steps.json');
 const useBuiltPackageDeclarations = process.env.KOVO_DOC_SNIPPETS_USE_DIST === '1';
 
 const TS_LANGS = new Set(['ts', 'tsx']);
-const PROVENANCE_COMMENT = /^\/\/\s*Source:\s*(.+)$/;
+const PROVENANCE_COMMENT =
+  /^\/\/\s*Source(?::\s*(.+)|-verified\s+(?:shape|runtime refusal)\s+from\s+(.+))$/;
+const REVIEWED_ILLUSTRATIVE_DIRECTIVE =
+  /^<!--\s*kovo-sample:\s*illustrative\s+reason="[^"]+"\s*-->$/;
 const STRICT_POLICY_SOURCE_PATHS = new Set([
   'getting-started/why-kovo.md',
   'guides/data-layer.md',
@@ -73,6 +76,7 @@ export function extractCodeSnippets(markdown, sourcePath = 'inline.md') {
 
     const lang = start[2].toLowerCase();
     const startLine = index + 1;
+    const reviewedIllustrative = precedingNonblankLine(lines, index - 1);
     const body = [];
     index += 1;
 
@@ -84,7 +88,7 @@ export function extractCodeSnippets(markdown, sourcePath = 'inline.md') {
     if (!TS_LANGS.has(lang)) continue;
 
     const code = body.join('\n');
-    const mode = snippetMode(code);
+    const mode = snippetMode(code, reviewedIllustrative);
     snippets.push({
       code,
       id: `${sanitize(sourcePath.replace(/\.md$/, ''))}__L${startLine}`,
@@ -212,9 +216,10 @@ export async function checkAuthoredCodeSnippets({
   return { ok: true, outDir, snippets };
 }
 
-function snippetMode(code) {
+function snippetMode(code, precedingLine) {
   const firstLine = firstNonblankLine(code);
-  return firstLine && PROVENANCE_COMMENT.test(firstLine) ? 'provenance' : 'standalone';
+  if (firstLine && PROVENANCE_COMMENT.test(firstLine)) return 'provenance';
+  return REVIEWED_ILLUSTRATIVE_DIRECTIVE.test(precedingLine ?? '') ? 'reviewed' : 'standalone';
 }
 
 function firstNonblankLine(code) {
@@ -224,9 +229,20 @@ function firstNonblankLine(code) {
   return undefined;
 }
 
+function precedingNonblankLine(lines, start) {
+  for (let index = start; index >= 0; index -= 1) {
+    if (lines[index].trim()) return lines[index].trim();
+  }
+  return undefined;
+}
+
 function checkSnippetPolicy(snippet) {
   const issues = [];
-  if (requiresSourceProvenance(snippet) && snippet.mode !== 'provenance') {
+  if (
+    requiresSourceProvenance(snippet) &&
+    snippet.mode !== 'provenance' &&
+    snippet.mode !== 'reviewed'
+  ) {
     issues.push({
       code: 'missing-provenance',
       line: snippet.startLine,
@@ -253,7 +269,7 @@ function provenanceSnippetIssues(snippet) {
   const firstContentIndex = lines.findIndex((line) => line.trim() !== '');
   const firstContentLine = firstContentIndex >= 0 ? lines[firstContentIndex] : '';
   const provenance = PROVENANCE_COMMENT.exec(firstContentLine);
-  if (!provenance || !provenance[1]?.trim()) {
+  if (!provenance || !(provenance[1] ?? provenance[2])?.trim()) {
     issues.push({
       code: 'missing-provenance',
       line: snippet.startLine,
@@ -479,13 +495,16 @@ function sanitize(name) {
   return name.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '') || 'snippet';
 }
 
-async function writeSupportFiles(outDir) {
+export async function writeAuthoredSnippetSupportFiles(
+  outDir,
+  { includeNodeModuleStubs = true } = {},
+) {
   const stubsDir = path.join(outDir, 'stubs');
   await mkdir(stubsDir, { recursive: true });
   await writeFile(path.join(outDir, 'snippet-prelude.d.ts'), `${PRELUDE}\n`, 'utf8');
   await writeFile(path.join(stubsDir, 'external.ts'), `${EXTERNAL_STUBS}\n`, 'utf8');
   await writeFile(path.join(stubsDir, 'kovo.ts'), `${KOVO_STUBS}\n`, 'utf8');
-  await writeNodeModuleStubs(outDir);
+  if (includeNodeModuleStubs) await writeNodeModuleStubs(outDir);
   await writeFile(path.join(outDir, 'app.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'db.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await writeFile(path.join(outDir, 'domains.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
@@ -496,6 +515,10 @@ async function writeSupportFiles(outDir) {
   await writeFile(path.join(outDir, 'theme.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
   await mkdir(path.join(outDir, 'components/ui'), { recursive: true });
   await writeFile(path.join(outDir, 'components/ui/button.ts'), `${LOCAL_APP_STUBS}\n`, 'utf8');
+}
+
+async function writeSupportFiles(outDir) {
+  await writeAuthoredSnippetSupportFiles(outDir);
 }
 
 async function writeNodeModuleStubs(outDir) {
@@ -974,6 +997,7 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type ComponentChild = any;
+export type MutationFormDefinition = any;
 export type IconProps = any;
 export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
@@ -1026,6 +1050,9 @@ export const guards: {
   rateLimit: <Request = any>(...args: any[]) => any;
   role: <Request = any>(...args: any[]) => any;
 };
+export const handler: <State = unknown>(
+  fn: (event: Event, context: { state: State }) => void,
+) => unknown;
 export const hmacSignature: any;
 export const installKovoLoader: any;
 export const layout: <Request = any, Params = any, Page = any, Regions = any>(
@@ -1042,6 +1069,7 @@ export const queue: any;
 export const query: any;
 export const publicAccess: any;
 export const publicScopedKey: any;
+export const publishToClient: any;
 export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;

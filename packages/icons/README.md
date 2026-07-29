@@ -15,14 +15,20 @@ const styles = style.create({
   muted: { color: '#6b7280' },
 });
 
-// Decorative by default (aria-hidden):
-<ArrowRight />
+export function IconExamples() {
+  return (
+    <div>
+      {/* Decorative by default (aria-hidden). */}
+      <ArrowRight />
 
-// Sized + tinted via the StyleX `style` channel (color flows through currentColor):
-<Search style={[styles.small, styles.muted]} />
+      {/* Size and tint through StyleX; color flows through currentColor. */}
+      <Search style={[styles.small, styles.muted]} />
 
-// Meaningful icon — `aria-label` promotes it to role="img":
-<Search aria-label="Search" />
+      {/* aria-label promotes a meaningful icon to role="img". */}
+      <Search aria-label="Search" />
+    </div>
+  );
+}
 ```
 
 ## API

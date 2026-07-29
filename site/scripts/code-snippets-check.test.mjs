@@ -52,6 +52,20 @@ describe('authored code snippet extractor', () => {
     expect(snippets[0].lang).toBe('tsx');
   });
 
+  it('honors reviewed illustrative directives owned by the packed sample policy', () => {
+    const [snippet] = extractCodeSnippets(
+      [
+        '<!-- kovo-sample: illustrative reason="Requires app-local generated bindings." -->',
+        '',
+        '```ts',
+        'useGeneratedBinding();',
+        '```',
+      ].join('\n'),
+      'page.md',
+    );
+    expect(snippet.mode).toBe('reviewed');
+  });
+
   it('ignores non-TypeScript fences', () => {
     const markdown = ['```sh', 'pnpm run check', '```', '', '```json', '{"ok":true}', '```'].join(
       '\n',

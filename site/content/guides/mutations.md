@@ -79,17 +79,23 @@ Submit the form once with JavaScript disabled, then again with enhancement turne
 Expected failures belong in the mutation contract:
 
 ```ts
+import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+
+declare const cartCsrf: Readonly<CsrfOptions<{ db: any }>>;
+declare const cart: any;
+declare const products: any;
+
 const addCartRow = async (_db: unknown, _input: unknown) => {};
 
 export const addToCart = mutation({
   access: publicAccess('demo cart is intentionally public'),
   csrf: cartCsrf,
-  input: addToCartInput,
+  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
   registry: { touches: [cart] },
   errors: {
     OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }),
   },
-  async handler(input, request, context) {
+  async handler(input, request: { db: any }, context) {
     const [row] = await request.db
       .select({ stock: products.stock })
       .from(products)
@@ -135,6 +141,11 @@ named helper or domain operation instead.
 Raw SQL and helper calls that hide the write need registry facts:
 
 ```ts
+import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+
+declare const cartCsrf: Readonly<CsrfOptions<{ db: any }>>;
+declare const cart: any;
+
 const mergeCartRows = async (_db: unknown, _cartId: string) => {};
 
 export const mergeCart = mutation({
@@ -145,7 +156,7 @@ export const mergeCart = mutation({
     tables: ['cart_items'],
     touches: [cart],
   },
-  async handler(input, request) {
+  async handler(input, request: { db: any }) {
     await mergeCartRows(request.db, input.cartId);
     return { ok: true };
   },
@@ -180,10 +191,18 @@ Domain values those writes affect.
 Optimism is keyed to queries:
 
 ```ts
+import { mutation, publicAccess, s, type CsrfOptions } from '@kovojs/server';
+
+declare const cartCsrf: Readonly<CsrfOptions<unknown>>;
+declare const addToCartHandler: (input: {
+  productId: string;
+  quantity: number;
+}) => Promise<{ ok: true }>;
+
 export const addToCart = mutation({
   access: publicAccess('demo cart is intentionally public'),
   csrf: cartCsrf,
-  input: addToCartInput,
+  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
   optimistic: {
     cartSummary(draft, input) {
       draft.count += input.quantity;

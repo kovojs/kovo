@@ -18,12 +18,16 @@ it, the database itself refuses.
 Here's the whole idea in one line. You mark who owns a row:
 
 ```ts
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
 const orders = pgTable(
   'orders',
   {
-    /* … */
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
   },
-  kovo({ owner: (t) => t.userId }),
+  kovo({ domain: 'order', owner: (t) => t.userId }),
 );
 ```
 
@@ -138,7 +142,14 @@ The dangerous form is longer to write than the safe one, and it leaves a trace. 
 Mark a column `secret` and its value can't be serialized to the client — even if a query selects it:
 
 ```ts
-session = pgTable('session', { token: text('token') /* … */ }, kovo({ secret: ['token'] }));
+import { kovo } from '@kovojs/drizzle';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+
+const session = pgTable(
+  'session',
+  { id: text('id').primaryKey(), token: text('token').notNull() },
+  kovo({ domain: 'session', secret: ['token'] }),
+);
 ```
 
 A session token, a password hash, an OAuth secret: tag it once, and the secret-egress check keeps it

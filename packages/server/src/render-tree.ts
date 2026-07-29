@@ -146,6 +146,7 @@ const MAX_RENDER_TREE_SOURCE_CODE_UNITS = 1_000_000;
  * against the component's own `s.object({...})` schema.
  *
  * @example
+ * // kovo-sample: illustrative reason="The registry excerpt depends on app-local components and their validated props schemas."
  * const registry = renderRegistry({
  *   'kovo-chart': { component: Chart, props: chartProps },
  *   'kovo-card': { component: Card, props: cardProps },

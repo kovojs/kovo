@@ -1,0 +1,72 @@
+{
+  "schema": "kovo.doc-sample-policy/v1",
+  "languages": {
+    "bash": {
+      "class": "executable",
+      "validator": "shell"
+    },
+    "dockerfile": {
+      "class": "illustrative",
+      "reason": "The fragment documents deployment shape; it is not a complete build context."
+    },
+    "dotenv": {
+      "class": "executable",
+      "validator": "dotenv"
+    },
+    "html": {
+      "class": "output",
+      "validator": "none"
+    },
+    "http": {
+      "class": "output",
+      "validator": "none"
+    },
+    "js": {
+      "class": "executable",
+      "validator": "typescript"
+    },
+    "jsonc": {
+      "class": "executable",
+      "validator": "jsonc"
+    },
+    "sh": {
+      "class": "executable",
+      "validator": "shell"
+    },
+    "sql": {
+      "class": "illustrative",
+      "reason": "The fragment depends on an app-owned database schema and migration context."
+    },
+    "text": {
+      "class": "output",
+      "validator": "none"
+    },
+    "ts": {
+      "class": "executable",
+      "validator": "typescript"
+    },
+    "tsx": {
+      "class": "executable",
+      "validator": "typescript"
+    },
+    "txt": {
+      "class": "output",
+      "validator": "none"
+    }
+  },
+  "reviewedSkips": {
+    "generated-signature": {
+      "class": "illustrative",
+      "reason": "The API generator derives this declaration from the TypeScript checker; it is a signature, not a standalone program."
+    },
+    "source-provenance": {
+      "class": "illustrative",
+      "reason": "The excerpt is tied to a tracked repository source and intentionally omits surrounding declarations."
+    }
+  },
+  "readmeExclusions": {
+    "@kovojs/verify": {
+      "reason": "The standalone verifier intentionally ships a NOTICE and generated API reference instead of a package README."
+    }
+  }
+}

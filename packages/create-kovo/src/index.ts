@@ -24,6 +24,14 @@ import {
   renderKovoRulesBlock,
 } from '@kovojs/core/internal/agent-docs';
 
+import {
+  assertCreateKovoSqliteScaffoldAllowed,
+  readCreateKovoCliOptions,
+  type CreateKovoDialect,
+} from './cli-schema.js';
+
+export type { CreateKovoDialect } from './cli-schema.js';
+
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
 const nativeGetOwnPropertyDescriptor = NativeObject.getOwnPropertyDescriptor;
@@ -34,8 +42,6 @@ export interface CreateKovoOptions {
   dialect?: CreateKovoDialect;
   name: string;
 }
-
-export type CreateKovoDialect = 'postgres' | 'sqlite';
 
 export interface GeneratedFile {
   path: string;
@@ -515,8 +521,8 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   try {
-    const options = readCliOptions(args);
-    assertCliSqliteScaffoldAllowed(options);
+    const options = readCreateKovoCliOptions(args);
+    assertCreateKovoSqliteScaffoldAllowed(options);
     const result = writeKovoProject(options.targetDirectory, {
       ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
       ...(options.name === undefined ? {} : { name: options.name }),
@@ -712,114 +718,6 @@ function isInsideVersionControl(root: string): boolean {
     if (parent === current) return false;
     current = parent;
   }
-}
-
-interface CliOptions {
-  disableGit?: boolean;
-  dialect?: CreateKovoDialect;
-  experimentalSqlite?: boolean;
-  name?: string;
-  targetDirectory: string;
-}
-
-function readCliOptions(args: readonly string[]): CliOptions {
-  let disableGit: boolean | undefined;
-  let experimentalSqlite: boolean | undefined;
-  let targetDirectory: string | undefined;
-  let name: string | undefined;
-  let dialect: CreateKovoDialect | undefined;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--name') {
-      name = readRequiredOptionValue(args, index, '--name');
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--name=')) {
-      name = arg.slice('--name='.length);
-      if (!name) throw new Error('Missing value for --name.');
-      continue;
-    }
-
-    if (arg === '--dialect') {
-      dialect = parseDialectOption(readRequiredOptionValue(args, index, '--dialect'));
-      index += 1;
-      continue;
-    }
-
-    if (arg === '--sqlite') {
-      dialect = 'sqlite';
-      continue;
-    }
-
-    if (arg === '--disable-git') {
-      disableGit = true;
-      continue;
-    }
-
-    if (arg === '--experimental-sqlite') {
-      experimentalSqlite = true;
-      continue;
-    }
-
-    if (arg === '--postgres') {
-      dialect = 'postgres';
-      continue;
-    }
-
-    if (arg.startsWith('--dialect=')) {
-      dialect = parseDialectOption(arg.slice('--dialect='.length));
-      continue;
-    }
-
-    if (arg.startsWith('-')) {
-      throw new Error(`Unknown option: ${arg}`);
-    }
-
-    if (targetDirectory) {
-      throw new Error(`Unexpected argument: ${arg}`);
-    }
-    targetDirectory = arg;
-  }
-
-  if (!targetDirectory) {
-    throw new Error('Missing target directory.');
-  }
-
-  return {
-    ...(disableGit === undefined ? {} : { disableGit }),
-    ...(dialect === undefined ? {} : { dialect }),
-    ...(experimentalSqlite === undefined ? {} : { experimentalSqlite }),
-    ...(name === undefined ? {} : { name }),
-    targetDirectory,
-  };
-}
-
-function assertCliSqliteScaffoldAllowed(options: CliOptions): void {
-  if (options.dialect !== 'sqlite') return;
-  if (options.experimentalSqlite || process.env.KOVO_EXPERIMENTAL_SQLITE === '1') return;
-
-  throw new Error(
-    'SQLite scaffold is experimental and single-principal/local-dev only; it does not provide Kovo authorization/confidentiality guarantees. Set KOVO_EXPERIMENTAL_SQLITE=1 or pass --experimental-sqlite to scaffold it.',
-  );
-}
-
-function readRequiredOptionValue(args: readonly string[], index: number, option: string): string {
-  const value = args[index + 1];
-  if (!value || value.startsWith('-')) {
-    throw new Error(`Missing value for ${option}.`);
-  }
-  return value;
-}
-
-function parseDialectOption(value: string | undefined): CreateKovoDialect {
-  if (value === 'postgres' || value === 'sqlite') return value;
-
-  throw new Error(`Unsupported dialect: ${value ?? '<missing>'}.`);
 }
 
 function renderSuccess(result: WriteKovoProjectResult, dialect: CreateKovoDialect): string {

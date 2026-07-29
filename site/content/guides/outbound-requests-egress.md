@@ -14,14 +14,17 @@ destination.
 
 Use the framework-owned fetch in a task body:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/task.ts
 import { s, task } from '@kovojs/server';
 
 export const sendReceipt = task('email/send-receipt', {
   input: s.object({ orderId: s.string() }),
   async run({ orderId }, ctx) {
-    await ctx.fetch('https://api.resend.com/emails', { method: 'POST', body: JSON.stringify({ orderId }) });
+    await ctx.fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      body: JSON.stringify({ orderId }),
+    });
   },
 });
 ```
@@ -44,7 +47,7 @@ That is an `EgressBlockedError`.
 
 Add only the origins and internal destinations you mean to trust:
 
-```text
+```ts
 // Source-verified shape from packages/server/src/app-types.ts
 import { createApp } from '@kovojs/server';
 
@@ -76,7 +79,9 @@ without widening the origin allowlist. One private or metadata answer closes the
 Do this when your deployment uses DNS64/NAT64 with a Network-Specific Prefix. Copy the Pref64
 from the network configuration into the app posture:
 
-```text
+```ts
+import { createApp } from '@kovojs/server';
+
 createApp({
   egress: {
     nat64Prefixes: ['2001:db8:64::/96'],

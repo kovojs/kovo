@@ -35,7 +35,7 @@ describe('server JSX runtime types', () => {
         `
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
-import { component, queryRef } from '@kovojs/core';
+import { component, Link, queryRef } from '@kovojs/core';
 import type { TrustedUrl } from '@kovojs/browser';
 import { mutation, s } from '@kovojs/server';
 import type { MutationFormDefinition } from '@kovojs/server';
@@ -109,6 +109,17 @@ const streaming = (
 // @ts-expect-error SPEC §6.3/§6.6: structural objects cannot mint mutation form authority.
 const forgedMutation: MutationFormDefinition = { key: 'chat/send' };
 const uploadInput = <input type="file" accept="application/pdf" name="receipt" />;
+const standardHtmlAttributes = (
+  <>
+    <input defaultValue={1} />
+    <time dateTime="2026-07-28T12:00:00Z">Published</time>
+  </>
+);
+const typedLink = (
+  <Link to="/products/:id" params={{ id: 'p1' }}>
+    View product
+  </Link>
+);
 const kovoComponentOk = (
   <ProductCard productId="p1" selected style={{ color: 'red' }} kovo-key="p1">
     <span>Nested</span>
@@ -152,6 +163,8 @@ void trustedPoster;
 void streaming;
 void forgedMutation;
 void uploadInput;
+void standardHtmlAttributes;
+void typedLink;
 void kovoComponentOk;
 void plainFunctionComponentOk;
 void missingRequiredProp;

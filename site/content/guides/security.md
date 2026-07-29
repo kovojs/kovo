@@ -104,7 +104,9 @@ return type must be assignable to the session schema under static checking; brow
 crosses the runtime validators. The generated Better Auth integration returns a sanitized provider,
 not the raw auth instance:
 
-```text
+<!-- kovo-sample: illustrative reason="The session provider excerpt depends on generated auth bindings and the app-local request shell." -->
+
+```ts
 // authBindings comes from the framework-owned generated auth/database boundary
 export const commerceSessionProvider = commerceSession.provider(authBindings.sessionProvider);
 
@@ -128,6 +130,9 @@ Annotate the column that ties a table's rows to a principal in the schema:
 
 ```ts
 // schema.ts — `owner:` names the principal column
+import { kovo } from '@kovojs/drizzle';
+import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+
 export const orders = pgTable(
   'orders',
   {
@@ -141,8 +146,9 @@ export const orders = pgTable(
 
 Then scope every read and write of that table to the session, not to client input:
 
+<!-- kovo-sample: illustrative reason="The authorization excerpt depends on the app-owned request, schema, database, and domain declarations." -->
+
 ```ts
-// Source: app/orders/query.ts
 import { guards, query } from '@kovojs/server';
 
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
@@ -174,10 +180,16 @@ signer, or custom binding callback:
 
 ```ts
 import { betterAuthCsrfFromEnvironment } from '@kovojs/better-auth';
+import { mutation, publicAccess, s } from '@kovojs/server';
 
 export const commerceCsrf = betterAuthCsrfFromEnvironment({ field: 'csrf' });
 
-export const addToCart = mutation({ csrf: commerceCsrf /* … */ });
+export const addToCart = mutation({
+  access: publicAccess('public storefront cart'),
+  csrf: commerceCsrf,
+  input: s.object({ productId: s.string() }),
+  handler: (input) => ({ ok: true, productId: input.productId }),
+});
 ```
 
 Kovo emits the hidden field for mutation forms. Do not copy the returned configuration into a raw
@@ -376,14 +388,21 @@ export const users = pgTable(
 Project only the fields the UI needs:
 
 ```ts
-export const supportUser = query({
-  guard: guards.role('support'),
-  args: s.object({ userId: s.string() }),
-  load: (args, context: { db?: any }) =>
-    context?.db
-      ?.select({ id: users.id, email: users.email })
-      .from(users)
-      .where(eq(users.id, args.userId)) ?? [],
+import { domain, guards, query } from '@kovojs/server';
+
+interface SupportRequest {
+  session?: { user?: { roles: readonly string[] } | null } | null;
+}
+
+const user = domain('user');
+declare const users: any;
+const supportRead = guards.role<SupportRequest>('support');
+
+export const supportUsers = query({
+  guard: supportRead,
+  async load(_input: unknown, context?: { db?: any }): Promise<{ email: string; id: string }[]> {
+    return context?.db?.select({ id: users.id, email: users.email }).from(users) ?? [];
+  },
   reads: [user],
 });
 ```
