@@ -13,6 +13,7 @@ import { galleryComponentEntries } from './gallery-component-manifest.js';
 const expectedRoutes = galleryComponentEntries.map(
   (entry) => entry.path,
 ) as readonly GalleryRoute['path'][];
+const renderedGalleryFixtures = await galleryFixtures();
 
 describe('gallery demo fixtures', () => {
   it('renders one route fixture for each covered demo component', () => {
@@ -22,11 +23,11 @@ describe('gallery demo fixtures', () => {
       galleryRoutes.map((route) => `/components/${route.component}`),
     );
 
-    expect(galleryFixtures()).toHaveLength(galleryRoutes.length);
+    expect(renderedGalleryFixtures).toHaveLength(galleryRoutes.length);
   });
 
   it('keeps rendered demos as the test fixture surface', () => {
-    for (const fixture of galleryFixtures()) {
+    for (const fixture of renderedGalleryFixtures) {
       expect(fixture.html).toContain(`data-gallery-route="${fixture.path}"`);
       expect(fixture.html).toContain(`data-gallery-demo="${fixture.component}"`);
       expect(fixture.html).toContain('data-gallery-contract');
@@ -34,21 +35,21 @@ describe('gallery demo fixtures', () => {
     }
   });
 
-  it('renders route navigation links to every covered demo', () => {
+  it('renders route navigation links to every covered demo', async () => {
     const route = galleryRoutes[0];
 
     if (!route) {
       throw new Error('Expected at least one gallery route');
     }
 
-    const html = renderGalleryRoute(route);
+    const html = await renderGalleryRoute(route);
     for (const path of expectedRoutes) {
       expect(html).toContain(`href="${path}"`);
     }
     expect(html).toContain(`aria-current="page" href="${route.path}"`);
   });
 
-  it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
+  it('keeps static visual fixture HTML synchronized with rendered styled routes', async () => {
     expect(staticRouteFixtureMatrix.map((fixture) => fixture.path)).toEqual(expectedRoutes);
 
     for (const { fileName, path } of staticRouteFixtureMatrix) {
@@ -58,7 +59,7 @@ describe('gallery demo fixtures', () => {
       // Opt-in regeneration: `UPDATE_VISUAL_FIXTURES=1 vitest run demo-fixtures` rewrites the
       // committed `visual-fixtures/*.html.txt` from the current styled render (used after an
       // intentional component/demo change), then the default assertion mode pins them.
-      const rendered = `${renderGalleryRoute(route)}\n`;
+      const rendered = `${await renderGalleryRoute(route)}\n`;
       if (process.env.UPDATE_VISUAL_FIXTURES) {
         writeFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), rendered);
       } else {
@@ -123,9 +124,7 @@ describe('gallery demo fixtures', () => {
           functionName: fixture.functionName,
           route: fixture.route,
           routeMarker: source.includes(`data-gallery-demo="${fixture.component}"`),
-          styledRenderCalls: fixture.styledRenderCalls.filter((name) =>
-            source.includes(`${name}.definition.render`),
-          ),
+          styledJsxCalls: fixture.styledJsxCalls.filter((name) => source.includes(`<${name}`)),
         };
       }),
     ).toEqual([
@@ -143,7 +142,7 @@ describe('gallery demo fixtures', () => {
         functionName: 'AutocompleteDemo',
         route: '/components/autocomplete',
         routeMarker: true,
-        styledRenderCalls: [
+        styledJsxCalls: [
           'Autocomplete',
           'AutocompleteInput',
           'AutocompleteList',
@@ -165,7 +164,7 @@ describe('gallery demo fixtures', () => {
         functionName: 'ComboboxDemo',
         route: '/components/combobox',
         routeMarker: true,
-        styledRenderCalls: [
+        styledJsxCalls: [
           'Combobox',
           'ComboboxInput',
           'ComboboxListbox',
@@ -187,7 +186,7 @@ describe('gallery demo fixtures', () => {
         functionName: 'CommandDemo',
         route: '/components/command',
         routeMarker: true,
-        styledRenderCalls: [
+        styledJsxCalls: [
           'Command',
           'CommandTrigger',
           'CommandDialog',
@@ -213,7 +212,7 @@ describe('gallery demo fixtures', () => {
         functionName: 'SelectDemo',
         route: '/components/select',
         routeMarker: true,
-        styledRenderCalls: [
+        styledJsxCalls: [
           'Select',
           'SelectTrigger',
           'SelectHiddenInput',
@@ -1032,7 +1031,7 @@ describe('gallery demo fixtures', () => {
 });
 
 function findFixture(path: (typeof galleryRoutes)[number]['path']) {
-  const fixture = galleryFixtures().find((candidate) => candidate.path === path);
+  const fixture = renderedGalleryFixtures.find((candidate) => candidate.path === path);
 
   if (!fixture) {
     throw new Error(`Missing gallery fixture for ${path}`);
@@ -1075,7 +1074,7 @@ const h3SearchSelectionSourceFixtures = [
     ],
     functionName: 'AutocompleteDemo',
     route: '/components/autocomplete',
-    styledRenderCalls: [
+    styledJsxCalls: [
       'Autocomplete',
       'AutocompleteInput',
       'AutocompleteList',
@@ -1096,7 +1095,7 @@ const h3SearchSelectionSourceFixtures = [
     ],
     functionName: 'ComboboxDemo',
     route: '/components/combobox',
-    styledRenderCalls: [
+    styledJsxCalls: [
       'Combobox',
       'ComboboxInput',
       'ComboboxListbox',
@@ -1117,7 +1116,7 @@ const h3SearchSelectionSourceFixtures = [
     ],
     functionName: 'CommandDemo',
     route: '/components/command',
-    styledRenderCalls: [
+    styledJsxCalls: [
       'Command',
       'CommandTrigger',
       'CommandDialog',
@@ -1142,7 +1141,7 @@ const h3SearchSelectionSourceFixtures = [
     ],
     functionName: 'SelectDemo',
     route: '/components/select',
-    styledRenderCalls: [
+    styledJsxCalls: [
       'Select',
       'SelectTrigger',
       'SelectHiddenInput',
@@ -1161,15 +1160,14 @@ function readGalleryFixtureSources(): readonly string[] {
 }
 
 function extractDemoSource(moduleSources: readonly string[], functionName: string): string {
-  const moduleSource = moduleSources.find((source) =>
-    source.includes(`export function ${functionName}(): string {`),
-  );
+  const marker = `export function ${functionName}() {`;
+  const moduleSource = moduleSources.find((source) => source.includes(marker));
 
   if (!moduleSource) {
     throw new Error(`Missing demo source for ${functionName}`);
   }
 
-  const start = moduleSource.indexOf(`export function ${functionName}(): string {`);
+  const start = moduleSource.indexOf(marker);
   const next = moduleSource.indexOf('\nexport function ', start + 1);
   return moduleSource.slice(start, next === -1 ? moduleSource.length : next);
 }

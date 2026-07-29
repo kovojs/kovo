@@ -249,7 +249,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/avatar': [
     'role="img"',
     'aria-label="Ada Lovelace avatar"',
-    '<img alt="Ada Lovelace"',
+    'alt="Ada Lovelace"',
     'decoding="async"',
     'data-delay="250"',
     'hidden>GH</span>',
@@ -596,16 +596,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
 };
 
 describe('gallery behavior-contract gates', () => {
-  it('pins every rendered route to an exact browser-free behavior contract', () => {
-    for (const fixture of galleryFixtures()) {
+  it('pins every rendered route to an exact browser-free behavior contract', async () => {
+    for (const fixture of await galleryFixtures()) {
       expect(extractBehaviorContract(fixture.html), fixture.path).toEqual(
         expectedBehaviorContracts[fixture.path],
       );
     }
   });
 
-  it('pins represented primitive routes to required native and ARIA behavior snippets', () => {
-    for (const fixture of galleryFixtures()) {
+  it('pins represented primitive routes to required native and ARIA behavior snippets', async () => {
+    for (const fixture of await galleryFixtures()) {
       const snippets = expectedBehaviorSnippets[fixture.path] ?? [];
 
       for (const snippet of snippets) {

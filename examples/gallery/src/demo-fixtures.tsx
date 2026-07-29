@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 import {
   MeterDemo,
   NumberFieldDemo,
@@ -162,7 +162,7 @@ export type GalleryPrimitive = GalleryComponent;
 export interface GalleryRoute {
   component: GalleryComponent;
   path: GalleryComponentPath;
-  render(): string;
+  render(): unknown;
   title: string;
 }
 
@@ -218,7 +218,7 @@ const galleryDemoRenderers = {
   'toggle-group': () => ToggleGroupDemo(),
   toolbar: () => ToolbarDemo(),
   tooltip: () => TooltipDemo(),
-} satisfies Record<GalleryComponent, () => string>;
+} satisfies Record<GalleryComponent, () => unknown>;
 
 export const galleryRoutes: readonly GalleryRoute[] = Object.freeze(
   galleryComponentEntries.map(({ component, path, title }) => ({
@@ -229,45 +229,38 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze(
   })),
 );
 
-export function galleryFixtures(): readonly GalleryFixture[] {
-  return galleryRoutes.map((route) => ({
-    component: route.component,
-    html: renderGalleryRoute(route),
-    path: route.path,
-    title: route.title,
-  }));
-}
-
-export function renderGalleryRoute(route: GalleryRoute): string {
-  return decodeTrustedGalleryHtml(
-    renderedValueToHtml(
-      <main data-gallery-route={route.path}>
-        <nav aria-label="Components">
-          {galleryRoutes.map((candidate) => (
-            <a
-              aria-current={candidate.path === route.path ? 'page' : undefined}
-              href={candidate.path}
-            >
-              {candidate.title}
-            </a>
-          ))}
-        </nav>
-        <h1>{route.title}</h1>
-        {route.render()}
-      </main>,
-    ),
+export async function galleryFixtures(): Promise<readonly GalleryFixture[]> {
+  return Promise.all(
+    galleryRoutes.map(async (route) => ({
+      component: route.component,
+      html: await renderGalleryRoute(route),
+      path: route.path,
+      title: route.title,
+    })),
   );
 }
 
-function renderedValueToHtml(value: unknown): string {
-  if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
-  if (typeof value === 'object' && typeof (value as { html?: unknown }).html === 'string') {
-    return (value as { html: string }).html;
-  }
-
-  return JSON.stringify(value) ?? '';
+export async function renderGalleryRoute(route: GalleryRoute): Promise<string> {
+  return decodeTrustedGalleryHtml(
+    renderRouteHtml(
+      await Promise.resolve(
+        <main data-gallery-route={route.path}>
+          <nav aria-label="Components">
+            {galleryRoutes.map((candidate) => (
+              <a
+                aria-current={candidate.path === route.path ? 'page' : undefined}
+                href={candidate.path}
+              >
+                {candidate.title}
+              </a>
+            ))}
+          </nav>
+          <h1>{route.title}</h1>
+          {route.render()}
+        </main>,
+      ),
+    ),
+  );
 }
 
 function decodeTrustedGalleryHtml(html: string): string {
@@ -284,7 +277,7 @@ function decodeTrustedGalleryHtml(html: string): string {
   return decoded;
 }
 
-export function AccordionDemo(): string {
+export function AccordionDemo() {
   const state = {
     orientation: 'vertical' as const,
     type: 'multiple' as const,
@@ -299,51 +292,56 @@ export function AccordionDemo(): string {
         Accordion keeps each item addressable with native-friendly open and hidden attributes.
       </p>
       <div data-ui-demo="accordion">
-        {Accordion.definition.render({
-          ...state,
-          children:
-            AccordionItem.definition.render({
-              ...shipping,
-              children:
-                AccordionHeader.definition.render({
-                  ...shipping,
-                  children: AccordionTrigger.definition.render({
-                    ...shipping,
-                    children: 'Shipping',
-                    contentId: 'gallery-accordion-shipping-panel',
-                    triggerId: 'gallery-accordion-shipping-trigger',
-                  }),
-                  level: 3,
-                }) +
-                AccordionContent.definition.render({
-                  ...shipping,
-                  children: 'Ships from the nearest warehouse.',
-                  contentId: 'gallery-accordion-shipping-panel',
-                  triggerId: 'gallery-accordion-shipping-trigger',
-                }),
-            }) +
-            AccordionItem.definition.render({
-              ...billing,
-              children:
-                AccordionHeader.definition.render({
-                  ...billing,
-                  children: AccordionTrigger.definition.render({
-                    ...billing,
-                    children: 'Billing',
-                    contentId: 'gallery-accordion-billing-panel',
-                    triggerId: 'gallery-accordion-billing-trigger',
-                  }),
-                  level: 3,
-                }) +
-                AccordionContent.definition.render({
-                  ...billing,
-                  children: 'Invoices remain available after checkout.',
-                  contentId: 'gallery-accordion-billing-panel',
-                  triggerId: 'gallery-accordion-billing-trigger',
-                }),
-            }),
-          id: 'gallery-accordion',
-        })}
+        {
+          <Accordion {...state} id={'gallery-accordion'}>
+            {[
+              <AccordionItem {...shipping}>
+                {[
+                  <AccordionHeader {...shipping} level={3}>
+                    {
+                      <AccordionTrigger
+                        {...shipping}
+                        contentId={'gallery-accordion-shipping-panel'}
+                        triggerId={'gallery-accordion-shipping-trigger'}
+                      >
+                        {'Shipping'}
+                      </AccordionTrigger>
+                    }
+                  </AccordionHeader>,
+                  <AccordionContent
+                    {...shipping}
+                    contentId={'gallery-accordion-shipping-panel'}
+                    triggerId={'gallery-accordion-shipping-trigger'}
+                  >
+                    {'Ships from the nearest warehouse.'}
+                  </AccordionContent>,
+                ]}
+              </AccordionItem>,
+              <AccordionItem {...billing}>
+                {[
+                  <AccordionHeader {...billing} level={3}>
+                    {
+                      <AccordionTrigger
+                        {...billing}
+                        contentId={'gallery-accordion-billing-panel'}
+                        triggerId={'gallery-accordion-billing-trigger'}
+                      >
+                        {'Billing'}
+                      </AccordionTrigger>
+                    }
+                  </AccordionHeader>,
+                  <AccordionContent
+                    {...billing}
+                    contentId={'gallery-accordion-billing-panel'}
+                    triggerId={'gallery-accordion-billing-trigger'}
+                  >
+                    {'Invoices remain available after checkout.'}
+                  </AccordionContent>,
+                ]}
+              </AccordionItem>,
+            ]}
+          </Accordion>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -359,7 +357,7 @@ export function AccordionDemo(): string {
 // not an allowed scheme), so the loaded avatars must be committed static assets
 // (gradient disc + monogram). The `error` fixture intentionally points at a
 // missing file to exercise the initials fallback / data-state="error" visual.
-export function AvatarDemo(): string {
+export function AvatarDemo() {
   const loading = {
     src: '/avatars/ada.svg',
     status: 'loading' as const,
@@ -380,32 +378,38 @@ export function AvatarDemo(): string {
         document.
       </p>
       <div data-ui-demo="avatar">
-        {Avatar.definition.render({
-          ...loading,
-          children:
-            AvatarImage.definition.render({
-              ...loading,
-              alt: 'Ada Lovelace',
-              decoding: 'async',
-              loading: 'lazy',
-              sizes: '40px',
-            }) + AvatarFallback.definition.render({ ...loading, children: 'AL', delayMs: 250 }),
-          label: 'Ada Lovelace avatar',
-        })}
-        {Avatar.definition.render({
-          ...loaded,
-          children:
-            AvatarImage.definition.render({ ...loaded, alt: 'Grace Hopper' }) +
-            AvatarFallback.definition.render({ ...loaded, children: 'GH' }),
-          label: 'Grace Hopper avatar',
-        })}
-        {Avatar.definition.render({
-          ...error,
-          children:
-            AvatarImage.definition.render({ ...error, alt: 'Lin Wei' }) +
-            AvatarFallback.definition.render({ ...error, children: 'LW' }),
-          label: 'Lin Wei avatar',
-        })}
+        {
+          <Avatar {...loading} label={'Ada Lovelace avatar'}>
+            {[
+              <AvatarImage
+                {...loading}
+                alt={'Ada Lovelace'}
+                decoding={'async'}
+                loading={'lazy'}
+                sizes={'40px'}
+              />,
+              <AvatarFallback {...loading} delayMs={250}>
+                {'AL'}
+              </AvatarFallback>,
+            ]}
+          </Avatar>
+        }
+        {
+          <Avatar {...loaded} label={'Grace Hopper avatar'}>
+            {[
+              <AvatarImage {...loaded} alt={'Grace Hopper'} />,
+              <AvatarFallback {...loaded}>{'GH'}</AvatarFallback>,
+            ]}
+          </Avatar>
+        }
+        {
+          <Avatar {...error} label={'Lin Wei avatar'}>
+            {[
+              <AvatarImage {...error} alt={'Lin Wei'} />,
+              <AvatarFallback {...error}>{'LW'}</AvatarFallback>,
+            ]}
+          </Avatar>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'image-load, image-error, programmatic',
@@ -416,24 +420,23 @@ export function AvatarDemo(): string {
   );
 }
 
-export function AlertDemo(): string {
+export function AlertDemo() {
   return (
     <section data-gallery-demo="alert">
       <p data-demo-summary="no-js">
         Alert keeps status and alert roles in source-authored markup with no client behavior.
       </p>
       <div data-ui-demo="alert">
-        {Alert.definition.render({
-          children: 'Imports completed successfully.',
-          title: 'Import complete',
-          variant: 'success',
-        })}
-        {Alert.definition.render({
-          children: 'Payment method must be updated before renewal.',
-          role: 'alert',
-          title: 'Billing issue',
-          variant: 'danger',
-        })}
+        {
+          <Alert title={'Import complete'} variant={'success'}>
+            {'Imports completed successfully.'}
+          </Alert>
+        }
+        {
+          <Alert role={'alert'} title={'Billing issue'} variant={'danger'}>
+            {'Payment method must be updated before renewal.'}
+          </Alert>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
@@ -444,7 +447,7 @@ export function AlertDemo(): string {
   );
 }
 
-export function AlertDialogDemo(): string {
+export function AlertDialogDemo() {
   const state = {
     contentId: 'gallery-alert-dialog-content',
     descriptionId: 'gallery-alert-dialog-description',
@@ -458,31 +461,26 @@ export function AlertDialogDemo(): string {
         Alert dialog keeps destructive confirmation controls wired to a native dialog element.
       </p>
       <div data-ui-demo="alert-dialog">
-        {AlertDialog.definition.render({
-          ...state,
-          children:
-            AlertDialogTrigger.definition.render({
-              ...state,
-              children: 'Delete project',
-              open: false,
-            }) +
-            AlertDialogContent.definition.render({
-              ...state,
-              children:
-                '<h2 id="gallery-alert-dialog-title">Delete production project?</h2><p id="gallery-alert-dialog-description">This action removes deploy tokens and cannot be undone.</p>' +
-                AlertDialogCancel.definition.render({
-                  ...state,
-                  autoFocus: true,
-                  children: 'Cancel',
-                }) +
-                AlertDialogAction.definition.render({
-                  ...state,
-                  children: 'Delete',
-                  intent: 'destructive',
-                }),
-            }),
-          id: 'gallery-alert-dialog',
-        })}
+        {
+          <AlertDialog {...state} id={'gallery-alert-dialog'}>
+            {[
+              <AlertDialogTrigger {...state} open={false}>
+                {'Delete project'}
+              </AlertDialogTrigger>,
+              <AlertDialogContent {...state}>
+                {[
+                  '<h2 id="gallery-alert-dialog-title">Delete production project?</h2><p id="gallery-alert-dialog-description">This action removes deploy tokens and cannot be undone.</p>',
+                  <AlertDialogCancel {...state} autoFocus={true}>
+                    {'Cancel'}
+                  </AlertDialogCancel>,
+                  <AlertDialogAction {...state} intent={'destructive'}>
+                    {'Delete'}
+                  </AlertDialogAction>,
+                ]}
+              </AlertDialogContent>,
+            ]}
+          </AlertDialog>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -494,7 +492,7 @@ export function AlertDialogDemo(): string {
   );
 }
 
-export function AutocompleteDemo(): string {
+export function AutocompleteDemo() {
   const items = [
     { label: 'Starter plan', value: 'starter' },
     { label: 'Growth plan', value: 'growth' },
@@ -524,39 +522,39 @@ export function AutocompleteDemo(): string {
       </label>
       <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
       <div data-ui-demo="autocomplete">
-        {Autocomplete.definition.render({
-          ...state,
-          children: (
-            <>
-              {AutocompleteInput.definition.render({
-                ...state,
-                id: 'gallery-autocomplete-input',
-                labelledBy: 'gallery-autocomplete-label',
-                placeholder: 'Search plans',
-              })}
-              {AutocompleteList.definition.render({
-                ...state,
-                children: items
-                  .map((item) =>
-                    AutocompleteOption.definition.render({
-                      ...state,
-                      itemLabel: item.label,
-                      itemValue: item.value,
-                    }),
-                  )
-                  .join(''),
-                id: 'gallery-autocomplete-list',
-                labelledBy: 'gallery-autocomplete-label',
-              })}
-              {AutocompleteValue.definition.render({
-                ...state,
-                id: 'gallery-autocomplete-value',
-              })}
-              <p id="gallery-autocomplete-description">Suggestions remain browser-native.</p>
-            </>
-          ),
-          id: 'gallery-autocomplete',
-        })}
+        {
+          <Autocomplete {...state} id={'gallery-autocomplete'}>
+            {
+              <>
+                {
+                  <AutocompleteInput
+                    {...state}
+                    id={'gallery-autocomplete-input'}
+                    labelledBy={'gallery-autocomplete-label'}
+                    placeholder={'Search plans'}
+                  />
+                }
+                {
+                  <AutocompleteList
+                    {...state}
+                    id={'gallery-autocomplete-list'}
+                    labelledBy={'gallery-autocomplete-label'}
+                  >
+                    {items.map((item) => (
+                      <AutocompleteOption
+                        {...state}
+                        itemLabel={item.label}
+                        itemValue={item.value}
+                      />
+                    ))}
+                  </AutocompleteList>
+                }
+                {<AutocompleteValue {...state} id={'gallery-autocomplete-value'} />}
+                <p id="gallery-autocomplete-description">Suggestions remain browser-native.</p>
+              </>
+            }
+          </Autocomplete>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'input, option-select, typeahead, programmatic',
@@ -567,16 +565,16 @@ export function AutocompleteDemo(): string {
   );
 }
 
-export function BadgeDemo(): string {
+export function BadgeDemo() {
   return (
     <section data-gallery-demo="badge">
       <p data-demo-summary="no-js">
         Badge is a pure styled source component with no behavior island.
       </p>
       <div data-ui-demo="badge">
-        {Badge.definition.render({ children: 'Draft', variant: 'neutral' })}
-        {Badge.definition.render({ children: 'Live', variant: 'success' })}
-        {Badge.definition.render({ children: 'Needs review', variant: 'warning' })}
+        {<Badge variant={'neutral'}>{'Draft'}</Badge>}
+        {<Badge variant={'success'}>{'Live'}</Badge>}
+        {<Badge variant={'warning'}>{'Needs review'}</Badge>}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
@@ -587,17 +585,16 @@ export function BadgeDemo(): string {
   );
 }
 
-export function BreadcrumbDemo(): string {
-  const account = BreadcrumbItem.definition.render({
-    children: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),
-  });
-  const separator = BreadcrumbSeparator.definition.render({});
-  const billing = BreadcrumbItem.definition.render({
-    children: BreadcrumbLink.definition.render({
-      children: 'Billing',
-      current: true,
-    }),
-  });
+export function BreadcrumbDemo() {
+  const account = (
+    <BreadcrumbItem>
+      {<BreadcrumbLink href={'/account'}>{'Account'}</BreadcrumbLink>}
+    </BreadcrumbItem>
+  );
+  const separator = <BreadcrumbSeparator />;
+  const billing = (
+    <BreadcrumbItem>{<BreadcrumbLink current={true}>{'Billing'}</BreadcrumbLink>}</BreadcrumbItem>
+  );
 
   return (
     <section data-gallery-demo="breadcrumb">
@@ -605,13 +602,7 @@ export function BreadcrumbDemo(): string {
         Breadcrumb is a native navigation list with current-page and decorative separator semantics.
       </p>
       <div data-ui-demo="breadcrumb">
-        {Breadcrumb.definition.render({
-          children: trustedHtml(`${account}${separator}${billing}`, {
-            reason: 'breadcrumb fixture composes Kovo-rendered primitive markup',
-            source: 'examples/gallery/src/demo-fixtures.tsx',
-          }) as unknown as string,
-          label: 'Account path',
-        })}
+        <Breadcrumb label={'Account path'}>{[account, separator, billing]}</Breadcrumb>
       </div>
       {renderBehaviorContract({
         changeReasons: 'native link navigation',
@@ -622,7 +613,7 @@ export function BreadcrumbDemo(): string {
   );
 }
 
-export function ButtonDemo(): string {
+export function ButtonDemo() {
   return (
     <section data-gallery-demo="button">
       <p data-demo-summary="no-js">
@@ -630,15 +621,22 @@ export function ButtonDemo(): string {
       </p>
       <form id="gallery-button-form" data-gallery-form="button" />
       <div data-ui-demo="button">
-        {Button.definition.render({
-          children: 'Save changes',
-          form: 'gallery-button-form',
-          name: 'gallery-action',
-          type: 'submit',
-          value: 'save',
-        })}
-        {Button.definition.render({ children: 'Preview', variant: 'secondary' })}
-        {Button.definition.render({ children: 'Archived', disabled: true, variant: 'ghost' })}
+        {
+          <Button
+            form={'gallery-button-form'}
+            name={'gallery-action'}
+            type={'submit'}
+            value={'save'}
+          >
+            {'Save changes'}
+          </Button>
+        }
+        {<Button variant={'secondary'}>{'Preview'}</Button>}
+        {
+          <Button disabled={true} variant={'ghost'}>
+            {'Archived'}
+          </Button>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'native click or form submit',
@@ -649,28 +647,24 @@ export function ButtonDemo(): string {
   );
 }
 
-export function CardDemo(): string {
-  const anatomy =
-    CardHeader.definition.render({
-      children:
-        CardTitle.definition.render({ children: 'Release candidate' }) +
-        CardDescription.definition.render({
-          children: 'Security review and package checks are complete.',
-        }),
-    }) +
-    CardContent.definition.render({
-      children: 'Ready for the production deployment window.',
-    }) +
-    CardFooter.definition.render({
-      children: 'Last verified just now',
-    });
+export function CardDemo() {
+  const anatomy = [
+    <CardHeader>
+      {[
+        <CardTitle>{'Release candidate'}</CardTitle>,
+        <CardDescription>{'Security review and package checks are complete.'}</CardDescription>,
+      ]}
+    </CardHeader>,
+    <CardContent>{'Ready for the production deployment window.'}</CardContent>,
+    <CardFooter>{'Last verified just now'}</CardFooter>,
+  ];
 
   return (
     <section data-gallery-demo="card">
       <p data-demo-summary="no-js">
         Card exposes one header, title, description, content, and footer anatomy in pure markup.
       </p>
-      <div data-ui-demo="card">{Card.definition.render({ children: anatomy })}</div>
+      <div data-ui-demo="card">{<Card>{anatomy}</Card>}</div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
         dataState: 'not emitted',
@@ -680,7 +674,7 @@ export function CardDemo(): string {
   );
 }
 
-export function CheckboxDemo(): string {
+export function CheckboxDemo() {
   return (
     <section data-gallery-demo="checkbox">
       <p data-demo-summary="no-js">
@@ -692,31 +686,33 @@ export function CheckboxDemo(): string {
       </span>
       <div data-ui-demo="checkbox">
         <span data-fixture-state="checked">
-          {Checkbox.definition.render({
-            checked: true,
-            children: 'Accept terms',
-            describedBy: 'gallery-checkbox-help',
-            form: 'gallery-checkbox-form',
-            id: 'gallery-checkbox-consent',
-            name: 'gallery-consent',
-            required: true,
-            value: 'accepted',
-          })}
+          {
+            <Checkbox
+              checked={true}
+              describedBy={'gallery-checkbox-help'}
+              form={'gallery-checkbox-form'}
+              id={'gallery-checkbox-consent'}
+              name={'gallery-consent'}
+              required={true}
+              value={'accepted'}
+            >
+              {'Accept terms'}
+            </Checkbox>
+          }
         </span>
         <span data-fixture-state="indeterminate">
-          {Checkbox.definition.render({
-            checked: 'indeterminate',
-            children: 'Some permissions',
-            name: 'gallery-partial',
-            value: 'partial',
-          })}
+          {
+            <Checkbox checked={'indeterminate'} name={'gallery-partial'} value={'partial'}>
+              {'Some permissions'}
+            </Checkbox>
+          }
         </span>
         <span data-fixture-state="disabled">
-          {Checkbox.definition.render({
-            checked: false,
-            children: 'Locked option',
-            disabled: true,
-          })}
+          {
+            <Checkbox checked={false} disabled={true}>
+              {'Locked option'}
+            </Checkbox>
+          }
         </span>
       </div>
       {renderBehaviorContract({
@@ -728,7 +724,7 @@ export function CheckboxDemo(): string {
   );
 }
 
-export function CheckboxGroupDemo(): string {
+export function CheckboxGroupDemo() {
   const items = [{ value: 'updates' }, { value: 'billing' }, { disabled: true, value: 'security' }];
   const state = {
     descriptionId: 'gallery-checkbox-group-description',
@@ -750,35 +746,39 @@ export function CheckboxGroupDemo(): string {
       <p id="gallery-checkbox-group-error">Select at least one notification type.</p>
       <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
       <div data-ui-demo="checkbox-group">
-        {CheckboxGroup.definition.render({
-          ...state,
-          children: items
-            .map((item) =>
-              CheckboxGroupItem.definition.render({
-                ...state,
-                children: (
+        {
+          <CheckboxGroup
+            {...state}
+            errorId={'gallery-checkbox-group-error'}
+            invalid={true}
+            labelledBy={'gallery-checkbox-group-label'}
+          >
+            {items.map((item) => (
+              <CheckboxGroupItem {...state} itemValue={item.value}>
+                {
                   <>
-                    {CheckboxGroupControl.definition.render({
-                      ...state,
-                      controlId: `gallery-checkbox-group-${item.value}`,
-                      itemValue: item.value,
-                    })}
-                    {CheckboxGroupLabel.definition.render({
-                      ...state,
-                      children: item.value,
-                      controlId: `gallery-checkbox-group-${item.value}`,
-                      itemValue: item.value,
-                    })}
+                    {
+                      <CheckboxGroupControl
+                        {...state}
+                        controlId={`gallery-checkbox-group-${item.value}`}
+                        itemValue={item.value}
+                      />
+                    }
+                    {
+                      <CheckboxGroupLabel
+                        {...state}
+                        controlId={`gallery-checkbox-group-${item.value}`}
+                        itemValue={item.value}
+                      >
+                        {item.value}
+                      </CheckboxGroupLabel>
+                    }
                   </>
-                ),
-                itemValue: item.value,
-              }),
-            )
-            .join(''),
-          errorId: 'gallery-checkbox-group-error',
-          invalid: true,
-          labelledBy: 'gallery-checkbox-group-label',
-        })}
+                }
+              </CheckboxGroupItem>
+            ))}
+          </CheckboxGroup>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'item-click, keyboard, programmatic',
@@ -789,7 +789,7 @@ export function CheckboxGroupDemo(): string {
   );
 }
 
-export function CollapsibleDemo(): string {
+export function CollapsibleDemo() {
   const state = {
     contentId: 'gallery-collapsible-content',
     open: true,
@@ -802,31 +802,31 @@ export function CollapsibleDemo(): string {
         styled part.
       </p>
       <div data-ui-demo="collapsible">
-        {Collapsible.definition.render({
-          children:
-            CollapsibleTrigger.definition.render({ ...state, children: 'Release notes' }) +
-            CollapsibleContent.definition.render({
-              ...state,
-              children: 'Includes dependency updates and migration notes.',
-            }),
-          id: 'gallery-collapsible',
-          open: state.open,
-        })}
-        {Collapsible.definition.render({
-          children:
-            CollapsibleTrigger.definition.render({
-              children: 'Archived notes',
-              contentId: 'gallery-collapsible-disabled-content',
-              disabled: true,
-            }) +
-            CollapsibleContent.definition.render({
-              children: 'Archived content remains present for no-JS readers.',
-              contentId: 'gallery-collapsible-disabled-content',
-            }),
-          disabled: true,
-          id: 'gallery-collapsible-disabled',
-          open: false,
-        })}
+        {
+          <Collapsible id={'gallery-collapsible'} open={state.open}>
+            {[
+              <CollapsibleTrigger {...state}>{'Release notes'}</CollapsibleTrigger>,
+              <CollapsibleContent {...state}>
+                {'Includes dependency updates and migration notes.'}
+              </CollapsibleContent>,
+            ]}
+          </Collapsible>
+        }
+        {
+          <Collapsible disabled={true} id={'gallery-collapsible-disabled'} open={false}>
+            {[
+              <CollapsibleTrigger
+                contentId={'gallery-collapsible-disabled-content'}
+                disabled={true}
+              >
+                {'Archived notes'}
+              </CollapsibleTrigger>,
+              <CollapsibleContent contentId={'gallery-collapsible-disabled-content'}>
+                {'Archived content remains present for no-JS readers.'}
+              </CollapsibleContent>,
+            ]}
+          </Collapsible>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -837,7 +837,7 @@ export function CollapsibleDemo(): string {
   );
 }
 
-export function ComboboxDemo(): string {
+export function ComboboxDemo() {
   const items = [
     { label: 'Ada Lovelace', value: 'ada' },
     { label: 'Grace Hopper', value: 'grace' },
@@ -867,36 +867,39 @@ export function ComboboxDemo(): string {
       </label>
       <form id="gallery-combobox-form" data-gallery-form="combobox" />
       <div data-ui-demo="combobox">
-        {Combobox.definition.render({
-          ...state,
-          children: (
-            <>
-              {ComboboxInput.definition.render({
-                ...state,
-                id: 'gallery-combobox-input',
-                labelledBy: 'gallery-combobox-label',
-              })}
-              {ComboboxListbox.definition.render({
-                ...state,
-                children: items
-                  .map((item, index) =>
-                    ComboboxOption.definition.render({
-                      ...state,
-                      id: `gallery-combobox-listbox-option-${index}`,
-                      itemLabel: item.label,
-                      itemValue: item.value,
-                    }),
-                  )
-                  .join(''),
-                id: 'gallery-combobox-listbox',
-                labelledBy: 'gallery-combobox-label',
-              })}
-              {ComboboxValue.definition.render({ ...state, id: 'gallery-combobox-value' })}
-              <p id="gallery-combobox-description">Choose a release owner.</p>
-            </>
-          ),
-          id: 'gallery-combobox',
-        })}
+        {
+          <Combobox {...state} id={'gallery-combobox'}>
+            {
+              <>
+                {
+                  <ComboboxInput
+                    {...state}
+                    id={'gallery-combobox-input'}
+                    labelledBy={'gallery-combobox-label'}
+                  />
+                }
+                {
+                  <ComboboxListbox
+                    {...state}
+                    id={'gallery-combobox-listbox'}
+                    labelledBy={'gallery-combobox-label'}
+                  >
+                    {items.map((item, index) => (
+                      <ComboboxOption
+                        {...state}
+                        id={`gallery-combobox-listbox-option-${index}`}
+                        itemLabel={item.label}
+                        itemValue={item.value}
+                      />
+                    ))}
+                  </ComboboxListbox>
+                }
+                {<ComboboxValue {...state} id={'gallery-combobox-value'} />}
+                <p id="gallery-combobox-description">Choose a release owner.</p>
+              </>
+            }
+          </Combobox>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'input, option-select, arrow-key, escape-key, typeahead, programmatic',
@@ -907,7 +910,7 @@ export function ComboboxDemo(): string {
   );
 }
 
-export function CommandDemo(): string {
+export function CommandDemo() {
   const items = [
     { label: 'Open dashboard', value: 'dashboard' },
     { label: 'Invite teammate', value: 'invite' },
@@ -932,66 +935,70 @@ export function CommandDemo(): string {
       </p>
       <div data-ui-demo="command">
         <form id="gallery-command-form"></form>
-        {Command.definition.render({
-          ...state,
-          children: (
-            <>
-              {CommandTrigger.definition.render({
-                ...state,
-                contentId: 'gallery-command-dialog',
-                id: 'gallery-command-trigger',
-              })}
-              {CommandDialog.definition.render({
-                ...state,
-                children: (
-                  <>
-                    <h2 id="gallery-command-title">Command menu</h2>
-                    <p id="gallery-command-description">Search project actions.</p>
-                    {CommandInput.definition.render({
-                      ...state,
-                      id: 'gallery-command-input',
-                      labelledBy: 'gallery-command-title',
-                      listboxId: 'gallery-command-listbox',
-                    })}
-                    {CommandListbox.definition.render({
-                      ...state,
-                      children: items
-                        .map((item) =>
-                          CommandItem.definition.render({
-                            ...state,
-                            id: `gallery-command-listbox-item-${items.indexOf(item)}`,
-                            ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
-                            itemLabel: item.label,
-                            itemValue: item.value,
-                          }),
-                        )
-                        .join(''),
-                      id: 'gallery-command-listbox',
-                      labelledBy: 'gallery-command-title',
-                    })}
-                    {CommandEmpty.definition.render({
-                      inputValue: 'zzz',
-                      items,
-                      children: 'No matching command',
-                    })}
-                    {CommandClose.definition.render({
-                      ...state,
-                      contentId: 'gallery-command-dialog',
-                    })}
-                    {CommandValue.definition.render({
-                      ...state,
-                      id: 'gallery-command-value',
-                    })}
-                  </>
-                ),
-                contentId: 'gallery-command-dialog',
-                descriptionId: 'gallery-command-description',
-                titleId: 'gallery-command-title',
-              })}
-            </>
-          ),
-          id: 'gallery-command',
-        })}
+        {
+          <Command {...state} id={'gallery-command'}>
+            {
+              <>
+                {
+                  <CommandTrigger
+                    {...state}
+                    contentId={'gallery-command-dialog'}
+                    id={'gallery-command-trigger'}
+                  />
+                }
+                {
+                  <CommandDialog
+                    {...state}
+                    contentId={'gallery-command-dialog'}
+                    descriptionId={'gallery-command-description'}
+                    titleId={'gallery-command-title'}
+                  >
+                    {
+                      <>
+                        <h2 id="gallery-command-title">Command menu</h2>
+                        <p id="gallery-command-description">Search project actions.</p>
+                        {
+                          <CommandInput
+                            {...state}
+                            id={'gallery-command-input'}
+                            labelledBy={'gallery-command-title'}
+                            listboxId={'gallery-command-listbox'}
+                          />
+                        }
+                        {
+                          <CommandListbox
+                            {...state}
+                            id={'gallery-command-listbox'}
+                            labelledBy={'gallery-command-title'}
+                          >
+                            {items.map((item) => (
+                              <CommandItem
+                                {...state}
+                                id={`gallery-command-listbox-item-${items.indexOf(item)}`}
+                                {...(item.disabled === undefined
+                                  ? {}
+                                  : { itemDisabled: item.disabled })}
+                                itemLabel={item.label}
+                                itemValue={item.value}
+                              />
+                            ))}
+                          </CommandListbox>
+                        }
+                        {
+                          <CommandEmpty inputValue={'zzz'} items={items}>
+                            {'No matching command'}
+                          </CommandEmpty>
+                        }
+                        {<CommandClose {...state} contentId={'gallery-command-dialog'} />}
+                        {<CommandValue {...state} id={'gallery-command-value'} />}
+                      </>
+                    }
+                  </CommandDialog>
+                }
+              </>
+            }
+          </Command>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1003,7 +1010,7 @@ export function CommandDemo(): string {
   );
 }
 
-export function ContextMenuDemo(): string {
+export function ContextMenuDemo() {
   const items = [
     { label: 'Copy link', value: 'copy' },
     { disabled: true, label: 'Delete', value: 'delete' },
@@ -1022,34 +1029,34 @@ export function ContextMenuDemo(): string {
         Context menu keeps package-prefixed trigger wiring and menuitem roving state inspectable.
       </p>
       <div data-ui-demo="context-menu">
-        {ContextMenu.definition.render({
-          ...state,
-          children: (
-            <>
-              {ContextMenuTrigger.definition.render({
-                ...state,
-                contentId: 'gallery-context-menu-content',
-                id: 'gallery-context-menu-trigger',
-              })}
-              {ContextMenuContent.definition.render({
-                ...state,
-                children: items
-                  .map((item) =>
-                    ContextMenuItem.definition.render({
-                      ...state,
-                      id: `gallery-context-menu-${item.value}`,
-                      ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
-                      itemLabel: item.label,
-                      itemValue: item.value,
-                    }),
-                  )
-                  .join(''),
-                id: 'gallery-context-menu-content',
-              })}
-            </>
-          ),
-          id: 'gallery-context-menu',
-        })}
+        {
+          <ContextMenu {...state} id={'gallery-context-menu'}>
+            {
+              <>
+                {
+                  <ContextMenuTrigger
+                    {...state}
+                    contentId={'gallery-context-menu-content'}
+                    id={'gallery-context-menu-trigger'}
+                  />
+                }
+                {
+                  <ContextMenuContent {...state} id={'gallery-context-menu-content'}>
+                    {items.map((item) => (
+                      <ContextMenuItem
+                        {...state}
+                        id={`gallery-context-menu-${item.value}`}
+                        {...(item.disabled === undefined ? {} : { itemDisabled: item.disabled })}
+                        itemLabel={item.label}
+                        itemValue={item.value}
+                      />
+                    ))}
+                  </ContextMenuContent>
+                }
+              </>
+            }
+          </ContextMenu>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1062,7 +1069,7 @@ export function ContextMenuDemo(): string {
   );
 }
 
-export function DialogDemo(): string {
+export function DialogDemo() {
   const root = { open: true };
   const trigger = {
     contentId: 'gallery-dialog-content',
@@ -1086,18 +1093,19 @@ export function DialogDemo(): string {
         JavaScript.
       </p>
       <div data-ui-demo="dialog">
-        {Dialog.definition.render({
-          ...root,
-          children:
-            DialogTrigger.definition.render({ ...trigger, children: 'Open preview' }) +
-            DialogContent.definition.render({
-              ...content,
-              children:
-                '<h2 id="gallery-dialog-title">Publish gallery changes</h2><p id="gallery-dialog-description">Review the demo route before publishing.</p>' +
-                DialogClose.definition.render({ ...close, children: 'Close' }),
-            }),
-          id: 'gallery-dialog',
-        })}
+        {
+          <Dialog {...root} id={'gallery-dialog'}>
+            {[
+              <DialogTrigger {...trigger}>{'Open preview'}</DialogTrigger>,
+              <DialogContent {...content}>
+                {[
+                  '<h2 id="gallery-dialog-title">Publish gallery changes</h2><p id="gallery-dialog-description">Review the demo route before publishing.</p>',
+                  <DialogClose {...close}>{'Close'}</DialogClose>,
+                ]}
+              </DialogContent>,
+            ]}
+          </Dialog>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1109,7 +1117,7 @@ export function DialogDemo(): string {
   );
 }
 
-export function DisclosureDemo(): string {
+export function DisclosureDemo() {
   const state = {
     contentId: 'gallery-disclosure-content',
     open: true,
@@ -1122,16 +1130,16 @@ export function DisclosureDemo(): string {
         state.
       </p>
       <div data-ui-demo="disclosure">
-        {Disclosure.definition.render({
-          children:
-            DisclosureTrigger.definition.render({ ...state, children: 'Show audit details' }) +
-            DisclosureContent.definition.render({
-              ...state,
-              children: 'Two reviewers approved the release.',
-            }),
-          id: 'gallery-disclosure',
-          open: state.open,
-        })}
+        {
+          <Disclosure id={'gallery-disclosure'} open={state.open}>
+            {[
+              <DisclosureTrigger {...state}>{'Show audit details'}</DisclosureTrigger>,
+              <DisclosureContent {...state}>
+                {'Two reviewers approved the release.'}
+              </DisclosureContent>,
+            ]}
+          </Disclosure>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -1142,7 +1150,7 @@ export function DisclosureDemo(): string {
   );
 }
 
-export function DropdownMenuDemo(): string {
+export function DropdownMenuDemo() {
   const items = [
     { label: 'Duplicate', value: 'duplicate' },
     { disabled: true, label: 'Archive', value: 'archive' },
@@ -1160,34 +1168,34 @@ export function DropdownMenuDemo(): string {
         Dropdown menu keeps the trigger, menu, and menuitem roving state visible in static markup.
       </p>
       <div data-ui-demo="dropdown-menu">
-        {DropdownMenu.definition.render({
-          ...state,
-          children: (
-            <>
-              {DropdownMenuTrigger.definition.render({
-                ...state,
-                contentId: 'gallery-dropdown-menu-content',
-                id: 'gallery-dropdown-menu-trigger',
-              })}
-              {DropdownMenuContent.definition.render({
-                ...state,
-                children: items
-                  .map((item) =>
-                    DropdownMenuItem.definition.render({
-                      ...state,
-                      id: `gallery-dropdown-menu-${item.value}`,
-                      ...(item.disabled === undefined ? {} : { itemDisabled: item.disabled }),
-                      itemLabel: item.label,
-                      itemValue: item.value,
-                    }),
-                  )
-                  .join(''),
-                id: 'gallery-dropdown-menu-content',
-              })}
-            </>
-          ),
-          id: 'gallery-dropdown-menu',
-        })}
+        {
+          <DropdownMenu {...state} id={'gallery-dropdown-menu'}>
+            {
+              <>
+                {
+                  <DropdownMenuTrigger
+                    {...state}
+                    contentId={'gallery-dropdown-menu-content'}
+                    id={'gallery-dropdown-menu-trigger'}
+                  />
+                }
+                {
+                  <DropdownMenuContent {...state} id={'gallery-dropdown-menu-content'}>
+                    {items.map((item) => (
+                      <DropdownMenuItem
+                        {...state}
+                        id={`gallery-dropdown-menu-${item.value}`}
+                        {...(item.disabled === undefined ? {} : { itemDisabled: item.disabled })}
+                        itemLabel={item.label}
+                        itemValue={item.value}
+                      />
+                    ))}
+                  </DropdownMenuContent>
+                }
+              </>
+            }
+          </DropdownMenu>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1199,7 +1207,7 @@ export function DropdownMenuDemo(): string {
   );
 }
 
-export function FieldDemo(): string {
+export function FieldDemo() {
   const fieldState = {
     invalid: true,
     required: true,
@@ -1212,139 +1220,161 @@ export function FieldDemo(): string {
       </p>
       <form id="gallery-field-external-form" method="post" action="/gallery/field" />
       <div data-ui-demo="field">
-        {Field.definition.render({
-          ...fieldState,
-          children: (
-            <>
-              {FieldLabel.definition.render({
-                ...fieldState,
-                children: 'Email',
-                controlId: 'gallery-field-email',
-                id: 'gallery-field-label',
-              })}
-              {FieldControl.definition.render({
-                ...fieldState,
-                autoComplete: 'email',
-                descriptionId: 'gallery-field-description',
-                errorId: 'gallery-field-error',
-                form: 'gallery-field-external-form',
-                id: 'gallery-field-email',
-                inputMode: 'email',
-                maxLength: 80,
-                minLength: 3,
-                name: 'email',
-                pattern: '.+@example\\.com',
-                placeholder: 'ada@example.com',
-                type: 'email',
-              })}
-              {FieldDescription.definition.render({
-                children: 'Used for release notifications.',
-                id: 'gallery-field-description',
-              })}
-              {FieldErrorMessage.definition.render({
-                children: 'Email is required.',
-                id: 'gallery-field-error',
-              })}
-            </>
-          ),
-          id: 'gallery-field',
-        })}
-        {Field.definition.render({
-          children: (
-            <>
-              {FieldLabel.definition.render({
-                children: 'Profile note',
-                controlId: 'gallery-field-bio',
-                id: 'gallery-field-bio-label',
-              })}
-              {FieldTextarea.definition.render({
-                autoComplete: 'off',
-                children: 'Prefers changelog emails and release candidate previews.',
-                descriptionId: 'gallery-field-bio-description',
-                form: 'gallery-field-external-form',
-                id: 'gallery-field-bio',
-                maxLength: 240,
-                name: 'bio',
-                rows: 3,
-              })}
-              {FieldDescription.definition.render({
-                children: 'Textarea keeps the same description IDREF contract as inputs.',
-                id: 'gallery-field-bio-description',
-              })}
-            </>
-          ),
-          id: 'gallery-field-bio-row',
-        })}
-        {Field.definition.render({
-          children: (
-            <>
-              {FieldLabel.definition.render({
-                children: 'Workspace plan',
-                controlId: 'gallery-field-plan',
-                id: 'gallery-field-plan-label',
-                required: true,
-              })}
-              {FieldSelect.definition.render({
-                children:
-                  FieldSelectOption.definition.render({ children: 'Starter', value: 'starter' }) +
-                  FieldSelectOption.definition.render({
-                    children: 'Team',
-                    selected: true,
-                    value: 'team',
-                  }) +
-                  FieldSelectOption.definition.render({
-                    children: 'Enterprise',
-                    disabled: true,
-                    value: 'enterprise',
-                  }),
-                descriptionId: 'gallery-field-plan-description',
-                form: 'gallery-field-external-form',
-                id: 'gallery-field-plan',
-                name: 'plan',
-                required: true,
-                value: 'team',
-              })}
-              {FieldDescription.definition.render({
-                children: 'Select controls preserve native option submission.',
-                id: 'gallery-field-plan-description',
-              })}
-            </>
-          ),
-          id: 'gallery-field-plan-row',
-          required: true,
-        })}
-        {Fieldset.definition.render({
-          children: (
-            <>
-              {FieldsetLegend.definition.render({
-                children: 'Plan',
-                id: 'gallery-fieldset-legend',
-              })}
-              {FieldLabel.definition.render({
-                children: 'Seat preference',
-                controlId: 'gallery-fieldset-seat',
-                id: 'gallery-fieldset-seat-label',
-              })}
-              {FieldControl.definition.render({
-                descriptionId: 'gallery-fieldset-description',
-                form: 'gallery-field-external-form',
-                id: 'gallery-fieldset-seat',
-                name: 'seat',
-                value: 'window',
-              })}
-              {FieldDescription.definition.render({
-                children: 'Fieldset preserves the native grouping element.',
-                id: 'gallery-fieldset-description',
-              })}
-            </>
-          ),
-          descriptionId: 'gallery-fieldset-description',
-          disabled: true,
-          form: 'gallery-field-external-form',
-          id: 'gallery-fieldset',
-          invalid: true,
-          name: 'seat-options',
-        })}
+        {
+          <Field {...fieldState} id={'gallery-field'}>
+            {
+              <>
+                {
+                  <FieldLabel
+                    {...fieldState}
+                    controlId={'gallery-field-email'}
+                    id={'gallery-field-label'}
+                  >
+                    {'Email'}
+                  </FieldLabel>
+                }
+                {
+                  <FieldControl
+                    {...fieldState}
+                    autoComplete={'email'}
+                    descriptionId={'gallery-field-description'}
+                    errorId={'gallery-field-error'}
+                    form={'gallery-field-external-form'}
+                    id={'gallery-field-email'}
+                    inputMode={'email'}
+                    maxLength={80}
+                    minLength={3}
+                    name={'email'}
+                    pattern={'.+@example\\.com'}
+                    placeholder={'ada@example.com'}
+                    type={'email'}
+                  />
+                }
+                {
+                  <FieldDescription id={'gallery-field-description'}>
+                    {'Used for release notifications.'}
+                  </FieldDescription>
+                }
+                {
+                  <FieldErrorMessage id={'gallery-field-error'}>
+                    {'Email is required.'}
+                  </FieldErrorMessage>
+                }
+              </>
+            }
+          </Field>
+        }
+        {
+          <Field id={'gallery-field-bio-row'}>
+            {
+              <>
+                {
+                  <FieldLabel controlId={'gallery-field-bio'} id={'gallery-field-bio-label'}>
+                    {'Profile note'}
+                  </FieldLabel>
+                }
+                {
+                  <FieldTextarea
+                    autoComplete={'off'}
+                    descriptionId={'gallery-field-bio-description'}
+                    form={'gallery-field-external-form'}
+                    id={'gallery-field-bio'}
+                    maxLength={240}
+                    name={'bio'}
+                    rows={3}
+                  >
+                    {'Prefers changelog emails and release candidate previews.'}
+                  </FieldTextarea>
+                }
+                {
+                  <FieldDescription id={'gallery-field-bio-description'}>
+                    {'Textarea keeps the same description IDREF contract as inputs.'}
+                  </FieldDescription>
+                }
+              </>
+            }
+          </Field>
+        }
+        {
+          <Field id={'gallery-field-plan-row'} required={true}>
+            {
+              <>
+                {
+                  <FieldLabel
+                    controlId={'gallery-field-plan'}
+                    id={'gallery-field-plan-label'}
+                    required={true}
+                  >
+                    {'Workspace plan'}
+                  </FieldLabel>
+                }
+                {
+                  <FieldSelect
+                    descriptionId={'gallery-field-plan-description'}
+                    form={'gallery-field-external-form'}
+                    id={'gallery-field-plan'}
+                    name={'plan'}
+                    required={true}
+                    value={'team'}
+                  >
+                    {[
+                      <FieldSelectOption value={'starter'}>{'Starter'}</FieldSelectOption>,
+                      <FieldSelectOption selected={true} value={'team'}>
+                        {'Team'}
+                      </FieldSelectOption>,
+                      <FieldSelectOption disabled={true} value={'enterprise'}>
+                        {'Enterprise'}
+                      </FieldSelectOption>,
+                    ]}
+                  </FieldSelect>
+                }
+                {
+                  <FieldDescription id={'gallery-field-plan-description'}>
+                    {'Select controls preserve native option submission.'}
+                  </FieldDescription>
+                }
+              </>
+            }
+          </Field>
+        }
+        {
+          <Fieldset
+            descriptionId={'gallery-fieldset-description'}
+            disabled={true}
+            form={'gallery-field-external-form'}
+            id={'gallery-fieldset'}
+            invalid={true}
+            name={'seat-options'}
+          >
+            {
+              <>
+                {<FieldsetLegend id={'gallery-fieldset-legend'}>{'Plan'}</FieldsetLegend>}
+                {
+                  <FieldLabel
+                    controlId={'gallery-fieldset-seat'}
+                    id={'gallery-fieldset-seat-label'}
+                  >
+                    {'Seat preference'}
+                  </FieldLabel>
+                }
+                {
+                  <FieldControl
+                    descriptionId={'gallery-fieldset-description'}
+                    form={'gallery-field-external-form'}
+                    id={'gallery-fieldset-seat'}
+                    name={'seat'}
+                    value={'window'}
+                  />
+                }
+                {
+                  <FieldDescription id={'gallery-fieldset-description'}>
+                    {'Fieldset preserves the native grouping element.'}
+                  </FieldDescription>
+                }
+              </>
+            }
+          </Fieldset>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'native form control changes',
@@ -1355,7 +1385,7 @@ export function FieldDemo(): string {
   );
 }
 
-export function HoverCardDemo(): string {
+export function HoverCardDemo() {
   const state = {
     contentId: 'gallery-hover-card-content',
     open: true,
@@ -1368,20 +1398,18 @@ export function HoverCardDemo(): string {
         content in the document.
       </p>
       <div data-ui-demo="hover-card">
-        {HoverCard.definition.render({
-          children:
-            HoverCardTrigger.definition.render({
-              ...state,
-              children: 'Ada Lovelace',
-              href: '/team/ada',
-            }) +
-            HoverCardContent.definition.render({
-              ...state,
-              children: '<strong>Compiler owner</strong><p>Maintains release quality gates.</p>',
-            }),
-          id: 'gallery-hover-card',
-          open: state.open,
-        })}
+        {
+          <HoverCard id={'gallery-hover-card'} open={state.open}>
+            {[
+              <HoverCardTrigger {...state} href={'/team/ada'}>
+                {'Ada Lovelace'}
+              </HoverCardTrigger>,
+              <HoverCardContent {...state}>
+                {'<strong>Compiler owner</strong><p>Maintains release quality gates.</p>'}
+              </HoverCardContent>,
+            ]}
+          </HoverCard>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1393,15 +1421,15 @@ export function HoverCardDemo(): string {
   );
 }
 
-export function KbdDemo(): string {
+export function KbdDemo() {
   return (
     <section data-gallery-demo="kbd">
       <p data-demo-summary="no-js">
         Keyboard hints remain semantic kbd elements and do not require behavior wiring.
       </p>
       <div data-ui-demo="kbd">
-        {Kbd.definition.render({ children: 'Ctrl' })}
-        {Kbd.definition.render({ children: 'K' })}
+        {<Kbd>{'Ctrl'}</Kbd>}
+        {<Kbd>{'K'}</Kbd>}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
@@ -1412,7 +1440,7 @@ export function KbdDemo(): string {
   );
 }
 
-export function MenubarDemo(): string {
+export function MenubarDemo() {
   const items = [
     { hasPopup: true, label: 'File', value: 'file' },
     { label: 'Edit', value: 'edit' },
@@ -1431,54 +1459,65 @@ export function MenubarDemo(): string {
         Menubar keeps top-level and submenu items in one roving collection with menu popup state.
       </p>
       <div data-ui-demo="menubar">
-        {Menubar.definition.render({
-          ...state,
-          children: (
-            <>
-              {MenubarItem.definition.render({
-                ...state,
-                contentId: 'gallery-menubar-file-menu',
-                id: 'gallery-menubar-file',
-                itemLabel: 'File',
-                itemValue: 'file',
-              })}
-              {MenubarItem.definition.render({
-                ...state,
-                id: 'gallery-menubar-edit',
-                itemLabel: 'Edit',
-                itemValue: 'edit',
-              })}
-              {MenubarSubmenu.definition.render({
-                ...state,
-                children: (
-                  <>
-                    {MenubarItem.definition.render({
-                      ...state,
-                      activeValue: 'new',
-                      id: 'gallery-menubar-new',
-                      itemLabel: 'New',
-                      itemParentValue: 'file',
-                      itemValue: 'new',
-                    })}
-                    {MenubarItem.definition.render({
-                      ...state,
-                      activeValue: 'new',
-                      id: 'gallery-menubar-import',
-                      itemDisabled: true,
-                      itemLabel: 'Import',
-                      itemParentValue: 'file',
-                      itemValue: 'import',
-                    })}
-                  </>
-                ),
-                id: 'gallery-menubar-file-menu',
-                labelledBy: 'gallery-menubar-file',
-                value: 'file',
-              })}
-            </>
-          ),
-          label: 'Document commands',
-        })}
+        {
+          <Menubar {...state} label={'Document commands'}>
+            {
+              <>
+                {
+                  <MenubarItem
+                    {...state}
+                    contentId={'gallery-menubar-file-menu'}
+                    id={'gallery-menubar-file'}
+                    itemLabel={'File'}
+                    itemValue={'file'}
+                  />
+                }
+                {
+                  <MenubarItem
+                    {...state}
+                    id={'gallery-menubar-edit'}
+                    itemLabel={'Edit'}
+                    itemValue={'edit'}
+                  />
+                }
+                {
+                  <MenubarSubmenu
+                    {...state}
+                    id={'gallery-menubar-file-menu'}
+                    labelledBy={'gallery-menubar-file'}
+                    value={'file'}
+                  >
+                    {
+                      <>
+                        {
+                          <MenubarItem
+                            {...state}
+                            activeValue={'new'}
+                            id={'gallery-menubar-new'}
+                            itemLabel={'New'}
+                            itemParentValue={'file'}
+                            itemValue={'new'}
+                          />
+                        }
+                        {
+                          <MenubarItem
+                            {...state}
+                            activeValue={'new'}
+                            id={'gallery-menubar-import'}
+                            itemDisabled={true}
+                            itemLabel={'Import'}
+                            itemParentValue={'file'}
+                            itemValue={'import'}
+                          />
+                        }
+                      </>
+                    }
+                  </MenubarSubmenu>
+                }
+              </>
+            }
+          </Menubar>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
@@ -1490,7 +1529,7 @@ export function MenubarDemo(): string {
   );
 }
 
-export function NavigationMenuDemo(): string {
+export function NavigationMenuDemo() {
   const items = [
     { hasContent: true, label: 'Products', value: 'products' },
     { label: 'Docs', value: 'docs' },
@@ -1507,57 +1546,67 @@ export function NavigationMenuDemo(): string {
         Navigation menu keeps links native while trigger content uses roving and disclosure state.
       </p>
       <div data-ui-demo="navigation-menu">
-        {NavigationMenu.definition.render({
-          ...state,
-          children: (
-            <>
-              {NavigationMenuList.definition.render({
-                ...state,
-                children: (
-                  <>
-                    {NavigationMenuItem.definition.render({
-                      ...state,
-                      children: NavigationMenuTrigger.definition.render({
-                        ...state,
-                        contentId: 'gallery-navigation-products-panel',
-                        id: 'gallery-navigation-products-trigger',
-                        itemLabel: 'Products',
-                        itemValue: 'products',
-                      }),
-                      id: 'gallery-navigation-products-item',
-                      itemValue: 'products',
-                    })}
-                    {NavigationMenuItem.definition.render({
-                      ...state,
-                      children: NavigationMenuLink.definition.render({
-                        ...state,
-                        href: '/docs',
-                        id: 'gallery-navigation-docs-link',
-                        itemLabel: 'Docs',
-                        itemValue: 'docs',
-                      }),
-                      id: 'gallery-navigation-docs-item',
-                      itemValue: 'docs',
-                    })}
-                  </>
-                ),
-                id: 'gallery-navigation-list',
-              })}
-              {NavigationMenuContent.definition.render({
-                ...state,
-                children: 'Product links stay grouped with their trigger.',
-                id: 'gallery-navigation-products-panel',
-                labelledBy: 'gallery-navigation-products-trigger',
-                value: 'products',
-              })}
-              {NavigationMenuViewport.definition.render({
-                ...state,
-                id: 'gallery-navigation-viewport',
-              })}
-            </>
-          ),
-          label: 'Primary navigation',
-        })}
+        {
+          <NavigationMenu {...state} label={'Primary navigation'}>
+            {
+              <>
+                {
+                  <NavigationMenuList {...state} id={'gallery-navigation-list'}>
+                    {
+                      <>
+                        {
+                          <NavigationMenuItem
+                            {...state}
+                            id={'gallery-navigation-products-item'}
+                            itemValue={'products'}
+                          >
+                            {
+                              <NavigationMenuTrigger
+                                {...state}
+                                contentId={'gallery-navigation-products-panel'}
+                                id={'gallery-navigation-products-trigger'}
+                                itemLabel={'Products'}
+                                itemValue={'products'}
+                              />
+                            }
+                          </NavigationMenuItem>
+                        }
+                        {
+                          <NavigationMenuItem
+                            {...state}
+                            id={'gallery-navigation-docs-item'}
+                            itemValue={'docs'}
+                          >
+                            {
+                              <NavigationMenuLink
+                                {...state}
+                                href={'/docs'}
+                                id={'gallery-navigation-docs-link'}
+                                itemLabel={'Docs'}
+                                itemValue={'docs'}
+                              />
+                            }
+                          </NavigationMenuItem>
+                        }
+                      </>
+                    }
+                  </NavigationMenuList>
+                }
+                {
+                  <NavigationMenuContent
+                    {...state}
+                    id={'gallery-navigation-products-panel'}
+                    labelledBy={'gallery-navigation-products-trigger'}
+                    value={'products'}
+                  >
+                    {'Product links stay grouped with their trigger.'}
+                  </NavigationMenuContent>
+                }
+                {<NavigationMenuViewport {...state} id={'gallery-navigation-viewport'} />}
+              </>
+            }
+          </NavigationMenu>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:

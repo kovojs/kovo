@@ -1,4 +1,8 @@
 /** @jsxImportSource @kovojs/server */
+import type { Component } from '@kovojs/core';
+import { jsx } from '@kovojs/server/jsx-runtime';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+
 import { GalleryAccordionDemo } from './interactive/accordion-demo.js';
 import { GalleryAlertDialogDemo } from './interactive/alert-dialog-demo.js';
 import { GalleryAutocompleteDemo } from './interactive/autocomplete-demo.js';
@@ -41,12 +45,7 @@ export interface InteractiveGalleryDemo {
   title: string;
 }
 
-type InteractiveDemoComponent = {
-  definition: {
-    render(queries: Record<string, never>, state: unknown): Promise<string> | string;
-    state(): unknown;
-  };
-};
+type InteractiveDemoComponent = Component<any>;
 
 type InteractiveDemoModule = Record<string, InteractiveDemoComponent | undefined>;
 
@@ -264,8 +263,7 @@ function renderInteractiveDemo(
 
   return async () => {
     resolvedComponent ??= resolveInteractiveDemo(name, sourceComponent);
-    const definition = resolvedComponent.definition;
-    return String(await definition.render({}, definition.state()));
+    return renderRouteHtml(await jsx(resolvedComponent, {}));
   };
 }
 

@@ -253,9 +253,7 @@ export function DocsRouteLayoutShell({
       ) : (
         children
       )}
-      {hasDocsRegions
-        ? (regions?.footer ?? SiteFooter.definition.render())
-        : (regions?.footer ?? '')}
+      {hasDocsRegions ? (regions?.footer ?? <SiteFooter />) : (regions?.footer ?? '')}
     </div>
   );
 }
@@ -269,7 +267,7 @@ export function DocsHeaderRegion({
 }): string {
   return (
     <div data-docs-header>
-      {SiteHeader.definition.render({ activePath: page.activePath, clients })}
+      <SiteHeader activePath={page.activePath} clients={clients} />
     </div>
   );
 }
@@ -292,12 +290,10 @@ export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
   // Started + Tutorial + Guides) together, or Components/Examples/reference
   // together — so the rail stays scoped to what the reader is browsing.
   const sidebarGroups = sidebarGroupsForPath(groups, activePath);
-  const mobileSidebar = DocsSidebar.definition.render({
-    activePath,
-    groups: sidebarGroups,
-    mode: 'mobile',
-  });
-  const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
+  const mobileSidebar = (
+    <DocsSidebar activePath={activePath} groups={sidebarGroups} mode="mobile" />
+  );
+  const toc = apiSidebar ? <ApiSidebar apiSidebar={apiSidebar} /> : renderToc(headings);
 
   return (
     <div data-docs-page-region style={docsLayoutStyles.pageFrame}>
@@ -315,7 +311,7 @@ export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
           ''
         )}
         <DocsRouteContentView content={content} />
-        {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
+        {prev || next ? <PrevNext next={next} prev={prev} /> : ''}
       </main>
       <aside style={docsLayoutStyles.tocRail}>{toc}</aside>
     </div>
@@ -333,12 +329,12 @@ export function DocsSidebarRegion({
   const sidebarGroups = sidebarGroupsForPath(groups, activePath);
   return (
     <aside data-docs-sidebar-region style={docsLayoutStyles.sidebarRail}>
-      {DocsSidebar.definition.render({
-        activePath,
-        groups: sidebarGroups,
-        mode: 'desktop',
-        syncHref: clients.sidebar,
-      })}
+      <DocsSidebar
+        activePath={activePath}
+        groups={sidebarGroups}
+        mode="desktop"
+        syncHref={clients.sidebar}
+      />
     </aside>
   );
 }

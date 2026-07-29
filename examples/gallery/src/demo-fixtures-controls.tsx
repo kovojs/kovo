@@ -60,31 +60,31 @@ import { Toggle } from '@kovojs/ui/toggle';
 import { Toolbar, ToolbarButton, ToolbarItem } from '@kovojs/ui/toolbar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@kovojs/ui/tooltip';
 
-export function MeterDemo(): string {
+export function MeterDemo() {
   return (
     <section data-gallery-demo="meter">
       <p data-demo-summary="no-js">
         Meter uses the native meter element and exposes threshold data for styling.
       </p>
       <div data-ui-demo="meter">
-        {Meter.definition.render({
-          children: '84%',
-          high: 90,
-          low: 50,
-          max: 100,
-          min: 0,
-          optimum: 80,
-          value: 84,
-          valueText: '84 percent quality score',
-        })}
-        {Meter.definition.render({
-          children: '42%',
-          high: 90,
-          low: 50,
-          max: 100,
-          optimum: 80,
-          value: 42,
-        })}
+        {
+          <Meter
+            high={90}
+            low={50}
+            max={100}
+            min={0}
+            optimum={80}
+            value={84}
+            valueText={'84 percent quality score'}
+          >
+            {'84%'}
+          </Meter>
+        }
+        {
+          <Meter high={90} low={50} max={100} optimum={80} value={42}>
+            {'42%'}
+          </Meter>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'value comes from app state',
@@ -95,7 +95,7 @@ export function MeterDemo(): string {
   );
 }
 
-export function NumberFieldDemo(): string {
+export function NumberFieldDemo() {
   const quantity = {
     invalid: true,
     max: 10,
@@ -116,48 +116,52 @@ export function NumberFieldDemo(): string {
         Quantity
       </label>
       <div data-ui-demo="number-field">
-        {NumberField.definition.render({
-          ...quantity,
-          children: (
-            <>
-              {NumberFieldControl.definition.render({
-                ...quantity,
-                children: (
-                  <>
-                    {NumberFieldDecrement.definition.render({
-                      ...quantity,
-                      id: 'gallery-number-field-decrement',
-                      inputId: 'gallery-number-field-input',
-                      label: 'Decrease quantity',
-                    })}
-                    {NumberFieldInput.definition.render({
-                      ...quantity,
-                      descriptionId: 'gallery-number-field-description',
-                      errorId: 'gallery-number-field-error',
-                      form: 'gallery-number-field-form',
-                      id: 'gallery-number-field-input',
-                      labelledBy: 'gallery-number-field-label',
-                    })}
-                    {NumberFieldIncrement.definition.render({
-                      ...quantity,
-                      id: 'gallery-number-field-increment',
-                      inputId: 'gallery-number-field-input',
-                      label: 'Increase quantity',
-                    })}
-                  </>
-                ),
-              })}
-              <p id="gallery-number-field-description">Choose an even quantity.</p>
-              <p id="gallery-number-field-error">Quantity must be available in stock.</p>
-            </>
-          ),
-          id: 'gallery-number-field',
-        })}
+        {
+          <NumberField {...quantity} id={'gallery-number-field'}>
+            {
+              <>
+                {
+                  <NumberFieldControl {...quantity}>
+                    {
+                      <>
+                        {
+                          <NumberFieldDecrement
+                            {...quantity}
+                            id={'gallery-number-field-decrement'}
+                            inputId={'gallery-number-field-input'}
+                            label={'Decrease quantity'}
+                          />
+                        }
+                        {
+                          <NumberFieldInput
+                            {...quantity}
+                            descriptionId={'gallery-number-field-description'}
+                            errorId={'gallery-number-field-error'}
+                            form={'gallery-number-field-form'}
+                            id={'gallery-number-field-input'}
+                            labelledBy={'gallery-number-field-label'}
+                          />
+                        }
+                        {
+                          <NumberFieldIncrement
+                            {...quantity}
+                            id={'gallery-number-field-increment'}
+                            inputId={'gallery-number-field-input'}
+                            label={'Increase quantity'}
+                          />
+                        }
+                      </>
+                    }
+                  </NumberFieldControl>
+                }
+                <p id="gallery-number-field-description">Choose an even quantity.</p>
+                <p id="gallery-number-field-error">Quantity must be available in stock.</p>
+              </>
+            }
+          </NumberField>
+        }
         <span data-fixture-state="disabled-boundary">
-          {NumberFieldDecrement.definition.render({
-            min: 0,
-            value: 0,
-          })}
+          {<NumberFieldDecrement min={0} value={0} />}
         </span>
       </div>
       {renderBehaviorContract({
@@ -169,7 +173,7 @@ export function NumberFieldDemo(): string {
   );
 }
 
-export function OtpFieldDemo(): string {
+export function OtpFieldDemo() {
   const state = {
     descriptionId: 'gallery-otp-description',
     errorId: 'gallery-otp-error',
@@ -199,36 +203,41 @@ export function OtpFieldDemo(): string {
       </label>
       <form id="gallery-otp-form" data-gallery-form="otp-field" />
       <div data-ui-demo="otp-field">
-        {OtpField.definition.render({
-          ...state,
-          children: (
-            <>
-              {OtpFieldHiddenInput.definition.render({ ...state, id: 'gallery-otp-code' })}
-              {OtpFieldGroup.definition.render({
-                children: Array.from({ length: state.length }, (_, slotIndex) =>
-                  OtpFieldInput.definition.render({
-                    ...state,
-                    id: `gallery-otp-slot-${slotIndex + 1}`,
-                    label: `One-time code digit ${slotIndex + 1}`,
-                    slotIndex,
-                  }),
-                ).join(''),
-              })}
-              <p id="gallery-otp-description">Enter the six digit verification code.</p>
-              <p id="gallery-otp-error">The code is incomplete.</p>
-            </>
-          ),
-          id: 'gallery-otp-field',
-        })}
+        {
+          <OtpField {...state} id={'gallery-otp-field'}>
+            {
+              <>
+                {<OtpFieldHiddenInput {...state} id={'gallery-otp-code'} />}
+                {
+                  <OtpFieldGroup>
+                    {Array.from({ length: state.length }, (_, slotIndex) => (
+                      <OtpFieldInput
+                        {...state}
+                        id={`gallery-otp-slot-${slotIndex + 1}`}
+                        label={`One-time code digit ${slotIndex + 1}`}
+                        slotIndex={slotIndex}
+                      />
+                    ))}
+                  </OtpFieldGroup>
+                }
+                <p id="gallery-otp-description">Enter the six digit verification code.</p>
+                <p id="gallery-otp-error">The code is incomplete.</p>
+              </>
+            }
+          </OtpField>
+        }
         <span data-fixture-state="disabled-complete">
-          {OtpField.definition.render({
-            ...completeDisabledState,
-            children: OtpFieldHiddenInput.definition.render({
-              ...completeDisabledState,
-              id: 'gallery-otp-disabled-code',
-              name: 'gallery-disabled-otp-code',
-            }),
-          })}
+          {
+            <OtpField {...completeDisabledState}>
+              {
+                <OtpFieldHiddenInput
+                  {...completeDisabledState}
+                  id={'gallery-otp-disabled-code'}
+                  name={'gallery-disabled-otp-code'}
+                />
+              }
+            </OtpField>
+          }
         </span>
       </div>
       {renderBehaviorContract({
@@ -240,22 +249,22 @@ export function OtpFieldDemo(): string {
   );
 }
 
-export function ToggleDemo(): string {
+export function ToggleDemo() {
   return (
     <section data-gallery-demo="toggle">
       <p data-demo-summary="no-js">
         Toggle renders a native button with aria-pressed, so the state is inspectable in HTML.
       </p>
       <div aria-label="Toggle states" data-ui-demo="toggle" role="group">
-        <span data-fixture-state="pressed">
-          {Toggle.definition.render({ children: 'Saved', pressed: true })}
-        </span>
+        <span data-fixture-state="pressed">{<Toggle pressed={true}>{'Saved'}</Toggle>}</span>
         <span data-fixture-state="idle">
-          {Toggle.definition.render({ children: 'Save view', pressed: false, variant: 'subtle' })}
+          {
+            <Toggle pressed={false} variant={'subtle'}>
+              {'Save view'}
+            </Toggle>
+          }
         </span>
-        <span data-fixture-state="disabled">
-          {Toggle.definition.render({ children: 'Disabled', disabled: true })}
-        </span>
+        <span data-fixture-state="disabled">{<Toggle disabled={true}>{'Disabled'}</Toggle>}</span>
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -266,7 +275,7 @@ export function ToggleDemo(): string {
   );
 }
 
-export function ToggleGroupDemo(): string {
+export function ToggleGroupDemo() {
   const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'strike' }];
   const state = {
     activeValue: 'bold',
@@ -283,26 +292,31 @@ export function ToggleGroupDemo(): string {
       <h2 id="gallery-toggle-group-label">Formatting</h2>
       <p id="gallery-toggle-group-description">Choose one or more text styles.</p>
       <div data-ui-demo="toggle-group">
-        {ToggleGroup.definition.render({
-          ...state,
-          children: items
-            .map((item) =>
-              ToggleGroupItem.definition.render({
-                ...state,
-                children: ToggleGroupButton.definition.render({
-                  ...state,
-                  children: item.value,
-                  id: `gallery-toggle-group-${item.value}`,
-                  itemValue: item.value,
-                }),
-                id: `gallery-toggle-group-${item.value}-item`,
-                itemValue: item.value,
-              }),
-            )
-            .join(''),
-          descriptionId: 'gallery-toggle-group-description',
-          labelledBy: 'gallery-toggle-group-label',
-        })}
+        {
+          <ToggleGroup
+            {...state}
+            descriptionId={'gallery-toggle-group-description'}
+            labelledBy={'gallery-toggle-group-label'}
+          >
+            {items.map((item) => (
+              <ToggleGroupItem
+                {...state}
+                id={`gallery-toggle-group-${item.value}-item`}
+                itemValue={item.value}
+              >
+                {
+                  <ToggleGroupButton
+                    {...state}
+                    id={`gallery-toggle-group-${item.value}`}
+                    itemValue={item.value}
+                  >
+                    {item.value}
+                  </ToggleGroupButton>
+                }
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'item-click, keyboard, programmatic',
@@ -313,7 +327,7 @@ export function ToggleGroupDemo(): string {
   );
 }
 
-export function ToolbarDemo(): string {
+export function ToolbarDemo() {
   const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }];
   const state = {
     activeValue: 'bold',
@@ -331,27 +345,32 @@ export function ToolbarDemo(): string {
         Move between editor commands without leaving the group.
       </p>
       <div data-ui-demo="toolbar">
-        {Toolbar.definition.render({
-          ...state,
-          children: items
-            .map((item) =>
-              ToolbarItem.definition.render({
-                ...state,
-                children: ToolbarButton.definition.render({
-                  ...state,
-                  children: item.value,
-                  id: `gallery-toolbar-${item.value}`,
-                  itemValue: item.value,
-                  pressed: item.value === 'bold',
-                }),
-                id: `gallery-toolbar-${item.value}-item`,
-                itemValue: item.value,
-              }),
-            )
-            .join(''),
-          descriptionId: 'gallery-toolbar-description',
-          labelledBy: 'gallery-toolbar-label',
-        })}
+        {
+          <Toolbar
+            {...state}
+            descriptionId={'gallery-toolbar-description'}
+            labelledBy={'gallery-toolbar-label'}
+          >
+            {items.map((item) => (
+              <ToolbarItem
+                {...state}
+                id={`gallery-toolbar-${item.value}-item`}
+                itemValue={item.value}
+              >
+                {
+                  <ToolbarButton
+                    {...state}
+                    id={`gallery-toolbar-${item.value}`}
+                    itemValue={item.value}
+                    pressed={item.value === 'bold'}
+                  >
+                    {item.value}
+                  </ToolbarButton>
+                }
+              </ToolbarItem>
+            ))}
+          </Toolbar>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'button-click, keyboard, programmatic',
@@ -362,7 +381,7 @@ export function ToolbarDemo(): string {
   );
 }
 
-export function RadioGroupDemo(): string {
+export function RadioGroupDemo() {
   const items = [{ value: 'standard' }, { value: 'express' }, { disabled: true, value: 'freight' }];
   const state = {
     descriptionId: 'gallery-radio-description',
@@ -389,36 +408,39 @@ export function RadioGroupDemo(): string {
         Freight requires a quoted delivery window.
       </p>
       <div data-ui-demo="radio-group">
-        {RadioGroup.definition.render({
-          ...state,
-          children: (
-            <>
-              <p id="gallery-radio-description">Choose a fulfillment speed.</p>
-              {items.map((item) =>
-                RadioGroupItem.definition.render({
-                  ...state,
-                  children: (
-                    <>
-                      {RadioGroupRadio.definition.render({
-                        ...state,
-                        controlId: `gallery-radio-${item.value}`,
-                        itemValue: item.value,
-                      })}
-                      {RadioGroupLabel.definition.render({
-                        ...state,
-                        children: item.value,
-                        controlId: `gallery-radio-${item.value}`,
-                        itemValue: item.value,
-                      })}
-                    </>
-                  ),
-                  itemValue: item.value,
-                }),
-              )}
-            </>
-          ),
-          id: 'gallery-radio-group',
-        })}
+        {
+          <RadioGroup {...state} id={'gallery-radio-group'}>
+            {
+              <>
+                <p id="gallery-radio-description">Choose a fulfillment speed.</p>
+                {items.map((item) => (
+                  <RadioGroupItem {...state} itemValue={item.value}>
+                    {
+                      <>
+                        {
+                          <RadioGroupRadio
+                            {...state}
+                            controlId={`gallery-radio-${item.value}`}
+                            itemValue={item.value}
+                          />
+                        }
+                        {
+                          <RadioGroupLabel
+                            {...state}
+                            controlId={`gallery-radio-${item.value}`}
+                            itemValue={item.value}
+                          >
+                            {item.value}
+                          </RadioGroupLabel>
+                        }
+                      </>
+                    }
+                  </RadioGroupItem>
+                ))}
+              </>
+            }
+          </RadioGroup>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'item-click, keyboard, programmatic',
@@ -429,7 +451,7 @@ export function RadioGroupDemo(): string {
   );
 }
 
-export function ScrollAreaDemo(): string {
+export function ScrollAreaDemo() {
   const state = {
     dir: 'ltr' as const,
     scrollbars: 'both' as const,
@@ -447,73 +469,84 @@ export function ScrollAreaDemo(): string {
       </p>
       <h2 id="gallery-scroll-area-title">Activity feed</h2>
       <div data-ui-demo="scroll-area">
-        {ScrollArea.definition.render({
-          ...state,
-          children: (
-            <>
-              {ScrollAreaViewport.definition.render({
-                ...state,
-                children: (
-                  <ol>
-                    <li>Design tokens published.</li>
-                    <li>Headless primitive verified.</li>
-                    <li>Gallery route added.</li>
-                  </ol>
-                ),
-                descriptionId: 'gallery-scroll-area-description',
-                id: 'gallery-scroll-area-viewport',
-                labelledBy: 'gallery-scroll-area-title',
-                scrollX: 'none',
-                scrollY: 'start',
-              })}
-              <p id="gallery-scroll-area-description">
-                The viewport remains tabbable without a client behavior island.
-              </p>
-              {ScrollAreaScrollbar.definition.render({
-                ...state,
-                children: ScrollAreaThumb.definition.render({
-                  ...state,
-                  id: 'gallery-scroll-area-thumb-y',
-                  orientation: 'vertical',
-                  scrollPosition: 'start',
-                  visible: true,
-                }),
-                id: 'gallery-scroll-area-scrollbar-y',
-                orientation: 'vertical',
-                visible: true,
-              })}
-              {ScrollAreaScrollbar.definition.render({
-                ...state,
-                children: ScrollAreaThumb.definition.render({
-                  ...state,
-                  forceMount: true,
-                  id: 'gallery-scroll-area-thumb-x',
-                  orientation: 'horizontal',
-                  scrollPosition: 'none',
-                  visible: false,
-                }),
-                forceMount: true,
-                id: 'gallery-scroll-area-scrollbar-x',
-                orientation: 'horizontal',
-                visible: false,
-              })}
-              {ScrollAreaCorner.definition.render({
-                ...state,
-                id: 'gallery-scroll-area-corner',
-              })}
-            </>
-          ),
-          id: 'gallery-scroll-area',
-        })}
+        {
+          <ScrollArea {...state} id={'gallery-scroll-area'}>
+            {
+              <>
+                {
+                  <ScrollAreaViewport
+                    {...state}
+                    descriptionId={'gallery-scroll-area-description'}
+                    id={'gallery-scroll-area-viewport'}
+                    labelledBy={'gallery-scroll-area-title'}
+                    scrollX={'none'}
+                    scrollY={'start'}
+                  >
+                    {
+                      <ol>
+                        <li>Design tokens published.</li>
+                        <li>Headless primitive verified.</li>
+                        <li>Gallery route added.</li>
+                      </ol>
+                    }
+                  </ScrollAreaViewport>
+                }
+                <p id="gallery-scroll-area-description">
+                  The viewport remains tabbable without a client behavior island.
+                </p>
+                {
+                  <ScrollAreaScrollbar
+                    {...state}
+                    id={'gallery-scroll-area-scrollbar-y'}
+                    orientation={'vertical'}
+                    visible={true}
+                  >
+                    {
+                      <ScrollAreaThumb
+                        {...state}
+                        id={'gallery-scroll-area-thumb-y'}
+                        orientation={'vertical'}
+                        scrollPosition={'start'}
+                        visible={true}
+                      />
+                    }
+                  </ScrollAreaScrollbar>
+                }
+                {
+                  <ScrollAreaScrollbar
+                    {...state}
+                    forceMount={true}
+                    id={'gallery-scroll-area-scrollbar-x'}
+                    orientation={'horizontal'}
+                    visible={false}
+                  >
+                    {
+                      <ScrollAreaThumb
+                        {...state}
+                        forceMount={true}
+                        id={'gallery-scroll-area-thumb-x'}
+                        orientation={'horizontal'}
+                        scrollPosition={'none'}
+                        visible={false}
+                      />
+                    }
+                  </ScrollAreaScrollbar>
+                }
+                {<ScrollAreaCorner {...state} id={'gallery-scroll-area-corner'} />}
+              </>
+            }
+          </ScrollArea>
+        }
         <span data-fixture-state="disabled">
-          {ScrollArea.definition.render({
-            ...disabledState,
-            children: ScrollAreaViewport.definition.render({
-              ...disabledState,
-              children: 'Archived feed',
-              label: 'Archived feed',
-            }),
-          })}
+          {
+            <ScrollArea {...disabledState}>
+              {
+                <ScrollAreaViewport {...disabledState} label={'Archived feed'}>
+                  {'Archived feed'}
+                </ScrollAreaViewport>
+              }
+            </ScrollArea>
+          }
         </span>
       </div>
       {renderBehaviorContract({
@@ -525,7 +558,7 @@ export function ScrollAreaDemo(): string {
   );
 }
 
-export function SelectDemo(): string {
+export function SelectDemo() {
   const items = [
     { label: 'Starter', value: 'starter' },
     { label: 'Growth', value: 'growth' },
@@ -550,39 +583,36 @@ export function SelectDemo(): string {
         Plan
       </label>
       <div data-ui-demo="select">
-        {Select.definition.render({
-          ...state,
-          children: (
-            <>
-              {SelectTrigger.definition.render({
-                ...state,
-                children: SelectContent.definition.render({
-                  ...state,
-                  children: items
-                    .map((item) =>
-                      SelectItem.definition.render({
-                        ...state,
-                        itemLabel: item.label,
-                        itemValue: item.value,
-                      }),
-                    )
-                    .join(''),
-                  id: 'gallery-select-listbox',
-                  label: 'Plans',
-                  labelledBy: 'gallery-select-label',
-                }),
-                id: 'gallery-select',
-                labelledBy: 'gallery-select-label',
-              })}
-              {SelectHiddenInput.definition.render({
-                ...state,
-                id: 'gallery-select-hidden',
-              })}
-              {SelectValue.definition.render({ ...state, id: 'gallery-select-value' })}
-            </>
-          ),
-          id: 'gallery-select-root',
-        })}
+        {
+          <Select {...state} id={'gallery-select-root'}>
+            {
+              <>
+                {
+                  <SelectTrigger
+                    {...state}
+                    id={'gallery-select'}
+                    labelledBy={'gallery-select-label'}
+                  >
+                    {
+                      <SelectContent
+                        {...state}
+                        id={'gallery-select-listbox'}
+                        label={'Plans'}
+                        labelledBy={'gallery-select-label'}
+                      >
+                        {items.map((item) => (
+                          <SelectItem {...state} itemLabel={item.label} itemValue={item.value} />
+                        ))}
+                      </SelectContent>
+                    }
+                  </SelectTrigger>
+                }
+                {<SelectHiddenInput {...state} id={'gallery-select-hidden'} />}
+                {<SelectValue {...state} id={'gallery-select-value'} />}
+              </>
+            }
+          </Select>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, item-select, arrow-key, typeahead, programmatic',
@@ -593,7 +623,7 @@ export function SelectDemo(): string {
   );
 }
 
-export function SeparatorDemo(): string {
+export function SeparatorDemo() {
   return (
     <section data-gallery-demo="separator">
       <p data-demo-summary="no-js">
@@ -601,14 +631,14 @@ export function SeparatorDemo(): string {
       </p>
       <div style="display:grid;gap:1rem" data-ui-demo="separator">
         <span style="display:block;width:256px" data-fixture-state="decorative">
-          {Separator.definition.render({})}
+          {<Separator />}
         </span>
         <span
           style="display:flex;height:4rem;align-items:stretch;gap:1rem"
           data-fixture-state="semantic"
         >
           <span>Before</span>
-          {Separator.definition.render({ decorative: false, orientation: 'vertical' })}
+          {<Separator decorative={false} orientation={'vertical'} />}
           <span>After</span>
         </span>
       </div>
@@ -621,22 +651,25 @@ export function SeparatorDemo(): string {
   );
 }
 
-export function SheetDemo(): string {
+export function SheetDemo() {
   return (
     <section data-gallery-demo="sheet">
       <p data-demo-summary="no-js">
         Sheet is a styled dialog wrapper that keeps native invoker commands and dialog content.
       </p>
       <div data-ui-demo="sheet">
-        {Sheet.definition.render({
-          children: 'Adjust notification and access settings.',
-          contentId: 'gallery-sheet',
-          description: 'Manage account preferences',
-          open: true,
-          side: 'right',
-          title: 'Account settings',
-          trigger: 'Open settings',
-        })}
+        {
+          <Sheet
+            contentId={'gallery-sheet'}
+            description={'Manage account preferences'}
+            open={true}
+            side={'right'}
+            title={'Account settings'}
+            trigger={'Open settings'}
+          >
+            {'Adjust notification and access settings.'}
+          </Sheet>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
@@ -647,21 +680,24 @@ export function SheetDemo(): string {
   );
 }
 
-export function DrawerDemo(): string {
+export function DrawerDemo() {
   return (
     <section data-gallery-demo="drawer">
       <p data-demo-summary="no-js">
         Drawer is a styled dialog variant with bottom sheet placement and native close wiring.
       </p>
       <div data-ui-demo="drawer">
-        {Drawer.definition.render({
-          children: 'Review mobile actions before continuing.',
-          contentId: 'gallery-drawer',
-          description: 'Mobile action drawer',
-          open: true,
-          title: 'Quick actions',
-          trigger: 'Open drawer',
-        })}
+        {
+          <Drawer
+            contentId={'gallery-drawer'}
+            description={'Mobile action drawer'}
+            open={true}
+            title={'Quick actions'}
+            trigger={'Open drawer'}
+          >
+            {'Review mobile actions before continuing.'}
+          </Drawer>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
@@ -672,7 +708,7 @@ export function DrawerDemo(): string {
   );
 }
 
-export function SkeletonDemo(): string {
+export function SkeletonDemo() {
   // A content silhouette (circular avatar + two text lines) so the demo reads
   // as "a profile row is loading" instead of two anonymous gray blocks — the
   // shadcn skeleton card shape. The Skeleton component's own background/shimmer
@@ -696,20 +732,20 @@ export function SkeletonDemo(): string {
             }}
             data-demo-skeleton-shape="avatar"
           >
-            {Skeleton.definition.render({})}
+            {<Skeleton />}
           </span>
           <div style={{ display: 'grid', rowGap: 8 }}>
             <span
               style={{ display: 'block', height: 16, overflow: 'hidden', width: 220 }}
               data-demo-skeleton-shape="line"
             >
-              {Skeleton.definition.render({})}
+              {<Skeleton />}
             </span>
             <span
               style={{ display: 'block', height: 16, overflow: 'hidden', width: 160 }}
               data-demo-skeleton-shape="line"
             >
-              {Skeleton.definition.render({})}
+              {<Skeleton />}
             </span>
           </div>
         </div>
@@ -723,7 +759,7 @@ export function SkeletonDemo(): string {
   );
 }
 
-export function SliderDemo(): string {
+export function SliderDemo() {
   const state = {
     form: 'gallery-slider-form',
     invalid: true,
@@ -746,29 +782,28 @@ export function SliderDemo(): string {
         Coverage
       </label>
       <div data-ui-demo="slider">
-        {Slider.definition.render({
-          ...state,
-          children: (
-            <>
-              {SliderInput.definition.render({
-                ...state,
-                descriptionId: 'gallery-slider-description',
-                errorId: 'gallery-slider-error',
-                id: 'gallery-slider-input',
-                labelledBy: 'gallery-slider-label',
-                valueText: '65 percent coverage',
-              })}
-              {SliderTrack.definition.render({
-                ...state,
-                children: SliderRange.definition.render(state),
-              })}
-              {SliderThumb.definition.render(state)}
-              <p id="gallery-slider-description">Choose a release coverage target.</p>
-              <p id="gallery-slider-error">Coverage must be reviewed.</p>
-            </>
-          ),
-          id: 'gallery-slider',
-        })}
+        {
+          <Slider {...state} id={'gallery-slider'}>
+            {
+              <>
+                {
+                  <SliderInput
+                    {...state}
+                    descriptionId={'gallery-slider-description'}
+                    errorId={'gallery-slider-error'}
+                    id={'gallery-slider-input'}
+                    labelledBy={'gallery-slider-label'}
+                    valueText={'65 percent coverage'}
+                  />
+                }
+                {<SliderTrack {...state}>{<SliderRange {...state} />}</SliderTrack>}
+                {<SliderThumb {...state} />}
+                <p id="gallery-slider-description">Choose a release coverage target.</p>
+                <p id="gallery-slider-error">Coverage must be reviewed.</p>
+              </>
+            }
+          </Slider>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'input, programmatic',
@@ -779,7 +814,7 @@ export function SliderDemo(): string {
   );
 }
 
-export function SwitchDemo(): string {
+export function SwitchDemo() {
   return (
     <section data-gallery-demo="switch">
       <p data-demo-summary="no-js">Switch renders a native checkbox with switch semantics.</p>
@@ -789,22 +824,25 @@ export function SwitchDemo(): string {
       </span>
       <div data-ui-demo="switch">
         <span data-fixture-state="checked">
-          {Switch.definition.render({
-            checked: true,
-            children: 'Notifications',
-            describedBy: 'gallery-switch-help',
-            form: 'gallery-switch-form',
-            id: 'gallery-switch-notifications',
-            name: 'gallery-notifications',
-            value: 'enabled',
-          })}
+          {
+            <Switch
+              checked={true}
+              describedBy={'gallery-switch-help'}
+              form={'gallery-switch-form'}
+              id={'gallery-switch-notifications'}
+              name={'gallery-notifications'}
+              value={'enabled'}
+            >
+              {'Notifications'}
+            </Switch>
+          }
         </span>
         <span data-fixture-state="disabled">
-          {Switch.definition.render({
-            checked: false,
-            children: 'Locked automation',
-            disabled: true,
-          })}
+          {
+            <Switch checked={false} disabled={true}>
+              {'Locked automation'}
+            </Switch>
+          }
         </span>
       </div>
       {renderBehaviorContract({
@@ -816,35 +854,34 @@ export function SwitchDemo(): string {
   );
 }
 
-export function TableDemo(): string {
-  const header = TableHead.definition.render({
-    children: TableRow.definition.render({
-      children: `${TableHeaderCell.definition.render({
-        children: 'Invoice',
-      })}${TableHeaderCell.definition.render({
-        children: 'Status',
-      })}${TableHeaderCell.definition.render({
-        children: 'Amount',
-      })}`,
-    }),
-  });
-  const body = TableBody.definition.render({
-    children: `${TableRow.definition.render({
-      children: `${TableHeaderCell.definition.render({
-        children: 'INV-0042',
-        scope: 'row',
-      })}${TableCell.definition.render({
-        children: 'Paid',
-      })}${TableCell.definition.render({
-        children: '$250.00',
-      })}`,
-    })}${TableRow.definition.render({
-      children: TableCell.definition.render({
-        children: 'Two pending invoices omitted',
-        colSpan: 3,
-      }),
-    })}`,
-  });
+export function TableDemo() {
+  const header = (
+    <TableHead>
+      {
+        <TableRow>
+          {[
+            <TableHeaderCell>{'Invoice'}</TableHeaderCell>,
+            <TableHeaderCell>{'Status'}</TableHeaderCell>,
+            <TableHeaderCell>{'Amount'}</TableHeaderCell>,
+          ]}
+        </TableRow>
+      }
+    </TableHead>
+  );
+  const body = (
+    <TableBody>
+      {[
+        <TableRow>
+          {[
+            <TableHeaderCell scope={'row'}>{'INV-0042'}</TableHeaderCell>,
+            <TableCell>{'Paid'}</TableCell>,
+            <TableCell>{'$250.00'}</TableCell>,
+          ]}
+        </TableRow>,
+        <TableRow>{<TableCell colSpan={3}>{'Two pending invoices omitted'}</TableCell>}</TableRow>,
+      ]}
+    </TableBody>
+  );
 
   return (
     <section data-gallery-demo="table">
@@ -853,10 +890,7 @@ export function TableDemo(): string {
         TSX.
       </p>
       <div data-ui-demo="table">
-        {Table.definition.render({
-          caption: 'Invoices for the current billing period',
-          children: `${header}${body}`,
-        })}
+        {<Table caption={'Invoices for the current billing period'}>{[header, body]}</Table>}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
@@ -867,7 +901,7 @@ export function TableDemo(): string {
   );
 }
 
-export function TabsDemo(): string {
+export function TabsDemo() {
   const items = [{ value: 'overview' }, { value: 'activity' }, { disabled: true, value: 'audit' }];
   const state = {
     activeValue: 'overview',
@@ -882,34 +916,34 @@ export function TabsDemo(): string {
         Tabs expose tablist, tab, and tabpanel roles with roving focus data.
       </p>
       <div data-ui-demo="tabs">
-        {Tabs.definition.render({
-          ...state,
-          children: `${TabsList.definition.render({
-            ...state,
-            children: items
-              .map((item) =>
-                TabsTrigger.definition.render({
-                  ...state,
-                  children: item.value,
-                  id: `gallery-tabs-${item.value}`,
-                  itemValue: item.value,
-                  panelId: `gallery-tabs-${item.value}-panel`,
-                }),
-              )
-              .join(''),
-            label: 'Gallery tabs',
-          })}${items
-            .map((item) =>
-              TabsPanel.definition.render({
-                ...state,
-                children: `${item.value} content`,
-                id: `gallery-tabs-${item.value}-panel`,
-                itemValue: item.value,
-                triggerId: `gallery-tabs-${item.value}`,
-              }),
-            )
-            .join('')}`,
-        })}
+        {
+          <Tabs {...state}>
+            {[
+              <TabsList {...state} label={'Gallery tabs'}>
+                {items.map((item) => (
+                  <TabsTrigger
+                    {...state}
+                    id={`gallery-tabs-${item.value}`}
+                    itemValue={item.value}
+                    panelId={`gallery-tabs-${item.value}-panel`}
+                  >
+                    {item.value}
+                  </TabsTrigger>
+                ))}
+              </TabsList>,
+              items.map((item) => (
+                <TabsPanel
+                  {...state}
+                  id={`gallery-tabs-${item.value}-panel`}
+                  itemValue={item.value}
+                  triggerId={`gallery-tabs-${item.value}`}
+                >
+                  {[item.value, ' content']}
+                </TabsPanel>
+              )),
+            ]}
+          </Tabs>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, keyboard, programmatic',
@@ -920,50 +954,53 @@ export function TabsDemo(): string {
   );
 }
 
-export function ToastDemo(): string {
-  const toast = Toast.definition.render({
-    children: (
-      <>
-        {ToastTitle.definition.render({
-          children: 'Deployment complete',
-          id: 'gallery-toast-title',
-        })}
-        {ToastDescription.definition.render({
-          children: 'Production is serving the new build.',
-          id: 'gallery-toast-description',
-        })}
-        {ToastAction.definition.render({
-          actionValue: 'open-deploy',
-          children: 'View deploy',
-          id: 'gallery-toast',
-          variant: 'success',
-        })}
-        {ToastAction.definition.render({
-          actionValue: 'keep-open',
-          children: 'Keep open',
-          dismissOnAction: false,
-          id: 'gallery-toast',
-          variant: 'success',
-        })}
-        {ToastAction.definition.render({
-          actionValue: 'blocked',
-          children: 'Blocked',
-          disabled: true,
-          dismissOnAction: false,
-          id: 'gallery-toast',
-          variant: 'success',
-        })}
-        {ToastClose.definition.render({
-          id: 'gallery-toast',
-          variant: 'success',
-        })}
-      </>
-    ),
-    descriptionId: 'gallery-toast-description',
-    id: 'gallery-toast',
-    titleId: 'gallery-toast-title',
-    variant: 'success',
-  });
+export function ToastDemo() {
+  const toast = (
+    <Toast
+      descriptionId={'gallery-toast-description'}
+      id={'gallery-toast'}
+      titleId={'gallery-toast-title'}
+      variant={'success'}
+    >
+      {
+        <>
+          {<ToastTitle id={'gallery-toast-title'}>{'Deployment complete'}</ToastTitle>}
+          {
+            <ToastDescription id={'gallery-toast-description'}>
+              {'Production is serving the new build.'}
+            </ToastDescription>
+          }
+          {
+            <ToastAction actionValue={'open-deploy'} id={'gallery-toast'} variant={'success'}>
+              {'View deploy'}
+            </ToastAction>
+          }
+          {
+            <ToastAction
+              actionValue={'keep-open'}
+              dismissOnAction={false}
+              id={'gallery-toast'}
+              variant={'success'}
+            >
+              {'Keep open'}
+            </ToastAction>
+          }
+          {
+            <ToastAction
+              actionValue={'blocked'}
+              disabled={true}
+              dismissOnAction={false}
+              id={'gallery-toast'}
+              variant={'success'}
+            >
+              {'Blocked'}
+            </ToastAction>
+          }
+          {<ToastClose id={'gallery-toast'} variant={'success'} />}
+        </>
+      }
+    </Toast>
+  );
 
   return (
     <section data-gallery-demo="toast">
@@ -971,17 +1008,23 @@ export function ToastDemo(): string {
         Toast exposes a live-region viewport and dismiss/action buttons with inspectable state.
       </p>
       <div data-ui-demo="toast">
-        {ToastViewport.definition.render({
-          children: `${toast}${Toast.definition.render({
-            id: 'gallery-toast-hidden',
-            open: false,
-            politeness: 'assertive',
-            variant: 'error',
-          })}`,
-          id: 'gallery-toast-viewport',
-          label: 'Gallery notifications',
-          placement: 'top-center',
-        })}
+        {
+          <ToastViewport
+            id={'gallery-toast-viewport'}
+            label={'Gallery notifications'}
+            placement={'top-center'}
+          >
+            {[
+              toast,
+              <Toast
+                id={'gallery-toast-hidden'}
+                open={false}
+                politeness={'assertive'}
+                variant={'error'}
+              />,
+            ]}
+          </ToastViewport>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'action-click, close-click, escape-key, timeout, programmatic',
@@ -992,7 +1035,7 @@ export function ToastDemo(): string {
   );
 }
 
-export function PopoverDemo(): string {
+export function PopoverDemo() {
   const state = {
     contentId: 'gallery-popover-content',
     open: true,
@@ -1004,16 +1047,16 @@ export function PopoverDemo(): string {
         Popover keeps native popover target wiring on the trigger and an auto popover content node.
       </p>
       <div data-ui-demo="popover">
-        {Popover.definition.render({
-          children:
-            PopoverTrigger.definition.render({ ...state, children: 'Filters' }) +
-            PopoverContent.definition.render({
-              ...state,
-              children: 'Status, owner, and due-date filters are available.',
-            }),
-          id: 'gallery-popover',
-          open: state.open,
-        })}
+        {
+          <Popover id={'gallery-popover'} open={state.open}>
+            {[
+              <PopoverTrigger {...state}>{'Filters'}</PopoverTrigger>,
+              <PopoverContent {...state}>
+                {'Status, owner, and due-date filters are available.'}
+              </PopoverContent>,
+            ]}
+          </Popover>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, escape-key, native-beforetoggle, programmatic',
@@ -1024,21 +1067,28 @@ export function PopoverDemo(): string {
   );
 }
 
-export function ProgressDemo(): string {
+export function ProgressDemo() {
   return (
     <section data-gallery-demo="progress">
       <p data-demo-summary="no-js">
         Progress uses the native progress element for determinate and indeterminate states.
       </p>
       <div data-ui-demo="progress">
-        {Progress.definition.render({
-          children: '42%',
-          max: 100,
-          value: 42,
-          valueText: '42 of 100 tasks complete',
-        })}
-        {Progress.definition.render({ children: '100%', max: 100, value: 100 })}
-        {Progress.definition.render({ children: 'Loading', max: 100, value: null })}
+        {
+          <Progress max={100} value={42} valueText={'42 of 100 tasks complete'}>
+            {'42%'}
+          </Progress>
+        }
+        {
+          <Progress max={100} value={100}>
+            {'100%'}
+          </Progress>
+        }
+        {
+          <Progress max={100} value={null}>
+            {'Loading'}
+          </Progress>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons: 'value comes from app state',
@@ -1049,7 +1099,7 @@ export function ProgressDemo(): string {
   );
 }
 
-export function TooltipDemo(): string {
+export function TooltipDemo() {
   const state = {
     contentId: 'gallery-tooltip-content',
     open: true,
@@ -1061,16 +1111,14 @@ export function TooltipDemo(): string {
         Tooltip uses package-prefixed behavior attributes and a hidden content node.
       </p>
       <div data-ui-demo="tooltip">
-        {Tooltip.definition.render({
-          children:
-            TooltipTrigger.definition.render({ ...state, children: 'Inspect status' }) +
-            TooltipContent.definition.render({
-              ...state,
-              children: 'Status updates every minute.',
-            }),
-          id: 'gallery-tooltip',
-          open: state.open,
-        })}
+        {
+          <Tooltip id={'gallery-tooltip'} open={state.open}>
+            {[
+              <TooltipTrigger {...state}>{'Inspect status'}</TooltipTrigger>,
+              <TooltipContent {...state}>{'Status updates every minute.'}</TooltipContent>,
+            ]}
+          </Tooltip>
+        }
       </div>
       {renderBehaviorContract({
         changeReasons:
