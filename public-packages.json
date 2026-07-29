@@ -1897,6 +1897,7 @@
           "./internal/execution",
           "./internal/html",
           "./internal/keyring",
+          "./internal/managed-db-capabilities",
           "./internal/managed-db",
           "./internal/postgres-capability",
           "./internal/runtime-registry-wire",

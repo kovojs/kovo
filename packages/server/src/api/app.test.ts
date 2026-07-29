@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+
+// This mixed public/internal package-boundary test must install the Node SQL parser authority
+// before the ordinary root seals late authority mutation.
+import '../sql-parser-authority-bootstrap.js';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
 import {
   createFileSystemStorage as coreCreateFileSystemStorage,
@@ -23,6 +27,7 @@ import * as packageInternalEgressApi from '@kovojs/server/internal/egress';
 import * as packageInternalEscapeApi from '@kovojs/server/internal/escape';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
+import * as packageInternalManagedDbCapabilitiesApi from '@kovojs/server/internal/managed-db-capabilities';
 import * as packageInternalManagedDbApi from '@kovojs/server/internal/managed-db';
 import * as packageInternalPostgresCapabilityApi from '@kovojs/server/internal/postgres-capability';
 import * as packageInternalRouteApi from '@kovojs/server/internal/route';
@@ -32,6 +37,7 @@ import serverPackage from '../../package.json' with { type: 'json' };
 import * as agentApi from '../agent.js';
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import { isKovoApp as isKovoAppToken, resolveKovoAppToken } from '../app-token.js';
 import * as writeGovernanceApi from '../write-governance.js';
 import * as confidentialAtRestApi from '../confidential-at-rest.js';
 import * as capabilityUrlApi from '../capability-url.js';
@@ -63,6 +69,7 @@ import * as internalEgressApi from '../internal/egress.js';
 import * as internalEscapeApi from '../internal/escape.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
+import * as internalManagedDbCapabilitiesApi from '../internal/managed-db-capabilities.js';
 import * as internalManagedDbApi from '../internal/managed-db.js';
 import * as internalPostgresCapabilityApi from '../internal/postgres-capability.js';
 import * as internalRouteApi from '../internal/route.js';
@@ -642,427 +649,83 @@ function moduleValueKeys(module: Record<string, unknown>): string[] {
 }
 
 describe('server app-shell public API barrels', () => {
-  it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
-    const publicValues = publicApi as Record<string, unknown>;
-    const packageRootValues = packageRootApi as Record<string, unknown>;
-    const renderingSubpathOnlyValues = new Set<string>(['meta']);
-    const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
-      agent: agentApi.agent,
-      agentContent: agentApi.agentContent,
-      createAgentSession: agentApi.createAgentSession,
-      runAgentTurn: agentApi.runAgentTurn,
-      tool: agentApi.tool,
-      createDelegationAuthority: delegationApi.createDelegationAuthority,
-      onBehalfOf: delegationApi.onBehalfOf,
-      createApp: appApi.createApp,
-      // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
-      // env/secret validation surface — the typed boot error and its guard are public.
-      CreateAppBootError: envApi.CreateAppBootError,
-      isCreateAppBootError: envApi.isCreateAppBootError,
-      // SPEC.md §6.6 / plans/secure-framework.md Phase 5: app-facing egress config errors
-      // remain public; bootstrap/credential plumbing moved to @kovojs/server/internal/egress.
-      EgressBlockedError: egressApi.EgressBlockedError,
-      EgressConfigError: egressApi.EgressConfigError,
-      createSigningKeyRing: keyringApi.createSigningKeyRing,
-      // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned
-      // storage download route that hosts the capability verify sink. Low-level signing,
-      // URL-construction, token constants, and audit drains are internal plumbing.
-      DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH:
-        capabilityRouteApi.DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
-      createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
-      createFileSystemStorage: coreCreateFileSystemStorage,
-      createMemoryStorage: coreCreateMemoryStorage,
-      createS3CompatibleStorage: coreCreateS3CompatibleStorage,
-      customVerifier: coreCustomVerifier,
-      hmacSignature: coreHmacSignature,
-      standardWebhooks: coreStandardWebhooks,
-      // SPEC §6.6 / §9.1: rooted file serving is the public local-file sink capability.
-      rootedFiles: fileApi.rootedFiles,
-      // SPEC §6.6 / plans/most-secure-web-framework.md §3: shell-free command
-      // execution is available only through this minted command sink primitive.
-      cmd: commandApi.cmd,
-      commandAllowlist: commandApi.commandAllowlist,
-      runCommand: commandApi.runCommand,
-      // SPEC §6.6 / plans/most-secure-web-framework.md OPP-10: argon2id-only password sink.
-      PASSWORD_ARGON2ID_DEFAULTS: passwordApi.PASSWORD_ARGON2ID_DEFAULTS,
-      hashPassword: passwordApi.hashPassword,
-      isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
-      verifyCredential: passwordApi.verifyCredential,
-      verifyPassword: passwordApi.verifyPassword,
-      createMemoryVersionedClientModuleRegistry:
-        internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
-      // SPEC §6.6/§10.3: persistent principal revocation state is an app-facing lifecycle door.
-      advancePrincipalEpoch: principalEpochApi.advancePrincipalEpoch,
-      createMemoryPrincipalEpochStore: principalEpochApi.createMemoryPrincipalEpochStore,
-      initializePrincipalEpoch: principalEpochApi.initializePrincipalEpoch,
-      PrincipalEpochStaleError: principalEpochApi.PrincipalEpochStaleError,
-      PrincipalEpochUnavailableError: principalEpochApi.PrincipalEpochUnavailableError,
-      tombstonePrincipalEpoch: principalEpochApi.tombstonePrincipalEpoch,
-      postgresSchemaModule: postgresRuntimeApi.postgresSchemaModule,
-      createRequestHandler: requestHandlerApi.createRequestHandler,
-      exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
-      isKovoApp: appGuardsApi.isKovoApp,
-      // SPEC.md §10.3/§11.1 / plans/secure-framework.md Phase 3: the mass-assignment
-      // (KV438) author-assertion escapes — serverValue(non-input) + trustedAssign
-      // are public; the drain is CLI/audit plumbing.
-      trustedAssign: writeGovernanceApi.trustedAssign,
-      serverValue: writeGovernanceApi.serverValue,
-      // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
-      // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
-      createConfidentialAtRestCipher: confidentialAtRestApi.createConfidentialAtRestCipher,
-      decryptAtRest: confidentialAtRestApi.decryptAtRest,
-      encryptAtRest: confidentialAtRestApi.encryptAtRest,
-      rewrapAtRest: confidentialAtRestApi.rewrapAtRest,
-      mintCsrfField: dataApi.mintCsrfField,
-      mintCsrfToken: dataApi.mintCsrfToken,
-      StaticExportError: staticExportDiagnosticsApi.StaticExportError,
-      createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
-      toNodeHandler: nodeSourceApi.toNodeHandler,
-    }).filter((key) => !renderingSubpathOnlyValues.has(key));
+  it('keeps the root focused on ordinary app declaration', () => {
+    const expectedRootValues = [
+      'BodyAttrs',
+      'BodyEnd',
+      'BodyStart',
+      'CreateAppBootError',
+      'Defer',
+      'Document',
+      'FontPreload',
+      'Head',
+      'HtmlAttrs',
+      'InlineScript',
+      'InlineStyle',
+      'Meta',
+      'ModulePreload',
+      'SchemaValidationError',
+      'StaleVersionError',
+      'StylesheetLink',
+      'defineKovo',
+      'domain',
+      'endpoint',
+      'errorBoundary',
+      'guard',
+      'guards',
+      'i18n',
+      'isCreateAppBootError',
+      'layout',
+      'metaFromQuery',
+      'mutation',
+      'mutationFormAttributes',
+      'notFound',
+      'publicAccess',
+      'query',
+      'queue',
+      'respond',
+      'route',
+      's',
+      'safeRichHtml',
+      'session',
+      'stream',
+      'stylesheet',
+      't',
+      'tag',
+      'unsafeInline',
+      'verifiedAccess',
+    ];
 
-    expect(Object.keys(publicValues).sort()).toEqual(rootValues);
-    expect(Object.keys(packageRootValues).sort()).toEqual(rootValues);
+    expect(moduleValueKeys(publicApi)).toEqual(expectedRootValues);
+    expect(moduleValueKeys(packageRootApi)).toEqual(expectedRootValues);
+    expect(publicApi.defineKovo).toBe(packageRootApi.defineKovo);
+    expect(publicApi.route).toBe(routeApi.route);
+    expect(publicApi.layout).toBe(routeApi.layout);
+    expect(publicApi.respond).toBe(responseApi.respond);
+    expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
-    expect(publicApi.createApp).toBe(appApi.createApp);
-    expect(publicApi.agent).toBe(agentApi.agent);
-    expect(publicApi.agentContent).toBe(agentApi.agentContent);
-    expect(publicApi.createAgentSession).toBe(agentApi.createAgentSession);
-    expect(publicApi.runAgentTurn).toBe(agentApi.runAgentTurn);
-    expect(publicApi.tool).toBe(agentApi.tool);
-    expect(publicApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
-    expect(publicApi.createRequestHandler).not.toBe(appApi.createRequestHandler);
-    expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
-    expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
-    expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
-    expect(publicApi.createMemoryStorage).toBe(coreCreateMemoryStorage);
-    expect(publicApi.createFileSystemStorage).toBe(coreCreateFileSystemStorage);
-    expect(publicApi.createS3CompatibleStorage).toBe(coreCreateS3CompatibleStorage);
-    expect(publicApi.createMemoryWebhookReplayStore).toBe(
-      routingApi.createMemoryWebhookReplayStore,
-    );
-    expect(publicApi.webhookReplayIdentity).toBe(routingApi.webhookReplayIdentity);
-    expect(publicApi.hmacSignature).toBe(coreHmacSignature);
-    expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
-    expect(publicApi.customVerifier).toBe(coreCustomVerifier);
-    expect(publicValues).not.toHaveProperty('createElement');
-    expect(packageRootValues).not.toHaveProperty('createElement');
-    expect(publicValues).not.toHaveProperty('GuardFailure');
-    expect(packageRootValues).not.toHaveProperty('GuardFailure');
-    expect(publicValues).not.toHaveProperty('EndpointReason');
-    expect(packageRootValues).not.toHaveProperty('EndpointReason');
-    expect(publicValues).not.toHaveProperty('MutationResponseHeaderValue');
-    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaderValue');
-    expect(publicValues).not.toHaveProperty('MutationResponseHeaders');
-    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaders');
-    // SPEC §6.3/§6.6: typed mutation forms are the only public mutation-form authoring path.
-    // Internal token helpers cannot create the canonical CSRF + Kovo-Idem bundle by themselves.
-    expect(publicValues).not.toHaveProperty('csrfField');
-    expect(packageRootValues).not.toHaveProperty('csrfField');
-    expect(publicValues).not.toHaveProperty('csrfToken');
-    expect(packageRootValues).not.toHaveProperty('csrfToken');
-    expect(() =>
-      (publicApi.mintCsrfToken as (...args: unknown[]) => unknown)(
-        {},
-        { secret: 'public-raw-csrf-test-secret-0123456789', sessionId: () => 'session' },
-        { mutation: { key: 'account/update' } },
-      ),
-    ).toThrow('Mutation forms must use typed <form mutation={definition}>');
-    expect(publicValues).not.toHaveProperty('DeferredQueryChunk');
-    expect(packageRootValues).not.toHaveProperty('DeferredQueryChunk');
-    expect(publicValues).not.toHaveProperty('DeferredFragmentChunk');
-    expect(packageRootValues).not.toHaveProperty('DeferredFragmentChunk');
-    expect(publicValues).not.toHaveProperty('DeferredStreamChunk');
-    expect(packageRootValues).not.toHaveProperty('DeferredStreamChunk');
-    expect(publicValues).not.toHaveProperty('DeferredPriority');
-    expect(packageRootValues).not.toHaveProperty('DeferredPriority');
-    // SPEC.md §9.5: `createApp({ clientModules })` consumers construct a registry,
-    // so the constructor stays public at the root and shares the internal value.
-    expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
-      internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
-    );
-    // SPEC §6.6/§10.3: the raw-client adapter unwraps managed request DB handles for framework
-    // queue plumbing, so it must never be reachable from the app-facing package root.
-    expect(publicApi).not.toHaveProperty('createDurableTaskSqlExecutor');
-    // SPEC §10.3: structural SQL executors cannot mint authenticated replay-store authority.
-    expect(publicApi).not.toHaveProperty('createPostgresCapabilityReplayStore');
-    expect(publicApi).not.toHaveProperty('createPostgresMutationReplayStore');
-    expect(publicApi).not.toHaveProperty('createPostgresWebhookReplayStore');
-    expect(publicApi).not.toHaveProperty('releasePostgresPendingReplay');
-    expect(publicApi.createDurableTaskStatus).toBe(taskObservabilityApi.createDurableTaskStatus);
-    expect(publicApi.encryptAtRest).toBe(confidentialAtRestApi.encryptAtRest);
-    expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
-    expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
-    expect(publicApi.createMemoryWebhookReplayStore).toBe(
-      routingApi.createMemoryWebhookReplayStore,
-    );
-    expect(publicApi.webhook).toBe(routingApi.webhook);
-    expect(publicApi.webhookReplayIdentity).toBe(routingApi.webhookReplayIdentity);
-    expect(publicApi.declarePublicRelation).toBe(dataApi.declarePublicRelation);
-    expect(publicApi.postgresAppRuntimeOptions).toBe(dataApi.postgresAppRuntimeOptions);
-    expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
-    expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
-    expect(publicApi.customVerifier).toBe(coreCustomVerifier);
-    expect(publicApi.hmacSignature).toBe(coreHmacSignature);
-    expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
-    expect(publicValues).not.toHaveProperty('parseRouteRequest');
-    expect(publicValues).not.toHaveProperty('endpointMatches');
-    expect(publicValues).not.toHaveProperty('runEndpoint');
-    expect(publicValues).not.toHaveProperty('runMutation');
-    expect(publicValues).not.toHaveProperty('runQuery');
-    expect(publicValues).not.toHaveProperty('runRoutePage');
-    expect(publicValues).not.toHaveProperty('runWebhook');
-    expect(publicValues).not.toHaveProperty('renderMutationEndpointResponse');
-    expect(publicValues).not.toHaveProperty('renderMutationResponse');
-    expect(publicValues).not.toHaveProperty('renderNoJsMutationResponse');
-    expect(publicValues).not.toHaveProperty('renderQueryEndpointResponse');
-    expect(publicValues).not.toHaveProperty('renderQueryRegistryEndpointResponse');
-    expect(publicValues).not.toHaveProperty('renderContentSecurityPolicy');
-    expect(publicValues).not.toHaveProperty('cspSha256');
-    expect(publicApi.Defer).toBe(renderingApi.Defer);
-    expect(publicApi.trustedHtml).toBe(trustedHtml);
-    expect(publicApi.trustedUrl).toBe(trustedUrl);
-    expect(publicApi.Document).toBe(documentStructuredApi.Document);
-    expect(publicApi.Head).toBe(documentStructuredApi.Head);
-    expect(publicApi.BodyStart).toBe(documentStructuredApi.BodyStart);
-    expect(publicApi.BodyEnd).toBe(documentStructuredApi.BodyEnd);
-    expect(publicApi.HtmlAttrs).toBe(documentStructuredApi.HtmlAttrs);
-    expect(publicApi.BodyAttrs).toBe(documentStructuredApi.BodyAttrs);
-    expect(publicApi.FontPreload).toBe(documentStructuredApi.FontPreload);
-    expect(publicApi.InlineScript).toBe(documentStructuredApi.InlineScript);
-    expect(publicApi.InlineStyle).toBe(documentStructuredApi.InlineStyle);
-    expect(renderingApi.Link).toBe(documentStructuredApi.Link);
-    expect(publicValues).not.toHaveProperty('DocumentLink');
-    expect(publicValues).not.toHaveProperty('defer');
-    expect(packageRootValues).not.toHaveProperty('renderContentSecurityPolicy');
-    expect(packageRootValues).not.toHaveProperty('cspSha256');
-    expect(packageRootApi.Defer).toBe(renderingApi.Defer);
-    expect(packageRootApi.trustedHtml).toBe(trustedHtml);
-    expect(packageRootApi.trustedUrl).toBe(trustedUrl);
-    expect(packageRootValues).not.toHaveProperty('defer');
-    expect(publicValues).not.toHaveProperty('renderDeferredDocument');
-    expect(publicValues).not.toHaveProperty('renderDeferredStream');
-    expect(publicValues).not.toHaveProperty('renderDiagnosticDocument');
-    expect(publicValues).not.toHaveProperty('renderDocument');
-    expect(publicValues).not.toHaveProperty('renderDocumentQueryScript');
-    expect(publicValues).not.toHaveProperty('renderErrorDocument');
-    expect(publicValues).not.toHaveProperty('renderPageHints');
-    expect(publicValues).not.toHaveProperty('renderQueryScript');
-    expect(publicValues).not.toHaveProperty('renderRouteDocumentResponse');
-    expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
-    expect(publicValues).not.toHaveProperty('readHeader');
-    expect(publicValues).not.toHaveProperty('renderComponent');
-    expect(publicValues).not.toHaveProperty('installEgressFloor');
-    expect(publicValues).not.toHaveProperty('createDatabaseEgressSocket');
-    expect(packageRootValues).not.toHaveProperty('createDatabaseEgressSocket');
-    expect(publicValues).not.toHaveProperty('selfProbe');
-    expect(publicValues).not.toHaveProperty('awsCredential');
-    expect(publicValues).not.toHaveProperty('gcpCredential');
-    expect(publicValues).not.toHaveProperty('azureCredential');
-    expect(publicValues).not.toHaveProperty('DEFAULT_CAPABILITY_TTL_MS');
-    expect(publicValues).not.toHaveProperty('createMemoryCapabilityReplayStore');
-    expect(publicValues).not.toHaveProperty('signCapability');
-    expect(publicValues).not.toHaveProperty('verifyCapability');
-    expect(publicValues).not.toHaveProperty('CAPABILITY_TOKEN_PARAM');
-    expect(publicValues).not.toHaveProperty('createSignUrl');
-    expect(publicValues).not.toHaveProperty('deriveDownloadKey');
-    expect(publicValues).not.toHaveProperty('drainCapabilityMintFacts');
-    expect(publicValues).not.toHaveProperty('drainTrustedAssignFacts');
-    expect(publicValues).not.toHaveProperty('drainUnsafeRegexFacts');
-    expect(publicValues).not.toHaveProperty('drainUnverifiedMimeFacts');
-    expect(publicValues).not.toHaveProperty('createKovoAppShellViteDevIntegration');
-    expect(publicValues).not.toHaveProperty('kovoAppShellViteDevPlugin');
-    expect(publicValues).not.toHaveProperty('createDeclaredWriteDb');
-    expect(publicValues).not.toHaveProperty('createAuthorizationCensusDb');
-    expect(publicValues).not.toHaveProperty('createPostgresReadonlyClient');
-    expect(publicValues).not.toHaveProperty('createPostgresScopedClient');
-    expect(publicValues).not.toHaveProperty('kovoDeclaredWriteDbHandle');
-    expect(publicValues).not.toHaveProperty('kovoReadonlyDbHandle');
-    expect(publicValues).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
-    expect(publicValues).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
-    expect(publicValues).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
-    expect(publicValues).not.toHaveProperty('drainPublicReadAuditFacts');
-    expect(publicValues).not.toHaveProperty('createSecretBoxingReadDb');
-    expect(publicApi.declareSecretReadCapability).toBe(
-      secretReadBoundaryApi.declareSecretReadCapability,
-    );
-    expect(packageRootApi.declareSecretReadCapability).toBe(
-      secretReadBoundaryApi.declareSecretReadCapability,
-    );
-    expect(publicApi).not.toHaveProperty('createSqliteAppRuntimeDb');
-    expect(packageRootApi).not.toHaveProperty('createSqliteAppRuntimeDb');
-    expect(publicApi).not.toHaveProperty('runtimeDbMetadataForSchema');
-    expect(packageRootApi).not.toHaveProperty('runtimeDbMetadataForSchema');
-    for (const key of renderingSubpathOnlyValues) {
-      expect(publicValues).not.toHaveProperty(key);
-      expect(packageRootValues).not.toHaveProperty(key);
+    for (const moved of [
+      'agent',
+      'createApp',
+      'createPostgresAppRuntimeDb',
+      'createRequestHandler',
+      'exportStaticApp',
+      'isKovoApp',
+      'task',
+      'toNodeHandler',
+      'webhook',
+      'webhookReplayIdentity',
+    ]) {
+      expect(publicApi).not.toHaveProperty(moved);
+      expect(packageRootApi).not.toHaveProperty(moved);
     }
-    expect(dataApi).not.toHaveProperty('renderMutationEndpointResponse');
-    expect(dataApi).not.toHaveProperty('renderMutationResponse');
-    expect(dataApi).not.toHaveProperty('renderNoJsMutationResponse');
-    expect(dataApi).not.toHaveProperty('renderQueryEndpointResponse');
-    expect(dataApi).not.toHaveProperty('renderQueryRegistryEndpointResponse');
-    expect(dataApi).not.toHaveProperty('renderQueryScript');
-    expect(dataApi).not.toHaveProperty('runMutation');
-    expect(dataApi).not.toHaveProperty('runQuery');
-    expect(dataApi).not.toHaveProperty('createDeclaredWriteDb');
-    expect(dataApi).not.toHaveProperty('createAuthorizationCensusDb');
-    expect(dataApi).not.toHaveProperty('createPostgresReadonlyClient');
-    expect(dataApi).not.toHaveProperty('createPostgresScopedClient');
-    expect(dataApi).not.toHaveProperty('kovoDeclaredWriteDbHandle');
-    expect(dataApi).not.toHaveProperty('kovoReadonlyDbHandle');
-    expect(dataApi.declareSecretReadCapability).toBe(
-      secretReadBoundaryApi.declareSecretReadCapability,
-    );
-    expect(dataApi).not.toHaveProperty('createSqliteAppRuntimeDb');
-    expect(dataApi).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
-    expect(dataApi).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
-    expect(dataApi).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
-    expect(dataApi).not.toHaveProperty('drainPublicReadAuditFacts');
-    expect(dataApi).not.toHaveProperty('drainUnsafeRegexFacts');
-    expect(dataApi).not.toHaveProperty('drainUnverifiedMimeFacts');
-    expect(renderingApi).not.toHaveProperty('renderContentSecurityPolicy');
-    expect(renderingApi).not.toHaveProperty('cspSha256');
-    expect(renderingApi.Defer).toBe(internalHtmlApi.Defer);
-    expect(renderingApi.trustedHtml).toBe(trustedHtml);
-    expect(renderingApi.trustedUrl).toBe(trustedUrl);
-    expect(renderingApi).not.toHaveProperty('defer');
-    expect(renderingApi).not.toHaveProperty('renderDeferredDocument');
-    expect(renderingApi).not.toHaveProperty('renderDeferredStream');
-    expect(renderingApi).not.toHaveProperty('renderDiagnosticDocument');
-    expect(renderingApi).not.toHaveProperty('renderDocument');
-    expect(renderingApi).not.toHaveProperty('renderDocumentQueryScript');
-    expect(renderingApi).not.toHaveProperty('renderErrorDocument');
-    expect(renderingApi).not.toHaveProperty('renderPageHints');
-    expect(renderingApi).not.toHaveProperty('renderComponent');
-    expect(renderingApi).not.toHaveProperty('renderRouteDocumentResponse');
-    expect(routingApi).not.toHaveProperty('endpointMatches');
-    expect(routingApi).not.toHaveProperty('parseRouteRequest');
-    expect(routingApi).not.toHaveProperty('renderRoutePageResponse');
-    expect(routingApi).not.toHaveProperty('readHeader');
-    expect(routingApi).not.toHaveProperty('runEndpoint');
-    expect(routingApi).not.toHaveProperty('runRoutePage');
-    expect(routingApi).not.toHaveProperty('runWebhook');
-
-    expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
-      documentCoreApi.renderRouteDocumentResponse,
-    );
-    expect(packageInternalHtmlApi).not.toHaveProperty('renderContentSecurityPolicy');
-    expect(packageInternalCspApi.renderContentSecurityPolicy).toBe(
-      cspApi.renderContentSecurityPolicy,
-    );
-    expect(packageInternalCspApi.cspSha256).toBe(cspApi.cspSha256);
-    expect(packageInternalCspApi).toEqual(internalCspApi);
-    expect(packageInternalCapabilitiesApi.signCapability).toBe(capabilityUrlApi.signCapability);
-    expect(packageInternalCapabilitiesApi.verifyCapability).toBe(capabilityUrlApi.verifyCapability);
-    expect(packageInternalCapabilitiesApi.createSignUrl).toBe(capabilityRouteApi.createSignUrl);
-    expect(packageInternalCapabilitiesApi.deriveDownloadKey).toBe(
-      capabilityRouteApi.deriveDownloadKey,
-    );
-    expect(packageInternalCapabilitiesApi.drainCapabilityMintFacts).toBe(
-      capabilityRouteApi.drainCapabilityMintFacts,
-    );
-    expect(packageInternalCapabilitiesApi).toEqual(internalCapabilitiesApi);
-    expect(packageInternalAuditFactsApi.drainTrustedAssignFacts).toBe(
-      writeGovernanceApi.drainTrustedAssignFacts,
-    );
-    expect(packageInternalAuditFactsApi.drainUnsafeRegexFacts).toBe(redosApi.drainUnsafeRegexFacts);
-    expect(packageInternalAuditFactsApi.drainUnverifiedMimeFacts).toBe(
-      uploadSniffApi.drainUnverifiedMimeFacts,
-    );
-    expect(packageInternalAuditFactsApi.drainCapabilityMintFacts).toBe(
-      capabilityRouteApi.drainCapabilityMintFacts,
-    );
-    expect(packageInternalAuditFactsApi.drainPostgresPostureCheckOptOutFacts).toBe(
-      postgresRuntimeApi.drainPostgresPostureCheckOptOutFacts,
-    );
-    expect(packageInternalAuditFactsApi).toEqual(internalAuditFactsApi);
-    expect(packageInternalEgressApi.installEgressFloor).toBe(egressBootstrapApi.installEgressFloor);
-    expect(packageInternalEgressApi).not.toHaveProperty('createDatabaseEgressSocket');
-    expect(packageInternalEgressApi.selfProbe).toBe(egressBootstrapApi.selfProbe);
-    expect(packageInternalEgressApi.awsCredential).toBe(egressCredentialsApi.awsCredential);
-    expect(packageInternalEgressApi.gcpCredential).toBe(egressCredentialsApi.gcpCredential);
-    expect(packageInternalEgressApi.azureCredential).toBe(egressCredentialsApi.azureCredential);
-    expect(packageInternalEgressApi).toEqual(internalEgressApi);
-    expect(packageInternalManagedDbApi.createDeclaredWriteDb).toBe(
-      managedDbApi.createDeclaredWriteDb,
-    );
-    expect(packageInternalManagedDbApi.createAuthorizationCensusDb).toBe(
-      managedDbApi.createAuthorizationCensusDb,
-    );
-    expect(packageInternalManagedDbApi.createPostgresReadonlyClient).toBe(
-      managedDbApi.createPostgresReadonlyClient,
-    );
-    expect(packageInternalManagedDbApi.createPostgresScopedClient).toBe(
-      managedDbApi.createPostgresScopedClient,
-    );
-    expect(packageInternalManagedDbApi.kovoDeclaredWriteDbHandle).toBe(
-      managedDbApi.kovoDeclaredWriteDbHandle,
-    );
-    expect(packageInternalManagedDbApi.kovoReadonlyDbHandle).toBe(
-      managedDbApi.kovoReadonlyDbHandle,
-    );
-    expect(packageInternalManagedDbApi.createSecretBoxingReadDb).toBe(
-      secretReadBoundaryApi.createSecretBoxingReadDb,
-    );
-    expect(packageInternalManagedDbApi.declareSecretReadCapability).toBe(
-      secretReadBoundaryApi.declareSecretReadCapability,
-    );
-    expect(packageInternalManagedDbApi).toEqual(internalManagedDbApi);
-    expect(packageInternalPostgresCapabilityApi).toEqual(internalPostgresCapabilityApi);
-    expect(packageRootApi).not.toHaveProperty('usePostgresSystemDb');
-    expect(packageInternalHtmlApi.renderComponent).toBe(componentRenderApi.renderComponent);
-    expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
-      documentCoreApi.renderDeferredDocument,
-    );
-    expect(packageInternalHtmlApi.renderDeferredStream).toBe(
-      deferredStreamApi.renderDeferredStream,
-    );
-    expect(packageInternalHtmlApi.renderDiagnosticDocument).toBe(
-      documentDiagnosticsApi.renderDiagnosticDocument,
-    );
-    expect(packageInternalHtmlApi.renderDocument).toBe(documentCoreApi.renderDocument);
-    expect(packageInternalHtmlApi.renderDocumentQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(packageInternalHtmlApi.renderErrorDocument).toBe(documentCoreApi.renderErrorDocument);
-    expect(packageInternalHtmlApi.renderPageHints).toBe(hintsApi.renderPageHints);
-    expect(packageInternalHtmlApi.renderQueryScript).toBe(wireHtmlApi.renderQueryScript);
-    expect(packageInternalHtmlApi.readHeader).toBe(responseApi.readHeader);
-    expect(packageInternalRouteApi.renderRoutePageResponse).toBe(routeApi.renderRoutePageResponse);
-    expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
-      mutationApi.renderMutationEndpointResponse,
-    );
-    expect(packageInternalWireApi.createLiveTargetAttestation).toBe(
-      liveTargetAppAttestationApi.createAppLiveTargetAttestation,
-    );
-    expect(packageInternalWireApi.createLiveTargetAttestation).not.toBe(
-      mutationWireApi.createLiveTargetAttestation,
-    );
-    expect(packageInternalWireApi.renderMutationResponse).toBe(mutationApi.renderMutationResponse);
-    expect(packageInternalWireApi.renderNoJsMutationResponse).toBe(
-      mutationApi.renderNoJsMutationResponse,
-    );
-    expect(packageInternalWireApi.renderQueryEndpointResponse).toBe(
-      queryApi.renderQueryEndpointResponse,
-    );
-    expect(packageInternalWireApi.renderQueryRegistryEndpointResponse).toBe(
-      queryApi.renderQueryRegistryEndpointResponse,
-    );
-    expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
-      internalHtmlApi.renderRouteDocumentResponse,
-    );
-    expect(packageInternalRouteApi.renderRoutePageResponse).toBe(
-      internalRouteApi.renderRoutePageResponse,
-    );
-    expect(packageInternalWireApi.renderMutationEndpointResponse).toBe(
-      internalWireApi.renderMutationEndpointResponse,
-    );
-
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell');
   });
 
   it('exposes path-first webhook authoring through public routing barrels', () => {
-    const replayIdentity = publicApi.webhookReplayIdentity('evt_public', Date.now());
-    const rootWebhook = publicApi.webhook('/webhooks/public-order-paid', {
+    const replayIdentity = routingApi.webhookReplayIdentity('evt_public', Date.now());
+    const taskWebhook = routingApi.webhook('/webhooks/public-order-paid', {
       handler: () => undefined,
       input: publicApi.s.object({ id: publicApi.s.string() }),
       verify: 'none',
@@ -1075,7 +738,7 @@ describe('server app-shell public API barrels', () => {
       verifyJustification: 'public API fixture',
     });
     const removedOptionsPath = () =>
-      publicApi.webhook('/webhooks/public-path-first-only', {
+      routingApi.webhook('/webhooks/public-path-first-only', {
         handler: () => undefined,
         input: publicApi.s.object({ id: publicApi.s.string() }),
         // @ts-expect-error Phase 1 path-first API removed public options.path.
@@ -1084,15 +747,17 @@ describe('server app-shell public API barrels', () => {
         verifyJustification: 'compile-time fixture only',
       });
 
-    expect(rootWebhook.name).toBe('/webhooks/public-order-paid');
-    expect(rootWebhook.path).toBe('/webhooks/public-order-paid');
-    expect(rootWebhook.reason).toBe('webhook:/webhooks/public-order-paid');
+    expect(taskWebhook.name).toBe('/webhooks/public-order-paid');
+    expect(taskWebhook.path).toBe('/webhooks/public-order-paid');
+    expect(taskWebhook.reason).toBe('webhook:/webhooks/public-order-paid');
     expect(replayIdentity).toMatchObject({
       key: 'evt_public',
       occurredAtMs: expect.any(Number),
       expiresAtMs: expect.any(Number),
     });
     expect(routingWebhook.name).toBe('/webhooks/routing-order-paid');
+    expect(publicApi).not.toHaveProperty('webhook');
+    expect(publicApi).not.toHaveProperty('webhookReplayIdentity');
     expect(removedOptionsPath).toBeTypeOf('function');
   });
 
@@ -1205,15 +870,16 @@ describe('server app-shell public API barrels', () => {
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./testing');
 
-    expect(packageRootApi.createApp).toBe(appApi.createApp);
-    expect(packageRootApi.createRequestHandler).toBe(requestHandlerApi.createRequestHandler);
-    expect(packageRootApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
-    expect(packageRootApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
+    expect(packageRootApi.defineKovo).toBe(publicApi.defineKovo);
+    expect(packageRootApi).not.toHaveProperty('createApp');
+    expect(packageRootApi).not.toHaveProperty('createRequestHandler');
+    expect(packageRootApi).not.toHaveProperty('exportStaticApp');
+    expect(packageRootApi).not.toHaveProperty('isKovoApp');
     expect(packageRootApi.layout).toBe(routeApi.layout);
     expect(packageRootApi.respond).toBe(responseApi.respond);
     expect(packageRootApi.route).toBe(routeApi.route);
     expect(packageRootApi.stylesheet).toBe(hintsApi.stylesheet);
-    expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
+    expect(packageRootApi).not.toHaveProperty('toNodeHandler');
     expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
       internalClientModulesApi.renderVersionedClientModuleResponse,
     );
@@ -1274,57 +940,33 @@ describe('server app-shell public API barrels', () => {
       './internal/egress': './src/internal/egress.ts',
       './internal/escape': './src/internal/escape.ts',
       './internal/execution': './src/internal/execution.ts',
+      './internal/managed-db-capabilities': './src/internal/managed-db-capabilities.ts',
       './internal/managed-db': './src/internal/managed-db.ts',
     });
+    expect(moduleValueKeys(packageInternalManagedDbCapabilitiesApi)).toEqual([
+      'kovoDeclaredWriteDbHandle',
+      'kovoReadonlyDbHandle',
+    ]);
+    expect(packageInternalManagedDbCapabilitiesApi).toEqual(internalManagedDbCapabilitiesApi);
   });
 
-  it('validates dynamically loaded app-shell aggregates through the shared core guard', () => {
-    const app = publicApi.createApp();
+  it('keeps assembled app state behind an exact opaque token', () => {
+    const app = publicApi.defineKovo({});
+    const token = app.assemble({});
 
-    expect(publicApi.isKovoApp(app)).toBe(true);
-    expect(publicApi.isKovoApp(publicApi.createApp({ document: publicApi.Document({}) }))).toBe(
-      true,
+    expect(isKovoAppToken(token)).toBe(true);
+    expect(Object.isFrozen(token)).toBe(true);
+    expect(Reflect.ownKeys(token)).toEqual([]);
+    expect(resolveKovoAppToken(token, 'API topology test')).toMatchObject({
+      endpoints: [],
+      mutations: [],
+      queries: [],
+      routes: [],
+    });
+    expect(isKovoAppToken({ ...token })).toBe(false);
+    expect(isKovoAppToken(new Proxy(token, {}))).toBe(false);
+    expect(() => resolveKovoAppToken({ ...token }, 'API topology test')).toThrow(
+      'requires the exact opaque KovoApp',
     );
-    expect(() =>
-      publicApi.createApp({ document: { template: () => '<html></html>' } as any }),
-    ).toThrow('createApp({ document.template }) is not supported');
-    expect(publicApi.isKovoApp({ ...app })).toBe(false);
-    expect(publicApi.isKovoApp(new Proxy(app, {}))).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, document: undefined })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, document: { template: '<html></html>' } })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, document: { structured: {} } })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, errorShells: undefined })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, errorShells: { notFound: '<main>404</main>' } })).toBe(
-      false,
-    );
-    expect(publicApi.isKovoApp({ ...app, clientModules: {} })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, renderRoute: '<main>compat</main>' })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, sessionProvider: { session: null } })).toBe(false);
-    expect(
-      publicApi.isKovoApp({
-        ...app,
-        clientModules: {
-          resolve: () => ({ body: 'Not Found', headers: {}, status: 404 }),
-        },
-      }),
-    ).toBe(false);
-    expect(
-      publicApi.isKovoApp({
-        ...app,
-        clientModules: { put: () => '/c/cart.client.js?v=test' },
-      }),
-    ).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, endpoints: [{ path: '/status' }] })).toBe(false);
-    expect(
-      publicApi.isKovoApp({
-        ...app,
-        mutations: [{ handler: () => ({ ok: true }), key: 'cart/add' }],
-      }),
-    ).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart' }] })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(false);
-    expect(
-      publicApi.isKovoApp({ ...app, routes: [{ page: () => trustedHtml('<main>Cart</main>') }] }),
-    ).toBe(false);
   });
 });
