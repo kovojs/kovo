@@ -348,6 +348,39 @@ export function tokenizeShell(source, label = 'shell sample') {
 }
 
 export function extractKovoInvocations(shellSource, label = 'shell sample') {
+  const invocations = [];
+  for (const [line, logicalLine] of logicalShellLines(shellSource, label).entries()) {
+    const tokens = tokenizeShell(logicalLine, `${label}:${line + 1}`);
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (tokens[index] !== 'kovo' || !isKovoExecutableToken(tokens, index)) continue;
+      invocations.push({ argv: invocationArgs(tokens, index + 1), line: line + 1 });
+    }
+  }
+  return invocations;
+}
+
+export function extractCreateKovoInvocations(shellSource, label = 'shell sample') {
+  const invocations = [];
+  for (const [line, logicalLine] of logicalShellLines(shellSource, label).entries()) {
+    const tokens = tokenizeShell(logicalLine, `${label}:${line + 1}`);
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      const direct = isCreateKovoPackageToken(token) && isCreateKovoExecutableToken(tokens, index);
+      const createWrapper =
+        isKovoCreateTargetToken(token) &&
+        ['create', 'init'].includes(tokens[index - 1]) &&
+        ['npm', 'pnpm', 'yarn', 'bun'].includes(tokens[index - 2]);
+      if (!direct && !createWrapper) continue;
+      const argv = invocationArgs(tokens, index + 1);
+      const separator = argv.indexOf('--');
+      if (separator >= 0) argv.splice(separator, 1);
+      invocations.push({ argv, line: line + 1 });
+    }
+  }
+  return invocations;
+}
+
+function logicalShellLines(shellSource, label) {
   const logicalLines = [];
   let current = '';
   for (const rawLine of shellSource.split('\n')) {
@@ -361,21 +394,16 @@ export function extractKovoInvocations(shellSource, label = 'shell sample') {
     current = '';
   }
   if (current !== '') throw new TypeError(`${label}: dangling line continuation`);
+  return logicalLines;
+}
 
-  const invocations = [];
-  for (let line = 0; line < logicalLines.length; line += 1) {
-    const tokens = tokenizeShell(logicalLines[line], `${label}:${line + 1}`);
-    for (let index = 0; index < tokens.length; index += 1) {
-      if (tokens[index] !== 'kovo' || !isKovoExecutableToken(tokens, index)) continue;
-      const argv = [];
-      for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
-        if (['|', '||', '&', '&&', ';', '<', '>', '>>'].includes(tokens[cursor])) break;
-        argv.push(tokens[cursor]);
-      }
-      invocations.push({ argv, line: line + 1 });
-    }
+function invocationArgs(tokens, start) {
+  const argv = [];
+  for (let cursor = start; cursor < tokens.length; cursor += 1) {
+    if (['|', '||', '&', '&&', ';', '<', '>', '>>'].includes(tokens[cursor])) break;
+    argv.push(tokens[cursor]);
   }
-  return invocations;
+  return argv;
 }
 
 function isKovoExecutableToken(tokens, index) {
@@ -401,10 +429,25 @@ function isKovoExecutableToken(tokens, index) {
   );
 }
 
+function isCreateKovoExecutableToken(tokens, index) {
+  if (isKovoExecutableToken(tokens, index)) return true;
+  return tokens[index - 1] === 'dlx' && tokens[index - 2] === 'pnpm';
+}
+
+function isCreateKovoPackageToken(token) {
+  return /^create-kovo(?:@[^/]+)?$/u.test(token);
+}
+
+function isKovoCreateTargetToken(token) {
+  return /^kovo(?:@[^/]+)?$/u.test(token);
+}
+
 export async function validateKovoInvocations(samples) {
   registerTypeScriptSourceResolution();
   const { parseKovoCommandInvocation, parseKovoMetaInvocation, resolveCommand } =
     await import('../packages/cli/src/commands-manifest.ts');
+  const { assertCreateKovoSqliteScaffoldAllowed, readCreateKovoCliOptions } =
+    await import('../packages/create-kovo/src/cli-schema.ts');
   let count = 0;
   for (const sample of samples) {
     if (sample.class !== 'executable' || !SHELL_LANGUAGES.has(sample.language)) continue;
@@ -432,6 +475,33 @@ export async function validateKovoInvocations(samples) {
             `documented kovo invocation is not in the command schema`,
           );
         }
+      }
+      count += 1;
+    }
+    const createInvocations = extractCreateKovoInvocations(
+      sample.code,
+      `${sample.sourcePath}:${sample.startLine}`,
+    );
+    for (const invocation of createInvocations) {
+      try {
+        if (
+          invocation.argv.length === 1 &&
+          (invocation.argv[0] === '--help' || invocation.argv[0] === '-h')
+        ) {
+          count += 1;
+          continue;
+        }
+        const options = readCreateKovoCliOptions(invocation.argv);
+        assertCreateKovoSqliteScaffoldAllowed(options, {
+          experimentalSqliteEnvironment: false,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw sampleError(
+          sample.sourcePath,
+          sample.startLine + invocation.line,
+          `documented create-kovo invocation contradicts command schema: ${message}`,
+        );
       }
       count += 1;
     }

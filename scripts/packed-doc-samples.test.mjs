@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertPackedKovoResolutions,
+  extractCreateKovoInvocations,
   extractKovoInvocations,
   loadCodeSamplePolicy,
   scanMarkdownSamples,
@@ -145,6 +146,19 @@ describe('documented CLI schema parsing', () => {
       ['check', 'graph.json'],
       ['explain', 'query', 'cart', 'graph.json'],
     ]);
+    expect(
+      extractCreateKovoInvocations(
+        [
+          'pnpm create kovo my-app -- --dialect sqlite --experimental-sqlite',
+          'pnpm dlx create-kovo@0.2.0 another-app --disable-git',
+          'npx create-kovo third-app',
+        ].join('\n'),
+      ).map((entry) => entry.argv),
+    ).toEqual([
+      ['my-app', '--dialect', 'sqlite', '--experimental-sqlite'],
+      ['another-app', '--disable-git'],
+      ['third-app'],
+    ]);
   });
 
   it('accepts real command forms and rejects synopsis notation through the owning schema', async () => {
@@ -167,6 +181,15 @@ describe('documented CLI schema parsing', () => {
         },
       ]),
     ).rejects.toThrow('contradicts command schema');
+
+    await expect(
+      validateKovoInvocations([
+        {
+          ...valid[0],
+          code: 'pnpm create kovo my-app -- --template app',
+        },
+      ]),
+    ).rejects.toThrow('documented create-kovo invocation contradicts command schema');
   });
 });
 

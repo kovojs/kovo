@@ -11,7 +11,7 @@ pnpm run check
 ```
 
 ```sh
-pnpm create kovo my-app --template app
+pnpm create kovo my-app -- --disable-git
 ```
 
 ## Reference
