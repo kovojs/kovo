@@ -13,8 +13,29 @@ import {
   stableOwnData,
 } from './output-security.mjs';
 
-const NODE_KINDS = freeze(['mutation', 'domain', 'query', 'component', 'page']);
-const EDGE_KINDS = freeze(['writes', 'backs', 'feeds', 'emits', 'renders']);
+const NODE_KINDS = freeze([
+  'mutation',
+  'domain',
+  'query',
+  'component',
+  'handler',
+  'trigger',
+  'derive',
+  'binding-position',
+  'page',
+]);
+const EDGE_KINDS = freeze([
+  'writes',
+  'backs',
+  'feeds',
+  'emits',
+  'renders',
+  'handles',
+  'triggers',
+  'derives',
+  'owns',
+  'updates',
+]);
 const OPTIMISTIC_STATUSES = freeze(['UNHANDLED', 'derived', 'hand-written', 'await-fragment']);
 const DERIVATION_STATUSES = freeze(['derived', 'PUNTED']);
 const MAX_MANIFEST_ENTRIES = 256;

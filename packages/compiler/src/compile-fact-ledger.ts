@@ -258,6 +258,23 @@ function snapshotCompileFact<Family extends CompileFactFamily>(
   label: string,
 ): CompileFactFamilyMap[Family] {
   const snapshot = compilerSnapshotJsonValue(fact, label);
+  if (family === 'queryUpdateCoverage') {
+    const sourceAnchor = compilerOwnDataValue(fact, 'sourceAnchor', label);
+    if (sourceAnchor === undefined) return snapshot;
+    const record = compilerCreateNullRecord<unknown>();
+    const keys = compilerObjectKeys(snapshot as object);
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      compilerDefineOwnDataProperty(record, key, compilerOwnDataValue(snapshot, key, label));
+    }
+    compilerDefineOwnDataProperty(
+      record,
+      'sourceAnchor',
+      compilerSnapshotJsonValue(sourceAnchor, `${label}.sourceAnchor`),
+      false,
+    );
+    return compilerFreeze(record) as CompileFactFamilyMap[Family];
+  }
   if (family !== 'queryUpdatePlans') return snapshot;
 
   // Query-update analysis deliberately carries output contexts as a non-enumerable sidecar so the

@@ -1,7 +1,7 @@
 // Server-side renderer for the dataflow graph. URL-driven (SPEC §8): ?app, ?sel,
 // ?q decide what renders, so the core works JS-off. Pure — takes a prebuilt bundle
 // (nodes/edges with source slices) and returns HTML.
-import { buildBm25, KIND_META, LANES, traceGraph } from './graph-model.mjs';
+import { buildBm25, KIND_META, LANES, laneForKind, traceGraph } from './graph-model.mjs';
 import { renderCode } from './highlight.mjs';
 import {
   arrayAppend,
@@ -66,12 +66,12 @@ const glyph = (kind) => KIND_META[kind]?.glyph ?? '•';
 function layout(bundle) {
   const activeLanes = arrayFilter(
     LANES,
-    (k) => arraySome(bundle.nodes, (n) => n.kind === k, 'devtool graph nodes'),
+    (k) => arraySome(bundle.nodes, (n) => laneForKind(n.kind) === k, 'devtool graph nodes'),
     'devtool lane vocabulary',
   );
   const lanes = arrayMap(
     activeLanes,
-    (k) => arrayFilter(bundle.nodes, (n) => n.kind === k, 'devtool graph nodes'),
+    (k) => arrayFilter(bundle.nodes, (n) => laneForKind(n.kind) === k, 'devtool graph nodes'),
     'devtool active lanes',
   );
 
@@ -495,6 +495,45 @@ function renderInspector(bundle, byId, sel) {
             'devtool component mutation rows',
           )
         : muted('No mutations emitted (read-only component).'),
+    );
+    const behavior = arrayMap(
+      arrayFilter(
+        out,
+        (e) => e.kind === 'handles' || e.kind === 'triggers' || e.kind === 'owns',
+        'devtool component behavior edges',
+      ),
+      (e) => mapGet(byId, e.to),
+      'devtool component behavior nodes',
+    );
+    const deriveBehavior = arrayMap(
+      arrayFilter(inc, (e) => e.kind === 'derives', 'devtool component derive edges'),
+      (e) => mapGet(byId, e.from),
+      'devtool component derive nodes',
+    );
+    for (
+      let behaviorIndex = 0;
+      behaviorIndex < arrayLength(deriveBehavior, 'devtool component derive nodes');
+      behaviorIndex += 1
+    ) {
+      arrayAppend(
+        behavior,
+        arrayValue(deriveBehavior, behaviorIndex, 'devtool component derive nodes'),
+        'devtool component behavior nodes',
+      );
+    }
+    body += section(
+      'Authored behavior',
+      arrayLength(behavior, 'devtool component behavior'),
+      joinStrings(
+        arrayMap(
+          behavior,
+          (detail) =>
+            flowrow(app, detail, `<span class="chip">${esc(KIND_META[detail.kind].label)}</span>`),
+          'devtool component behavior',
+        ),
+        '',
+        'devtool component behavior rows',
+      ) || muted('No anchored handlers, triggers, derives, or binding positions.'),
     );
     const cov = [];
     for (

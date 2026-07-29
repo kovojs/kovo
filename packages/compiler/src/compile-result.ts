@@ -1,11 +1,18 @@
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type { SourceSpan } from './scan/parse.js';
-import type { QueryUpdateCoverageFact, QueryUpdatePlanFact } from './types.js';
+import type {
+  QueryDeriveFact,
+  QueryStampFact,
+  QueryTemplateStampFact,
+  QueryUpdateCoverageFact,
+  QueryUpdatePlanFact,
+} from './types.js';
 import { canonicalJson } from './canonical-json.js';
 import {
   compilerArrayAppend,
   compilerArrayIsArray,
   compilerCreateMap,
+  compilerDefineOwnDataProperty,
   compilerMapForEach,
   compilerMapGet,
   compilerMapSet,
@@ -142,7 +149,7 @@ export function mergeStyleUpdateCoverage(
     'Query update coverage',
   );
   const styleSnapshot = compilerSnapshotDenseArray(
-    compilerSnapshotJsonValue(styleCoverage, 'Style update coverage'),
+    snapshotStyleUpdateCoverage(styleCoverage),
     'Style update coverage',
   );
   const spanSnapshot = compilerSnapshotDenseArray(
@@ -182,6 +189,34 @@ export function mergeStyleUpdateCoverage(
   return merged;
 }
 
+function snapshotStyleUpdateCoverage(
+  coverage: readonly QueryUpdateCoverageFact[],
+): QueryUpdateCoverageFact[] {
+  const source = compilerSnapshotDenseArray(coverage, 'Style update coverage');
+  const result: QueryUpdateCoverageFact[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const label = `Style update coverage[${index}]`;
+    const fact = source[index]!;
+    const snapshot: QueryUpdateCoverageFact = {
+      ...compilerSnapshotJsonValue(fact, label),
+    };
+    const sourceSpan = compilerOwnDataValue(fact, 'sourceSpan', label);
+    if (sourceSpan !== undefined) {
+      if (typeof sourceSpan !== 'object' || sourceSpan === null) {
+        throw new TypeError(`${label}.sourceSpan must be an object.`);
+      }
+      const start = compilerOwnDataValue(sourceSpan, 'start', `${label}.sourceSpan`);
+      const length = compilerOwnDataValue(sourceSpan, 'length', `${label}.sourceSpan`);
+      if (typeof start !== 'number' || typeof length !== 'number') {
+        throw new TypeError(`${label}.sourceSpan must contain numeric start and length offsets.`);
+      }
+      compilerDefineOwnDataProperty(snapshot, 'sourceSpan', { length, start }, false);
+    }
+    compilerArrayAppend(result, snapshot, 'Style update coverage');
+  }
+  return result;
+}
+
 function containsSourceSpan(outer: SourceSpan, inner: { length: number; start: number }): boolean {
   return inner.start >= outer.start && inner.start + inner.length <= outer.end;
 }
@@ -218,7 +253,33 @@ function flattenPlanFacts<Value>(
 
 function snapshotQueryUpdatePlan(plan: QueryUpdatePlanFact, index: number): QueryUpdatePlanFact {
   const label = `Query update plans[${index}]`;
-  const snapshot = compilerSnapshotJsonValue(plan, label);
+  const snapshot: QueryUpdatePlanFact = {
+    ...compilerSnapshotJsonValue(plan, label),
+  };
+  const derives = compilerOwnDataValue(plan, 'derives', label);
+  if (derives !== undefined) {
+    if (!compilerArrayIsArray(derives)) {
+      throw new TypeError(`${label}.derives must be an array.`);
+    }
+    snapshot.derives = snapshotQueryDeriveFacts(derives, `${label}.derives`);
+  }
+  const stamps = compilerOwnDataValue(plan, 'stamps', label);
+  if (stamps !== undefined) {
+    if (!compilerArrayIsArray(stamps)) {
+      throw new TypeError(`${label}.stamps must be an array.`);
+    }
+    snapshot.stamps = snapshotQueryStampFacts(stamps, `${label}.stamps`);
+  }
+  const templateStamps = compilerOwnDataValue(plan, 'templateStamps', label);
+  if (templateStamps !== undefined) {
+    if (!compilerArrayIsArray(templateStamps)) {
+      throw new TypeError(`${label}.templateStamps must be an array.`);
+    }
+    snapshot.templateStamps = snapshotQueryTemplateStampFacts(
+      templateStamps,
+      `${label}.templateStamps`,
+    );
+  }
   const outputContexts = compilerOwnDataValue(plan, 'outputContexts', label);
   if (outputContexts === undefined) return snapshot;
   if (!compilerArrayIsArray(outputContexts)) {
@@ -228,6 +289,87 @@ function snapshotQueryUpdatePlan(plan: QueryUpdatePlanFact, index: number): Quer
     ...snapshot,
     outputContexts: snapshotOutputContextFacts(outputContexts, `${label}.outputContexts`),
   };
+}
+
+function snapshotQueryDeriveFacts(value: unknown[], label: string): QueryDeriveFact[] {
+  const source = compilerSnapshotDenseArray(value, label);
+  const result: QueryDeriveFact[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const factLabel = `${label}[${index}]`;
+    const fact = compilerOwnDataValue(source, index, label);
+    if (typeof fact !== 'object' || fact === null) {
+      throw new TypeError(`${factLabel} must be an object.`);
+    }
+    const snapshot = {
+      ...compilerSnapshotJsonValue(fact, factLabel),
+    } as QueryDeriveFact;
+    preserveHiddenSourceSpan(fact, snapshot, 'sourceSpan', factLabel);
+    preserveHiddenSourceSpan(fact, snapshot, 'generatedFromSpan', factLabel);
+    compilerArrayAppend(result, snapshot, label);
+  }
+  return result;
+}
+
+function snapshotQueryStampFacts(value: unknown[], label: string): QueryStampFact[] {
+  const source = compilerSnapshotDenseArray(value, label);
+  const result: QueryStampFact[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const factLabel = `${label}[${index}]`;
+    const fact = compilerOwnDataValue(source, index, label);
+    if (typeof fact !== 'object' || fact === null) {
+      throw new TypeError(`${factLabel} must be an object.`);
+    }
+    const snapshot = {
+      ...compilerSnapshotJsonValue(fact, factLabel),
+    } as QueryStampFact;
+    const derive = compilerOwnDataValue(fact, 'derive', factLabel);
+    if (typeof derive !== 'object' || derive === null) {
+      throw new TypeError(`${factLabel}.derive must be an object.`);
+    }
+    snapshot.derive = snapshotQueryDeriveFacts([derive], `${factLabel}.derive`)[0]!;
+    compilerArrayAppend(result, snapshot, label);
+  }
+  return result;
+}
+
+function snapshotQueryTemplateStampFacts(
+  value: unknown[],
+  label: string,
+): QueryTemplateStampFact[] {
+  const source = compilerSnapshotDenseArray(value, label);
+  const result: QueryTemplateStampFact[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const factLabel = `${label}[${index}]`;
+    const fact = compilerOwnDataValue(source, index, label);
+    if (typeof fact !== 'object' || fact === null) {
+      throw new TypeError(`${factLabel} must be an object.`);
+    }
+    const snapshot = {
+      ...compilerSnapshotJsonValue(fact, factLabel),
+    } as QueryTemplateStampFact;
+    preserveHiddenSourceSpan(fact, snapshot, 'sourceSpan', factLabel);
+    compilerArrayAppend(result, snapshot, label);
+  }
+  return result;
+}
+
+function preserveHiddenSourceSpan(
+  source: object,
+  target: object,
+  key: 'generatedFromSpan' | 'sourceSpan',
+  label: string,
+): void {
+  const span = compilerOwnDataValue(source, key, label);
+  if (span === undefined) return;
+  if (typeof span !== 'object' || span === null) {
+    throw new TypeError(`${label}.${key} must be an object.`);
+  }
+  const start = compilerOwnDataValue(span, 'start', `${label}.${key}`);
+  const end = compilerOwnDataValue(span, 'end', `${label}.${key}`);
+  if (typeof start !== 'number' || typeof end !== 'number') {
+    throw new TypeError(`${label}.${key} must contain numeric start and end offsets.`);
+  }
+  compilerDefineOwnDataProperty(target, key, { end, start }, false);
 }
 
 function snapshotOutputContextFacts(value: unknown[], label: string): GeneratedOutputWriteFact[] {

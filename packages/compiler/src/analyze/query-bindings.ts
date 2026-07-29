@@ -18,6 +18,7 @@ import {
   hasJsxAttribute,
   jsxAttributes,
   jsxStaticAttributeValue,
+  withSourceSpan,
   withOutputContext,
   type DataBindAttribute,
 } from './query-internal.js';
@@ -108,7 +109,8 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
   const stamps: QueryTemplateStampFact[] = [];
   for (let index = 0; index < elements.length; index += 1) {
     const element = elements[index]!;
-    const list = jsxStaticAttributeValue(element, 'data-bind-list');
+    const listAttribute = staticAttribute(element, 'data-bind-list');
+    const list = listAttribute?.value;
     const key = jsxStaticAttributeValue(element, 'kovo-key');
     if (!list || !key) continue;
 
@@ -123,15 +125,18 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
     compilerArrayAppend(
       stamps,
       withOutputContext(
-        {
-          itemBindingPlaceholders,
-          key,
-          list,
-          listReadPath: queryRelativePath(list),
-          listReadSegments: queryRelativeSegments(list),
-          selector: `[data-bind-list="${list}"]`,
-          template: templateBody?.source ?? '',
-        },
+        withSourceSpan(
+          {
+            itemBindingPlaceholders,
+            key,
+            list,
+            listReadPath: queryRelativePath(list),
+            listReadSegments: queryRelativeSegments(list),
+            selector: `[data-bind-list="${list}"]`,
+            template: templateBody?.source ?? '',
+          },
+          { end: listAttribute.end, start: listAttribute.start },
+        ),
         {
           context: 'html-fragment',
           expression: list,
@@ -144,6 +149,21 @@ export function collectDataBindListStamps(model: ComponentModuleModel): QueryTem
     );
   }
   return stamps;
+}
+
+function staticAttribute(
+  element: JsxElementModel,
+  name: string,
+): JsxElementModel['attributes'][number] | undefined {
+  const attributes = compilerSnapshotDenseArray(
+    element.attributes,
+    'Compiler static JSX attribute lookup',
+  );
+  for (let index = 0; index < attributes.length; index += 1) {
+    const attribute = attributes[index]!;
+    if (attribute.name === name && attribute.value !== undefined) return attribute;
+  }
+  return undefined;
 }
 
 function queryRelativePath(path: string): string {

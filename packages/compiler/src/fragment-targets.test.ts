@@ -550,9 +550,7 @@ export const CartTable = component({
   });
 
   it('ignores fragment target declarations inside strings and comments for graph facts', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-row.tsx',
-      source: `
+    const source = `
 const sample = "export const CartRow = component({ fragmentTarget: true, render: () => null });";
 // export const OtherRow = component({ fragmentTarget: true, render: () => null });
 export const CartTable = component({
@@ -565,7 +563,10 @@ export const CartTable = component({
     </table>
   ),
 });
-`,
+`;
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source,
     });
 
     expect(result.componentGraphFacts).toEqual([
@@ -575,8 +576,16 @@ export const CartTable = component({
         fragments: ['cart-row/cart-table'],
         name: 'cart-row/cart-table',
         queries: ['cart'],
+        source: expect.objectContaining({ file: 'cart-row.tsx' }),
       },
     ]);
+    const componentSource = result.componentGraphFacts[0]?.source;
+    expect(source.slice(componentSource?.start, componentSource?.end)).toContain(
+      'CartTable = component',
+    );
+    expect(source.slice(componentSource?.start, componentSource?.end)).not.toContain(
+      'OtherRow = component',
+    );
   });
 });
 

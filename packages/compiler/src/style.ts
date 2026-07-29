@@ -44,6 +44,7 @@ import {
   compilerSetHas,
   compilerSetOwnDataProperty,
   compilerSetSize,
+  compilerSnapshotDenseArray,
   compilerSnapshotJsonValue,
   compilerStringReplaceAll,
   compilerStringSplit,
@@ -67,6 +68,7 @@ import { propertyNameText } from './scan/ast.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
 import { parseSourceFile } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
+import { withGeneratedFromSpan, withSourceSpan } from './analyze/query-internal.js';
 import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
   CompileComponentOptions,
@@ -1693,22 +1695,26 @@ function dynamicStyleAttributeLowering(
     handledSpan: { end: attribute.end, start: attribute.start },
     ...(stateOnly
       ? {
-          stateDerive: {
-            attr: 'class',
-            expression: classExpression,
-            exportName,
-            input: 'state',
-            name: exportName,
-            outputContext: outputWriteFact({
-              context: 'attribute',
+          stateDerive: withSourceSpan(
+            {
+              attr: 'class',
               expression: classExpression,
-              sink: 'class',
-              source: 'client-state',
-              writer: 'style-object class toggle',
-            }),
-            param: 'state',
-            placeholder: `state.${exportName}`,
-          },
+              exportName,
+              input: 'state' as const,
+              name: exportName,
+              outputContext: outputWriteFact({
+                context: 'attribute',
+                expression: classExpression,
+                sink: 'class',
+                source: 'client-state',
+                writer: 'style-object class toggle',
+              }),
+              param: 'state' as const,
+              placeholder: `state.${exportName}`,
+              sourcePaths: styleCoveragePaths(coverage),
+            },
+            { end: attribute.end, start: attribute.start },
+          ),
         }
       : {
           queryPlan: {
@@ -1718,14 +1724,20 @@ function dynamicStyleAttributeLowering(
             stamps: [
               {
                 attr: 'class',
-                derive: {
-                  exportName,
-                  expression: classExpression,
-                  input: query,
-                  name: exportName,
-                  param: query,
-                  selector: `[data-derive="${query}.${exportName}"]`,
-                },
+                derive: withGeneratedFromSpan(
+                  withSourceSpan(
+                    {
+                      exportName,
+                      expression: classExpression,
+                      input: query,
+                      name: exportName,
+                      param: query,
+                      selector: `[data-derive="${query}.${exportName}"]`,
+                    },
+                    { end: attribute.end, start: attribute.start },
+                  ),
+                  { end: attribute.end, start: attribute.start },
+                ),
                 outputContext: outputWriteFact({
                   context: 'attribute',
                   expression: classExpression,
@@ -1940,25 +1952,37 @@ function styleUpdateCoverage(
       propertyAccesses,
       index,
       'Style update property accesses',
-    ) as { readonly path: string };
+    ) as { readonly end: number; readonly path: string; readonly start: number };
     if (!compilerStringStartsWith(access.path, prefix) || compilerSetHas(seen, access.path)) {
       continue;
     }
     compilerSetAdd(seen, access.path);
     compilerArrayAppend(
       coverage,
-      {
-        componentName,
-        detail: 'style-object toggle',
-        position: 'attribute',
-        query: access.path,
-        ...(stateOnly ? { source: 'state' as const } : {}),
-        status: 'plan' as const,
-      },
+      withSourceSpan(
+        {
+          componentName,
+          detail: 'style-object toggle',
+          position: 'attribute',
+          query: access.path,
+          ...(stateOnly ? { source: 'state' as const } : {}),
+          status: 'plan' as const,
+        },
+        { length: access.end - access.start, start: access.start },
+      ),
       'Style update coverage',
     );
   }
   return coverage;
+}
+
+function styleCoveragePaths(coverage: readonly QueryUpdateCoverageFact[]): string[] {
+  const source = compilerSnapshotDenseArray(coverage, 'Style derive coverage paths');
+  const paths: string[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    compilerArrayAppend(paths, source[index]!.query, 'Style derive coverage paths');
+  }
+  return paths;
 }
 
 function parseExpression(source: string): ParsedExpression | null {

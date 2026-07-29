@@ -817,6 +817,10 @@ export function componentGraphFact(
   securityOperations: NonNullable<CoreGraph.ComponentExplain['securityOperations']> = [],
   securitySemanticGraph?: CoreGraph.ComponentExplain['securitySemanticGraph'],
   source?: CoreGraph.SourceAnchor,
+  feedbackFacts: Pick<
+    CoreGraph.ComponentExplain,
+    'derives' | 'handlers' | 'suppressions' | 'triggers'
+  > = {},
 ): ComponentGraphFact {
   const queries = component
     ? componentQueryNames(component, model, sourceFileName)
@@ -843,9 +847,25 @@ export function componentGraphFact(
   return {
     ...(cacheInfluence.length === 0 ? {} : { cacheInfluence }),
     ...(clocks.length === 0 ? {} : { clocks }),
+    ...(feedbackFacts.derives === undefined || feedbackFacts.derives.length === 0
+      ? {}
+      : {
+          derives: compilerSnapshotDenseArray(
+            feedbackFacts.derives,
+            'Component derive explain facts',
+          ),
+        }),
     domName,
     ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
+    ...(feedbackFacts.handlers === undefined || feedbackFacts.handlers.length === 0
+      ? {}
+      : {
+          handlers: compilerSnapshotDenseArray(
+            feedbackFacts.handlers,
+            'Component handler explain facts',
+          ),
+        }),
     ...(mutationForms.length === 0 ? {} : { mutationForms }),
     ...(component
       ? componentDeclaresMutableLocalState(component, model)
@@ -860,6 +880,22 @@ export function componentGraphFact(
     ...(securityOperations.length === 0 ? {} : { securityOperations }),
     ...(source === undefined ? {} : { source }),
     ...(styleRules.length === 0 ? {} : { styleRules }),
+    ...(feedbackFacts.suppressions === undefined || feedbackFacts.suppressions.length === 0
+      ? {}
+      : {
+          suppressions: compilerSnapshotDenseArray(
+            feedbackFacts.suppressions,
+            'Component diagnostic suppression facts',
+          ),
+        }),
+    ...(feedbackFacts.triggers === undefined || feedbackFacts.triggers.length === 0
+      ? {}
+      : {
+          triggers: compilerSnapshotDenseArray(
+            feedbackFacts.triggers,
+            'Component trigger explain facts',
+          ),
+        }),
   };
 }
 

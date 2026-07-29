@@ -26,7 +26,12 @@ import {
   compilerStringStartsWith,
 } from '../compiler-security-intrinsics.js';
 import { knownQueryNames, queryNameFromPath } from './query-shapes.js';
-import { coveragePathKey, withOutputContexts } from './query-internal.js';
+import {
+  coveragePathKey,
+  withGeneratedFromSpan,
+  withOutputContexts,
+  withSourceSpan,
+} from './query-internal.js';
 import {
   collectDataBindListStamps,
   dataBindAttributes,
@@ -39,8 +44,8 @@ import {
   jsxQueryExpressionPaths,
   jsxStateExpressionPaths,
   queryExpressionCoveredByDataBind,
-  renderOnceQueryPaths,
-  renderOnceStatePaths,
+  renderOnceQueryPathFacts,
+  renderOnceStatePathFacts,
   stateExpressionCoveredByDataBind,
   updateCoverageKey,
 } from './query-coverage.js';
@@ -129,7 +134,12 @@ export function collectQueryUpdatePlans(
     );
     for (let inputIndex = 0; inputIndex < inputs.length; inputIndex += 1) {
       const input = inputs[inputIndex]!;
-      appendMapArray(derivesByQuery, input, { ...derive, input }, 'Compiler query-plan derives');
+      appendMapArray(
+        derivesByQuery,
+        input,
+        queryDeriveForInput(derive, input),
+        'Compiler query-plan derives',
+      );
     }
   }
 
@@ -148,7 +158,7 @@ export function collectQueryUpdatePlans(
       appendMapArray(
         stampsByQuery,
         input,
-        { ...stamp, derive: { ...stamp.derive, input } },
+        { ...stamp, derive: queryDeriveForInput(stamp.derive, input) },
         'Compiler query-plan derive stamps',
       );
       pushOutputContext(outputContextsByQuery, input, stamp.outputContext);
@@ -210,6 +220,23 @@ export function collectQueryUpdatePlans(
   return output;
 }
 
+function queryDeriveForInput(derive: QueryDeriveFact, input: string): QueryDeriveFact {
+  let output: QueryDeriveFact = { ...derive, input };
+  if (derive.sourceSpan !== undefined) {
+    output = withSourceSpan(output, {
+      end: derive.sourceSpan.end,
+      start: derive.sourceSpan.start,
+    });
+  }
+  if (derive.generatedFromSpan !== undefined) {
+    output = withGeneratedFromSpan(output, {
+      end: derive.generatedFromSpan.end,
+      start: derive.generatedFromSpan.start,
+    });
+  }
+  return output;
+}
+
 export function collectQueryUpdateCoverage(
   model: ComponentModuleModel,
   options: CompileComponentOptions,
@@ -247,6 +274,10 @@ export function collectQueryUpdateCoverage(
         position: binding.name === 'data-bind' ? 'binding' : 'attribute',
         query: path,
         ...(query === 'state' ? { source: 'state' as const } : {}),
+        sourceSpan: {
+          length: (binding.end ?? binding.start ?? 0) - (binding.start ?? 0),
+          start: binding.start ?? 0,
+        },
         status: 'plan',
       },
       'Compiler query coverage facts',
@@ -271,6 +302,14 @@ export function collectQueryUpdateCoverage(
         detail: 'data-bind-list',
         position: 'template',
         query: stamp.list,
+        ...(stamp.sourceSpan === undefined
+          ? {}
+          : {
+              sourceSpan: {
+                length: stamp.sourceSpan.end - stamp.sourceSpan.start,
+                start: stamp.sourceSpan.start,
+              },
+            }),
         status: 'plan',
       },
       'Compiler query coverage facts',
@@ -281,11 +320,12 @@ export function collectQueryUpdateCoverage(
   }
 
   const renderOnceQueries = compilerSnapshotDenseArray(
-    renderOnceQueryPaths(model, knownQueries),
+    renderOnceQueryPathFacts(model, knownQueries),
     'Compiler renderOnce query paths',
   );
   for (let index = 0; index < renderOnceQueries.length; index += 1) {
-    const path = renderOnceQueries[index]!;
+    const expression = renderOnceQueries[index]!;
+    const path = expression.path;
     compilerArrayAppend(
       facts,
       {
@@ -293,6 +333,7 @@ export function collectQueryUpdateCoverage(
         detail: 'declared renderOnce',
         position: 'expression',
         query: path,
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
         status: 'renderOnce',
       },
       'Compiler query coverage facts',
@@ -303,11 +344,12 @@ export function collectQueryUpdateCoverage(
   }
 
   const renderOnceStates = compilerSnapshotDenseArray(
-    renderOnceStatePaths(model),
+    renderOnceStatePathFacts(model),
     'Compiler renderOnce state paths',
   );
   for (let index = 0; index < renderOnceStates.length; index += 1) {
-    const path = renderOnceStates[index]!;
+    const expression = renderOnceStates[index]!;
+    const path = expression.path;
     compilerArrayAppend(
       facts,
       {
@@ -316,6 +358,7 @@ export function collectQueryUpdateCoverage(
         position: 'expression',
         query: path,
         source: 'state',
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
         status: 'renderOnce',
       },
       'Compiler query coverage facts',
@@ -345,6 +388,7 @@ export function collectQueryUpdateCoverage(
         detail: 'declared isomorphic island',
         position: 'expression',
         query: path,
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
         status: 'isomorphic',
       },
       'Compiler query coverage facts',
@@ -374,6 +418,7 @@ export function collectQueryUpdateCoverage(
         position: 'expression',
         query: path,
         source: 'state',
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
         status: 'isomorphic',
       },
       'Compiler state coverage facts',
@@ -402,6 +447,7 @@ export function collectQueryUpdateCoverage(
         detail: 'inferred query-backed server refresh target',
         position: 'expression',
         query: path,
+        sourceSpan: { length: expression.end - expression.start, start: expression.start },
         status: 'fragment',
       },
       'Compiler query coverage facts',

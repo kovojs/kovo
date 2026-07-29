@@ -306,6 +306,7 @@ export interface KovoCheckInput {
   cacheInfluence?: CacheInfluenceManifest;
   components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
+  domains?: readonly DomainExplain[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
   derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
@@ -580,7 +581,21 @@ export interface ComponentExplain {
   securityOperations?: readonly SecurityOperationIr[];
   source?: SourceAnchor;
   styleRules?: readonly StyleRuleExplain[];
+  suppressions?: readonly DiagnosticSuppressionExplain[];
   triggers?: readonly TriggerExplain[];
+}
+
+/** @internal One compiler-proven domain declaration and its exact authored range. */
+export interface DomainExplain {
+  name: string;
+  source: SourceAnchor;
+}
+
+/** @internal One authored diagnostic justification retained for explain/editor surfaces. */
+export interface DiagnosticSuppressionExplain {
+  codes: readonly string[];
+  source: SourceAnchor;
+  target?: SourceAnchor;
 }
 
 /** @internal */
@@ -1330,6 +1345,7 @@ export interface StaticDiagnosticFact {
   message?: string;
   severity?: DiagnosticSeverity;
   site: string;
+  source?: SourceAnchor;
   start?: SourcePosition;
 }
 
@@ -2390,6 +2406,7 @@ const arrayFields = [
   'capabilityClosure',
   'components',
   'cookieDowngrades',
+  'domains',
   'derivedMutations',
   'derivedQueries',
   'diagnostics',

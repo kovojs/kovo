@@ -242,7 +242,15 @@ export interface CallExpressionModel {
   end: number;
   exportedConstName?: string;
   /** Parser-owned exact framework factory identity; a same-named local function never receives it. */
-  frameworkFactory?: 'agent' | 'endpoint' | 'mutation' | 'query' | 'task' | 'tool' | 'webhook';
+  frameworkFactory?:
+    | 'agent'
+    | 'domain'
+    | 'endpoint'
+    | 'mutation'
+    | 'query'
+    | 'task'
+    | 'tool'
+    | 'webhook';
   /** Exact framework identity for a security helper whose call shape participates in finite IR. */
   frameworkSecurityOperation?: 'csrf-field' | 'csrf-token';
   /** Exact compiler JSX-runtime constructor identity; app source may not call this emitted ABI. */

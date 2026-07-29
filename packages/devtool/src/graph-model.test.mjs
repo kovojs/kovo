@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildBm25, buildDataflowGraph, KIND_META, LANES, traceGraph } from './graph-model.mjs';
+import {
+  buildBm25,
+  buildDataflowGraph,
+  KIND_META,
+  LANES,
+  laneForKind,
+  traceGraph,
+} from './graph-model.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { arraySort } from './output-security.mjs';
 
@@ -44,19 +51,54 @@ describe('devtool BM25 retrieval', () => {
   it('carries compiler-owned declaration anchors onto every derived node and edge', () => {
     const mutationSource = { end: 52, file: 'src/mutations.ts', start: 8 };
     const querySource = { end: 94, file: 'src/queries.ts', start: 21 };
+    const domainSource = { end: 36, file: 'src/domains.ts', start: 7 };
     const componentSource = { end: 130, file: 'src/card.tsx', start: 12 };
     const formSource = { end: 117, file: 'src/card.tsx', start: 80 };
+    const handlerSource = { end: 76, file: 'src/card.tsx', start: 52 };
+    const triggerSource = { end: 105, file: 'src/card.tsx', start: 78 };
+    const deriveSource = { end: 48, file: 'src/card.tsx', start: 20 };
+    const deriveUseSource = { end: 126, file: 'src/card.tsx', start: 106 };
+    const bindingSource = { end: 129, file: 'src/card.tsx', start: 118 };
     const pageSource = { end: 84, file: 'src/routes.tsx', start: 9 };
     const graph = buildDataflowGraph({
       components: [
         {
+          derives: [
+            {
+              generatedFrom: deriveUseSource,
+              inputs: ['cart'],
+              name: 'cartLabel',
+              ref: '/c/card.client.js#cartLabel',
+              source: deriveSource,
+              target: '[data-derive="cart.cartLabel"]',
+            },
+          ],
           exportName: 'Card',
+          handlers: [
+            {
+              event: 'click',
+              exportName: 'Card$click',
+              generatedFrom: handlerSource,
+              ref: '/c/card.client.js#Card$click',
+              source: handlerSource,
+            },
+          ],
           mutationForms: [{ mutation: 'cart/add', slot: 'add', source: formSource }],
           name: 'components/card',
           queries: ['cart'],
           source: componentSource,
+          triggers: [
+            {
+              exportName: 'Card$visible',
+              generatedFrom: triggerSource,
+              ref: '/c/card.client.js#Card$visible',
+              source: triggerSource,
+              trigger: 'visible',
+            },
+          ],
         },
       ],
+      domains: [{ name: 'cart', source: domainSource }],
       mutations: [{ key: 'cart/add', source: mutationSource, writes: ['cart'] }],
       pages: [
         {
@@ -66,6 +108,15 @@ describe('devtool BM25 retrieval', () => {
         },
       ],
       queries: [{ domains: ['cart'], query: 'cart', source: querySource }],
+      updateCoverage: [
+        {
+          component: 'Card',
+          position: 'binding',
+          query: 'cart.count',
+          sourceAnchor: bindingSource,
+          status: 'plan',
+        },
+      ],
     });
 
     expect(
@@ -74,17 +125,33 @@ describe('devtool BM25 retrieval', () => {
       ),
     ).toEqual({
       'component:components/card': componentSource,
+      'derive:components/card:cartLabel:[data-derive="cart.cartLabel"]': deriveSource,
+      'domain:cart': domainSource,
+      'handler:components/card:Card$click': handlerSource,
+      'binding-position:components/card:src/card.tsx:118:0': bindingSource,
       'mutation:cart/add': mutationSource,
       'page:/': pageSource,
       'query:cart': querySource,
+      'trigger:components/card:Card$visible': triggerSource,
     });
     expect(Object.fromEntries(graph.edges.map((edge) => [edge.kind, edge.anchor]))).toEqual({
       backs: querySource,
+      derives: deriveUseSource,
       emits: formSource,
       feeds: componentSource,
+      handles: handlerSource,
+      owns: bindingSource,
       renders: pageSource,
+      triggers: triggerSource,
+      updates: bindingSource,
       writes: mutationSource,
     });
+    expect(graph.edges.find((edge) => edge.kind === 'updates')).toMatchObject({
+      from: 'query:cart',
+      to: 'binding-position:components/card:src/card.tsx:118:0',
+    });
+    expect(laneForKind('handler')).toBe('component');
+    expect(laneForKind('binding-position')).toBe('component');
   });
 
   it('preserves camel-case token ranking for the shared UI and MCP search surface', () => {
