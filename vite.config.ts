@@ -240,7 +240,7 @@ export default defineConfig({
       },
       conformance: {
         command:
-          'pnpm --filter @kovojs/conformance-drizzle-pin test && pnpm --filter @kovojs/conformance-better-auth-pin test && pnpm --filter @kovojs/conformance-auth-spike test && pnpm --filter @kovojs/conformance-webhook-spike test && pnpm --filter @kovojs/conformance-app-shell-spike test',
+          'pnpm --filter @kovojs/conformance-app-contract-spike test && pnpm --filter @kovojs/conformance-drizzle-pin test && pnpm --filter @kovojs/conformance-better-auth-pin test && pnpm --filter @kovojs/conformance-auth-spike test && pnpm --filter @kovojs/conformance-webhook-spike test && pnpm --filter @kovojs/conformance-app-shell-spike test',
         input: [
           { auto: true },
           { pattern: 'conformance/**/package.json', base: 'workspace' },

@@ -521,6 +521,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
+      - name: App contract spike conformance
+        run: vp exec pnpm --filter @kovojs/conformance-app-contract-spike test
       - name: Drizzle pinned conformance
         run: vp exec pnpm --filter @kovojs/conformance-drizzle-pin test
       - name: Better Auth pinned conformance

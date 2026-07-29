@@ -651,6 +651,7 @@ void test('Conformance suites are an explicit gate', async () => {
     directory: 'conformance',
   });
   const expectedConformancePackages = {
+    'app-contract-spike': '@kovojs/conformance-app-contract-spike',
     'app-shell-spike': '@kovojs/conformance-app-shell-spike',
     'auth-spike': '@kovojs/conformance-auth-spike',
     'better-auth-pin': '@kovojs/conformance-better-auth-pin',
@@ -718,7 +719,7 @@ void test('Conformance suites are an explicit gate', async () => {
   );
   assert.deepEqual(
     executedTask.observed.map((entry) => entry.script),
-    ['test', 'test', 'test', 'test', 'test'],
+    Object.keys(expectedConformancePackages).map(() => 'test'),
   );
   assert.deepEqual(
     commandOutputLines(executedTask.output),
