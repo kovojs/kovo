@@ -55,6 +55,18 @@ unknown. One direct immutable same-file `const alias = requireSessionId` may pre
 the proven identity when invoked; property, destructured/container, chained, opaque,
 imported, or mutable aliases do not. There is no general `server` summary kind.
 
+## Compatibility and package boundary
+
+The human API is the package root. The `./internal/*` exports are framework-to-framework
+contracts and are not app compatibility promises.
+
+The package manifest supports `drizzle-orm >=1.0.0-rc.4 <2`. The repository's finite,
+executable compatibility fixture is exactly `1.0.0-rc.4`, which is both the minimum and
+the development version. Drizzle `0.45.x` is outside this adapter's peer range even though
+another Kovo integration may install it independently. After creating the canonical packed
+release manifest, `pnpm run check:packed-drizzle-consumer` installs that exact fixture and
+compiles Postgres and SQLite annotations against the tarball.
+
 ## Reference
 
 - API: `/api/drizzle/`
