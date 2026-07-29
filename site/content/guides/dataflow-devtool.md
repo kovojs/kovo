@@ -94,7 +94,7 @@ Use the repo check that exercises the devtool against real graphs rather than re
 command above:
 
 ```sh
-pnpm run check:vp
+pnpm run check
 ```
 
 When a graph assertion fails, fix the app facts first: route, query, mutation, domain, or generated

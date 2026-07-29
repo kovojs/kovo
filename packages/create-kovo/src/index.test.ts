@@ -44,9 +44,6 @@ const TEMPLATE_FILES = [
   'index.html',
   '.github/workflows/ci.yml',
   'README.md',
-  'scripts/check-lifecycle-policy.mjs',
-  'scripts/check-sound-subset.mjs',
-  'scripts/check-parallel.mjs',
   'src/schema.ts',
   'src/db.ts',
   'src/_kovo/app-runtime-db-options.ts',
@@ -80,6 +77,9 @@ const SQLITE_TEMPLATE_FILES = [
   'src/auth.sqlite.ts',
 ];
 const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
+const SOUND_SUBSET_SCRIPT = fileURLToPath(
+  new URL('../../cli/src/commands/sound-subset.mjs', import.meta.url),
+);
 const createKovoPackage = JSON.parse(
   readFileSync(join(createKovoPackageRoot, 'package.json'), 'utf8'),
 ) as { version: string };
@@ -223,16 +223,12 @@ describe('create-kovo starter (metadata)', () => {
       );
       expect(packageJson.scripts).toMatchObject({
         'build:prod': 'kovo build ./src/app.tsx',
-        check: 'node scripts/check-parallel.mjs',
-        'check:endpoint-posture':
-          'vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json',
-        'check:lifecycle-policy': 'node scripts/check-lifecycle-policy.mjs',
-        'check:source': 'kovo check',
-        'check:sound-subset': 'node scripts/check-sound-subset.mjs',
+        check: 'kovo check',
+        'check:endpoint-posture': 'kovo check endpoint-posture',
         dev: 'kovo dev ./src/app.tsx',
         serve: 'pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs',
         start: 'NODE_ENV=production node dist/server/server.mjs',
-        test: 'vp test',
+        test: 'kovo test',
       });
       // Removed fiction/wrapper scripts are gone.
       expect(packageJson.scripts).not.toHaveProperty('emit-graph');
@@ -240,21 +236,23 @@ describe('create-kovo starter (metadata)', () => {
       expect(packageJson.scripts).not.toHaveProperty('serve:dev');
 
       const ciWorkflow = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8');
-      expect(ciWorkflow).toContain('vp exec pnpm run build:prod');
+      expect(ciWorkflow).toContain('corepack pnpm run build:prod');
       expect(ciWorkflow).toContain('node-version: 24.10.0');
       expect(ciWorkflow).toContain('permissions:\n  contents: read');
       expect(ciWorkflow).not.toContain('actions: read');
       expect(ciWorkflow).toContain('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5');
       expect(ciWorkflow).toContain('persist-credentials: false');
       expect(ciWorkflow).toContain('actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830');
-      expect(ciWorkflow).toContain('vp install --frozen-lockfile');
-      expect(ciWorkflow).toContain('vp exec pnpm run check');
-      expect(ciWorkflow).toContain('vp exec pnpm run test');
-      expect(ciWorkflow).toContain('vp exec pnpm run check:endpoint-posture');
-      expect(ciWorkflow.indexOf('vp exec pnpm run build:prod')).toBeLessThan(
-        ciWorkflow.indexOf('vp exec pnpm run check:endpoint-posture'),
+      expect(ciWorkflow).toContain('corepack pnpm install --frozen-lockfile --ignore-scripts');
+      expect(ciWorkflow).toContain('corepack pnpm exec kovo check lifecycle');
+      expect(ciWorkflow).toContain('corepack pnpm rebuild');
+      expect(ciWorkflow).toContain('corepack pnpm run check');
+      expect(ciWorkflow).toContain('corepack pnpm run test');
+      expect(ciWorkflow).toContain('corepack pnpm run check:endpoint-posture');
+      expect(ciWorkflow.indexOf('corepack pnpm run build:prod')).toBeLessThan(
+        ciWorkflow.indexOf('corepack pnpm run check:endpoint-posture'),
       );
-      expect(ciWorkflow).not.toContain('- run: vp check');
+      expect(ciWorkflow).not.toContain('- run: vp ');
       expect(ciWorkflow).not.toMatch(/uses: [^\n]+@v\d/u);
       expect(ciWorkflow).not.toContain('run: kovo build');
 
@@ -265,7 +263,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(readme).toContain('keep that posture in your process');
       expect(readme).toContain('blocks private-network egress by default');
       expect(readme).toContain('KOVO_DATA_DIR');
-      expect(readme).toContain('source-backed `kovo check`');
+      expect(readme).toContain('The source-backed check');
       expect(readme).toMatch(/needs no\s+deployment-retention declaration/u);
 
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
@@ -576,28 +574,20 @@ describe('create-kovo starter (metadata)', () => {
   it('emits SPEC §6.6 sound-subset policy and framework anonymous CSRF binding', () => {
     const project = createKovoProject({ name: 'Policy Proof' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
+    const soundSubsetSource = readFileSync(SOUND_SUBSET_SCRIPT, 'utf8');
 
     expect(files.get('tsconfig.json')).toContain('"strict": true');
     expect(files.get('tsconfig.json')).toContain('"noUncheckedIndexedAccess": true');
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
-      'SPEC.md §6.6 sound subset bans any',
-    );
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
-      '.sort((left, right) => left.localeCompare(right));',
-    );
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
-      'bans non-type imports of src/_kovo/app-runtime-db',
-    );
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
-      'FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES',
-    );
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+    expect(files.has('scripts/check-sound-subset.mjs')).toBe(false);
+    expect(soundSubsetSource).toContain('SPEC.md §6.6 sound subset bans any');
+    expect(soundSubsetSource).toContain('.sort((left, right) => left.localeCompare(right));');
+    expect(soundSubsetSource).toContain('bans non-type imports of src/_kovo/app-runtime-db');
+    expect(soundSubsetSource).toContain('FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES');
+    expect(soundSubsetSource).toContain(
       "['src/auth.ts', new Set(['appRuntimeDbReady', 'createAppAuthBindings'])]",
     );
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain('SECURITY_SURFACE_FILES');
-    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
-      'must enroll the whole starter security surface',
-    );
+    expect(soundSubsetSource).toContain('SECURITY_SURFACE_FILES');
+    expect(soundSubsetSource).toContain('must enroll the whole starter security surface');
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain("field: 'csrf',");
     expect(files.get('src/auth.ts')).not.toContain('sessionId(');
@@ -606,7 +596,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).not.toContain('kovo-starter-anon');
   });
 
-  it('lets check:sound-subset ignore import aliases and JSX prose while still flagging casts', () => {
+  it('lets the framework sound-subset classifier ignore aliases and prose while flagging casts', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-sound-subset-'));
 
     try {
@@ -662,14 +652,14 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
       ).toThrowError(/unsafe-cast\.ts:1: SPEC\.md §6\.6 sound subset bans unchecked casts/);
 
       try {
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         });
@@ -684,7 +674,7 @@ describe('create-kovo starter (metadata)', () => {
 
       rmSync(join(root, 'src/unsafe-cast.ts'), { force: true });
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -700,7 +690,7 @@ describe('create-kovo starter (metadata)', () => {
         'utf8',
       );
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -716,7 +706,7 @@ describe('create-kovo starter (metadata)', () => {
         'utf8',
       );
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -744,7 +734,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -763,7 +753,7 @@ describe('create-kovo starter (metadata)', () => {
         'utf8',
       );
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -782,7 +772,7 @@ describe('create-kovo starter (metadata)', () => {
         'utf8',
       );
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -819,7 +809,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           env: { ...process.env, KOVO_PARANOID: '1' },
           stdio: 'pipe',
@@ -861,7 +851,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -888,7 +878,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -915,7 +905,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -942,7 +932,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -973,7 +963,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -1000,7 +990,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -1009,7 +999,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       try {
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         });
@@ -1034,7 +1024,7 @@ describe('create-kovo starter (metadata)', () => {
       );
 
       expect(() =>
-        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+        execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
           cwd: root,
           stdio: 'pipe',
         }),
@@ -1045,7 +1035,7 @@ describe('create-kovo starter (metadata)', () => {
   });
 
   it.each(['src/app.test.ts', 'src/endpoint-posture.test.ts'])(
-    'fails check:sound-subset when security surface %s is not fully enrolled',
+    'fails the framework sound-subset classifier when security surface %s is not fully enrolled',
     (removedFile) => {
       const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-enrollment-'));
 
@@ -1055,7 +1045,7 @@ describe('create-kovo starter (metadata)', () => {
         rmSync(join(root, removedFile), { force: true });
 
         expect(() =>
-          execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          execFileSync(process.execPath, [SOUND_SUBSET_SCRIPT], {
             cwd: root,
             stdio: 'pipe',
           }),
@@ -1228,7 +1218,7 @@ describe('create-kovo starter (metadata)', () => {
       expect(appSource).not.toContain('Starter$announce');
 
       // No fake graph apparatus or static-export wrappers remain.
-      expect(existsSync(join(root, 'scripts/check-sound-subset.mjs'))).toBe(true);
+      expect(existsSync(join(root, 'scripts/check-sound-subset.mjs'))).toBe(false);
       expect(existsSync(join(root, 'docs'))).toBe(false);
       expect(existsSync(join(root, '.kovo/docs/llms.txt'))).toBe(true);
       expect(existsSync(join(root, 'src/app-shell.ts'))).toBe(false);
@@ -1403,7 +1393,11 @@ describe('create-kovo starter (CLI)', () => {
       );
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Next steps'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`cd '${root}'`));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm install'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm install --ignore-scripts'));
+      expect(stdout).toHaveBeenCalledWith(
+        expect.stringContaining('pnpm exec kovo check lifecycle'),
+      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm rebuild'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run dev'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('pnpm run check'));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Install     skipped'));
@@ -1514,7 +1508,15 @@ describe('create-kovo starter (CLI)', () => {
 
     try {
       expect(main([root, '--install', '--disable-git'])).toBe(0);
-      expect(install).toHaveBeenCalledWith('pnpm', ['install'], {
+      expect(install).toHaveBeenNthCalledWith(1, 'pnpm', ['install', '--ignore-scripts'], {
+        cwd: root,
+        stdio: 'inherit',
+      });
+      expect(install).toHaveBeenNthCalledWith(2, 'pnpm', ['exec', 'kovo', 'check', 'lifecycle'], {
+        cwd: root,
+        stdio: 'inherit',
+      });
+      expect(install).toHaveBeenNthCalledWith(3, 'pnpm', ['rebuild'], {
         cwd: root,
         stdio: 'inherit',
       });
@@ -1522,7 +1524,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(output).toContain('Install     complete');
       expect(output).toContain('pnpm run dev');
       expect(output).toContain('pnpm run check');
-      expect(output).not.toContain('  pnpm install\n');
+      expect(output).not.toContain('  pnpm install --ignore-scripts\n');
     } finally {
       install.mockRestore();
       stdout.mockRestore();
@@ -1545,7 +1547,9 @@ describe('create-kovo starter (CLI)', () => {
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('project files were created');
-      expect(output).toContain('pnpm install');
+      expect(output).toContain('pnpm install --ignore-scripts');
+      expect(output).toContain('pnpm exec kovo check lifecycle');
+      expect(output).toContain('pnpm rebuild');
       expect(output).toContain('pnpm run dev');
       expect(output).toContain('pnpm run check');
       expect(output).not.toContain('Kovo app created');

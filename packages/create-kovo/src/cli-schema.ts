@@ -36,6 +36,7 @@ export interface CreateKovoCreatorSchema {
  */
 export const CREATE_KOVO_CREATOR_SCHEMA = {
   name: {
+    choices: [],
     description: 'Package name written to package.json.',
     flags: ['--name'],
     interactiveDefault: 'kovo-app',

@@ -46,7 +46,7 @@
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeReadonlyDb",
       "publicStatus": "reader-facade",
       "allowedConsumers": ["packages/create-kovo/templates/src/db.ts"],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits appRuntimeReadonlyDb from src/db.ts",
+      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeReadonlyDb from src/db.ts",
       "evidence": "packages/create-kovo/src/index.test.ts asserts readonlyAppDb wiring"
     },
     {
@@ -56,7 +56,7 @@
       "mint": "packages/create-kovo/templates/src/_kovo/app-runtime-db.ts#appRuntimeDbProvider",
       "publicStatus": "non-callable framework-managed provider token",
       "allowedConsumers": ["packages/create-kovo/templates/src/app.tsx"],
-      "buildDiagnostic": "packages/create-kovo/templates/scripts/check-sound-subset.mjs only permits appRuntimeDbProvider from src/app.tsx",
+      "buildDiagnostic": "packages/cli/src/commands/sound-subset.mjs only permits appRuntimeDbProvider from src/app.tsx",
       "evidence": "packages/create-kovo/src/index.test.ts asserts appRuntimeDbProvider is the opaque appDatabase.db token and rejects auth.ts importing it"
     },
     {

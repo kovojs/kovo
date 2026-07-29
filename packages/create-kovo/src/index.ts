@@ -298,9 +298,6 @@ const templateFiles: readonly TemplateFile[] = [
   'index.html',
   '.github/workflows/ci.yml',
   { path: 'README.md', sqlitePath: 'README.sqlite.md' },
-  'scripts/check-lifecycle-policy.mjs',
-  'scripts/check-sound-subset.mjs',
-  'scripts/check-parallel.mjs',
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
   { path: 'src/_kovo/app-runtime-db-options.ts', postgresOnly: true },
@@ -462,9 +459,9 @@ function renderProjectTemplate(
   }
   const source = renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values);
   // The repository stores JSON templates under its own formatter configuration, while a generated
-  // app formats the rendered manifest under its Vite+ project configuration. Canonicalize only at
+  // app formats the rendered manifest under its framework-owned project configuration. Canonicalize only at
   // this trusted template boundary so placeholder length and dialect-specific arrays cannot make a
-  // brand-new app fail its first `vp check`.
+  // brand-new app fail its first `kovo check`.
   if (file.path !== 'package.json') return source;
   const manifest = JSON.parse(source) as { scripts?: Record<string, string> };
   if (deployment.deploymentTarget !== 'node' && manifest.scripts !== undefined) {
@@ -769,14 +766,24 @@ function runCreateKovoCli(options: CreateKovoCliOptions): number {
 function installKovoProject(root: string): void {
   const packageManager = packageManagerCommand();
   try {
-    createKovoCommandShell.execFileSync(packageManager, ['install'], {
+    createKovoCommandShell.execFileSync(packageManager, ['install', '--ignore-scripts'], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+    createKovoCommandShell.execFileSync(packageManager, ['exec', 'kovo', 'check', 'lifecycle'], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+    createKovoCommandShell.execFileSync(packageManager, ['rebuild'], {
       cwd: root,
       stdio: 'inherit',
     });
   } catch (error) {
     throw new CreateKovoInstallError(
       root,
-      `${packageManager} install failed: ${error instanceof Error ? error.message : String(error)}`,
+      `safe ${packageManager} install failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
   }
 }
@@ -1055,7 +1062,13 @@ function renderSuccess(
     '',
     'Next steps',
     `  cd ${shellQuote(result.root)}`,
-    ...(options.install === 'never' ? [`  ${packageManager} install`] : []),
+    ...(options.install === 'never'
+      ? [
+          `  ${packageManager} install --ignore-scripts`,
+          `  ${packageManager} exec kovo check lifecycle`,
+          `  ${packageManager} rebuild`,
+        ]
+      : []),
     `  ${packageManager} run dev`,
     `  ${packageManager} run check`,
     '',
@@ -1081,7 +1094,9 @@ function renderCliError(error: unknown): string {
       'The project files were created, but dependency installation did not complete.',
       '',
       `  cd ${shellQuote(error.root)}`,
-      `  ${packageManagerCommand()} install`,
+      `  ${packageManagerCommand()} install --ignore-scripts`,
+      `  ${packageManagerCommand()} exec kovo check lifecycle`,
+      `  ${packageManagerCommand()} rebuild`,
       `  ${packageManagerCommand()} run dev`,
       `  ${packageManagerCommand()} run check`,
     );

@@ -178,6 +178,22 @@ export type KovoSemanticCommandRequest =
       };
     }
   | {
+      readonly arguments: { readonly [key: PropertyKey]: never };
+      readonly command: 'check';
+      readonly form: 'lifecycle';
+      readonly options?: {
+        readonly format?: 'human' | 'json' | 'github';
+      };
+    }
+  | {
+      readonly arguments: { readonly [key: PropertyKey]: never };
+      readonly command: 'check';
+      readonly form: 'endpoint-posture-suite';
+      readonly options?: {
+        readonly format?: 'human' | 'json' | 'github';
+      };
+    }
+  | {
       readonly arguments: {
         readonly family?: 'optimistic' | 'coverage' | 'endpoint-posture' | 'sources-sinks';
         readonly graph?: string;
@@ -634,6 +650,16 @@ export type KovoSemanticCommandRequest =
             readonly dist: string;
           }
       );
+    }
+  | {
+      readonly arguments: {
+        readonly sources?: readonly string[];
+      };
+      readonly command: 'fix';
+      readonly form: 'format';
+      readonly options?: {
+        readonly check?: boolean;
+      };
     }
   | {
       readonly arguments: {

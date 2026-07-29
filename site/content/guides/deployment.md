@@ -297,7 +297,7 @@ export default createApp({
 });
 ```
 
-Keep build-time and runtime signals separate. `vp check`, `kovo check`, `kovo explain`, and the
+Keep build-time and runtime signals separate. `kovo check`, `kovo explain`, and the
 source/sink audits answer "what can this app do?" before deploy. `onError`, access logs, and rate
 limit counters answer "what happened in production?" after deploy.
 
@@ -314,7 +314,7 @@ pnpm run start       # NODE_ENV=production node dist/server/server.mjs
 ```
 
 `pnpm run check` is the starter's current-source proof script, not just a typecheck alias. It runs
-`vp check`, the starter sound-subset gate, and source-backed `kovo check` without requiring a
+the formatter, linter, sound-subset classifier, and source-backed `kovo check` without requiring a
 deployment-retention claim or writing `dist`. `pnpm run build:prod` adds the selected preset,
 artifact, least-privilege, and §14 retention gates; only after it succeeds can the endpoint-posture
 audit exercise the emitted Node server. Add app-owned graph assertions only after your app owns a

@@ -447,7 +447,7 @@ export function evaluateCapabilityBoundaryPosture({
     postgresCapability: 'packages/server/src/internal/postgres-capability.ts',
     postgresRuntime: 'packages/create-kovo/templates/src/_kovo/app-runtime-db.ts',
     serverRoot: 'packages/server/src/index.ts',
-    soundSubset: 'packages/create-kovo/templates/scripts/check-sound-subset.mjs',
+    soundSubset: 'packages/cli/src/commands/sound-subset.mjs',
     sqlSafeHandle: 'packages/server/src/sql-safe-handle.ts',
     sqliteAuth: 'packages/create-kovo/templates/src/auth.sqlite.ts',
     sqliteCapability: 'packages/server/src/internal/sqlite-capability.ts',

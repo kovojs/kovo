@@ -15,13 +15,15 @@ current template.
 Run the narrow checks in the same order the scaffold expects:
 
 ```sh
-pnpm install
-vp check
-vp test
+pnpm install --ignore-scripts
+kovo check lifecycle
+pnpm rebuild
+kovo check
+kovo test
 pnpm run dev
 ```
 
-If `vp check` fails, fix that before chasing browser behavior. The starter pushes most wiring
+If `kovo check` fails, fix that before chasing browser behavior. The starter pushes most wiring
 mistakes into the typed compile path.
 
 ## Fix missing or placeholder secrets

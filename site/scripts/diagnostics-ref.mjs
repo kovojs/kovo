@@ -9,7 +9,7 @@ import ts from 'typescript';
  * Generated diagnostics→fix catalog (plan: agent layer). One reference page
  * listing every framework diagnostic (KV###) with its severity, message, and
  * fix, sourced from the framework's internal `diagnosticDefinitions` registry
- * (the same registry the compiler/CLI emit and `vp run kovo-check` asserts
+ * (the same registry the compiler/CLI emit and `kovo check` asserts
  * against).
  *
  * This is the indexed KV### reference agents (and humans) pattern-match. It is
@@ -23,8 +23,8 @@ const repoRoot = new URL('../../', import.meta.url);
 const SEVERITY_ORDER = ['error', 'warn', 'lint', 'notice'];
 
 const SEVERITY_BLURB = {
-  error: 'Build-blocking. `vp check` fails until you resolve it.',
-  lint: 'Style/clarity guidance. Surfaced by `vp check`; non-blocking by default.',
+  error: 'Build-blocking. `kovo check` fails until you resolve it.',
+  lint: 'Style/clarity guidance. Surfaced by `kovo check`; non-blocking by default.',
   notice: 'Informational. The framework degraded behavior and is telling you how.',
   warn: 'Non-blocking warning. The check passes, but the framework wants your attention.',
 };
@@ -294,7 +294,7 @@ function renderPage(definitions) {
     '',
     `Generated from \`diagnosticDefinitions\` in \`packages/core/src/diagnostics.ts\` — ${codes.length} codes (${counts}). Do not edit by hand.`,
     '',
-    'Every diagnostic Kovo emits has a stable `KV###` code. The compiler, the CLI, and `vp check` all draw their messages from the one registry below, so the code you see in your terminal is the code you look up here. Each entry lists what triggered it and the fix.',
+    'Every diagnostic Kovo emits has a stable `KV###` code. The compiler and CLI draw their messages from the one registry below, so the code you see in your terminal is the code you look up here. Each entry lists what triggered it and the fix.',
     '',
   ];
 

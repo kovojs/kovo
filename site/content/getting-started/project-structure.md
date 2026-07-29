@@ -20,9 +20,7 @@ my-app/
 |-- README.md
 |-- kovo.config.ts          # production build preset
 |-- package.json
-|-- scripts/
-|   `-- check-sound-subset.mjs
-|-- vite.config.ts          # Vite+ build/test config; kovo dev loads it only with --config
+|-- vite.config.ts          # Kovo project config; the pinned implementation runner stays internal
 |-- src/
 |   |-- _kovo/
 |   |   |-- app-runtime-db-options.ts # validated schema and boot/CLI database options

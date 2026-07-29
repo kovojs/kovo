@@ -1,13 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
 
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import { type CliCommandResult } from '../shared.js';
 import type { KovoCommandSecurityDisposition } from './security-disposition.js';
+import { resolveVitePlusBin } from './vite-plus-bin.js';
 
-const requireFromCli = createRequire(import.meta.url);
 const TEST_PROTOCOL = 'kovo-test/v1';
 
 /** @internal Boot-captured process sink kept injectable for exact delegation tests. */
@@ -66,7 +63,7 @@ export async function runTestCommand(
 
   let executable: string;
   try {
-    executable = vitePlusBin();
+    executable = resolveVitePlusBin();
   } catch (error) {
     return {
       error: `${TEST_PROTOCOL}\nERROR runner reason=${singleLine(error)}`,
@@ -95,23 +92,6 @@ export async function runTestCommand(
     error: `${TEST_PROTOCOL}\n${status === 1 ? 'FAIL tests' : `ERROR runner status=${status}`}`,
     exitCode: status === 1 ? 1 : 2,
   };
-}
-
-function vitePlusBin(): string {
-  const manifestPath = requireFromCli.resolve('vite-plus/package.json');
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown;
-  if (
-    typeof manifest !== 'object' ||
-    manifest === null ||
-    !('bin' in manifest) ||
-    typeof manifest.bin !== 'object' ||
-    manifest.bin === null ||
-    !('vp' in manifest.bin) ||
-    typeof manifest.bin.vp !== 'string'
-  ) {
-    throw new TypeError('vite-plus package does not declare its vp executable');
-  }
-  return resolve(dirname(manifestPath), manifest.bin.vp);
 }
 
 function singleLine(value: unknown): string {

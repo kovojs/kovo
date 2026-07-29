@@ -198,16 +198,7 @@ function freshCheckObservation(packedRelease) {
       name: `known-failure-fresh-check-${dialect}`,
     });
     prepareInstalledScaffoldFixture(appRoot);
-    const result = runCommand(
-      process.execPath,
-      ['scripts/check-parallel.mjs'],
-      appRoot,
-      knownFailurePackedEnvironment(packedRelease, {
-        BETTER_AUTH_URL: null,
-        NODE_ENV: 'development',
-      }),
-      240_000,
-    );
+    const result = runPackedCli(packedRelease, appRoot, ['check', '--no-cache'], 240_000);
     requireOrdinaryExit(result, `fresh packed ${dialect} scaffold check`);
     variants.push({
       dialect,
@@ -262,8 +253,8 @@ async function fullCatalogObservation(packedRelease) {
   );
   requireBoundedPhase(typecheck, 'full-catalog typecheck');
   const check = await runBoundedCommand(
-    path.join(packedRelease.nodeModules, '.bin', 'vp'),
-    ['check'],
+    process.execPath,
+    [path.join(packedRelease.packageRoot('@kovojs/cli'), 'dist', 'bin.mjs'), 'check', '--no-cache'],
     appRoot,
     boundedEnvironment,
     150_000,

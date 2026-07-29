@@ -634,6 +634,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     examples: [
       'kovo check',
       'kovo check source ./src/app.tsx --no-cache',
+      'kovo check lifecycle',
       'kovo check coverage graph.json',
       'kovo check coverage --artifact dist/.kovo/graph.json',
       'kovo check env deployment.json',
@@ -663,6 +664,23 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           literal('source', 'Derive proof from current authored source.'),
           argument('appModule', value('path', 'app-module'), { required: false }),
           option('cache'),
+          option('format'),
+        ],
+      },
+      {
+        id: 'lifecycle',
+        summary: 'Verify the dependency lifecycle allowlist before running package build scripts.',
+        tokens: [
+          literal('lifecycle', 'Verify the pnpm dependency lifecycle policy.'),
+          option('format'),
+        ],
+      },
+      {
+        async: true,
+        id: 'endpoint-posture-suite',
+        summary: 'Run the production endpoint probe and verify its emitted posture facts.',
+        tokens: [
+          literal('endpoint-posture', 'Run the framework-owned endpoint posture suite.'),
           option('format'),
         ],
       },
@@ -1305,6 +1323,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     compilerRealm: 'locked-before-dispatch',
     examples: [
       'kovo fix src/components/cart.tsx',
+      'kovo fix format src',
       'kovo fix api-v1 --check',
       'kovo fix --cost-report',
     ],
@@ -1324,6 +1343,17 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     resultProtocol: null,
     summary: 'Apply only compiler-proven safe TSX/JSX rewrites.',
     usage: [
+      {
+        id: 'format',
+        tokens: [
+          literal('format', 'Format the project or named authored paths.'),
+          argument('sources', value('path', 'source-or-directory'), {
+            repeatable: true,
+            required: false,
+          }),
+          option('check'),
+        ],
+      },
       {
         id: 'source',
         tokens: [argument('source', value('path', 'source.tsx|source.jsx')), option('check')],

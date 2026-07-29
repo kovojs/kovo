@@ -79,14 +79,14 @@ export const ProductCard = component({
   }
 
   const lines = [
-    `<span class="tok-dim">$ vp check</span>`,
+    `<span class="tok-dim">$ kovo check</span>`,
     '',
     `<span class="tok-dim">${escapeHtml(diagnostic.fileName)}</span> — <span class="tok-error">${escapeHtml(diagnostic.code)}</span> warning`,
     '',
     `  ${escapeHtml(diagnostic.message)}`,
   ];
 
-  return artifactFrame('vp check — compiled against the real query shape', lines.join('\n'));
+  return artifactFrame('kovo check — compiled against the real query shape', lines.join('\n'));
 }
 
 /** The pinned enhanced-mutation wire fixture (SPEC §9.1), rendered verbatim. */

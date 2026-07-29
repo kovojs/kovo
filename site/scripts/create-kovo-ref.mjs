@@ -80,7 +80,7 @@ function page() {
     '',
     '- [Installation](/getting-started/installation/) - installing Kovo packages.',
     '- [Project structure](/getting-started/project-structure/) - what the generated files are for.',
-    '- [The kovo & vp CLIs](/guides/cli/) - day-to-day project commands after scaffolding.',
+    '- [The Kovo CLI](/guides/cli/) - day-to-day project commands after scaffolding.',
     '',
   ].join('\n');
 }

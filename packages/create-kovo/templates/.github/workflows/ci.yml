@@ -32,16 +32,17 @@ jobs:
           key: kovo-tsc-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             kovo-tsc-${{ runner.os }}-
-      # This dependency-free gate runs before installation so an allow-all or allowlist weakening
-      # cannot execute an app dependency's lifecycle script before CI reports the policy failure.
-      - run: node scripts/check-lifecycle-policy.mjs
-      - run: vp install --frozen-lockfile
-      # Run the package script, not bare `vp check`: the source-only quick loop also enforces the
-      # sound TypeScript subset and a current-source graph proof without requiring deploy posture.
-      - run: vp exec pnpm run check
-      - run: vp exec pnpm run test
+      # Bootstrap without dependency lifecycle scripts, authenticate the framework-owned policy,
+      # then rebuild only the exact reviewed allowlist. No app-copied policy program runs here.
+      - run: corepack pnpm install --frozen-lockfile --ignore-scripts
+      - run: corepack pnpm exec kovo check lifecycle
+      - run: corepack pnpm rebuild
+      # The app-facing loop is entirely Kovo-owned: type/lint, the strict TypeScript subset, and
+      # current-source proof run without requiring deployment posture.
+      - run: corepack pnpm run check
+      - run: corepack pnpm run test
       # Deployment proof stays explicit: this additionally enforces preset, least-privilege,
       # artifact, and SPEC §14 retention/KV417 posture.
-      - run: vp exec pnpm run build:prod
+      - run: corepack pnpm run build:prod
       # This probe starts the emitted production server, so it follows a successful deployment build.
-      - run: vp exec pnpm run check:endpoint-posture
+      - run: corepack pnpm run check:endpoint-posture

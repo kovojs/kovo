@@ -70,10 +70,10 @@ pnpm run check
 pnpm test
 ```
 
-`pnpm run check` is the starter's source-only quick gate. It runs `vp check`, the starter
-sound-subset policy, and source-backed `kovo check` without requiring deployment retention or
-writing `dist`. `pnpm test` runs the starter test through the same app wiring. The explicit
-production proof is also present from day one:
+`pnpm run check` is the starter's source-only quick gate. It joins format, lint, TypeScript, the
+framework-owned sound-subset policy, and current-source compiler/security proof without requiring
+deployment retention or writing `dist`. `pnpm test` runs the starter test through the same app
+wiring. The explicit production proof is also present from day one:
 
 ```sh
 npm run build:prod
@@ -138,9 +138,9 @@ When the feature crosses data domains or relies on optimistic behavior, add a gr
 
 ## The commands you'll use daily
 
-`vp` is the project toolchain runner (`vp check`, `vp test`, `vp build`) and `kovo` is the
-framework CLI (`kovo dev`, `kovo check`, `kovo explain`, `kovo add`). The full table - and the rule for which
-binary does what - lives in [Installation > The everyday commands](/getting-started/installation/#the-everyday-commands).
+`kovo` owns the app-facing loop: `dev`, `check`, `test`, `build`, `explain`, and `add`. The full
+table lives in
+[Installation > The everyday commands](/getting-started/installation/#the-everyday-commands).
 
 ## Next
 

@@ -92,7 +92,7 @@ functions that render full pages without diverging from them.
 
 ## Reading emitted output in practice
 
-- `vp build` writes the compiled modules; in dev they're compiled on demand and served under the
+- `kovo build` writes the compiled modules; in dev they're compiled on demand and served under the
   versioned `/c/` namespace. Module URLs are immutable, and old versions stay published across deploys
   so long-lived documents never 404 on first interaction.
 - The generated `registries.d.ts` is where declare-once typing comes from: handler modules, fragment

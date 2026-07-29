@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, normalize, relative } from 'node:path';
 
-const ts = await loadTypeScript();
 const root = process.cwd();
+const ts = await loadTypeScript();
 const findings = [];
 const RUNTIME_DB_MODULE_PATHS = new Set([
   'src/_kovo/app-runtime-db',
@@ -82,11 +83,21 @@ for (const file of enrolledSourceFiles) {
 }
 
 if (findings.length > 0) {
-  console.error(`Kovo starter sound-subset check failed:\n${findings.join('\n')}`);
+  if (process.env.KOVO_SOUND_SUBSET_FORMAT === 'json') {
+    process.stdout.write(`${JSON.stringify({ findings, version: 'kovo-sound-subset/v1' })}\n`);
+  } else {
+    console.error(
+      `Kovo starter sound-subset check failed:\n${findings.map(renderFinding).join('\n')}`,
+    );
+  }
   process.exit(1);
 }
 
-console.log('Kovo starter sound-subset check passed.');
+if (process.env.KOVO_SOUND_SUBSET_FORMAT === 'json') {
+  process.stdout.write(`${JSON.stringify({ findings: [], version: 'kovo-sound-subset/v1' })}\n`);
+} else {
+  console.log('Kovo starter sound-subset check passed.');
+}
 
 function sourceFiles(dir) {
   return readdirSync(dir)
@@ -101,7 +112,8 @@ function sourceFiles(dir) {
 
 async function loadTypeScript() {
   try {
-    const module = await import('typescript');
+    const requireFromProject = createRequire(join(root, 'package.json'));
+    const module = await import(requireFromProject.resolve('typescript'));
     return module.default ?? module;
   } catch {
     return null;
@@ -731,7 +743,7 @@ function reportMissingSecuritySurfaceFiles(files) {
   const enrolled = new Set(files.map((file) => toPosixPath(relative(root, file))));
   for (const file of SECURITY_SURFACE_FILES) {
     if (enrolled.has(file)) continue;
-    findings.push(`${file}:1: ${SECURITY_SURFACE_ENROLLMENT_MESSAGE}; missing from src/ scan`);
+    appendFinding(file, 1, `${SECURITY_SURFACE_ENROLLMENT_MESSAGE}; missing from src/ scan`);
   }
 }
 
@@ -747,8 +759,9 @@ function hasTrustExports(module) {
 }
 
 function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
-  const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
-  findings.push(`${relativeFile}:${line + 1}: ${message}`);
+  const start = node.getStart(sourceFile);
+  const { line } = sourceFile.getLineAndCharacterOfPosition(start);
+  appendFinding(relativeFile, line + 1, message, start, node.getEnd());
 }
 
 function isAllowedRuntimeDbImport(ts, node, relativeFile) {
@@ -798,18 +811,36 @@ function analyzeWithScanner(source, relativeFile) {
   scanRuntimeDbImports(source, relativeFile);
 
   const lines = maskIgnoredText(source).split('\n');
+  let offset = 0;
   for (const [index, line] of lines.entries()) {
     if (/\bany\b/.test(line)) {
-      findings.push(`${relativeFile}:${index + 1}: SPEC.md §6.6 sound subset bans any`);
-    }
-    if (/\bas\s+(?!const\b)[A-Za-z_{]/.test(line)) {
-      findings.push(`${relativeFile}:${index + 1}: SPEC.md §6.6 sound subset bans unchecked casts`);
-    }
-    if (/[A-Za-z0-9_$)\]]!\s*(?:[.;,\])}]|\?|$)/.test(line)) {
-      findings.push(
-        `${relativeFile}:${index + 1}: SPEC.md §6.6 sound subset bans non-null assertions`,
+      appendFinding(
+        relativeFile,
+        index + 1,
+        'SPEC.md §6.6 sound subset bans any',
+        offset,
+        offset + line.length,
       );
     }
+    if (/\bas\s+(?!const\b)[A-Za-z_{]/.test(line)) {
+      appendFinding(
+        relativeFile,
+        index + 1,
+        'SPEC.md §6.6 sound subset bans unchecked casts',
+        offset,
+        offset + line.length,
+      );
+    }
+    if (/[A-Za-z0-9_$)\]]!\s*(?:[.;,\])}]|\?|$)/.test(line)) {
+      appendFinding(
+        relativeFile,
+        index + 1,
+        'SPEC.md §6.6 sound subset bans non-null assertions',
+        offset,
+        offset + line.length,
+      );
+    }
+    offset += line.length + 1;
   }
 }
 
@@ -827,11 +858,28 @@ function scanRuntimeDbImports(source, relativeFile) {
       if (kind === 'import' && isAllowedRuntimeDbImportByScanner(match[1] ?? '', relativeFile)) {
         continue;
       }
-      findings.push(
-        `${relativeFile}:${lineNumberAt(source, match.index ?? 0)}: ${RUNTIME_DB_IMPORT_MESSAGE}`,
+      appendFinding(
+        relativeFile,
+        lineNumberAt(source, match.index ?? 0),
+        RUNTIME_DB_IMPORT_MESSAGE,
+        match.index ?? 0,
+        (match.index ?? 0) + match[0].length,
       );
     }
   }
+}
+
+function appendFinding(file, line, message, start, end) {
+  findings.push({
+    file,
+    line,
+    message,
+    ...(Number.isInteger(start) && Number.isInteger(end) ? { end, start } : {}),
+  });
+}
+
+function renderFinding(finding) {
+  return `${finding.file}:${finding.line}: ${finding.message}`;
 }
 
 function isAllowedRuntimeDbImportByScanner(importClause, relativeFile) {

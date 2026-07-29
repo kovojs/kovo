@@ -1,4 +1,5 @@
-import { realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { lstatSync, realpathSync } from 'node:fs';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import type { DiagnosticCode } from '@kovojs/core';
@@ -16,6 +17,12 @@ import {
 import { parseKovoCommandInvocation } from '../commands-manifest.js';
 import type { CliCommandResult } from '../shared.js';
 import { runApiV1Migration } from './api-v1-migration.js';
+import { resolveVitePlusBin } from './vite-plus-bin.js';
+
+const FIX_FORMAT_PROTOCOL = 'kovo-fix-format/v1';
+
+/** @internal Boot-captured process seam for exact formatter-delegation tests. */
+export const fixFormatCommandShell = { spawnSync };
 
 /** @internal Parsed options for the source-rewrite and corpus-report modes. */
 export type FixCommandOptions =
@@ -23,6 +30,11 @@ export type FixCommandOptions =
   | {
       readonly apiV1: true;
       readonly check: boolean;
+      readonly sourcePaths: readonly string[];
+    }
+  | {
+      readonly check: boolean;
+      readonly format: true;
       readonly sourcePaths: readonly string[];
     }
   | { readonly costReport: true };
@@ -45,6 +57,16 @@ export function parseFixArgs(args: readonly string[]): FixArgParseResult {
       options: {
         apiV1: true,
         check: parsed.value.options.check,
+        sourcePaths: parsed.value.arguments.sources ?? [],
+      },
+    };
+  }
+  if (parsed.value.form === 'format') {
+    return {
+      ok: true,
+      options: {
+        check: parsed.value.options.check,
+        format: true,
         sourcePaths: parsed.value.arguments.sources ?? [],
       },
     };
@@ -79,6 +101,9 @@ export async function runFixCommand(
         },
         invocationCwd,
       );
+    }
+    if ('format' in options) {
+      return runFormatFix(options, invocationCwd);
     }
     const source = await readAuthoredSource(invocationCwd, options.sourcePath);
     const analysis = analyzeSafeComponentFixes({
@@ -118,6 +143,79 @@ export async function runFixCommand(
       exitCode: 1,
     };
   }
+}
+
+function runFormatFix(
+  options: Extract<FixCommandOptions, { readonly format: true }>,
+  invocationCwd: string,
+): CliCommandResult {
+  const root = realpathSync(invocationCwd);
+  const sources = options.sourcePaths.map((source) => resolveAuthoredFormatPath(root, source));
+  const executable = resolveVitePlusBin();
+  const result = fixFormatCommandShell.spawnSync(
+    process.execPath,
+    [executable, 'fmt', options.check ? '--check' : '--write', ...sources],
+    {
+      cwd: root,
+      env: process.env,
+      stdio: 'inherit',
+    },
+  );
+  if (result.error !== undefined || result.signal !== null) {
+    return {
+      error: `${FIX_FORMAT_PROTOCOL}\nERROR runner reason=${singleLine(
+        result.error ?? `terminated by ${result.signal}`,
+      )}`,
+      exitCode: 2,
+    };
+  }
+  const status = result.status ?? 2;
+  if (status === 0) {
+    return {
+      exitCode: 0,
+      output: `${FIX_FORMAT_PROTOCOL}\nOK mode=${options.check ? 'check' : 'write'} paths=${
+        sources.length === 0 ? 'project' : String(sources.length)
+      }\n`,
+    };
+  }
+  if (options.check && status === 1) {
+    return {
+      error: `${FIX_FORMAT_PROTOCOL}\nWOULD_FORMAT paths=${
+        sources.length === 0 ? 'project' : String(sources.length)
+      }\n`,
+      exitCode: 1,
+    };
+  }
+  return {
+    error: `${FIX_FORMAT_PROTOCOL}\nERROR runner status=${String(status)}\n`,
+    exitCode: 2,
+  };
+}
+
+function resolveAuthoredFormatPath(root: string, input: string): string {
+  const candidate = resolve(root, input);
+  const relativePath = relative(root, candidate);
+  if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+    throw new Error(`${input} resolves outside the invocation root`);
+  }
+  const stats = lstatSync(candidate);
+  if (stats.isSymbolicLink() || (!stats.isFile() && !stats.isDirectory())) {
+    throw new Error(`${input} must be a regular file or directory`);
+  }
+  const canonical = realpathSync(candidate);
+  const canonicalRelative = relative(root, canonical);
+  if (
+    canonicalRelative === '..' ||
+    canonicalRelative.startsWith(`..${sep}`) ||
+    isAbsolute(canonicalRelative)
+  ) {
+    throw new Error(`${input} resolves outside the invocation root`);
+  }
+  return canonicalRelative === '' ? '.' : canonicalRelative;
+}
+
+function singleLine(value: unknown): string {
+  return (value instanceof Error ? value.message : String(value)).replace(/\s+/gu, ' ').trim();
 }
 
 interface AuthoredSource {

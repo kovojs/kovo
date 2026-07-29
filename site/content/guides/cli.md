@@ -1,60 +1,51 @@
 ---
-title: The kovo & vp CLIs
-description: Use kovo for framework-aware dev, build, and graph commands; use vp for the surrounding project toolchain.
+title: The kovo CLI
+description: Use one framework command for development, checks, tests, builds, and inspection.
 order: 6.7
 ---
 
-# The kovo & vp CLIs
+# The kovo CLI
 
-Kovo projects use **two distinct binaries**, and keeping them straight saves confusion:
+Kovo apps have one command surface:
 
-- **`vp`** is the **project / toolchain runner** — Vite+ (`vite-plus`). Use it for tests,
-  typechecking, packaging, and named project tasks.
-- **`kovo`** is the **framework CLI**. Use `kovo dev` for the app server, `kovo build` for deploy
-  output, and its graph commands for coverage, invalidation, guards, and audits.
+- `kovo dev` starts the app.
+- `kovo check` joins formatting, lint, TypeScript, compiler, security, and current-source proof.
+- `kovo test` runs the project tests with Kovo's bootstrap ordering.
+- `kovo build` repeats the source proof and adds deployment checks.
 
-The two compose: `vp` orchestrates, and `kovo` is often invoked _through_ a `vp` task. For example,
-`vp run kovo-check` is a project task that runs `kovo check` under the hood (the repo wires this as
-the `check:kovo` npm script).
+Vite Plus remains a pinned implementation dependency. App scripts and CI do not need to know which
+runner implements a phase.
 
-## `vp` — the toolchain runner
+## Daily commands
 
-`vp` is the Vite+ runner. Its everyday commands:
+| Command      | What it does                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| `kovo dev`   | Establish Kovo's trust roots, then start the development server.                                 |
+| `kovo check` | Format-check, lint, typecheck, and derive current compiler/security proof without deploy output. |
+| `kovo test`  | Run Vitest through Kovo's bootstrap-first test ordering.                                         |
+| `kovo build` | Prove source and emit output after preset, least-privilege, and retention checks.                |
+| `kovo fix`   | Apply compiler-proven rewrites, API migrations, or `kovo fix format`.                            |
 
-| Command         | What it does                                                                                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vp dev`        | Start generic Vite directly. Do not use this for a Kovo app; it evaluates authored config before Kovo can establish its compiler trust root. Use `kovo dev <app-module>` instead. |
-| `vp build`      | Build the app and component packages for production.                                                                                                                              |
-| `vp test`       | Run the project's test suites.                                                                                                                                                    |
-| `vp check`      | Typecheck + lint. Regenerates registries first, then runs TypeScript static checking over all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, guards).        |
-| `vp run <task>` | Run a named task from the Vite+ config — the general escape hatch for project-defined scripts.                                                                                    |
-| `vp pack`       | Package the project / component library for publishing.                                                                                                                           |
-
-`vp check` is where the framework's type-level guarantees land: it regenerates the registry `.d.ts`
+`kovo check` is where the framework's type-level guarantees land: it regenerates the registry `.d.ts`
 files and runs `tsc`, so route renames, missing form fields, and dead links all surface as type
 errors (this is the propagation property from [routing](/guides/routing/)).
 
-In practice, a repo wires these into npm scripts that combine `vp` with extra gates:
+The generated package scripts are intentionally thin:
 
 ```jsonc
 {
   "scripts": {
-    "check": "vp check && vp run typecheck-examples",
-    "check:kovo": "vp run kovo-check", // a vp task that runs `kovo check`
-    "test:integration": "vp run integration",
-    "test:browser": "vp run browser",
+    "dev": "kovo dev ./src/app.tsx",
+    "check": "kovo check",
+    "test": "kovo test",
+    "build:prod": "kovo build ./src/app.tsx",
   },
 }
 ```
 
-So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script is the convenience name;
-`vp` is the runner; `kovo` does the graph work.
-
-## `kovo` — the framework CLI
-
 `kovo` with no arguments prints categorized root help. Its current capability commands are:
 
-- Daily and build: `add`, `build`, `dev`, `export`
+- Daily and build: `add`, `build`, `dev`, `doctor`, `export`, `test`
 - Inspect and security: `audit`, `check`, `explain`, `incident`
 - Agent and operator: `compile`, `db`, `docs`, `fix`, `mcp`, `update-docs`
 
@@ -82,8 +73,7 @@ Pass `--config ./vite.config.ts` only when dev needs an authored client transfor
 surface accepts `server.host`, `server.port`, `server.strictPort`, and client plugins limited to
 `resolveId`, `load`, and `transform`. Build, test, lint, format, and run sections are ignored. Other
 Vite fields and lifecycle hooks fail closed because they can replace the SSR compiler graph. The
-ordinary Vite+ commands still read the complete config for their own build, test, lint, format, and
-task workflows.
+framework-owned test, lint, and format adapters still read the complete project configuration.
 
 ## Check current source; inspect artifacts explicitly
 
@@ -402,19 +392,18 @@ resolves to `0`, `1`, or `2`. Invalid JavaScript objects are rejected before dis
 contract. The public module does not expose the argv dispatcher, diagnostic construction internals,
 or transport internals.
 
-## How they compose
+## How the scripts compose
 
 ```text
-npm script  →  vp  →  kovo
-─────────────────────────────────────────────
-npm run check        →  vp check                       (typecheck + lint, regenerates registries)
-npm run check:kovo   →  vp run kovo-check  →  kovo check   (current source + compiler/security proof)
-npm run test:*       →  vp run <task>                   (project test suites)
+npm script         →  kovo
+────────────────────────────────────────────────────────────
+npm run check      →  kovo check  (format + lint + type + compiler/security proof)
+npm run test       →  kovo test   (bootstrap-first project tests)
+npm run build:prod →  kovo build  (source proof + deployment proof + output)
 ```
 
-Use `vp` to _run things_; use `kovo` to verify current app facts, inspect graphs, and emit artifacts.
-In CI, `kovo build` reruns the source verifier and adds the deployment gates before emitting output;
-keep `kovo check` as an explicit earlier step for a stable `kovo-check/v1` log and a quick loop that
+In CI, `kovo build` reruns the source verifier and adds the deployment gates before emitting output.
+Keep `kovo check` as an explicit earlier step for a stable `kovo-check/v1` log and a quick loop that
 does not pretend deployment retention has been configured.
 
 ## Next
@@ -423,12 +412,12 @@ does not pretend deployment retention has been configured.
 - [CLI API reference](/api/cli/) — the one-shot semantic command facade and verifier helpers.
 - [create-kovo command reference](/api/create-kovo/) — scaffold flags, dialects, and write safety.
 - [Deployment](/guides/deployment/) — `kovo build` presets and `kovo export`.
-- [Testing](/guides/testing/) — what `vp test` runs and the browser-free verification surface.
+- [Testing](/guides/testing/) — what `kovo test` runs and the browser-free verification surface.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-The compiler pipeline, hard rules (1:1 mapping, fixpoint, registry atomicity that `kovo dev`/`vp check`
+The compiler pipeline, hard rules (1:1 mapping, fixpoint, registry atomicity that `kovo dev`/`kovo check`
 rely on), and `kovo explain` sub-commands: SPEC §5.1–5.3. The verification surface — TypeScript
 checking, `kovo check`, graph queries over `kovo explain`, and the `kovo explain endpoints` machine-ingress
 audit: SPEC §11.4. Diagnostic severities and blocking policy: SPEC §11.3. Static export (`kovo

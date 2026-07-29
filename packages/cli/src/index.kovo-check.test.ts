@@ -2605,7 +2605,7 @@ describe('kovo check', () => {
 
     expect(output).toBe(
       humanUsage(
-        'kovo: usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]\n',
+        'kovo: usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check lifecycle [--format <human|json|github>] | kovo check endpoint-posture [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]\n',
       ),
     );
   });

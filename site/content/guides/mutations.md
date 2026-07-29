@@ -218,11 +218,11 @@ Use `'await-fragment'` when the safe prediction is not obvious. Server truth sti
 ## Check it
 
 ```sh
-vp check
+kovo check
 kovo check
 ```
 
-`vp check` covers the type/lint side of the form and handler wiring. `kovo check` is the graph gate
+`kovo check` covers the type/lint side of the form and handler wiring, then derives the graph gate
 that reports direct handler writes, opaque writes, and the invalidation coverage facts.
 
 ## Next

@@ -109,6 +109,7 @@ const reviewedUnresolvedDynamicModuleAcquisitions = new Set([
   'packages/server/src/vite-source.ts#d20810d8378391eeced5375aa3c41998c433b9846f2a612735e2c1d9365d6d41#2d48f56da770ec53b7e31eacdafd3983b0929513b177d3acfd08d2c3db8012ca',
   'packages/server/src/sqlite.ts#5ae4b492509f7482fd6eb5b6fca9b86585f68631e3e3e81cf924e79edb3584e9#cb1f4aa1ac29147775093dc3c4411e81e956780357d25c102098893d5361a482',
   'packages/test/src/integration/optimistic-client.ts#e54d1c166f3e8fd585b9c65bbdf6281a7fc5b25644415776589ef44dda89d943#c7ce4597dc092d68bd9823e3434012745d9c977893566551bcdfee04cfb2a2e5',
+  'packages/cli/src/commands/sound-subset.mjs#2e84f3dec7396e04d0149ac0d5373498cba164452eb106633b5d1ed6280dc205#0a2e825ccb996448551e9e666568a12ebc039398f5e35848d8adf5b936a5f136',
 ]);
 const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   [
@@ -126,7 +127,7 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
   ['packages/cli/src/bin.ts', 'c25df08ae63082fc227c0c8cd6e4c71cf68e44a05d238a5890cb4f17d7fcd07b'],
   [
     'packages/cli/src/commands/build-export.ts',
-    'e0bebabd240865a2dccb782e95a3358f23491e3eabce06dc9291262338865506',
+    '5e4067711a0bf0ff1cdbc8687b0fb49a2cbc03f006a4634b8df89ec68481c78e',
   ],
   [
     'packages/cli/src/commands/compile.ts',
@@ -137,8 +138,12 @@ const reviewedRuntimeModuleLoaderAuthorityFiles = new Map([
     'ac4f7f4acfcce3648f7765a823db84c3166682632ca3a633b3f2f0f4e163edd9',
   ],
   [
-    'packages/cli/src/commands/test.ts',
-    '6425b9c1069eaa372db3433042a2250d664c41e3439696cf746b8f26a3ec925d',
+    'packages/cli/src/commands/sound-subset.mjs',
+    '2e84f3dec7396e04d0149ac0d5373498cba164452eb106633b5d1ed6280dc205',
+  ],
+  [
+    'packages/cli/src/commands/vite-plus-bin.ts',
+    'c36fbf9c4e92888fb6d3708da71d0cd6f80933c078463f441bd10d91e790d92a',
   ],
   [
     'packages/cli/src/dependency-capability-loader.ts',

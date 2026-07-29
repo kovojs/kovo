@@ -41,7 +41,7 @@ captures its path string as a literal type:
 `route()` hands you a value you can export, test, and point links at — it doesn't register
 anything into a hidden router. Because the path is a literal type, every `<Link>`, GET form, and
 `redirect()` that targets it is checked against it. Rename the path and every consumer turns red
-under `vp check`. That pattern — declare once, derive everywhere, let renames be compiler errors
+under `kovo check`. That pattern — declare once, derive everywhere, let renames be compiler errors
 — recurs through the whole tutorial.
 
 The `publicAccess(...)` line is equally deliberate: every request surface records an access

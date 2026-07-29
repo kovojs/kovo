@@ -130,7 +130,7 @@ kovo check
 ```
 
 That is the command that reports the data-plane graph verdict for opaque reads, exempt-table reads,
-and opaque writes. Keep `vp check` in CI for type/lint wiring, but use `kovo check` when you want
+and opaque writes. Keep `kovo check` in CI for type/lint wiring and current-source proof when you want
 the graph result itself.
 
 ## Handle failure

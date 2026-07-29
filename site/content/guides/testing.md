@@ -17,7 +17,7 @@ browser.
 Run the suite that matches the question you are asking:
 
 ```sh
-vp test
+kovo test
 pnpm test -- src/cart.mutation.test.ts
 ```
 
@@ -209,7 +209,7 @@ integration suite compiles fixture apps, starts the app shell, drives real reque
 that generated graphs, mutation responses, and browser behavior agree.
 
 Application wiring is proof-carrying: handler refs, form fields, binding paths, fragment targets,
-and coverage are all checked by `vp check` and `kovo check`, so apps need few or no browser tests of
+and coverage are all checked by `kovo check`, so apps need few or no browser tests of
 their own. The reference commerce app meets exactly that bar: its full behavior surface is tested
 with zero app-level browser tests.
 

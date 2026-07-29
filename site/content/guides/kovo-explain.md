@@ -138,7 +138,7 @@ The grammar is consistent: `key: value` lines, `-` for empty, comma-separated se
 
 ## Run the gates with kovo check
 
-`kovo check graph.json` runs the semantic checks that don't belong in `vp check`: optimistic
+`kovo check graph.json` runs focused semantic checks over a named artifact rather than current source: optimistic
 exhaustiveness, update coverage, touch-graph consistency, and the audits. Healthy output is short:
 
 ```txt

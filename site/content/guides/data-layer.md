@@ -128,7 +128,7 @@ export async function commitAddToCartRows(
 Make one table annotation change, then one helper-write change, and run the graph gate:
 
 ```sh
-vp check
+kovo check
 kovo check
 ```
 
@@ -195,11 +195,11 @@ surface is intentionally public.
 ## Check the data plane
 
 ```sh
-vp check
+kovo check
 kovo check
 ```
 
-`vp check` covers the typed app wiring. `kovo check` compares query reads, mutation writes, registry
+`kovo check` covers the typed app wiring and compares query reads, mutation writes, registry
 declarations, and runtime verification facts. If the analyzer cannot prove a write and you did not
 declare it, that graph check fails.
 

@@ -152,7 +152,7 @@ describe('commands manifest', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
     expect(CHECK_USAGE).toBe(
-      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
+      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check lifecycle [--format <human|json|github>] | kovo check endpoint-posture [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(ADVISORY_USAGE).toBe(
       'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
@@ -185,7 +185,7 @@ describe('commands manifest', () => {
     );
     expect(COMPILE_USAGE_LINE).toContain('kovo compile component <source.tsx>');
     expect(FIX_USAGE).toBe(
-      'usage: kovo fix <source.tsx|source.jsx> [--check] | kovo fix api-v1 [source-or-directory] [--check] | kovo fix --cost-report',
+      'usage: kovo fix format [source-or-directory] [--check] | kovo fix <source.tsx|source.jsx> [--check] | kovo fix api-v1 [source-or-directory] [--check] | kovo fix --cost-report',
     );
     expect(EXPORT_USAGE).toBe(
       'usage: kovo export <app-module> [--vite] [--root <dir>] [--out <dir>] [--origin <url>] [--manifest <file> --dist <dir>] [--asset-base <path>] [--skip-non-exportable]',
@@ -338,6 +338,16 @@ describe('commands manifest', () => {
           severityFloor: 'critical',
           state: '.kovo/advisory-state.json',
         },
+      },
+    });
+
+    expect(parseKovoCommandInvocation('check', ['lifecycle', '--format=json'])).toEqual({
+      ok: true,
+      value: {
+        arguments: {},
+        command: 'check',
+        form: 'lifecycle',
+        options: { format: 'json' },
       },
     });
 

@@ -8,10 +8,10 @@ import {
   addSqliteDurableTaskRegistration,
   execFileFailureOutput,
 } from './index.build.scaffold-support.js';
-import { createStarterApp, runStarterVpCheck } from './index.test-support.js';
+import { createStarterApp, runStarterCheck } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: scaffold SQLite)', () => {
-  it('runs vp check in the generated SQLite app', () => {
+  it('runs kovo check in the generated SQLite app', () => {
     const app = createStarterApp({
       dialect: 'sqlite',
       install: 'link-local',
@@ -21,7 +21,7 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
     });
 
     try {
-      runStarterVpCheck(app.root);
+      runStarterCheck(app.root);
     } finally {
       app.cleanup();
     }

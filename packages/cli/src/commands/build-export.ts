@@ -169,6 +169,9 @@ import {
   combineBuildTimeViteFailures,
   type BuildTimeViteServerLifetime,
 } from './build-vite-lifetime.js';
+import { declaresKovoLifecyclePolicy, runLifecyclePolicyCheck } from './lifecycle-policy.js';
+import { runProjectQualityCheck } from './project-quality.js';
+import { runSoundSubsetCheck } from './sound-subset.js';
 import {
   buildByteLength,
   buildSecurityArrayAppend,
@@ -661,6 +664,11 @@ export async function runSourceCheckCommand(
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo check app module');
+    const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
+    if (strictLifecyclePolicy) {
+      const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot);
+      if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+    }
     const configPath = findKovoBuildConfig(invocationRoot);
     if (configPath !== undefined) {
       assertReadableKovoInputFile(configPath, 'kovo check config');
@@ -680,6 +688,26 @@ export async function runSourceCheckCommand(
       );
     }
 
+    const projectQualityPreflight = strictLifecyclePolicy
+      ? runProjectQualityCheck(invocationRoot, security.invocationEnv, 'kovo-check/v1')
+      : undefined;
+    if (projectQualityPreflight !== undefined) {
+      buildObservePromise(
+        projectQualityPreflight,
+        () => {},
+        () => {},
+      );
+    }
+    const soundSubsetPreflight = strictLifecyclePolicy
+      ? runSoundSubsetCheck(invocationRoot, security.invocationEnv, 'kovo-check/v1')
+      : undefined;
+    if (soundSubsetPreflight !== undefined) {
+      buildObservePromise(
+        soundSubsetPreflight,
+        () => {},
+        () => {},
+      );
+    }
     const typeScriptPreflight = runTypeScriptBuildPreflight(
       resolvedAppModulePath,
       invocationRoot,
@@ -711,6 +739,11 @@ export async function runSourceCheckCommand(
     // Preserve build's fail-closed, type-error-first ordering. No deploy artifact has been written:
     // the only persistent output allowed here is content-invalidated analysis/typegen cache state.
     await typeScriptPreflight;
+    const projectQuality =
+      projectQualityPreflight === undefined ? undefined : await projectQualityPreflight;
+    if (projectQuality !== undefined && projectQuality.exitCode !== 0) return projectQuality;
+    const soundSubset = soundSubsetPreflight === undefined ? undefined : await soundSubsetPreflight;
+    if (soundSubset !== undefined && soundSubset.exitCode !== 0) return soundSubset;
     if (!sourceCheck.ok) throw sourceCheck.error;
     return sourceCheck.value;
   } catch (error) {
@@ -818,6 +851,11 @@ export async function runBuildCommand(
     const invocationRoot = security.invocationCwd;
     const resolvedAppModulePath = resolve(invocationRoot, options.appModulePath);
     assertReadableKovoInputFile(resolvedAppModulePath, 'kovo build app module');
+    const strictLifecyclePolicy = declaresKovoLifecyclePolicy(invocationRoot);
+    if (strictLifecyclePolicy) {
+      const lifecyclePolicy = runLifecyclePolicyCheck(invocationRoot, 'kovo-build/v1');
+      if (lifecyclePolicy.exitCode !== 0) return lifecyclePolicy;
+    }
     const outDir = resolve(invocationRoot, options.outDir);
     assertKovoOutputDirectoryTarget(outDir, 'kovo build --out');
     const configPath = findKovoBuildConfig(invocationRoot);
@@ -865,6 +903,26 @@ export async function runBuildCommand(
       () => {},
       () => {},
     );
+    const projectQualityPreflight = strictLifecyclePolicy
+      ? runProjectQualityCheck(invocationRoot, security.invocationEnv, 'kovo-build/v1')
+      : undefined;
+    if (projectQualityPreflight !== undefined) {
+      buildObservePromise(
+        projectQualityPreflight,
+        () => {},
+        () => {},
+      );
+    }
+    const soundSubsetPreflight = strictLifecyclePolicy
+      ? runSoundSubsetCheck(invocationRoot, security.invocationEnv, 'kovo-build/v1')
+      : undefined;
+    if (soundSubsetPreflight !== undefined) {
+      buildObservePromise(
+        soundSubsetPreflight,
+        () => {},
+        () => {},
+      );
+    }
     // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
     // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
@@ -902,6 +960,11 @@ export async function runBuildCommand(
     // artifact-emitting step below (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit,
     // writeKovoBuildGraphArtifact) stays strictly after this join, so any failure emits ZERO artifacts.
     await typeScriptPreflight;
+    const projectQuality =
+      projectQualityPreflight === undefined ? undefined : await projectQualityPreflight;
+    if (projectQuality !== undefined && projectQuality.exitCode !== 0) return projectQuality;
+    const soundSubset = soundSubsetPreflight === undefined ? undefined : await soundSubsetPreflight;
+    if (soundSubset !== undefined && soundSubset.exitCode !== 0) return soundSubset;
     if (!loadAndCheck.ok) throw loadAndCheck.error;
     const {
       app,

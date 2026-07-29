@@ -206,8 +206,8 @@ export function runStarterAppHttpTest(root: string): void {
   });
 }
 
-export function runStarterVpCheck(root: string): void {
-  execFileSync(resolveStarterBin(root, 'vp'), ['check'], {
+export function runStarterCheck(root: string): void {
+  execFileSync(resolveStarterBin(root, 'kovo'), ['check'], {
     cwd: root,
     env: withStarterBinOnPath(root),
     stdio: 'inherit',

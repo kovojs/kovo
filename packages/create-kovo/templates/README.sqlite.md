@@ -16,7 +16,7 @@ RLS, or column-privilege layer.
 ```sh
 pnpm run dev         # kovo dev — bootstrap trust roots, then start Vite
 pnpm run check       # type/lint + sound-subset + current-source proof; no deploy artifacts
-pnpm run test        # vp test
+pnpm run test        # kovo test
 pnpm run build:prod  # kovo build ./src/app.tsx → {{deployment_target}} preset output
 {{production_start_command}}
 ```
@@ -50,12 +50,10 @@ Better Auth timestamps are `integer(..., { mode: 'timestamp_ms' })` columns, and
 JSON should use `text(..., { mode: 'json' })` when you add JSON fields. Those
 mappings are the blessed SQLite subset described by the data-layer policy.
 
-`kovo dev` bootstraps Kovo before loading the Vite config; `vp check` and `vp test`
-retain the `kovo()` config integration, which
-compiles the app and serves route documents and `/c/` handler modules (SPEC.md
-§9.5). `pnpm run check` runs source-backed `kovo check`, which reruns TypeScript
-and derives the compiler/security graph from the current app source. It needs no
-deployment-retention declaration and writes no deploy artifact. There is no
+`kovo dev` bootstraps Kovo before loading the Vite config. `kovo check` and `kovo test` retain the
+`kovo()` config integration while the framework owns the pinned formatter, linter, TypeScript,
+compiler, and test-runner phases. The source-backed check derives the security graph from current
+app source, needs no deployment-retention declaration, and writes no deploy artifact. There is no
 hand-maintained graph file.
 
 `pnpm run check` also enforces the SPEC.md §6.6 sound TypeScript subset for app
@@ -79,9 +77,10 @@ direct `@node-rs/argon2@2.0.2` and `better-sqlite3@12.11.1` pins; `esbuild`'s in
 explicitly ignored because its platform package supplies the binary without that hook. pnpm
 runs in `strict-dep-builds` mode, so a new dependency with an unreviewed `preinstall`, `install`, or
 `postinstall` script makes installation fail instead of merely printing a warning.
-`scripts/check-lifecycle-policy.mjs` runs before install in CI and again under `pnpm run check`; update
-the pin, reviewed allowlist, and checker together after a security review. Matching pnpm overrides
-prevent transitive copies of either allowed package name from resolving to unreviewed versions.
+CI installs with `--ignore-scripts`, authenticates the declarative policy with
+`kovo check lifecycle`, and only then runs `pnpm rebuild`. Update the pin and reviewed allowlist
+together after a security review. Matching pnpm overrides prevent transitive copies of either
+allowed package name from resolving to unreviewed versions.
 
 This policy bounds dependency install hooks, not application scripts or code imported at build or
 runtime. Command-line, environment, or machine-global pnpm overrides remain operator-controlled and

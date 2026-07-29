@@ -1,10 +1,11 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { runLifecyclePolicyCheck } from '../../cli/src/commands/lifecycle-policy.js';
 import { writeKovoProject } from './index.js';
 
 // C13-style forcing proof for SPEC §2 and plan 3 §3.5: exercise pnpm itself against local hostile
@@ -88,12 +89,15 @@ describe('create-kovo dependency lifecycle-script policy', () => {
       expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['@node-rs/argon2']);
       expect(packageJson.pnpm?.ignoredBuiltDependencies).toEqual(['esbuild']);
       expect(packageJson.pnpm?.overrides).toEqual({ '@node-rs/argon2': '2.0.2' });
-      expect(packageJson.scripts?.['check:lifecycle-policy']).toBe(
-        'node scripts/check-lifecycle-policy.mjs',
+      expect(packageJson).toMatchObject({ kovo: { lifecyclePolicy: 'strict-v1' } });
+      expect(packageJson.scripts).not.toHaveProperty('check:lifecycle-policy');
+      expect(workflow).toContain('corepack pnpm install --frozen-lockfile --ignore-scripts');
+      expect(workflow).toContain('corepack pnpm exec kovo check lifecycle');
+      expect(workflow.indexOf('install --frozen-lockfile --ignore-scripts')).toBeLessThan(
+        workflow.indexOf('kovo check lifecycle'),
       );
-      expect(workflow).toContain('- run: node scripts/check-lifecycle-policy.mjs');
-      expect(workflow.indexOf('- run: node scripts/check-lifecycle-policy.mjs')).toBeLessThan(
-        workflow.indexOf('- run: vp install --frozen-lockfile'),
+      expect(workflow.indexOf('kovo check lifecycle')).toBeLessThan(
+        workflow.indexOf('pnpm rebuild'),
       );
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -135,16 +139,7 @@ describe('create-kovo dependency lifecycle-script policy', () => {
         '@node-rs/argon2': '2.0.2',
         'better-sqlite3': '12.11.1',
       });
-      expect(() =>
-        execFileSync(
-          process.execPath,
-          [join(generatedRoot, 'scripts/check-lifecycle-policy.mjs')],
-          {
-            cwd: generatedRoot,
-            stdio: 'pipe',
-          },
-        ),
-      ).not.toThrow();
+      expect(runLifecyclePolicyCheck(generatedRoot)).toMatchObject({ exitCode: 0 });
 
       const installRoot = writeInstallHarness(join(root, 'sqlite-install'), {
         dependencies: {
@@ -168,11 +163,7 @@ describe('create-kovo dependency lifecycle-script policy', () => {
 
     try {
       writeKovoProject(root, { disableGit: true, name: 'Lifecycle Policy Mutants' });
-      const checker = join(root, 'scripts/check-lifecycle-policy.mjs');
-
-      expect(() =>
-        execFileSync(process.execPath, [checker], { cwd: root, stdio: 'pipe' }),
-      ).not.toThrow();
+      expect(runLifecyclePolicyCheck(root)).toMatchObject({ exitCode: 0 });
 
       const npmrc = readFileSync(join(root, '.npmrc'), 'utf8');
       writeFileSync(
@@ -180,7 +171,7 @@ describe('create-kovo dependency lifecycle-script policy', () => {
         npmrc.replace('dangerously-allow-all-builds=false', 'dangerously-allow-all-builds=true'),
         'utf8',
       );
-      expectCheckerFailure(root, checker, /dangerously-allow-all-builds must be exactly false/u);
+      expectCheckerFailure(root, /dangerously-allow-all-builds must be exactly false/u);
 
       writeFileSync(join(root, '.npmrc'), npmrc, 'utf8');
       const packageJsonPath = join(root, 'package.json');
@@ -191,13 +182,13 @@ describe('create-kovo dependency lifecycle-script policy', () => {
         'hostile-lifecycle',
       ];
       writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
-      expectCheckerFailure(root, checker, /reviewed lifecycle build allowlist/u);
+      expectCheckerFailure(root, /reviewed lifecycle build allowlist/u);
 
       packageJson.pnpm.onlyBuiltDependencies = ['@node-rs/argon2'];
       packageJson.pnpm.overrides ??= {};
       packageJson.pnpm.overrides['@node-rs/argon2'] = '9.9.9';
       writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
-      expectCheckerFailure(root, checker, /graph-wide override to 2\.0\.2/u);
+      expectCheckerFailure(root, /graph-wide override to 2\.0\.2/u);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -206,6 +197,9 @@ describe('create-kovo dependency lifecycle-script policy', () => {
 
 interface GeneratedPackageJson {
   dependencies?: Record<string, string>;
+  kovo?: {
+    lifecyclePolicy?: string;
+  };
   packageManager?: string;
   pnpm?: {
     ignoredBuiltDependencies?: string[];
@@ -302,8 +296,8 @@ function installOutput(result: ReturnType<typeof spawnSync>): string {
   return `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
 }
 
-function expectCheckerFailure(root: string, checker: string, pattern: RegExp): void {
-  const result = spawnSync(process.execPath, [checker], { cwd: root, encoding: 'utf8' });
-  expect(result.status).not.toBe(0);
-  expect(installOutput(result)).toMatch(pattern);
+function expectCheckerFailure(root: string, pattern: RegExp): void {
+  const result = runLifecyclePolicyCheck(root);
+  expect(result.exitCode).not.toBe(0);
+  expect(`${result.output ?? ''}\n${result.error ?? ''}`).toMatch(pattern);
 }

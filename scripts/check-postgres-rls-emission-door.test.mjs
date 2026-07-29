@@ -393,7 +393,7 @@ export function rogue(input) { return emit({ ...input, site: 'owner' }); }
     expect(files.has(runtimeFile)).toBe(true);
     expect(files.has('packages/create-kovo/templates/src/app.tsx')).toBe(true);
     expect(files.has('packages/create-kovo/templates/kovo.config.ts')).toBe(true);
-    expect(files.has('packages/create-kovo/templates/scripts/check-parallel.mjs')).toBe(true);
+    expect(files.has('packages/cli/src/commands/sound-subset.mjs')).toBe(true);
     expect([...files].some(([file]) => file.endsWith('.test.ts'))).toBe(false);
   });
 });

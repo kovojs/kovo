@@ -40,7 +40,7 @@ a spec, a sales page, or a lecture.
   the code — not three sentences of preamble.
 - Show it working. Paste the command, the output, the View Source, the wire
   bytes. Real artifacts beat description.
-- Name things exactly. `vp check`, `kovo-csrf`, the `/cart` route — never "the
+- Name things exactly. `kovo check`, `kovo-csrf`, the `/cart` route — never "the
   relevant command" or "the framework".
 - Be honest about rough edges. "The catch is…" and "this part is fiddly…" read as
   trustworthy. Pretending everything is smooth does not.
@@ -186,7 +186,7 @@ Voice (above) is the register. These are the structural and content choices:
   deployment over abstract framework vocabulary.
 - Explain payoff before mechanism. Say "the cart badge updates after the form
   submits" before "the touch graph intersects visible query-backed targets."
-- Use proof as reassurance, not posture. Prefer "Run `vp check`; a missing field
+- Use proof as reassurance, not posture. Prefer "Run `kovo check`; a missing field
   fails before deploy" in the main flow. Put "SPEC §..." and KV taxonomy in
   reference sections unless a diagnostic is the subject of the page.
 - Prefer reader verbs in headings: Add, Render, Run, Check, Handle, Deploy,
@@ -210,7 +210,7 @@ Voice (above) is the register. These are the structural and content choices:
 Kovo's correctness story is a product feature. Do not hide it. Do control where
 it appears.
 
-- Main path: use plain outcomes and commands. "This fails under `vp check`" is
+- Main path: use plain outcomes and commands. "This fails under `kovo check`" is
   usually better than "this violates the invariant."
 - Diagnostic path: name KV codes when the reader is expected to recognize or fix
   that diagnostic.

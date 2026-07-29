@@ -45,6 +45,7 @@ import {
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import { runDocsCommand } from './commands/docs.js';
 import { parseTestArgs, runTestCommand } from './commands/test.js';
+import { runLifecyclePolicyCheck } from './commands/lifecycle-policy.js';
 import {
   captureKovoCommandSecurityDisposition,
   type KovoCommandSecurityDisposition,
@@ -164,6 +165,14 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         ),
         parsed.format,
         'proof',
+        'check',
+      );
+    }
+    if ('lifecycle' in parsed) {
+      return writeFormattedCommandResult(
+        runLifecyclePolicyCheck(security.invocationCwd),
+        parsed.format,
+        'config',
         'check',
       );
     }
@@ -418,6 +427,36 @@ export async function mainAsync(
         security,
       ),
       parsed.format,
+      'proof',
+      'check',
+    );
+  }
+  if (invocation.command === 'check' && invocation.form === 'endpoint-posture-suite') {
+    const testResult = await runTestCommand(
+      {
+        coverage: false,
+        files: ['src/endpoint-posture.test.ts'],
+        passWithNoTests: false,
+        update: false,
+      },
+      security,
+    );
+    if (testResult.exitCode !== 0) {
+      return writeCommandResult(testResult, 'runtime', 'check');
+    }
+    return writeFormattedCommandResult(
+      runRequiredSelectedGraphCommand(
+        '.kovo/endpoint-posture.json',
+        false,
+        (input) =>
+          kovoCheck(input, {
+            family: 'endpoint-posture',
+            paranoidStaticAdvisory: security.paranoidStaticAdvisory,
+          }),
+        security.invocationCwd,
+        'endpoint-posture',
+      ),
+      invocation.options.format,
       'proof',
       'check',
     );

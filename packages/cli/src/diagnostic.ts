@@ -75,6 +75,11 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
     help: 'Restore write access to the project and `.kovo` paths, then rerun `kovo doctor`.',
     severity: 'error',
   },
+  KOVO_LIFECYCLE_POLICY: {
+    category: 'config',
+    help: 'Restore the generated pnpm lifecycle allowlist, run `kovo check lifecycle`, then run `pnpm rebuild`.',
+    severity: 'error',
+  },
   KOVO_BUILD_FINDING: {
     category: 'build',
     help: 'Resolve the reported build finding and rerun the command.',
@@ -95,9 +100,19 @@ const CLI_DIAGNOSTIC_DEFINITIONS = {
     help: 'Inspect the cited source proof and rerun the command.',
     severity: 'error',
   },
+  KOVO_PROJECT_QUALITY: {
+    category: 'proof',
+    help: 'Run `kovo fix format`, resolve the cited lint finding, then rerun `kovo check`.',
+    severity: 'error',
+  },
   KOVO_RUNTIME_FINDING: {
     category: 'runtime',
     help: 'Resolve the reported runtime finding and rerun the command.',
+    severity: 'error',
+  },
+  KOVO_SOUND_SUBSET: {
+    category: 'proof',
+    help: 'Remove the unsafe TypeScript shape at the cited source span, then rerun `kovo check`.',
     severity: 'error',
   },
   KOVO_USAGE: {
@@ -327,6 +342,30 @@ export function doctorFindingDiagnostic(
   source?: KovoDiagnosticSourceAnchor,
 ): KovoDiagnosticRecord {
   return createCliDiagnostic(code, message, source);
+}
+
+/** @internal Mint one dependency-lifecycle policy finding from the finite CLI registry. */
+export function lifecyclePolicyDiagnostic(
+  message: string,
+  source?: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic('KOVO_LIFECYCLE_POLICY', message, source);
+}
+
+/** @internal Mint one starter sound-subset finding from the finite CLI registry. */
+export function soundSubsetDiagnostic(
+  message: string,
+  source?: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic('KOVO_SOUND_SUBSET', message, source);
+}
+
+/** @internal Mint one formatter/linter finding from the finite CLI registry. */
+export function projectQualityDiagnostic(
+  message: string,
+  source?: KovoDiagnosticSourceAnchor,
+): KovoDiagnosticRecord {
+  return createCliDiagnostic('KOVO_PROJECT_QUALITY', message, source);
 }
 
 /**

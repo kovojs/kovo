@@ -185,6 +185,11 @@ type CheckArgParseResult =
       inputPath: string | undefined;
       ok: true;
     }
+  | {
+      format: KovoDiagnosticFormat;
+      lifecycle: true;
+      ok: true;
+    }
   | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
@@ -196,6 +201,22 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
       environment: true,
       format: parsed.value.options.format,
       inputPath: parsed.value.arguments.deployment,
+      ok: true,
+    };
+  }
+  if (parsed.value.form === 'lifecycle') {
+    return {
+      format: parsed.value.options.format,
+      lifecycle: true,
+      ok: true,
+    };
+  }
+  if (parsed.value.form === 'endpoint-posture-suite') {
+    return {
+      artifact: false,
+      family: 'endpoint-posture',
+      format: parsed.value.options.format,
+      inputPath: undefined,
       ok: true,
     };
   }

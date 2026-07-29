@@ -7,7 +7,7 @@ order: 0.5
 # Routing & navigation
 
 Declare a route once, then use that same route shape for links, redirects, GET forms, metadata,
-guards, and static export. Rename a path and `vp check` points at every stale consumer before you
+guards, and static export. Rename a path and `kovo check` points at every stale consumer before you
 ship.
 
 ## Declare a route
@@ -304,7 +304,7 @@ export const dealDetailRoute = route('/deals/:dealId', {
   /* … */
 });
 
-// …and every one of these goes red under `vp check` until updated:
+// …and every one of these goes red under `kovo check` until updated:
 // <Link to="/deals/:id" params={{ id }}>…</Link>  // literal no longer in RouteRegistry
 // redirect('/deals/:id', { params: { id } });     // same stale literal
 // <a href="/deals/p1">…</a>                       // KV220: matches no declared route
@@ -357,7 +357,7 @@ export const accountOverviewRoute = route('/account', {
 });
 ```
 
-Without that justification, `vp check` reports KV419.
+Without that justification, `kovo check` reports KV419.
 
 </details>
 
@@ -372,7 +372,7 @@ stamps or persistence policy.
 - [Interactive islands & client state](/guides/islands/) — coordinating islands through the typed URL.
 - [Layouts](/guides/layouts/) — nested route chrome, layout queries, guards, and boundaries.
 - [Mutations & forms](/guides/mutations/) — the POST-redirect-GET write side of navigation.
-- [The kovo & vp CLIs](/guides/cli/) — running `kovo explain unguarded` and `kovo explain page`.
+- [The kovo CLI](/guides/cli/) — running `kovo explain unguarded` and `kovo explain page`.
 
 <details>
 <summary>Spec & diagnostics</summary>

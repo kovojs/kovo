@@ -1,7 +1,9 @@
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -10,11 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from '../index.js';
 import { runApiV1Migration } from './api-v1-migration.js';
-import { parseFixArgs, runFixCommand } from './fix.js';
+import { fixFormatCommandShell, parseFixArgs, runFixCommand } from './fix.js';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('kovo fix', () => {
   it('parses source, check, and cost-report modes through the closed argv grammar', () => {
@@ -38,8 +42,55 @@ describe('kovo fix', () => {
         sourcePaths: ['src', 'packages/app/theme.ts'],
       },
     });
+    expect(parseFixArgs(['format', 'src', 'package.json', '--check'])).toEqual({
+      ok: true,
+      options: {
+        check: true,
+        format: true,
+        sourcePaths: ['src', 'package.json'],
+      },
+    });
     expect(parseFixArgs(['src/cart.tsx', '--cost-report'])).toMatchObject({ ok: false });
     expect(parseFixArgs(['--unknown'])).toMatchObject({ ok: false });
+  });
+
+  it('keeps the formatter implementation behind the semantic kovo fix command', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-fix-format-'));
+    const sourceRoot = join(root, 'src');
+    mkdirSync(sourceRoot);
+    const spawn = vi.spyOn(fixFormatCommandShell, 'spawnSync').mockReturnValue({
+      output: [],
+      pid: 10,
+      signal: null,
+      status: 0,
+      stderr: null,
+      stdout: null,
+    });
+    try {
+      const result = await runFixCommand(
+        { check: false, format: true, sourcePaths: ['src'] },
+        root,
+      );
+
+      expect(result).toEqual({
+        exitCode: 0,
+        output: 'kovo-fix-format/v1\nOK mode=write paths=1\n',
+      });
+      expect(spawn).toHaveBeenCalledOnce();
+      expect(spawn.mock.calls[0]?.[0]).toBe(process.execPath);
+      expect(spawn.mock.calls[0]?.[1]).toEqual([
+        expect.stringMatching(/node_modules[/\\]vite-plus[/\\]bin[/\\]vp$/u),
+        'fmt',
+        '--write',
+        'src',
+      ]);
+      expect(spawn.mock.calls[0]?.[2]).toMatchObject({
+        cwd: realpathSync(root),
+        stdio: 'inherit',
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('dispatches the real kovo fix command against the invocation cwd', async () => {

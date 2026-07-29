@@ -4,15 +4,12 @@
   "type": "module",
   "scripts": {
     "build:prod": "kovo build ./src/app.tsx",
-    "check": "node scripts/check-parallel.mjs",
-    "check:endpoint-posture": "vitest run src/endpoint-posture.test.ts && kovo check endpoint-posture .kovo/endpoint-posture.json",
-    "check:lifecycle-policy": "node scripts/check-lifecycle-policy.mjs",
-    "check:sound-subset": "node scripts/check-sound-subset.mjs",
-    "check:source": "kovo check",
+    "check": "kovo check",
+    "check:endpoint-posture": "kovo check endpoint-posture",
     "dev": "kovo dev ./src/app.tsx",
     "serve": "pnpm run build:prod && NODE_ENV=production node dist/server/server.mjs",
     "start": "NODE_ENV=production node dist/server/server.mjs",
-    "test": "vp test"
+    "test": "kovo test"
   },
   "dependencies": {
     "@kovojs/better-auth": "{{kovo_better_auth_version}}",
@@ -49,5 +46,8 @@
       "@node-rs/argon2": "2.0.2",
       "better-sqlite3": "12.11.1"
     }
+  },
+  "kovo": {
+    "lifecyclePolicy": "strict-v1"
   }
 }
