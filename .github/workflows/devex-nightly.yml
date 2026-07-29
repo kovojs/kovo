@@ -1,0 +1,133 @@
+name: DevEx Nightly
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: devex-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+  PLAYWRIGHT_VERSION: 1.60.0
+
+jobs:
+  package-producer:
+    # devex-gate: nightly-package-producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Enforce declared DevEx cadence and runner-minute caps
+        run: vp exec node scripts/devex-ci-policy.mjs
+      - name: Build authenticated public tarballs
+        run: vp exec pnpm run check:publish
+      - name: Archive authenticated packed release
+        run: >-
+          tar -czf "$RUNNER_TEMP/kovo-packed-release.tgz"
+          .release/packed-packages.json
+          .release/tarballs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-devex-packed-release
+          path: ${{ runner.temp }}/kovo-packed-release.tgz
+          retention-days: 7
+
+  benchmark:
+    # devex-gate: nightly-benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - name: Identify the observational hosted runner
+        run: |
+          runner_digest="$(
+            {
+              printf '%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+              cat /etc/os-release
+            } | sha256sum | cut -d' ' -f1
+          )"
+          echo "KOVO_DEVEX_OS_IMAGE=github-actions/ubuntu-24.04@sha256:$runner_digest" >> "$GITHUB_ENV"
+          echo "KOVO_DEVEX_RUNNER_NAME=github-hosted-ubuntu-24.04-observational" >> "$GITHUB_ENV"
+      - name: Collect five-sample authenticated baseline candidate
+        run: |
+          mkdir -p "$RUNNER_TEMP/kovo-devex-baseline"
+          vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario
+          vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5 --output "$RUNNER_TEMP/kovo-devex-baseline/benchmark.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-devex-baseline
+          path: ${{ runner.temp }}/kovo-devex-baseline
+          retention-days: 30
+
+  packed-journeys:
+    # devex-gate: nightly-packed-journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    needs:
+      - package-producer
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+        with:
+          rebuild-better-sqlite3: 'true'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-devex-packed-release
+          path: ${{ runner.temp }}/kovo-devex-packed-release
+      - name: Restore authenticated packed release
+        run: tar -xzf "$RUNNER_TEMP/kovo-devex-packed-release/kovo-packed-release.tgz" -C .
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
+      - name: Exercise both packed starter variants
+        run: >-
+          vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1
+          --report "$RUNNER_TEMP/kovo-devex-golden/report.json"
+          --artifacts "$RUNNER_TEMP/kovo-devex-golden/failures"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          if-no-files-found: error
+          name: kovo-devex-golden-journey
+          path: ${{ runner.temp }}/kovo-devex-golden
+          include-hidden-files: true
+          retention-days: 14
+
+  full-catalog:
+    # devex-gate: nightly-full-catalog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs:
+      - package-producer
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/kovo-setup
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kovo-devex-packed-release
+          path: ${{ runner.temp }}/kovo-devex-packed-release
+      - name: Restore authenticated packed release
+        run: tar -xzf "$RUNNER_TEMP/kovo-devex-packed-release/kovo-packed-release.tgz" -C .
+      - name: Gate the all-44 copied-component expected failure
+        run: vp exec pnpm run test:devex-known-failures-nightly

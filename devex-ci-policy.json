@@ -1,0 +1,67 @@
+{
+  "schema": "kovo-devex-ci-policy/v1",
+  "budgets": {
+    "perPullRequestRunnerMinutes": 60,
+    "nightlyRunnerMinutes": 300
+  },
+  "gates": [
+    {
+      "id": "pr-scorecard",
+      "cadence": "per-pr",
+      "workflow": ".github/workflows/ci.yml",
+      "job": "devex-scorecard",
+      "timeoutMinutes": 60,
+      "runnerCount": 1,
+      "commands": [
+        "vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario",
+        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 1 --output \"$RUNNER_TEMP/kovo-devex-pr/benchmark.json\"",
+        "vp exec node scripts/devex-pr-report.mjs"
+      ],
+      "prVisible": true
+    },
+    {
+      "id": "nightly-package-producer",
+      "cadence": "nightly",
+      "workflow": ".github/workflows/devex-nightly.yml",
+      "job": "package-producer",
+      "timeoutMinutes": 40,
+      "runnerCount": 1,
+      "commands": ["vp exec pnpm run check:publish"],
+      "prVisible": false
+    },
+    {
+      "id": "nightly-benchmark",
+      "cadence": "nightly",
+      "workflow": ".github/workflows/devex-nightly.yml",
+      "job": "benchmark",
+      "timeoutMinutes": 100,
+      "runnerCount": 1,
+      "commands": [
+        "vp exec node scripts/devex-benchmark.mjs --prepare-kovo-scenario",
+        "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5"
+      ],
+      "prVisible": false
+    },
+    {
+      "id": "nightly-packed-journeys",
+      "cadence": "nightly",
+      "workflow": ".github/workflows/devex-nightly.yml",
+      "job": "packed-journeys",
+      "timeoutMinutes": 90,
+      "runnerCount": 1,
+      "commands": ["vp exec node scripts/golden-journey.mjs --scenario packed-apps --samples 1"],
+      "prVisible": false,
+      "requiresBrowser": true
+    },
+    {
+      "id": "nightly-full-catalog",
+      "cadence": "nightly",
+      "workflow": ".github/workflows/devex-nightly.yml",
+      "job": "full-catalog",
+      "timeoutMinutes": 60,
+      "runnerCount": 1,
+      "commands": ["vp exec pnpm run test:devex-known-failures-nightly"],
+      "prVisible": false
+    }
+  ]
+}

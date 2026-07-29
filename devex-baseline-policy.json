@@ -1,0 +1,30 @@
+{
+  "schema": "kovo-devex-baseline-policy/v1",
+  "status": "unratified",
+  "referenceRunner": {
+    "kind": "github-hosted-observational",
+    "label": "ubuntu-24.04",
+    "binding": false,
+    "rationale": "GitHub-hosted Ubuntu is accepted for candidate collection and measured noise, but CPU assignment and image identity are not stable enough to bind release budgets across runs."
+  },
+  "collection": {
+    "workflow": ".github/workflows/devex-nightly.yml",
+    "gateId": "nightly-benchmark",
+    "sampleCount": 5,
+    "statistic": "median",
+    "noiseStatistic": "median-absolute-deviation",
+    "command": "vp exec node scripts/devex-benchmark.mjs --scenario .release/devex/kovo-packed-scenario.json --samples 5"
+  },
+  "ratification": {
+    "command": "vp exec node scripts/devex-benchmark.mjs --ratify --baseline <report> --proposal <reviewed-proposal> --write",
+    "proposalSchema": "kovo-devex-budget-proposal/v5",
+    "requiresExactRunnerFingerprint": true,
+    "requiresHumanTargetRationale": true,
+    "thresholdFormula": "budget + noiseMultiplier * noise"
+  },
+  "blockers": [
+    "Provision a stable named runner or record an explicit reviewed decision to accept one exact GitHub-hosted runner fingerprint for binding evaluation.",
+    "Record five or more samples for every statistical metric and review product targets before writing any ratification.",
+    "Extend authenticated baseline provenance to the golden-journey install, docs snapshot, and full-catalog reports before those cross-report metrics can bind."
+  ]
+}
