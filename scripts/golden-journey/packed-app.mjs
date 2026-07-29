@@ -720,6 +720,7 @@ async function runBrowserJourney({
     await page.locator('input[name="email"]').fill(email);
     const company = page.locator('input[name="company"]');
     if ((await company.count()) === 1) await company.fill('Kovo');
+    const preSubmit = await preSubmitTargetSnapshot(page);
     const [mutationResponse] = await Promise.all([
       page.waitForResponse(
         (response) => {
@@ -740,12 +741,18 @@ async function runBrowserJourney({
         email,
         origin,
         page,
+        preSubmit,
         response: mutationResponse,
         streamedResponse,
       });
+      const diagnosticPath = writeCrudDiagnostic({
+        diagnostics,
+        evidenceDirectory,
+        exactSecrets: Object.values(env),
+      });
       throw new JourneyPhaseError(
         'crud',
-        `add-contact mutation failed\n${JSON.stringify(diagnostics)}`,
+        `add-contact mutation failed; diagnostic=${path.relative(artifactRoot, diagnosticPath).split(path.sep).join('/')}\n${JSON.stringify(crudDiagnosticSummary(diagnostics))}`,
         {
           durationMs: performance.now() - crudStarted,
           name: 'crud',
@@ -764,14 +771,21 @@ async function runBrowserJourney({
         email,
         origin,
         page,
+        preSubmit,
         response: mutationResponse,
         streamedResponse,
+      });
+      const diagnosticPath = writeCrudDiagnostic({
+        diagnostics,
+        evidenceDirectory,
+        exactSecrets: Object.values(env),
       });
       throw new JourneyPhaseError(
         'crud',
         [
           `add-contact returned ${String(mutationResponse.status())} but did not render the created contact`,
-          JSON.stringify(diagnostics),
+          `diagnostic=${path.relative(artifactRoot, diagnosticPath).split(path.sep).join('/')}`,
+          JSON.stringify(crudDiagnosticSummary(diagnostics)),
           error instanceof Error ? error.message : String(error),
         ].join('\n'),
         {
@@ -937,18 +951,67 @@ async function mutationFailureDiagnostics({
   email,
   origin,
   page,
+  preSubmit,
   response,
   streamedResponse,
 }) {
   const beforeReload = await browserPageSnapshot(page, email);
+  let rawRequestHeaders;
+  let requestHeaders;
+  try {
+    rawRequestHeaders = await response.request().allHeaders();
+    requestHeaders = sanitizeDiagnosticRequestHeaders(rawRequestHeaders);
+  } catch (error) {
+    requestHeaders = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  let hmrProbe;
+  try {
+    const oldBuild = rawRequestHeaders?.['kovo-build'];
+    const liveTargets = rawRequestHeaders?.['kovo-live-targets'];
+    const currentUrl = rawRequestHeaders?.['kovo-current-url'];
+    if (!oldBuild || !liveTargets || !currentUrl) {
+      throw new Error('mutation request did not expose the build, source URL, and live target');
+    }
+    const hmrResponse = await page
+      .context()
+      .request.post(
+        `${origin}/@kovo/hmr/refresh/live-targets?oldBuild=${encodeURIComponent(oldBuild)}`,
+        {
+          headers: {
+            Accept: 'text/vnd.kovo.fragment+html',
+            'Kovo-Build': oldBuild,
+            'Kovo-Current-Url': currentUrl,
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': liveTargets,
+          },
+          timeout: 15_000,
+        },
+      );
+    hmrProbe = {
+      body: sanitizeMarkupPreview(await hmrResponse.text(), 8 * 1024),
+      headers: sanitizeDiagnosticResponseHeaders(hmrResponse.headers()),
+      status: hmrResponse.status(),
+    };
+  } catch (error) {
+    hmrProbe = {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
   let independentGet;
   try {
     const result = await page.context().request.get(`${origin}/`, { timeout: 15_000 });
-    const body = sanitizeMarkupPreview(await result.text(), 8 * 1024);
+    const rawBody = await result.text();
+    const bodyStart = rawBody.indexOf('<body');
+    const body = sanitizeMarkupPreview(
+      bodyStart < 0 ? rawBody : rawBody.slice(bodyStart),
+      8 * 1024,
+    );
     independentGet = {
       body,
-      containsEmail: body.includes(email),
-      headers: result.headers(),
+      containsEmail: rawBody.includes(email),
+      headers: sanitizeDiagnosticResponseHeaders(result.headers()),
       status: result.status(),
     };
   } catch (error) {
@@ -967,8 +1030,15 @@ async function mutationFailureDiagnostics({
   }
   return {
     schema: 'kovo.golden-journey/crud-diagnostic/v1',
+    hmrProbe,
+    preSubmit,
+    request: {
+      headers: requestHeaders,
+      method: response.request().method(),
+      url: response.request().url(),
+    },
     response: {
-      headers: response.headers(),
+      headers: sanitizeDiagnosticResponseHeaders(response.headers()),
       status: response.status(),
       streamed: streamedResponse,
       url: response.url(),
@@ -982,32 +1052,116 @@ async function mutationFailureDiagnostics({
 
 async function browserPageSnapshot(page, email) {
   try {
-    return await page.evaluate((expectedEmail) => {
-      const clone = document.documentElement.cloneNode(true);
-      for (const element of clone.querySelectorAll('*')) {
-        for (const attribute of element.attributes) {
-          if (
-            ['class', 'id', 'name', 'role', 'type'].includes(attribute.name) ||
-            attribute.name.startsWith('aria-')
-          ) {
-            continue;
-          }
-          element.setAttribute(attribute.name, '[REDACTED]');
-        }
-      }
-      const html = clone.outerHTML;
+    const snapshot = await page.evaluate((expectedEmail) => {
       return {
         containsEmail: document.body?.textContent?.includes(expectedEmail) ?? false,
-        outerHTML: html.length > 8 * 1024 ? `${html.slice(0, 8 * 1024)}\n[TRUNCATED]` : html,
+        outerHTML: document.body?.outerHTML ?? '',
         title: document.title.slice(0, 512),
         url: location.href,
       };
     }, email);
+    return {
+      ...snapshot,
+      outerHTML: sanitizeMarkupPreview(snapshot.outerHTML, 8 * 1024),
+    };
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+async function preSubmitTargetSnapshot(page) {
+  try {
+    const raw = await page.getByRole('button', { name: /add contact/iu }).evaluate((button) => {
+      const form = button.closest('form');
+      let componentRoot = form;
+      for (let current = form; current instanceof Element; current = current.parentElement) {
+        const carriesKovoIdentity = [...current.attributes].some(
+          (attribute) =>
+            attribute.name.startsWith('kovo-') || attribute.name.startsWith('data-kovo-'),
+        );
+        if (carriesKovoIdentity) {
+          componentRoot = current;
+          break;
+        }
+      }
+      return {
+        componentRoot: componentRoot?.outerHTML ?? null,
+        form: form?.outerHTML ?? null,
+      };
+    });
+    return {
+      componentRoot:
+        raw.componentRoot === null
+          ? null
+          : sanitizeTargetMarkupPreview(raw.componentRoot, 8 * 1024),
+      form: raw.form === null ? null : sanitizeTargetMarkupPreview(raw.form, 8 * 1024),
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function writeCrudDiagnostic({ diagnostics, evidenceDirectory, exactSecrets }) {
+  const diagnosticPath = path.join(evidenceDirectory, 'crud-diagnostic.json');
+  const serialized = redactSecrets(JSON.stringify(diagnostics, null, 2), exactSecrets);
+  writeFileSync(diagnosticPath, `${serialized}\n`, { encoding: 'utf8', flag: 'wx' });
+  return diagnosticPath;
+}
+
+function crudDiagnosticSummary(diagnostics) {
+  return {
+    preSubmit: diagnostics.preSubmit,
+    request: diagnostics.request,
+    response: diagnostics.response,
+  };
+}
+
+function sanitizeDiagnosticRequestHeaders(headers) {
+  const admitted = new Set([
+    'accept',
+    'content-type',
+    'kovo-build',
+    'kovo-current-url',
+    'kovo-fragment',
+    'kovo-idem',
+    'kovo-live-targets',
+    'kovo-targets',
+  ]);
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([name]) => admitted.has(name.toLowerCase()))
+      .map(([name, value]) => [name.toLowerCase(), sanitizeDiagnosticValue(value)]),
+  );
+}
+
+export function sanitizeDiagnosticResponseHeaders(headers) {
+  const admitted = new Set([
+    'cache-control',
+    'content-length',
+    'content-type',
+    'kovo-build',
+    'kovo-changes',
+    'kovo-hmr-fallback',
+    'kovo-hmr-refresh',
+    'kovo-previous-build',
+    'location',
+    'vary',
+  ]);
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([name]) => admitted.has(name.toLowerCase()))
+      .map(([name, value]) => [name.toLowerCase(), sanitizeDiagnosticValue(value)]),
+  );
+}
+
+function sanitizeDiagnosticValue(value) {
+  return String(value)
+    .replace(/(@)[^:;,\s]+(?=:)/gu, '$1[REDACTED:ATTESTATION]')
+    .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, '[REDACTED:TOKEN]');
 }
 
 export function sanitizeCapturedMutationResponse(response) {
@@ -1026,6 +1180,23 @@ export function sanitizeMarkupPreview(value, maxBytes) {
   const redacted = String(value)
     .replace(/(\s+[A-Za-z_:][-A-Za-z0-9_:.]*\s*=\s*)(["'])[\s\S]*?\2/gu, '$1$2[REDACTED]$2')
     .replace(/\b[A-Za-z0-9_+/=-]{32,}\b/gu, '[REDACTED:TOKEN]');
+  return boundedText(redacted, maxBytes);
+}
+
+export function sanitizeTargetMarkupPreview(value, maxBytes) {
+  const redacted = String(value).replace(
+    /(\s+)([A-Za-z_:][-A-Za-z0-9_:.]*)(\s*=\s*)(["'])([\s\S]*?)\4/gu,
+    (attribute, whitespace, name, separator, quote, rawValue) => {
+      const normalizedName = name.toLowerCase();
+      const structural =
+        ['action', 'class', 'id', 'method', 'name', 'role', 'type'].includes(normalizedName) ||
+        normalizedName.startsWith('aria-') ||
+        normalizedName.startsWith('kovo-') ||
+        normalizedName.startsWith('data-kovo-');
+      const safeValue = structural ? sanitizeDiagnosticValue(rawValue) : '[REDACTED]';
+      return `${whitespace}${name}${separator}${quote}${safeValue}${quote}`;
+    },
+  );
   return boundedText(redacted, maxBytes);
 }
 

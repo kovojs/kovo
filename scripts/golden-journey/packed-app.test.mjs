@@ -14,7 +14,9 @@ import {
   requirePackedPhaseSuccess,
   rewriteScaffoldDependenciesToPackedTarballs,
   sanitizeCapturedMutationResponse,
+  sanitizeDiagnosticResponseHeaders,
   sanitizeMarkupPreview,
+  sanitizeTargetMarkupPreview,
   validatePackedAppsReport,
 } from './packed-app.mjs';
 
@@ -47,6 +49,25 @@ describe('packed app golden journey', () => {
     expect(captured.bodyPreview).not.toContain('csrf-secret');
     expect(captured.bodyPreview).not.toContain('attestation-secret');
     expect(sanitizeMarkupPreview(`token=${'a'.repeat(64)}`, 1_024)).not.toContain('a'.repeat(64));
+    const targetMarkup = sanitizeTargetMarkupPreview(
+      `<div kovo-c="contacts" kovo-deps="contacts-query" kovo-live="contacts#region@${'a'.repeat(64)}:{}"><form action="/_m/mutations/add-contact"><input name="email" value="private@example.test"></form></div>`,
+      4_096,
+    );
+    expect(targetMarkup).toContain('kovo-c="contacts"');
+    expect(targetMarkup).toContain('kovo-deps="contacts-query"');
+    expect(targetMarkup).toContain('kovo-live="contacts#region@[REDACTED:ATTESTATION]:{}"');
+    expect(targetMarkup).toContain('action="/_m/mutations/add-contact"');
+    expect(targetMarkup).not.toContain('private@example.test');
+    expect(
+      sanitizeDiagnosticResponseHeaders({
+        'content-type': 'text/vnd.kovo.fragment+html',
+        'kovo-build': 'build-1',
+        'set-cookie': 'session=private',
+      }),
+    ).toEqual({
+      'content-type': 'text/vnd.kovo.fragment+html',
+      'kovo-build': 'build-1',
+    });
   });
 
   it('rewrites every direct and transitive Kovo edge to authenticated tarball files', () => {
