@@ -1,14 +1,7 @@
 {
-  "$comment": "Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode \"package-and-copy-in\", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add. registryDependencies lists the public packages copied source may import: `@kovojs/core`, `@kovojs/icons`, `@kovojs/server`, `@kovojs/headless-ui`, and `@kovojs/style`. dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and anatomy/enhancement metadata records manifest-owned ids, parts, slots, state inputs, roles, keyboard behavior, and enhancement tier for all 44 components. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.",
-  "distributionMode": "package-and-copy-in",
-  "registryDependencies": [
-    "@kovojs/core",
-    "@kovojs/icons",
-    "@kovojs/server",
-    "@kovojs/headless-ui",
-    "@kovojs/style"
-  ],
-  "components": [
+  "schema": "kovo-component-catalog/v1",
+  "owner": "@kovojs/ui",
+  "entries": [
     {
       "anatomy": {
         "ids": [
@@ -37,6 +30,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add accordion",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles an item; Arrow keys, Home, and End move focus between triggers.",
@@ -46,41 +40,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/accordion",
+      "id": "component:accordion",
+      "kind": "component",
       "name": "accordion",
-      "title": "Accordion",
-      "files": [
-        "src/accordion.tsx"
-      ],
-      "exports": [
-        "Accordion",
-        "AccordionItem",
-        "AccordionHeader",
-        "AccordionTrigger",
-        "AccordionContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "accordionContentAttributes",
-          "accordionHeaderAttributes",
-          "accordionItemAttributes",
-          "accordionRootAttributes",
-          "accordionTriggerAttributes",
-          "AccordionType",
-          "AccordionValue"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/accordion",
+      "searchText": "accordion Accordion Vertically stacked headers that each expand to reveal a panel, with single- or multi-open behavior. @kovojs/ui/accordion kovo add accordion root item header trigger content button region Enter or Space toggles an item; Arrow keys, Home, and End move focus between triggers. The rendered anatomy owns the button, region role contract.",
+      "summary": "Vertically stacked headers that each expand to reveal a panel, with single- or multi-open behavior.",
+      "title": "Accordion"
     },
     {
       "anatomy": {
@@ -93,6 +60,7 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add alert",
       "enhancement": {
         "accessibility": "The status message is exposed through the alert role without client code.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -101,27 +69,14 @@
         ],
         "tier": "none"
       },
+      "headlessImport": null,
+      "id": "component:alert",
+      "kind": "component",
       "name": "alert",
-      "title": "Alert",
-      "files": [
-        "src/alert.tsx"
-      ],
-      "exports": [
-        "Alert"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/alert",
+      "searchText": "alert Alert A statically rendered status banner that surfaces an important inline message. @kovojs/ui/alert kovo add alert root alert No custom keyboard behavior; the rendered native elements keep their platform behavior. The status message is exposed through the alert role without client code.",
+      "summary": "A statically rendered status banner that surfaces an important inline message.",
+      "title": "Alert"
     },
     {
       "anatomy": {
@@ -159,6 +114,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add alert-dialog",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the alertdialog, button role contract.",
         "keyboard": "Enter or Space opens and activates controls; Tab stays in the modal and Escape cancels it.",
@@ -168,46 +124,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": "@kovojs/headless-ui/alert-dialog",
+      "id": "component:alert-dialog",
+      "kind": "component",
       "name": "alert-dialog",
-      "title": "AlertDialog",
-      "files": [
-        "src/alert-dialog.tsx"
-      ],
-      "exports": [
-        "AlertDialog",
-        "AlertDialogTrigger",
-        "AlertDialogContent",
-        "AlertDialogCancel",
-        "AlertDialogAction",
-        "AlertDialogHeader",
-        "AlertDialogTitle",
-        "AlertDialogDescription",
-        "AlertDialogFooter"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "alertDialogActionAttributes",
-          "AlertDialogActionIntent",
-          "alertDialogCancelAttributes",
-          "alertDialogContentAttributes",
-          "alertDialogRootAttributes",
-          "alertDialogTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/alert-dialog",
+      "searchText": "alert-dialog Alert Dialog A modal dialog that interrupts the user to confirm or cancel a consequential action. @kovojs/ui/alert-dialog kovo add alert-dialog root trigger content cancel action header title description footer alertdialog button Enter or Space opens and activates controls; Tab stays in the modal and Escape cancels it. The rendered anatomy owns the alertdialog, button role contract.",
+      "summary": "A modal dialog that interrupts the user to confirm or cancel a consequential action.",
+      "title": "Alert Dialog"
     },
     {
       "anatomy": {
@@ -237,6 +161,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add autocomplete",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes suggestions.",
@@ -247,40 +172,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/autocomplete",
+      "id": "component:autocomplete",
+      "kind": "component",
       "name": "autocomplete",
-      "title": "Autocomplete",
-      "files": [
-        "src/autocomplete.tsx"
-      ],
-      "exports": [
-        "Autocomplete",
-        "AutocompleteInput",
-        "AutocompleteList",
-        "AutocompleteOption",
-        "AutocompleteValue"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "autocompleteInputAttributes",
-          "AutocompleteItem",
-          "autocompleteListAttributes",
-          "autocompleteOptionAttributes",
-          "autocompleteRootAttributes",
-          "autocompleteValueAttributes",
-          "autocompleteValueText"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/autocomplete",
+      "searchText": "autocomplete Autocomplete A text input that suggests matching options as you type while keeping native typing intact. @kovojs/ui/autocomplete kovo add autocomplete root input list option value combobox listbox option Arrow keys move the active option, Enter selects it, and Escape closes suggestions. The rendered anatomy owns the combobox, listbox, option role contract.",
+      "summary": "A text input that suggests matching options as you type while keeping native typing intact.",
+      "title": "Autocomplete"
     },
     {
       "anatomy": {
@@ -299,6 +198,7 @@
           "status"
         ]
       },
+      "copyCommand": "kovo add avatar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the img role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -307,38 +207,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": "@kovojs/headless-ui/avatar",
+      "id": "component:avatar",
+      "kind": "component",
       "name": "avatar",
-      "title": "Avatar",
-      "files": [
-        "src/avatar.tsx"
-      ],
-      "exports": [
-        "Avatar",
-        "AvatarImage",
-        "AvatarFallback"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "avatarFallbackAttributes",
-          "avatarImageAttributes",
-          "AvatarImageStatus",
-          "avatarRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/server": [
-          "trustedUrl"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/avatar",
+      "searchText": "avatar Avatar A user image with an automatic fallback to initials or a placeholder when it fails to load. @kovojs/ui/avatar kovo add avatar root image fallback img No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the img role contract.",
+      "summary": "A user image with an automatic fallback to initials or a placeholder when it fails to load.",
+      "title": "Avatar"
     },
     {
       "anatomy": {
@@ -351,33 +227,21 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add badge",
       "enhancement": {
         "accessibility": "The rendered semantic HTML remains the accessibility contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
         "roles": [],
         "tier": "none"
       },
+      "headlessImport": null,
+      "id": "component:badge",
+      "kind": "component",
       "name": "badge",
-      "title": "Badge",
-      "files": [
-        "src/badge.tsx"
-      ],
-      "exports": [
-        "Badge"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/badge",
+      "searchText": "badge Badge A small inline count or status label attached to another element. @kovojs/ui/badge kovo add badge root No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered semantic HTML remains the accessibility contract.",
+      "summary": "A small inline count or status label attached to another element.",
+      "title": "Badge"
     },
     {
       "anatomy": {
@@ -400,6 +264,7 @@
           "current"
         ]
       },
+      "copyCommand": "kovo add breadcrumb",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -409,34 +274,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": null,
+      "id": "component:breadcrumb",
+      "kind": "component",
       "name": "breadcrumb",
-      "title": "Breadcrumb",
-      "files": [
-        "src/breadcrumb.tsx"
-      ],
-      "exports": [
-        "Breadcrumb",
-        "BreadcrumbItem",
-        "BreadcrumbLink",
-        "BreadcrumbSeparator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/breadcrumb",
+      "searchText": "breadcrumb Breadcrumb An ordered trail of links showing the current page's position in the hierarchy. @kovojs/ui/breadcrumb kovo add breadcrumb root item link separator navigation list No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the navigation, list role contract.",
+      "summary": "An ordered trail of links showing the current page's position in the hierarchy.",
+      "title": "Breadcrumb"
     },
     {
       "anatomy": {
@@ -452,6 +297,7 @@
           "loading"
         ]
       },
+      "copyCommand": "kovo add button",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -460,28 +306,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": null,
+      "id": "component:button",
+      "kind": "component",
       "name": "button",
-      "title": "Button",
-      "files": [
-        "src/button.tsx"
-      ],
-      "exports": [
-        "Button"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/button",
+      "searchText": "button Button The base interactive control, with variant, size, and disabled/loading states. @kovojs/ui/button kovo add button root button No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the button role contract.",
+      "summary": "The base interactive control, with variant, size, and disabled/loading states.",
+      "title": "Button"
     },
     {
       "anatomy": {
@@ -504,38 +336,21 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add card",
       "enhancement": {
         "accessibility": "The rendered semantic HTML remains the accessibility contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
         "roles": [],
         "tier": "none"
       },
+      "headlessImport": null,
+      "id": "component:card",
+      "kind": "component",
       "name": "card",
-      "title": "Card",
-      "files": [
-        "src/card.tsx"
-      ],
-      "exports": [
-        "Card",
-        "CardHeader",
-        "CardTitle",
-        "CardDescription",
-        "CardContent",
-        "CardFooter"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/card",
+      "searchText": "card Card A surface container that groups related content with optional header, content, and footer. @kovojs/ui/card kovo add card root header title description content footer No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered semantic HTML remains the accessibility contract.",
+      "summary": "A surface container that groups related content with optional header, content, and footer.",
+      "title": "Card"
     },
     {
       "anatomy": {
@@ -558,6 +373,7 @@
           "required"
         ]
       },
+      "copyCommand": "kovo add checkbox",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the checkbox role contract.",
         "keyboard": "Space toggles the checkbox while disabled controls remain inert.",
@@ -566,31 +382,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/checkbox",
+      "id": "component:checkbox",
+      "kind": "component",
       "name": "checkbox",
-      "title": "Checkbox",
-      "files": [
-        "src/checkbox.tsx"
-      ],
-      "exports": [
-        "Checkbox"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "CheckboxCheckedState",
-          "checkboxRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/checkbox",
+      "searchText": "checkbox Checkbox A single toggle for an on/off (or indeterminate) boolean value. @kovojs/ui/checkbox kovo add checkbox root checkbox Space toggles the checkbox while disabled controls remain inert. The rendered anatomy owns the checkbox role contract.",
+      "summary": "A single toggle for an on/off (or indeterminate) boolean value.",
+      "title": "Checkbox"
     },
     {
       "anatomy": {
@@ -620,6 +419,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add checkbox-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, checkbox role contract.",
         "keyboard": "Space toggles the focused item; Arrow keys can move roving focus when configured.",
@@ -629,38 +429,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/checkbox-group",
+      "id": "component:checkbox-group",
+      "kind": "component",
       "name": "checkbox-group",
-      "title": "CheckboxGroup",
-      "files": [
-        "src/checkbox-group.tsx"
-      ],
-      "exports": [
-        "CheckboxGroup",
-        "CheckboxGroupItem",
-        "CheckboxGroupControl",
-        "CheckboxGroupLabel"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "checkboxGroupControlAttributes",
-          "CheckboxGroupItem",
-          "checkboxGroupItemAttributes",
-          "checkboxGroupLabelAttributes",
-          "checkboxGroupRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/checkbox-group",
+      "searchText": "checkbox-group Checkbox Group A set of related checkboxes managed as one multi-select value. @kovojs/ui/checkbox-group kovo add checkbox-group root item control label group checkbox Space toggles the focused item; Arrow keys can move roving focus when configured. The rendered anatomy owns the group, checkbox role contract.",
+      "summary": "A set of related checkboxes managed as one multi-select value.",
+      "title": "Checkbox Group"
     },
     {
       "anatomy": {
@@ -683,6 +459,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add collapsible",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the native details disclosure.",
@@ -691,34 +468,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": "@kovojs/headless-ui/collapsible",
+      "id": "component:collapsible",
+      "kind": "component",
       "name": "collapsible",
-      "title": "Collapsible",
-      "files": [
-        "src/collapsible.tsx"
-      ],
-      "exports": [
-        "Collapsible",
-        "CollapsibleTrigger",
-        "CollapsibleContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "collapsibleContentAttributes",
-          "collapsibleRootAttributes",
-          "collapsibleTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/collapsible",
+      "searchText": "collapsible Collapsible A native <details>/<summary> reveal that expands or collapses one region and works without JavaScript - the simplest progressive-enhancement show/hide. @kovojs/ui/collapsible kovo add collapsible root trigger content button Enter or Space toggles the native details disclosure. The rendered anatomy owns the button role contract.",
+      "summary": "A native <details>/<summary> reveal that expands or collapses one region and works without JavaScript - the simplest progressive-enhancement show/hide.",
+      "title": "Collapsible"
     },
     {
       "anatomy": {
@@ -748,6 +505,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add combobox",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter selects it, and Escape closes the listbox.",
@@ -758,40 +516,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/combobox",
+      "id": "component:combobox",
+      "kind": "component",
       "name": "combobox",
-      "title": "Combobox",
-      "files": [
-        "src/combobox.tsx"
-      ],
-      "exports": [
-        "Combobox",
-        "ComboboxInput",
-        "ComboboxListbox",
-        "ComboboxOption",
-        "ComboboxValue"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "comboboxInputAttributes",
-          "ComboboxItem",
-          "comboboxListboxAttributes",
-          "comboboxOptionAttributes",
-          "comboboxRootAttributes",
-          "comboboxValueAttributes",
-          "comboboxValueText"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/combobox",
+      "searchText": "combobox Combobox An input paired with a filterable listbox for selecting one option from many. @kovojs/ui/combobox kovo add combobox root input listbox option value combobox listbox option Arrow keys move the active option, Enter selects it, and Escape closes the listbox. The rendered anatomy owns the combobox, listbox, option role contract.",
+      "summary": "An input paired with a filterable listbox for selecting one option from many.",
+      "title": "Combobox"
     },
     {
       "anatomy": {
@@ -830,6 +562,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add command",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active command, Enter runs it, and Escape closes the palette.",
@@ -841,50 +574,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": "@kovojs/headless-ui/command",
+      "id": "component:command",
+      "kind": "component",
       "name": "command",
-      "title": "Command",
-      "files": [
-        "src/command.tsx"
-      ],
-      "exports": [
-        "Command",
-        "CommandTrigger",
-        "CommandDialog",
-        "CommandInput",
-        "CommandListbox",
-        "CommandItem",
-        "CommandClose",
-        "CommandEmpty",
-        "CommandValue"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "commandCloseAttributes",
-          "commandDialogAttributes",
-          "commandEmptyAttributes",
-          "commandInputAttributes",
-          "CommandItem",
-          "commandItemAttributes",
-          "commandListboxAttributes",
-          "commandRootAttributes",
-          "commandTriggerAttributes",
-          "commandValueText"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "Search"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/command",
+      "searchText": "command Command A searchable command palette that filters actions and runs the selected one. @kovojs/ui/command kovo add command root trigger dialog input listbox item close empty value dialog combobox listbox option Arrow keys move the active command, Enter runs it, and Escape closes the palette. The rendered anatomy owns the dialog, combobox, listbox, option role contract.",
+      "summary": "A searchable command palette that filters actions and runs the selected one.",
+      "title": "Command"
     },
     {
       "anatomy": {
@@ -916,6 +613,7 @@
           "point"
         ]
       },
+      "copyCommand": "kovo add context-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Context Menu or Shift+F10 opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
@@ -927,42 +625,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/context-menu",
+      "id": "component:context-menu",
+      "kind": "component",
       "name": "context-menu",
-      "title": "ContextMenu",
-      "files": [
-        "src/context-menu.tsx"
-      ],
-      "exports": [
-        "ContextMenu",
-        "ContextMenuTrigger",
-        "ContextMenuContent",
-        "ContextMenuItem",
-        "ContextMenuGroup",
-        "ContextMenuSeparator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "contextMenuContentAttributes",
-          "contextMenuGroupAttributes",
-          "ContextMenuItem",
-          "contextMenuItemAttributes",
-          "ContextMenuPoint",
-          "contextMenuRootAttributes",
-          "contextMenuSeparatorAttributes",
-          "contextMenuTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/context-menu",
+      "searchText": "context-menu Context Menu A right-click menu of actions anchored to the element it targets. @kovojs/ui/context-menu kovo add context-menu root trigger content item group separator menu menuitem group separator Context Menu or Shift+F10 opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu. The rendered anatomy owns the menu, menuitem, group, separator role contract.",
+      "summary": "A right-click menu of actions anchored to the element it targets.",
+      "title": "Context Menu"
     },
     {
       "anatomy": {
@@ -997,6 +667,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add dialog",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab stays inside the modal and Escape closes it.",
@@ -1006,40 +677,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": "@kovojs/headless-ui/dialog",
+      "id": "component:dialog",
+      "kind": "component",
       "name": "dialog",
-      "title": "Dialog",
-      "files": [
-        "src/dialog.tsx"
-      ],
-      "exports": [
-        "Dialog",
-        "DialogTrigger",
-        "DialogContent",
-        "DialogClose",
-        "DialogCloseX",
-        "DialogHeader",
-        "DialogTitle",
-        "DialogDescription"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "dialogCloseAttributes",
-          "dialogContentAttributes",
-          "dialogRootAttributes",
-          "dialogTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/dialog",
+      "searchText": "dialog Dialog A focus-trapped modal overlay for content or forms, dismissible by escape or backdrop. @kovojs/ui/dialog kovo add dialog root trigger content close closeX header title description dialog button Enter or Space opens controls; Tab stays inside the modal and Escape closes it. The rendered anatomy owns the dialog, button role contract.",
+      "summary": "A focus-trapped modal overlay for content or forms, dismissible by escape or backdrop.",
+      "title": "Dialog"
     },
     {
       "anatomy": {
@@ -1062,6 +707,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add disclosure",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button, region role contract.",
         "keyboard": "Enter or Space toggles the controlled region.",
@@ -1071,34 +717,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/disclosure",
+      "id": "component:disclosure",
+      "kind": "component",
       "name": "disclosure",
-      "title": "Disclosure",
-      "files": [
-        "src/disclosure.tsx"
-      ],
-      "exports": [
-        "Disclosure",
-        "DisclosureTrigger",
-        "DisclosureContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "disclosureContentAttributes",
-          "disclosureRootAttributes",
-          "disclosureTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/disclosure",
+      "searchText": "disclosure Disclosure A scripted reveal pairing a <button aria-expanded> trigger with a controlled region, for show/hide cases that need full control over a non-native trigger and content. @kovojs/ui/disclosure kovo add disclosure root trigger content button region Enter or Space toggles the controlled region. The rendered anatomy owns the button, region role contract.",
+      "summary": "A scripted reveal pairing a <button aria-expanded> trigger with a controlled region, for show/hide cases that need full control over a non-native trigger and content.",
+      "title": "Disclosure"
     },
     {
       "anatomy": {
@@ -1134,6 +760,7 @@
           "side"
         ]
       },
+      "copyCommand": "kovo add drawer",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
@@ -1143,41 +770,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": null,
+      "id": "component:drawer",
+      "kind": "component",
       "name": "drawer",
-      "title": "Drawer",
-      "files": [
-        "src/drawer.tsx"
-      ],
-      "exports": [
-        "Drawer",
-        "DrawerRoot",
-        "DrawerTrigger",
-        "DrawerContent",
-        "DrawerHandle",
-        "DrawerHeader",
-        "DrawerTitle",
-        "DrawerDescription",
-        "DrawerClose"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "dialogCloseAttributes",
-          "dialogContentAttributes",
-          "dialogRootAttributes",
-          "dialogTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/drawer",
+      "searchText": "drawer Drawer A panel that slides in from a screen edge, often for navigation or filters. @kovojs/ui/drawer kovo add drawer root trigger content handle header title description close dialog button Enter or Space opens controls; Tab is contained and Escape closes. The rendered anatomy owns the dialog, button role contract.",
+      "summary": "A panel that slides in from a screen edge, often for navigation or filters.",
+      "title": "Drawer"
     },
     {
       "anatomy": {
@@ -1208,6 +808,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add dropdown-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menu, menuitem, group, separator role contract.",
         "keyboard": "Enter or Space opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.",
@@ -1219,41 +820,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/dropdown-menu",
+      "id": "component:dropdown-menu",
+      "kind": "component",
       "name": "dropdown-menu",
-      "title": "DropdownMenu",
-      "files": [
-        "src/dropdown-menu.tsx"
-      ],
-      "exports": [
-        "DropdownMenu",
-        "DropdownMenuTrigger",
-        "DropdownMenuContent",
-        "DropdownMenuItem",
-        "DropdownMenuGroup",
-        "DropdownMenuSeparator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "dropdownMenuContentAttributes",
-          "dropdownMenuGroupAttributes",
-          "DropdownMenuItem",
-          "dropdownMenuItemAttributes",
-          "dropdownMenuRootAttributes",
-          "dropdownMenuSeparatorAttributes",
-          "dropdownMenuTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/dropdown-menu",
+      "searchText": "dropdown-menu Dropdown Menu A button-triggered menu of actions with keyboard navigation. @kovojs/ui/dropdown-menu kovo add dropdown-menu root trigger content item group separator menu menuitem group separator Enter or Space opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu. The rendered anatomy owns the menu, menuitem, group, separator role contract.",
+      "summary": "A button-triggered menu of actions with keyboard navigation.",
+      "title": "Dropdown Menu"
     },
     {
       "anatomy": {
@@ -1293,6 +867,7 @@
           "required"
         ]
       },
+      "copyCommand": "kovo add field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -1301,45 +876,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": "@kovojs/headless-ui/field",
+      "id": "component:field",
+      "kind": "component",
       "name": "field",
-      "title": "Field",
-      "files": [
-        "src/field.tsx"
-      ],
-      "exports": [
-        "Field",
-        "FieldLabel",
-        "FieldControl",
-        "FieldTextarea",
-        "FieldSelect",
-        "FieldSelectOption",
-        "FieldDescription",
-        "FieldErrorMessage",
-        "Fieldset",
-        "FieldsetLegend"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "fieldControlAttributes",
-          "fieldDescriptionAttributes",
-          "fieldErrorAttributes",
-          "fieldLabelAttributes",
-          "fieldRootAttributes",
-          "fieldsetLegendAttributes",
-          "fieldsetRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/field",
+      "searchText": "field Field A labeled form-control wrapper that wires up label, description, and error messaging. @kovojs/ui/field kovo add field root label control textarea select selectOption description errorMessage set setLegend group No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the group role contract.",
+      "summary": "A labeled form-control wrapper that wires up label, description, and error messaging.",
+      "title": "Field"
     },
     {
       "anatomy": {
@@ -1361,6 +905,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add hover-card",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Focus or pointer entry opens the preview; Escape and focus or pointer exit close it.",
@@ -1369,35 +914,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/hover-card",
+      "id": "component:hover-card",
+      "kind": "component",
       "name": "hover-card",
-      "title": "HoverCard",
-      "files": [
-        "src/hover-card.tsx"
-      ],
-      "exports": [
-        "HoverCard",
-        "HoverCardTrigger",
-        "HoverCardContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "hoverCardContentAttributes",
-          "hoverCardRootAttributes",
-          "hoverCardTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/hover-card",
+      "searchText": "hover-card Hover Card A rich preview card that opens on hover or focus of its trigger. @kovojs/ui/hover-card kovo add hover-card root trigger content button Focus or pointer entry opens the preview; Escape and focus or pointer exit close it. The rendered anatomy owns the button role contract.",
+      "summary": "A rich preview card that opens on hover or focus of its trigger.",
+      "title": "Hover Card"
     },
     {
       "anatomy": {
@@ -1410,33 +934,21 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add kbd",
       "enhancement": {
         "accessibility": "The rendered semantic HTML remains the accessibility contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
         "roles": [],
         "tier": "native"
       },
+      "headlessImport": null,
+      "id": "component:kbd",
+      "kind": "component",
       "name": "kbd",
-      "title": "Kbd",
-      "files": [
-        "src/kbd.tsx"
-      ],
-      "exports": [
-        "Kbd"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/kbd",
+      "searchText": "kbd Kbd Inline styling for a keyboard key or shortcut chord. @kovojs/ui/kbd kovo add kbd root No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered semantic HTML remains the accessibility contract.",
+      "summary": "Inline styling for a keyboard key or shortcut chord.",
+      "title": "Kbd"
     },
     {
       "anatomy": {
@@ -1466,6 +978,7 @@
           "orientation"
         ]
       },
+      "copyCommand": "kovo add menubar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the menubar, menuitem, menu, separator role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape operate menus and submenus.",
@@ -1477,40 +990,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/menubar",
+      "id": "component:menubar",
+      "kind": "component",
       "name": "menubar",
-      "title": "Menubar",
-      "files": [
-        "src/menubar.tsx"
-      ],
-      "exports": [
-        "Menubar",
-        "MenubarItem",
-        "MenubarSubmenu",
-        "MenubarGroup",
-        "MenubarSeparator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "menubarGroupAttributes",
-          "MenubarItem",
-          "menubarItemAttributes",
-          "menubarRootAttributes",
-          "menubarSeparatorAttributes",
-          "menubarSubmenuAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/menubar",
+      "searchText": "menubar Menubar A horizontal bar of menus, like a desktop application's menu strip. @kovojs/ui/menubar kovo add menubar root item submenu group separator menubar menuitem menu separator Arrow keys, Home, End, typeahead, Enter, Space, and Escape operate menus and submenus. The rendered anatomy owns the menubar, menuitem, menu, separator role contract.",
+      "summary": "A horizontal bar of menus, like a desktop application's menu strip.",
+      "title": "Menubar"
     },
     {
       "anatomy": {
@@ -1533,6 +1020,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add meter",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the meter role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -1541,30 +1029,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": "@kovojs/headless-ui/meter",
+      "id": "component:meter",
+      "kind": "component",
       "name": "meter",
-      "title": "Meter",
-      "files": [
-        "src/meter.tsx"
-      ],
-      "exports": [
-        "Meter"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "meterRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/meter",
+      "searchText": "meter Meter A static gauge showing a scalar value within a known range. @kovojs/ui/meter kovo add meter root meter No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the meter role contract.",
+      "summary": "A static gauge showing a scalar value within a known range.",
+      "title": "Meter"
     },
     {
       "anatomy": {
@@ -1601,6 +1073,7 @@
           "orientation"
         ]
       },
+      "copyCommand": "kovo add navigation-menu",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the navigation, list, button role contract.",
         "keyboard": "Arrow keys, Home, End, typeahead, Enter, Space, and Escape move through navigation items.",
@@ -1611,49 +1084,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/navigation-menu",
+      "id": "component:navigation-menu",
+      "kind": "component",
       "name": "navigation-menu",
-      "title": "NavigationMenu",
-      "files": [
-        "src/navigation-menu.tsx"
-      ],
-      "exports": [
-        "NavigationMenu",
-        "NavigationMenuList",
-        "NavigationMenuItem",
-        "NavigationMenuTrigger",
-        "NavigationMenuContent",
-        "NavigationMenuLink",
-        "NavigationMenuViewport",
-        "NavigationMenuIndicator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "navigationMenuContentAttributes",
-          "navigationMenuIndicatorAttributes",
-          "NavigationMenuItem",
-          "navigationMenuItemAttributes",
-          "navigationMenuLinkAttributes",
-          "navigationMenuListAttributes",
-          "navigationMenuRootAttributes",
-          "navigationMenuTriggerAttributes",
-          "navigationMenuViewportAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "ChevronDown"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/navigation-menu",
+      "searchText": "navigation-menu Navigation Menu A site navigation bar with expandable submenus. @kovojs/ui/navigation-menu kovo add navigation-menu root list item trigger content link viewport indicator navigation list button Arrow keys, Home, End, typeahead, Enter, Space, and Escape move through navigation items. The rendered anatomy owns the navigation, list, button role contract.",
+      "summary": "A site navigation bar with expandable submenus.",
+      "title": "Navigation Menu"
     },
     {
       "anatomy": {
@@ -1686,6 +1124,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add number-field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the spinbutton, button role contract.",
         "keyboard": "Arrow Up and Arrow Down step the value within its declared bounds.",
@@ -1695,38 +1134,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/number-field",
+      "id": "component:number-field",
+      "kind": "component",
       "name": "number-field",
-      "title": "NumberField",
-      "files": [
-        "src/number-field.tsx"
-      ],
-      "exports": [
-        "NumberField",
-        "NumberFieldControl",
-        "NumberFieldInput",
-        "NumberFieldDecrement",
-        "NumberFieldIncrement"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "numberFieldDecrementAttributes",
-          "numberFieldIncrementAttributes",
-          "numberFieldInputAttributes",
-          "numberFieldRootAttributes",
-          "NumberFieldValue"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/number-field",
+      "searchText": "number-field Number Field A numeric input with stepper buttons and min/max/step constraints. @kovojs/ui/number-field kovo add number-field root control input decrement increment spinbutton button Arrow Up and Arrow Down step the value within its declared bounds. The rendered anatomy owns the spinbutton, button role contract.",
+      "summary": "A numeric input with stepper buttons and min/max/step constraints.",
+      "title": "Number Field"
     },
     {
       "anatomy": {
@@ -1756,6 +1171,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add otp-field",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, textbox role contract.",
         "keyboard": "Typing advances slots, Backspace moves backward, Arrow keys move focus, and paste fills available slots.",
@@ -1765,36 +1181,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/otp-field",
+      "id": "component:otp-field",
+      "kind": "component",
       "name": "otp-field",
-      "title": "OtpField",
-      "files": [
-        "src/otp-field.tsx"
-      ],
-      "exports": [
-        "OtpField",
-        "OtpFieldGroup",
-        "OtpFieldHiddenInput",
-        "OtpFieldInput"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "otpFieldHiddenInputAttributes",
-          "otpFieldInputAttributes",
-          "OtpFieldInputMode",
-          "otpFieldRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/otp-field",
+      "searchText": "otp-field OTP Field A segmented input for entering a one-time passcode digit by digit. @kovojs/ui/otp-field kovo add otp-field root group hiddenInput input group textbox Typing advances slots, Backspace moves backward, Arrow keys move focus, and paste fills available slots. The rendered anatomy owns the group, textbox role contract.",
+      "summary": "A segmented input for entering a one-time passcode digit by digit.",
+      "title": "OTP Field"
     },
     {
       "anatomy": {
@@ -1817,6 +1211,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add popover",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space opens the popover and Escape closes it.",
@@ -1825,34 +1220,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": "@kovojs/headless-ui/popover",
+      "id": "component:popover",
+      "kind": "component",
       "name": "popover",
-      "title": "Popover",
-      "files": [
-        "src/popover.tsx"
-      ],
-      "exports": [
-        "Popover",
-        "PopoverTrigger",
-        "PopoverContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "popoverContentAttributes",
-          "popoverRootAttributes",
-          "popoverTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/popover",
+      "searchText": "popover Popover A non-modal floating panel anchored to a trigger. @kovojs/ui/popover kovo add popover root trigger content button Enter or Space opens the popover and Escape closes it. The rendered anatomy owns the button role contract.",
+      "summary": "A non-modal floating panel anchored to a trigger.",
+      "title": "Popover"
     },
     {
       "anatomy": {
@@ -1871,6 +1246,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add progress",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the progressbar role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -1879,30 +1255,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": "@kovojs/headless-ui/progress",
+      "id": "component:progress",
+      "kind": "component",
       "name": "progress",
-      "title": "Progress",
-      "files": [
-        "src/progress.tsx"
-      ],
-      "exports": [
-        "Progress"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "progressRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/progress",
+      "searchText": "progress Progress A bar that communicates the completion percentage of a task. @kovojs/ui/progress kovo add progress root progressbar No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the progressbar role contract.",
+      "summary": "A bar that communicates the completion percentage of a task.",
+      "title": "Progress"
     },
     {
       "anatomy": {
@@ -1933,6 +1293,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add radio-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the radiogroup, radio role contract.",
         "keyboard": "Arrow keys move selection and focus; Space selects the focused radio option.",
@@ -1942,38 +1303,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/radio-group",
+      "id": "component:radio-group",
+      "kind": "component",
       "name": "radio-group",
-      "title": "RadioGroup",
-      "files": [
-        "src/radio-group.tsx"
-      ],
-      "exports": [
-        "RadioGroup",
-        "RadioGroupItem",
-        "RadioGroupRadio",
-        "RadioGroupLabel"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "RadioGroupItem",
-          "radioGroupItemAttributes",
-          "radioGroupLabelAttributes",
-          "radioGroupRadioAttributes",
-          "radioGroupRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/radio-group",
+      "searchText": "radio-group Radio Group A set of mutually exclusive options where exactly one is selected. @kovojs/ui/radio-group kovo add radio-group root item radio label radiogroup radio Arrow keys move selection and focus; Space selects the focused radio option. The rendered anatomy owns the radiogroup, radio role contract.",
+      "summary": "A set of mutually exclusive options where exactly one is selected.",
+      "title": "Radio Group"
     },
     {
       "anatomy": {
@@ -2001,6 +1338,7 @@
           "viewportSize"
         ]
       },
+      "copyCommand": "kovo add scroll-area",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the scrollbar role contract.",
         "keyboard": "Native viewport scrolling remains available when custom dragging is absent.",
@@ -2009,42 +1347,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/scroll-area",
+      "id": "component:scroll-area",
+      "kind": "component",
       "name": "scroll-area",
-      "title": "ScrollArea",
-      "files": [
-        "src/scroll-area.tsx"
-      ],
-      "exports": [
-        "ScrollArea",
-        "ScrollAreaViewport",
-        "ScrollAreaScrollbar",
-        "ScrollAreaThumb",
-        "ScrollAreaCorner"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "scrollAreaCornerAttributes",
-          "ScrollAreaOrientation",
-          "scrollAreaRootAttributes",
-          "scrollAreaScrollbarAttributes",
-          "ScrollAreaScrollbars",
-          "ScrollAreaScrollPosition",
-          "scrollAreaThumbAttributes",
-          "scrollAreaViewportAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/scroll-area",
+      "searchText": "scroll-area Scroll Area A custom-styled scroll container with consistent cross-browser scrollbars. @kovojs/ui/scroll-area kovo add scroll-area root viewport scrollbar thumb corner scrollbar Native viewport scrolling remains available when custom dragging is absent. The rendered anatomy owns the scrollbar role contract.",
+      "summary": "A custom-styled scroll container with consistent cross-browser scrollbars.",
+      "title": "Scroll Area"
     },
     {
       "anatomy": {
@@ -2080,6 +1390,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add select",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the combobox, listbox, option role contract.",
         "keyboard": "Arrow keys move the active option, Enter or Space selects, typeahead searches, and Escape closes.",
@@ -2090,42 +1401,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/select",
+      "id": "component:select",
+      "kind": "component",
       "name": "select",
-      "title": "Select",
-      "files": [
-        "src/select.tsx"
-      ],
-      "exports": [
-        "Select",
-        "SelectTrigger",
-        "SelectHiddenInput",
-        "SelectContent",
-        "SelectItem",
-        "SelectValue"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "selectContentAttributes",
-          "selectHiddenInputAttributes",
-          "SelectItem",
-          "selectItemAttributes",
-          "selectRootAttributes",
-          "selectTriggerAttributes",
-          "selectValueAttributes",
-          "selectValueText"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/select",
+      "searchText": "select Select A trigger that opens a listbox to choose one option, with a native fallback. @kovojs/ui/select kovo add select root trigger hiddenInput content item value combobox listbox option Arrow keys move the active option, Enter or Space selects, typeahead searches, and Escape closes. The rendered anatomy owns the combobox, listbox, option role contract.",
+      "summary": "A trigger that opens a listbox to choose one option, with a native fallback.",
+      "title": "Select"
     },
     {
       "anatomy": {
@@ -2141,6 +1424,7 @@
           "orientation"
         ]
       },
+      "copyCommand": "kovo add separator",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the separator role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -2149,30 +1433,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": "@kovojs/headless-ui/separator",
+      "id": "component:separator",
+      "kind": "component",
       "name": "separator",
-      "title": "Separator",
-      "files": [
-        "src/separator.tsx"
-      ],
-      "exports": [
-        "Separator"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "SeparatorOrientation",
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/separator",
+      "searchText": "separator Separator A semantic or decorative divider between groups of content. @kovojs/ui/separator kovo add separator root separator No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the separator role contract.",
+      "summary": "A semantic or decorative divider between groups of content.",
+      "title": "Separator"
     },
     {
       "anatomy": {
@@ -2206,6 +1474,7 @@
           "side"
         ]
       },
+      "copyCommand": "kovo add sheet",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the dialog, button role contract.",
         "keyboard": "Enter or Space opens controls; Tab is contained and Escape closes.",
@@ -2215,44 +1484,14 @@
         ],
         "tier": "progressive"
       },
+      "headlessImport": null,
+      "id": "component:sheet",
+      "kind": "component",
       "name": "sheet",
-      "title": "Sheet",
-      "files": [
-        "src/sheet.tsx"
-      ],
-      "exports": [
-        "Sheet",
-        "SheetRoot",
-        "SheetTrigger",
-        "SheetContent",
-        "SheetHeader",
-        "SheetTitle",
-        "SheetDescription",
-        "SheetClose"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "dialogCloseAttributes",
-          "dialogContentAttributes",
-          "dialogRootAttributes",
-          "dialogTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild",
-          "ComponentRenderResult"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/sheet",
+      "searchText": "sheet Sheet A large panel that slides over the page from an edge for secondary tasks. @kovojs/ui/sheet kovo add sheet root trigger content header title description close dialog button Enter or Space opens controls; Tab is contained and Escape closes. The rendered anatomy owns the dialog, button role contract.",
+      "summary": "A large panel that slides over the page from an edge for secondary tasks.",
+      "title": "Sheet"
     },
     {
       "anatomy": {
@@ -2265,32 +1504,21 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add skeleton",
       "enhancement": {
         "accessibility": "The placeholder remains hidden from assistive technology until content loads.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
         "roles": [],
         "tier": "none"
       },
+      "headlessImport": null,
+      "id": "component:skeleton",
+      "kind": "component",
       "name": "skeleton",
-      "title": "Skeleton",
-      "files": [
-        "src/skeleton.tsx"
-      ],
-      "exports": [
-        "Skeleton"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/skeleton",
+      "searchText": "skeleton Skeleton A placeholder shape that stands in for content while it loads. @kovojs/ui/skeleton kovo add skeleton root No custom keyboard behavior; the rendered native elements keep their platform behavior. The placeholder remains hidden from assistive technology until content loads.",
+      "summary": "A placeholder shape that stands in for content while it loads.",
+      "title": "Skeleton"
     },
     {
       "anatomy": {
@@ -2323,6 +1551,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add slider",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the slider role contract.",
         "keyboard": "Arrow keys step the value; Home and End select bounds while pointer drag tracks continuously.",
@@ -2331,39 +1560,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/slider",
+      "id": "component:slider",
+      "kind": "component",
       "name": "slider",
-      "title": "Slider",
-      "files": [
-        "src/slider.tsx"
-      ],
-      "exports": [
-        "Slider",
-        "SliderInput",
-        "SliderTrack",
-        "SliderRange",
-        "SliderThumb"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "sliderInputAttributes",
-          "SliderOrientation",
-          "sliderRangeAttributes",
-          "sliderRootAttributes",
-          "sliderThumbAttributes",
-          "sliderTrackAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/slider",
+      "searchText": "slider Slider A draggable thumb that selects a value or range along a track. @kovojs/ui/slider kovo add slider root input track range thumb slider Arrow keys step the value; Home and End select bounds while pointer drag tracks continuously. The rendered anatomy owns the slider role contract.",
+      "summary": "A draggable thumb that selects a value or range along a track.",
+      "title": "Slider"
     },
     {
       "anatomy": {
@@ -2386,6 +1590,7 @@
           "required"
         ]
       },
+      "copyCommand": "kovo add switch",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the switch role contract.",
         "keyboard": "Space toggles the switch while disabled controls remain inert.",
@@ -2394,30 +1599,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/switch",
+      "id": "component:switch",
+      "kind": "component",
       "name": "switch",
-      "title": "Switch",
-      "files": [
-        "src/switch.tsx"
-      ],
-      "exports": [
-        "Switch"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "switchRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/switch",
+      "searchText": "switch Switch A toggle styled as an on/off switch for an immediate boolean setting. @kovojs/ui/switch kovo add switch root switch Space toggles the switch while disabled controls remain inert. The rendered anatomy owns the switch role contract.",
+      "summary": "A toggle styled as an on/off switch for an immediate boolean setting.",
+      "title": "Switch"
     },
     {
       "anatomy": {
@@ -2440,6 +1629,7 @@
         ],
         "stateInputs": []
       },
+      "copyCommand": "kovo add table",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the table, row, columnheader, cell role contract.",
         "keyboard": "No custom keyboard behavior; the rendered native elements keep their platform behavior.",
@@ -2451,36 +1641,14 @@
         ],
         "tier": "native"
       },
+      "headlessImport": null,
+      "id": "component:table",
+      "kind": "component",
       "name": "table",
-      "title": "Table",
-      "files": [
-        "src/table.tsx"
-      ],
-      "exports": [
-        "Table",
-        "TableHead",
-        "TableBody",
-        "TableRow",
-        "TableHeaderCell",
-        "TableCell"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/server": [
-          "renderRouteHtml",
-          "trustedHtml"
-        ]
-      },
-      "uiComponents": [
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/table",
+      "searchText": "table Table A semantic data table with header, body, and styled rows. @kovojs/ui/table kovo add table root head body row headerCell cell table row columnheader cell No custom keyboard behavior; the rendered native elements keep their platform behavior. The rendered anatomy owns the table, row, columnheader, cell role contract.",
+      "summary": "A semantic data table with header, body, and styled rows.",
+      "title": "Table"
     },
     {
       "anatomy": {
@@ -2508,6 +1676,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add tabs",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tablist, tab, tabpanel role contract.",
         "keyboard": "Arrow keys move between tabs; Home and End jump to bounds; Enter or Space activates in manual mode.",
@@ -2518,39 +1687,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/tabs",
+      "id": "component:tabs",
+      "kind": "component",
       "name": "tabs",
-      "title": "Tabs",
-      "files": [
-        "src/tabs.tsx"
-      ],
-      "exports": [
-        "Tabs",
-        "TabsList",
-        "TabsTrigger",
-        "TabsPanel"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "TabsActivationMode",
-          "TabsItem",
-          "tabsListAttributes",
-          "tabsPanelAttributes",
-          "tabsRootAttributes",
-          "tabsTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/tabs",
+      "searchText": "tabs Tabs A set of tabbed panels where one panel is visible at a time. @kovojs/ui/tabs kovo add tabs root list trigger panel tablist tab tabpanel Arrow keys move between tabs; Home and End jump to bounds; Enter or Space activates in manual mode. The rendered anatomy owns the tablist, tab, tabpanel role contract.",
+      "summary": "A set of tabbed panels where one panel is visible at a time.",
+      "title": "Tabs"
     },
     {
       "anatomy": {
@@ -2582,6 +1726,7 @@
           "type"
         ]
       },
+      "copyCommand": "kovo add toast",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the region, status role contract.",
         "keyboard": "Escape dismisses the newest toast; native buttons activate actions and close.",
@@ -2591,46 +1736,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/toast",
+      "id": "component:toast",
+      "kind": "component",
       "name": "toast",
-      "title": "ToastViewport",
-      "files": [
-        "src/toast.tsx"
-      ],
-      "exports": [
-        "ToastViewport",
-        "Toast",
-        "ToastTitle",
-        "ToastDescription",
-        "ToastAction",
-        "ToastClose"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "toastActionAttributes",
-          "toastCloseAttributes",
-          "toastDescriptionAttributes",
-          "ToastPlacement",
-          "ToastPoliteness",
-          "toastRootAttributes",
-          "toastTitleAttributes",
-          "ToastVariant",
-          "toastViewportAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/toast",
+      "searchText": "toast Toast A transient, non-blocking notification that auto-dismisses. @kovojs/ui/toast kovo add toast viewport root title description action close region status Escape dismisses the newest toast; native buttons activate actions and close. The rendered anatomy owns the region, status role contract.",
+      "summary": "A transient, non-blocking notification that auto-dismisses.",
+      "title": "Toast"
     },
     {
       "anatomy": {
@@ -2646,6 +1759,7 @@
           "pressed"
         ]
       },
+      "copyCommand": "kovo add toggle",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the button role contract.",
         "keyboard": "Enter or Space toggles the pressed state.",
@@ -2654,30 +1768,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/toggle",
+      "id": "component:toggle",
+      "kind": "component",
       "name": "toggle",
-      "title": "Toggle",
-      "files": [
-        "src/toggle.tsx"
-      ],
-      "exports": [
-        "Toggle"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "toggleRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/toggle",
+      "searchText": "toggle Toggle A two-state button that stays pressed or unpressed. @kovojs/ui/toggle kovo add toggle root button Enter or Space toggles the pressed state. The rendered anatomy owns the button role contract.",
+      "summary": "A two-state button that stays pressed or unpressed.",
+      "title": "Toggle"
     },
     {
       "anatomy": {
@@ -2700,6 +1798,7 @@
           "value"
         ]
       },
+      "copyCommand": "kovo add toggle-group",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the group, button role contract.",
         "keyboard": "Arrow keys move roving focus and Enter or Space toggles the focused item.",
@@ -2709,38 +1808,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/toggle-group",
+      "id": "component:toggle-group",
+      "kind": "component",
       "name": "toggle-group",
-      "title": "ToggleGroup",
-      "files": [
-        "src/toggle-group.tsx"
-      ],
-      "exports": [
-        "ToggleGroup",
-        "ToggleGroupItem",
-        "ToggleGroupButton"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "toggleGroupButtonAttributes",
-          "ToggleGroupItem",
-          "toggleGroupItemAttributes",
-          "toggleGroupRootAttributes",
-          "ToggleGroupType",
-          "ToggleGroupValue"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/toggle-group",
+      "searchText": "toggle-group Toggle Group A set of toggle buttons acting as a single- or multi-select control. @kovojs/ui/toggle-group kovo add toggle-group root item button group button Arrow keys move roving focus and Enter or Space toggles the focused item. The rendered anatomy owns the group, button role contract.",
+      "summary": "A set of toggle buttons acting as a single- or multi-select control.",
+      "title": "Toggle Group"
     },
     {
       "anatomy": {
@@ -2761,6 +1836,7 @@
           "orientation"
         ]
       },
+      "copyCommand": "kovo add toolbar",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the toolbar, button role contract.",
         "keyboard": "Arrow keys, Home, and End move roving focus through toolbar items.",
@@ -2770,37 +1846,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/toolbar",
+      "id": "component:toolbar",
+      "kind": "component",
       "name": "toolbar",
-      "title": "Toolbar",
-      "files": [
-        "src/toolbar.tsx"
-      ],
-      "exports": [
-        "Toolbar",
-        "ToolbarItem",
-        "ToolbarButton"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "toolbarButtonAttributes",
-          "ToolbarItem",
-          "toolbarItemAttributes",
-          "ToolbarOrientation",
-          "toolbarRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/toolbar",
+      "searchText": "toolbar Toolbar A container grouping buttons and controls with roving-tabindex navigation. @kovojs/ui/toolbar kovo add toolbar root item button toolbar button Arrow keys, Home, and End move roving focus through toolbar items. The rendered anatomy owns the toolbar, button role contract.",
+      "summary": "A container grouping buttons and controls with roving-tabindex navigation.",
+      "title": "Toolbar"
     },
     {
       "anatomy": {
@@ -2822,6 +1875,7 @@
           "open"
         ]
       },
+      "copyCommand": "kovo add tooltip",
       "enhancement": {
         "accessibility": "The rendered anatomy owns the tooltip role contract.",
         "keyboard": "Focus or pointer entry opens the tooltip and Escape closes it.",
@@ -2830,34 +1884,14 @@
         ],
         "tier": "scripted"
       },
+      "headlessImport": "@kovojs/headless-ui/tooltip",
+      "id": "component:tooltip",
+      "kind": "component",
       "name": "tooltip",
-      "title": "Tooltip",
-      "files": [
-        "src/tooltip.tsx"
-      ],
-      "exports": [
-        "Tooltip",
-        "TooltipTrigger",
-        "TooltipContent"
-      ],
-      "dependencies": {
-        "@kovojs/headless-ui": [
-          "tooltipContentAttributes",
-          "tooltipRootAttributes",
-          "tooltipTriggerAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
-      },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "packageImport": "@kovojs/ui/tooltip",
+      "searchText": "tooltip Tooltip A small label that appears on hover or focus to describe its trigger. @kovojs/ui/tooltip kovo add tooltip root trigger content tooltip Focus or pointer entry opens the tooltip and Escape closes it. The rendered anatomy owns the tooltip role contract.",
+      "summary": "A small label that appears on hover or focus to describe its trigger.",
+      "title": "Tooltip"
     }
   ]
 }

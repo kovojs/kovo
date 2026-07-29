@@ -11,15 +11,26 @@ pnpm add @kovojs/ui @kovojs/style @kovojs/headless-ui
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@kovojs/ui/card';
 
 export function SettingsCard() {
   return (
     <Card>
-      <h2>Settings</h2>
-      <div>
+      <CardHeader>
+        <CardTitle>Settings</CardTitle>
+        <CardDescription>Change the preferences for your account.</CardDescription>
+      </CardHeader>
+      <CardContent>
         <Button type="submit">Save changes</Button>
-      </div>
+      </CardContent>
+      <CardFooter>Your changes apply immediately.</CardFooter>
     </Card>
   );
 }

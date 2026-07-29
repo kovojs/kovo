@@ -73,7 +73,7 @@ export const galleryComponentEntries = Object.freeze([
     demoFunction: 'CardDemo',
     path: '/components/card',
     summary:
-      'A surface container that groups related content with optional header, body, and footer.',
+      'A surface container that groups related content with optional header, content, and footer.',
     title: 'Card',
     visualFixture: 'card.html.txt',
   },

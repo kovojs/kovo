@@ -256,12 +256,13 @@ export type RadioGroupKeyboardEvent = Event & { readonly key: string };
  *
  * @example
  * ```ts
- * import { radioGroupItemChecked } from '@kovojs/headless-ui/radio-group';
+ * import { radioGroupItemChecked } from './radio-group.js';
  *
  * declare const input: Parameters<typeof radioGroupItemChecked>[0];
  * const result = radioGroupItemChecked(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function radioGroupItemChecked(options: RadioGroupItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
@@ -454,13 +455,14 @@ export function setRadioGroupValue(
  *
  * @example
  * ```ts
- * import { radioGroupMoveValue } from '@kovojs/headless-ui/radio-group';
+ * import { radioGroupMoveValue } from './radio-group.js';
  *
  * declare const input: Parameters<typeof radioGroupMoveValue>[0];
  * declare const state: Parameters<typeof radioGroupMoveValue>[1];
  * const result = radioGroupMoveValue(input, state);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function radioGroupMoveValue(
   state: RadioGroupState,
   intent: NavigationIntent,

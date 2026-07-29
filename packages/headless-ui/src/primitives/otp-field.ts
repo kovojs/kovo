@@ -265,12 +265,13 @@ export type OtpFieldPasteEvent = Event & {
  *
  * @example
  * ```ts
- * import { otpFieldComplete } from '@kovojs/headless-ui/otp-field';
+ * import { otpFieldComplete } from './otp-field.js';
  *
  * declare const input: Parameters<typeof otpFieldComplete>[0];
  * const result = otpFieldComplete(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function otpFieldComplete(state: OtpFieldState): boolean {
   return normalizeOtpFieldValue(state.value, state.length).length === otpFieldLength(state.length);
 }
@@ -282,13 +283,14 @@ export function otpFieldComplete(state: OtpFieldState): boolean {
  *
  * @example
  * ```ts
- * import { otpFieldSlotValue } from '@kovojs/headless-ui/otp-field';
+ * import { otpFieldSlotValue } from './otp-field.js';
  *
  * declare const input: Parameters<typeof otpFieldSlotValue>[0];
  * declare const state: Parameters<typeof otpFieldSlotValue>[1];
  * const result = otpFieldSlotValue(input, state);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function otpFieldSlotValue(state: OtpFieldState, slotIndex: number): string {
   return (
     otpFieldChars(state.value, state.length)[normalizeOtpFieldSlotIndex(state, slotIndex)] ?? ''
@@ -520,13 +522,14 @@ export function otpFieldMoveFocus(
  *
  * @example
  * ```ts
- * import { otpFieldValueFromString } from '@kovojs/headless-ui/otp-field';
+ * import { otpFieldValueFromString } from './otp-field.js';
  *
  * declare const input: Parameters<typeof otpFieldValueFromString>[0];
  * declare const state: Parameters<typeof otpFieldValueFromString>[1];
  * const result = otpFieldValueFromString(input, state);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function otpFieldValueFromString(value: string, length?: number): string {
   return normalizeOtpFieldValue(value, length);
 }

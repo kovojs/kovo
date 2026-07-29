@@ -39,11 +39,11 @@ export function Toolbar() {
 Every styled component takes a typed `style` (or `styles`) override prop; the mechanics live in
 [Styling → Overrides](/guides/styling/#overrides).
 
-Use this mode when the versioned package behavior and styling are close to what your app needs. The
-root `@kovojs/ui` entry is reserved for package-wide helpers; component symbols live on component
-subpaths so each symbol has one public home. Styled components use the `@kovojs/style` system token
-contract by default, so changing the app theme seed changes their surface, foreground, border, and
-state colors without editing each component.
+Use this mode when the versioned package behavior and styling are close to what your app needs.
+`@kovojs/ui` deliberately has no root export: component symbols live on component subpaths so an
+import always names the component and each symbol has one public home. Styled components use the
+`@kovojs/style` system token contract by default, so changing the app theme seed changes their
+surface, foreground, border, and state colors without editing each component.
 
 Headless behavior follows the same subpath rule. `@kovojs/headless-ui` has no public root import;
 import each primitive's attribute builders from its primitive subpath:
@@ -59,6 +59,68 @@ Icons are also one glyph per subpath, with shared props at the root:
 import type { IconProps } from '@kovojs/icons';
 import { Search } from '@kovojs/icons/search';
 ```
+
+## Find a component or icon
+
+Open global search with <kbd>⌘K</kbd> (or <kbd>Ctrl K</kbd>) and type a component name, anatomy
+part, ARIA role, keyboard behavior, icon name, or import path. The index covers all 44 styled
+components and all 1,737 icon glyphs. Component results open the live fixture; icon results return
+here with their exact import path.
+
+The checked-in `catalog/component-icon-catalog.json` is the same machine-readable index for tools
+and agents. It combines two package-owned inputs under one schema:
+
+- `packages/ui/catalog.json` describes component anatomy, enhancement tier, roles, keyboard and
+  accessibility behavior, direct import, and copy command.
+- `packages/icons/catalog.json` describes every glyph and its direct import.
+
+The UI/headless generator and icon generator remain independent owners. The combined catalog is a
+discovery view, not a second source of truth.
+
+## Card anatomy
+
+Card has one stable six-part anatomy in source, package exports, copy-in output, and the catalog:
+
+```tsx
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@kovojs/ui/card';
+
+export function AccountCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account</CardTitle>
+        <CardDescription>Manage your profile and sign-in settings.</CardDescription>
+      </CardHeader>
+      <CardContent>Profile controls</CardContent>
+      <CardFooter>Last saved just now</CardFooter>
+    </Card>
+  );
+}
+```
+
+## Icons
+
+Import a glyph from its direct subpath. `IconProps` stays at the icons root because it is the one
+shared author contract; every glyph returns Kovo's canonical `ComponentRenderResult`.
+
+```tsx
+import type { IconProps } from '@kovojs/icons';
+import { ArrowRight } from '@kovojs/icons/arrow-right';
+
+export function ContinueIcon(props: IconProps) {
+  return <ArrowRight aria-label="Continue" {...props} />;
+}
+```
+
+Icons are decorative when they have no accessible name. Give a meaningful standalone icon an
+`aria-label` or `title`; do not repeat adjacent visible text.
 
 ## Copy-in components
 
@@ -252,7 +314,7 @@ its source file(s), exported symbols, and the exact public package symbols it im
 sibling files to copy alongside it). `public-packages.json` declares `@kovojs/ui` distribution
 mode as `package-and-copy-in`, so the generated registry records both the package-managed and copy-in
 paths from the same source of truth. The current registry spans 44 components,
-tracks family metadata for 3 copy-in-sensitive wrappers, and
+tracks anatomy, enhancement, keyboard, and accessibility metadata for every component, and
 limits copied source imports to `@kovojs/core`, `@kovojs/icons`, `@kovojs/server`, `@kovojs/headless-ui`, and `@kovojs/style`. This is the data
 `kovo add <component>` consumes to copy a component and its dependencies into your app. It is
 also enforced: a copy-in smoke test typechecks representative components against the public

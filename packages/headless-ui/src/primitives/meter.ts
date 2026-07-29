@@ -83,12 +83,13 @@ type MeterRegion = 'high' | 'low' | 'middle';
  *
  * @example
  * ```ts
- * import { meterValueState } from '@kovojs/headless-ui/meter';
+ * import { meterValueState } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof meterValueState>[0];
  * const result = meterValueState(input);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function meterValueState(options: MeterAttributeOptions = {}): MeterComputedState {
   const min = normalizeMeterMin(options.min);
   const max = normalizeMeterMax(options.max, min);

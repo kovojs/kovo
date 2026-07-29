@@ -14,6 +14,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
+import {
+  COMPONENT_CATALOG_SCHEMA,
+  validateComponentCatalogDocument,
+} from '../../../scripts/component-catalog-schema.mjs';
 import { primitiveComponentManifest } from './primitive-component-manifest.mjs';
 
 const pkgRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -58,6 +62,9 @@ const paths = {
   ),
   headlessPackageJson: path.join(headlessRoot, 'package.json'),
   headlessPublicDir: path.join(headlessRoot, 'src', 'public'),
+  headlessRuntimeHelperAudit: path.join(headlessRoot, 'runtime-helper-audit.json'),
+  headlessTransitionAbiAudit: path.join(headlessRoot, 'transition-abi-audit.json'),
+  uiCatalog: path.join(pkgRoot, 'catalog.json'),
   uiRegistry: path.join(pkgRoot, 'registry.json'),
   componentsGuide: componentsGuidePath,
 };
@@ -76,7 +83,14 @@ const headlessPrimitiveSubpaths = primitiveComponentManifest.headlessPrimitives.
 );
 const uiDistributionMode = uiPackageDistributionMode();
 const generatedUiRegistry = generateUiRegistry();
+const generatedUiCatalog = generateUiCatalog();
 const generatedTargets = [
+  {
+    compare: 'json',
+    label: 'packages/ui/catalog.json',
+    path: paths.uiCatalog,
+    source: `${JSON.stringify(generatedUiCatalog, null, 2)}\n`,
+  },
   {
     compare: 'json',
     label: 'packages/ui/registry.json',
@@ -100,6 +114,18 @@ const generatedTargets = [
     label: 'packages/headless-ui/src/generated.ts',
     path: paths.headlessGenerated,
     source: generateHeadlessGeneratedTs(),
+  },
+  {
+    compare: 'json',
+    label: 'packages/headless-ui/runtime-helper-audit.json',
+    path: paths.headlessRuntimeHelperAudit,
+    source: `${JSON.stringify(generateHeadlessRuntimeHelperAudit(), null, 2)}\n`,
+  },
+  {
+    compare: 'json',
+    label: 'packages/headless-ui/transition-abi-audit.json',
+    path: paths.headlessTransitionAbiAudit,
+    source: `${JSON.stringify(generateHeadlessTransitionAbiAudit(), null, 2)}\n`,
   },
   {
     compare: 'text',
@@ -287,12 +313,25 @@ function generateUiRegistryJson() {
       );
     }
 
+    const sourceParts = componentParts(name, exportedComponents);
+    if (!sameArray(entry.parts, sourceParts)) {
+      findings.push(
+        `${file}: manifest parts ${JSON.stringify(entry.parts)} do not match exported component anatomy ${JSON.stringify(sourceParts)}`,
+      );
+    }
+
     components.push({
-      family: entry.family ?? {
-        ids: [],
-        parts: [],
-        slots: [],
-        state: [],
+      anatomy: {
+        ids: entry.ids,
+        parts: entry.parts,
+        slots: entry.slots,
+        stateInputs: entry.stateInputs,
+      },
+      enhancement: {
+        accessibility: entry.accessibility,
+        keyboard: entry.keyboardBehavior,
+        roles: entry.roles,
+        tier: entry.enhancementTier,
       },
       name,
       title: exportedComponents[0] ?? pascalCase(name),
@@ -337,6 +376,56 @@ function generateUiRegistry() {
   return generateUiRegistryJson();
 }
 
+function generateUiCatalog() {
+  const entries = manifestComponents
+    .map((entry) => ({
+      anatomy: {
+        ids: entry.ids,
+        parts: entry.parts,
+        slots: entry.slots,
+        stateInputs: entry.stateInputs,
+      },
+      copyCommand: `kovo add ${entry.component}`,
+      enhancement: {
+        accessibility: entry.accessibility,
+        keyboard: entry.keyboardBehavior,
+        roles: entry.roles,
+        tier: entry.enhancementTier,
+      },
+      headlessImport: headlessPrimitiveSubpaths.includes(entry.component)
+        ? `@kovojs/headless-ui/${entry.component}`
+        : null,
+      id: `component:${entry.component}`,
+      kind: 'component',
+      name: entry.component,
+      packageImport: `@kovojs/ui/${entry.component}`,
+      searchText: [
+        entry.component,
+        entry.title,
+        entry.summary,
+        `@kovojs/ui/${entry.component}`,
+        `kovo add ${entry.component}`,
+        ...entry.parts,
+        ...entry.roles,
+        entry.keyboardBehavior,
+        entry.accessibility,
+      ].join(' '),
+      summary: entry.summary,
+      title: entry.title,
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const document = {
+    schema: COMPONENT_CATALOG_SCHEMA,
+    owner: '@kovojs/ui',
+    entries,
+  };
+  const findings = validateComponentCatalogDocument(document);
+  if (findings.length > 0) {
+    throw new Error(`Unable to generate packages/ui/catalog.json:\n${findings.join('\n')}`);
+  }
+  return document;
+}
+
 function generateComponentsGuide() {
   const current = readFileSync(paths.componentsGuide, 'utf8');
   return replaceMarkedSection(
@@ -354,7 +443,7 @@ function uiRegistryComment({ components, registryDependencies }) {
   return [
     `Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode "${uiDistributionMode}", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add.`,
     `registryDependencies lists the public packages copied source may import: ${formatPackageList(registryDependencies)}.`,
-    `dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and family metadata records manifest-owned ids, parts, slots, and state for ${countCopyInSensitiveFamilies(components)} copy-in-sensitive component families across ${components.length} components.`,
+    `dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and anatomy/enhancement metadata records manifest-owned ids, parts, slots, state inputs, roles, keyboard behavior, and enhancement tier for all ${components.length} components.`,
     'Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.',
   ].join(' ');
 }
@@ -366,7 +455,7 @@ function uiRegistryGuideSnippet({ components, registryDependencies }) {
     'sibling files to copy alongside it). `public-packages.json` declares `@kovojs/ui` distribution',
     `mode as \`${uiDistributionMode}\`, so the generated registry records both the package-managed and copy-in`,
     `paths from the same source of truth. The current registry spans ${components.length} components,`,
-    `tracks family metadata for ${countCopyInSensitiveFamilies(components)} copy-in-sensitive wrappers, and`,
+    'tracks anatomy, enhancement, keyboard, and accessibility metadata for every component, and',
     `limits copied source imports to ${formatPackageList(registryDependencies)}. This is the data`,
     '`kovo add <component>` consumes to copy a component and its dependencies into your app. It is',
     'also enforced: a copy-in smoke test typechecks representative components against the public',
@@ -386,12 +475,6 @@ function formatPackageList(packageNames) {
     .slice(0, -1)
     .map((name) => `\`${name}\``)
     .join(', ')}, and \`${packageNames.at(-1)}\``;
-}
-
-function countCopyInSensitiveFamilies(components) {
-  return components.filter((component) =>
-    Object.values(component.family).some((entries) => entries.length > 0),
-  ).length;
 }
 
 function orderedPublicPackageNames(packageNames) {
@@ -790,6 +873,97 @@ function generateHeadlessPublicFacadeTs(subpath) {
   ].join('\n');
 }
 
+function generateHeadlessRuntimeHelperAudit() {
+  const entries = primitiveComponentManifest.headlessPrimitives
+    .flatMap((primitive) => {
+      const generatedHelpers = new Set(primitive.clientHelpers ?? []);
+      return primitive.internalRuntimeHelpers.map((symbol) => ({
+        decision: generatedHelpers.has(symbol) ? 'generated-only' : 'internalize',
+        evidence: {
+          declarationTag: generatedHelpers.has(symbol) ? '@generated' : '@internal',
+          generatedAbiReference: generatedHelpers.has(symbol),
+          publicNamedImports: {
+            authoredDocs: 0,
+            authoredExamples: 0,
+            conformance: 0,
+            packageConsumers: 0,
+          },
+        },
+        reason: generatedHelpers.has(symbol)
+          ? 'Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.'
+          : 'The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.',
+        specifier: `@kovojs/headless-ui/${primitive.subpath}`,
+        symbol,
+      }));
+    })
+    .sort(
+      (left, right) =>
+        left.specifier.localeCompare(right.specifier) || left.symbol.localeCompare(right.symbol),
+    );
+  if (entries.length !== 38) {
+    throw new Error(`Headless runtime-helper audit must contain 38 entries, got ${entries.length}`);
+  }
+  return {
+    schema: 'kovo-headless-runtime-helper-audit/v1',
+    reviewedAt: '2026-07-28',
+    inventory: 'kovo-public-api-inventory/v1',
+    auditedCount: entries.length,
+    entries,
+  };
+}
+
+function generateHeadlessTransitionAbiAudit() {
+  const primitives = primitiveComponentManifest.headlessPrimitives.map((primitive) => {
+    const fileName = `packages/headless-ui/src/primitives/${primitive.subpath}.ts`;
+    const source = readFileSync(path.join(repoRoot, fileName), 'utf8');
+    const declarations = primitiveExportDeclarations(fileName, primitive.subpath, source);
+    const transitionTypes = [...declarations.values()]
+      .filter(
+        (declaration) =>
+          isTypeDeclarationKind(declaration.kind) &&
+          isTransitionMachineOnlyDeclaration(declaration.name),
+      )
+      .map((declaration) => declaration.name)
+      .sort((left, right) => left.localeCompare(right));
+    const publicExports = publicPrimitiveExportsFromSource(fileName, primitive.subpath, source);
+    const publicNames = new Set([...publicExports.types, ...publicExports.values]);
+    const facade = generateHeadlessPublicFacadeTs(primitive.subpath);
+    const publicReachable = transitionTypes.filter(
+      (name) =>
+        new RegExp(`\\b${escapeRegExp(name)}\\b`).test(facade) ||
+        publicSignatureReferences(publicNames, name, declarations),
+    );
+    return {
+      primitive: primitive.subpath,
+      transitionTypes,
+      publicReachable,
+    };
+  });
+  const generatedFacade = generateHeadlessGeneratedTs();
+  const allTransitionTypes = primitives.flatMap((entry) => entry.transitionTypes);
+  const generatedFacadeReachable = allTransitionTypes.filter((name) =>
+    new RegExp(`\\b${escapeRegExp(name)}\\b`).test(generatedFacade),
+  );
+  const publicReachable = primitives.flatMap((entry) => entry.publicReachable);
+  if (publicReachable.length > 0 || generatedFacadeReachable.length > 0) {
+    throw new Error(
+      `Transition ABI leaked through a public/generated facade: ${sorted([
+        ...publicReachable,
+        ...generatedFacadeReachable,
+      ]).join(', ')}`,
+    );
+  }
+  return {
+    schema: 'kovo-headless-transition-abi-audit/v1',
+    reviewedAt: '2026-07-28',
+    sourceDeclarationCount: allTransitionTypes.length,
+    publicReachable,
+    generatedFacadeReachable,
+    classification: 'internal primitive transition machinery',
+    primitives,
+  };
+}
+
 function staleHeadlessPublicFacadeTargets() {
   const expectedFileNames = new Set(headlessPrimitiveSubpaths.map((subpath) => `${subpath}.ts`));
   return readdirSync(paths.headlessPublicDir)
@@ -837,19 +1011,46 @@ function generateGalleryComponentManifestTs() {
 }
 
 function generateGalleryComponentCatalogTs() {
+  const entries = generatedUiCatalog.entries.map((entry) => ({
+    anatomy: entry.anatomy,
+    component: entry.name,
+    copyCommand: entry.copyCommand,
+    enhancement: entry.enhancement,
+    headlessImport: entry.headlessImport,
+    packageImport: entry.packageImport,
+    searchText: entry.searchText,
+    summary: entry.summary,
+    title: entry.title,
+  }));
   return [
     generatedSourceComment,
     '',
-    "import { galleryComponentEntries, type GalleryComponent } from './gallery-component-manifest.js';",
+    "import type { GalleryComponent } from './gallery-component-manifest.js';",
     '',
     'export interface GalleryComponentEntry {',
+    '  anatomy: {',
+    '    ids: readonly string[];',
+    '    parts: readonly string[];',
+    '    slots: readonly string[];',
+    '    stateInputs: readonly string[];',
+    '  };',
     '  component: GalleryComponent;',
+    '  copyCommand: string;',
+    '  enhancement: {',
+    '    accessibility: string;',
+    '    keyboard: string;',
+    '    roles: readonly string[];',
+    "    tier: 'none' | 'native' | 'progressive' | 'scripted';",
+    '  };',
+    '  headlessImport: string | null;',
+    '  packageImport: string;',
+    '  searchText: string;',
     '  summary: string;',
     '  title: string;',
     '}',
     '',
     'export const galleryComponentCatalog: readonly GalleryComponentEntry[] = Object.freeze(',
-    '  galleryComponentEntries.map(({ component, summary, title }) => ({ component, summary, title })),',
+    `${JSON.stringify(entries, null, 2)} as readonly GalleryComponentEntry[],`,
     ');',
     '',
   ].join('\n');
@@ -901,6 +1102,31 @@ function validateManifestDrift() {
   );
   addDuplicateFindings(findings, 'interactive demos', primitiveComponentManifest.interactiveDemos);
 
+  for (const component of primitiveComponentManifest.components) {
+    for (const field of ['ids', 'parts', 'roles', 'slots', 'stateInputs']) {
+      const values = component[field];
+      if (!Array.isArray(values) || values.some((value) => typeof value !== 'string')) {
+        findings.push(`${component.component}: ${field} must be a string array`);
+      } else {
+        addDuplicateFindings(findings, `${component.component}: ${field}`, values);
+      }
+    }
+    if (component.parts.length === 0 || component.slots.length === 0) {
+      findings.push(`${component.component}: parts and slots must not be empty`);
+    }
+    if (!['none', 'native', 'progressive', 'scripted'].includes(component.enhancementTier)) {
+      findings.push(`${component.component}: invalid enhancement tier`);
+    }
+    if (
+      typeof component.keyboardBehavior !== 'string' ||
+      component.keyboardBehavior.trim().length < 12 ||
+      typeof component.accessibility !== 'string' ||
+      component.accessibility.trim().length < 12
+    ) {
+      findings.push(`${component.component}: keyboard and accessibility contracts are required`);
+    }
+  }
+
   const generatedClientHelperWrappers = primitiveComponentManifest.headlessPrimitives.flatMap(
     (primitive) => primitive.generatedClientHelperWrappers ?? [],
   );
@@ -925,6 +1151,37 @@ function validateManifestDrift() {
     generatedClientHelperWrappers,
     clientHelperAbiExportsFromSource(readFileSync(paths.headlessClientHelperAbi, 'utf8')),
   );
+
+  const auditedRuntimeHelpers = primitiveComponentManifest.headlessPrimitives.flatMap(
+    (primitive) => primitive.internalRuntimeHelpers,
+  );
+  addDuplicateFindings(findings, 'audited headless runtime helpers', auditedRuntimeHelpers);
+  if (auditedRuntimeHelpers.length !== 38) {
+    findings.push(
+      `audited headless runtime helper count must remain 38 until a new evidence review, got ${auditedRuntimeHelpers.length}`,
+    );
+  }
+  for (const primitive of primitiveComponentManifest.headlessPrimitives) {
+    const primitivePath = path.join(headlessRoot, 'src', 'primitives', `${primitive.subpath}.ts`);
+    if (!existsSync(primitivePath)) continue;
+    const declarations = primitiveExportDeclarations(
+      `packages/headless-ui/src/primitives/${primitive.subpath}.ts`,
+      primitive.subpath,
+      readFileSync(primitivePath, 'utf8'),
+    );
+    for (const helper of primitive.internalRuntimeHelpers) {
+      const declaration = declarations.get(helper);
+      const generatedOnly = new Set(primitive.clientHelpers ?? []).has(helper);
+      const expectedTag = generatedOnly ? '@generated' : '@internal';
+      if (declaration === undefined) {
+        findings.push(`${primitive.subpath}: audited runtime helper ${helper} no longer exists`);
+      } else if (!declaration.jsdoc?.includes(expectedTag)) {
+        findings.push(
+          `${primitive.subpath}: audited runtime helper ${helper} must carry an immediate ${expectedTag} declaration tag`,
+        );
+      }
+    }
+  }
 
   const headlessPackageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
   const headlessExportSubpaths = Object.keys(headlessPackageJson.exports)
@@ -1059,6 +1316,19 @@ function bindingToLeafName(binding) {
     .toLowerCase();
 }
 
+function componentParts(component, bindings) {
+  const prefix = pascalCase(component);
+  return [
+    ...new Set(
+      bindings.map((binding) => {
+        if (binding === prefix) return 'root';
+        const suffix = binding.startsWith(prefix) ? binding.slice(prefix.length) : binding;
+        return `${suffix[0]?.toLowerCase() ?? ''}${suffix.slice(1)}`;
+      }),
+    ),
+  ];
+}
+
 /** Exported `component({ ... })` definitions in a component file. */
 function parseExportedComponents(source) {
   const re = /export const (\w+) = component\s*\(\s*\{/g;
@@ -1090,7 +1360,9 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
     [...declarations.values()]
       .filter(
         (declaration) =>
-          declaration.isPublic && !isTransitionMachineOnlyDeclaration(declaration.name),
+          declaration.isPublic &&
+          !isTransitionMachineOnlyDeclaration(declaration.name) &&
+          !internalRuntimeHelperNames(subpath).has(declaration.name),
       )
       .map((declaration) => declaration.name),
   );
@@ -1119,6 +1391,16 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
   }
 
   return { types, values };
+}
+
+function internalRuntimeHelperNames(subpath) {
+  const primitive = primitiveComponentManifest.headlessPrimitives.find(
+    (entry) => entry.subpath === subpath,
+  );
+  if (primitive === undefined) {
+    throw new Error(`Missing headless primitive manifest entry for ${subpath}`);
+  }
+  return new Set(primitive.internalRuntimeHelpers);
 }
 
 function isTransitionMachineOnlyDeclaration(name) {
@@ -1151,31 +1433,83 @@ function isTransitionMachineOnlyDeclaration(name) {
 function primitiveExportDeclarations(fileName, subpath, source) {
   const exportRe = /^\s*export\s+(type|interface|function|const|class|enum)\s+(\w+)/gm;
   const matches = [...source.matchAll(exportRe)];
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const astDeclarations = exportedAstDeclarations(sourceFile);
   const declarations = new Map();
 
-  for (let index = 0; index < matches.length; index += 1) {
-    const match = matches[index];
+  for (const match of matches) {
     const kind = match[1];
     const name = match[2];
     if (kind === undefined || name === undefined || match.index === undefined) continue;
 
+    const astDeclaration = astDeclarations.get(name);
+    if (astDeclaration === undefined) {
+      throw new Error(`Unable to resolve exported declaration ${name} from ${fileName}`);
+    }
     const jsdoc = immediateJsdocBefore(source, match.index);
-    const declarationEnd = matches[index + 1]?.index ?? source.length;
-    const fullDeclarationSource = source.slice(match.index, declarationEnd);
+    const fullDeclarationSource = source.slice(match.index, astDeclaration.node.end);
     const isImplementationOnly =
-      jsdoc?.includes('@internal') === true || jsdoc?.includes('@kovoPrimitiveHandler') === true;
+      jsdoc?.includes('@internal') === true ||
+      jsdoc?.includes('@generated') === true ||
+      jsdoc?.includes('@kovoPrimitiveHandler') === true;
     declarations.set(name, {
       fullDeclarationSource,
       isImplementationOnly,
       isPublic: jsdoc?.includes(`@kovojs/headless-ui/${subpath}`) === true && !isImplementationOnly,
       kind,
       name,
-      publicSignatureSource: publicSignatureSource(kind, fullDeclarationSource),
+      publicSignatureSource: source.slice(match.index, astDeclaration.signatureEnd),
       jsdoc,
     });
   }
 
   return declarations;
+}
+
+function exportedAstDeclarations(sourceFile) {
+  const declarations = new Map();
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement)) continue;
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        declarations.set(declaration.name.text, {
+          node: statement,
+          signatureEnd: declaration.initializer?.getStart(sourceFile) ?? statement.end,
+        });
+      }
+      continue;
+    }
+
+    if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name !== undefined
+    ) {
+      declarations.set(statement.name.text, {
+        node: statement,
+        signatureEnd:
+          ts.isFunctionDeclaration(statement) && statement.body !== undefined
+            ? statement.body.getStart(sourceFile)
+            : statement.end,
+      });
+    }
+  }
+  return declarations;
+}
+
+function hasExportModifier(node) {
+  return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
 }
 
 function immediateJsdocBefore(source, exportIndex) {
@@ -1194,20 +1528,6 @@ function publicSignatureReferences(publicNames, candidateName, declarations) {
     if (declaration !== undefined && pattern.test(declaration.publicSignatureSource)) return true;
   }
   return false;
-}
-
-function publicSignatureSource(kind, declarationSource) {
-  if (kind === 'function') {
-    const bodyIndex = declarationSource.indexOf('{');
-    return bodyIndex === -1 ? declarationSource : declarationSource.slice(0, bodyIndex);
-  }
-  if (kind === 'const') {
-    const initializerIndex = declarationSource.indexOf('=');
-    return initializerIndex === -1
-      ? declarationSource
-      : declarationSource.slice(0, initializerIndex);
-  }
-  return declarationSource;
 }
 
 function isTypeDeclarationKind(kind) {

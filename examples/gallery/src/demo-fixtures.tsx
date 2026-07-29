@@ -77,7 +77,14 @@ import {
   BreadcrumbSeparator,
 } from '@kovojs/ui/breadcrumb';
 import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@kovojs/ui/card';
 import {
   CheckboxGroup,
   CheckboxGroupControl,
@@ -640,12 +647,27 @@ export function ButtonDemo(): string {
 }
 
 export function CardDemo(): string {
+  const anatomy =
+    CardHeader.definition.render({
+      children:
+        CardTitle.definition.render({ children: 'Release candidate' }) +
+        CardDescription.definition.render({
+          children: 'Security review and package checks are complete.',
+        }),
+    }) +
+    CardContent.definition.render({
+      children: 'Ready for the production deployment window.',
+    }) +
+    CardFooter.definition.render({
+      children: 'Last verified just now',
+    });
+
   return (
     <section data-gallery-demo="card">
-      <p data-demo-summary="no-js">Card is pure markup around authored TSX children.</p>
-      <div data-ui-demo="card">
-        {Card.definition.render({ children: '<h2>Release candidate</h2><p>Ready for audit.</p>' })}
-      </div>
+      <p data-demo-summary="no-js">
+        Card exposes one header, title, description, content, and footer anatomy in pure markup.
+      </p>
+      <div data-ui-demo="card">{Card.definition.render({ children: anatomy })}</div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
         dataState: 'not emitted',

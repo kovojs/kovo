@@ -423,12 +423,13 @@ export type ComboboxKeyboardResult =
  *
  * @example
  * ```ts
- * import { comboboxOptionSelected } from '@kovojs/headless-ui/combobox';
+ * import { comboboxOptionSelected } from './combobox.js';
  *
  * declare const input: Parameters<typeof comboboxOptionSelected>[0];
  * const result = comboboxOptionSelected(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
@@ -440,12 +441,13 @@ export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions):
  *
  * @example
  * ```ts
- * import { comboboxOptionHighlighted } from '@kovojs/headless-ui/combobox';
+ * import { comboboxOptionHighlighted } from './combobox.js';
  *
  * declare const input: Parameters<typeof comboboxOptionHighlighted>[0];
  * const result = comboboxOptionHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function comboboxOptionHighlighted(options: ComboboxOptionAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
@@ -477,12 +479,13 @@ export function comboboxValueText(state: ComboboxState): string {
  *
  * @example
  * ```ts
- * import { comboboxFilteredItems } from '@kovojs/headless-ui/combobox';
+ * import { comboboxFilteredItems } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof comboboxFilteredItems>[0];
  * const result = comboboxFilteredItems(input);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxItem[] {
   const query = normalizeComboboxQuery(state.value);
   return filterCollection({

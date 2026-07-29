@@ -354,12 +354,13 @@ export interface SliderPointerDragOptions extends SliderChangeOptions {
  *
  * @example
  * ```ts
- * import { sliderValueState } from '@kovojs/headless-ui/slider';
+ * import { sliderValueState } from './slider.js';
  *
  * declare const input: Parameters<typeof sliderValueState>[0];
  * const result = sliderValueState(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function sliderValueState(options: SliderState = {}): SliderComputedState {
   const min = normalizeSliderMin(options.min);
   const max = normalizeSliderMax(options.max, min);

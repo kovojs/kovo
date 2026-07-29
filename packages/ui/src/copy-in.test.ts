@@ -50,6 +50,7 @@ function linkKovoDep(nodeModules: string, pkg: string): void {
 const COMPONENTS = [
   { file: 'alert-dialog.tsx', label: 'overlay + @kovojs/icons X close glyph' },
   { file: 'button.tsx', label: 'static (no headless behavior)' },
+  { file: 'card.tsx', label: 'six-part structural anatomy' },
   { file: 'hover-card.tsx', label: 'overlay slot overrides + href sanitization' },
   { file: 'popover.tsx', label: 'overlay slot overrides + native popover wiring' },
   { file: 'radio-group.tsx', label: 'headless behavior + StyleX slot overrides' },
@@ -149,11 +150,17 @@ describe('@kovojs/ui copy-in model', () => {
       components: {
         name: string;
         dependencies: Record<string, unknown>;
-        family: {
+        anatomy: {
           ids: string[];
           parts: string[];
           slots: string[];
-          state: string[];
+          stateInputs: string[];
+        };
+        enhancement: {
+          accessibility: string;
+          keyboard: string;
+          roles: string[];
+          tier: string;
         };
         uiComponents: string[];
       }[];
@@ -174,6 +181,15 @@ describe('@kovojs/ui copy-in model', () => {
     expect(uiPackage?.distributionMode).toBe(registry.distributionMode);
     expect(registry.components.length).toBeGreaterThan(0);
     for (const component of registry.components) {
+      expect(component.anatomy.parts.length, `${component.name} parts`).toBeGreaterThan(0);
+      expect(component.anatomy.slots.length, `${component.name} slots`).toBeGreaterThan(0);
+      expect(component.enhancement.keyboard.length, `${component.name} keyboard`).toBeGreaterThan(
+        12,
+      );
+      expect(
+        component.enhancement.accessibility.length,
+        `${component.name} accessibility`,
+      ).toBeGreaterThan(12);
       for (const dep of Object.keys(component.dependencies)) {
         // An `other` bucket would hold a non-allowlisted import — a real finding.
         expect(PUBLIC.has(dep), `${component.name} depends on non-public "${dep}"`).toBe(true);
@@ -181,63 +197,27 @@ describe('@kovojs/ui copy-in model', () => {
     }
   });
 
-  it('records explicit family metadata for copy-in-sensitive component families', () => {
+  it('records explicit anatomy and enhancement metadata for all 44 components', () => {
     const registry = JSON.parse(readFileSync(join(pkgRoot, 'registry.json'), 'utf8')) as {
       components: {
-        family: {
+        anatomy: {
           ids: string[];
           parts: string[];
           slots: string[];
-          state: string[];
+          stateInputs: string[];
         };
         name: string;
       }[];
     };
-    const byName = new Map(registry.components.map((entry) => [entry.name, entry.family]));
+    const byName = new Map(registry.components.map((entry) => [entry.name, entry.anatomy]));
 
-    expect(byName.get('select')).toEqual({
-      ids: ['descriptionId', 'errorId', 'id', 'labelledBy', 'listboxId'],
-      parts: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
-      slots: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
-      state: [
-        'disabled',
-        'form',
-        'highlightedValue',
-        'invalid',
-        'items',
-        'listboxId',
-        'name',
-        'open',
-        'placeholder',
-        'required',
-        'value',
-      ],
-    });
-    expect(byName.get('radio-group')).toEqual({
-      ids: ['controlId', 'descriptionId', 'errorId', 'id', 'labelledBy'],
-      parts: ['item', 'label', 'radio', 'radioControl', 'root'],
-      slots: ['item', 'label', 'radio', 'radioControl', 'root'],
-      state: [
-        'descriptionId',
-        'dir',
-        'disabled',
-        'errorId',
-        'form',
-        'invalid',
-        'items',
-        'loop',
-        'name',
-        'orientation',
-        'required',
-        'value',
-      ],
-    });
-    expect(byName.get('table')).toEqual({
+    expect(byName.get('card')).toEqual({
       ids: [],
-      parts: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
-      slots: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
-      state: [],
+      parts: ['root', 'header', 'title', 'description', 'content', 'footer'],
+      slots: ['root', 'header', 'title', 'description', 'content', 'footer'],
+      stateInputs: [],
     });
+    expect(byName.size).toBe(44);
   });
 
   it('keeps the components guide aligned with the explicit UI distribution mode', () => {

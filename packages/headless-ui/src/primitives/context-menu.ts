@@ -641,12 +641,13 @@ export function contextMenuSeparatorAttributes(
  *
  * @example
  * ```ts
- * import { contextMenuItemHighlighted } from '@kovojs/headless-ui/context-menu';
+ * import { contextMenuItemHighlighted } from './context-menu.js';
  *
  * declare const input: Parameters<typeof contextMenuItemHighlighted>[0];
  * const result = contextMenuItemHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function contextMenuItemHighlighted(options: ContextMenuItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
@@ -1060,7 +1061,7 @@ export function contextMenuPointFromEvent(event: ContextMenuTriggerEvent): Conte
  *
  * @example
  * ```ts
- * import { contextMenuFocusElement } from '@kovojs/headless-ui/context-menu';
+ * import { contextMenuFocusElement } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof contextMenuFocusElement>[0];
  * declare const state: Parameters<typeof contextMenuFocusElement>[1];
@@ -1068,6 +1069,7 @@ export function contextMenuPointFromEvent(event: ContextMenuTriggerEvent): Conte
  * const result = contextMenuFocusElement(input, state, options);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function contextMenuFocusElement(
   event: ContextMenuFocusEvent,
   id: string | undefined,

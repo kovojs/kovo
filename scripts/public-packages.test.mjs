@@ -167,8 +167,9 @@ describe('public-packages manifest', () => {
     expect(ui?.kind).toBe('library');
     expect(ui?.distributionMode).toBe('package-and-copy-in');
     expect(publicEntrySubpaths(ui)).toEqual(
-      expect.arrayContaining(['.', './button', './select', './dialog']),
+      expect.arrayContaining(['./button', './select', './dialog']),
     );
+    expect(publicEntrySubpaths(ui)).not.toContain('.');
     expect(generatedEntrySubpaths(ui)).toEqual([]);
     expect(internalEntrySubpaths(ui)).toEqual([]);
 

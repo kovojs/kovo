@@ -479,12 +479,13 @@ export type AutocompleteKeyboardResult =
  *
  * @example
  * ```ts
- * import { autocompleteOptionSelected } from '@kovojs/headless-ui/autocomplete';
+ * import { autocompleteOptionSelected } from './autocomplete.js';
  *
  * declare const input: Parameters<typeof autocompleteOptionSelected>[0];
  * const result = autocompleteOptionSelected(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function autocompleteOptionSelected(options: AutocompleteOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
@@ -496,12 +497,13 @@ export function autocompleteOptionSelected(options: AutocompleteOptionAttributeO
  *
  * @example
  * ```ts
- * import { autocompleteOptionHighlighted } from '@kovojs/headless-ui/autocomplete';
+ * import { autocompleteOptionHighlighted } from './autocomplete.js';
  *
  * declare const input: Parameters<typeof autocompleteOptionHighlighted>[0];
  * const result = autocompleteOptionHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function autocompleteOptionHighlighted(
   options: AutocompleteOptionAttributeOptions,
 ): boolean {
@@ -535,12 +537,13 @@ export function autocompleteValueText(state: AutocompleteState): string {
  *
  * @example
  * ```ts
- * import { autocompleteSuggestions } from '@kovojs/headless-ui/autocomplete';
+ * import { autocompleteSuggestions } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof autocompleteSuggestions>[0];
  * const result = autocompleteSuggestions(input);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function autocompleteSuggestions(state: AutocompleteState): readonly AutocompleteItem[] {
   const query = (state.inputValue ?? state.value ?? '').trim().toLocaleLowerCase();
   return filterCollection({

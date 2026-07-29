@@ -2169,7 +2169,6 @@
       "distributionMode": "package-and-copy-in",
       "apiBoundary": {
         "public": [
-          ".",
           "./accordion",
           "./alert",
           "./alert-dialog",

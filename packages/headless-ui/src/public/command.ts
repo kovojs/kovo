@@ -9,10 +9,7 @@ export {
   commandListboxAttributes,
   commandItemAttributes,
   commandEmptyAttributes,
-  commandItemHighlighted,
-  commandItemSelected,
   commandValueText,
-  commandFilteredItems,
 } from '../primitives/command.js';
 export type {
   CommandItem,

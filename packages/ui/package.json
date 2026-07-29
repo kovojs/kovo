@@ -6,7 +6,9 @@
     "url": "git+https://github.com/kovojs/kovo.git"
   },
   "files": [
+    "catalog.json",
     "dist",
+    "registry.json",
     "src/accordion.tsx",
     "src/alert-dialog.tsx",
     "src/alert.tsx",
@@ -58,7 +60,6 @@
   ],
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx",
     "./accordion": "./src/accordion.tsx",
     "./alert": "./src/alert.tsx",
     "./alert-dialog": "./src/alert-dialog.tsx",
@@ -106,10 +107,6 @@
   },
   "publishConfig": {
     "exports": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
       "./accordion": {
         "types": "./dist/accordion.d.mts",
         "default": "./dist/accordion.mjs"
@@ -289,7 +286,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/accordion.tsx src/alert-dialog.tsx src/alert.tsx src/autocomplete.tsx src/avatar.tsx src/badge.tsx src/breadcrumb.tsx src/button.tsx src/card.tsx src/checkbox-group.tsx src/checkbox.tsx src/collapsible.tsx src/combobox.tsx src/command.tsx src/context-menu.tsx src/dialog.tsx src/disclosure.tsx src/drawer.tsx src/dropdown-menu.tsx src/field.tsx src/hover-card.tsx src/index.tsx src/kbd.tsx src/menubar.tsx src/meter.tsx src/navigation-menu.tsx src/number-field.tsx src/otp-field.tsx src/popover.tsx src/progress.tsx src/radio-group.tsx src/scroll-area.tsx src/select.tsx src/separator.tsx src/sheet.tsx src/skeleton.tsx src/slider.tsx src/switch.tsx src/table.tsx src/tabs.tsx src/toast.tsx src/toggle-group.tsx src/toggle.tsx src/toolbar.tsx src/tooltip.tsx --dts",
+    "build:dist": "vp pack src/accordion.tsx src/alert-dialog.tsx src/alert.tsx src/autocomplete.tsx src/avatar.tsx src/badge.tsx src/breadcrumb.tsx src/button.tsx src/card.tsx src/checkbox-group.tsx src/checkbox.tsx src/collapsible.tsx src/combobox.tsx src/command.tsx src/context-menu.tsx src/dialog.tsx src/disclosure.tsx src/drawer.tsx src/dropdown-menu.tsx src/field.tsx src/hover-card.tsx src/kbd.tsx src/menubar.tsx src/meter.tsx src/navigation-menu.tsx src/number-field.tsx src/otp-field.tsx src/popover.tsx src/progress.tsx src/radio-group.tsx src/scroll-area.tsx src/select.tsx src/separator.tsx src/sheet.tsx src/skeleton.tsx src/slider.tsx src/switch.tsx src/table.tsx src/tabs.tsx src/toast.tsx src/toggle-group.tsx src/toggle.tsx src/toolbar.tsx src/tooltip.tsx --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
@@ -317,7 +314,7 @@
       "badge": "sha256-Ljpeft2k8VKi8USzcjJxDQjYQ2rG5tGDYBrJK-MzFfI",
       "breadcrumb": "sha256-eon1iQXCnnASEtO2QoUaN9JqA7uOGPrNkSHLwQb7LIA",
       "button": "sha256-POZJkE5M6hHSw9OHADMO4EYo0zqZ0zidKqs2zMQQy0w",
-      "card": "sha256-s4n2GU49UbJIXWoCk00KLVhd7sJ4r69-8Nyyy1Pe61E",
+      "card": "sha256-S3FBY0goFcrWSV2ZoDegS-iGIDFlxsNouy43b8shUXg",
       "checkbox": "sha256-l2EA6YBtYjyZvC8frrGpV0FEADF7XRvFECuYuZAb_Sk",
       "checkbox-group": "sha256-ncsB-R9e_GUzV1APz8oHxeQ-tfKvIe7S80CQ5UBHwIs",
       "collapsible": "sha256-FjARxeXcZINVAnKW26ld5ICaJN8oHUZjuiOtIUwdJ8I",

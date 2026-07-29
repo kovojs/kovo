@@ -533,12 +533,13 @@ export function scrollAreaCornerAttributes(
  *
  * @example
  * ```ts
- * import { scrollAreaScrollbarState } from '@kovojs/headless-ui/scroll-area';
+ * import { scrollAreaScrollbarState } from './scroll-area.js';
  *
  * declare const input: Parameters<typeof scrollAreaScrollbarState>[0];
  * const result = scrollAreaScrollbarState(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function scrollAreaScrollbarState(
   options: ScrollAreaScrollbarAttributeOptions = {},
 ): ScrollAreaVisibilityState {
@@ -557,12 +558,13 @@ export function scrollAreaScrollbarState(
  *
  * @example
  * ```ts
- * import { scrollAreaCornerState } from '@kovojs/headless-ui/scroll-area';
+ * import { scrollAreaCornerState } from './scroll-area.js';
  *
  * declare const input: Parameters<typeof scrollAreaCornerState>[0];
  * const result = scrollAreaCornerState(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function scrollAreaCornerState(
   options: ScrollAreaCornerAttributeOptions = {},
 ): ScrollAreaVisibilityState {
@@ -579,13 +581,14 @@ export function scrollAreaCornerState(
  *
  * @example
  * ```ts
- * import { scrollAreaViewportState } from '@kovojs/headless-ui/scroll-area';
+ * import { scrollAreaViewportState } from './scroll-area.js';
  *
  * declare const input: Parameters<typeof scrollAreaViewportState>[0];
  * declare const state: Parameters<typeof scrollAreaViewportState>[1];
  * const result = scrollAreaViewportState(input, state);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function scrollAreaViewportState(
   target: ScrollAreaViewportTarget,
   state: ScrollAreaState = {},
@@ -635,13 +638,14 @@ export function scrollAreaViewportState(
  *
  * @example
  * ```ts
- * import { scrollAreaThumbGeometry } from '@kovojs/headless-ui/scroll-area';
+ * import { scrollAreaThumbGeometry } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof scrollAreaThumbGeometry>[0];
  * declare const state: Parameters<typeof scrollAreaThumbGeometry>[1];
  * const result = scrollAreaThumbGeometry(input, state);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function scrollAreaThumbGeometry(
   target: ScrollAreaViewportTarget,
   options: ScrollAreaThumbGeometryOptions = {},

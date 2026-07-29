@@ -252,12 +252,13 @@ export type ToggleGroupKeyboardEvent = Event & { readonly key: string };
  *
  * @example
  * ```ts
- * import { toggleGroupItemPressed } from '@kovojs/headless-ui/toggle-group';
+ * import { toggleGroupItemPressed } from './toggle-group.js';
  *
  * declare const input: Parameters<typeof toggleGroupItemPressed>[0];
  * const result = toggleGroupItemPressed(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function toggleGroupItemPressed(options: ToggleGroupItemAttributeOptions): boolean {
   if (toggleGroupType(options) === 'multiple') {
     return Array.isArray(options.value) && options.value.includes(options.itemValue);

@@ -895,7 +895,10 @@ describe('gallery demo fixtures', () => {
     expect(breadcrumb.html).toContain('data-orientation="horizontal" role="none"');
 
     expect(card.html).toMatchSnapshot('card demo html');
-    expect(card.html).toContain('<h2>Release candidate</h2>');
+    expect(card.html).toContain('>Release candidate</h3>');
+    expect(card.html).toContain('>Security review and package checks are complete.</p>');
+    expect(card.html).toContain('>Ready for the production deployment window.</div>');
+    expect(card.html).toContain('>Last verified just now</footer>');
 
     expect(checkboxGroup.html).toContain('data-ui-demo="checkbox-group"');
     expect(checkboxGroup.html).toContain('data-style-src="checkbox-group.tsx#root"');

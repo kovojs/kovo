@@ -586,12 +586,13 @@ export function menubarSeparatorAttributes(
  *
  * @example
  * ```ts
- * import { menubarItemHighlighted } from '@kovojs/headless-ui/menubar';
+ * import { menubarItemHighlighted } from './menubar.js';
  *
  * declare const input: Parameters<typeof menubarItemHighlighted>[0];
  * const result = menubarItemHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function menubarItemHighlighted(options: MenubarItemAttributeOptions): boolean {
   return options.activeValue === options.itemValue;
 }
@@ -603,12 +604,13 @@ export function menubarItemHighlighted(options: MenubarItemAttributeOptions): bo
  *
  * @example
  * ```ts
- * import { menubarItemOpen } from '@kovojs/headless-ui/menubar';
+ * import { menubarItemOpen } from './menubar.js';
  *
  * declare const input: Parameters<typeof menubarItemOpen>[0];
  * const result = menubarItemOpen(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function menubarItemOpen(options: MenubarItemAttributeOptions): boolean {
   return options.openValue === options.itemValue;
 }
@@ -1008,7 +1010,7 @@ export function menubarKeyDown(
  *
  * @example
  * ```ts
- * import { menubarFocusElement } from '@kovojs/headless-ui/menubar';
+ * import { menubarFocusElement } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof menubarFocusElement>[0];
  * declare const state: Parameters<typeof menubarFocusElement>[1];
@@ -1016,6 +1018,7 @@ export function menubarKeyDown(
  * const result = menubarFocusElement(input, state, options);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function menubarFocusElement(
   event: MenubarFocusEvent,
   id: string | undefined,

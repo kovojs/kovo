@@ -1,6 +1,6 @@
 // Source of truth for UI copy-in, headless generated ABI, and gallery fixture registries.
 
-export const primitiveComponentManifest = {
+const primitiveComponentManifestSource = {
   components: [
     {
       component: 'accordion',
@@ -49,7 +49,7 @@ export const primitiveComponentManifest = {
     {
       component: 'card',
       summary:
-        'A surface container that groups related content with optional header, body, and footer.',
+        'A surface container that groups related content with optional header, content, and footer.',
       title: 'Card',
     },
     {
@@ -158,25 +158,6 @@ export const primitiveComponentManifest = {
     },
     {
       component: 'radio-group',
-      family: {
-        ids: ['controlId', 'descriptionId', 'errorId', 'id', 'labelledBy'],
-        parts: ['item', 'label', 'radio', 'radioControl', 'root'],
-        slots: ['item', 'label', 'radio', 'radioControl', 'root'],
-        state: [
-          'descriptionId',
-          'dir',
-          'disabled',
-          'errorId',
-          'form',
-          'invalid',
-          'items',
-          'loop',
-          'name',
-          'orientation',
-          'required',
-          'value',
-        ],
-      },
       summary: 'A set of mutually exclusive options where exactly one is selected.',
       title: 'Radio Group',
     },
@@ -187,24 +168,6 @@ export const primitiveComponentManifest = {
     },
     {
       component: 'select',
-      family: {
-        ids: ['descriptionId', 'errorId', 'id', 'labelledBy', 'listboxId'],
-        parts: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
-        slots: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
-        state: [
-          'disabled',
-          'form',
-          'highlightedValue',
-          'invalid',
-          'items',
-          'listboxId',
-          'name',
-          'open',
-          'placeholder',
-          'required',
-          'value',
-        ],
-      },
       summary: 'A trigger that opens a listbox to choose one option, with a native fallback.',
       title: 'Select',
     },
@@ -235,12 +198,6 @@ export const primitiveComponentManifest = {
     },
     {
       component: 'table',
-      family: {
-        ids: [],
-        parts: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
-        slots: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
-        state: [],
-      },
       summary: 'A semantic data table with header, body, and styled rows.',
       title: 'Table',
     },
@@ -557,4 +514,411 @@ export const primitiveComponentManifest = {
     'toggle-group-demo',
     'tooltip-demo',
   ],
+};
+
+const nativeKeyboard =
+  'No custom keyboard behavior; the rendered native elements keep their platform behavior.';
+
+function componentContract(
+  parts,
+  {
+    accessibility,
+    enhancementTier = 'none',
+    ids = [],
+    keyboardBehavior = nativeKeyboard,
+    roles = [],
+    slots = parts,
+    stateInputs = [],
+  } = {},
+) {
+  return {
+    accessibility:
+      accessibility ??
+      (roles.length > 0
+        ? `The rendered anatomy owns the ${roles.join(', ')} role contract.`
+        : 'The rendered semantic HTML remains the accessibility contract.'),
+    enhancementTier,
+    ids,
+    keyboardBehavior,
+    parts,
+    roles,
+    slots,
+    stateInputs,
+  };
+}
+
+const componentContracts = {
+  accordion: componentContract(['root', 'item', 'header', 'trigger', 'content'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior:
+      'Enter or Space toggles an item; Arrow keys, Home, and End move focus between triggers.',
+    roles: ['button', 'region'],
+    stateInputs: ['disabled', 'open', 'orientation', 'type', 'value'],
+  }),
+  alert: componentContract(['root'], {
+    accessibility: 'The status message is exposed through the alert role without client code.',
+    roles: ['alert'],
+  }),
+  'alert-dialog': componentContract(
+    ['root', 'trigger', 'content', 'cancel', 'action', 'header', 'title', 'description', 'footer'],
+    {
+      enhancementTier: 'progressive',
+      ids: ['contentId', 'descriptionId', 'titleId', 'triggerId'],
+      keyboardBehavior:
+        'Enter or Space opens and activates controls; Tab stays in the modal and Escape cancels it.',
+      roles: ['alertdialog', 'button'],
+      stateInputs: ['actionIntent', 'disabled', 'open'],
+    },
+  ),
+  autocomplete: componentContract(['root', 'input', 'list', 'option', 'value'], {
+    enhancementTier: 'scripted',
+    ids: ['inputId', 'listboxId'],
+    keyboardBehavior:
+      'Arrow keys move the active option, Enter selects it, and Escape closes suggestions.',
+    roles: ['combobox', 'listbox', 'option'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'open', 'value'],
+  }),
+  avatar: componentContract(['root', 'image', 'fallback'], {
+    enhancementTier: 'progressive',
+    keyboardBehavior: nativeKeyboard,
+    roles: ['img'],
+    stateInputs: ['status'],
+  }),
+  badge: componentContract(['root']),
+  breadcrumb: componentContract(['root', 'item', 'link', 'separator'], {
+    enhancementTier: 'native',
+    ids: ['currentId'],
+    roles: ['navigation', 'list'],
+    stateInputs: ['current'],
+  }),
+  button: componentContract(['root'], {
+    enhancementTier: 'native',
+    roles: ['button'],
+    stateInputs: ['disabled', 'loading'],
+  }),
+  card: componentContract(['root', 'header', 'title', 'description', 'content', 'footer']),
+  checkbox: componentContract(['root'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior: 'Space toggles the checkbox while disabled controls remain inert.',
+    roles: ['checkbox'],
+    stateInputs: ['checked', 'disabled', 'invalid', 'required'],
+  }),
+  'checkbox-group': componentContract(['root', 'item', 'control', 'label'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior:
+      'Space toggles the focused item; Arrow keys can move roving focus when configured.',
+    roles: ['group', 'checkbox'],
+    stateInputs: ['disabled', 'items', 'orientation', 'required', 'value'],
+  }),
+  collapsible: componentContract(['root', 'trigger', 'content'], {
+    enhancementTier: 'native',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior: 'Enter or Space toggles the native details disclosure.',
+    roles: ['button'],
+    stateInputs: ['disabled', 'open'],
+  }),
+  combobox: componentContract(['root', 'input', 'listbox', 'option', 'value'], {
+    enhancementTier: 'scripted',
+    ids: ['inputId', 'listboxId'],
+    keyboardBehavior:
+      'Arrow keys move the active option, Enter selects it, and Escape closes the listbox.',
+    roles: ['combobox', 'listbox', 'option'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'open', 'value'],
+  }),
+  command: componentContract(
+    ['root', 'trigger', 'dialog', 'input', 'listbox', 'item', 'close', 'empty', 'value'],
+    {
+      enhancementTier: 'progressive',
+      ids: ['dialogId', 'inputId', 'listboxId'],
+      keyboardBehavior:
+        'Arrow keys move the active command, Enter runs it, and Escape closes the palette.',
+      roles: ['dialog', 'combobox', 'listbox', 'option'],
+      stateInputs: ['disabled', 'highlightedValue', 'items', 'open', 'value'],
+    },
+  ),
+  'context-menu': componentContract(['root', 'trigger', 'content', 'item', 'group', 'separator'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior:
+      'Context Menu or Shift+F10 opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.',
+    roles: ['menu', 'menuitem', 'group', 'separator'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'open', 'point'],
+  }),
+  dialog: componentContract(
+    ['root', 'trigger', 'content', 'close', 'closeX', 'header', 'title', 'description'],
+    {
+      enhancementTier: 'progressive',
+      ids: ['contentId', 'descriptionId', 'titleId', 'triggerId'],
+      keyboardBehavior:
+        'Enter or Space opens controls; Tab stays inside the modal and Escape closes it.',
+      roles: ['dialog', 'button'],
+      stateInputs: ['disabled', 'open'],
+    },
+  ),
+  disclosure: componentContract(['root', 'trigger', 'content'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior: 'Enter or Space toggles the controlled region.',
+    roles: ['button', 'region'],
+    stateInputs: ['disabled', 'open'],
+  }),
+  drawer: componentContract(
+    ['root', 'trigger', 'content', 'handle', 'header', 'title', 'description', 'close'],
+    {
+      enhancementTier: 'progressive',
+      ids: ['contentId', 'descriptionId', 'titleId', 'triggerId'],
+      keyboardBehavior: 'Enter or Space opens controls; Tab is contained and Escape closes.',
+      roles: ['dialog', 'button'],
+      stateInputs: ['disabled', 'open', 'side'],
+    },
+  ),
+  'dropdown-menu': componentContract(['root', 'trigger', 'content', 'item', 'group', 'separator'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior:
+      'Enter or Space opens; Arrow keys, Home, End, typeahead, Enter, and Escape operate the menu.',
+    roles: ['menu', 'menuitem', 'group', 'separator'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'open'],
+  }),
+  field: componentContract(
+    [
+      'root',
+      'label',
+      'control',
+      'textarea',
+      'select',
+      'selectOption',
+      'description',
+      'errorMessage',
+      'set',
+      'setLegend',
+    ],
+    {
+      enhancementTier: 'native',
+      ids: ['controlId', 'descriptionId', 'errorId', 'labelId'],
+      roles: ['group'],
+      stateInputs: ['disabled', 'invalid', 'required'],
+    },
+  ),
+  'hover-card': componentContract(['root', 'trigger', 'content'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior:
+      'Focus or pointer entry opens the preview; Escape and focus or pointer exit close it.',
+    roles: ['button'],
+    stateInputs: ['open'],
+  }),
+  kbd: componentContract(['root'], { enhancementTier: 'native' }),
+  menubar: componentContract(['root', 'item', 'submenu', 'group', 'separator'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior:
+      'Arrow keys, Home, End, typeahead, Enter, Space, and Escape operate menus and submenus.',
+    roles: ['menubar', 'menuitem', 'menu', 'separator'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'openValue', 'orientation'],
+  }),
+  meter: componentContract(['root'], {
+    enhancementTier: 'native',
+    ids: ['descriptionId', 'labelledBy'],
+    roles: ['meter'],
+    stateInputs: ['high', 'low', 'max', 'min', 'optimum', 'value'],
+  }),
+  'navigation-menu': componentContract(
+    ['root', 'list', 'item', 'trigger', 'content', 'link', 'viewport', 'indicator'],
+    {
+      enhancementTier: 'scripted',
+      ids: ['contentId', 'triggerId', 'viewportId'],
+      keyboardBehavior:
+        'Arrow keys, Home, End, typeahead, Enter, Space, and Escape move through navigation items.',
+      roles: ['navigation', 'list', 'button'],
+      stateInputs: ['disabled', 'highlightedValue', 'items', 'openValue', 'orientation'],
+    },
+  ),
+  'number-field': componentContract(['root', 'control', 'input', 'decrement', 'increment'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior: 'Arrow Up and Arrow Down step the value within its declared bounds.',
+    roles: ['spinbutton', 'button'],
+    stateInputs: ['disabled', 'invalid', 'max', 'min', 'step', 'value'],
+  }),
+  'otp-field': componentContract(['root', 'group', 'hiddenInput', 'input'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior:
+      'Typing advances slots, Backspace moves backward, Arrow keys move focus, and paste fills available slots.',
+    roles: ['group', 'textbox'],
+    stateInputs: ['disabled', 'invalid', 'length', 'required', 'value'],
+  }),
+  popover: componentContract(['root', 'trigger', 'content'], {
+    enhancementTier: 'progressive',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior: 'Enter or Space opens the popover and Escape closes it.',
+    roles: ['button'],
+    stateInputs: ['disabled', 'open'],
+  }),
+  progress: componentContract(['root'], {
+    enhancementTier: 'native',
+    ids: ['descriptionId', 'labelledBy'],
+    roles: ['progressbar'],
+    stateInputs: ['max', 'value'],
+  }),
+  'radio-group': componentContract(['root', 'item', 'radio', 'label'], {
+    enhancementTier: 'scripted',
+    ids: ['controlId', 'descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior:
+      'Arrow keys move selection and focus; Space selects the focused radio option.',
+    roles: ['radiogroup', 'radio'],
+    stateInputs: ['disabled', 'items', 'orientation', 'required', 'value'],
+  }),
+  'scroll-area': componentContract(['root', 'viewport', 'scrollbar', 'thumb', 'corner'], {
+    enhancementTier: 'scripted',
+    ids: ['scrollbarId', 'viewportId'],
+    keyboardBehavior: 'Native viewport scrolling remains available when custom dragging is absent.',
+    roles: ['scrollbar'],
+    stateInputs: ['orientation', 'scrollSize', 'viewportSize'],
+  }),
+  select: componentContract(['root', 'trigger', 'hiddenInput', 'content', 'item', 'value'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy', 'listboxId'],
+    keyboardBehavior:
+      'Arrow keys move the active option, Enter or Space selects, typeahead searches, and Escape closes.',
+    roles: ['combobox', 'listbox', 'option'],
+    stateInputs: ['disabled', 'highlightedValue', 'items', 'open', 'required', 'value'],
+  }),
+  separator: componentContract(['root'], {
+    enhancementTier: 'native',
+    roles: ['separator'],
+    stateInputs: ['decorative', 'orientation'],
+  }),
+  sheet: componentContract(
+    ['root', 'trigger', 'content', 'header', 'title', 'description', 'close'],
+    {
+      enhancementTier: 'progressive',
+      ids: ['contentId', 'descriptionId', 'titleId', 'triggerId'],
+      keyboardBehavior: 'Enter or Space opens controls; Tab is contained and Escape closes.',
+      roles: ['dialog', 'button'],
+      stateInputs: ['disabled', 'open', 'side'],
+    },
+  ),
+  skeleton: componentContract(['root'], {
+    accessibility: 'The placeholder remains hidden from assistive technology until content loads.',
+  }),
+  slider: componentContract(['root', 'input', 'track', 'range', 'thumb'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior:
+      'Arrow keys step the value; Home and End select bounds while pointer drag tracks continuously.',
+    roles: ['slider'],
+    stateInputs: ['disabled', 'max', 'min', 'orientation', 'step', 'value'],
+  }),
+  switch: componentContract(['root'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'errorId', 'id', 'labelledBy'],
+    keyboardBehavior: 'Space toggles the switch while disabled controls remain inert.',
+    roles: ['switch'],
+    stateInputs: ['checked', 'disabled', 'invalid', 'required'],
+  }),
+  table: componentContract(['root', 'head', 'body', 'row', 'headerCell', 'cell'], {
+    enhancementTier: 'native',
+    roles: ['table', 'row', 'columnheader', 'cell'],
+  }),
+  tabs: componentContract(['root', 'list', 'trigger', 'panel'], {
+    enhancementTier: 'scripted',
+    ids: ['panelId', 'tabId'],
+    keyboardBehavior:
+      'Arrow keys move between tabs; Home and End jump to bounds; Enter or Space activates in manual mode.',
+    roles: ['tablist', 'tab', 'tabpanel'],
+    stateInputs: ['activationMode', 'disabled', 'items', 'orientation', 'value'],
+  }),
+  toast: componentContract(['viewport', 'root', 'title', 'description', 'action', 'close'], {
+    enhancementTier: 'scripted',
+    ids: ['descriptionId', 'titleId', 'toastId', 'viewportId'],
+    keyboardBehavior:
+      'Escape dismisses the newest toast; native buttons activate actions and close.',
+    roles: ['region', 'status'],
+    stateInputs: ['duration', 'open', 'type'],
+  }),
+  toggle: componentContract(['root'], {
+    enhancementTier: 'scripted',
+    keyboardBehavior: 'Enter or Space toggles the pressed state.',
+    roles: ['button'],
+    stateInputs: ['disabled', 'pressed'],
+  }),
+  'toggle-group': componentContract(['root', 'item', 'button'], {
+    enhancementTier: 'scripted',
+    keyboardBehavior: 'Arrow keys move roving focus and Enter or Space toggles the focused item.',
+    roles: ['group', 'button'],
+    stateInputs: ['disabled', 'items', 'orientation', 'type', 'value'],
+  }),
+  toolbar: componentContract(['root', 'item', 'button'], {
+    enhancementTier: 'scripted',
+    keyboardBehavior: 'Arrow keys, Home, and End move roving focus through toolbar items.',
+    roles: ['toolbar', 'button'],
+    stateInputs: ['disabled', 'items', 'orientation'],
+  }),
+  tooltip: componentContract(['root', 'trigger', 'content'], {
+    enhancementTier: 'scripted',
+    ids: ['contentId', 'triggerId'],
+    keyboardBehavior: 'Focus or pointer entry opens the tooltip and Escape closes it.',
+    roles: ['tooltip'],
+    stateInputs: ['open'],
+  }),
+};
+
+// Track 5a audit: these 38 runtime helpers had no direct named import from a
+// manifest-public facade in authored docs, examples, conformance, or package
+// consumers. Nine remain reachable only through the finite generated client ABI;
+// the rest are private projections used while implementing attribute builders.
+const internalRuntimeHelpers = {
+  accordion: ['accordionItemOpen'],
+  autocomplete: [
+    'autocompleteOptionHighlighted',
+    'autocompleteOptionSelected',
+    'autocompleteSuggestions',
+  ],
+  avatar: ['avatarImageState'],
+  'checkbox-group': ['checkboxGroupItemChecked'],
+  combobox: ['comboboxFilteredItems', 'comboboxOptionHighlighted', 'comboboxOptionSelected'],
+  command: ['commandFilteredItems', 'commandItemHighlighted', 'commandItemSelected'],
+  'context-menu': ['contextMenuFocusElement', 'contextMenuItemHighlighted'],
+  'dropdown-menu': ['dropdownMenuFocusElement', 'dropdownMenuItemHighlighted'],
+  menubar: ['menubarFocusElement', 'menubarItemHighlighted', 'menubarItemOpen'],
+  meter: ['meterValueState'],
+  'navigation-menu': [
+    'navigationMenuFocusElement',
+    'navigationMenuItemHighlighted',
+    'navigationMenuItemOpen',
+  ],
+  'otp-field': ['otpFieldComplete', 'otpFieldSlotValue', 'otpFieldValueFromString'],
+  progress: ['progressValueState'],
+  'radio-group': ['radioGroupItemChecked', 'radioGroupMoveValue'],
+  'scroll-area': [
+    'scrollAreaCornerState',
+    'scrollAreaScrollbarState',
+    'scrollAreaThumbGeometry',
+    'scrollAreaViewportState',
+  ],
+  select: ['selectItemSelected'],
+  slider: ['sliderValueState'],
+  tabs: ['tabsItemSelected'],
+  'toggle-group': ['toggleGroupItemPressed'],
+  toolbar: ['toolbarRovingIndex'],
+};
+
+export const primitiveComponentManifest = {
+  ...primitiveComponentManifestSource,
+  components: primitiveComponentManifestSource.components.map((entry) => {
+    const contract = componentContracts[entry.component];
+    if (contract === undefined) {
+      throw new Error(`Missing UI/headless manifest contract for ${entry.component}`);
+    }
+    return { ...entry, ...contract };
+  }),
+  headlessPrimitives: primitiveComponentManifestSource.headlessPrimitives.map((entry) => ({
+    ...entry,
+    internalRuntimeHelpers: internalRuntimeHelpers[entry.subpath] ?? [],
+  })),
 };

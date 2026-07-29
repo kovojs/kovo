@@ -599,12 +599,13 @@ export function dropdownMenuSeparatorAttributes(
  *
  * @example
  * ```ts
- * import { dropdownMenuItemHighlighted } from '@kovojs/headless-ui/dropdown-menu';
+ * import { dropdownMenuItemHighlighted } from './dropdown-menu.js';
  *
  * declare const input: Parameters<typeof dropdownMenuItemHighlighted>[0];
  * const result = dropdownMenuItemHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function dropdownMenuItemHighlighted(options: DropdownMenuItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
@@ -975,7 +976,7 @@ export function dropdownMenuKeyDown(
  *
  * @example
  * ```ts
- * import { dropdownMenuFocusElement } from '@kovojs/headless-ui/dropdown-menu';
+ * import { dropdownMenuFocusElement } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof dropdownMenuFocusElement>[0];
  * declare const state: Parameters<typeof dropdownMenuFocusElement>[1];
@@ -983,6 +984,7 @@ export function dropdownMenuKeyDown(
  * const result = dropdownMenuFocusElement(input, state, options);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function dropdownMenuFocusElement(
   event: DropdownMenuFocusEvent,
   id: string | undefined,

@@ -125,12 +125,13 @@ export type AvatarPrimitiveAttributes = PrimitiveDataAttributes &
  *
  * @example
  * ```ts
- * import { avatarImageState } from '@kovojs/headless-ui/avatar';
+ * import { avatarImageState } from './avatar.js';
  *
  * declare const input: Parameters<typeof avatarImageState>[0];
  * const result = avatarImageState(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function avatarImageState(options: AvatarState = {}): AvatarComputedState {
   const src = normalizeAvatarSrc(options.src);
   const status = src === undefined ? 'error' : (options.status ?? 'loading');

@@ -97,6 +97,7 @@ describe('kovo add', () => {
     expect(cliManifest.dependencies['@kovojs/ui']).toBe('workspace:*');
     expect(manifest.name).toBe('@kovojs/ui');
     expect(manifest.kovo.vendoredSource).toBe(true);
+    expect(manifest.exports['.']).toBeUndefined();
     expect(Object.keys(vendoredUiComponents).sort()).toEqual(exportedComponents);
 
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
@@ -564,6 +565,12 @@ describe('kovo add', () => {
       expect(button).toContain('const variants = style.create');
       expect(button).toContain('style.attrs(');
       expect(card).toContain('export const Card = component({');
+      expect(card).toContain('export const CardHeader = component({');
+      expect(card).toContain('export const CardTitle = component({');
+      expect(card).toContain('export const CardDescription = component({');
+      expect(card).toContain('export const CardContent = component({');
+      expect(card).toContain('export const CardFooter = component({');
+      expect(card).not.toContain('CardBody');
       expect(card).toContain("import * as style from '@kovojs/style';");
       expect(card).toContain('const cardStyles = style.create');
       expect(card).toContain('style?: style.StyleInput');

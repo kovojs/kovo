@@ -287,12 +287,13 @@ export type TabsTriggerEvent = Event;
  *
  * @example
  * ```ts
- * import { tabsItemSelected } from '@kovojs/headless-ui/tabs';
+ * import { tabsItemSelected } from './tabs.js';
  *
  * declare const input: Parameters<typeof tabsItemSelected>[0];
  * const result = tabsItemSelected(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function tabsItemSelected(options: TabsTriggerAttributeOptions): boolean {
   return options.value === options.itemValue;
 }

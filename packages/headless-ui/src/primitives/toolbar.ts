@@ -170,12 +170,13 @@ export type ToolbarKeyboardEvent = Event & { readonly key: string };
  *
  * @example
  * ```ts
- * import { toolbarRovingIndex } from '@kovojs/headless-ui/toolbar';
+ * import { toolbarRovingIndex } from './toolbar.js';
  *
  * declare const input: Parameters<typeof toolbarRovingIndex>[0];
  * const result = toolbarRovingIndex(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function toolbarRovingIndex(state: ToolbarState): number {
   const items = state.items ?? [];
   if (items.length === 0) return -1;

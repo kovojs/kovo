@@ -288,12 +288,13 @@ export type AccordionKeyboardEvent = Event & { readonly key: string };
  *
  * @example
  * ```ts
- * import { accordionItemOpen } from '@kovojs/headless-ui/accordion';
+ * import { accordionItemOpen } from './accordion.js';
  *
  * declare const input: Parameters<typeof accordionItemOpen>[0];
  * const result = accordionItemOpen(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function accordionItemOpen(options: AccordionItemOptions): boolean {
   if (accordionType(options) === 'multiple') {
     return Array.isArray(options.value) && options.value.includes(options.itemValue);

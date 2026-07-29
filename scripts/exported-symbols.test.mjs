@@ -52,7 +52,7 @@ describe('exported-symbols script', () => {
       .find((pkg) => pkg.name === '@kovojs/headless-ui')
       ?.exports.find((entry) => entry.subpath === './select');
 
-    expect(uiRoot?.symbols).toEqual([]);
+    expect(uiRoot).toBeUndefined();
     expect(uiButton?.symbols).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'Button' })]),
     );

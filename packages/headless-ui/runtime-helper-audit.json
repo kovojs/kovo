@@ -1,0 +1,616 @@
+{
+  "schema": "kovo-headless-runtime-helper-audit/v1",
+  "reviewedAt": "2026-07-28",
+  "inventory": "kovo-public-api-inventory/v1",
+  "auditedCount": 38,
+  "entries": [
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/accordion",
+      "symbol": "accordionItemOpen"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/autocomplete",
+      "symbol": "autocompleteOptionHighlighted"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/autocomplete",
+      "symbol": "autocompleteOptionSelected"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/autocomplete",
+      "symbol": "autocompleteSuggestions"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/avatar",
+      "symbol": "avatarImageState"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/checkbox-group",
+      "symbol": "checkboxGroupItemChecked"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/combobox",
+      "symbol": "comboboxFilteredItems"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/combobox",
+      "symbol": "comboboxOptionHighlighted"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/combobox",
+      "symbol": "comboboxOptionSelected"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/command",
+      "symbol": "commandFilteredItems"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/command",
+      "symbol": "commandItemHighlighted"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/command",
+      "symbol": "commandItemSelected"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/context-menu",
+      "symbol": "contextMenuFocusElement"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/context-menu",
+      "symbol": "contextMenuItemHighlighted"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/dropdown-menu",
+      "symbol": "dropdownMenuFocusElement"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/dropdown-menu",
+      "symbol": "dropdownMenuItemHighlighted"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/menubar",
+      "symbol": "menubarFocusElement"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/menubar",
+      "symbol": "menubarItemHighlighted"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/menubar",
+      "symbol": "menubarItemOpen"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/meter",
+      "symbol": "meterValueState"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/navigation-menu",
+      "symbol": "navigationMenuFocusElement"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/navigation-menu",
+      "symbol": "navigationMenuItemHighlighted"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/navigation-menu",
+      "symbol": "navigationMenuItemOpen"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/otp-field",
+      "symbol": "otpFieldComplete"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/otp-field",
+      "symbol": "otpFieldSlotValue"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/otp-field",
+      "symbol": "otpFieldValueFromString"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/progress",
+      "symbol": "progressValueState"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/radio-group",
+      "symbol": "radioGroupItemChecked"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/radio-group",
+      "symbol": "radioGroupMoveValue"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/scroll-area",
+      "symbol": "scrollAreaCornerState"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/scroll-area",
+      "symbol": "scrollAreaScrollbarState"
+    },
+    {
+      "decision": "generated-only",
+      "evidence": {
+        "declarationTag": "@generated",
+        "generatedAbiReference": true,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "Compiler-emitted client modules call this helper through @kovojs/headless-ui/generated; app-authored code has no runtime assembly task for it.",
+      "specifier": "@kovojs/headless-ui/scroll-area",
+      "symbol": "scrollAreaThumbGeometry"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/scroll-area",
+      "symbol": "scrollAreaViewportState"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/select",
+      "symbol": "selectItemSelected"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/slider",
+      "symbol": "sliderValueState"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/tabs",
+      "symbol": "tabsItemSelected"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/toggle-group",
+      "symbol": "toggleGroupItemPressed"
+    },
+    {
+      "decision": "internalize",
+      "evidence": {
+        "declarationTag": "@internal",
+        "generatedAbiReference": false,
+        "publicNamedImports": {
+          "authoredDocs": 0,
+          "authoredExamples": 0,
+          "conformance": 0,
+          "packageConsumers": 0
+        }
+      },
+      "reason": "The helper is an implementation projection used to construct public attributes; copied and package-managed components consume the attribute builder instead.",
+      "specifier": "@kovojs/headless-ui/toolbar",
+      "symbol": "toolbarRovingIndex"
+    }
+  ]
+}

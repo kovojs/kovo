@@ -9,9 +9,6 @@ export {
   navigationMenuLinkAttributes,
   navigationMenuViewportAttributes,
   navigationMenuIndicatorAttributes,
-  navigationMenuItemHighlighted,
-  navigationMenuItemOpen,
-  navigationMenuFocusElement,
 } from '../primitives/navigation-menu.js';
 export type {
   NavigationMenuItem,

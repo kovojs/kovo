@@ -795,12 +795,13 @@ export function commandEmptyAttributes(
  *
  * @example
  * ```ts
- * import { commandItemHighlighted } from '@kovojs/headless-ui/command';
+ * import { commandItemHighlighted } from './command.js';
  *
  * declare const input: Parameters<typeof commandItemHighlighted>[0];
  * const result = commandItemHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function commandItemHighlighted(options: CommandItemAttributeOptions): boolean {
   return options.highlightedValue === options.itemValue;
 }
@@ -812,12 +813,13 @@ export function commandItemHighlighted(options: CommandItemAttributeOptions): bo
  *
  * @example
  * ```ts
- * import { commandItemSelected } from '@kovojs/headless-ui/command';
+ * import { commandItemSelected } from './command.js';
  *
  * declare const input: Parameters<typeof commandItemSelected>[0];
  * const result = commandItemSelected(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function commandItemSelected(options: CommandItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }
@@ -848,12 +850,13 @@ export function commandValueText(state: CommandState): string {
  *
  * @example
  * ```ts
- * import { commandFilteredItems } from '@kovojs/headless-ui/command';
+ * import { commandFilteredItems } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof commandFilteredItems>[0];
  * const result = commandFilteredItems(input);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function commandFilteredItems(state: CommandState): readonly CommandItem[] {
   const query = normalizeCommandQuery(state.inputValue);
   const items = state.items ?? [];

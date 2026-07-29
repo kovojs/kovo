@@ -259,12 +259,13 @@ export type CheckboxGroupKeyboardEvent = Event & { readonly key: string };
  *
  * @example
  * ```ts
- * import { checkboxGroupItemChecked } from '@kovojs/headless-ui/checkbox-group';
+ * import { checkboxGroupItemChecked } from './checkbox-group.js';
  *
  * declare const input: Parameters<typeof checkboxGroupItemChecked>[0];
  * const result = checkboxGroupItemChecked(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function checkboxGroupItemChecked(options: CheckboxGroupItemAttributeOptions): boolean {
   return checkboxGroupValue(options).includes(options.itemValue);
 }

@@ -168,7 +168,7 @@ export async function buildSiteUiCss(outPath = uiStylesheetPath) {
     );
 
   try {
-    import.meta.resolve('@kovojs/ui');
+    import.meta.resolve('@kovojs/ui/button');
   } catch (error) {
     throw missingDepHint('@kovojs/ui', error?.message ?? error);
   }

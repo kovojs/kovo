@@ -1,7 +1,6 @@
 // Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
 // Public facade for @kovojs/headless-ui/accordion; implementation-only helpers stay in src/primitives.
 export {
-  accordionItemOpen,
   accordionRootAttributes,
   accordionItemAttributes,
   accordionHeaderAttributes,

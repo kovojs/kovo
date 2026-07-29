@@ -1,0 +1,435 @@
+{
+  "schema": "kovo-headless-transition-abi-audit/v1",
+  "reviewedAt": "2026-07-28",
+  "sourceDeclarationCount": 225,
+  "publicReachable": [],
+  "generatedFacadeReachable": [],
+  "classification": "internal primitive transition machinery",
+  "primitives": [
+    {
+      "primitive": "accordion",
+      "transitionTypes": [
+        "AccordionChangeDetail",
+        "AccordionChangeOptions",
+        "AccordionChangeReason",
+        "AccordionChangeResult",
+        "AccordionKeyboardEvent",
+        "AccordionTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "alert-dialog",
+      "transitionTypes": [
+        "AlertDialogActionEvent",
+        "AlertDialogBeforeToggleEvent",
+        "AlertDialogCancelButtonEvent",
+        "AlertDialogCancelEvent",
+        "AlertDialogChangeDetail",
+        "AlertDialogChangeOptions",
+        "AlertDialogChangeReason",
+        "AlertDialogChangeResult",
+        "AlertDialogTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "autocomplete",
+      "transitionTypes": [
+        "AutocompleteChangeOptions",
+        "AutocompleteInputChangeDetail",
+        "AutocompleteInputChangeReason",
+        "AutocompleteInputChangeResult",
+        "AutocompleteInputEvent",
+        "AutocompleteKeyboardEvent",
+        "AutocompleteKeyboardResult",
+        "AutocompleteOpenChangeDetail",
+        "AutocompleteOpenChangeReason",
+        "AutocompleteOpenChangeResult",
+        "AutocompleteOptionEvent",
+        "AutocompleteOptionSelectResult",
+        "AutocompleteValueChangeDetail",
+        "AutocompleteValueChangeReason",
+        "AutocompleteValueChangeResult"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "avatar",
+      "transitionTypes": [
+        "AvatarImageEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "checkbox",
+      "transitionTypes": [
+        "CheckboxChangeDetail",
+        "CheckboxChangeOptions",
+        "CheckboxChangeReason",
+        "CheckboxChangeResult",
+        "CheckboxTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "checkbox-group",
+      "transitionTypes": [
+        "CheckboxGroupChangeDetail",
+        "CheckboxGroupChangeOptions",
+        "CheckboxGroupChangeReason",
+        "CheckboxGroupChangeResult",
+        "CheckboxGroupItemEvent",
+        "CheckboxGroupKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "collapsible",
+      "transitionTypes": [
+        "CollapsibleChangeDetail",
+        "CollapsibleChangeOptions",
+        "CollapsibleChangeReason",
+        "CollapsibleChangeResult",
+        "CollapsibleTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "combobox",
+      "transitionTypes": [
+        "ComboboxChangeOptions",
+        "ComboboxInputEvent",
+        "ComboboxKeyboardEvent",
+        "ComboboxKeyboardResult",
+        "ComboboxOpenChangeDetail",
+        "ComboboxOpenChangeReason",
+        "ComboboxOpenChangeResult",
+        "ComboboxOptionEvent",
+        "ComboboxOptionSelectResult",
+        "ComboboxValueChangeDetail",
+        "ComboboxValueChangeReason",
+        "ComboboxValueChangeResult"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "command",
+      "transitionTypes": [
+        "CommandBeforeToggleEvent",
+        "CommandCancelEvent",
+        "CommandChangeOptions",
+        "CommandCloseEvent",
+        "CommandInputChangeDetail",
+        "CommandInputChangeReason",
+        "CommandInputChangeResult",
+        "CommandInputEvent",
+        "CommandItemEvent",
+        "CommandKeyboardEvent",
+        "CommandKeyboardResult",
+        "CommandOpenChangeDetail",
+        "CommandOpenChangeReason",
+        "CommandOpenChangeResult",
+        "CommandSelectResult",
+        "CommandTriggerEvent",
+        "CommandValueChangeDetail",
+        "CommandValueChangeReason",
+        "CommandValueChangeResult"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "context-menu",
+      "transitionTypes": [
+        "ContextMenuChangeOptions",
+        "ContextMenuItemEvent",
+        "ContextMenuKeyboardEvent",
+        "ContextMenuOpenChangeDetail",
+        "ContextMenuOpenChangeReason",
+        "ContextMenuOpenChangeResult",
+        "ContextMenuSelectDetail",
+        "ContextMenuSelectReason",
+        "ContextMenuSelectResult",
+        "ContextMenuTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "dialog",
+      "transitionTypes": [
+        "DialogBeforeToggleEvent",
+        "DialogCancelEvent",
+        "DialogChangeDetail",
+        "DialogChangeOptions",
+        "DialogChangeReason",
+        "DialogChangeResult",
+        "DialogCloseEvent",
+        "DialogTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "disclosure",
+      "transitionTypes": [
+        "DisclosureChangeDetail",
+        "DisclosureChangeOptions",
+        "DisclosureChangeReason",
+        "DisclosureChangeResult",
+        "DisclosureTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "dropdown-menu",
+      "transitionTypes": [
+        "DropdownMenuChangeOptions",
+        "DropdownMenuItemEvent",
+        "DropdownMenuKeyboardEvent",
+        "DropdownMenuOpenChangeDetail",
+        "DropdownMenuOpenChangeReason",
+        "DropdownMenuOpenChangeResult",
+        "DropdownMenuSelectDetail",
+        "DropdownMenuSelectReason",
+        "DropdownMenuSelectResult",
+        "DropdownMenuTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "field",
+      "transitionTypes": [],
+      "publicReachable": []
+    },
+    {
+      "primitive": "hover-card",
+      "transitionTypes": [
+        "HoverCardChangeDetail",
+        "HoverCardChangeOptions",
+        "HoverCardChangeReason",
+        "HoverCardChangeResult",
+        "HoverCardContentEvent",
+        "HoverCardEscapeEvent",
+        "HoverCardTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "menubar",
+      "transitionTypes": [
+        "MenubarChangeOptions",
+        "MenubarItemEvent",
+        "MenubarKeyboardEvent",
+        "MenubarOpenChangeDetail",
+        "MenubarOpenChangeReason",
+        "MenubarOpenChangeResult",
+        "MenubarSelectDetail",
+        "MenubarSelectReason",
+        "MenubarSelectResult"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "meter",
+      "transitionTypes": [],
+      "publicReachable": []
+    },
+    {
+      "primitive": "navigation-menu",
+      "transitionTypes": [
+        "NavigationMenuChangeOptions",
+        "NavigationMenuKeyboardEvent",
+        "NavigationMenuLinkEvent",
+        "NavigationMenuOpenChangeDetail",
+        "NavigationMenuOpenChangeReason",
+        "NavigationMenuOpenChangeResult",
+        "NavigationMenuSelectDetail",
+        "NavigationMenuSelectReason",
+        "NavigationMenuSelectResult",
+        "NavigationMenuTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "number-field",
+      "transitionTypes": [
+        "NumberFieldButtonEvent",
+        "NumberFieldChangeDetail",
+        "NumberFieldChangeOptions",
+        "NumberFieldChangeReason",
+        "NumberFieldChangeResult",
+        "NumberFieldInputEvent",
+        "NumberFieldKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "otp-field",
+      "transitionTypes": [
+        "OtpFieldChangeDetail",
+        "OtpFieldChangeOptions",
+        "OtpFieldChangeReason",
+        "OtpFieldChangeResult",
+        "OtpFieldInputEvent",
+        "OtpFieldKeyboardEvent",
+        "OtpFieldPasteEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "popover",
+      "transitionTypes": [
+        "PopoverBeforeToggleEvent",
+        "PopoverChangeDetail",
+        "PopoverChangeOptions",
+        "PopoverChangeReason",
+        "PopoverChangeResult",
+        "PopoverEscapeEvent",
+        "PopoverTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "progress",
+      "transitionTypes": [],
+      "publicReachable": []
+    },
+    {
+      "primitive": "radio-group",
+      "transitionTypes": [
+        "RadioGroupChangeDetail",
+        "RadioGroupChangeOptions",
+        "RadioGroupChangeReason",
+        "RadioGroupChangeResult",
+        "RadioGroupItemEvent",
+        "RadioGroupKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "scroll-area",
+      "transitionTypes": [
+        "ScrollAreaPointerEvent",
+        "ScrollAreaScrollToEvent",
+        "ScrollAreaViewportScrollEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "separator",
+      "transitionTypes": [],
+      "publicReachable": []
+    },
+    {
+      "primitive": "select",
+      "transitionTypes": [
+        "SelectChangeDetail",
+        "SelectChangeOptions",
+        "SelectChangeReason",
+        "SelectChangeResult",
+        "SelectItemEvent",
+        "SelectKeyboardEvent",
+        "SelectKeyboardResult",
+        "SelectKeyDownOptions",
+        "SelectOpenChangeDetail",
+        "SelectOpenChangeReason",
+        "SelectOpenChangeResult",
+        "SelectOptionSelectResult",
+        "SelectTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "slider",
+      "transitionTypes": [
+        "SliderChangeDetail",
+        "SliderChangeOptions",
+        "SliderChangeReason",
+        "SliderChangeResult",
+        "SliderInputEvent",
+        "SliderKeyboardEvent",
+        "SliderPointerDragOptions",
+        "SliderPointerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "switch",
+      "transitionTypes": [
+        "SwitchChangeDetail",
+        "SwitchChangeOptions",
+        "SwitchChangeReason",
+        "SwitchChangeResult",
+        "SwitchTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "tabs",
+      "transitionTypes": [
+        "TabsChangeDetail",
+        "TabsChangeOptions",
+        "TabsChangeReason",
+        "TabsChangeResult",
+        "TabsKeyboardEvent",
+        "TabsKeyboardResult",
+        "TabsTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "toast",
+      "transitionTypes": [
+        "ToastAnimationEvent",
+        "ToastButtonEvent",
+        "ToastChangeDetail",
+        "ToastChangeOptions",
+        "ToastChangeResult",
+        "ToastKeyboardEvent",
+        "ToastViewportKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "toggle",
+      "transitionTypes": [
+        "ToggleChangeDetail",
+        "ToggleChangeOptions",
+        "ToggleChangeReason",
+        "ToggleChangeResult",
+        "ToggleTriggerEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "toggle-group",
+      "transitionTypes": [
+        "ToggleGroupChangeDetail",
+        "ToggleGroupChangeOptions",
+        "ToggleGroupChangeReason",
+        "ToggleGroupChangeResult",
+        "ToggleGroupItemEvent",
+        "ToggleGroupKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "toolbar",
+      "transitionTypes": [
+        "ToolbarKeyboardEvent"
+      ],
+      "publicReachable": []
+    },
+    {
+      "primitive": "tooltip",
+      "transitionTypes": [
+        "TooltipChangeDetail",
+        "TooltipChangeOptions",
+        "TooltipChangeReason",
+        "TooltipChangeResult",
+        "TooltipEscapeEvent",
+        "TooltipTriggerEvent"
+      ],
+      "publicReachable": []
+    }
+  ]
+}

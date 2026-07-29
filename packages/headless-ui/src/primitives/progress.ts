@@ -73,12 +73,13 @@ export type ProgressPrimitiveAttributes = PrimitiveDataAttributes &
  *
  * @example
  * ```ts
- * import { progressValueState } from '@kovojs/headless-ui/progress';
+ * import { progressValueState } from './progress.js';
  *
  * declare const input: Parameters<typeof progressValueState>[0];
  * const result = progressValueState(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function progressValueState(options: ProgressAttributeOptions = {}): ProgressComputedState {
   const max = normalizeProgressMax(options.max);
   const value = normalizeProgressValue(options.value, max);

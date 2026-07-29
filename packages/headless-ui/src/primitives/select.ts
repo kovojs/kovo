@@ -479,12 +479,13 @@ export type SelectKeyboardResult =
  *
  * @example
  * ```ts
- * import { selectItemSelected } from '@kovojs/headless-ui/select';
+ * import { selectItemSelected } from './select.js';
  *
  * declare const input: Parameters<typeof selectItemSelected>[0];
  * const result = selectItemSelected(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function selectItemSelected(options: SelectItemAttributeOptions): boolean {
   return options.value === options.itemValue;
 }

@@ -99,7 +99,10 @@ function findUiPackageRoot(moduleDir: string): string {
 
 function resolveInstalledUiPackageRoot(): string | undefined {
   try {
-    return findPackageRoot(dirname(realpathSync(catalogRequire.resolve('@kovojs/ui'))));
+    const discoverySubpath = KOVO_ADD_COMPONENT_NAMES[0];
+    return findPackageRoot(
+      dirname(realpathSync(catalogRequire.resolve(`@kovojs/ui/${discoverySubpath}`))),
+    );
   } catch {
     return undefined;
   }

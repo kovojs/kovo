@@ -6,9 +6,6 @@ export {
   menubarSubmenuAttributes,
   menubarGroupAttributes,
   menubarSeparatorAttributes,
-  menubarItemHighlighted,
-  menubarItemOpen,
-  menubarFocusElement,
 } from '../primitives/menubar.js';
 export type {
   MenubarItem,

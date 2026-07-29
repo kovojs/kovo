@@ -6,10 +6,6 @@ export {
   scrollAreaScrollbarAttributes,
   scrollAreaThumbAttributes,
   scrollAreaCornerAttributes,
-  scrollAreaScrollbarState,
-  scrollAreaCornerState,
-  scrollAreaViewportState,
-  scrollAreaThumbGeometry,
 } from '../primitives/scroll-area.js';
 export type {
   ScrollAreaOrientation,

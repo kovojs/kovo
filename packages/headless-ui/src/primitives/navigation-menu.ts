@@ -732,12 +732,13 @@ export function navigationMenuIndicatorAttributes(
  *
  * @example
  * ```ts
- * import { navigationMenuItemHighlighted } from '@kovojs/headless-ui/navigation-menu';
+ * import { navigationMenuItemHighlighted } from './navigation-menu.js';
  *
  * declare const input: Parameters<typeof navigationMenuItemHighlighted>[0];
  * const result = navigationMenuItemHighlighted(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function navigationMenuItemHighlighted(
   options: NavigationMenuItemAttributeOptions,
 ): boolean {
@@ -751,12 +752,13 @@ export function navigationMenuItemHighlighted(
  *
  * @example
  * ```ts
- * import { navigationMenuItemOpen } from '@kovojs/headless-ui/navigation-menu';
+ * import { navigationMenuItemOpen } from './navigation-menu.js';
  *
  * declare const input: Parameters<typeof navigationMenuItemOpen>[0];
  * const result = navigationMenuItemOpen(input);
  * ```
  */
+/** @internal Framework-owned projection; applications use primitive attribute builders. */
 export function navigationMenuItemOpen(options: NavigationMenuItemAttributeOptions): boolean {
   return options.openValue === options.itemValue;
 }
@@ -1170,7 +1172,7 @@ export function navigationMenuKeyDown(
  *
  * @example
  * ```ts
- * import { navigationMenuFocusElement } from '@kovojs/headless-ui/navigation-menu';
+ * import { navigationMenuFocusElement } from '@kovojs/headless-ui/generated';
  *
  * declare const input: Parameters<typeof navigationMenuFocusElement>[0];
  * declare const state: Parameters<typeof navigationMenuFocusElement>[1];
@@ -1178,6 +1180,7 @@ export function navigationMenuKeyDown(
  * const result = navigationMenuFocusElement(input, state, options);
  * ```
  */
+/** @generated Compiler-only ABI; applications use primitive attribute builders. */
 export function navigationMenuFocusElement(
   event: NavigationMenuFocusEvent,
   id: string | undefined,
