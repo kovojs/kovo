@@ -98,6 +98,7 @@ export async function runPackedAppJourneys({
     schema: PACKED_APPS_REPORT_SCHEMA,
     scenario: packedAppsScenario,
     sampleCount: samples,
+    dialects: normalizedDialects,
     packageSet: packageSetIdentity(packedPackages),
     variants,
     pass: variants.every((variant) => variant.pass),
@@ -399,6 +400,20 @@ export function validatePackedAppsReport(report) {
   if (!Number.isSafeInteger(report?.sampleCount) || report.sampleCount < 1) {
     findings.push('sampleCount must be positive');
   }
+  const reportDialects = [];
+  if (!Array.isArray(report?.dialects) || report.dialects.length === 0) {
+    findings.push('dialects must be a non-empty array');
+  } else {
+    for (const [index, dialect] of report.dialects.entries()) {
+      if (!DIALECTS.includes(dialect)) {
+        findings.push(`dialects[${String(index)}] is invalid`);
+      } else if (reportDialects.includes(dialect)) {
+        findings.push(`dialects duplicates ${dialect}`);
+      } else {
+        reportDialects.push(dialect);
+      }
+    }
+  }
   const packageNames = new Set();
   if (!Array.isArray(report?.packageSet)) {
     findings.push('packageSet must be an authenticated package identity array');
@@ -490,14 +505,14 @@ export function validatePackedAppsReport(report) {
   }
   if (Number.isSafeInteger(report.sampleCount) && report.sampleCount > 0) {
     for (let sampleIndex = 0; sampleIndex < report.sampleCount; sampleIndex += 1) {
-      for (const dialect of DIALECTS) {
+      for (const dialect of reportDialects) {
         if (!variantKeys.has(`${String(sampleIndex)}:${dialect}`)) {
           findings.push(`variants omit sample ${String(sampleIndex)} ${dialect}`);
         }
       }
     }
-    if (report.variants.length !== report.sampleCount * DIALECTS.length) {
-      findings.push('variants do not contain exactly both dialects for every sample');
+    if (report.variants.length !== report.sampleCount * reportDialects.length) {
+      findings.push('variants do not contain exactly the declared dialects for every sample');
     }
   }
   const expectedPass = report.variants.every((variant) => variant.pass);

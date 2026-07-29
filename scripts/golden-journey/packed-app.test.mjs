@@ -196,6 +196,11 @@ describe('packed app golden journey', () => {
     const missingDialect = structuredClone(report);
     missingDialect.variants.pop();
     expect(validatePackedAppsReport(missingDialect)).toContain('variants omit sample 0 sqlite');
+
+    const sqliteOnly = structuredClone(report);
+    sqliteOnly.dialects = ['sqlite'];
+    sqliteOnly.variants = sqliteOnly.variants.filter((variant) => variant.dialect === 'sqlite');
+    expect(validatePackedAppsReport(sqliteOnly)).toEqual([]);
   });
 
   it('retains failed command timing and process-tree RSS evidence', () => {
@@ -231,6 +236,7 @@ function successfulReport() {
     schema: PACKED_APPS_REPORT_SCHEMA,
     scenario: 'packed-apps',
     sampleCount: 1,
+    dialects: ['postgres', 'sqlite'],
     packageSet: PACKED_JOURNEY_PACKAGE_NAMES.map((name) => ({
       name,
       sha512: 'sha512-YQ==',
