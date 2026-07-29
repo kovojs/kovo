@@ -57,7 +57,7 @@ describe('D1 compiler-owned exact project resolver', () => {
   it('carries app-scoped handler roots into the finite TASK B semantic carrier', async () => {
     const fixture = await createFixture();
     const contract = join(fixture.root, 'app/src/kovo.ts');
-    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.tsx');
     await writeSource(
       contract,
       [
@@ -71,9 +71,23 @@ describe('D1 compiler-owned exact project resolver', () => {
     await writeSource(
       entry,
       [
+        '/** @jsxImportSource @kovojs/server */',
         "import { app } from './kovo.js';",
+        "import * as style from '@kovojs/style';",
+        "const styles = style.create({ shell: { color: 'red' } });",
+        'export function Shell() { return <main style={styles.shell} />; }',
         'export const item = app.query({',
         '  load(_input, request) { return request.db.select(); },',
+        '});',
+        "export const health = app.endpoint('/api/health', {",
+        "  access: app.publicAccess('public uptime probe'),",
+        "  auth: { justification: 'public uptime probe', kind: 'none' },",
+        '  csrf: false,',
+        "  csrfJustification: 'read-only machine health probe',",
+        '  handler: () => Response.json({ ok: true }),',
+        "  method: 'GET',",
+        "  reason: 'read-only machine health probe',",
+        "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
         '});',
         '',
       ].join('\n'),
@@ -92,11 +106,31 @@ describe('D1 compiler-owned exact project resolver', () => {
         root: expect.stringMatching(/^query:.*item$/u),
       }),
     );
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: 'endpoint:/api/health',
+      }),
+    );
     expect(
       finite.compiled.componentGraphFacts.flatMap(
         (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
       ),
-    ).toContainEqual(expect.stringMatching(/^query:.*item$/u));
+    ).toEqual(
+      expect.arrayContaining(['endpoint:/api/health', expect.stringMatching(/^query:.*item$/u)]),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap((fact) => fact.securityOperations ?? []),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          door: 'handler-root',
+          kind: 'server.handler.root',
+          target: 'endpoint:/api/health',
+        }),
+      ]),
+    );
   });
 
   it('recognizes exact app access members and only exempts managed request.db writes', async () => {
@@ -156,6 +190,17 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(
       result.component?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330'),
     ).toHaveLength(2);
+    expect(result.component?.handlerWriteSinkFacts).toHaveLength(2);
+    expect(result.component?.handlerWriteSinkFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          canonicalTarget: expect.objectContaining({ identity: 'capturedDb' }),
+        }),
+        expect.objectContaining({
+          canonicalTarget: expect.objectContaining({ identity: 'request.db' }),
+        }),
+      ]),
+    );
     expect(
       result.route?.routePageFacts.map((fact) => ({
         access: fact.access,
@@ -246,6 +291,7 @@ describe('D1 compiler-owned exact project resolver', () => {
         { fileName: 'kovo.ts', source: contractSource },
         { fileName: 'mutations.ts', source: mutationSource },
         { fileName: 'form.tsx', source: formSource },
+        { fileName: 'styles.css', source: ':root { color-scheme: light; }' },
       ],
       dirname(contract),
     );

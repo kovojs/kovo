@@ -118,9 +118,13 @@ export function compilerOwnedProjectMutationRegistryFactsFromFiles(
   files: readonly ProjectMutationSourceFile[],
   rootDirectory: string = process.cwd(),
 ): ProjectMutationRegistryFacts {
-  if (files.length === 0) return projectMutationRegistryFactsFromFiles(files);
+  // SPEC §5.2 rule 9: only JavaScript/TypeScript authoring modules enter the exact Program.
+  // Build source closures also retain approved CSS bytes for artifact identity; CSS is not a
+  // structural mutation-fact input and must not be misrepresented as a TypeScript root.
+  const sourceFiles = files.filter((file) => /\.[cm]?[jt]sx?$/u.test(file.fileName));
+  if (sourceFiles.length === 0) return projectMutationRegistryFactsFromFiles(sourceFiles);
   const originalNames = new Map<string, string>();
-  const programFiles = files.map((file) => {
+  const programFiles = sourceFiles.map((file) => {
     const fileName = resolve(rootDirectory, file.fileName);
     const canonical = normalizeFileName(fileName);
     if (originalNames.has(canonical)) {

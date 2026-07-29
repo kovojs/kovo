@@ -92,6 +92,7 @@ import {
 } from './lower/handlers.js';
 import { runLoweringPipeline } from './lowering-pipeline.js';
 import {
+  handlerWriteSinkUsesManagedAppTransaction,
   handlerWriteSinks,
   inferComponentName,
   jsxElements,
@@ -674,7 +675,13 @@ function emitRegistryCssPhase(
         fact.component,
         parsed.options.fileName,
         index === 0 ? componentCacheInfluenceFacts(parsed.originalModel) : [],
-        index === 0 ? componentSecurityOperationFacts(lowered.model, client.versionedHandlers) : [],
+        // SPEC §5.2 rule 9 / §6.6: server security operations remain bound to the exact authored
+        // Program snapshot. Style extraction reparses transformed source whose spans cannot
+        // authenticate app-scoped factory facts, while browser operations are already carried by
+        // the versioned handler lowerings.
+        index === 0
+          ? componentSecurityOperationFacts(parsed.originalModel, client.versionedHandlers)
+          : [],
         index === 0 ? componentSecuritySemanticGraphFacts(parsed.originalModel) : undefined,
       ),
   );
@@ -831,7 +838,10 @@ function emitServerPhase(
   );
 
   return {
-    serverModule: emitServerModule(serverRenderedSource, lowered.model, parsed.originalModel),
+    // SPEC §5.2 rule 9 / §6.6: the generated manifest carries operations and semantic roots from
+    // the same exact authored model. A lowered style reparse is an emitted artifact, not a second
+    // authority source for app-scoped handler identity.
+    serverModule: emitServerModule(serverRenderedSource, parsed.originalModel),
     serverRender,
     serverRenderedSource,
   };
@@ -1007,7 +1017,7 @@ function assembleCompileResult(
       source: confidentialityClosed ? '' : registryCss.registrySource,
     },
   ];
-  assertEmittedTranslation(lowered, client, registryCss, files, confidentialityClosed);
+  assertEmittedTranslation(client, registryCss, files, confidentialityClosed, parsed.originalModel);
 
   return {
     agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel),
@@ -1168,11 +1178,11 @@ function compileBrowserPostureManifest(
 }
 
 function assertEmittedTranslation(
-  lowered: LowerComponentPhaseResult,
   client: EmitClientPhaseResult,
   registryCss: EmitRegistryCssPhaseResult,
   files: CompileResult['files'],
   confidentialityClosed: boolean,
+  authoredModel: ComponentModuleModel,
 ): void {
   const result = verifyEmittedTranslation({
     artifacts: files,
@@ -1189,7 +1199,7 @@ function assertEmittedTranslation(
           ),
       clientImports: client.clientModuleImportManifest,
       secretFieldNames: registryCss.secretFieldNames,
-      serverOperations: serverSecurityOperationFacts(lowered.model),
+      serverOperations: serverSecurityOperationFacts(authoredModel),
     },
   });
   if (result.ok) return;
@@ -1310,7 +1320,15 @@ function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): Endpoi
 }
 
 function handlerWriteSinkFactsFromModel(model: ComponentModuleModel): HandlerWriteSinkFact[] {
-  return handlerWriteSinks(model);
+  // SPEC §10.3: compiler-proven app.mutation request.db work is the framework-managed
+  // transaction itself, not a raw driver escape. Keep ordinary/captured/shadowed DB sinks in the
+  // graph, but remove the private parser-marked managed sinks before the compile ledger snapshots
+  // them and necessarily sheds their non-structural WeakMap provenance.
+  return compilerFilterDense(
+    handlerWriteSinks(model),
+    'Handler write sink graph facts',
+    (sink) => !handlerWriteSinkUsesManagedAppTransaction(sink),
+  );
 }
 
 function registryFileName(parsed: ParsedComponentPhaseResult): string {

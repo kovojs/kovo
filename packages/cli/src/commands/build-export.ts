@@ -2136,7 +2136,7 @@ async function staticBuildCheckGraph(
   ) as readonly QueryShapeFact[];
   const revealed = mergeBuildRevealFacts(drizzleFacts.revealed ?? [], runtimeReveals);
   const queryReadSets = buildMapDense(app.queries, 'Build app queries', (query) =>
-    queryCheckFact(query, drizzleFacts.queries),
+    queryCheckFact(query, drizzleFacts.queries, options.execution),
   );
   const diagnosticSourceCatalog = queryDiagnosticSourceCatalog(
     app.queries,
@@ -2164,7 +2164,9 @@ async function staticBuildCheckGraph(
         status: fact.status,
       })),
   );
-  const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', endpointCheckFact);
+  const endpoints = buildMapDense(app.endpoints, 'Build app endpoints', (endpoint) =>
+    endpointCheckFact(endpoint, options.execution),
+  );
   for (let index = 0; index < routeOutcomeFacts.length; index += 1) {
     buildSecurityArrayAppend(
       endpoints,
@@ -2181,7 +2183,9 @@ async function staticBuildCheckGraph(
     'Build app mutations for optimistic coverage',
     mutationOptimisticCheckFacts,
   );
-  const pages = buildMapDense(app.routes, 'Build app routes', routeCheckFact);
+  const pages = buildMapDense(app.routes, 'Build app routes', (route) =>
+    routeCheckFact(route, options.execution),
+  );
   const authorizationCorrespondence =
     drizzleFacts.runtimeTableSecurityManifest === undefined
       ? []
@@ -2669,7 +2673,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const projectMutationFacts =
     appContractProject?.projectMutationRegistryFacts(sourceFiles) ??
     projectMutationRegistryFactsFromFiles(sourceFiles);
-  const appContractStaticFacts = appContractProject?.staticFacts() ?? [];
+  const appContractStaticFacts = appContractProject?.staticFacts(sourceFiles) ?? [];
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
     // Every identity input comes from the same descriptor-bound source census. Supplying the
@@ -2955,7 +2959,9 @@ function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
 function queryCheckFact(
   query: KovoApp['queries'][number],
   queryFacts: readonly QueryReadFactLike[],
+  execution: BuildExecutionModule,
 ): CoreGraph.QueryReadSet {
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(query), execution);
   const fact = buildFindDense(
     queryFacts,
     'Static query-read facts',
@@ -2981,6 +2987,7 @@ function queryCheckFact(
     isString,
   );
   return {
+    ...(access === undefined ? {} : { access }),
     domains: uniqueSorted(
       appendDense(declaredReadKeys, factReads, `Read domains for ${query.key}`),
     ),
@@ -3206,7 +3213,11 @@ function uniqueQueries(queries: readonly { key: string }[]): { key: string }[] {
   return unique;
 }
 
-function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain {
+function routeCheckFact(
+  route: KovoApp['routes'][number],
+  execution: BuildExecutionModule,
+): CoreGraph.PageExplain {
+  const access = routeEndpointAccessFact(route, execution);
   const layoutQueryRecord = route.layout?.queries ?? {};
   const layoutQueryKeys = buildObjectKeys(layoutQueryRecord);
   const layoutQueries: { key: string }[] = [];
@@ -3229,6 +3240,7 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
     }
   }
   return {
+    ...(access === undefined ? {} : { access }),
     ...(route.guard === undefined ? {} : { guards: ['route.guard'] }),
     queries: uniqueSorted(
       buildMapDense(layoutQueries, `Layout query values for ${route.path}`, (query) => query.key),
@@ -3317,7 +3329,11 @@ function isGuardAccessDecisionValue(access: AccessDecision): access is readonly 
   return buildArrayIsArray(access);
 }
 
-function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
+function endpointCheckFact(
+  endpoint: KovoApp['endpoints'][number],
+  execution: BuildExecutionModule,
+): CoreGraph.EndpointExplain {
+  const access = accessDecisionGraphFact(execution.accessDecisionFor(endpoint), execution);
   const csrf = endpointSafeMethod(endpoint.method)
     ? 'safe:read-only'
     : endpoint.csrf?.exempt === true
@@ -3325,6 +3341,7 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
       : 'checked';
   const name = endpointWebhookName(endpoint);
   return {
+    ...(access === undefined ? {} : { access }),
     appOwnedSafety: endpoint.response.appOwnedSafety,
     ...(endpoint.auth === undefined
       ? {}

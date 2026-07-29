@@ -7649,6 +7649,7 @@ import {
 } from './static/project-setup.js';
 import {
   type ProjectNamespaceTableNames,
+  appendCompilerOwnedAppDbReceiverProof,
   appendProjectDrizzleReceiverAliasIdentifier,
   appendProjectDrizzleReceiverArrayAssignmentAliases,
   appendProjectDrizzleReceiverArrayAssignmentAliasesForType,
@@ -7676,6 +7677,7 @@ import {
   extractProjectUnclassifiedDrizzleReceiverCalls,
   extractProjectUnresolvedCalls,
   isFunctionLikeNode,
+  isCompilerOwnedAppDbMemberExpression,
   isInlineIterationCallback,
   isInlineTransactionCallback,
   isNestedInWriteReadSource,
@@ -7886,11 +7888,13 @@ export {
 
 /** @internal */
 export {
+  appendCompilerOwnedAppDbReceiverProof,
   appendProjectDrizzleReceiverBindingsFromBody,
   appendProjectDrizzleReceiverParameterBinding,
   bodySourceStart,
   drizzleWriteChainRoot,
   isProjectDrizzleReceiverIdentifier,
+  isCompilerOwnedAppDbMemberExpression,
   isProjectDrizzleReceiverMemberExpression,
   projectClassStaticMemberCallbacks,
   projectDomainWriteCallbacks,
