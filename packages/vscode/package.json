@@ -1,0 +1,81 @@
+{
+  "name": "kovo-diagnostics",
+  "displayName": "Kovo Diagnostics",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Presentation-only VS Code diagnostics over Kovo's kovo-diagnostic/v1 JSON output.",
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "diagnostics",
+    "kovo",
+    "tsx"
+  ],
+  "homepage": "https://kovo.sh",
+  "bugs": {
+    "url": "https://github.com/kovojs/kovo/issues"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kovojs/kovo.git",
+    "directory": "packages/vscode"
+  },
+  "publisher": "kovojs",
+  "main": "./src/extension.cjs",
+  "scripts": {
+    "package:vsix": "node scripts/package-vsix.mjs",
+    "package:check": "node scripts/check-package.mjs",
+    "test": "vitest --run src/diagnostic-adapter.test.mjs src/extension.test.mjs --reporter=dot"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "kovo.diagnostics.refresh",
+        "title": "Kovo: Reload Diagnostic File"
+      },
+      {
+        "command": "kovo.diagnostics.applySafeFix",
+        "title": "Kovo: Apply Compiler-Proven Safe Fix"
+      }
+    ],
+    "configuration": {
+      "title": "Kovo",
+      "properties": {
+        "kovo.diagnostics.file": {
+          "type": "string",
+          "default": ".kovo/diagnostics.json",
+          "description": "Workspace-relative kovo-diagnostic/v1 JSON file to watch.",
+          "scope": "resource"
+        },
+        "kovo.diagnostics.pnpmPath": {
+          "type": "string",
+          "default": "pnpm",
+          "description": "pnpm executable used only after you invoke the compiler-proven safe-fix action.",
+          "scope": "machine-overridable"
+        }
+      }
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:.kovo/diagnostics.json"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Kovo Diagnostics reads workspace files and can run an explicitly requested local kovo fix process."
+    }
+  }
+}

@@ -46,6 +46,7 @@
     "test:devex-known-failures-nightly": "node scripts/known-failure-register.mjs --run-available --cadence nightly --packed-manifest .release/packed-packages.json",
     "test:devex-track2": "node scripts/devex-ci-policy.mjs && vitest --run scripts/devex-benchmark.test.mjs scripts/devex-ci-policy.test.mjs scripts/devex-golden-contract.test.mjs scripts/devex-pr-report.test.mjs scripts/full-catalog-reproducer.test.mjs scripts/full-catalog-known-failure.test.mjs scripts/golden-journey.test.mjs scripts/golden-journey/artifacts.test.mjs scripts/golden-journey/offline-agent.test.mjs scripts/golden-journey/packed-app.test.mjs scripts/lib/process-tree-rss.test.mjs --reporter=dot",
     "test:devex-offline-agent": "vitest --run scripts/golden-journey.test.mjs scripts/golden-journey/offline-agent.test.mjs scripts/egress-floor.test.mjs --reporter=dot",
+    "test:devex-editor": "pnpm --filter kovo-diagnostics test && pnpm --filter kovo-diagnostics run package:check",
     "test:devex-offline-agent:packed": "node scripts/golden-journey.mjs --scenario offline-agent --packed-manifest .release/packed-packages.json",
     "check:security-event-answerability": "node scripts/security-cost-budget-runner.mjs --gate security-event-answerability",
     "check:protocol-alphabet": "node scripts/security-cost-budget-runner.mjs --gate protocol-alphabet",

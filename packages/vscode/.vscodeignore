@@ -1,0 +1,7 @@
+.gitignore
+.vscodeignore
+DECISION.md
+scripts/**
+src/**/*.test.mjs
+dist/**
+node_modules/**

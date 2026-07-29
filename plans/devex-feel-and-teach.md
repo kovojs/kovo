@@ -35,12 +35,22 @@ compiler/runtime facts; none may become a second analyzer.
 
 ## Editor decision and parity
 
-- [ ] Compare thin `kovo lsp` transport with a VS Code JSON-watch adapter and record the selected
+- [x] Compare thin `kovo lsp` transport with a VS Code JSON-watch adapter and record the selected
       distribution model.
-- [ ] Keep the selected editor presentation-only over the incremental analyzer and diagnostic
+  - Evidence: `packages/vscode/DECISION.md` selects the six-entry VSIX JSON-watch arm; the
+    dependency-free `package:check` builds two byte-identical installable archives and verifies the
+    reviewed runtime allowlist.
+- [x] Keep the selected editor presentation-only over the incremental analyzer and diagnostic
       registry.
-- [ ] Permit deterministic safe source actions but never auto-insert security waivers, trusted
+  - Evidence: `pnpm --filter kovo-diagnostics test` proves strict bounded
+    `kovo-diagnostic/v1` ingestion, exact producer fields/UTF-16 spans, source-less output without
+    invented locations, workspace confinement, malformed-replacement clearing, and zero source
+    parsing or severity-table lookup.
+- [x] Permit deterministic safe source actions but never auto-insert security waivers, trusted
       escapes, disabled CSRF, raw SQL, or suppressions.
+  - Evidence: the same 28-test suite proves the code action contains no `WorkspaceEdit`, invokes
+    the authoritative `kovo fix <relative TSX/JSX>` process with `shell: false`, and refuses dirty,
+    untrusted, non-authored, symlink, and out-of-workspace inputs.
 - [ ] Assert human, JSON, GitHub, editor, MCP, and devtool projections agree on code, severity,
       help, and source span for each diagnostic family.
 
@@ -103,3 +113,6 @@ packages/cli/src/api.test.ts packages/server/src/api-topology.test.ts` passed (5
 - Devtool unit/parity verification passed 11 files and 53 tests; direct conformance proved UI
   edges ≡ MCP cards ≡ CLI text across three committed apps; the Chromium browser suite passed 3
   interaction/replay tests and is registered for Chromium, Firefox, and WebKit in CI.
+- `pnpm run test:devex-editor` passed (2 files, 28 tests) and built/verified a deterministic
+  six-entry `kovojs.kovo-diagnostics` VSIX; `pnpm run check:api-surface` stayed at zero public and
+  recursive-publicness findings.

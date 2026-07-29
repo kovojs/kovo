@@ -2465,6 +2465,12 @@
       "dir": "devtool",
       "visibility": "private",
       "kind": "build-tool"
+    },
+    {
+      "name": "kovo-diagnostics",
+      "dir": "vscode",
+      "visibility": "private",
+      "kind": "build-tool"
     }
   ]
 }
