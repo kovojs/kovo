@@ -99,7 +99,7 @@ kovo check source ./src/admin-app.tsx    # current source from another authored 
 kovo check --no-cache                    # force every current-source derivation
 kovo check optimistic graph.json         # optimistic exhaustiveness for an artifact
 kovo check coverage graph.json           # update coverage for an artifact
-kovo check endpoint-posture .kovo/endpoint-posture.json
+kovo check endpoint-posture                  # framework-owned production probe + artifact check
 kovo check sources-sinks
 kovo check advisories dist/.kovo/graph.json
 ```
