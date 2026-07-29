@@ -263,7 +263,7 @@ describe('tutorial step 07 — testing & verification', () => {
   // snippet:kovo-explain-test
   it('explains the addToCart mutation as a stable, diffable artifact', () => {
     const explanation = kovoExplain(verifiedShopGraph, {
-      kind: 'mutation',
+      view: 'mutation',
       optimistic: true,
       target: addToCart.key,
     });
@@ -287,10 +287,10 @@ describe('tutorial step 07 — testing & verification', () => {
   // snippet:intent-test
   it('answers "what updates when addToCart commits" mechanically', () => {
     const mutationExplain = kovoExplain(verifiedShopGraph, {
-      kind: 'mutation',
+      view: 'mutation',
       target: addToCart.key,
     });
-    const pageExplain = kovoExplain(verifiedShopGraph, { kind: 'page', target: '/' });
+    const pageExplain = kovoExplain(verifiedShopGraph, { view: 'page', target: '/' });
     const pageQueries = explainList(explainLine(pageExplain.output, 'queries: '));
 
     expect(pageQueries).toEqual([cartQuery.key, productsQuery.key, orderHistoryQuery.key]);
@@ -299,7 +299,7 @@ describe('tutorial step 07 — testing & verification', () => {
     // updated by addToCart, and each names its consuming component.
     const updates = explainLine(mutationExplain.output, 'updates: ');
     for (const query of pageQueries) {
-      const queryExplain = kovoExplain(verifiedShopGraph, { kind: 'query', target: query });
+      const queryExplain = kovoExplain(verifiedShopGraph, { view: 'query', target: query });
       const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
 
       expect(updates).toContain(`${query}->`);
@@ -321,7 +321,7 @@ describe('tutorial step 07 — testing & verification', () => {
       { decision: 'guard', kind: 'query', name: orderHistoryQuery.key },
       { decision: 'public', kind: 'query', name: productsQuery.key },
     ]);
-    expect(kovoExplain(verifiedShopGraph, { unguarded: true })).toEqual({
+    expect(kovoExplain(verifiedShopGraph, { view: 'unguarded' })).toEqual({
       exitCode: 0,
       output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });

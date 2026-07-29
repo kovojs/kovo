@@ -47,7 +47,7 @@ test('matches browser-observed cart behavior to component and mutation explain o
     queries: [{ domains: ['cart'], query: 'cart' }],
   };
 
-  expect(kovoExplain(graph, { kind: 'component', target: 'CartBadge' })).toEqual({
+  expect(kovoExplain(graph, { view: 'component', target: 'CartBadge' })).toEqual({
     exitCode: 0,
     output: [
       'kovo-explain/v1',
@@ -58,7 +58,7 @@ test('matches browser-observed cart behavior to component and mutation explain o
       '',
     ].join('\n'),
   });
-  expect(kovoExplain(graph, { kind: 'mutation', target: 'cart/add' }).output).toContain(
+  expect(kovoExplain(graph, { view: 'mutation', target: 'cart/add' }).output).toContain(
     'updates: cart->component:CartBadge,page:/',
   );
 });

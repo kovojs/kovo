@@ -43,6 +43,7 @@ export type {
   KovoAnalysisInputs,
   KovoCheckInput,
   KovoExplainInput,
+  KovoGraphProof,
   MassAssignmentFact,
   MutationExplain,
   MutationFormErrorExplain,

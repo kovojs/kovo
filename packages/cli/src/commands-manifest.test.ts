@@ -148,7 +148,7 @@ describe('commands manifest', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
     expect(CHECK_USAGE).toBe(
-      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
+      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(ADVISORY_USAGE).toBe(
       'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
@@ -193,22 +193,22 @@ describe('commands manifest', () => {
       'kovo explain component|mutation|query|page|context|task <target>',
     );
     expect(EXPLAIN_USAGE).toContain(
-      '       kovo explain --capabilities [graph.json] [--format <human|json|github>]',
+      '       kovo explain capabilities [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE).toContain(
-      '       kovo explain --cookies [graph.json] [--format <human|json|github>]',
+      '       kovo explain cookies [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE).toContain(
-      '       kovo explain --tasks [graph.json] [--format <human|json|github>]',
+      '       kovo explain tasks [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE_LINE).toContain(
-      'kovo explain --capabilities [graph.json] [--format <human|json|github>]',
+      'kovo explain capabilities [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE_LINE).toContain(
-      'kovo explain --cookies [graph.json] [--format <human|json|github>]',
+      'kovo explain cookies [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE_LINE).toContain(
-      'kovo explain --tasks [graph.json] [--format <human|json|github>]',
+      'kovo explain tasks [graph.json] [--artifact <graph.json>] [--format <human|json|github>]',
     );
     expect(EXPLAIN_USAGE_LINE).toContain('[--format <human|json|github>]');
   });
@@ -378,7 +378,7 @@ describe('commands manifest', () => {
       message: expect.stringContaining('kovo: build accepts one app module path.'),
       ok: false,
     });
-    expect(parseKovoCommandInvocation('explain', ['--tasks', '--agent'])).toMatchObject({
+    expect(parseKovoCommandInvocation('explain', ['tasks', 'one.json', 'two.json'])).toMatchObject({
       error: 'usage',
       ok: false,
     });
@@ -409,7 +409,8 @@ describe('commands manifest', () => {
     });
     expect(
       parseKovoCommandInvocation('explain', [
-        '--attest=https://app.example',
+        'attest',
+        'https://app.example',
         '--artifact=graph.json',
         `--trust-anchor=sha256:${'a'.repeat(64)}`,
       ]),
@@ -418,7 +419,7 @@ describe('commands manifest', () => {
       value: {
         command: 'explain',
         form: 'attest',
-        options: { attest: 'https://app.example' },
+        arguments: { url: 'https://app.example' },
       },
     });
   });

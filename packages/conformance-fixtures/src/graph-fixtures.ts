@@ -246,8 +246,8 @@ export interface CommerceGraphBehaviorOptions<T extends ProjectGraphFixture> {
   kovoExplain: (
     graph: KovoExplainInput,
     options:
-      | { kind: 'mutation'; optimistic?: boolean; target: string }
-      | { kind: 'query'; target: string },
+      | { optimistic?: boolean; target: string; view: 'mutation' }
+      | { target: string; view: 'query' },
   ) => KovoExplainResultLike;
   graph: T & KovoExplainInput;
 }
@@ -430,11 +430,11 @@ export function graphStaticBehaviorFact(graph: KovoGraphFixture): GraphStaticBeh
 export function commerceGraphBehaviorFact<T extends ProjectGraphFixture>(
   options: CommerceGraphBehaviorOptions<T>,
 ): CommerceGraphBehaviorFact {
-  const cartQueryExplain = options.kovoExplain(options.graph, { kind: 'query', target: 'cart' });
+  const cartQueryExplain = options.kovoExplain(options.graph, { target: 'cart', view: 'query' });
   const cartAddExplain = options.kovoExplain(options.graph, {
-    kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
+    view: 'mutation',
   });
   const invalidatedBy = graphInvalidatedByQueries(options.graph);
   const coverageCheck = options.kovoCheck(
@@ -494,9 +494,9 @@ export const CartBadge = component({
     matrix: kovoExplainMutationQueryMatrixFact({
       explainMutation: (mutationKey) =>
         options.kovoExplain(options.graph, {
-          kind: 'mutation',
           optimistic: true,
           target: mutationKey,
+          view: 'mutation',
         }),
       graph: options.graph,
       invalidatedBy,

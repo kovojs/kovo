@@ -484,14 +484,14 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
             return { exitCode: 0, output: 'kovo-check/v1\nOK\n' };
           },
           kovoExplain(_candidateGraph, options) {
-            if (options.kind === 'mutation') {
+            if (options.view === 'mutation') {
               return {
                 exitCode: 0,
                 output:
                   'kovo-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0\n',
               };
             }
-            if (options.kind === 'page') {
+            if (options.view === 'page') {
               return {
                 exitCode: 0,
                 output:

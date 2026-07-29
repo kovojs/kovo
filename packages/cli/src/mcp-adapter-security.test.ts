@@ -360,21 +360,21 @@ export const Shell = component({ render: () => <section></section> });
     expectToolError(
       await callTool('kovo_explain', {
         graph: {},
-        options: { kind: 'query', target: 'cart', typo: true },
+        options: { target: 'cart', typo: true, view: 'query' },
       }),
       'kovo_explain options contain unsupported field typo',
     );
     expectToolError(
       await callTool('kovo_explain', {
         graph: {},
-        options: { agent: true, endpoints: true },
+        options: { endpoints: true, view: 'agent' },
       }),
-      'kovo_explain options select multiple modes',
+      'kovo_explain options contain unsupported field endpoints',
     );
     expectToolError(
       await callTool('kovo_explain', {
         graph: {},
-        options: { access: true, failOnFindings: true, optimistic: true },
+        options: { failOnFindings: true, optimistic: true, view: 'access' },
       }),
       'kovo_explain options contain unsupported field optimistic',
     );
@@ -401,7 +401,10 @@ export const Shell = component({ render: () => <section></section> });
       'MCP graph work exceeds 65536 aggregate comparison units',
     );
     expectToolError(
-      await callTool('kovo_explain', { graph: graphOverBoundary, options: { endpoints: true } }),
+      await callTool('kovo_explain', {
+        graph: graphOverBoundary,
+        options: { view: 'endpoints' },
+      }),
       'MCP graph work exceeds 65536 aggregate comparison units',
     );
   });
@@ -418,7 +421,7 @@ export const Shell = component({ render: () => <section></section> });
     expectToolError(
       await callTool('kovo_explain', {
         graph: mutationConsumerGraph,
-        options: { kind: 'mutation', target: 'save' },
+        options: { target: 'save', view: 'mutation' },
       }),
       'MCP graph work exceeds 65536 aggregate comparison units',
     );
@@ -434,7 +437,7 @@ export const Shell = component({ render: () => <section></section> });
     expectToolError(
       await callTool('kovo_explain', {
         graph: endpointRunMutationGraph,
-        options: { endpoints: true },
+        options: { view: 'endpoints' },
       }),
       'MCP graph work exceeds 65536 aggregate comparison units',
     );

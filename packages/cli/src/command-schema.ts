@@ -345,6 +345,11 @@ const checkOptions = [
     }),
   }),
   diagnosticFormatOption,
+  flag('artifact', ['--artifact'], 'Inspect the explicitly named completed build graph.', {
+    category: 'input',
+    missingValueMessage: 'kovo: check --artifact requires a graph path.\n',
+    value: value('path', 'graph.json'),
+  }),
 ] as const;
 
 const explainOptions = [
@@ -352,58 +357,8 @@ const explainOptions = [
     category: 'selection',
   }),
   flag('layouts', ['--layouts'], 'Include the page layout chain.', { category: 'selection' }),
-  flag('sourcesSinks', ['--sources-sinks'], 'Print the source/sink inventory.', {
-    category: 'selection',
-  }),
-  flag('tasks', ['--tasks'], 'List durable-task facts and composition edges.', {
-    category: 'selection',
-  }),
-  flag('agent', ['--agent'], 'Print model/tool effect closures by integrity level.', {
-    category: 'selection',
-  }),
-  flag('grants', ['--grants'], 'Print compiler-derived grant and attenuation facts.', {
-    category: 'selection',
-  }),
-  flag('endpoints', ['--endpoints'], 'Audit every machine-ingress surface.', {
-    category: 'selection',
-  }),
-  flag('revealed', ['--revealed'], 'List confidentiality reveals and their proof grade.', {
-    category: 'selection',
-  }),
-  flag('trust', ['--trust'], 'List explicit trust escape hatches.', {
-    category: 'selection',
-  }),
-  flag('capabilities', ['--capabilities'], 'List held capabilities and closed paths.', {
-    category: 'selection',
-  }),
-  flag('cookies', ['--cookies'], 'List cookie posture and downgrade findings.', {
-    category: 'selection',
-  }),
-  flag('authLifecycle', ['--auth-lifecycle'], 'Print the Better Auth lifecycle contract.', {
-    category: 'selection',
-  }),
-  flag('modelBoundaries', ['--model-boundaries'], 'Print bounded-model assumptions.', {
-    category: 'selection',
-  }),
-  flag('authorization', ['--authorization'], 'Compare app guard facts and Postgres policies.', {
-    category: 'selection',
-  }),
-  flag('access', ['--access'], 'Review producer-owned access decisions.', {
-    category: 'selection',
-  }),
-  flag('unguarded', ['--unguarded'], 'Audit handlers reachable without a guard.', {
-    category: 'selection',
-  }),
-  flag('unscoped', ['--unscoped'], 'Audit owner data reached without owner scope.', {
-    category: 'selection',
-  }),
   flag('failOnFindings', ['--fail-on-findings'], 'Exit 1 when an audit reports findings.', {
     category: 'posture',
-  }),
-  flag('attest', ['--attest'], 'Attest a live deployment URL.', {
-    category: 'input',
-    missingValueMessage: 'kovo: explain --attest requires a deployment URL.\n',
-    value: value('url', 'url'),
   }),
   flag('artifact', ['--artifact'], 'Use the explicitly named build graph.', {
     category: 'input',
@@ -625,6 +580,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
       'kovo check',
       'kovo check source ./src/app.tsx --no-cache',
       'kovo check coverage graph.json',
+      'kovo check coverage --artifact dist/.kovo/graph.json',
       'kovo check env deployment.json',
       'kovo check advisories .kovo/graph.json',
     ],
@@ -672,6 +628,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
             },
           ),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
@@ -1028,8 +985,8 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     compilerRealm: 'unlocked',
     examples: [
       'kovo explain component Cart graph.json',
-      'kovo explain --capabilities',
-      'kovo explain --access --fail-on-findings',
+      'kovo explain capabilities',
+      'kovo explain access --fail-on-findings',
     ],
     exits,
     name: 'explain',
@@ -1059,6 +1016,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           option('optimistic'),
           option('layouts'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
@@ -1067,129 +1025,147 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
         tokens: [
           literal('document', 'Explain the framework-owned document shell.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'sources-sinks',
         tokens: [
-          option('sourcesSinks', true),
+          literal('sources-sinks', 'Print the source/sink inventory.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'tasks',
         tokens: [
-          option('tasks', true),
+          literal('tasks', 'List durable-task facts and composition edges.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'agent',
         tokens: [
-          option('agent', true),
+          literal('agent', 'Print model/tool effect closures by integrity level.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'grants',
         tokens: [
-          option('grants', true),
+          literal('grants', 'Print compiler-derived grant and attenuation facts.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'endpoints',
         tokens: [
-          option('endpoints', true),
+          literal('endpoints', 'Audit every machine-ingress surface.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'revealed',
         tokens: [
-          option('revealed', true),
+          literal('revealed', 'List confidentiality reveals and their proof grade.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'trust',
         tokens: [
-          option('trust', true),
+          literal('trust', 'List explicit trust escape hatches.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'capabilities',
         tokens: [
-          option('capabilities', true),
+          literal('capabilities', 'List held capabilities and closed paths.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'cookies',
         tokens: [
-          option('cookies', true),
+          literal('cookies', 'List cookie posture and downgrade findings.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'authorization',
         tokens: [
-          option('authorization', true),
+          literal('authorization', 'Compare app guard facts and Postgres policies.'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'access',
         tokens: [
-          option('access', true),
+          literal('access', 'Review producer-owned access decisions.'),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'unguarded',
         tokens: [
-          option('unguarded', true),
+          literal('unguarded', 'Audit handlers reachable without a guard.'),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'unscoped',
         tokens: [
-          option('unscoped', true),
+          literal('unscoped', 'Audit owner data reached without owner scope.'),
           option('failOnFindings'),
           argument('graph', value('path', 'graph.json'), { required: false }),
+          option('artifact'),
           option('format'),
         ],
       },
       {
         id: 'auth-lifecycle',
-        tokens: [option('authLifecycle', true), option('format')],
+        tokens: [
+          literal('auth-lifecycle', 'Print the Better Auth lifecycle contract.'),
+          option('format'),
+        ],
       },
       {
         id: 'model-boundaries',
-        tokens: [option('modelBoundaries', true), option('format')],
+        tokens: [literal('model-boundaries', 'Print bounded-model assumptions.'), option('format')],
       },
       {
         async: true,
         id: 'attest',
         tokens: [
-          option('attest', true),
+          literal('attest', 'Attest a live deployment URL.'),
+          argument('url', value('url', 'url')),
           option('artifact', true),
           option('trustAnchor', true),
           option('escapeReviews'),

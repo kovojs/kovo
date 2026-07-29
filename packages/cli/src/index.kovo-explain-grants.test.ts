@@ -5,13 +5,14 @@ import { kovoCheck, kovoExplain } from './graph-output.js';
 
 describe('kovo explain --grants (Plan 3 §3.2 C13 anchor)', () => {
   it('parses the grant graph as an exclusive graph-backed explain mode', () => {
-    expect(parseExplainArgs(['--grants', 'graph.json'])).toEqual({
+    expect(parseExplainArgs(['grants', 'graph.json'])).toEqual({
+      artifact: false,
       format: 'human',
       inputPath: 'graph.json',
       ok: true,
-      options: { grants: true },
+      options: { view: 'grants' },
     });
-    expect(parseExplainArgs(['--grants', '--agent'])).toMatchObject({ ok: false });
+    expect(parseExplainArgs(['grants', 'one.json', 'two.json'])).toMatchObject({ ok: false });
   });
 
   it('prints derived resources, decided transitions, and named budgeted escapes', () => {
@@ -45,7 +46,7 @@ describe('kovo explain --grants (Plan 3 §3.2 C13 anchor)', () => {
           },
         ],
       },
-      { grants: true },
+      { view: 'grants' },
     );
 
     expect(result).toEqual({

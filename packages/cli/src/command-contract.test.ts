@@ -218,7 +218,7 @@ describe('semantic CLI contract', () => {
       ok: true,
       value: { options: { format: 'github' } },
     });
-    expect(parseKovoCommandInvocation('explain', ['--tasks', '--format', 'yaml'])).toMatchObject({
+    expect(parseKovoCommandInvocation('explain', ['tasks', '--format', 'yaml'])).toMatchObject({
       error: 'usage',
       message: expect.stringContaining('--format requires human, json, or github'),
       ok: false,
@@ -411,15 +411,15 @@ describe('semantic CLI contract', () => {
   });
 
   it('keeps human fact protocols byte-stable and emits authenticated machine diagnostics', async () => {
-    const implicitHuman = captureWrites(() => main(['explain', '--auth-lifecycle']));
+    const implicitHuman = captureWrites(() => main(['explain', 'auth-lifecycle']));
     const explicitHuman = captureWrites(() =>
-      main(['explain', '--auth-lifecycle', '--format', 'human']),
+      main(['explain', 'auth-lifecycle', '--format', 'human']),
     );
     expect(explicitHuman).toEqual(implicitHuman);
     expect(implicitHuman.stdout).toMatch(/^kovo-explain\/v1\n/u);
 
     const explainJson = captureWrites(() =>
-      main(['explain', '--auth-lifecycle', '--format', 'json']),
+      main(['explain', 'auth-lifecycle', '--format', 'json']),
     );
     expect(explainJson).toEqual({
       result: 0,
@@ -482,7 +482,8 @@ describe('semantic CLI contract', () => {
     const attestJson = await captureWritesAsync(() =>
       mainAsync([
         'explain',
-        '--attest=https://app.example',
+        'attest',
+        'https://app.example',
         `--artifact=${missingGraph}`,
         `--trust-anchor=sha256:${'a'.repeat(64)}`,
         '--format=json',
@@ -544,7 +545,8 @@ describe('semantic CLI contract', () => {
     const invalidAttestation = await captureWritesAsync(() =>
       mainAsync([
         'explain',
-        '--attest=https://app.example',
+        'attest',
+        'https://app.example',
         '--artifact=graph.json',
         '--trust-anchor=invalid',
       ]),

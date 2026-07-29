@@ -160,7 +160,7 @@ describe('kovo explain', () => {
             },
           ],
         },
-        { kind: 'component', target: 'CartBadge' },
+        { view: 'component', target: 'CartBadge' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -209,7 +209,7 @@ describe('kovo explain', () => {
             },
           ],
         },
-        { kind: 'component', target: 'kovo-dialog' },
+        { view: 'component', target: 'kovo-dialog' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -256,7 +256,7 @@ describe('kovo explain', () => {
             { domains: ['product'], query: 'recommendations' },
           ],
         },
-        { kind: 'mutation', optimistic: true, target: 'cart/add' },
+        { view: 'mutation', optimistic: true, target: 'cart/add' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -293,7 +293,7 @@ describe('kovo explain', () => {
       ],
     };
 
-    expect(kovoExplain(graph, { tasks: true })).toEqual({
+    expect(kovoExplain(graph, { view: 'tasks' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -304,7 +304,7 @@ describe('kovo explain', () => {
       ].join('\n'),
     });
 
-    expect(kovoExplain(graph, { kind: 'task', target: 'email/send-receipt' })).toEqual({
+    expect(kovoExplain(graph, { view: 'task', target: 'email/send-receipt' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -343,7 +343,7 @@ describe('kovo explain', () => {
           ],
           mutations: [{ guards: ['authed'], key: 'cart/save', writes: ['cart'] }],
         },
-        { endpoints: true },
+        { view: 'endpoints' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -396,7 +396,7 @@ export const save = mutation('cart/save', {
     });
     const result = kovoExplain(
       JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
-      { endpoints: true },
+      { view: 'endpoints' },
     );
 
     expect(result.output).toContain(
@@ -431,7 +431,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'query', target: 'dashboard' },
+        { view: 'query', target: 'dashboard' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -462,7 +462,7 @@ export const save = mutation('cart/save', {
             { domains: ['product'], query: 'recommendations' },
           ],
         },
-        { kind: 'mutation', optimistic: true, target: 'cart/add' },
+        { view: 'mutation', optimistic: true, target: 'cart/add' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -541,7 +541,7 @@ export const save = mutation('cart/save', {
             { domains: ['order'], query: 'orders.byPrice' },
           ],
         },
-        { kind: 'mutation', optimistic: true, target: 'cart/add' },
+        { view: 'mutation', optimistic: true, target: 'cart/add' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -588,7 +588,7 @@ export const save = mutation('cart/save', {
           { key: 'inventory/sync', manualInvalidates: ['product'], writes: ['product'] },
         ],
       },
-      { unguarded: true },
+      { view: 'unguarded' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -615,7 +615,7 @@ export const save = mutation('cart/save', {
       ],
     };
 
-    expect(kovoExplain(input, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
+    expect(kovoExplain(input, { view: 'mutation', target: 'auth/sign-in' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -630,7 +630,7 @@ export const save = mutation('cart/save', {
         '',
       ].join('\n'),
     });
-    expect(kovoExplain(input, { unguarded: true })).toEqual({
+    expect(kovoExplain(input, { view: 'unguarded' })).toEqual({
       exitCode: 0,
       output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });
@@ -666,7 +666,7 @@ export const save = mutation('cart/save', {
       ],
     } as const;
 
-    expect(kovoExplain(input, { kind: 'mutation', target: 'cart/add' })).toEqual({
+    expect(kovoExplain(input, { view: 'mutation', target: 'cart/add' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -681,7 +681,7 @@ export const save = mutation('cart/save', {
         '',
       ].join('\n'),
     });
-    expect(kovoExplain(input, { kind: 'query', target: 'product/list' })).toEqual({
+    expect(kovoExplain(input, { view: 'query', target: 'product/list' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -712,7 +712,7 @@ export const save = mutation('cart/save', {
           { domains: ['order'], guards: [], query: 'adminOrders' },
         ],
       },
-      { unguarded: true },
+      { view: 'unguarded' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -749,7 +749,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { unguarded: true },
+      { view: 'unguarded' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -878,7 +878,7 @@ export const save = mutation('cart/save', {
           { domains: ['product'], query: 'catalog' },
         ],
       },
-      { access: true },
+      { view: 'access' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -917,7 +917,7 @@ export const save = mutation('cart/save', {
       ],
     });
 
-    expect(kovoExplain({ access: accessFactsFromApp(app) }, { access: true })).toEqual({
+    expect(kovoExplain({ access: accessFactsFromApp(app) }, { view: 'access' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',
@@ -937,7 +937,7 @@ export const save = mutation('cart/save', {
         pages: [{ guards: ['authed'], route: '/cart' }],
         queries: [{ domains: ['cart'], guards: ['authed'], query: 'cart' }],
       },
-      { access: true },
+      { view: 'access' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1003,7 +1003,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { endpoints: true },
+      { view: 'endpoints' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1036,7 +1036,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { endpoints: true },
+      { view: 'endpoints' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1064,7 +1064,7 @@ export const save = mutation('cart/save', {
         ],
         mutations: [{ key: 'billing/record-invoice', writes: ['invoice'] }],
       },
-      { endpoints: true },
+      { view: 'endpoints' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1103,7 +1103,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { endpoints: true },
+      { view: 'endpoints' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1149,7 +1149,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--endpoints', graphPath])).toBe(0);
+      expect(main(['explain', 'endpoints', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1199,7 +1199,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { trust: true },
+      { view: 'trust' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1236,7 +1236,7 @@ export const save = mutation('cart/save', {
     >[0]);
     const result = kovoExplain(
       JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
-      { trust: true },
+      { view: 'trust' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1282,7 +1282,7 @@ export const save = mutation('cart/save', {
     >[0]);
     const result = kovoExplain(
       JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
-      { capabilities: true },
+      { view: 'capabilities' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1336,7 +1336,7 @@ export const save = mutation('cart/save', {
     const merged = deriveAppGraph({ graph: { revealed } } as Parameters<typeof deriveAppGraph>[0]);
     const result = kovoExplain(
       JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
-      { revealed: true },
+      { view: 'revealed' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1382,7 +1382,7 @@ export const save = mutation('cart/save', {
     >[0]);
     const result = kovoExplain(
       JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
-      { cookies: true },
+      { view: 'cookies' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1478,7 +1478,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { capabilities: true },
+      { view: 'capabilities' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1547,7 +1547,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { capabilities: true },
+      { view: 'capabilities' },
     );
 
     expect(result).toEqual({
@@ -1574,7 +1574,7 @@ export const save = mutation('cart/save', {
   // framework-owned external-Postgres lease contract without inventing a current lease verdict.
   it('surfaces the Postgres posture-lease contract without claiming live state', async () => {
     const runtimeContract = await import('../../server/src/postgres-posture-lease.js');
-    const result = kovoExplain({}, { capabilities: true });
+    const result = kovoExplain({}, { view: 'capabilities' });
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(
@@ -1612,7 +1612,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { cookies: true },
+      { view: 'cookies' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1650,7 +1650,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { document: true },
+      { view: 'document' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1691,7 +1691,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { revealed: true },
+      { view: 'revealed' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -1733,7 +1733,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--revealed', graphPath])).toBe(0);
+      expect(main(['explain', 'revealed', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1777,7 +1777,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--trust', graphPath])).toBe(0);
+      expect(main(['explain', 'trust', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1851,7 +1851,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--unguarded', graphPath])).toBe(0);
+      expect(main(['explain', 'unguarded', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1892,7 +1892,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--access', graphPath])).toBe(0);
+      expect(main(['explain', 'access', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1933,7 +1933,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--access', '--fail-on-findings', graphPath])).toBe(1);
+      expect(main(['explain', 'access', '--fail-on-findings', graphPath])).toBe(1);
     } finally {
       stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -1965,7 +1965,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--unguarded', '--fail-on-findings', graphPath])).toBe(1);
+      expect(main(['explain', 'unguarded', '--fail-on-findings', graphPath])).toBe(1);
     } finally {
       stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -2016,7 +2016,7 @@ export const save = mutation('cart/save', {
           },
         ],
       },
-      { unscoped: true },
+      { view: 'unscoped' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -2056,7 +2056,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--unscoped', graphPath])).toBe(0);
+      expect(main(['explain', 'unscoped', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -2097,7 +2097,7 @@ export const save = mutation('cart/save', {
         }),
       );
 
-      expect(main(['explain', '--unscoped', '--fail-on-findings', graphPath])).toBe(1);
+      expect(main(['explain', 'unscoped', '--fail-on-findings', graphPath])).toBe(1);
     } finally {
       stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
@@ -2139,7 +2139,7 @@ export const save = mutation('cart/save', {
             },
           },
         },
-        { kind: 'query', target: 'cart' },
+        { view: 'query', target: 'cart' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2165,7 +2165,7 @@ export const save = mutation('cart/save', {
           ],
           queries: [{ domains: ['cart'], query: 'cart' }],
         },
-        { kind: 'query', target: 'cart' },
+        { view: 'query', target: 'cart' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2193,7 +2193,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'component', target: 'ProductGrid' },
+        { view: 'component', target: 'ProductGrid' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2227,7 +2227,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'context', target: 'db' },
+        { view: 'context', target: 'db' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2254,7 +2254,7 @@ export const save = mutation('cart/save', {
             { domains: ['product'], query: 'productGrid' },
           ],
         },
-        { kind: 'mutation', target: 'cart/add' },
+        { view: 'mutation', target: 'cart/add' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2292,7 +2292,7 @@ export const save = mutation('cart/save', {
             { domains: ['product'], query: 'productGrid' },
           ],
         },
-        { kind: 'mutation', target: 'cart/add' },
+        { view: 'mutation', target: 'cart/add' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2329,7 +2329,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'page', target: '/cart' },
+        { view: 'page', target: '/cart' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2349,7 +2349,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'page', target: '/cart' },
+        { view: 'page', target: '/cart' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2393,7 +2393,7 @@ export const save = mutation('cart/save', {
             },
           ],
         },
-        { kind: 'page', layouts: true, target: '/admin' },
+        { view: 'page', layouts: true, target: '/admin' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -2480,7 +2480,7 @@ export const save = mutation('cart/save', {
   });
 
   it('returns a stable not-found diagnostic for missing explain targets', () => {
-    expect(kovoExplain({}, { kind: 'component', target: 'Missing' })).toEqual({
+    expect(kovoExplain({}, { view: 'component', target: 'Missing' })).toEqual({
       exitCode: 1,
       output: 'kovo-explain/v1\nERROR NOT_FOUND component Missing\n',
     });

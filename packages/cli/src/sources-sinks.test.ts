@@ -283,20 +283,20 @@ describe('source/sink inventory', () => {
   });
 
   it('prints stable explain text with the required Phase 1 fields', () => {
-    expect(kovoExplain({}, { sourcesSinks: true })).toMatchObject({
+    expect(kovoExplain({}, { view: 'sources-sinks' })).toMatchObject({
       exitCode: 0,
       output: expect.stringContaining('kovo-explain/v1\nSOURCES-SINKS'),
     });
-    expect(kovoExplain({}, { sourcesSinks: true }).output).toContain(
+    expect(kovoExplain({}, { view: 'sources-sinks' }).output).toContain(
       'ITEM source=server-render|client-query|client-state|template-stamp|data-stream-text|streamed-model-output|compiler-read-app-source|db-user-text sink=html.dom.output context=html.text+attribute+url+script-json+style+srcdoc trust=untrusted-unless-branded firstParser=tsx-lowered-output-context consumers=server-renderer|browser-output-helpers|compiler-output-context-facts guard=contextual-encoding+url-scheme-allowlist:http|https|mailto|tel|ftp',
     );
-    expect(kovoExplain({}, { sourcesSinks: true }).output).toContain(
+    expect(kovoExplain({}, { view: 'sources-sinks' }).output).toContain(
       'diagnostic=KV236 escapeHatch=trustedHtml|trustedUrl specAnchor=SPEC.md#4.8;SPEC.md#5.2 testEvidence=packages/compiler/src/output-context-security.test.ts,packages/browser/src/security-output.test.ts',
     );
   });
 
   it('prints source ownership columns in explain output', () => {
-    const result = kovoExplain({}, { sourcesSinks: true });
+    const result = kovoExplain({}, { view: 'sources-sinks' });
 
     expect(result.output).toContain(' firstParser=');
     expect(result.output).toContain(' consumers=');

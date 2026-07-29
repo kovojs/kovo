@@ -63,7 +63,8 @@ import {
   parseCheckArgs,
   parseExplainArgs,
   runGraphCommand,
-  runRequiredGraphCommand,
+  runRequiredSelectedGraphCommand,
+  runSelectedGraphCommand,
   writeCheckUsageError,
 } from './graph-output.js';
 import { writeCommandResult, writeFormattedCommandResult, writeUsageError } from './shared.js';
@@ -164,7 +165,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
         'check',
       );
     }
-    const { family, inputPath } = parsed;
+    const { artifact, family, inputPath } = parsed;
     if (family === 'sources-sinks') {
       if (inputPath) {
         const input = runGraphCommand(
@@ -185,8 +186,9 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
       );
     }
     return writeFormattedCommandResult(
-      runRequiredGraphCommand(
+      runRequiredSelectedGraphCommand(
         inputPath,
+        artifact,
         (input) =>
           kovoCheck(input, {
             family,
@@ -203,7 +205,7 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
   explain(args, security) {
     const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message, 'explain');
-    if ('authLifecycle' in parsed.options || 'modelBoundaries' in parsed.options) {
+    if (parsed.options.view === 'auth-lifecycle' || parsed.options.view === 'model-boundaries') {
       return writeFormattedCommandResult(
         kovoExplain({}, parsed.options),
         parsed.format,
@@ -212,8 +214,9 @@ const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
       );
     }
     return writeFormattedCommandResult(
-      runGraphCommand(
+      runSelectedGraphCommand(
         parsed.inputPath,
+        parsed.artifact,
         (input) => kovoExplain(input, parsed.options),
         security.invocationCwd,
       ),

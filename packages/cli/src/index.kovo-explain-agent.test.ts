@@ -6,11 +6,12 @@ import { kovoExplain } from './index.js';
 // @kovo-security-classifier-corpus finite-security-operation-ir
 describe('kovo explain --agent', () => {
   it('prints the exact per-integrity effect closure', () => {
-    expect(parseExplainArgs(['--agent'])).toEqual({
+    expect(parseExplainArgs(['agent'])).toEqual({
+      artifact: false,
       format: 'human',
       inputPath: undefined,
       ok: true,
-      options: { agent: true },
+      options: { view: 'agent' },
     });
     expect(
       kovoExplain(
@@ -44,7 +45,7 @@ describe('kovo explain --agent', () => {
             },
           ],
         },
-        { agent: true },
+        { view: 'agent' },
       ),
     ).toEqual({
       exitCode: 0,
@@ -84,7 +85,7 @@ describe('kovo explain --agent', () => {
             },
           ],
         },
-        { agent: true },
+        { view: 'agent' },
       ),
     ).toMatchObject({
       exitCode: 1,

@@ -143,6 +143,8 @@ export {
   readGraphInput,
   runGraphCommand,
   runRequiredGraphCommand,
+  runRequiredSelectedGraphCommand,
+  runSelectedGraphCommand,
 } from './graph-input.js';
 import type { KovoCheckResult } from './shared.js';
 import {
@@ -442,15 +444,15 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
 
-  if ('authLifecycle' in options) {
+  if (options.view === 'auth-lifecycle') {
     return authLifecycleExplainResult(explainOutputVersion);
   }
 
-  if ('modelBoundaries' in options) {
+  if (options.view === 'model-boundaries') {
     return modelBoundariesExplainResult(explainOutputVersion);
   }
 
-  if ('agent' in options) {
+  if (options.view === 'agent') {
     const agents = [...(graph.agents ?? [])].sort((left, right) =>
       left.name.localeCompare(right.name),
     );
@@ -494,7 +496,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('grants' in options) {
+  if (options.view === 'grants') {
     const facts = [...(graph.grants ?? [])].sort(compareGrantFacts);
     const resources = facts.filter((fact) => fact.kind === 'resource').length;
     const delegations = facts.filter((fact) => fact.kind === 'delegation').length;
@@ -509,7 +511,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('authorization' in options) {
+  if (options.view === 'authorization') {
     const facts = [...(graph.authorizationCorrespondence ?? [])].sort(
       compareAuthorizationCorrespondenceFact,
     );
@@ -528,7 +530,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('access' in options) {
+  if (options.view === 'access') {
     const access = accessDecisions(graph);
     const missing = access.filter((fact) => fact.decision === 'missing').length;
     lines.push('ACCESS');
@@ -541,7 +543,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return explainAuditResult(lines, missing, options.failOnFindings);
   }
 
-  if ('unscoped' in options) {
+  if (options.view === 'unscoped') {
     const findings = unscopedAccesses(graph);
     lines.push('UNSCOPED');
 
@@ -553,7 +555,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return explainAuditResult(lines, findings.length, options.failOnFindings);
   }
 
-  if ('unguarded' in options) {
+  if (options.view === 'unguarded') {
     const accesses = unguardedAccesses(graph);
     lines.push('UNGUARDED');
 
@@ -565,7 +567,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return explainAuditResult(lines, accesses.length, options.failOnFindings);
   }
 
-  if ('endpoints' in options) {
+  if (options.view === 'endpoints') {
     // SPEC §11.4: the machine-ingress audit lists every endpoint and webhook PLUS every
     // mutation(), each with its CSRF posture, so review can answer "what can reach this app, and
     // what can it touch?" without executing a browser. A `csrf: false` mutation appears with
@@ -598,7 +600,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('document' in options) {
+  if (options.view === 'document') {
     const sinks = documentSourceSinkRows();
     const escapes = documentTrustEscapes(graph.trustEscapes ?? []);
     lines.push('DOCUMENT');
@@ -614,7 +616,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('revealed' in options) {
+  if (options.view === 'revealed') {
     const revealed = [...(graph.revealed ?? [])].sort(compareRevealExplain);
     lines.push('REVEALED');
 
@@ -626,9 +628,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('sourcesSinks' in options) return sourcesSinksExplainResult(explainOutputVersion);
+  if (options.view === 'sources-sinks') return sourcesSinksExplainResult(explainOutputVersion);
 
-  if ('tasks' in options) {
+  if (options.view === 'tasks') {
     const tasks = sortedTasks(graph.tasks ?? []);
     lines.push('TASKS');
 
@@ -640,7 +642,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('trust' in options) {
+  if (options.view === 'trust') {
     const escapes = [...(graph.trustEscapes ?? [])].sort(compareTrustEscape);
     lines.push('TRUST');
 
@@ -652,7 +654,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('capabilities' in options) {
+  if (options.view === 'capabilities') {
     // SPEC §6.6 (audit-only): a diffable table of every HELD dangerous capability collected from the
     // merged slices — publishToClient secret-emit escapes (KV437), egress `allowInternal` private-
     // network entries, confidentiality `trustedReveal`s, and serverValue/unsafeCookie/accept.unverified
@@ -684,7 +686,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if ('cookies' in options) {
+  if (options.view === 'cookies') {
     // SPEC §6.6/§9.1 (audit-only): every recorded insecure cookie downgrade (drained from
     // `drainCookieDowngradeFacts` at the serializeCookie sink and carried into the graph), with the
     // justification a reviewer needs to sign off on the weakened credential-cookie floor.
@@ -699,7 +701,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if (options.kind === 'context') {
+  if (options.view === 'context') {
     const provider = graph.requestProviders?.find((item) => item.kind === options.target);
     if (!provider) return notFound(options);
 
@@ -710,7 +712,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if (options.kind === 'component') {
+  if (options.view === 'component') {
     const component = findComponentExplain(graph.components, options.target);
     if (!component) return notFound(options);
     const provenance = componentPrefixProvenance(component, options.target, graph);
@@ -885,7 +887,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if (options.kind === 'mutation') {
+  if (options.view === 'mutation') {
     const mutation = graph.mutations?.find((item) => item.key === options.target);
     if (!mutation) return notFound(options);
 
@@ -934,7 +936,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if (options.kind === 'task') {
+  if (options.view === 'task') {
     const task = graph.tasks?.find((item) => item.key === options.target);
     if (!task) return notFound(options);
 
@@ -946,7 +948,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     return ok(lines);
   }
 
-  if (options.kind === 'query') {
+  if (options.view === 'query') {
     const query = graph.queries?.find((item) => item.query === options.target);
     if (!query) return notFound(options);
 
@@ -1251,7 +1253,7 @@ function kovoCheckInternal(
 
     for (const finding of unscopedAccesses(graph)) {
       // SPEC §10.3: a recorded public-read justification suppresses the enforced
-      // KV414 (the access is still surfaced by `kovo explain --unscoped`).
+      // KV414 (the access is still surfaced by `kovo explain unscoped`).
       if (finding.justification) continue;
       pushFinding(unscopedKv414Line(finding), true);
     }

@@ -137,9 +137,9 @@ export interface StarterTemplateAcceptanceOptions extends StarterTemplateFixture
   kovoExplain(
     graph: Record<string, unknown>,
     options:
-      | { kind: 'mutation'; optimistic: true; target: string }
-      | { kind: 'page'; target: string }
-      | { kind: 'query'; target: string },
+      | { optimistic: true; target: string; view: 'mutation' }
+      | { target: string; view: 'page' }
+      | { target: string; view: 'query' },
   ): { exitCode: number; output: string };
   kovoOutputs: readonly StarterTemplateKovoOutput[];
 }
@@ -316,13 +316,17 @@ export async function starterTemplateAcceptanceFact(
     ),
     explain: {
       cartAdd: kovoExplainMutationAssertionFact(
-        options.kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
+        options.kovoExplain(graph, {
+          optimistic: true,
+          target: 'cart/add',
+          view: 'mutation',
+        }),
       ),
       cartPage: kovoExplainPageAssertionFact(
-        options.kovoExplain(graph, { kind: 'page', target: '/cart' }),
+        options.kovoExplain(graph, { target: '/cart', view: 'page' }),
       ),
       cartQuery: kovoExplainQueryAssertionFact(
-        options.kovoExplain(graph, { kind: 'query', target: 'cart' }),
+        options.kovoExplain(graph, { target: 'cart', view: 'query' }),
       ),
     },
     graph: {

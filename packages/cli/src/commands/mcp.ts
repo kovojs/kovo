@@ -345,22 +345,36 @@ function explainOptionsSchema(): Record<string, unknown> {
     required,
     type: 'object',
   });
-  const auditMode = (name: 'access' | 'unguarded' | 'unscoped') =>
-    exactMode({ failOnFindings: { type: 'boolean' }, [name]: { const: true } }, [name]);
+  const auditMode = (view: 'access' | 'unguarded' | 'unscoped') =>
+    exactMode({ failOnFindings: { type: 'boolean' }, view: { const: view } }, ['view']);
   return {
     oneOf: [
-      exactMode({ agent: { const: true } }, ['agent']),
+      ...[
+        'agent',
+        'auth-lifecycle',
+        'authorization',
+        'capabilities',
+        'cookies',
+        'document',
+        'endpoints',
+        'grants',
+        'model-boundaries',
+        'revealed',
+        'sources-sinks',
+        'tasks',
+        'trust',
+      ].map((view) => exactMode({ view: { const: view } }, ['view'])),
       auditMode('access'),
-      exactMode({ endpoints: { const: true } }, ['endpoints']),
       auditMode('unguarded'),
       auditMode('unscoped'),
       exactMode(
         {
-          kind: { enum: ['component', 'context', 'mutation', 'page', 'query', 'task'] },
+          layouts: { type: 'boolean' },
           optimistic: { type: 'boolean' },
           target: { minLength: 1, type: 'string' },
+          view: { enum: ['component', 'context', 'mutation', 'page', 'query', 'task'] },
         },
-        ['kind', 'target'],
+        ['target', 'view'],
       ),
     ],
     type: 'object',
@@ -754,58 +768,54 @@ function assertMcpCompilePreparseBudget(source: string): void {
 
 function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
   if (!isRecord(value)) throw new Error('kovo_explain options must be an object');
-  const modeFields = ['access', 'agent', 'endpoints', 'unguarded', 'unscoped'] as const;
-  const selectedModes = modeFields.filter((field) => value[field] === true);
-  const targeted = Object.hasOwn(value, 'kind') || Object.hasOwn(value, 'target');
-  if (selectedModes.length + (targeted ? 1 : 0) > 1) {
-    throw new Error('kovo_explain options select multiple modes');
-  }
-
-  if (value.agent === true) {
-    assertExactKeys(value, ['agent'], 'kovo_explain options');
-    return { agent: true };
-  }
-  if (value.access === true) {
-    assertExactKeys(value, ['access', 'failOnFindings'], 'kovo_explain options');
+  const view = typeof value.view === 'string' ? value.view : undefined;
+  if (isExplainKind(view)) {
+    assertExactKeys(value, ['layouts', 'optimistic', 'target', 'view'], 'kovo_explain options');
+    if (typeof value.target !== 'string' || value.target.length === 0) {
+      throw new Error('kovo_explain target views require a nonempty target');
+    }
+    if (Object.hasOwn(value, 'optimistic') && typeof value.optimistic !== 'boolean') {
+      throw new Error('kovo_explain options optimistic must be a boolean');
+    }
+    if (Object.hasOwn(value, 'layouts') && typeof value.layouts !== 'boolean') {
+      throw new Error('kovo_explain options layouts must be a boolean');
+    }
     return {
-      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
-      access: true,
-    };
-  }
-  if (value.endpoints === true) {
-    assertExactKeys(value, ['endpoints'], 'kovo_explain options');
-    return { endpoints: true };
-  }
-  if (value.unguarded === true) {
-    assertExactKeys(value, ['failOnFindings', 'unguarded'], 'kovo_explain options');
-    return {
-      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
-      unguarded: true,
-    };
-  }
-  if (value.unscoped === true) {
-    assertExactKeys(value, ['failOnFindings', 'unscoped'], 'kovo_explain options');
-    return {
-      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
-      unscoped: true,
+      ...(typeof value.layouts === 'boolean' ? { layouts: value.layouts } : {}),
+      ...(typeof value.optimistic === 'boolean' ? { optimistic: value.optimistic } : {}),
+      target: value.target,
+      view,
     };
   }
 
-  const kind = typeof value.kind === 'string' ? value.kind : undefined;
-  if (!isExplainKind(kind) || typeof value.target !== 'string') {
-    throw new Error('kovo_explain options require kind and target, or a supported audit flag');
-  }
-  assertExactKeys(value, ['kind', 'optimistic', 'target'], 'kovo_explain options');
-  if (value.target.length === 0) throw new Error('kovo_explain options target must be nonempty');
-  if (Object.hasOwn(value, 'optimistic') && typeof value.optimistic !== 'boolean') {
-    throw new Error('kovo_explain options optimistic must be a boolean');
+  if (view === 'access' || view === 'unguarded' || view === 'unscoped') {
+    assertExactKeys(value, ['failOnFindings', 'view'], 'kovo_explain options');
+    return {
+      ...assertOptionalBoolean(value, 'failOnFindings', 'kovo_explain options'),
+      view,
+    };
   }
 
-  return {
-    kind,
-    ...(typeof value.optimistic === 'boolean' ? { optimistic: value.optimistic } : {}),
-    target: value.target,
-  };
+  if (
+    view === 'agent' ||
+    view === 'auth-lifecycle' ||
+    view === 'authorization' ||
+    view === 'capabilities' ||
+    view === 'cookies' ||
+    view === 'document' ||
+    view === 'endpoints' ||
+    view === 'grants' ||
+    view === 'model-boundaries' ||
+    view === 'revealed' ||
+    view === 'sources-sinks' ||
+    view === 'tasks' ||
+    view === 'trust'
+  ) {
+    assertExactKeys(value, ['view'], 'kovo_explain options');
+    return { view };
+  }
+
+  throw new Error('kovo_explain options require a supported view discriminant');
 }
 
 function listDiagnosticsV1(): {

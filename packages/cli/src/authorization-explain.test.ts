@@ -7,7 +7,7 @@ describe('kovo explain --authorization', () => {
   it('prints deterministic quoted non-correspondence records and one dead-role warning', () => {
     const result = kovoExplain(
       { authorizationCorrespondence: [authorizationFact()] },
-      { authorization: true },
+      { view: 'authorization' },
     );
 
     expect(result.exitCode).toBe(0);
@@ -24,11 +24,12 @@ describe('kovo explain --authorization', () => {
   });
 
   it('parses the authorization audit as a standalone explain mode', () => {
-    expect(parseExplainArgs(['--authorization', 'graph.json'])).toEqual({
+    expect(parseExplainArgs(['authorization', 'graph.json'])).toEqual({
+      artifact: false,
       format: 'human',
       inputPath: 'graph.json',
       ok: true,
-      options: { authorization: true },
+      options: { view: 'authorization' },
     });
   });
 });

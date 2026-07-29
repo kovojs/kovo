@@ -7,10 +7,12 @@ import {
   constants as builtinFsConstants,
   existsSync as builtinExistsSync,
   lstatSync as builtinLstatSync,
+  mkdirSync as builtinMkdirSync,
   mkdtempSync as builtinMkdtempSync,
   readFileSync as builtinReadFileSync,
   readdirSync as builtinReaddirSync,
   realpathSync as builtinRealpathSync,
+  renameSync as builtinRenameSync,
   rmSync as builtinRmSync,
   statSync as builtinStatSync,
   writeFileSync as builtinWriteFileSync,
@@ -40,7 +42,6 @@ import {
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
-import { canonicalJsonStringify } from '@kovojs/core/internal/json';
 import { clientModuleRepresentationDigest } from '@kovojs/core/internal/client-module-url';
 import { ESCAPE_CENSUS_DOORS } from '@kovojs/core/internal/graph';
 import {
@@ -117,7 +118,6 @@ import {
   type StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import {
-  runtimePostureFactsFromGraph,
   runtimeRegistryWireFactsFromGraph,
   type RuntimeRegistryWireFacts,
 } from '@kovojs/server/internal/runtime-registry-wire';
@@ -154,6 +154,11 @@ import {
   stableValue,
 } from '../shared.js';
 import { resolveKovoArtifactProvenance } from '../artifact-provenance.js';
+import {
+  createKovoGraphProof,
+  createKovoRuntimePostureManifest,
+  deriveKovoAppBuildToken,
+} from '../graph-proof.js';
 import { findNearestFile, readJsonRecord } from '../tooling.js';
 import {
   kovoCommandBootSecurityDisposition,
@@ -201,11 +206,13 @@ const accessSync = builtinAccessSync;
 const fsWriteOk = builtinFsConstants.W_OK;
 const existsSync = builtinExistsSync;
 const lstatSync = builtinLstatSync;
+const mkdirSync = builtinMkdirSync;
 const mkdtempSync = builtinMkdtempSync;
 const readFile = builtinReadFile;
 const readFileSync = builtinReadFileSync;
 const readdirSync = builtinReaddirSync;
 const realpathSync = builtinRealpathSync;
+const renameSync = builtinRenameSync;
 const rmSync = builtinRmSync;
 const statSync = builtinStatSync;
 const writeFileSync = builtinWriteFileSync;
@@ -711,10 +718,101 @@ export async function runSourceCheckCommand(
   }
 }
 
+/** @internal Transaction state exported only for adversarial CLI tests. */
+export interface KovoBuildOutputTransaction {
+  readonly buildId: string;
+  readonly finalOutDir: string;
+  readonly stagedOutDir: string;
+  promoted: boolean;
+}
+
+/** @internal */
+export function createKovoBuildOutputTransaction(finalOutDir: string): KovoBuildOutputTransaction {
+  // SPEC §5.2.4: all deploy bytes are assembled under one unique same-project directory. The
+  // requested output remains untouched until the complete preset artifact is ready.
+  const parent = dirname(finalOutDir);
+  mkdirSync(parent, { recursive: true });
+  // A sibling stage guarantees the final rename stays on one filesystem even when --out is
+  // outside the invocation root.
+  const stagedOutDir = mkdtempSync(join(parent, '.kovo-build-stage-'));
+  return {
+    buildId: basename(stagedOutDir),
+    finalOutDir,
+    promoted: false,
+    stagedOutDir,
+  };
+}
+
+/** @internal */
+export function promoteKovoBuildOutputTransaction(transaction: KovoBuildOutputTransaction): void {
+  if (transaction.promoted) {
+    throw new TypeError('Kovo build output transaction was already promoted.');
+  }
+  const parent = dirname(transaction.finalOutDir);
+  mkdirSync(parent, { recursive: true });
+  const backup = `${transaction.stagedOutDir}-last-good`;
+  const hadPrevious = existsSync(transaction.finalOutDir);
+  if (hadPrevious) renameSync(transaction.finalOutDir, backup);
+  try {
+    renameSync(transaction.stagedOutDir, transaction.finalOutDir);
+    transaction.promoted = true;
+  } catch (error) {
+    if (hadPrevious && existsSync(backup) && !existsSync(transaction.finalOutDir)) {
+      renameSync(backup, transaction.finalOutDir);
+    }
+    throw error;
+  }
+  if (hadPrevious) {
+    // The new output is already committed. Backup cleanup is deliberately best-effort so an
+    // inability to remove old bytes cannot relabel a successfully promoted build as failed.
+    try {
+      rmSync(backup, { force: true, recursive: true });
+    } catch {
+      // A sibling last-good backup is not deploy output and remains safe to remove manually.
+    }
+  }
+}
+
+/** @internal */
+export function abortKovoBuildOutputTransaction(transaction: KovoBuildOutputTransaction): void {
+  if (transaction.promoted) return;
+  rmSync(transaction.stagedOutDir, { force: true, recursive: true });
+}
+
+function writeKovoBuildDebugEvidence(
+  transaction: KovoBuildOutputTransaction,
+  error: unknown,
+  security: KovoCommandSecurityDisposition,
+): void {
+  if (kovoInvocationEnvironmentValue(security.invocationEnv, 'KOVO_BUILD_DEBUG') !== '1') return;
+  const debugDir = join(security.invocationCwd, '.kovo', 'debug', transaction.buildId);
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const redactedMessage = rawMessage
+    .replaceAll(security.invocationCwd, '<project>')
+    .replaceAll(transaction.stagedOutDir, '<staging>')
+    .slice(0, 2_000);
+  mkdirSync(debugDir, { recursive: true });
+  writeFileSync(
+    join(debugDir, 'build.json'),
+    `${stringifyBuildValue(
+      {
+        buildId: transaction.buildId,
+        errorClass: error instanceof KovoCommandConfigurationError ? 'configuration' : 'finding',
+        message: redactedMessage,
+        schema: 'kovo.build-debug/v1',
+        status: 'failed',
+      },
+      2,
+    )}\n`,
+    'utf8',
+  );
+}
+
 export async function runBuildCommand(
   options: KovoBuildOptions,
   security: KovoCommandSecurityDisposition = kovoCommandBootSecurityDisposition,
 ): Promise<CliCommandResult> {
+  let transaction: KovoBuildOutputTransaction | undefined;
   try {
     options = configurationBoundary(() => snapshotKovoBuildOptions(options));
     const invocationRoot = security.invocationCwd;
@@ -830,15 +928,8 @@ export async function runBuildCommand(
       }),
       provenance: artifactProvenance,
     };
-    const runtimePosture = runtimePostureManifestForBuild(graphWithProvenance);
-    const attestedCheckGraph: CoreGraph.KovoCheckInput = {
-      ...graphWithProvenance,
-      runtimePosture,
-    };
-    // Validate every trustedAssign review subject before any client/server artifact is emitted.
-    const escapeObligationManifest = escapeObligationManifestForBuild(attestedCheckGraph);
-    // Metric E signatures are a separate domain-separated subject family under the same anchor.
-    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(attestedCheckGraph);
+    transaction = createKovoBuildOutputTransaction(outDir);
+    const stagedOutDir = transaction.stagedOutDir;
     const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
     const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
       resolvedAppModulePath,
@@ -862,7 +953,7 @@ export async function runBuildCommand(
       );
     }
     const clientBuild = await buildKovoClientManifest(
-      join(outDir, '.kovo-client'),
+      join(stagedOutDir, '.kovo-client'),
       clientRoot,
       resolvedAppModulePath,
       {
@@ -880,6 +971,47 @@ export async function runBuildCommand(
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
+    const commonRuntimeRegistry = {
+      ...(staticRuntimeRegistry.browserPosture === undefined
+        ? {}
+        : { browserPosture: staticRuntimeRegistry.browserPosture }),
+      ...(staticRuntimeRegistry.tableSecurity === undefined
+        ? {}
+        : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
+    };
+    // The server compiler contributes client modules, while the final runtime-posture registry
+    // embeds the completed graph. Run one non-emitted discovery pass to close that dependency,
+    // then prove the final pass retained the exact client-module set before any artifact write.
+    const discoveredServerHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+      approvedSourceFiles,
+      buildRoot: invocationRoot,
+      dependencyCapabilities,
+      projectMutationFacts: serverProjectMutationFacts,
+      queryShapeFacts,
+      runtimeTarget: selectedPreset.name,
+      runtimeRegistry: {
+        ...runtimeRegistryWireFactsFromGraph(graphWithProvenance),
+        ...commonRuntimeRegistry,
+      },
+      stylesheetAssets: buildCssAssets,
+    });
+    const discoveredClientModules = uniqueKovoCompiledClientModules([
+      ...clientBuild.clientModules,
+      ...discoveredServerHandlerBuild.clientModules,
+    ]);
+    const appBuildToken = deriveKovoAppBuildToken(
+      discoveredClientModules,
+      buildApp.clientModules.entries(),
+    );
+    const graphWithProof: CoreGraph.KovoCheckInput = {
+      ...graphWithProvenance,
+      proof: createKovoGraphProof(graphWithProvenance, appBuildToken),
+    };
+    const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
+    const completedCheckGraph: CoreGraph.KovoCheckInput = {
+      ...graphWithProof,
+      runtimePosture,
+    };
     const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
       approvedSourceFiles,
       buildRoot: invocationRoot,
@@ -888,13 +1020,8 @@ export async function runBuildCommand(
       queryShapeFacts,
       runtimeTarget: selectedPreset.name,
       runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(attestedCheckGraph),
-        ...(staticRuntimeRegistry.browserPosture === undefined
-          ? {}
-          : { browserPosture: staticRuntimeRegistry.browserPosture }),
-        ...(staticRuntimeRegistry.tableSecurity === undefined
-          ? {}
-          : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
+        ...runtimeRegistryWireFactsFromGraph(completedCheckGraph),
+        ...commonRuntimeRegistry,
       },
       stylesheetAssets: buildCssAssets,
     });
@@ -902,18 +1029,29 @@ export async function runBuildCommand(
       ...clientBuild.clientModules,
       ...serverHandlerBuild.clientModules,
     ]);
+    if (
+      deriveKovoAppBuildToken(clientModules, buildApp.clientModules.entries()) !== appBuildToken
+    ) {
+      throw new TypeError(
+        'Kovo final runtime-posture bundle changed the discovered client-module identity.',
+      );
+    }
     const neutralBuild = await writeKovoNeutralBuild({
       app: buildApp,
       buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
       clientModules,
       manifestFile: clientBuild.manifestFile,
-      outDir: join(outDir, '.kovo'),
+      outDir: join(stagedOutDir, '.kovo'),
       serverHandlerSource: serverHandlerBuild.source,
       stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
+    // Validate every trustedAssign review subject only after the deployment graph is complete.
+    const escapeObligationManifest = escapeObligationManifestForBuild(completedCheckGraph);
+    // Metric E signatures are a separate domain-separated subject family under the same anchor.
+    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(completedCheckGraph);
     writeKovoBuildGraphArtifact(
       neutralBuild,
-      attestedCheckGraph,
+      completedCheckGraph,
       escapeObligationManifest,
       escapeCensusReviewManifest,
     );
@@ -929,7 +1067,7 @@ export async function runBuildCommand(
         `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
       );
     }
-    const presetOutDir = buildPresetOutDir(outDir, selectedPreset.name);
+    const presetOutDir = buildPresetOutDir(stagedOutDir, selectedPreset.name);
     const presetLogs: string[] = [];
     const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerBuild.source);
     const presetContext: KovoBuildPresetContext = {
@@ -963,9 +1101,11 @@ export async function runBuildCommand(
       // that raises KV235, and the preset inspection above. `--check` skips ONLY the
       // deployable `preset.emit`, so it is a strict subset of a full build and cannot pass
       // where a full build would fail.
+      abortKovoBuildOutputTransaction(transaction);
+      transaction = undefined;
       return kovoBuildCheckResult({
         appModulePath: resolvedAppModulePath,
-        neutralOutDir: neutralBuild.outDir,
+        neutralOutDir: join(outDir, '.kovo'),
         preset: selectedPreset.name,
         presetDiagnostics,
         presetLogs,
@@ -973,17 +1113,33 @@ export async function runBuildCommand(
     }
 
     await preset.emit(neutralBuild, presetContext);
+    promoteKovoBuildOutputTransaction(transaction);
+    transaction = undefined;
 
     return kovoBuildResult({
       appModulePath: resolvedAppModulePath,
-      neutralOutDir: neutralBuild.outDir,
+      neutralOutDir: join(outDir, '.kovo'),
       outDir,
       preset: selectedPreset.name,
       presetDiagnostics,
       presetLogs,
-      serverOutDir: presetOutDir,
+      serverOutDir: buildPresetOutDir(outDir, selectedPreset.name),
     });
   } catch (error) {
+    if (transaction !== undefined) {
+      // Failed-build evidence and staging cleanup are secondary to the original diagnostic.
+      // Neither may erase the producer-owned build failure if the local filesystem is unhealthy.
+      try {
+        writeKovoBuildDebugEvidence(transaction, error, security);
+      } catch {
+        // Debug evidence is opt-in and never part of deploy correctness.
+      }
+      try {
+        abortKovoBuildOutputTransaction(transaction);
+      } catch {
+        // The unique sibling staging path is safe to remove manually.
+      }
+    }
     return buildErrorResult(error);
   }
 }
@@ -1595,7 +1751,7 @@ function writeKovoBuildGraphArtifact(
   writeFileSync(join(neutralBuild.outDir, 'certificate-policy.json'), kovoCertificatePolicyV1Json);
   // Plan 3 §4.2: this is deliberately unsigned build output. A second-party reviewer signs each
   // subject outside the build/coding-agent environment with the already-pinned deployment
-  // attestation key; `kovo explain --attest --escape-reviews` verifies the detached envelopes.
+  // attestation key; `kovo explain attest --escape-reviews` verifies the detached envelopes.
   writeFileSync(
     join(neutralBuild.outDir, 'escape-obligations.json'),
     `${stringifyBuildValue(escapeObligations, 2)}\n`,
@@ -1643,18 +1799,6 @@ export function escapeObligationManifestForBuild(graph: CoreGraph.KovoCheckInput
     artifactSubject,
     schema: 'kovo.escape-obligations/v1',
     subjects,
-  };
-}
-
-function runtimePostureManifestForBuild(
-  graph: CoreGraph.KovoCheckInput,
-): CoreGraph.RuntimePostureManifest {
-  const facts = runtimePostureFactsFromGraph(graph);
-  return {
-    artifactSubject: `sha256:${hash('sha256', canonicalJsonStringify(graph), 'hex')}`,
-    facts,
-    postureDigest: `sha256:${hash('sha256', canonicalJsonStringify(facts), 'hex')}`,
-    schema: 'kovo-runtime-posture/v1',
   };
 }
 

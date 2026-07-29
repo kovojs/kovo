@@ -304,39 +304,171 @@ export const Shell = component({
                       {
                         "additionalProperties": false,
                         "properties": {
-                          "agent": {
-                            "const": true,
+                          "view": {
+                            "const": "agent",
                           },
                         },
                         "required": [
-                          "agent",
+                          "view",
                         ],
                         "type": "object",
                       },
                       {
                         "additionalProperties": false,
                         "properties": {
-                          "access": {
-                            "const": true,
+                          "view": {
+                            "const": "auth-lifecycle",
                           },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "authorization",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "capabilities",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "cookies",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "document",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "endpoints",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "grants",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "model-boundaries",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "revealed",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "sources-sinks",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "tasks",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "view": {
+                            "const": "trust",
+                          },
+                        },
+                        "required": [
+                          "view",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
                           "failOnFindings": {
                             "type": "boolean",
                           },
-                        },
-                        "required": [
-                          "access",
-                        ],
-                        "type": "object",
-                      },
-                      {
-                        "additionalProperties": false,
-                        "properties": {
-                          "endpoints": {
-                            "const": true,
+                          "view": {
+                            "const": "access",
                           },
                         },
                         "required": [
-                          "endpoints",
+                          "view",
                         ],
                         "type": "object",
                       },
@@ -346,12 +478,12 @@ export const Shell = component({
                           "failOnFindings": {
                             "type": "boolean",
                           },
-                          "unguarded": {
-                            "const": true,
+                          "view": {
+                            "const": "unguarded",
                           },
                         },
                         "required": [
-                          "unguarded",
+                          "view",
                         ],
                         "type": "object",
                       },
@@ -361,19 +493,29 @@ export const Shell = component({
                           "failOnFindings": {
                             "type": "boolean",
                           },
-                          "unscoped": {
-                            "const": true,
+                          "view": {
+                            "const": "unscoped",
                           },
                         },
                         "required": [
-                          "unscoped",
+                          "view",
                         ],
                         "type": "object",
                       },
                       {
                         "additionalProperties": false,
                         "properties": {
-                          "kind": {
+                          "layouts": {
+                            "type": "boolean",
+                          },
+                          "optimistic": {
+                            "type": "boolean",
+                          },
+                          "target": {
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                          "view": {
                             "enum": [
                               "component",
                               "context",
@@ -383,17 +525,10 @@ export const Shell = component({
                               "task",
                             ],
                           },
-                          "optimistic": {
-                            "type": "boolean",
-                          },
-                          "target": {
-                            "minLength": 1,
-                            "type": "string",
-                          },
                         },
                         "required": [
-                          "kind",
                           "target",
+                          "view",
                         ],
                         "type": "object",
                       },
@@ -583,7 +718,7 @@ export const Shell = component({
         params: {
           arguments: {
             graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
-            options: { kind: 'query', target: 'cart' },
+            options: { target: 'cart', view: 'query' },
           },
           name: 'kovo_explain',
         },

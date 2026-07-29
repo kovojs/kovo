@@ -165,6 +165,7 @@ export type KovoSemanticCommandRequest =
       readonly form: 'graph';
       readonly options?: {
         readonly format?: 'human' | 'json' | 'github';
+        readonly artifact?: string;
       };
     }
   | {
@@ -323,6 +324,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -337,6 +339,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: boolean;
         readonly layouts?: false;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -351,6 +354,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -365,6 +369,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: boolean;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -379,6 +384,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -393,6 +399,7 @@ export type KovoSemanticCommandRequest =
       readonly options?: {
         readonly optimistic?: false;
         readonly layouts?: false;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -403,6 +410,7 @@ export type KovoSemanticCommandRequest =
       readonly command: 'explain';
       readonly form: 'document';
       readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -412,8 +420,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'sources-sinks';
-      readonly options: {
-        readonly sourcesSinks: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -423,8 +431,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'tasks';
-      readonly options: {
-        readonly tasks: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -434,8 +442,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'agent';
-      readonly options: {
-        readonly agent: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -445,8 +453,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'grants';
-      readonly options: {
-        readonly grants: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -456,8 +464,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'endpoints';
-      readonly options: {
-        readonly endpoints: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -467,8 +475,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'revealed';
-      readonly options: {
-        readonly revealed: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -478,8 +486,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'trust';
-      readonly options: {
-        readonly trust: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -489,8 +497,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'capabilities';
-      readonly options: {
-        readonly capabilities: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -500,8 +508,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'cookies';
-      readonly options: {
-        readonly cookies: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -511,8 +519,8 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'authorization';
-      readonly options: {
-        readonly authorization: true;
+      readonly options?: {
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -522,9 +530,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'access';
-      readonly options: {
-        readonly access: true;
+      readonly options?: {
         readonly failOnFindings?: boolean;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -534,9 +542,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'unguarded';
-      readonly options: {
-        readonly unguarded: true;
+      readonly options?: {
         readonly failOnFindings?: boolean;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -546,9 +554,9 @@ export type KovoSemanticCommandRequest =
       };
       readonly command: 'explain';
       readonly form: 'unscoped';
-      readonly options: {
-        readonly unscoped: true;
+      readonly options?: {
         readonly failOnFindings?: boolean;
+        readonly artifact?: string;
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -556,8 +564,7 @@ export type KovoSemanticCommandRequest =
       readonly arguments: { readonly [key: PropertyKey]: never };
       readonly command: 'explain';
       readonly form: 'auth-lifecycle';
-      readonly options: {
-        readonly authLifecycle: true;
+      readonly options?: {
         readonly format?: 'human' | 'json' | 'github';
       };
     }
@@ -565,17 +572,17 @@ export type KovoSemanticCommandRequest =
       readonly arguments: { readonly [key: PropertyKey]: never };
       readonly command: 'explain';
       readonly form: 'model-boundaries';
-      readonly options: {
-        readonly modelBoundaries: true;
+      readonly options?: {
         readonly format?: 'human' | 'json' | 'github';
       };
     }
   | {
-      readonly arguments: { readonly [key: PropertyKey]: never };
+      readonly arguments: {
+        readonly url: string;
+      };
       readonly command: 'explain';
       readonly form: 'attest';
       readonly options: {
-        readonly attest: string;
         readonly artifact: string;
         readonly trustAnchor: string;
         readonly escapeReviews?: string;

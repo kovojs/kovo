@@ -34,7 +34,7 @@ interface AttestOptions {
   url: string;
 }
 
-/** Parse the asynchronous `kovo explain --attest` mode. @internal */
+/** Parse the asynchronous `kovo explain attest` view. @internal */
 export function parseAttestArgs(
   args: readonly string[],
 ): { ok: true; options: AttestOptions } | { message: string; ok: false } {
@@ -45,8 +45,8 @@ export function parseAttestArgs(
     escapeCensusReviews: escapeCensusReviewsPath,
     escapeReviews: escapeReviewsPath,
     trustAnchor,
-    attest: url,
   } = parsed.value.options;
+  const url = parsed.value.arguments.url;
   if (!/^sha256:[a-f0-9]{64}$/u.test(trustAnchor)) {
     return { message: 'kovo: --trust-anchor must be a sha256 fingerprint.', ok: false };
   }

@@ -7,24 +7,25 @@ import { kovoExplain } from './graph-output.js';
 
 describe('kovo explain --auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
   it('parses as a graph-independent exclusive explain mode without changing model boundaries', () => {
-    expect(parseExplainArgs(['--auth-lifecycle'])).toEqual({
+    expect(parseExplainArgs(['auth-lifecycle'])).toEqual({
+      artifact: false,
       format: 'human',
       inputPath: undefined,
       ok: true,
-      options: { authLifecycle: true },
+      options: { view: 'auth-lifecycle' },
     });
-    expect(parseExplainArgs(['--auth-lifecycle', 'graph.json'])).toMatchObject({ ok: false });
-    expect(parseExplainArgs(['--auth-lifecycle', '--model-boundaries'])).toMatchObject({
+    expect(parseExplainArgs(['auth-lifecycle', 'graph.json'])).toMatchObject({ ok: false });
+    expect(parseExplainArgs(['auth-lifecycle', 'model-boundaries'])).toMatchObject({
       ok: false,
     });
 
-    expect(kovoExplain({}, { modelBoundaries: true } as never).output).toContain(
+    expect(kovoExplain({}, { view: 'model-boundaries' }).output).toContain(
       'MODEL-BOUNDARY replay-reservation/v1 status=bounded-model-checked\n',
     );
   });
 
   it('prints inherited defaults, exactly four Kovo-owned transitions, and the honest complement', () => {
-    expect(kovoExplain({}, { authLifecycle: true } as never)).toEqual({
+    expect(kovoExplain({}, { view: 'auth-lifecycle' })).toEqual({
       exitCode: 0,
       output: [
         'kovo-explain/v1',

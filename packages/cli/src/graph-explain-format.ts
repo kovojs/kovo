@@ -293,7 +293,7 @@ export function diagnosticSite(diagnostic: CoreGraph.StaticDiagnosticFact): stri
 export function notFound(options: KovoTargetExplainOptions): KovoCheckResult {
   return {
     exitCode: 1,
-    output: `${explainOutputVersion}\nERROR NOT_FOUND ${options.kind} ${options.target}\n`,
+    output: `${explainOutputVersion}\nERROR NOT_FOUND ${options.view} ${options.target}\n`,
   };
 }
 

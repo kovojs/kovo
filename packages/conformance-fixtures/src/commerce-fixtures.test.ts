@@ -74,17 +74,17 @@ const addToCart = mutation('cart/add', {
 const kovoExplain = (
   _graph: typeof graph,
   options:
-    | { kind: 'mutation'; optimistic?: boolean; target: string }
-    | { kind: 'page'; target: string }
-    | { kind: 'query'; target: string },
+    | { optimistic?: boolean; target: string; view: 'mutation' }
+    | { target: string; view: 'page' }
+    | { target: string; view: 'query' },
 ) => {
-  if (options.kind === 'page') {
+  if (options.view === 'page') {
     return {
       exitCode: 0,
       output: ['kovo-explain/v1', 'PAGE /cart', 'queries: cart,productGrid'].join('\n'),
     };
   }
-  if (options.kind === 'query' && options.target === 'cart') {
+  if (options.view === 'query' && options.target === 'cart') {
     return {
       exitCode: 0,
       output: ['kovo-explain/v1', 'QUERY cart', 'consumers: component:CartBadge,page:/cart'].join(
@@ -92,7 +92,7 @@ const kovoExplain = (
       ),
     };
   }
-  if (options.kind === 'query') {
+  if (options.view === 'query') {
     return {
       exitCode: 0,
       output: [

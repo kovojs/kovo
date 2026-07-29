@@ -225,6 +225,31 @@ Those deployment obligations remain fail-closed, including KV417 under §14. A p
 therefore means “current authored source satisfies the source verifier,” not “this deployment is
 ready.”
 
+**Command result and diagnostic protocol (normative).** `kovo check`, `kovo build`,
+`kovo explain`, `kovo doctor`, and `kovo verify` accept exactly
+`--format human | json | github` and retain the exit classes declared by the semantic command AST:
+success is 0, proof/build findings are 1, and invocation/configuration errors are 2. Every finding
+crosses the framework-owned `kovo-diagnostic/v1` record before presentation. Code, severity, help,
+and source range are producer-owned facts; renderers may escape or lay them out but may not parse
+prose, consult a second severity table, or manufacture a location. JSON carries the diagnostic
+envelope plus the command's existing versioned result protocol and exact result text. GitHub output
+emits escaped workflow annotations from the same records and preserves the same result facts.
+`kovo-check/v1` and `kovo-explain/v1` therefore remain byte-for-byte payloads inside the common
+envelope rather than being silently replaced by an empty diagnostic array.
+
+The semantic command AST is the sole source for argv parsing, semantic request types, root and
+subcommand help, shell completion, and command-reference data. It includes aliases, argument kind,
+enum, default, repeatability, category, examples, exit behavior, and result protocol. Programmatic
+callers consume its discriminated request union and never an argv-shaped bag of flags.
+
+**Versioned starter policy (normative).** The starter owns a compact declarative
+`kovo.policy.json`; versioned CLI implementations own lifecycle allowlist validation, sound-subset
+analysis, endpoint-posture orchestration, and fail-closed parallel scheduling. Generated apps do
+not copy those algorithms. The default `kovo check` runs source proof and the applicable declared
+policies. Deployment endpoint probes run through `kovo verify --artifact <dist>`, after a successful
+build. App package scripts name Kovo, Vitest, and the package manager only; Vite Plus may remain a
+framework/CI implementation tool but is not app-facing vocabulary.
+
 **Safe cost-to-green rewrites (normative).** `kovo fix` accepts exactly one regular, non-symlink
 app-authored `.tsx`/`.jsx` file inside the invocation root, excluding `.kovo`, `dist`, `generated`,
 and `node_modules` trees. It MUST NOT synthesize a trust wrapper, justification, allowlist entry, or

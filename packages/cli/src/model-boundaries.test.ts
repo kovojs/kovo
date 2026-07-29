@@ -5,18 +5,19 @@ import { kovoExplain } from './graph-output.js';
 
 describe('kovo explain --model-boundaries (Plan 3 §6 C13 anchor)', () => {
   it('parses as a graph-independent exclusive explain mode', () => {
-    expect(parseExplainArgs(['--model-boundaries'])).toEqual({
+    expect(parseExplainArgs(['model-boundaries'])).toEqual({
+      artifact: false,
       format: 'human',
       inputPath: undefined,
       ok: true,
-      options: { modelBoundaries: true },
+      options: { view: 'model-boundaries' },
     });
-    expect(parseExplainArgs(['--model-boundaries', 'graph.json'])).toMatchObject({ ok: false });
-    expect(parseExplainArgs(['--model-boundaries', '--trust'])).toMatchObject({ ok: false });
+    expect(parseExplainArgs(['model-boundaries', 'graph.json'])).toMatchObject({ ok: false });
+    expect(parseExplainArgs(['model-boundaries', 'trust'])).toMatchObject({ ok: false });
   });
 
   it('prints the human atomicity assumption, exact bounds, and both action partitions', () => {
-    const result = kovoExplain({}, { modelBoundaries: true } as never);
+    const result = kovoExplain({}, { view: 'model-boundaries' });
 
     expect(result.exitCode).toBe(0);
     expect(result.output).toContain(

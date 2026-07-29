@@ -62,10 +62,10 @@ describe('kovo explain --attest', () => {
   });
 
   it('requires the reviewed artifact and out-of-band trust anchor', () => {
-    expect(parseAttestArgs(['--attest', 'https://example.test'])).toMatchObject({ ok: false });
+    expect(parseAttestArgs(['attest', 'https://example.test'])).toMatchObject({ ok: false });
     expect(
       parseAttestArgs([
-        '--attest',
+        'attest',
         'https://example.test',
         '--artifact',
         'graph.json',
@@ -79,7 +79,7 @@ describe('kovo explain --attest', () => {
     ).toMatchObject({ ok: true });
     expect(
       parseAttestArgs([
-        '--attest',
+        'attest',
         'https://example.test',
         '--artifact',
         'graph.json',

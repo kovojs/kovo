@@ -102,9 +102,40 @@ field makes two no-op builds byte-identical; changing any listed input MUST chan
 bytes. The stamp identifies the build inputs. It is not a signature and does not by itself prove that
 the artifact is safe or that the package contents match their version labels.
 
+#### 5.2.4 Proof-graph completion and transactional promotion (normative)
+
+A deploy graph is admissible only when its top-level `proof` record is the exact
+`kovo.graph.proof/v1` shape. The record binds the complete analyzed source set, config subset,
+executing compiler version, app build token, and selected posture profile. Its `completion` value is
+`complete`; a missing record, an unknown field, an invalid digest, an identity that does not
+recompute from the graph's own build-owned inputs, or any other completion value is not a partial
+success. Human CLI inspection of this graph requires `--artifact <path>` so a nearby
+`dist/.kovo/graph.json` cannot silently become source authority. Source-backed `kovo check` and
+`kovo explain` instead derive current facts or consume an explicitly selected non-deployment review
+graph; they never infer a deploy claim from directory layout.
+
+`kovo build` writes every neutral and preset artifact beneath one unique sibling staging directory.
+Only after source proof, preset inspection, artifact emission, and the complete proof stamp succeed
+may it promote that directory to the requested output. Replacement preserves the previous complete
+output until the staged output is ready and restores it if promotion fails. Any failure before
+promotion leaves the last known-good output byte-for-byte unchanged. Validate-only builds remove
+their staging directory and never touch the requested output.
+
+Failed-build evidence is not deploy output. When the operator explicitly enables debug evidence,
+Kovo may write one bounded, redacted `kovo.build-debug/v1` record beneath
+`.kovo/debug/<build-id>/` at the invocation root. That record contains no environment values,
+authored source, stack, absolute path, or partially emitted artifact, and `dist/.kovo` is never used
+as a failed-build cache.
+
 ### 5.3 `kovo explain`
 
-The compiler's decision tree, on demand. Sub-commands (all output stable, diffable text — agents consume the same artifact humans read):
+The compiler's decision tree, on demand. `explain` has one discriminated grammar: the token after
+`explain` is always a view (`component`, `mutation`, `query`, `page`, `context`, `task`,
+`access`, `agent`, `authorization`, `auth-lifecycle`, `capabilities`, `cookies`, `document`,
+`endpoints`, `grants`, `model-boundaries`, `revealed`, `sources-sinks`, `tasks`, `trust`,
+`unguarded`, or `unscoped`). Programmatic callers use the corresponding exhaustive `{ view, ... }`
+union. Flag-shaped view selectors are not a second grammar. All output remains stable, diffable text
+and agents consume the same artifact humans read:
 
 ```bash
 kovo explain component cart        # lowerings: extracted handlers, derives, capture channels, platform substitutions, attribute merges, triggers
@@ -112,7 +143,7 @@ kovo explain mutation cart/add     # writes → domains → invalidated queries 
 kovo explain mutation cart/add --optimistic   # transform coverage per query; derivation traces + punts (§10.5)
 kovo explain query cart            # read set, consumers, every mutation that invalidates it
 kovo explain page /products/:id    # emitted modulepreloads, per-route prefetch config, param/search schemas, query payloads
-kovo explain --capabilities        # held capabilities plus untrusted roots, reviewed doors, exact package verdicts, and closed provenance paths
+kovo explain capabilities          # held capabilities plus untrusted roots, reviewed doors, exact package verdicts, and closed provenance paths
 kovo mcp                           # the same compile/check/explain results over the finite stdio protocol in §11.5
 ```
 

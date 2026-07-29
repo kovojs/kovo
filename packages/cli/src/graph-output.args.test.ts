@@ -5,6 +5,7 @@ import { parseAuditArgs, parseCheckArgs, parseExplainArgs } from './graph-output
 describe('graph command argv parsing', () => {
   it('parses check/audit/explain through the shared command argv specs', () => {
     expect(parseCheckArgs(['coverage', 'graph.json', '--format=json'])).toEqual({
+      artifact: false,
       family: 'coverage',
       format: 'json',
       inputPath: 'graph.json',
@@ -17,11 +18,12 @@ describe('graph command argv parsing', () => {
       ok: true,
     });
 
-    expect(parseExplainArgs(['--tasks', 'graph.json', '--format=github'])).toEqual({
+    expect(parseExplainArgs(['tasks', 'graph.json', '--format=github'])).toEqual({
+      artifact: false,
       format: 'github',
       inputPath: 'graph.json',
       ok: true,
-      options: { tasks: true },
+      options: { view: 'tasks' },
     });
   });
 

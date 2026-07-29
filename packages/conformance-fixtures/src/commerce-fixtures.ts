@@ -25,7 +25,7 @@ export interface CommerceMutationQueryAcceptanceOptions<Db, Graph extends KovoGr
   createDb: () => Db;
   kovoExplain: (
     graph: Graph,
-    options: { kind: 'mutation'; optimistic?: boolean; target: string },
+    options: { optimistic?: boolean; target: string; view: 'mutation' },
   ) => KovoExplainResultLike;
   graph: Graph;
   submitAddToCart: (
@@ -56,9 +56,9 @@ export interface CommerceUpdateIntentOptions<Graph> {
   kovoExplain: (
     graph: Graph,
     options:
-      | { kind: 'mutation'; optimistic?: boolean; target: string }
-      | { kind: 'page'; target: string }
-      | { kind: 'query'; target: string },
+      | { optimistic?: boolean; target: string; view: 'mutation' }
+      | { target: string; view: 'page' }
+      | { target: string; view: 'query' },
   ) => KovoExplainResultLike;
   graph: Graph;
   mutation: string;
@@ -158,10 +158,10 @@ export function commerceUpdateIntentFact<Graph>(
   // SPEC.md §10.4 and rules/v1-acceptance.md: mutation update intent must mechanically cover every
   // query consumer affected on the page instead of relying on duplicated test logic.
   const mutation = options.kovoExplain(options.graph, {
-    kind: 'mutation',
     target: options.mutation,
+    view: 'mutation',
   });
-  const page = options.kovoExplain(options.graph, { kind: 'page', target: options.page });
+  const page = options.kovoExplain(options.graph, { target: options.page, view: 'page' });
   const updateConsumers = kovoExplainUpdateConsumerMap(mutation.output);
   const pageQueries = kovoExplainListField(page.output, 'queries');
   const componentConsumersByQuery: Record<string, string[]> = {};
@@ -170,7 +170,7 @@ export function commerceUpdateIntentFact<Graph>(
   const missingPageConsumers: string[] = [];
 
   for (const query of pageQueries) {
-    const queryExplain = options.kovoExplain(options.graph, { kind: 'query', target: query });
+    const queryExplain = options.kovoExplain(options.graph, { target: query, view: 'query' });
     const queryConsumers = kovoExplainListField(queryExplain.output, 'consumers');
     const componentConsumers = queryConsumers.filter((consumer) =>
       consumer.startsWith('component:'),
@@ -232,9 +232,9 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
   // SPEC.md §10.4/§11.2 and rules/v1-acceptance.md: commerce mutation/query acceptance is proven
   // through public graph explanations, harness verification, and fragment wire facts.
   const addToCartExplanation = options.kovoExplain(options.graph, {
-    kind: 'mutation',
     optimistic: true,
     target: 'cart/add',
+    view: 'mutation',
   });
   const addToCartUpdateQueries = [
     ...kovoExplainUpdateConsumerMap(addToCartExplanation.output).keys(),

@@ -9,51 +9,51 @@ import { writeUsageError } from './shared.js';
 export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query' | 'task';
 
 /**
- * Options selecting which `kovo explain` view `kovoExplain` produces: a targeted
- * component/mutation/query/page/task subject, the `--endpoints` machine-ingress
- * audit, or one of the security review modes (SPEC.md §5.3 and §11.4).
+ * Options selecting which `kovo explain` view `kovoExplain` produces. The
+ * discriminant is shared by the programmatic API and the CLI's literal
+ * subcommand grammar (SPEC.md §5.3 and §11.4).
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions
   | KovoAuthLifecycleExplainOptions
   | KovoAuthorizationExplainOptions
   | KovoAgentExplainOptions
-  | { capabilities: true }
-  | { cookies: true }
+  | { view: 'capabilities' }
+  | { view: 'cookies' }
   | KovoDocumentExplainOptions
   | KovoEndpointExplainOptions
   | KovoGrantExplainOptions
-  | { modelBoundaries: true }
+  | { view: 'model-boundaries' }
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
   | KovoTasksExplainOptions
   | KovoTargetExplainOptions
-  | { trust: true }
+  | { view: 'trust' }
   | KovoUnguardedExplainOptions
   | KovoUnscopedExplainOptions;
 
 /**
- * `kovo explain --access` options: emit the producer-owned access-decision
+ * `kovo explain access` options: emit the producer-owned access-decision
  * ledger from graph `access` facts (SPEC.md §10.2/§11.3).
  */
 export interface KovoAccessExplainOptions {
-  access: true;
   failOnFindings?: boolean;
+  view: 'access';
 }
 
-/** `kovo explain --auth-lifecycle`: print Better Auth ownership and explicit non-claims. */
+/** `kovo explain auth-lifecycle`: print Better Auth ownership and explicit non-claims. */
 export interface KovoAuthLifecycleExplainOptions {
-  authLifecycle: true;
+  view: 'auth-lifecycle';
 }
 
-/** `kovo explain --authorization`: print honest guard/RLS non-correspondence records. */
+/** `kovo explain authorization`: print honest guard/RLS non-correspondence records. */
 export interface KovoAuthorizationExplainOptions {
-  authorization: true;
+  view: 'authorization';
 }
 
-/** `kovo explain --agent`: print compiler-derived model/tool effect closures by integrity. */
+/** `kovo explain agent`: print compiler-derived model/tool effect closures by integrity. */
 export interface KovoAgentExplainOptions {
-  agent: true;
+  view: 'agent';
 }
 
 /**
@@ -62,46 +62,46 @@ export interface KovoAgentExplainOptions {
  * extracted graph (SPEC.md §9.5; plans/structured-document.md).
  */
 export interface KovoDocumentExplainOptions {
-  document: true;
+  view: 'document';
 }
 
 /**
- * `kovo explain --endpoints` options: emit the stable machine-ingress audit table
+ * `kovo explain endpoints` options: emit the stable machine-ingress audit table
  * of every declared endpoint, webhook, file/stream route, and dynamic ingress
  * surface (SPEC.md §11.4; plans/sources-sinks.md Phase 3).
  */
 export interface KovoEndpointExplainOptions {
-  endpoints: true;
+  view: 'endpoints';
 }
 
-/** `kovo explain --grants`: print the compiler-derived finite grant model (SPEC §10.3). */
+/** `kovo explain grants`: print the compiler-derived finite grant model (SPEC §10.3). */
 export interface KovoGrantExplainOptions {
-  grants: true;
+  view: 'grants';
 }
 
 /**
- * `kovo explain --revealed` options: emit every declared confidentiality reveal,
+ * `kovo explain revealed` options: emit every declared confidentiality reveal,
  * labeling proof-grade server projections separately from audit-grade arbitrary
  * function reveals (SPEC.md §1.1/§2; plans/secure-by-construction.md Phase 1).
  */
 export interface KovoRevealedExplainOptions {
-  revealed: true;
+  view: 'revealed';
 }
 
 /**
- * `kovo explain --sources-sinks` options: emit the stable Phase 1 repository
+ * `kovo explain sources-sinks` options: emit the stable Phase 1 repository
  * source/sink inventory (SPEC.md §5.3; plans/sources-sinks.md Phase 1).
  */
 export interface KovoSourcesSinksExplainOptions {
-  sourcesSinks: true;
+  view: 'sources-sinks';
 }
 
 /**
- * `kovo explain --tasks` options: emit durable task nodes plus statically discovered composition
+ * `kovo explain tasks` options: emit durable task nodes plus statically discovered composition
  * edges from task bodies (SPEC §9.6 and §11.4).
  */
 export interface KovoTasksExplainOptions {
-  tasks: true;
+  view: 'tasks';
 }
 
 /**
@@ -110,30 +110,30 @@ export interface KovoTasksExplainOptions {
  * (SPEC.md §5.3).
  */
 export interface KovoTargetExplainOptions {
-  kind: ExplainKind;
   layouts?: boolean;
   optimistic?: boolean;
   target: string;
+  view: ExplainKind;
 }
 
 /**
- * `kovo explain --unguarded` options: audit every mutation, route, and query
+ * `kovo explain unguarded` options: audit every mutation, route, and query
  * reachable without an `authed` guard, optionally failing when findings exist
  * (SPEC.md §11.4).
  */
 export interface KovoUnguardedExplainOptions {
   failOnFindings?: boolean;
-  unguarded: true;
+  view: 'unguarded';
 }
 
 /**
- * `kovo explain --unscoped` options: audit every query or write touching an
+ * `kovo explain unscoped` options: audit every query or write touching an
  * owner-annotated domain without an owner scope, optionally failing when findings
  * exist (SPEC.md §11.4).
  */
 export interface KovoUnscopedExplainOptions {
   failOnFindings?: boolean;
-  unscoped: true;
+  view: 'unscoped';
 }
 
 /** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
@@ -173,6 +173,7 @@ type CheckArgParseResult =
       source: true;
     }
   | {
+      artifact: boolean;
       family: KovoCheckFamily;
       format: KovoDiagnosticFormat;
       inputPath: string | undefined;
@@ -217,10 +218,19 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
     };
   }
 
+  const inputPath = parsed.value.arguments.graph;
+  const artifactPath = parsed.value.options.artifact;
+  if (inputPath !== undefined && artifactPath !== undefined) {
+    return {
+      message: 'kovo: check accepts either a review graph or --artifact, not both.\n',
+      ok: false,
+    };
+  }
   return {
+    artifact: artifactPath !== undefined,
     family: parsed.value.arguments.family ?? 'all',
     format: parsed.value.options.format,
-    inputPath: parsed.value.arguments.graph,
+    inputPath: artifactPath ?? inputPath,
     ok: true,
   };
 }
@@ -246,6 +256,7 @@ export function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
 
 type ExplainArgParseResult =
   | {
+      artifact: boolean;
       format: KovoDiagnosticFormat;
       inputPath: string | undefined;
       ok: true;
@@ -258,143 +269,178 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
   if (!parsed.ok) return { message: parsed.message, ok: false };
 
   const invocation = parsed.value;
+  const selectedGraph = (
+    inputPath: string | undefined,
+  ):
+    | { artifact: boolean; inputPath: string | undefined; ok: true }
+    | { message: string; ok: false } => {
+    const artifactPath = invocation.options.artifact;
+    if (inputPath !== undefined && artifactPath !== undefined) {
+      return {
+        message: 'kovo: explain accepts either a review graph or --artifact, not both.\n',
+        ok: false,
+      };
+    }
+    return { artifact: artifactPath !== undefined, inputPath: artifactPath ?? inputPath, ok: true };
+  };
+  const graph = selectedGraph(
+    'graph' in invocation.arguments ? invocation.arguments.graph : undefined,
+  );
+  if (!graph.ok) return graph;
   switch (invocation.form) {
     case 'target':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
         options: {
-          kind: invocation.arguments.kind,
           layouts: invocation.options.layouts,
           optimistic: invocation.options.optimistic,
           target: invocation.arguments.target,
+          view: invocation.arguments.kind,
         },
       };
     case 'document':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { document: true },
+        options: { view: 'document' },
       };
     case 'sources-sinks':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { sourcesSinks: true },
+        options: { view: 'sources-sinks' },
       };
     case 'tasks':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { tasks: true },
+        options: { view: 'tasks' },
       };
     case 'agent':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { agent: true },
+        options: { view: 'agent' },
       };
     case 'grants':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { grants: true },
+        options: { view: 'grants' },
       };
     case 'endpoints':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { endpoints: true },
+        options: { view: 'endpoints' },
       };
     case 'revealed':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { revealed: true },
+        options: { view: 'revealed' },
       };
     case 'trust':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { trust: true },
+        options: { view: 'trust' },
       };
     case 'capabilities':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { capabilities: true },
+        options: { view: 'capabilities' },
       };
     case 'cookies':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { cookies: true },
+        options: { view: 'cookies' },
       };
     case 'authorization':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
-        options: { authorization: true },
+        options: { view: 'authorization' },
       };
     case 'access':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
         options: {
-          access: true,
           failOnFindings: invocation.options.failOnFindings,
+          view: 'access',
         },
       };
     case 'unguarded':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
         options: {
           failOnFindings: invocation.options.failOnFindings,
-          unguarded: true,
+          view: 'unguarded',
         },
       };
     case 'unscoped':
       return {
+        artifact: graph.artifact,
         format: invocation.options.format,
-        inputPath: invocation.arguments.graph,
+        inputPath: graph.inputPath,
         ok: true,
         options: {
           failOnFindings: invocation.options.failOnFindings,
-          unscoped: true,
+          view: 'unscoped',
         },
       };
     case 'auth-lifecycle':
       return {
+        artifact: false,
         format: invocation.options.format,
         inputPath: undefined,
         ok: true,
-        options: { authLifecycle: true },
+        options: { view: 'auth-lifecycle' },
       };
     case 'model-boundaries':
       return {
+        artifact: false,
         format: invocation.options.format,
         inputPath: undefined,
         ok: true,
-        options: { modelBoundaries: true },
+        options: { view: 'model-boundaries' },
       };
     case 'attest':
       return {
-        message: 'kovo: explain --attest requires asynchronous command dispatch.\n',
+        message: 'kovo: explain attest requires asynchronous command dispatch.\n',
         ok: false,
       };
   }

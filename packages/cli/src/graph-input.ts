@@ -3,6 +3,7 @@ import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import { resolve } from 'node:path';
 
 import type { CliCommandResult, KovoCheckResult } from './shared.js';
+import { assertKovoArtifactGraphProof, hasKovoArtifactGraphProof } from './graph-proof.js';
 import { findNearestFile, readJsonRecord } from './tooling.js';
 
 export function runGraphCommand(
@@ -12,6 +13,35 @@ export function runGraphCommand(
 ): CliCommandResult {
   const input = readGraphInput(inputPath, invocationCwd);
   if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
+  return run(input.value);
+}
+
+/** Select either a non-deployment review graph or an explicitly named completed artifact graph. */
+export function runSelectedGraphCommand(
+  inputPath: string | undefined,
+  artifact: boolean,
+  run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
+  invocationCwd = process.cwd(),
+): CliCommandResult {
+  if (artifact && inputPath === undefined) {
+    return { error: 'kovo: --artifact requires a graph path.', exitCode: 2 };
+  }
+  const input = readGraphInput(inputPath, invocationCwd);
+  if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
+  try {
+    if (artifact) {
+      assertKovoArtifactGraphProof(input.value);
+    } else if (hasKovoArtifactGraphProof(input.value)) {
+      throw new TypeError(
+        'A completed build graph must be selected with --artifact; rebuild or select current source proof.',
+      );
+    }
+  } catch (error) {
+    return {
+      error: `kovo: ${error instanceof Error ? error.message : String(error)}`,
+      exitCode: 1,
+    };
+  }
   return run(input.value);
 }
 
@@ -36,6 +66,26 @@ export function runRequiredGraphCommand(
     };
   }
   return runGraphCommand(selectedPath, run, invocationCwd);
+}
+
+/** Required counterpart of {@link runSelectedGraphCommand}. */
+export function runRequiredSelectedGraphCommand(
+  inputPath: string | undefined,
+  artifact: boolean,
+  run: (input: CoreGraph.KovoExplainInput) => KovoCheckResult,
+  invocationCwd = process.cwd(),
+  family = 'graph',
+): CliCommandResult {
+  const selectedPath = inputPath ?? (artifact ? undefined : discoverGraphInputPath(invocationCwd));
+  if (selectedPath === undefined) {
+    return {
+      error: artifact
+        ? 'kovo: --artifact requires a graph path.'
+        : `kovo: check ${family} requires a graph input; pass graph.json or run bare kovo check to derive current source proof.`,
+      exitCode: artifact ? 2 : 1,
+    };
+  }
+  return runSelectedGraphCommand(selectedPath, artifact, run, invocationCwd);
 }
 
 interface InputReadError {

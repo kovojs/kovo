@@ -125,6 +125,21 @@ export interface KovoAnalysisInputs {
   sources: readonly KovoAnalysisInputSource[];
 }
 
+/**
+ * @internal Build-owned completion stamp for one deploy graph (SPEC §5.2.4).
+ *
+ * Digests are recomputed by the CLI artifact boundary; this structural type is not authority.
+ */
+export interface KovoGraphProof {
+  appBuildToken: `sha256:${string}`;
+  compilerVersion: string;
+  completion: 'complete';
+  configDigest: `sha256:${string}`;
+  postureProfile: 'cloudflare' | 'node' | 'vercel';
+  schema: 'kovo.graph.proof/v1';
+  sourceSetDigest: `sha256:${string}`;
+}
+
 /** @internal Exact createApp egress posture retained in the reviewed build graph. */
 export interface EgressPostureFact {
   allowDestinations: readonly string[];
@@ -307,6 +322,7 @@ export interface KovoCheckInput {
   ownerDomains?: readonly OwnerDomainFact[];
   ownershipPosture?: readonly OwnershipPostureFact[];
   pages?: readonly PageExplain[];
+  proof?: KovoGraphProof;
   provenance?: KovoArtifactProvenance;
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];

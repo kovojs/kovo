@@ -152,7 +152,7 @@ describe('@kovojs/test graph fixture seam', () => {
       },
     } as const;
     const kovoExplain = (_graph: unknown, options: Record<string, unknown>) => {
-      if (options.kind === 'query' && options.target === 'cart') {
+      if (options.view === 'query' && options.target === 'cart') {
         return {
           exitCode: 0,
           output: [
@@ -165,7 +165,7 @@ describe('@kovojs/test graph fixture seam', () => {
           ].join('\n'),
         };
       }
-      if (options.kind === 'mutation' && options.target === 'cart/add') {
+      if (options.view === 'mutation' && options.target === 'cart/add') {
         return {
           exitCode: 0,
           output: [
