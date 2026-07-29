@@ -6,7 +6,7 @@ import {
   snapshotCompileComponentOptions,
 } from '@kovojs/compiler/internal';
 import * as CompilerInternal from '@kovojs/compiler/internal';
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core/diagnostics';
 import {
   assertRegisteredDiagnostic,
   diagnosticDefinitions,

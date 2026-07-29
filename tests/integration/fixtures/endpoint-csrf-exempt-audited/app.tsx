@@ -1,6 +1,6 @@
 // SPEC.md §9.1: CSRF-exempt endpoints are declared machine ingress with a named
 // justification, not browser mutation forms.
-import { hmacSignature } from '@kovojs/core';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import { createApp, endpoint, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 

@@ -84,9 +84,9 @@ import {
   DRIZZLE_STATIC_PROJECT_ROOT,
 } from '../static.js';
 
-const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core/security', 'trustedReveal');
-const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core/security', 'DeclassifyPolicy');
-const DECLARE_OFF_WIRE_IDENTITY = frameworkExport('@kovojs/core/security', 'declareOffWire');
+const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const DECLASSIFY_POLICY_IDENTITY = frameworkExport('@kovojs/core', 'DeclassifyPolicy');
+const DECLARE_OFF_WIRE_IDENTITY = frameworkExport('@kovojs/core', 'declareOffWire');
 const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
 const DRIZZLE_SQL_IDENTITY = frameworkExport('drizzle-orm', 'sql');
 const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = [

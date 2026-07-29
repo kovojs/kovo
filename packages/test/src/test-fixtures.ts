@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { TouchGraph } from '@kovojs/core/internal/graph';
 

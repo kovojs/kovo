@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import { assertRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { canonicalJson } from '../canonical-json.js';

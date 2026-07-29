@@ -1,4 +1,4 @@
-import type { StorageCapability } from '@kovojs/core';
+import type { StorageCapability } from '@kovojs/core/storage';
 import { htmlElementFacts } from '@kovojs/test/html-fragment';
 
 export interface ServerMutationLifecycleRuntime {

@@ -1,6 +1,6 @@
 // SPEC.md §9.1: webhook() captures raw bytes, verifies before parsing, accepts
 // loose provider fields, writes Kovo-owned data, and emits unified changes.
-import { hmacSignature } from '@kovojs/core';
+import { hmacSignature } from '@kovojs/core/webhooks';
 import {
   createApp,
   createMemoryWebhookReplayStore,

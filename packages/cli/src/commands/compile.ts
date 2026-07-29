@@ -22,7 +22,7 @@ import type {
   CompileRouteModuleOptions,
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import { assertRegisteredDiagnostic, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import {
   createFrameworkFileSystemBoundary,

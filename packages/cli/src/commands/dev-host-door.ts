@@ -2,7 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-import { secret, type SecretValue } from '@kovojs/core';
+import { secret, type SecretValue } from '@kovojs/core/security';
 import type { InlineConfig, ViteDevServer } from 'vite-plus';
 
 const DEV_AUTH_COOKIE = 'Kovo-Dev-Auth';

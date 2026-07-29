@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core';
+import { hmacSignature, type HmacSecret, type HmacSignatureVerifier } from '@kovojs/core/webhooks';
 import {
   createMemoryWebhookReplayStore,
   replayMutationWireBody,

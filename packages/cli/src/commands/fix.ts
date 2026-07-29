@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { lstatSync, realpathSync } from 'node:fs';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import {
   createFrameworkFileSystemBoundary,
   type CapturedFileReplacement,

@@ -35,7 +35,7 @@ import {
 } from 'node:url';
 import { promisify as builtinPromisify } from 'node:util';
 
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 import {
   assertRegisteredDiagnostic,
   createRegisteredDiagnostic,

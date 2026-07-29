@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls pin KV330 diagnostic policy. */
-import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core/diagnostics';
 import {
   createRegisteredDiagnostic,
   diagnosticDefinitions,

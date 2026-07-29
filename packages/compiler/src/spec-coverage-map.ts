@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 
 export type SpecClause =
   | 'SPEC.md §4.3'

@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from '@kovojs/core';
+import type { DiagnosticCode } from '@kovojs/core/diagnostics';
 
 import {
   compilerArrayAppend,

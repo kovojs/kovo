@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/unbound-method -- Boot-captured controls are invoked through pinned Reflect.apply. */
-import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core';
+import type { DiagnosticCode, DiagnosticSeverity, RegisteredDiagnostic } from '@kovojs/core/diagnostics';
 import {
   assertRegisteredDiagnostic,
   diagnosticDefinitions,
