@@ -8,8 +8,6 @@ import type {
 import type { CsrfOptions } from '@kovojs/server/security';
 import type { GuardDenial } from '@kovojs/server/routing';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
-import type { GuardDenial } from '@kovojs/server/routing';
-import type { CsrfOptions } from '@kovojs/server/security';
 
 import type { BetterAuthRoleSession } from '../guards.js';
 import type { BetterAuthCredentialMutationInternalOptions } from '../credential-options.js';
