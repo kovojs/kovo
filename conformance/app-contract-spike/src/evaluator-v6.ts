@@ -37,9 +37,9 @@ const sealedArtifactNames = [
   'generated-app.ts',
 ] as const;
 const sealedArtifactSha256 = {
-  'compiler-packed.tgz': 'ec7b058031aeadac9de86e2dc2748957bfba48e8d2141dc1249cc1b4a1857efa',
+  'compiler-packed.tgz': '3e2fb36a441b74a4ee7d78f9b0b729c38ef551e37ced99b35cf375fa1981cd7e',
   'config.ts': 'ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761',
-  'generated-app.ts': '57b9f6d1fc78579fce84d4a6784a0bcad40fc34f2e393e2dfedb052e62943acf',
+  'generated-app.ts': 'd02ad62748d2282eabe9f40f3edef473c0684937c87b3ac53201e0b3530cb6a6',
   'provider.ts': '7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d',
   'server-overlay-packed.tgz':
     'a8a46d32eb323721f087d6ff5a0bb58a4aab7080663ab6c6f240db0694205928',
