@@ -561,6 +561,9 @@ function structuredSourceLocationKeys(
   if (key && structuredSpanObjectKeys.has(key) && exactNumericSpan(record)) {
     return spanCoordinateKeys;
   }
+  if (key === 'source' && exactFileSourceSpan(record)) {
+    return spanCoordinateKeys;
+  }
   if (
     typeof record.templateStart === 'number' &&
     typeof record.templateEnd === 'number' &&
@@ -591,6 +594,17 @@ function exactNumericSpan(record: Readonly<Record<string, unknown>>): boolean {
     typeof record.start === 'number' &&
     (typeof record.end === 'number' || typeof record.length === 'number') &&
     keys.every((key) => typeof record[key] === 'number')
+  );
+}
+
+function exactFileSourceSpan(record: Readonly<Record<string, unknown>>): boolean {
+  const keys = Object.keys(record);
+  return (
+    keys.length === 3 &&
+    keys.every((key) => key === 'file' || key === 'start' || key === 'end') &&
+    typeof record.file === 'string' &&
+    typeof record.start === 'number' &&
+    typeof record.end === 'number'
   );
 }
 
@@ -677,7 +691,9 @@ function canonicalizeFactorySource(value: string): string {
       const symbol = checker.getSymbolAtLocation(specifier.name);
       if (!symbol) continue;
       if (
-        (moduleName === '@kovojs/server' || moduleName === '#kovo') &&
+        (moduleName === '@kovojs/server' ||
+          moduleName === '#kovo' ||
+          (moduleName === '@kovojs/server/tasks' && imported === 'task')) &&
         declarationFamilies.includes(imported as DeclarationFamily)
       ) {
         factoryBindings.set(symbol, {

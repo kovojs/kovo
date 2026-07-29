@@ -1034,6 +1034,8 @@ async function writeReceiverFlowFixtures(app: string): Promise<{
 
 function familySource(family: DeclarationFamily, variant: AppContractArm | 'baseline'): string {
   const directFactory = family;
+  const directModule =
+    family === 'task' ? '@kovojs/server/tasks' : '@kovojs/server';
   const generatedFactory = `generated${family[0]!.toUpperCase()}${family.slice(1)}`;
   const factory =
     variant === 'arm-a' ? `app.${family}` : variant === 'arm-b' ? generatedFactory : directFactory;
@@ -1048,7 +1050,7 @@ function familySource(family: DeclarationFamily, variant: AppContractArm | 'base
             } } from '#kovo';`,
           ]
         : [
-            `import { ${directFactory}${family === 'layout' ? ', route' : ''} } from '@kovojs/server';`,
+            `import { ${directFactory}${family === 'layout' ? ', route' : ''} } from '${directModule}';`,
           ];
   const imports = [
     ...(sharedServerImports.length > 0

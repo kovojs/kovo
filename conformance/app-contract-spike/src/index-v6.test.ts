@@ -223,6 +223,13 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
         factoryCallSpan: { length: 8, start: 4 },
         root: 'query:contacts',
       },
+      page: {
+        source: {
+          end: 71,
+          file: '/fixture/src/route.tsx',
+          start: 23,
+        },
+      },
     }).canonical;
 
     expect(canonical).toEqual({
@@ -236,6 +243,11 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
         callableSpan: {},
         factoryCallSpan: {},
         root: 'query:contacts',
+      },
+      page: {
+        source: {
+          file: '/fixture/src/route.tsx',
+        },
       },
     });
   });
@@ -257,6 +269,20 @@ describe('D1 v6 authenticated app-contract evaluator', () => {
     expect(canonical.source).toContain("import { mutation as unusedMutation } from '#kovo';");
     expect(canonical.source).toContain('export const declaration = query(');
     expect(canonical.source).toContain("return generatedQuery('authored-shadow');");
+  });
+
+  it('normalizes the task factory only from its current public task subpath', () => {
+    const source = [
+      "import { task } from '@kovojs/server/tasks';",
+      'export const declaration = task({ run() { return 1; } });',
+      '',
+    ].join('\n');
+    const canonical = canonicalSemanticSubject({ source }).canonical as {
+      readonly source: string;
+    };
+
+    expect(canonical.source).not.toContain("from '@kovojs/server/tasks'");
+    expect(canonical.source).toContain('export const declaration = task(');
   });
 
   it('never reparses or rewrites source-like authored template literal text', () => {

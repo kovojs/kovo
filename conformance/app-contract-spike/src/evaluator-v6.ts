@@ -37,11 +37,11 @@ const sealedArtifactNames = [
   'generated-app.ts',
 ] as const;
 const sealedArtifactSha256 = {
-  'compiler-packed.tgz': 'a48785aec7e1d8cf3c9d5ccf400e7c7b2ead26dfc109c716363d5804638f3d28',
+  'compiler-packed.tgz': '9a4b90628e16a8266f079778c2666c5204e37e90f4c8f526f9747d57ba3418f8',
   'config.ts': 'ef1ddc51c0246b6e4b510c25fc0f1c4ed5fc2335e144aa1de177fa232e39f761',
-  'generated-app.ts': '0b04785f1063c7583236301a2958396f30e9a6cf741dd70154c42dcc4c229ff1',
+  'generated-app.ts': 'e1a26e4a53b93298507f725065cbaf2b7dd6181e6f223d86f95fc7ab02c44f23',
   'provider.ts': '7fe04d65fad502f337b2fe85a40968d425aaaa712721233aae827c23001b8e8d',
-  'server-overlay-packed.tgz': '4ba64583eb16d3db1bab7198f7a014a026212d2d04be5574d122841a89d24576',
+  'server-overlay-packed.tgz': '3786ac5a7dd90f3133408077c121672d50ff9f720eb512d95fc9e985cce1e6b9',
 } as const satisfies Readonly<Record<(typeof sealedArtifactNames)[number], string>>;
 const resolverMutationCodes = {
   'blank-consumer-file-name': 'D1A107',
