@@ -1,0 +1,166 @@
+{
+  "schema": "create-kovo-example-sources/v1",
+  "examples": {
+    "crm": {
+      "description": "Multi-page sales CRM with typed queries and mixed optimistic updates.",
+      "entry": "src/app-shell.ts",
+      "label": "CRM",
+      "sources": [
+        "src/app-shell.ts",
+        "src/components/chrome.tsx",
+        "src/components/contacts.tsx",
+        "src/components/deal-detail.tsx",
+        "src/components/pipeline.tsx",
+        "src/db.ts",
+        "src/demo-data.ts",
+        "src/index.ts",
+        "src/interactive-app.tsx",
+        "src/kovo.ts",
+        "src/model.ts",
+        "src/mutations.ts",
+        "src/queries.ts",
+        "src/schema.ts",
+        "src/styles.css",
+        "src/testing.ts",
+        "src/theme.ts"
+      ],
+      "excluded": [
+        {
+          "path": "README.md",
+          "reason": "Workspace commands are replaced by a standalone generated README."
+        },
+        {
+          "path": "package.json",
+          "reason": "Workspace ranges and repository scripts are replaced by a packed-consumer manifest."
+        },
+        {
+          "path": "scratch/crm-serve-drive.mjs",
+          "reason": "Repository-only manual demo driver."
+        },
+        {
+          "path": "scripts/demo-serve.mjs",
+          "reason": "Imports the repository demo-session server."
+        },
+        {
+          "path": "scripts/serve.mjs",
+          "reason": "Imports the repository security-locked Vite runtime."
+        },
+        {
+          "path": "src/interactive-app.test.ts",
+          "reason": "Imports repository-only generated-graph and raw-handler test seams."
+        },
+        {
+          "path": "src/optimistic.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "tsconfig.json",
+          "reason": "Extends the monorepo root config and is replaced by a standalone config."
+        },
+        {
+          "path": "vite.config.ts",
+          "reason": "Imports repository-only compiler facts and test setup."
+        }
+      ]
+    },
+    "commerce": {
+      "description": "Storefront with typed data, local auth, transactions, and derived optimism.",
+      "entry": "src/app.tsx",
+      "label": "Commerce",
+      "sources": [
+        "src/app.tsx",
+        "src/auth.ts",
+        "src/authored-output.test.ts",
+        "src/commerce-context.ts",
+        "src/components/auth-forms.tsx",
+        "src/components/cart-badge.tsx",
+        "src/components/order-history-view.tsx",
+        "src/components/order-history.tsx",
+        "src/components/product-grid.tsx",
+        "src/db.ts",
+        "src/domain.ts",
+        "src/graph.ts",
+        "src/kovo.ts",
+        "src/model.ts",
+        "src/queries.ts",
+        "src/schema.ts",
+        "src/styles.css",
+        "src/theme.ts"
+      ],
+      "excluded": [
+        {
+          "path": "README.md",
+          "reason": "Workspace commands are replaced by a standalone generated README."
+        },
+        {
+          "path": "package.json",
+          "reason": "Workspace ranges and repository scripts are replaced by a packed-consumer manifest."
+        },
+        {
+          "path": "scratch/commerce-serve-drive.mjs",
+          "reason": "Repository-only manual demo driver."
+        },
+        {
+          "path": "scripts/demo-serve.mjs",
+          "reason": "Imports the repository demo-session server."
+        },
+        {
+          "path": "scripts/measure-style-size.mjs",
+          "reason": "Imports the repository security-locked Vite runtime."
+        },
+        {
+          "path": "scripts/serve.mjs",
+          "reason": "Imports the repository security-locked Vite runtime."
+        },
+        {
+          "path": "src/app-test-helpers.ts",
+          "reason": "Imports repository-only generated-graph and raw-handler test seams."
+        },
+        {
+          "path": "src/app.add-to-cart.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/app.auth.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/app.live-targets.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/app.queries.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/app.rendering.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/app.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "src/enhanced-navigation.test.ts",
+          "reason": "Imports repository-only graph setup and browser test dependencies."
+        },
+        {
+          "path": "src/pagination.test.ts",
+          "reason": "Imports the repository-only generated-graph test seam."
+        },
+        {
+          "path": "tsconfig.json",
+          "reason": "Extends the monorepo root config and is replaced by a standalone config."
+        },
+        {
+          "path": "vite.config.ts",
+          "reason": "Imports repository-only compiler facts and test setup."
+        },
+        {
+          "path": "vitest.auth.config.ts",
+          "reason": "Repository-only test shard configuration."
+        }
+      ]
+    }
+  }
+}

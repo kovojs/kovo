@@ -50,8 +50,26 @@ describe('create-kovo command schema', () => {
     });
     expect(creatorChoiceValues('dialect')).toEqual(['postgres', 'sqlite']);
     expect(creatorChoiceValues('deploymentTarget')).toEqual(['node', 'vercel', 'cloudflare']);
+    expect(creatorChoiceValues('example')).toEqual(['crm', 'commerce']);
     expect(CREATE_KOVO_CREATOR_SCHEMA.install.interactiveDefault).toBe('auto');
     expect(CREATE_KOVO_CREATOR_SCHEMA.install.nonInteractiveDefault).toBe('never');
+  });
+
+  it('parses only the two canonical example names and rejects aliases and traversal', () => {
+    expect(readCreateKovoCliOptions(['sales', '--example', 'crm', '--yes'])).toEqual({
+      example: 'crm',
+      targetDirectory: 'sales',
+      yes: true,
+    });
+    expect(readCreateKovoCliOptions(['shop', '--example=commerce'])).toEqual({
+      example: 'commerce',
+      targetDirectory: 'shop',
+    });
+    for (const name of ['shop', 'CRM', '../crm', 'crm/../commerce', '/tmp/crm']) {
+      expect(() => readCreateKovoCliOptions(['app', '--example', name])).toThrow(
+        `Unsupported value for --example: ${name}. Expected crm or commerce.`,
+      );
+    }
   });
 
   it('rejects conflicting or repeated choices instead of silently taking the last flag', () => {

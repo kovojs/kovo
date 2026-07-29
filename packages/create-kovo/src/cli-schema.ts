@@ -1,3 +1,9 @@
+import {
+  CREATE_KOVO_EXAMPLE_NAMES,
+  CREATE_KOVO_EXAMPLE_SOURCE_CATALOG,
+  type CreateKovoExampleName,
+} from './example-assets.js';
+
 export type CreateKovoDeploymentTarget = 'cloudflare' | 'node' | 'vercel';
 export type CreateKovoDialect = 'postgres' | 'sqlite';
 export type CreateKovoInstallChoice = 'auto' | 'never';
@@ -13,14 +19,15 @@ export interface CreateKovoCreatorField<Value extends string = string> {
   choices?: readonly CreateKovoChoice<Value>[];
   description: string;
   flags: readonly string[];
-  interactiveDefault: Value;
+  interactiveDefault: Value | undefined;
   label: string;
-  nonInteractiveDefault: Value;
+  nonInteractiveDefault: Value | undefined;
 }
 
 export interface CreateKovoCreatorSchema {
   deploymentTarget: CreateKovoCreatorField<CreateKovoDeploymentTarget>;
   dialect: CreateKovoCreatorField<CreateKovoDialect>;
+  example: CreateKovoCreatorField<CreateKovoExampleName>;
   git: CreateKovoCreatorField<'initialize' | 'skip'>;
   install: CreateKovoCreatorField<CreateKovoInstallChoice>;
   name: CreateKovoCreatorField;
@@ -42,6 +49,18 @@ export const CREATE_KOVO_CREATOR_SCHEMA = {
     interactiveDefault: 'kovo-app',
     label: 'App name',
     nonInteractiveDefault: '',
+  },
+  example: {
+    choices: CREATE_KOVO_EXAMPLE_NAMES.map((value) => ({
+      description: CREATE_KOVO_EXAMPLE_SOURCE_CATALOG.examples[value].description,
+      label: CREATE_KOVO_EXAMPLE_SOURCE_CATALOG.examples[value].label,
+      value,
+    })),
+    description: 'Clone one packed-passing advanced example.',
+    flags: ['--example'],
+    interactiveDefault: undefined,
+    label: 'Example',
+    nonInteractiveDefault: undefined,
   },
   dialect: {
     choices: [
@@ -152,6 +171,7 @@ export interface CreateKovoCliOptions {
   deploymentTarget?: CreateKovoDeploymentTarget;
   disableGit?: boolean;
   dialect?: CreateKovoDialect;
+  example?: CreateKovoExampleName;
   experimentalSqlite?: boolean;
   install?: CreateKovoInstallChoice;
   name?: string;
@@ -169,6 +189,7 @@ export function readCreateKovoCliOptions(args: readonly string[]): CreateKovoCli
   let targetDirectory: string | undefined;
   let name: string | undefined;
   let dialect: CreateKovoDialect | undefined;
+  let example: CreateKovoExampleName | undefined;
   let yes: boolean | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -178,6 +199,33 @@ export function readCreateKovoCliOptions(args: readonly string[]): CreateKovoCli
     if (arg === '--name') {
       name = assignOnce(name, readRequiredOptionValue(args, index, '--name'), '--name');
       index += 1;
+      continue;
+    }
+
+    if (arg === '--example') {
+      example = assignOnce(
+        example,
+        parseChoiceOption(
+          readRequiredOptionValue(args, index, '--example'),
+          creatorChoiceValues('example'),
+          '--example',
+        ),
+        '--example',
+      );
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--example=')) {
+      example = assignOnce(
+        example,
+        parseChoiceOption(
+          arg.slice('--example='.length),
+          creatorChoiceValues('example'),
+          '--example',
+        ),
+        '--example',
+      );
       continue;
     }
 
@@ -325,6 +373,7 @@ export function readCreateKovoCliOptions(args: readonly string[]): CreateKovoCli
     ...(deploymentTarget === undefined ? {} : { deploymentTarget }),
     ...(disableGit === undefined ? {} : { disableGit }),
     ...(dialect === undefined ? {} : { dialect }),
+    ...(example === undefined ? {} : { example }),
     ...(experimentalSqlite === undefined ? {} : { experimentalSqlite }),
     ...(install === undefined ? {} : { install }),
     ...(name === undefined ? {} : { name }),

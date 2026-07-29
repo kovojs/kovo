@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts --dts",
+    "build:dist": "vp pack src/index.ts --dts && node scripts/build-example-assets.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

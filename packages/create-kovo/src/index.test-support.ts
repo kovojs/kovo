@@ -16,8 +16,10 @@ import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+  writeKovoExampleProject,
   writeKovoProject,
   type CreateKovoDialect,
+  type CreateKovoExampleName,
   type CreateKovoRetentionPosture,
 } from './index.js';
 
@@ -26,6 +28,7 @@ type StarterScaffoldMode = 'packed-bin' | 'source';
 
 interface StarterAppOptions {
   dialect?: CreateKovoDialect;
+  example?: CreateKovoExampleName;
   experimentalSqlite?: boolean;
   install?: StarterInstallMode;
   name: string;
@@ -98,6 +101,12 @@ export function createStarterApp(options: StarterAppOptions): StarterTestApp {
 
     if (scaffold === 'packed-bin') {
       scaffoldWithPackedCreateKovo(root, options, packedPackages);
+    } else if (options.example !== undefined) {
+      writeKovoExampleProject(root, {
+        disableGit: true,
+        example: options.example,
+        name: options.name,
+      });
     } else {
       writeKovoProject(root, {
         ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
@@ -512,6 +521,9 @@ function scaffoldWithPackedCreateKovo(
   materializePackedPackage(coreTarball, join(creatorRoot, 'node_modules/@kovojs/core'));
 
   const args = [root, '--name', options.name, '--disable-git'];
+  if (options.example !== undefined) {
+    args.push('--example', options.example);
+  }
   if (options.retention !== undefined) {
     args.push('--retention', options.retention);
   }

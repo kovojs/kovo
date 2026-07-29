@@ -36,6 +36,11 @@ import {
   type CreateKovoInstallChoice,
   type CreateKovoRetentionPosture,
 } from './cli-schema.js';
+import {
+  CREATE_KOVO_EXAMPLE_SOURCE_CATALOG,
+  readKovoExampleSourceFiles,
+  type CreateKovoExampleName,
+} from './example-assets.js';
 
 export type {
   CreateKovoDeploymentTarget,
@@ -43,6 +48,7 @@ export type {
   CreateKovoInstallChoice,
   CreateKovoRetentionPosture,
 } from './cli-schema.js';
+export type { CreateKovoExampleName } from './example-assets.js';
 
 const NativeObject = globalThis.Object;
 const NativeReflect = globalThis.Reflect;
@@ -58,6 +64,11 @@ export interface CreateKovoOptions {
   dialect?: CreateKovoDialect;
   name: string;
   retention?: CreateKovoRetentionPosture;
+}
+
+export interface CreateKovoExampleOptions {
+  example: CreateKovoExampleName;
+  name: string;
 }
 
 export interface GeneratedFile {
@@ -79,6 +90,12 @@ export interface WriteKovoProjectResult {
 
 export interface WriteKovoProjectOptions extends Partial<CreateKovoOptions> {
   disableGit?: boolean;
+}
+
+export interface WriteKovoExampleProjectOptions {
+  disableGit?: boolean;
+  example: CreateKovoExampleName;
+  name?: string;
 }
 
 export const CREATE_KOVO_HOST_POSTURE = {
@@ -129,6 +146,14 @@ export const CREATE_KOVO_REFERENCE = {
       defaultText: 'normalized target directory name.',
       docsDescription:
         'Override the generated `package.json` name. Names are normalized to lowercase npm-compatible words and dashes.',
+    },
+    {
+      flag: `${CREATE_KOVO_CREATOR_SCHEMA.example.flags[0]} <${creatorChoiceValues('example').join(
+        '|',
+      )}>`,
+      description: CREATE_KOVO_CREATOR_SCHEMA.example.description,
+      docsDescription:
+        'Clone the tracked authored sources for exactly one advanced example into a standalone packed-consumer project. No aliases or repository-only demo/test helpers are copied.',
     },
     {
       flag: `${CREATE_KOVO_CREATOR_SCHEMA.dialect.flags[0]} <${creatorChoiceValues('dialect').join(
@@ -204,6 +229,8 @@ export const CREATE_KOVO_REFERENCE = {
   ],
   examples: [
     'create-kovo my-app',
+    'create-kovo sales-app --example crm --yes --no-git --no-install',
+    'create-kovo shop --example commerce --yes --no-git --no-install',
     'create-kovo my-app --yes --no-install',
     'create-kovo my-app --name acme-todos',
     'create-kovo my-app --deployment node --retention retained-24h',
@@ -225,6 +252,14 @@ export const CREATE_KOVO_REFERENCE = {
         'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
         'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholders visible and documents the required production `BETTER_AUTH_URL`, generated-Node public-origin posture, Postgres runtime/admin URL split, PGlite data dir, and driver overrides. Framework bootstrap loads and pins that environment before generated app modules run, and the Better Auth constructors fail closed when required secrets or production origin are missing or invalid.',
         'SQLite scaffolds are explicit opt-in: pass `--experimental-sqlite` with `--sqlite` or `--dialect sqlite`, or set `KOVO_EXPERIMENTAL_SQLITE=1`. The generated SQLite README repeats that it is a single-principal local-development scaffold, not the Postgres authorization/confidentiality posture.',
+      ],
+    },
+    {
+      title: 'Advanced examples',
+      anchor: 'advanced-examples',
+      body: [
+        '`--example crm` and `--example commerce` copy the release-authenticated authored source payload into a standalone project. The two names come from the same semantic schema as parsing and help; arbitrary paths and aliases are rejected before filesystem work.',
+        'Each packed payload accounts for every tracked source and binds copied files to byte length plus SHA-256. Repository-only scripts, scratch drivers, monorepo configs, secret-shaped files, and tests that depend on internal repository seams are excluded. The generated package, Vite/Vitest config, CI workflow, and local agent docs provide the standalone shell.',
       ],
     },
     {
@@ -446,6 +481,281 @@ export function createKovoProject(options: CreateKovoOptions): CreateKovoProject
   };
 }
 
+export function createKovoExampleProject(options: CreateKovoExampleOptions): CreateKovoProject {
+  const packageName = normalizePackageName(options.name);
+  const definition = CREATE_KOVO_EXAMPLE_SOURCE_CATALOG.examples[options.example];
+  const docsVersion = packageVersion('@kovojs/core');
+  const kovoRulesBlock = renderKovoRulesBlock({
+    rulesSource: bundledKovoRulesSource(),
+    version: docsVersion,
+  });
+  const sourceFiles = readKovoExampleSourceFiles(options.example);
+
+  return {
+    files: [
+      { path: 'AGENTS.md', source: renderAgentsFile(kovoRulesBlock) },
+      {
+        path: 'CLAUDE.md',
+        source: 'See AGENTS.md for agent instructions.\n',
+        symlinkTarget: 'AGENTS.md',
+      },
+      ...bundledKovoDocsMirrorFiles({ version: docsVersion }).map((file) => ({
+        path: `.kovo/docs/${file.path}`,
+        source: file.source,
+      })),
+      { path: 'package.json', source: renderExamplePackageJson(packageName, definition.entry) },
+      { path: '.npmrc', source: readTemplate('npmrc') },
+      { path: 'tsconfig.json', source: readTemplate('tsconfig.json') },
+      { path: 'kovo.config.ts', source: renderKovoConfig('node', 'unconfigured') },
+      { path: 'vite.config.ts', source: renderExampleViteConfig(definition.entry) },
+      { path: 'vitest.config.ts', source: renderExampleVitestConfig() },
+      { path: 'index.html', source: readTemplate('index.html') },
+      {
+        path: '.github/workflows/ci.yml',
+        source: renderExampleCiWorkflow(),
+      },
+      {
+        path: 'README.md',
+        source: renderExampleReadme(options.example, definition),
+      },
+      ...sourceFiles,
+      ...(options.example === 'crm'
+        ? [{ path: 'src/example-db.test.ts', source: renderCrmExampleDatabaseTest() }]
+        : []),
+      { path: '.gitignore', source: gitignoreEntries },
+    ],
+    name: packageName,
+  };
+}
+
+function renderExamplePackageJson(name: string, entry: string): string {
+  const values = templateValues(name, generateAppId(), 'node', 'unconfigured');
+  const starter = JSON.parse(renderTemplate(readTemplate('package.json'), values)) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    engines?: Record<string, string>;
+    kovo?: Record<string, unknown>;
+    packageManager?: string;
+    pnpm?: Record<string, unknown>;
+  };
+  const dependencyNames = [
+    '@electric-sql/pglite',
+    '@kovojs/browser',
+    '@kovojs/core',
+    '@kovojs/drizzle',
+    '@kovojs/server',
+    '@kovojs/style',
+    '@kovojs/ui',
+    '@node-rs/argon2',
+    'drizzle-orm',
+  ] as const;
+  const devDependencyNames = [
+    '@kovojs/cli',
+    '@kovojs/test',
+    '@types/node',
+    '@typescript/native-preview',
+    'typescript',
+    'vite',
+    'vite-plus',
+    'vitest',
+  ] as const;
+  const dependencies = selectManifestDependencies(
+    starter.dependencies,
+    dependencyNames,
+    'dependency',
+  );
+  const devDependencies = selectManifestDependencies(
+    starter.devDependencies,
+    devDependencyNames,
+    'dev dependency',
+  );
+  return `${JSON.stringify(
+    {
+      name,
+      private: true,
+      type: 'module',
+      scripts: {
+        build: `kovo build ./${entry}`,
+        check: 'kovo check',
+        dev: `kovo dev ./${entry}`,
+        test: 'vitest --run --config vitest.config.ts',
+        typecheck: 'tsc --noEmit',
+      },
+      dependencies,
+      devDependencies,
+      engines: starter.engines,
+      packageManager: starter.packageManager,
+      pnpm: starter.pnpm,
+      kovo: starter.kovo,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function selectManifestDependencies(
+  source: Record<string, string> | undefined,
+  names: readonly string[],
+  label: string,
+): Record<string, string> {
+  const selected: Record<string, string> = {};
+  for (const name of names) {
+    const version = source?.[name];
+    if (!version) throw new Error(`Missing generated example ${label}: ${name}`);
+    selected[name] = version;
+  }
+  return selected;
+}
+
+function renderExampleViteConfig(entry: string): string {
+  return [
+    "import { kovo } from '@kovojs/server/vite';",
+    "import { defineConfig } from 'vite-plus';",
+    '',
+    "const port = Number.parseInt(process.env.PORT ?? '5173', 10);",
+    '',
+    'export default defineConfig({',
+    `  plugins: [kovo({ app: '/${entry}' })],`,
+    '  server: {',
+    "    host: process.env.HOST ?? '127.0.0.1',",
+    '    port: Number.isFinite(port) ? port : 5173,',
+    '    strictPort: true,',
+    '  },',
+    '  build: {',
+    '    manifest: true,',
+    '    rollupOptions: {',
+    "      input: { styles: 'src/styles.css' },",
+    "      output: { assetFileNames: 'assets/[name][extname]' },",
+    '    },',
+    '  },',
+    '  lint: { options: { typeAware: true, typeCheck: false } },',
+    '  fmt: { semi: true, singleQuote: true, sortPackageJson: true },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderExampleVitestConfig(): string {
+  return [
+    "import { defineConfig } from 'vitest/config';",
+    '',
+    '// These copied smoke tests exercise data/rendering without the monorepo-only generated-graph',
+    '// seam used by the canonical integration suites. Build/dev still use Kovo compilation.',
+    'export default defineConfig({',
+    '  test: {',
+    '    testTimeout: 60_000,',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderExampleCiWorkflow(): string {
+  return [
+    'name: CI',
+    '',
+    'on:',
+    '  pull_request:',
+    '  push:',
+    '    branches:',
+    '      - main',
+    '',
+    'permissions:',
+    '  contents: read',
+    '',
+    'jobs:',
+    '  verify:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5',
+    '        with:',
+    '          persist-credentials: false',
+    '      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1',
+    '        with:',
+    '          node-version: 24.10.0',
+    '      - run: corepack pnpm install --frozen-lockfile --ignore-scripts',
+    '      - run: corepack pnpm exec kovo check lifecycle',
+    '      - run: corepack pnpm rebuild',
+    '      - run: corepack pnpm run typecheck',
+    '      - run: corepack pnpm run test',
+    '      - run: corepack pnpm run build',
+    '',
+  ].join('\n');
+}
+
+function renderExampleReadme(
+  exampleName: CreateKovoExampleName,
+  definition: {
+    description: string;
+    entry: string;
+    label: string;
+  },
+): string {
+  return [
+    `# Kovo ${definition.label} Example`,
+    '',
+    definition.description,
+    '',
+    'The authored application files are copied byte-for-byte from the tracked Kovo example for',
+    `this release. The package, config, CI, and agent files are generated so this clone runs outside`,
+    'the Kovo monorepo. Repository-only demo drivers and test seams are intentionally excluded.',
+    '',
+    '## Run',
+    '',
+    '```sh',
+    'pnpm install --ignore-scripts',
+    'pnpm exec kovo check lifecycle',
+    'pnpm rebuild',
+    'pnpm run typecheck',
+    'pnpm run test',
+    ...(exampleName === 'commerce'
+      ? [
+          'KOVO_ENABLE_LOCAL_AUTH_FIXTURE=I_UNDERSTAND_THIS_IS_LOCAL_ONLY \\',
+          "KOVO_LOCAL_AUTH_FIXTURE_PASSWORD='<unique local password, 16+ characters>' \\",
+          '  pnpm run dev',
+        ]
+      : ['pnpm run dev']),
+    '```',
+    '',
+    ...(exampleName === 'commerce'
+      ? [
+          'The commerce auth fixture is local-only and refuses production use. Replace it with a fixed',
+          'Better Auth binding before deployment.',
+          '',
+        ]
+      : []),
+    '## Build',
+    '',
+    '```sh',
+    'pnpm run build',
+    '```',
+    '',
+    `App entry: \`${definition.entry}\`. Generated \`dist/\` and \`src/generated/\` files are`,
+    'compiler artifacts; author the copied TSX/TS sources instead (SPEC §5.2).',
+    '',
+  ].join('\n');
+}
+
+function renderCrmExampleDatabaseTest(): string {
+  return [
+    "import { describe, expect, it } from 'vitest';",
+    '',
+    "import { createCrmDb } from './db.js';",
+    "import { contacts, deals } from './schema.js';",
+    '',
+    "describe('CRM example database', () => {",
+    "  it('starts with the tracked contact and deal seed', async () => {",
+    '    const db = await createCrmDb();',
+    '    const contactRows = await db.select().from(contacts);',
+    '    const dealRows = await db.select().from(deals);',
+    "    expect(contactRows.map((row) => row.id)).toEqual(['c1', 'c2']);",
+    "    expect(dealRows.map((row) => row.id)).toEqual(['d1', 'd2']);",
+    '  });',
+    '});',
+    '',
+  ].join('\n');
+}
+
 function renderProjectTemplate(
   file: TemplateFile,
   dialect: CreateKovoDialect,
@@ -559,7 +869,38 @@ export function writeKovoProject(
     name,
     ...(configuredRetention === undefined ? {} : { retention: configuredRetention }),
   });
+  return writeGeneratedKovoProject(root, project, disableGit);
+}
 
+export function writeKovoExampleProject(
+  targetDirectory: string,
+  options: WriteKovoExampleProjectOptions,
+): WriteKovoProjectResult {
+  const root = resolve(targetDirectory);
+  const configuredName = ownScaffoldOption(options, 'name');
+  const example = ownScaffoldOption(options, 'example');
+  const disableGit = ownScaffoldOption(options, 'disableGit');
+  if (configuredName !== undefined && typeof configuredName !== 'string') {
+    throw new TypeError("create-kovo option 'name' must be a string.");
+  }
+  if (example === undefined || !creatorChoiceValues('example').includes(example)) {
+    throw new TypeError("create-kovo option 'example' must be 'crm' or 'commerce'.");
+  }
+  if (disableGit !== undefined && typeof disableGit !== 'boolean') {
+    throw new TypeError("create-kovo option 'disableGit' must be a boolean.");
+  }
+  const project = createKovoExampleProject({
+    example,
+    name: configuredName ?? basename(root),
+  });
+  return writeGeneratedKovoProject(root, project, disableGit);
+}
+
+function writeGeneratedKovoProject(
+  root: string,
+  project: CreateKovoProject,
+  disableGit: boolean | undefined,
+): WriteKovoProjectResult {
   assertWritableTarget(root);
 
   mkdirSync(root, { recursive: true });
@@ -631,10 +972,10 @@ export function writeKovoProject(
   };
 }
 
-function ownScaffoldOption<Key extends keyof WriteKovoProjectOptions>(
-  options: WriteKovoProjectOptions,
+function ownScaffoldOption<Options extends object, Key extends Extract<keyof Options, string>>(
+  options: Options,
   key: Key,
-): WriteKovoProjectOptions[Key] | undefined {
+): Options[Key] | undefined {
   const before = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
   const after = nativeReflectApply(nativeGetOwnPropertyDescriptor, NativeObject, [options, key]);
   if (before === undefined && after === undefined) return undefined;
@@ -650,7 +991,7 @@ function ownScaffoldOption<Key extends keyof WriteKovoProjectOptions>(
   ) {
     throw new TypeError(`create-kovo option '${key}' must be a stable own data property.`);
   }
-  return before.value as WriteKovoProjectOptions[Key];
+  return before.value as Options[Key];
 }
 
 function renderAgentsFile(kovoRulesBlock: string): string {
@@ -732,6 +1073,19 @@ export async function readInteractiveCreateKovoOptions(
 }
 
 function runCreateKovoCli(options: CreateKovoCliOptions): number {
+  if (options.example !== undefined) {
+    assertExampleCliOptionsCompatible(options);
+    const install = options.install ?? CREATE_KOVO_CREATOR_SCHEMA.install.nonInteractiveDefault;
+    const result = writeKovoExampleProject(options.targetDirectory, {
+      ...(options.disableGit === undefined ? {} : { disableGit: options.disableGit }),
+      example: options.example,
+      ...(options.name === undefined ? {} : { name: options.name }),
+    });
+    if (install === 'auto') installKovoProject(result.root);
+    process.stdout.write(renderExampleSuccess(result, options.example, install));
+    return 0;
+  }
+
   const dialect = options.dialect ?? CREATE_KOVO_CREATOR_SCHEMA.dialect.nonInteractiveDefault;
   const install = options.install ?? CREATE_KOVO_CREATOR_SCHEMA.install.nonInteractiveDefault;
   const deploymentTarget =
@@ -762,6 +1116,18 @@ function runCreateKovoCli(options: CreateKovoCliOptions): number {
     }),
   );
   return 0;
+}
+
+function assertExampleCliOptionsCompatible(options: CreateKovoCliOptions): void {
+  const incompatible = [
+    ...(options.dialect === undefined ? [] : ['--dialect/--postgres/--sqlite']),
+    ...(options.experimentalSqlite === undefined ? [] : ['--experimental-sqlite']),
+    ...(options.deploymentTarget === undefined ? [] : ['--deployment']),
+    ...(options.retention === undefined ? [] : ['--retention']),
+  ];
+  if (incompatible.length > 0) {
+    throw new Error(`Option --example cannot be combined with ${incompatible.join(', ')}.`);
+  }
 }
 
 function installKovoProject(root: string): void {
@@ -1073,6 +1439,38 @@ function renderSuccess(
       : []),
     `  ${packageManager} run dev`,
     `  ${packageManager} run check`,
+    '',
+  ].join('\n');
+}
+
+function renderExampleSuccess(
+  result: WriteKovoProjectResult,
+  example: CreateKovoExampleName,
+  install: CreateKovoInstallChoice,
+): string {
+  const packageManager = packageManagerCommand();
+  return [
+    'Kovo example created',
+    '',
+    `  Directory   ${result.root}`,
+    `  Name        ${result.name}`,
+    `  Example     ${example}`,
+    `  Install     ${install === 'auto' ? 'complete' : 'skipped'}`,
+    `  Git         ${existsSync(resolve(result.root, '.git')) ? 'initialized' : 'not initialized'}`,
+    `  Files       ${result.files.length}`,
+    '',
+    'Next steps',
+    `  cd ${shellQuote(result.root)}`,
+    ...(install === 'never'
+      ? [
+          `  ${packageManager} install --ignore-scripts`,
+          `  ${packageManager} exec kovo check lifecycle`,
+          `  ${packageManager} rebuild`,
+        ]
+      : []),
+    `  ${packageManager} run typecheck`,
+    `  ${packageManager} run test`,
+    `  ${packageManager} run dev`,
     '',
   ].join('\n');
 }

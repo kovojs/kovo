@@ -23,6 +23,7 @@ import {
   CREATE_KOVO_HELP,
   CREATE_KOVO_HOST_POSTURE,
   CREATE_KOVO_REFERENCE,
+  createKovoExampleProject,
   createKovoCommandShell,
   createKovoProject,
   demoPasswordEnvVar,
@@ -31,6 +32,7 @@ import {
   readInteractiveCreateKovoOptions,
   renderCreateKovoHelp,
   type WriteKovoProjectOptions,
+  writeKovoExampleProject,
   writeKovoProject,
 } from './index.js';
 import { linkStarterBuildDependencies, resolveDependencyRoot } from './index.test-support.js';
@@ -86,6 +88,45 @@ const createKovoPackage = JSON.parse(
 ) as { version: string };
 
 describe('create-kovo starter (metadata)', () => {
+  it('clones only the tracked authored files into standalone CRM and commerce projects', () => {
+    for (const example of ['crm', 'commerce'] as const) {
+      const root = mkdtempSync(join(tmpdir(), `create-kovo-${example}-`));
+      try {
+        const project = createKovoExampleProject({ example, name: `My ${example}` });
+        const result = writeKovoExampleProject(root, {
+          disableGit: true,
+          example,
+          name: `My ${example}`,
+        });
+        expect(result.name).toBe(`my-${example}`);
+        expect(result.files).toEqual(project.files.map((file) => file.path));
+        const manifestSource = readFileSync(join(root, 'package.json'), 'utf8');
+        expect(manifestSource).not.toContain('workspace:');
+        expect(manifestSource).not.toContain('../../');
+        expect(JSON.parse(manifestSource)).toMatchObject({
+          name: `my-${example}`,
+          scripts: {
+            build: expect.stringContaining('kovo build'),
+            test: 'vitest --run --config vitest.config.ts',
+            typecheck: 'tsc --noEmit',
+          },
+        });
+        expect(existsSync(join(root, 'scripts'))).toBe(false);
+        expect(existsSync(join(root, 'scratch'))).toBe(false);
+        expect(existsSync(join(root, 'vite.config.ts'))).toBe(true);
+        expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain(
+          'copied byte-for-byte from the tracked Kovo example',
+        );
+        const sourcePath = example === 'crm' ? 'src/interactive-app.tsx' : 'src/app.tsx';
+        expect(readFileSync(join(root, sourcePath), 'utf8')).toBe(
+          readFileSync(join(process.cwd(), 'examples', example, sourcePath), 'utf8'),
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    }
+  });
+
   it('scaffolds the real template file set with no unrendered placeholders', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-scaffold-'));
 
@@ -1337,6 +1378,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(CREATE_KOVO_HELP).toContain('--install[=auto|never]');
       expect(CREATE_KOVO_HELP).toContain('--deployment <node|vercel|cloudflare>');
       expect(CREATE_KOVO_HELP).toContain('--retention <unconfigured|retained-24h>');
+      expect(CREATE_KOVO_HELP).toContain('--example <crm|commerce>');
       expect(CREATE_KOVO_REFERENCE.sections).toContainEqual(
         expect.objectContaining({ anchor: 'development-host-support' }),
       );
@@ -1348,6 +1390,47 @@ describe('create-kovo starter (CLI)', () => {
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+    }
+  });
+
+  it('creates an advanced example through the same non-interactive schema path', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-example-'));
+    const root = join(parent, 'Sales Lab');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      expect(main([root, '--example', 'crm', '--yes', '--no-git', '--no-install'])).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Kovo example created'));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Example     crm'));
+      expect(existsSync(join(root, 'src/interactive-app.tsx'))).toBe(true);
+      expect(existsSync(join(root, '.git'))).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects starter-only flags with --example before writing', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-example-conflict-'));
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      for (const args of [
+        ['--sqlite', '--experimental-sqlite'],
+        ['--deployment', 'vercel'],
+        ['--retention', 'retained-24h'],
+      ]) {
+        const root = join(parent, args[0]!.slice(2));
+        expect(main([root, '--example', 'commerce', ...args])).toBe(1);
+        expect(existsSync(root)).toBe(false);
+      }
+      expect(stderr).toHaveBeenCalledWith(
+        expect.stringContaining('Option --example cannot be combined with'),
+      );
+    } finally {
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
     }
   });
 
