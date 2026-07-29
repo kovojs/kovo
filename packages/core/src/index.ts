@@ -737,7 +737,7 @@ export function href<const Path extends RegistryKey<RouteRegistry>>(
 
 /** Props accepted by the compiler-bound `<Link />` navigation sugar (SPEC §6.4). */
 export interface LinkProps {
-  children?: ComponentRenderResult;
+  children?: ComponentChild;
   params?: Record<string, string>;
   search?: Record<string, RouteSearchValue>;
   to: keyof RouteRegistry extends never ? string : Extract<keyof RouteRegistry, string>;
@@ -763,11 +763,11 @@ export interface LinkDescriptor {
  * const link = Link('/products/:id', { params: { id: 'p1' } });
  * const anchor = `<a href="${link.href}">View</a>`;
  */
-export function Link(props: LinkProps): ComponentRenderResult;
 export function Link<const Path extends RegistryKey<RouteRegistry>>(
   path: Path,
   options: RouteHrefOptions<RouteFor<Path>>,
 ): LinkDescriptor;
+export function Link(props: LinkProps): ComponentRenderResult;
 export function Link<const Path extends RegistryKey<RouteRegistry>>(
   pathOrProps: Path | LinkProps,
   options?: RouteHrefOptions<RouteFor<Path>>,

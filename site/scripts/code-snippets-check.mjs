@@ -997,6 +997,7 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type ComponentChild = any;
+export type MutationFormDefinition = any;
 export type IconProps = any;
 export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;

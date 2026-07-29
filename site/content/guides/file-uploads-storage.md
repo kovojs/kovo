@@ -40,8 +40,9 @@ Render it as a normal form:
 
 ```tsx
 import { component } from '@kovojs/core';
+import type { MutationFormDefinition } from '@kovojs/server';
 
-declare const uploadAvatar: unknown;
+declare const uploadAvatar: MutationFormDefinition;
 
 export const AvatarForm = component({
   render: () => (

@@ -1396,7 +1396,9 @@ export declare namespace JSX {
     cx?: number | string;
     cy?: number | string;
     d?: string;
+    dateTime?: AttributeValue;
     decoding?: AttributeValue;
+    defaultValue?: AttributeValue;
     disabled?: AttributeValue;
     download?: AttributeValue;
     draggable?: boolean | 'false' | 'true';
