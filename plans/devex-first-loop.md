@@ -21,8 +21,11 @@ proof; shared root verification belongs in the latest-verification block.
 - [x] Derive shell-completion data and the authored command-reference input from that model.
   - Evidence: `packages/cli/src/commands-manifest.test.ts` and `site/scripts/cli-ref.mjs` prove both
     derived surfaces use the same manifest.
-- [ ] Publish the framework-owned `kovo-diagnostic/v1` record and render human, JSON, and GitHub
+- [x] Publish the framework-owned `kovo-diagnostic/v1` record and render human, JSON, and GitHub
       adapters without re-deriving severity, help, or source ranges.
+  - Evidence: the 36-test diagnostic/command/doctor/standalone-verifier suite proves one projected
+    record per producer, hostile GitHub escaping, authenticated CLI envelopes, preserved command
+    protocols, and field parity across human, JSON, and GitHub adapters.
 - [x] Make root help, `help`, command help, and version write to stdout and exit 0.
   - Evidence: the CLI exit suite in Latest verification passes the stdout/exit-zero matrix.
 - [x] Make usage/config errors exit 2 and proof/build findings exit 1.
