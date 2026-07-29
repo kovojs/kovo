@@ -657,7 +657,7 @@ jobs:
       - paranoid
       - api-surface
       - docs-snippets
-      - docs-snippets-dist
+      - docs-samples-packed
       - sql-safety
       - metamorphic
       - compiler-perf
