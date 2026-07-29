@@ -14,6 +14,7 @@ import {
   extractedFunctionKey,
   writeActionCallbackFunction,
 } from './domain-writes.js';
+import { requestCallIsExactBetterAuthAppBindings } from '../trust-escapes-static.js';
 import { compilerOwnedAppContractMemberEquals } from './app-contract-static-facts.js';
 import {
   boundReceiverMethodAccessName,
@@ -1250,6 +1251,11 @@ function relationalReadWithObjectTableExpressions(
     ) {
       continue;
     }
+    // SPEC §6.6/§10.3 C9: the request-authority classifier authenticates this exact public
+    // package door, pristine framework-owned runtime, and finite generated option grammar. Reuse
+    // that closed verdict rather than treating the first argument as an opaque app helper handoff.
+    // Lookalikes, aliases, opaque options, and mutated runtimes still fall through to KV406.
+    if (requestCallIsExactBetterAuthAppBindings(call)) continue;
 
     calls.push({ index: call.getStart() - bodyStart, name });
   }

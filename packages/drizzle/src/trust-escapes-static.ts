@@ -8457,8 +8457,13 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
  * Exact public Better Auth app door. The facade accepts only a pristine framework-owned app
  * runtime plus the same finite option grammar used by the generated assembly ABI. Runtime system
  * authority and sign-out posture stay package-owned (SPEC §6.6/§10.3 C9).
+ *
+ * @internal Shared with the Drizzle receiver-handoff detector so its KV406 verdict cannot drift
+ * from the stricter request-authority classifier.
  */
-function requestCallIsExactBetterAuthAppBindings(call: import('ts-morph').CallExpression): boolean {
+export function requestCallIsExactBetterAuthAppBindings(
+  call: import('ts-morph').CallExpression,
+): boolean {
   const identities = [
     ['createBetterAuthPostgresAppBindings', '@kovojs/better-auth/postgres'],
     ['createBetterAuthSqliteAppBindings', '@kovojs/better-auth/sqlite'],
