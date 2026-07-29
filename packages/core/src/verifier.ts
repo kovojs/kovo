@@ -278,7 +278,7 @@ export function inspectFrameworkHmacSignatureVerifier(value: HmacSignatureVerifi
  * @param options - Secret(s), header name, encoding, payload derivation, and tolerance.
  * @returns An `HmacSignatureVerifier` with an async `verify`.
  * @example
- * import { hmacSignature } from '@kovojs/core';
+ * import { hmacSignature } from '@kovojs/core/webhooks';
  *
  * const secret = process.env.PROVIDER_WEBHOOK_SECRET;
  * if (secret === undefined) throw new Error('Missing provider webhook signing material');
@@ -596,7 +596,7 @@ function assertHmacSecretByteBound(value: Uint8Array): void {
  * @param verify - Predicate over the raw request returning whether it is authentic.
  * @returns A `CustomWebhookVerifier`.
  * @example
- * import { customVerifier, type WebhookHeaders } from '@kovojs/core';
+ * import { customVerifier, type WebhookHeaders } from '@kovojs/core/webhooks';
  *
  * function tokenFrom(headers: WebhookHeaders): string | undefined {
  *   if ('get' in headers && typeof headers.get === 'function') {
@@ -642,7 +642,7 @@ export function customVerifier(
  * @param options - The Standard Webhooks signing secret(s).
  * @returns An `HmacSignatureVerifier` configured for Standard Webhooks.
  * @example
- * import { standardWebhooks } from '@kovojs/core';
+ * import { standardWebhooks } from '@kovojs/core/webhooks';
  *
  * const secret = process.env.STANDARD_WEBHOOK_SECRET;
  * if (secret === undefined) throw new Error('Missing Standard Webhooks signing material');

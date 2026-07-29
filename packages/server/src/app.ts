@@ -137,14 +137,19 @@ if (!nativeArrayIsArray([]) || nativeArrayIsArray({}) || !nativeNumberIsFinite(1
  * @example
  * import '@kovojs/server/runtime-bootstrap';
  *
- * import { createApp, route } from '@kovojs/server'
+ * import { defineKovo, publicAccess } from '@kovojs/server';
  * import { createRequestHandler } from '@kovojs/server/custom-adapters';
  *
- * const app = createApp({
- *   routes: [route('/', { page: () => <h1>Home</h1> })],
+ * const app = defineKovo({
+ *   appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
  * });
  *
- * export const handler = createRequestHandler(app);
+ * const home = app.route('/', {
+ *   access: publicAccess('public home page'),
+ *   page: () => <h1>Home</h1>,
+ * });
+ *
+ * export const handler = createRequestHandler(app.assemble({ routes: [home] }));
  */
 export function createApp<
   SessionValue = never,
