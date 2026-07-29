@@ -63,6 +63,7 @@ import {
   collectCapabilityPackageRequests,
   componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
+  createCompilerOwnedAppContractProject,
   createFrameworkKovoCssCollectorVitePlugin,
   cssRouteDeliveryGate,
   dedupeCss,
@@ -74,6 +75,7 @@ import {
   projectMutationRegistryFactsFromFiles,
   type AppDependencyCapabilityManifest,
   type CompilerGeneratedCapabilityDependency,
+  type CompilerOwnedAppContractProject,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -2600,6 +2602,53 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
   }
 }
 
+function compilerOwnedAppContractProjectForBuild(
+  files: readonly BuildCheckSourceFile[],
+  extraRootNames: readonly string[] = [],
+  absoluteRoots = false,
+): CompilerOwnedAppContractProject | undefined {
+  const rootNames: string[] = [];
+  const seen = buildCreateSet<string>();
+  const sources = buildSnapshotDenseArray(files, 'App-contract compiler source roots');
+  for (let index = 0; index < sources.length; index += 1) {
+    const fileName = absoluteRoots
+      ? resolve(sources[index]!.fileName)
+      : sources[index]!.fileName;
+    const canonicalFileName = resolve(fileName);
+    if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
+    buildSetAdd(seen, canonicalFileName);
+    buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
+  }
+  const extras = buildSnapshotDenseArray(extraRootNames, 'App-contract compiler extra roots');
+  for (let index = 0; index < extras.length; index += 1) {
+    const fileName = absoluteRoots ? resolve(extras[index]!) : extras[index]!;
+    const canonicalFileName = resolve(fileName);
+    if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
+    buildSetAdd(seen, canonicalFileName);
+    buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
+  }
+  return rootNames.length === 0
+    ? undefined
+    : createCompilerOwnedAppContractProject({ rootNames });
+}
+
+function withBuildAppContractResolutions<Value>(
+  project: CompilerOwnedAppContractProject | undefined,
+  fileName: string,
+  source: string,
+  operation: () => Value,
+): Value {
+  if (project === undefined) return operation();
+  return project.withEntryResolutions(fileName, (programSource) => {
+    if (programSource !== source) {
+      throw new Error(
+        `Kovo app-contract compiler refused a stale source snapshot for ${fileName}.`,
+      );
+    }
+    return operation();
+  });
+}
+
 function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): SourceGraphFacts {
   const compilerDependencies: CompilerGeneratedCapabilityDependency[] = [];
   const compilerSecuritySemanticSources: CompilerSecuritySemanticSource[] = [];
@@ -2610,6 +2659,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const routePages: SourceRoutePageFacts[] = [];
 
   const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
+  const appContractProject = compilerOwnedAppContractProjectForBuild(sourceFiles);
   // SPEC §5.2 rule 10 / §6.3: derive imported mutation-form ownership once from the same immutable
   // source snapshot used by build/check. Lowering receives only typed, path-scoped facts and never
   // infers authority from a bare identifier or a post-evaluation runtime object.
@@ -2636,16 +2686,31 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       source: file.source,
       sourceProvenance: 'app',
     } as const;
-    const component = compileComponentModule(componentOptions);
+    const resolvedCompilation = withBuildAppContractResolutions(
+      appContractProject,
+      file.fileName,
+      file.source,
+      () => ({
+        component: compileComponentModule(componentOptions),
+        parsedModule: parseComponentModule(
+          file.fileName,
+          file.source,
+          extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
+        ),
+        routePage: compileRouteModule({ fileName: file.fileName, source: file.source }),
+        standaloneRegistrySource: lowerStandaloneSourceDerivedRegistryDeclarations({
+          fileName: file.fileName,
+          source: file.source,
+        }),
+      }),
+    );
+    const component = resolvedCompilation.component;
     appendBuildTaskBFiniteDiagnostics(
       compilerTaskBBlockingDiagnostics,
       component.diagnostics,
       'TASK B component compiler finite diagnostics',
     );
-    const standaloneRegistrySource = lowerStandaloneSourceDerivedRegistryDeclarations({
-      fileName: file.fileName,
-      source: file.source,
-    });
+    const standaloneRegistrySource = resolvedCompilation.standaloneRegistrySource;
     const compilerLoweredSources = [component.loweredSource, standaloneRegistrySource] as const;
     for (let loweredIndex = 0; loweredIndex < compilerLoweredSources.length; loweredIndex += 1) {
       const generatedDependencies = buildSnapshotDenseArray(
@@ -2673,11 +2738,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       `Compiler semantic graph facts for ${file.fileName}`,
       (fact) => (fact.securitySemanticGraph === undefined ? [] : [fact.securitySemanticGraph]),
     );
-    const parsedModule = parseComponentModule(
-      file.fileName,
-      file.source,
-      extraFiles.length === 0 ? {} : { frameworkIdentityFiles: extraFiles },
-    );
+    const parsedModule = resolvedCompilation.parsedModule;
     collectRegistryDeclarationAnchors(
       registryDeclarationAnchors,
       file.fileName,
@@ -2693,7 +2754,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       },
       'CLI compiler semantic source carriers',
     );
-    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    const routePage = resolvedCompilation.routePage;
     const routeDiagnostics = buildSnapshotDenseArray(
       routePage.diagnostics,
       `Compiler route diagnostics for ${file.fileName}`,
@@ -3586,6 +3647,11 @@ async function loadBuildAppModule(
   dependencyCapabilities: AppDependencyCapabilityManifest,
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
+  const appContractProject = compilerOwnedAppContractProjectForBuild(
+    approvedSourceFiles,
+    [appModulePath],
+    true,
+  );
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
     configFile: false,
@@ -3603,6 +3669,7 @@ async function loadBuildAppModule(
         appModulePath,
         root,
         lowerStandaloneSourceDerivedRegistryDeclarations,
+        appContractProject,
       ),
     ],
     oxc: {
@@ -3711,6 +3778,7 @@ function sourceDerivedRegistryVitePlugin(
   appModulePath: string,
   root: string,
   lowerRegistryDeclarations: typeof lowerStandaloneSourceDerivedRegistryDeclarations,
+  appContractProject: CompilerOwnedAppContractProject | undefined,
 ): Plugin {
   const authoredSourcePaths = buildCreateSet<string>();
   buildSetAdd(authoredSourcePaths, resolve(appModulePath));
@@ -3751,7 +3819,17 @@ function sourceDerivedRegistryVitePlugin(
       if (sourceClaimsKovoBuildCompilerAuthority(fileName, source)) {
         assertKovoBuildAuthoredCompilerAuthority(fileName, source);
       }
-      const code = lowerRegistryDeclarations({ fileName, source });
+      const code = withBuildAppContractResolutions(
+        appContractProject,
+        sourcePath,
+        source,
+        () =>
+          lowerRegistryDeclarations({
+            fileName: sourcePath,
+            identityFileName: fileName,
+            source,
+          }),
+      );
       return code === null ? null : { code, map: null };
     },
   };
@@ -6098,6 +6176,11 @@ async function loadExportAppModule(
   const resolvedAppModulePath = options.appModulePath;
   const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
+  const appContractProject = compilerOwnedAppContractProjectForBuild(
+    approvedSourceFiles,
+    [resolvedAppModulePath],
+    true,
+  );
 
   const lifetime = await createBuildTimeViteServer({
     appType: 'custom',
@@ -6111,6 +6194,12 @@ async function loadExportAppModule(
         dependencyCapabilities,
         'export',
         { sourceRoot: root },
+      ),
+      sourceDerivedRegistryVitePlugin(
+        resolvedAppModulePath,
+        root,
+        lowerStandaloneSourceDerivedRegistryDeclarations,
+        appContractProject,
       ),
     ],
     oxc: {

@@ -146,6 +146,8 @@ interface SourceDerivedRegistryAssignment {
 /** @internal Lower standalone app/server registry declarations before Vite evaluates createApp(). */
 export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   fileName: string;
+  /** Stable project-relative identity input when `fileName` is an absolute Program path. */
+  identityFileName?: string;
   source: string;
 }): string | null {
   const model = parseComponentModule(options.fileName, options.source);
@@ -164,7 +166,7 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
       'Source-derived assignments',
     ) as SourceDerivedRegistryAssignment;
     const helper = registryAssignmentTable[assignment.primitive].helper.local;
-    const key = derivedAssignmentKey(options.fileName, assignment);
+    const key = derivedAssignmentKey(options.identityFileName ?? options.fileName, assignment);
     const encodedKey = compilerJsonStringify(key);
     if (encodedKey === undefined) throw new TypeError('Source-derived key could not be encoded.');
     const start = assignment.call.getStart(sourceFile);

@@ -86,6 +86,7 @@ import type {
   RegistryFacts,
 } from './types.js';
 import { validateAuthoringSurface } from './validate/authoring-surface.js';
+import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
 
 const dirname = builtinDirname;
 const isAbsolute = builtinIsAbsolute;
@@ -720,7 +721,11 @@ function createBoundKovoVitePlugin(
           return null;
         }
         const standaloneRegistrySource = isAuthoredSource
-          ? lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source })
+          ? lowerViteSourceDerivedRegistryDeclarations(
+              transformRoot,
+              fileName,
+              source,
+            )
           : null;
         if (!isCurrent()) {
           finish();
@@ -2386,6 +2391,35 @@ function diagnosticSite(diagnostic: CompilerDiagnostic): string {
   if (line === undefined || column === undefined) return diagnostic.fileName;
 
   return `${diagnostic.fileName}:${line}:${column}`;
+}
+
+function lowerViteSourceDerivedRegistryDeclarations(
+  root: string,
+  fileName: string,
+  source: string,
+): string | null {
+  // Legacy free factories have no receiver to prove. App-scoped factories do: run their lowering
+  // inside a fresh compiler-owned Program so Vite cannot turn spelling such as `app.query(...)`
+  // into framework authority. The Program is deliberately invocation-local because HMR may replace
+  // the same file between transforms.
+  if (!compilerRegExpTest(/\.\s*(?:mutation|query|task)\s*\(/u, source)) {
+    return lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source });
+  }
+
+  const programFileName = isAbsolute(fileName) ? fileName : resolve(root, fileName);
+  const project = createCompilerOwnedAppContractProject({ rootNames: [programFileName] });
+  return project.withEntryResolutions(programFileName, (programSource) => {
+    if (programSource !== source) {
+      throw new TypeError(
+        `Kovo Vite app-contract compiler refused a stale source snapshot for ${fileName}.`,
+      );
+    }
+    return lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: programFileName,
+      identityFileName: fileName,
+      source,
+    });
+  });
 }
 
 function viteComponentFileName(id: string, root: string): string {

@@ -76,6 +76,10 @@ export interface CompilerOwnedAppContractProject {
   resolverIntegrityMutations(
     fileName: string,
   ): Readonly<Record<string, readonly AppContractResolverDiagnostic[]>>;
+  withEntryResolutions<Value>(
+    fileName: string,
+    operation: (source: string) => Value,
+  ): Value;
 }
 
 /** @internal Exact root names used to construct the compiler-owned TypeScript Program. */
@@ -369,6 +373,24 @@ export function createCompilerOwnedAppContractProject(
           },
         ]),
       });
+    },
+
+    withEntryResolutions<Value>(
+      fileName: string,
+      operation: (source: string) => Value,
+    ): Value {
+      const sourceFile = sourceFileFor(fileName);
+      const analysis = analyzeEntry(fileName);
+      if (analysis.diagnostics.length > 0) {
+        throw new TypeError(
+          analysis.diagnostics
+            .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+            .join('\n'),
+        );
+      }
+      return withCompilerOwnedAppContractResolutions(analysis.facts, () =>
+        operation(sourceFile.text),
+      );
     },
   });
 }
@@ -2300,6 +2322,7 @@ function snapshotRootNames(raw: CreateCompilerOwnedAppContractProjectOptions): r
 
 function appContractCompilerOptions(): ts.CompilerOptions {
   return {
+    allowJs: true,
     allowImportingTsExtensions: true,
     exactOptionalPropertyTypes: true,
     jsx: ts.JsxEmit.ReactJSX,
