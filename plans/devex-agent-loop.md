@@ -60,7 +60,7 @@ reference material; `SPEC.md` remains normative.
 ## Latest verification
 
 - **Agent-docs suite:** `pnpm exec vitest run` over snapshot generation, storage, CLI/MCP
-  retrieval, update, llms generation, benchmark binding, and CI policy passed (9 files, 57 tests).
+  retrieval, update, llms generation, benchmark binding, and CI policy passed (9 files, 61 tests).
 - **Offline-agent suite:** `pnpm run test:devex-offline-agent` passed (3 files, 24 tests), including
   the exact `check source` edit/fix sequence and denial of network and prose diagnostics.
 - **Budget proof:** `node scripts/devex-benchmark.mjs --check-budgets` validated the recorded

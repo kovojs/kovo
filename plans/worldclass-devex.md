@@ -661,14 +661,14 @@ track therefore precedes Track 5.
 package size. Generate from public manifests, SPEC links, and tested examples; set a compressed
 size budget and byte-compare outputs. Seeds child ledger `devex-agent-loop.md`.
 
-- [ ] (M) Package the complete versioned authored-doc/API snapshot with the CLI at pack time,
+- [x] (M) Package the complete versioned authored-doc/API snapshot with the CLI at pack time,
       including a file manifest, Kovo version, source commit, and SHA-256 digests; set a
       compressed tarball/install-size budget, ratified per Track 2's derivation procedure in
       `devex-budgets.json`, so version-matched context does not turn the CLI into an unbounded
       docs payload.
-  - Partial evidence: clean-root determinism and every authenticated manifest/content field pass;
-    the packed snapshot contains 77 files. The parent remains open until size budgets are
-    baseline-derived and ratified.
+  - Evidence: the 61-test agent-docs suite proves clean-root determinism and every authenticated
+    manifest/content field; `kovo-devex-budgets/v7` validates the baseline-derived 1.25 MiB
+    compressed and 5 MiB installed packed-artifact ratifications.
 - [x] (M) Make `kovo update-docs` atomically install that exact snapshot under `.kovo/docs`; never
       fetch mutable live docs during the command and never report success for placeholder-only
       content (G13).
