@@ -31,14 +31,30 @@ checklist from the charter.
 
 ## Test harness
 
-- [ ] Implement an app-scoped harness whose types come from the imported app contract.
-- [ ] Load runtime proof facts only from digest-verified, complete, matching app artifacts.
-- [ ] Reject stale, partial, failed-build, and wrong-app artifacts.
-- [ ] Move useful RLS/CSRF helpers to `@kovojs/test` and remove the parallel server/testing home.
-- [ ] Remove `/test-case` unless a sound Vitest fixture API replaces it.
-- [ ] Split ordinary harness dependencies from Playwright and optional/native backend engines.
-- [ ] Ratify installed-size and dependency-count budgets before adding the harness to the starter.
+- [x] Implement an app-scoped harness whose types come from the imported app contract.
+  - Evidence: `packages/test/src/harness.test.ts` compiles inferred DB, request, route, mutation,
+    query, result, and declared-error types from the supplied app.
+- [x] Load runtime proof facts only from digest-verified, complete, matching app artifacts.
+  - Evidence: the focused harness suite executes imported app handles using only a verified graph
+    artifact and matching lock/source/config digests.
+- [x] Reject stale, partial, failed-build, and wrong-app artifacts.
+  - Evidence: the harness suite proves all four refusal paths plus missing identity and non-absolute
+    artifact/project paths.
+- [x] Move useful RLS/CSRF helpers to `@kovojs/test` and remove the parallel server/testing home.
+  - Evidence: package-export conformance covers `@kovojs/test/csrf` and `/postgres`;
+    `pnpm run check:api-surface` records the removed `@kovojs/server/testing` home.
+- [x] Remove `/test-case` unless a sound Vitest fixture API replaces it.
+  - Evidence: the decision/migration gates classify and exercise removal of the subpath and
+    `kovoTest` family; the package-export conformance fixture has no `/test-case` import.
+- [x] Split ordinary harness dependencies from Playwright and optional/native backend engines.
+  - Evidence: `pnpm run check:test-package-budget` proves the harness runtime closure contains none
+    of the optional Playwright, PGlite, or native SQLite peers.
+- [x] Ratify installed-size and dependency-count budgets before adding the harness to the starter.
+  - Evidence: the budget gate measures 3,088,503 installed bytes, nine package-store entries, and a
+    243,685-byte tarball within the dated ratchets.
 - [ ] Add the dependency and a real inferred harness example to the packed starter.
+  - Current gap: the starter dependency is present, but `templates/src/app.test.ts` still teaches
+    the HTTP subprocess journey and does not import `createKovoTestHarness`.
 
 ## Exit
 
@@ -47,4 +63,6 @@ checklist from the charter.
 
 ## Latest verification
 
-No implementation checkbox has been closed in this ledger yet.
+Focused verification: five harness/Postgres/export/migration/budget test files pass (17 tests);
+`pnpm run check:test-package-budget` passes its build, offline install, exact dependency closure,
+measured budgets, and two mutation tests. The packed starter harness example and G24 remain open.

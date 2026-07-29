@@ -1,7 +1,7 @@
 {
   "$comment": "Reviewer-authored closed membership for every manifest-public first-party runtime export and module initializer. New packages, subpaths, value exports, condition arms, or manifest targets fail the gate until explicitly classified. SPEC.md §6.6.",
   "schema": "kovo-framework-public-runtime-export-posture/v1",
-  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-28.5",
+  "summaryVersion": "kovo-framework-public-runtime-export-posture/2026-07-29.1",
   "emptyPublicPackages": [
     {
       "packageName": "@kovojs/compiler",
@@ -11,7 +11,7 @@
     {
       "packageName": "create-kovo",
       "packageVersion": "0.2.0",
-      "sourceTreeSha256": "9046c93aed6531f15f494a93ca5e73f349a979b5a73367d1f510b0fcf73a4728",
+      "sourceTreeSha256": "60917ca4323305a2728143484d670e39a914c641b08331d02ca338ced5ca2734",
       "manifestVariants": [
         {
           "fingerprint": "sha256:65f523e5fc6e4b722b498b204040f16369f1a9dceab9d7854a48bab9b25c700a"
@@ -53,7 +53,7 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:701c0a827dd1cb4c52378f5e3b2935230077e92ea060e647222d6de3510d22db"
+          "fingerprint": "sha256:38aedbeab0edfec4288581919509d98a6d265277b096e4e8b2769a48cbe41ece"
         },
         {
           "exports": {
@@ -64,7 +64,7 @@
             "./internal": "./src/internal.ts",
             "./internal/server-mount-adapter": "./src/internal/server-mount-adapter.ts"
           },
-          "fingerprint": "sha256:dbcddc1f0c382d65a0005528a4b3a3237efe75a90396f9899c078cf4ed6b5057"
+          "fingerprint": "sha256:c5c8b4cb07662f4563c3d01a676fa285e12945ba356e1e63b196e018b731a961"
         },
         {
           "exports": {
@@ -93,7 +93,7 @@
               "default": "./dist/internal/server-mount-adapter.mjs"
             }
           },
-          "fingerprint": "sha256:fe6cd81e9116ee604a1ff570be7541905e6abf44e77598197a7ec49687eed914"
+          "fingerprint": "sha256:cea10dd9785b91140937f80cd8a2e99ae6d0cfa9520de56d44c15e5656bef166"
         }
       ],
       "packageName": "@kovojs/better-auth",
@@ -113,9 +113,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "<module>"
-            ]
+            ".": ["<module>"]
           },
           "review": {
             "basis": "@kovojs/better-auth manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
@@ -146,9 +144,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "mount"
-            ]
+            ".": ["mount"]
           },
           "review": {
             "basis": "The exact mount call creates a endpoint untrusted-data root; root status is independent from raw-capability disposition.",
@@ -179,9 +175,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "authed"
-            ]
+            ".": ["authed"]
           },
           "review": {
             "basis": "authed is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -212,9 +206,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "betterAuthCsrfFromEnvironment"
-            ]
+            ".": ["betterAuthCsrfFromEnvironment"]
           },
           "review": {
             "basis": "betterAuthCsrfFromEnvironment is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -245,9 +237,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "betterAuthPasswordResetMailDoor"
-            ]
+            ".": ["betterAuthPasswordResetMailDoor"]
           },
           "review": {
             "basis": "betterAuthPasswordResetMailDoor captures one exact non-Proxy deployer sender behind an opaque registry token; it acquires no raw host capability and fixed bindings can invoke it only through the reviewed password-reset mail sink.",
@@ -276,9 +266,7 @@
             "surface": "auth"
           },
           "members": {
-            ".": [
-              "role"
-            ]
+            ".": ["role"]
           },
           "review": {
             "basis": "role is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -296,7 +284,7 @@
           "securityRole": "security-control"
         }
       ],
-      "sourceTreeSha256": "c22040f4f310b4e975ed4c5cfcb0487602c01d836fa57d0eeb942163390e077c"
+      "sourceTreeSha256": "b21d58a9f69323a042e28fd1dacde1a1c75a1766ad3179150b7b0c621ba62559"
     },
     {
       "manifestVariants": [
@@ -598,7 +586,7 @@
           "reason": "The custom-shell browser installer captures framework-bounded network and dynamic-loader authority and is not available inside serialized handlers."
         }
       ],
-      "sourceTreeSha256": "4061e28e3f03926e401831ee2df9d5a7cb57af8df50f3d3025ce1a53c7ff8899"
+      "sourceTreeSha256": "49915ec37f0547ca944cfdd29c6d5abed49cb5bb5fc4141ed92a2cbec8777b23"
     },
     {
       "manifestVariants": [
@@ -698,7 +686,7 @@
           "reason": "The diagnostic schema constant belongs to the build-time CLI package and is not request-handler authority."
         }
       ],
-      "sourceTreeSha256": "17abbd87443708049c6605ff1e7f01910d67f1464eabe296ac4ad1bae7d0748b"
+      "sourceTreeSha256": "c8a6e0f928632abaccdd02dce7dc6f7f574cb122b8d7e3fc72955e03636db6eb"
     },
     {
       "manifestVariants": [
@@ -930,12 +918,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "DeclassifyPolicy",
-              "revealSecret",
-              "revealUntrusted",
-              "trustedReveal"
-            ]
+            "./security": ["DeclassifyPolicy", "revealSecret", "revealUntrusted", "trustedReveal"]
           },
           "review": {
             "basis": "SPEC §6.6 makes policy construction and all three declassification doors L1 capabilities. Any import reachable from an untrusted root closes before a runtime reveal can be attempted.",
@@ -964,12 +947,8 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "publicScopedKey"
-            ],
-            "./security": [
-              "publishToClient"
-            ]
+            ".": ["publicScopedKey"],
+            "./security": ["publishToClient"]
           },
           "review": {
             "basis": "publishToClient and publicScopedKey expose explicit audited publication/cross-principal postures and remain tied to the capability-escape proof.",
@@ -986,10 +965,7 @@
           "securityRole": "capability-escape"
         },
         {
-          "capabilities": [
-            "crypto-acquisition",
-            "digest"
-          ],
+          "capabilities": ["crypto-acquisition", "digest"],
           "disposition": "framework-door",
           "id": "framework-door-module-initializer-core-crypto-digest",
           "matrix": {
@@ -1002,12 +978,8 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./storage": [
-              "<module>"
-            ],
-            "./webhooks": [
-              "<module>"
-            ]
+            "./storage": ["<module>"],
+            "./webhooks": ["<module>"]
           },
           "review": {
             "basis": "The @kovojs/core root eagerly pins its verify-only crypto provider and non-secret storage digest controls; module initialization is classified separately from each named export.",
@@ -1045,16 +1017,9 @@
               "queryRef",
               "routeRef"
             ],
-            "./diagnostics": [
-              "<module>"
-            ],
-            "./security": [
-              "<module>"
-            ],
-            "./storage": [
-              "S3CompatibleObjectClient",
-              "createMemoryStorage"
-            ]
+            "./diagnostics": ["<module>"],
+            "./security": ["<module>"],
+            "./storage": ["createMemoryStorage", "S3CompatibleObjectClient"]
           },
           "review": {
             "basis": "@kovojs/core exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; doors, roots, escapes, sinks, and module initialization are split into separate groups.",
@@ -1083,9 +1048,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "secret"
-            ]
+            "./security": ["secret"]
           },
           "review": {
             "basis": "secret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1114,9 +1077,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "revealRedacted"
-            ]
+            "./security": ["revealRedacted"]
           },
           "review": {
             "basis": "revealRedacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1145,9 +1106,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "isUntrusted"
-            ]
+            "./security": ["isUntrusted"]
           },
           "review": {
             "basis": "isUntrusted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1176,9 +1135,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "declareOffWire"
-            ]
+            "./security": ["declareOffWire"]
           },
           "review": {
             "basis": "declareOffWire is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1207,9 +1164,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "isSecret"
-            ]
+            "./security": ["isSecret"]
           },
           "review": {
             "basis": "isSecret is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1238,9 +1193,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "untrusted"
-            ]
+            "./security": ["untrusted"]
           },
           "review": {
             "basis": "untrusted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1269,9 +1222,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "isRedacted"
-            ]
+            "./security": ["isRedacted"]
           },
           "review": {
             "basis": "isRedacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1300,9 +1251,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./security": [
-              "redacted"
-            ]
+            "./security": ["redacted"]
           },
           "review": {
             "basis": "redacted is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
@@ -1318,9 +1267,7 @@
           "securityRole": "secret-flow"
         },
         {
-          "capabilities": [
-            "crypto-acquisition"
-          ],
+          "capabilities": ["crypto-acquisition"],
           "disposition": "framework-door",
           "id": "framework-door-crypto-acquisition-standard-webhooks-core",
           "matrix": {
@@ -1333,9 +1280,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./webhooks": [
-              "standardWebhooks"
-            ]
+            "./webhooks": ["standardWebhooks"]
           },
           "review": {
             "basis": "standardWebhooks constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
@@ -1351,9 +1296,7 @@
           "securityRole": "security-control"
         },
         {
-          "capabilities": [
-            "crypto-acquisition"
-          ],
+          "capabilities": ["crypto-acquisition"],
           "disposition": "framework-door",
           "id": "framework-door-crypto-acquisition-hmac-signature-core",
           "matrix": {
@@ -1366,9 +1309,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./webhooks": [
-              "hmacSignature"
-            ]
+            "./webhooks": ["hmacSignature"]
           },
           "review": {
             "basis": "hmacSignature constructs a fixed verify-only HMAC authority whose provider key remains private to the framework crypto door.",
@@ -1397,9 +1338,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "form"
-            ]
+            ".": ["form"]
           },
           "review": {
             "basis": "form is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -1428,9 +1367,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "redirect"
-            ]
+            ".": ["redirect"]
           },
           "review": {
             "basis": "redirect is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1459,9 +1396,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "href"
-            ]
+            ".": ["href"]
           },
           "review": {
             "basis": "href is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1490,9 +1425,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "Link"
-            ]
+            ".": ["Link"]
           },
           "review": {
             "basis": "Link is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -1521,9 +1454,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./webhooks": [
-              "customVerifier"
-            ]
+            "./webhooks": ["customVerifier"]
           },
           "review": {
             "basis": "customVerifier is an audited trust escape and remains tied to the trust-escape threat-matrix proof.",
@@ -1539,11 +1470,7 @@
           "securityRole": "trust-escape"
         },
         {
-          "capabilities": [
-            "crypto-acquisition",
-            "digest",
-            "filesystem"
-          ],
+          "capabilities": ["crypto-acquisition", "digest", "filesystem"],
           "disposition": "framework-door",
           "id": "framework-door-core-filesystem-crypto-digest",
           "matrix": {
@@ -1556,9 +1483,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./storage": [
-              "createFileSystemStorage"
-            ]
+            "./storage": ["createFileSystemStorage"]
           },
           "review": {
             "basis": "createFileSystemStorage is a constrained filesystem door whose returned put capability also uses cryptographic UUID entropy and a fixed non-secret SHA-256 digest; no primitive or wildcard authority escapes.",
@@ -1574,10 +1499,7 @@
           "securityRole": "framework-door"
         },
         {
-          "capabilities": [
-            "digest",
-            "network"
-          ],
+          "capabilities": ["digest", "network"],
           "disposition": "framework-door",
           "id": "framework-door-core-network-digest",
           "matrix": {
@@ -1590,9 +1512,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            "./storage": [
-              "createS3CompatibleStorage"
-            ]
+            "./storage": ["createS3CompatibleStorage"]
           },
           "review": {
             "basis": "createS3CompatibleStorage is a constrained network door whose returned capability uses only fixed non-secret SHA-256 digests; no generic crypto or wildcard authority escapes.",
@@ -1608,7 +1528,7 @@
           "securityRole": "framework-door"
         }
       ],
-      "sourceTreeSha256": "6f8ceea3942840fbf0ba3a7c2bb62552c8c6cceae0d380a9f62327c43329ad7e"
+      "sourceTreeSha256": "316bdd39b3f1d0ba771bb01c7c407272f9bec0d28a16506a1a4b9353a0019149"
     },
     {
       "manifestVariants": [
@@ -1819,34 +1739,6 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
-          "id": "authority-free-security-control-db-data-plane-ae15cc7ff0",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "db-data-plane"
-          },
-          "members": {
-            ".": ["extractKovoRuntimeDbMetadata"]
-          },
-          "review": {
-            "basis": "extractKovoRuntimeDbMetadata is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
-            "evidence": [
-              "packages/drizzle/src/drizzle-surface.ts",
-              "packages/drizzle/src/index.ts",
-              "packages/drizzle/src/runtime.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "security-control"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
           "id": "authority-free-trust-escape-db-data-plane-7e995009e4",
           "matrix": {
             "cells": {
@@ -1901,7 +1793,7 @@
           "securityRole": "trust-escape"
         }
       ],
-      "sourceTreeSha256": "104a2cedbd75dc05d658f8659f245e124f30d043f65b046978aee1935a2d5319"
+      "sourceTreeSha256": "e68d71f0c5e519b1c432c797f9e985477ac512b7ee7c522d0ebe58521ef84458"
     },
     {
       "manifestVariants": [
@@ -2342,7 +2234,6 @@
               "accordionContentAttributes",
               "accordionHeaderAttributes",
               "accordionItemAttributes",
-              "accordionItemOpen",
               "accordionRootAttributes",
               "accordionTriggerAttributes"
             ],
@@ -2357,24 +2248,19 @@
               "autocompleteInputAttributes",
               "autocompleteListAttributes",
               "autocompleteOptionAttributes",
-              "autocompleteOptionHighlighted",
-              "autocompleteOptionSelected",
               "autocompleteRootAttributes",
-              "autocompleteSuggestions",
               "autocompleteValueAttributes",
               "autocompleteValueText"
             ],
             "./avatar": [
               "avatarFallbackAttributes",
               "avatarImageAttributes",
-              "avatarImageState",
               "avatarRootAttributes"
             ],
             "./checkbox": ["applyCheckboxIndeterminate", "checkboxRootAttributes"],
             "./checkbox-group": [
               "checkboxGroupControlAttributes",
               "checkboxGroupItemAttributes",
-              "checkboxGroupItemChecked",
               "checkboxGroupLabelAttributes",
               "checkboxGroupRootAttributes"
             ],
@@ -2384,12 +2270,9 @@
               "collapsibleTriggerAttributes"
             ],
             "./combobox": [
-              "comboboxFilteredItems",
               "comboboxInputAttributes",
               "comboboxListboxAttributes",
               "comboboxOptionAttributes",
-              "comboboxOptionHighlighted",
-              "comboboxOptionSelected",
               "comboboxRootAttributes",
               "comboboxValueAttributes",
               "comboboxValueText"
@@ -2398,11 +2281,8 @@
               "commandCloseAttributes",
               "commandDialogAttributes",
               "commandEmptyAttributes",
-              "commandFilteredItems",
               "commandInputAttributes",
               "commandItemAttributes",
-              "commandItemHighlighted",
-              "commandItemSelected",
               "commandListboxAttributes",
               "commandRootAttributes",
               "commandTriggerAttributes",
@@ -2410,10 +2290,8 @@
             ],
             "./context-menu": [
               "contextMenuContentAttributes",
-              "contextMenuFocusElement",
               "contextMenuGroupAttributes",
               "contextMenuItemAttributes",
-              "contextMenuItemHighlighted",
               "contextMenuRootAttributes",
               "contextMenuSeparatorAttributes",
               "contextMenuTriggerAttributes"
@@ -2431,10 +2309,8 @@
             ],
             "./dropdown-menu": [
               "dropdownMenuContentAttributes",
-              "dropdownMenuFocusElement",
               "dropdownMenuGroupAttributes",
               "dropdownMenuItemAttributes",
-              "dropdownMenuItemHighlighted",
               "dropdownMenuRootAttributes",
               "dropdownMenuSeparatorAttributes",
               "dropdownMenuTriggerAttributes"
@@ -2454,23 +2330,17 @@
               "hoverCardTriggerAttributes"
             ],
             "./menubar": [
-              "menubarFocusElement",
               "menubarGroupAttributes",
               "menubarItemAttributes",
-              "menubarItemHighlighted",
-              "menubarItemOpen",
               "menubarRootAttributes",
               "menubarSeparatorAttributes",
               "menubarSubmenuAttributes"
             ],
-            "./meter": ["meterRootAttributes", "meterValueState"],
+            "./meter": ["meterRootAttributes"],
             "./navigation-menu": [
               "navigationMenuContentAttributes",
-              "navigationMenuFocusElement",
               "navigationMenuIndicatorAttributes",
               "navigationMenuItemAttributes",
-              "navigationMenuItemHighlighted",
-              "navigationMenuItemOpen",
               "navigationMenuLinkAttributes",
               "navigationMenuListAttributes",
               "navigationMenuRootAttributes",
@@ -2485,43 +2355,33 @@
               "numberFieldValueFromString"
             ],
             "./otp-field": [
-              "otpFieldComplete",
               "otpFieldHiddenInputAttributes",
               "otpFieldInputAttributes",
-              "otpFieldRootAttributes",
-              "otpFieldSlotValue",
-              "otpFieldValueFromString"
+              "otpFieldRootAttributes"
             ],
             "./popover": [
               "popoverContentAttributes",
               "popoverRootAttributes",
               "popoverTriggerAttributes"
             ],
-            "./progress": ["progressRootAttributes", "progressValueState"],
+            "./progress": ["progressRootAttributes"],
             "./radio-group": [
               "radioGroupItemAttributes",
-              "radioGroupItemChecked",
               "radioGroupLabelAttributes",
-              "radioGroupMoveValue",
               "radioGroupRadioAttributes",
               "radioGroupRootAttributes"
             ],
             "./scroll-area": [
               "scrollAreaCornerAttributes",
-              "scrollAreaCornerState",
               "scrollAreaRootAttributes",
               "scrollAreaScrollbarAttributes",
-              "scrollAreaScrollbarState",
               "scrollAreaThumbAttributes",
-              "scrollAreaThumbGeometry",
-              "scrollAreaViewportAttributes",
-              "scrollAreaViewportState"
+              "scrollAreaViewportAttributes"
             ],
             "./select": [
               "selectContentAttributes",
               "selectHiddenInputAttributes",
               "selectItemAttributes",
-              "selectItemSelected",
               "selectRootAttributes",
               "selectTriggerAttributes",
               "selectValueAttributes",
@@ -2535,12 +2395,10 @@
               "sliderRootAttributes",
               "sliderThumbAttributes",
               "sliderTrackAttributes",
-              "sliderValueFromString",
-              "sliderValueState"
+              "sliderValueFromString"
             ],
             "./switch": ["switchRootAttributes"],
             "./tabs": [
-              "tabsItemSelected",
               "tabsListAttributes",
               "tabsPanelAttributes",
               "tabsRootAttributes",
@@ -2566,14 +2424,12 @@
             "./toggle-group": [
               "toggleGroupButtonAttributes",
               "toggleGroupItemAttributes",
-              "toggleGroupItemPressed",
               "toggleGroupRootAttributes"
             ],
             "./toolbar": [
               "toolbarButtonAttributes",
               "toolbarItemAttributes",
-              "toolbarRootAttributes",
-              "toolbarRovingIndex"
+              "toolbarRootAttributes"
             ],
             "./tooltip": [
               "tooltipContentAttributes",
@@ -2590,45 +2446,45 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "a3b65f0fbfff6bbce20395f5e42b3b4fb4f08ed7a8720a24cbfc206d294fd929"
+      "sourceTreeSha256": "e8eb2a3104a4aaab5bf9658620c38cf6ba304a1de4b91f6647fde9d7ffe3f014"
     },
     {
       "manifestVariants": [
-        {
-          "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./index": null,
-            "./*": {
-              "types": "./dist/*.d.mts",
-              "default": "./dist/*.mjs"
-            }
-          },
-          "fingerprint": "sha256:23c0a04b101c29a3ad8a9f7af8996572f893050f8dd16ffbf0e4811aa738bea2"
-        },
-        {
-          "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./index": null,
-            "./*": {
-              "types": "./dist/*.d.mts",
-              "default": "./dist/*.mjs"
-            }
-          },
-          "fingerprint": "sha256:973e5b191b7d192b2626ef0425f21bf37eaff17318d96594e7a5f981484e3c5c"
-        },
         {
           "exports": {
             ".": "./src/index.tsx",
             "./index": null,
             "./*": "./src/*.tsx"
           },
-          "fingerprint": "sha256:a53000da73d72f1dbf61daf4521bde0987cfa989904e2f1e1f49093cc9a4a152"
+          "fingerprint": "sha256:495356eda7f81e5b89c3a94120b8960324380db5bae5e744f4079e0f8bfe61f9"
+        },
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            },
+            "./index": null,
+            "./*": {
+              "types": "./dist/*.d.mts",
+              "default": "./dist/*.mjs"
+            }
+          },
+          "fingerprint": "sha256:4984e4b9a88f9511704da8a75b2b56957caf55b585e9934d026697f7ddddd3e8"
+        },
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            },
+            "./index": null,
+            "./*": {
+              "types": "./dist/*.d.mts",
+              "default": "./dist/*.mjs"
+            }
+          },
+          "fingerprint": "sha256:aae5b0d89c3171c7706c80055757c8ec4a2671b3b287a9773fc39e593aaa7323"
         }
       ],
       "packageName": "@kovojs/icons",
@@ -6156,300 +6012,47 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "ba9294cd1d47ffdd03123a2372cfad57f53c22f08ad7a7e64a9a0a93c068cc11"
+      "sourceTreeSha256": "9da0a75ac49bd0be38ff17e2874847f04d6bde62b1ba89bcf4295da9931c4a61"
     },
     {
       "manifestVariants": [
         {
           "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./build": {
-              "types": "./dist/build.d.mts",
-              "default": "./dist/build.mjs"
-            },
-            "./runtime-bootstrap": {
-              "types": "./dist/runtime-bootstrap.d.mts",
-              "default": "./dist/runtime-bootstrap.mjs"
-            },
-            "./sqlite": {
-              "types": "./dist/sqlite.d.mts",
-              "default": "./dist/sqlite.mjs"
-            },
-            "./testing": {
-              "types": "./dist/testing.d.mts",
-              "default": "./dist/testing.mjs"
-            },
-            "./vite": {
-              "types": "./dist/vite.d.mts",
-              "default": "./dist/vite.mjs"
-            },
-            "./internal/app-shell-vite": {
-              "types": "./dist/internal/app-shell-vite.d.mts",
-              "default": "./dist/internal/app-shell-vite.mjs"
-            },
-            "./internal/audit-facts": {
-              "types": "./dist/internal/audit-facts.d.mts",
-              "default": "./dist/internal/audit-facts.mjs"
-            },
-            "./internal/better-auth": {
-              "types": "./dist/internal/better-auth.d.mts",
-              "default": "./dist/internal/better-auth.mjs"
-            },
-            "./internal/build": {
-              "types": "./dist/internal/build.d.mts",
-              "default": "./dist/internal/build.mjs"
-            },
-            "./internal/build-context": {
-              "types": "./dist/internal/build-context.d.mts",
-              "default": "./dist/internal/build-context.mjs"
-            },
-            "./internal/build-preset": {
-              "types": "./dist/build-preset-internal.d.mts",
-              "default": "./dist/build-preset-internal.mjs"
-            },
-            "./internal/capabilities": {
-              "types": "./dist/internal/capabilities.d.mts",
-              "default": "./dist/internal/capabilities.mjs"
-            },
-            "./internal/client-modules": {
-              "types": "./dist/internal/client-modules.d.mts",
-              "default": "./dist/internal/client-modules.mjs"
-            },
-            "./internal/csp": {
-              "types": "./dist/internal/csp.d.mts",
-              "default": "./dist/internal/csp.mjs"
-            },
-            "./internal/csrf": {
-              "types": "./dist/internal/csrf.d.mts",
-              "default": "./dist/internal/csrf.mjs"
-            },
-            "./internal/data-plane-static-analysis": {
-              "types": "./dist/internal/data-plane-static-analysis.d.mts",
-              "default": "./dist/internal/data-plane-static-analysis.mjs"
-            },
-            "./internal/egress": {
-              "types": "./dist/internal/egress.d.mts",
-              "default": "./dist/internal/egress.mjs"
-            },
-            "./internal/escape": {
-              "types": "./dist/internal/escape.d.mts",
-              "default": "./dist/internal/escape.mjs"
-            },
-            "./internal/execution": {
-              "types": "./dist/internal/execution.d.mts",
-              "default": "./dist/internal/execution.mjs"
-            },
-            "./internal/html": {
-              "types": "./dist/internal/html.d.mts",
-              "default": "./dist/internal/html.mjs"
-            },
-            "./internal/keyring": {
-              "types": "./dist/internal/keyring.d.mts",
-              "default": "./dist/internal/keyring.mjs"
-            },
-            "./internal/managed-db": {
-              "types": "./dist/internal/managed-db.d.mts",
-              "default": "./dist/internal/managed-db.mjs"
-            },
-            "./internal/postgres-capability": {
-              "types": "./dist/internal/postgres-capability.d.mts",
-              "default": "./dist/internal/postgres-capability.mjs"
-            },
-            "./internal/runtime-registry-wire": {
-              "types": "./dist/internal/runtime-registry-wire.d.mts",
-              "default": "./dist/internal/runtime-registry-wire.mjs"
-            },
-            "./internal/runtime-environment": {
-              "types": "./dist/internal/runtime-environment.d.mts",
-              "default": "./dist/internal/runtime-environment.mjs"
-            },
-            "./internal/route": {
-              "types": "./dist/internal/route.d.mts",
-              "default": "./dist/internal/route.mjs"
-            },
-            "./internal/sqlite": {
-              "types": "./dist/internal/sqlite.d.mts",
-              "default": "./dist/internal/sqlite.mjs"
-            },
-            "./internal/sqlite-capability": {
-              "types": "./dist/internal/sqlite-capability.d.mts",
-              "default": "./dist/internal/sqlite-capability.mjs"
-            },
-            "./internal/static-export": {
-              "types": "./dist/internal/static-export.d.mts",
-              "default": "./dist/internal/static-export.mjs"
-            },
-            "./internal/vite-security-profile": {
-              "types": "./dist/internal/vite-security-profile.d.mts",
-              "default": "./dist/internal/vite-security-profile.mjs"
-            },
-            "./internal/wire": {
-              "types": "./dist/internal/wire.d.mts",
-              "default": "./dist/internal/wire.mjs"
-            },
-            "./jsx-runtime": {
-              "types": "./dist/jsx-runtime.d.mts",
-              "default": "./dist/jsx-runtime.mjs"
-            },
-            "./jsx-dev-runtime": {
-              "types": "./dist/jsx-runtime.d.mts",
-              "default": "./dist/jsx-runtime.mjs"
-            }
-          },
-          "fingerprint": "sha256:5691d3f7818bf2e10fa3bae03241b0dfb5cdfef19f097bc6ea9888be7af94337"
-        },
-        {
-          "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./build": {
-              "types": "./dist/build.d.mts",
-              "default": "./dist/build.mjs"
-            },
-            "./runtime-bootstrap": {
-              "types": "./dist/runtime-bootstrap.d.mts",
-              "default": "./dist/runtime-bootstrap.mjs"
-            },
-            "./sqlite": {
-              "types": "./dist/sqlite.d.mts",
-              "default": "./dist/sqlite.mjs"
-            },
-            "./testing": {
-              "types": "./dist/testing.d.mts",
-              "default": "./dist/testing.mjs"
-            },
-            "./vite": {
-              "types": "./dist/vite.d.mts",
-              "default": "./dist/vite.mjs"
-            },
-            "./internal/app-shell-vite": {
-              "types": "./dist/internal/app-shell-vite.d.mts",
-              "default": "./dist/internal/app-shell-vite.mjs"
-            },
-            "./internal/audit-facts": {
-              "types": "./dist/internal/audit-facts.d.mts",
-              "default": "./dist/internal/audit-facts.mjs"
-            },
-            "./internal/better-auth": {
-              "types": "./dist/internal/better-auth.d.mts",
-              "default": "./dist/internal/better-auth.mjs"
-            },
-            "./internal/build": {
-              "types": "./dist/internal/build.d.mts",
-              "default": "./dist/internal/build.mjs"
-            },
-            "./internal/build-context": {
-              "types": "./dist/internal/build-context.d.mts",
-              "default": "./dist/internal/build-context.mjs"
-            },
-            "./internal/build-preset": {
-              "types": "./dist/build-preset-internal.d.mts",
-              "default": "./dist/build-preset-internal.mjs"
-            },
-            "./internal/capabilities": {
-              "types": "./dist/internal/capabilities.d.mts",
-              "default": "./dist/internal/capabilities.mjs"
-            },
-            "./internal/client-modules": {
-              "types": "./dist/internal/client-modules.d.mts",
-              "default": "./dist/internal/client-modules.mjs"
-            },
-            "./internal/csp": {
-              "types": "./dist/internal/csp.d.mts",
-              "default": "./dist/internal/csp.mjs"
-            },
-            "./internal/csrf": {
-              "types": "./dist/internal/csrf.d.mts",
-              "default": "./dist/internal/csrf.mjs"
-            },
-            "./internal/data-plane-static-analysis": {
-              "types": "./dist/internal/data-plane-static-analysis.d.mts",
-              "default": "./dist/internal/data-plane-static-analysis.mjs"
-            },
-            "./internal/egress": {
-              "types": "./dist/internal/egress.d.mts",
-              "default": "./dist/internal/egress.mjs"
-            },
-            "./internal/escape": {
-              "types": "./dist/internal/escape.d.mts",
-              "default": "./dist/internal/escape.mjs"
-            },
-            "./internal/execution": {
-              "types": "./dist/internal/execution.d.mts",
-              "default": "./dist/internal/execution.mjs"
-            },
-            "./internal/html": {
-              "types": "./dist/internal/html.d.mts",
-              "default": "./dist/internal/html.mjs"
-            },
-            "./internal/keyring": {
-              "types": "./dist/internal/keyring.d.mts",
-              "default": "./dist/internal/keyring.mjs"
-            },
-            "./internal/managed-db": {
-              "types": "./dist/internal/managed-db.d.mts",
-              "default": "./dist/internal/managed-db.mjs"
-            },
-            "./internal/postgres-capability": {
-              "types": "./dist/internal/postgres-capability.d.mts",
-              "default": "./dist/internal/postgres-capability.mjs"
-            },
-            "./internal/runtime-registry-wire": {
-              "types": "./dist/internal/runtime-registry-wire.d.mts",
-              "default": "./dist/internal/runtime-registry-wire.mjs"
-            },
-            "./internal/runtime-environment": {
-              "types": "./dist/internal/runtime-environment.d.mts",
-              "default": "./dist/internal/runtime-environment.mjs"
-            },
-            "./internal/route": {
-              "types": "./dist/internal/route.d.mts",
-              "default": "./dist/internal/route.mjs"
-            },
-            "./internal/sqlite": {
-              "types": "./dist/internal/sqlite.d.mts",
-              "default": "./dist/internal/sqlite.mjs"
-            },
-            "./internal/sqlite-capability": {
-              "types": "./dist/internal/sqlite-capability.d.mts",
-              "default": "./dist/internal/sqlite-capability.mjs"
-            },
-            "./internal/static-export": {
-              "types": "./dist/internal/static-export.d.mts",
-              "default": "./dist/internal/static-export.mjs"
-            },
-            "./internal/vite-security-profile": {
-              "types": "./dist/internal/vite-security-profile.d.mts",
-              "default": "./dist/internal/vite-security-profile.mjs"
-            },
-            "./internal/wire": {
-              "types": "./dist/internal/wire.d.mts",
-              "default": "./dist/internal/wire.mjs"
-            },
-            "./jsx-runtime": {
-              "types": "./dist/jsx-runtime.d.mts",
-              "default": "./dist/jsx-runtime.mjs"
-            },
-            "./jsx-dev-runtime": {
-              "types": "./dist/jsx-runtime.d.mts",
-              "default": "./dist/jsx-runtime.mjs"
-            }
-          },
-          "fingerprint": "sha256:59194e9f5c31a6176a92a8d37a9728860479a4ba55e1dd8b4570b8c0ed4977ea"
-        },
-        {
-          "exports": {
             ".": "./src/index.ts",
+            "./agent": "./src/public-agent.ts",
             "./build": "./src/build.ts",
+            "./client-modules": "./src/public-client-modules.ts",
+            "./command": "./src/public-command.ts",
+            "./confidential": "./src/public-confidential.ts",
+            "./custom-adapters": "./src/public-custom-adapters.ts",
+            "./data": "./src/public-data.ts",
+            "./delegation": "./src/public-delegation.ts",
+            "./derived-data": "./src/public-derived-data.ts",
+            "./diagnostics": "./src/public-diagnostics.ts",
+            "./egress": "./src/public-egress.ts",
+            "./files": "./src/public-files.ts",
+            "./node": "./src/public-node.ts",
+            "./password": "./src/public-password.ts",
+            "./postgres": "./src/public-postgres.ts",
+            "./principal-epochs": "./src/public-principal-epochs.ts",
+            "./principal-erasure": "./src/public-principal-erasure.ts",
+            "./render-tree": "./src/public-render-tree.ts",
+            "./rendering": "./src/public-rendering.ts",
+            "./replay": "./src/public-replay.ts",
+            "./routing": "./src/public-routing.ts",
             "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
+            "./secret-reading": "./src/public-secret-reading.ts",
+            "./security": "./src/public-security.ts",
+            "./signing": "./src/public-signing.ts",
             "./sqlite": "./src/sqlite.ts",
-            "./testing": "./src/testing.ts",
+            "./static-export": "./src/public-static-export.ts",
+            "./storage-downloads": "./src/public-storage-downloads.ts",
+            "./storage-keys": "./src/public-storage-keys.ts",
+            "./tasks": "./src/public-tasks.ts",
             "./vite": "./src/vite-source.ts",
+            "./webhooks": "./src/public-webhooks.ts",
+            "./write-safety": "./src/public-write-safety.ts",
+            "./generated/db-capabilities": "./src/generated-db-capabilities.ts",
             "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
             "./internal/audit-facts": "./src/internal/audit-facts.ts",
             "./internal/better-auth": "./src/internal/better-auth.ts",
@@ -6466,6 +6069,7 @@
             "./internal/execution": "./src/internal/execution.ts",
             "./internal/html": "./src/internal/html.ts",
             "./internal/keyring": "./src/internal/keyring.ts",
+            "./internal/managed-db-capabilities": "./src/internal/managed-db-capabilities.ts",
             "./internal/managed-db": "./src/internal/managed-db.ts",
             "./internal/postgres-capability": "./src/internal/postgres-capability.ts",
             "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
@@ -6474,12 +6078,543 @@
             "./internal/sqlite": "./src/internal/sqlite.ts",
             "./internal/sqlite-capability": "./src/internal/sqlite-capability.ts",
             "./internal/static-export": "./src/internal/static-export.ts",
+            "./internal/testing": "./src/internal/testing.ts",
             "./internal/vite-security-profile": "./src/internal/vite-security-profile.ts",
             "./internal/wire": "./src/internal/wire.ts",
             "./jsx-runtime": "./src/jsx-runtime.ts",
             "./jsx-dev-runtime": "./src/jsx-runtime.ts"
           },
-          "fingerprint": "sha256:a924be77487f1241978f78c7214ecb5db96225a2ae60c3c0172ca4c90170055b"
+          "fingerprint": "sha256:2fbd145fafa943627d4831f039aca76fadb3c421984a1dd59af153647a79fadb"
+        },
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            },
+            "./agent": {
+              "types": "./dist/public-agent.d.mts",
+              "default": "./dist/public-agent.mjs"
+            },
+            "./build": {
+              "types": "./dist/build.d.mts",
+              "default": "./dist/build.mjs"
+            },
+            "./client-modules": {
+              "types": "./dist/public-client-modules.d.mts",
+              "default": "./dist/public-client-modules.mjs"
+            },
+            "./command": {
+              "types": "./dist/public-command.d.mts",
+              "default": "./dist/public-command.mjs"
+            },
+            "./confidential": {
+              "types": "./dist/public-confidential.d.mts",
+              "default": "./dist/public-confidential.mjs"
+            },
+            "./custom-adapters": {
+              "types": "./dist/public-custom-adapters.d.mts",
+              "default": "./dist/public-custom-adapters.mjs"
+            },
+            "./data": {
+              "types": "./dist/public-data.d.mts",
+              "default": "./dist/public-data.mjs"
+            },
+            "./delegation": {
+              "types": "./dist/public-delegation.d.mts",
+              "default": "./dist/public-delegation.mjs"
+            },
+            "./derived-data": {
+              "types": "./dist/public-derived-data.d.mts",
+              "default": "./dist/public-derived-data.mjs"
+            },
+            "./diagnostics": {
+              "types": "./dist/public-diagnostics.d.mts",
+              "default": "./dist/public-diagnostics.mjs"
+            },
+            "./egress": {
+              "types": "./dist/public-egress.d.mts",
+              "default": "./dist/public-egress.mjs"
+            },
+            "./files": {
+              "types": "./dist/public-files.d.mts",
+              "default": "./dist/public-files.mjs"
+            },
+            "./node": {
+              "types": "./dist/public-node.d.mts",
+              "default": "./dist/public-node.mjs"
+            },
+            "./password": {
+              "types": "./dist/public-password.d.mts",
+              "default": "./dist/public-password.mjs"
+            },
+            "./postgres": {
+              "types": "./dist/public-postgres.d.mts",
+              "default": "./dist/public-postgres.mjs"
+            },
+            "./principal-epochs": {
+              "types": "./dist/public-principal-epochs.d.mts",
+              "default": "./dist/public-principal-epochs.mjs"
+            },
+            "./principal-erasure": {
+              "types": "./dist/public-principal-erasure.d.mts",
+              "default": "./dist/public-principal-erasure.mjs"
+            },
+            "./render-tree": {
+              "types": "./dist/public-render-tree.d.mts",
+              "default": "./dist/public-render-tree.mjs"
+            },
+            "./rendering": {
+              "types": "./dist/public-rendering.d.mts",
+              "default": "./dist/public-rendering.mjs"
+            },
+            "./replay": {
+              "types": "./dist/public-replay.d.mts",
+              "default": "./dist/public-replay.mjs"
+            },
+            "./routing": {
+              "types": "./dist/public-routing.d.mts",
+              "default": "./dist/public-routing.mjs"
+            },
+            "./runtime-bootstrap": {
+              "types": "./dist/runtime-bootstrap.d.mts",
+              "default": "./dist/runtime-bootstrap.mjs"
+            },
+            "./secret-reading": {
+              "types": "./dist/public-secret-reading.d.mts",
+              "default": "./dist/public-secret-reading.mjs"
+            },
+            "./security": {
+              "types": "./dist/public-security.d.mts",
+              "default": "./dist/public-security.mjs"
+            },
+            "./signing": {
+              "types": "./dist/public-signing.d.mts",
+              "default": "./dist/public-signing.mjs"
+            },
+            "./sqlite": {
+              "types": "./dist/sqlite.d.mts",
+              "default": "./dist/sqlite.mjs"
+            },
+            "./static-export": {
+              "types": "./dist/public-static-export.d.mts",
+              "default": "./dist/public-static-export.mjs"
+            },
+            "./storage-downloads": {
+              "types": "./dist/public-storage-downloads.d.mts",
+              "default": "./dist/public-storage-downloads.mjs"
+            },
+            "./storage-keys": {
+              "types": "./dist/public-storage-keys.d.mts",
+              "default": "./dist/public-storage-keys.mjs"
+            },
+            "./tasks": {
+              "types": "./dist/public-tasks.d.mts",
+              "default": "./dist/public-tasks.mjs"
+            },
+            "./vite": {
+              "types": "./dist/vite.d.mts",
+              "default": "./dist/vite.mjs"
+            },
+            "./webhooks": {
+              "types": "./dist/public-webhooks.d.mts",
+              "default": "./dist/public-webhooks.mjs"
+            },
+            "./write-safety": {
+              "types": "./dist/public-write-safety.d.mts",
+              "default": "./dist/public-write-safety.mjs"
+            },
+            "./generated/db-capabilities": {
+              "types": "./dist/generated-db-capabilities.d.mts",
+              "default": "./dist/generated-db-capabilities.mjs"
+            },
+            "./internal/app-shell-vite": {
+              "types": "./dist/internal/app-shell-vite.d.mts",
+              "default": "./dist/internal/app-shell-vite.mjs"
+            },
+            "./internal/audit-facts": {
+              "types": "./dist/internal/audit-facts.d.mts",
+              "default": "./dist/internal/audit-facts.mjs"
+            },
+            "./internal/better-auth": {
+              "types": "./dist/internal/better-auth.d.mts",
+              "default": "./dist/internal/better-auth.mjs"
+            },
+            "./internal/build": {
+              "types": "./dist/internal/build.d.mts",
+              "default": "./dist/internal/build.mjs"
+            },
+            "./internal/build-context": {
+              "types": "./dist/internal/build-context.d.mts",
+              "default": "./dist/internal/build-context.mjs"
+            },
+            "./internal/build-preset": {
+              "types": "./dist/build-preset-internal.d.mts",
+              "default": "./dist/build-preset-internal.mjs"
+            },
+            "./internal/capabilities": {
+              "types": "./dist/internal/capabilities.d.mts",
+              "default": "./dist/internal/capabilities.mjs"
+            },
+            "./internal/client-modules": {
+              "types": "./dist/internal/client-modules.d.mts",
+              "default": "./dist/internal/client-modules.mjs"
+            },
+            "./internal/csp": {
+              "types": "./dist/internal/csp.d.mts",
+              "default": "./dist/internal/csp.mjs"
+            },
+            "./internal/csrf": {
+              "types": "./dist/internal/csrf.d.mts",
+              "default": "./dist/internal/csrf.mjs"
+            },
+            "./internal/data-plane-static-analysis": {
+              "types": "./dist/internal/data-plane-static-analysis.d.mts",
+              "default": "./dist/internal/data-plane-static-analysis.mjs"
+            },
+            "./internal/egress": {
+              "types": "./dist/internal/egress.d.mts",
+              "default": "./dist/internal/egress.mjs"
+            },
+            "./internal/escape": {
+              "types": "./dist/internal/escape.d.mts",
+              "default": "./dist/internal/escape.mjs"
+            },
+            "./internal/execution": {
+              "types": "./dist/internal/execution.d.mts",
+              "default": "./dist/internal/execution.mjs"
+            },
+            "./internal/html": {
+              "types": "./dist/internal/html.d.mts",
+              "default": "./dist/internal/html.mjs"
+            },
+            "./internal/keyring": {
+              "types": "./dist/internal/keyring.d.mts",
+              "default": "./dist/internal/keyring.mjs"
+            },
+            "./internal/managed-db-capabilities": {
+              "types": "./dist/internal/managed-db-capabilities.d.mts",
+              "default": "./dist/internal/managed-db-capabilities.mjs"
+            },
+            "./internal/managed-db": {
+              "types": "./dist/internal/managed-db.d.mts",
+              "default": "./dist/internal/managed-db.mjs"
+            },
+            "./internal/postgres-capability": {
+              "types": "./dist/internal/postgres-capability.d.mts",
+              "default": "./dist/internal/postgres-capability.mjs"
+            },
+            "./internal/runtime-registry-wire": {
+              "types": "./dist/internal/runtime-registry-wire.d.mts",
+              "default": "./dist/internal/runtime-registry-wire.mjs"
+            },
+            "./internal/runtime-environment": {
+              "types": "./dist/internal/runtime-environment.d.mts",
+              "default": "./dist/internal/runtime-environment.mjs"
+            },
+            "./internal/route": {
+              "types": "./dist/internal/route.d.mts",
+              "default": "./dist/internal/route.mjs"
+            },
+            "./internal/sqlite": {
+              "types": "./dist/internal/sqlite.d.mts",
+              "default": "./dist/internal/sqlite.mjs"
+            },
+            "./internal/sqlite-capability": {
+              "types": "./dist/internal/sqlite-capability.d.mts",
+              "default": "./dist/internal/sqlite-capability.mjs"
+            },
+            "./internal/static-export": {
+              "types": "./dist/internal/static-export.d.mts",
+              "default": "./dist/internal/static-export.mjs"
+            },
+            "./internal/testing": {
+              "types": "./dist/internal/testing.d.mts",
+              "default": "./dist/internal/testing.mjs"
+            },
+            "./internal/vite-security-profile": {
+              "types": "./dist/internal/vite-security-profile.d.mts",
+              "default": "./dist/internal/vite-security-profile.mjs"
+            },
+            "./internal/wire": {
+              "types": "./dist/internal/wire.d.mts",
+              "default": "./dist/internal/wire.mjs"
+            },
+            "./jsx-runtime": {
+              "types": "./dist/jsx-runtime.d.mts",
+              "default": "./dist/jsx-runtime.mjs"
+            },
+            "./jsx-dev-runtime": {
+              "types": "./dist/jsx-runtime.d.mts",
+              "default": "./dist/jsx-runtime.mjs"
+            }
+          },
+          "fingerprint": "sha256:5b36d0af489d40b74acf7004c6d799a92710d92cdf259afab4366d4afe7ecf2e"
+        },
+        {
+          "exports": {
+            ".": {
+              "types": "./dist/index.d.mts",
+              "default": "./dist/index.mjs"
+            },
+            "./agent": {
+              "types": "./dist/public-agent.d.mts",
+              "default": "./dist/public-agent.mjs"
+            },
+            "./build": {
+              "types": "./dist/build.d.mts",
+              "default": "./dist/build.mjs"
+            },
+            "./client-modules": {
+              "types": "./dist/public-client-modules.d.mts",
+              "default": "./dist/public-client-modules.mjs"
+            },
+            "./command": {
+              "types": "./dist/public-command.d.mts",
+              "default": "./dist/public-command.mjs"
+            },
+            "./confidential": {
+              "types": "./dist/public-confidential.d.mts",
+              "default": "./dist/public-confidential.mjs"
+            },
+            "./custom-adapters": {
+              "types": "./dist/public-custom-adapters.d.mts",
+              "default": "./dist/public-custom-adapters.mjs"
+            },
+            "./data": {
+              "types": "./dist/public-data.d.mts",
+              "default": "./dist/public-data.mjs"
+            },
+            "./delegation": {
+              "types": "./dist/public-delegation.d.mts",
+              "default": "./dist/public-delegation.mjs"
+            },
+            "./derived-data": {
+              "types": "./dist/public-derived-data.d.mts",
+              "default": "./dist/public-derived-data.mjs"
+            },
+            "./diagnostics": {
+              "types": "./dist/public-diagnostics.d.mts",
+              "default": "./dist/public-diagnostics.mjs"
+            },
+            "./egress": {
+              "types": "./dist/public-egress.d.mts",
+              "default": "./dist/public-egress.mjs"
+            },
+            "./files": {
+              "types": "./dist/public-files.d.mts",
+              "default": "./dist/public-files.mjs"
+            },
+            "./node": {
+              "types": "./dist/public-node.d.mts",
+              "default": "./dist/public-node.mjs"
+            },
+            "./password": {
+              "types": "./dist/public-password.d.mts",
+              "default": "./dist/public-password.mjs"
+            },
+            "./postgres": {
+              "types": "./dist/public-postgres.d.mts",
+              "default": "./dist/public-postgres.mjs"
+            },
+            "./principal-epochs": {
+              "types": "./dist/public-principal-epochs.d.mts",
+              "default": "./dist/public-principal-epochs.mjs"
+            },
+            "./principal-erasure": {
+              "types": "./dist/public-principal-erasure.d.mts",
+              "default": "./dist/public-principal-erasure.mjs"
+            },
+            "./render-tree": {
+              "types": "./dist/public-render-tree.d.mts",
+              "default": "./dist/public-render-tree.mjs"
+            },
+            "./rendering": {
+              "types": "./dist/public-rendering.d.mts",
+              "default": "./dist/public-rendering.mjs"
+            },
+            "./replay": {
+              "types": "./dist/public-replay.d.mts",
+              "default": "./dist/public-replay.mjs"
+            },
+            "./routing": {
+              "types": "./dist/public-routing.d.mts",
+              "default": "./dist/public-routing.mjs"
+            },
+            "./runtime-bootstrap": {
+              "types": "./dist/runtime-bootstrap.d.mts",
+              "default": "./dist/runtime-bootstrap.mjs"
+            },
+            "./secret-reading": {
+              "types": "./dist/public-secret-reading.d.mts",
+              "default": "./dist/public-secret-reading.mjs"
+            },
+            "./security": {
+              "types": "./dist/public-security.d.mts",
+              "default": "./dist/public-security.mjs"
+            },
+            "./signing": {
+              "types": "./dist/public-signing.d.mts",
+              "default": "./dist/public-signing.mjs"
+            },
+            "./sqlite": {
+              "types": "./dist/sqlite.d.mts",
+              "default": "./dist/sqlite.mjs"
+            },
+            "./static-export": {
+              "types": "./dist/public-static-export.d.mts",
+              "default": "./dist/public-static-export.mjs"
+            },
+            "./storage-downloads": {
+              "types": "./dist/public-storage-downloads.d.mts",
+              "default": "./dist/public-storage-downloads.mjs"
+            },
+            "./storage-keys": {
+              "types": "./dist/public-storage-keys.d.mts",
+              "default": "./dist/public-storage-keys.mjs"
+            },
+            "./tasks": {
+              "types": "./dist/public-tasks.d.mts",
+              "default": "./dist/public-tasks.mjs"
+            },
+            "./vite": {
+              "types": "./dist/vite.d.mts",
+              "default": "./dist/vite.mjs"
+            },
+            "./webhooks": {
+              "types": "./dist/public-webhooks.d.mts",
+              "default": "./dist/public-webhooks.mjs"
+            },
+            "./write-safety": {
+              "types": "./dist/public-write-safety.d.mts",
+              "default": "./dist/public-write-safety.mjs"
+            },
+            "./generated/db-capabilities": {
+              "types": "./dist/generated-db-capabilities.d.mts",
+              "default": "./dist/generated-db-capabilities.mjs"
+            },
+            "./internal/app-shell-vite": {
+              "types": "./dist/internal/app-shell-vite.d.mts",
+              "default": "./dist/internal/app-shell-vite.mjs"
+            },
+            "./internal/audit-facts": {
+              "types": "./dist/internal/audit-facts.d.mts",
+              "default": "./dist/internal/audit-facts.mjs"
+            },
+            "./internal/better-auth": {
+              "types": "./dist/internal/better-auth.d.mts",
+              "default": "./dist/internal/better-auth.mjs"
+            },
+            "./internal/build": {
+              "types": "./dist/internal/build.d.mts",
+              "default": "./dist/internal/build.mjs"
+            },
+            "./internal/build-context": {
+              "types": "./dist/internal/build-context.d.mts",
+              "default": "./dist/internal/build-context.mjs"
+            },
+            "./internal/build-preset": {
+              "types": "./dist/build-preset-internal.d.mts",
+              "default": "./dist/build-preset-internal.mjs"
+            },
+            "./internal/capabilities": {
+              "types": "./dist/internal/capabilities.d.mts",
+              "default": "./dist/internal/capabilities.mjs"
+            },
+            "./internal/client-modules": {
+              "types": "./dist/internal/client-modules.d.mts",
+              "default": "./dist/internal/client-modules.mjs"
+            },
+            "./internal/csp": {
+              "types": "./dist/internal/csp.d.mts",
+              "default": "./dist/internal/csp.mjs"
+            },
+            "./internal/csrf": {
+              "types": "./dist/internal/csrf.d.mts",
+              "default": "./dist/internal/csrf.mjs"
+            },
+            "./internal/data-plane-static-analysis": {
+              "types": "./dist/internal/data-plane-static-analysis.d.mts",
+              "default": "./dist/internal/data-plane-static-analysis.mjs"
+            },
+            "./internal/egress": {
+              "types": "./dist/internal/egress.d.mts",
+              "default": "./dist/internal/egress.mjs"
+            },
+            "./internal/escape": {
+              "types": "./dist/internal/escape.d.mts",
+              "default": "./dist/internal/escape.mjs"
+            },
+            "./internal/execution": {
+              "types": "./dist/internal/execution.d.mts",
+              "default": "./dist/internal/execution.mjs"
+            },
+            "./internal/html": {
+              "types": "./dist/internal/html.d.mts",
+              "default": "./dist/internal/html.mjs"
+            },
+            "./internal/keyring": {
+              "types": "./dist/internal/keyring.d.mts",
+              "default": "./dist/internal/keyring.mjs"
+            },
+            "./internal/managed-db-capabilities": {
+              "types": "./dist/internal/managed-db-capabilities.d.mts",
+              "default": "./dist/internal/managed-db-capabilities.mjs"
+            },
+            "./internal/managed-db": {
+              "types": "./dist/internal/managed-db.d.mts",
+              "default": "./dist/internal/managed-db.mjs"
+            },
+            "./internal/postgres-capability": {
+              "types": "./dist/internal/postgres-capability.d.mts",
+              "default": "./dist/internal/postgres-capability.mjs"
+            },
+            "./internal/runtime-registry-wire": {
+              "types": "./dist/internal/runtime-registry-wire.d.mts",
+              "default": "./dist/internal/runtime-registry-wire.mjs"
+            },
+            "./internal/runtime-environment": {
+              "types": "./dist/internal/runtime-environment.d.mts",
+              "default": "./dist/internal/runtime-environment.mjs"
+            },
+            "./internal/route": {
+              "types": "./dist/internal/route.d.mts",
+              "default": "./dist/internal/route.mjs"
+            },
+            "./internal/sqlite": {
+              "types": "./dist/internal/sqlite.d.mts",
+              "default": "./dist/internal/sqlite.mjs"
+            },
+            "./internal/sqlite-capability": {
+              "types": "./dist/internal/sqlite-capability.d.mts",
+              "default": "./dist/internal/sqlite-capability.mjs"
+            },
+            "./internal/static-export": {
+              "types": "./dist/internal/static-export.d.mts",
+              "default": "./dist/internal/static-export.mjs"
+            },
+            "./internal/testing": {
+              "types": "./dist/internal/testing.d.mts",
+              "default": "./dist/internal/testing.mjs"
+            },
+            "./internal/vite-security-profile": {
+              "types": "./dist/internal/vite-security-profile.d.mts",
+              "default": "./dist/internal/vite-security-profile.mjs"
+            },
+            "./internal/wire": {
+              "types": "./dist/internal/wire.d.mts",
+              "default": "./dist/internal/wire.mjs"
+            },
+            "./jsx-runtime": {
+              "types": "./dist/jsx-runtime.d.mts",
+              "default": "./dist/jsx-runtime.mjs"
+            },
+            "./jsx-dev-runtime": {
+              "types": "./dist/jsx-runtime.d.mts",
+              "default": "./dist/jsx-runtime.mjs"
+            }
+          },
+          "fingerprint": "sha256:bee2ba2dc5c0f6b5f3b6afaa597e374b8cdcca7375d87758bbb2d4c68c99ecf2"
         }
       ],
       "packageName": "@kovojs/server",
@@ -6499,7 +6634,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["tool"]
+            "./agent": ["tool"]
           },
           "review": {
             "basis": "tool declares the exact mutation-backed callback root whose compiler-derived terminal operation closure is checked before agent execution.",
@@ -6527,18 +6662,14 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
-              "PrincipalEpochStaleError",
-              "PrincipalEpochUnavailableError",
+            "./agent": ["agent", "agentContent", "createAgentSession", "runAgentTurn"],
+            "./delegation": ["createDelegationAuthority", "onBehalfOf"],
+            "./principal-epochs": [
               "advancePrincipalEpoch",
-              "agent",
-              "agentContent",
-              "createAgentSession",
-              "createDelegationAuthority",
               "createMemoryPrincipalEpochStore",
               "initializePrincipalEpoch",
-              "onBehalfOf",
-              "runAgentTurn",
+              "PrincipalEpochStaleError",
+              "PrincipalEpochUnavailableError",
               "tombstonePrincipalEpoch"
             ]
           },
@@ -6571,7 +6702,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["trustedAssign"]
+            "./write-safety": ["trustedAssign"]
           },
           "review": {
             "basis": "trustedAssign exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6603,7 +6734,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["declarePublicRead"]
+            "./data": ["declarePublicRead"]
           },
           "review": {
             "basis": "declarePublicRead exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6635,7 +6766,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["serverValue"]
+            "./write-safety": ["serverValue"]
           },
           "review": {
             "basis": "serverValue exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6667,7 +6798,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["publicAccess", "publicScopedKey"]
+            ".": ["publicAccess"]
           },
           "review": {
             "basis": "publicAccess and publicScopedKey expose explicit audited public/cross-principal postures and remain tied to the capability-escape proof.",
@@ -6700,7 +6831,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["unsafeRegex"]
+            "./security": ["unsafeRegex"]
           },
           "review": {
             "basis": "unsafeRegex exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6732,7 +6863,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["unsafeCookie"]
+            "./security": ["unsafeCookie"]
           },
           "review": {
             "basis": "unsafeCookie exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6796,7 +6927,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["declarePublicRelation"]
+            "./postgres": ["declarePublicRelation"]
           },
           "review": {
             "basis": "declarePublicRelation exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6828,7 +6959,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["accept"]
+            "./security": ["accept"]
           },
           "review": {
             "basis": "accept exposes an audited dangerous-capability posture and remains tied to the capability-escape proof.",
@@ -6861,19 +6992,17 @@
           },
           "members": {
             ".": [
-              "createMemoryStorage",
-              "defineKovo",
               "Defer",
+              "defineKovo",
               "errorBoundary",
               "i18n",
               "metaFromQuery",
-              "MutationQueue",
               "notFound",
               "queue",
-              "StaticExportError",
               "stylesheet",
               "t"
-            ]
+            ],
+            "./static-export": ["StaticExportError"]
           },
           "review": {
             "basis": "@kovojs/server exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; defineKovo snapshots an inert provider/declaration contract, while its exact app-scoped factory and assemble receiver calls are classified separately by compiler-owned provenance. Doors, roots, escapes, sinks, and module initialization are split into separate groups.",
@@ -6906,7 +7035,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["task"]
+            "./tasks": ["task"]
           },
           "review": {
             "basis": "The exact task call creates a durable-task untrusted-data root; root status is independent from raw-capability disposition.",
@@ -6938,7 +7067,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createRequestHandler"]
+            "./custom-adapters": ["createRequestHandler"]
           },
           "review": {
             "basis": "The exact createRequestHandler call creates a endpoint untrusted-data root; root status is independent from raw-capability disposition.",
@@ -7002,7 +7131,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createStorageDownloadEndpoint"]
+            "./storage-downloads": ["createStorageDownloadEndpoint"]
           },
           "review": {
             "basis": "createStorageDownloadEndpoint creates an endpoint root whose capability-token verification is a fixed purpose-bound HMAC door; it exposes neither signing nor raw key authority.",
@@ -7162,7 +7291,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["webhook"]
+            "./webhooks": ["webhook"]
           },
           "review": {
             "basis": "The exact webhook call creates a webhook untrusted-data root; root status is independent from raw-capability disposition.",
@@ -7194,42 +7323,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["declareSecretReadCapability"]
+            "./secret-reading": ["declareSecretReadCapability"]
           },
           "review": {
             "basis": "declareSecretReadCapability is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "secret-flow"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-secret-flow-runtime-infra-d979a28561",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["committedSecretWaiver"]
-          },
-          "review": {
-            "basis": "committedSecretWaiver is security-bearing secret/audit plumbing with no raw host authority; its exact identity remains review-visible.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7290,7 +7387,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createMemoryWebhookReplayStore"]
+            "./webhooks": ["createMemoryWebhookReplayStore"]
           },
           "review": {
             "basis": "createMemoryWebhookReplayStore is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7354,7 +7451,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createMemoryMutationReplayStore"]
+            "./replay": ["createMemoryMutationReplayStore"]
           },
           "review": {
             "basis": "createMemoryMutationReplayStore is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7386,7 +7483,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["renderRegistry"]
+            "./render-tree": ["renderRegistry"]
           },
           "review": {
             "basis": "renderRegistry is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7418,7 +7515,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["cmd"]
+            "./command": ["cmd"]
           },
           "review": {
             "basis": "cmd is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7482,7 +7579,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["postgresAppRuntimeOptions"]
+            "./postgres": ["postgresAppRuntimeOptions"]
           },
           "review": {
             "basis": "postgresAppRuntimeOptions is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7514,7 +7611,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["readonlyDb"]
+            "./data": ["readonlyDb"]
           },
           "review": {
             "basis": "readonlyDb is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7546,42 +7643,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["postgresSchemaModule"]
+            "./postgres": ["postgresSchemaModule"]
           },
           "review": {
             "basis": "postgresSchemaModule is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "security-control"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-56bf762b59",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["KovoReadonlyHandleError"]
-          },
-          "review": {
-            "basis": "KovoReadonlyHandleError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -7642,7 +7707,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["RedosPatternError"]
+            "./security": ["RedosPatternError"]
           },
           "review": {
             "basis": "RedosPatternError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7674,7 +7739,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["verifyPassword"]
+            "./password": ["verifyPassword"]
           },
           "review": {
             "basis": "verifyPassword is the fixed Argon2id verification door; it does not expose the raw provider or arbitrary algorithm selection.",
@@ -7706,7 +7771,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["webhookReplayIdentity"]
+            "./webhooks": ["webhookReplayIdentity"]
           },
           "review": {
             "basis": "webhookReplayIdentity is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7738,7 +7803,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["EgressConfigError"]
+            "./egress": ["EgressConfigError"]
           },
           "review": {
             "basis": "EgressConfigError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7770,7 +7835,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["hashPassword"]
+            "./password": ["hashPassword"]
           },
           "review": {
             "basis": "hashPassword is the fixed Argon2id hashing door; it does not expose the raw provider or arbitrary algorithm selection.",
@@ -7834,7 +7899,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["EgressBlockedError"]
+            "./egress": ["EgressBlockedError"]
           },
           "review": {
             "basis": "EgressBlockedError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7866,7 +7931,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["PASSWORD_ARGON2ID_DEFAULTS"]
+            "./password": ["PASSWORD_ARGON2ID_DEFAULTS"]
           },
           "review": {
             "basis": "PASSWORD_ARGON2ID_DEFAULTS is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7898,7 +7963,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH"]
+            "./storage-downloads": ["DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH"]
           },
           "review": {
             "basis": "DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7930,7 +7995,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["isArgon2idPasswordDigest"]
+            "./password": ["isArgon2idPasswordDigest"]
           },
           "review": {
             "basis": "isArgon2idPasswordDigest is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7962,7 +8027,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["ComponentXmlError"]
+            "./render-tree": ["ComponentXmlError"]
           },
           "review": {
             "basis": "ComponentXmlError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -7994,7 +8059,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["domain"]
+            ".": ["domain", "tag"]
           },
           "review": {
             "basis": "domain is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8058,7 +8123,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["mintCsrfField"]
+            "./security": ["mintCsrfField"]
           },
           "review": {
             "basis": "mintCsrfField enters the fixed CSRF purpose-bound signing door and returns only the framework CSRF field protocol value.",
@@ -8090,7 +8155,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createMemoryVersionedClientModuleRegistry"]
+            "./client-modules": ["createMemoryVersionedClientModuleRegistry"]
           },
           "review": {
             "basis": "createMemoryVersionedClientModuleRegistry is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8122,7 +8187,8 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["scopedKey", "verifiedAccess"]
+            ".": ["verifiedAccess"],
+            "./storage-keys": ["scopedKey"]
           },
           "review": {
             "basis": "scopedKey and verifiedAccess consume framework-owned request authority as security controls with no raw capability from the C13 vocabulary.",
@@ -8187,7 +8253,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["mintCsrfToken"]
+            "./security": ["mintCsrfToken"]
           },
           "review": {
             "basis": "mintCsrfToken enters the fixed CSRF purpose-bound signing door and returns only the framework CSRF token protocol value.",
@@ -8219,7 +8285,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": [
+            "./confidential": [
               "createConfidentialAtRestCipher",
               "decryptAtRest",
               "encryptAtRest",
@@ -8254,7 +8320,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["InlineUnverifiedUploadError"]
+            "./security": ["InlineUnverifiedUploadError"]
           },
           "review": {
             "basis": "InlineUnverifiedUploadError is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8286,7 +8352,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createDurableTaskStatus"]
+            "./tasks": ["createDurableTaskStatus"]
           },
           "review": {
             "basis": "createDurableTaskStatus is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8300,38 +8366,6 @@
               "packages/server/src/security-bootstrap.ts"
             ],
             "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "security-control"
-        },
-        {
-          "capabilities": ["crypto-acquisition"],
-          "disposition": "framework-door",
-          "id": "framework-door-crypto-acquisition-hmac-signature-server",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["hmacSignature"]
-          },
-          "review": {
-            "basis": "The server re-export preserves core's fixed verify-only HMAC authority; neither a generic signer nor provider key crosses this door.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -8364,70 +8398,6 @@
               "packages/server/src/security-bootstrap.ts"
             ],
             "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "security-control"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-security-control-runtime-infra-e05c8c0758",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["isKovoApp"]
-          },
-          "review": {
-            "basis": "isKovoApp is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "security-control"
-        },
-        {
-          "capabilities": ["crypto-acquisition"],
-          "disposition": "framework-door",
-          "id": "framework-door-crypto-acquisition-standard-webhooks-server",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["standardWebhooks"]
-          },
-          "review": {
-            "basis": "The server re-export preserves core's fixed verify-only Standard Webhooks HMAC authority; neither a generic signer nor provider key crosses this door.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "security-control"
@@ -8478,7 +8448,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["verifyCredential"]
+            "./password": ["verifyCredential"]
           },
           "review": {
             "basis": "verifyCredential is the fixed Argon2id credential verification door; it does not expose the raw provider or arbitrary algorithm selection.",
@@ -8510,7 +8480,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createSigningKeyRing"]
+            "./signing": ["createSigningKeyRing"]
           },
           "review": {
             "basis": "createSigningKeyRing is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8542,7 +8512,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["replayMutationWireBody"]
+            "./replay": ["replayMutationWireBody"]
           },
           "review": {
             "basis": "replayMutationWireBody is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8574,7 +8544,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["commandAllowlist"]
+            "./command": ["commandAllowlist"]
           },
           "review": {
             "basis": "commandAllowlist is a framework-owned security primitive with no raw capability from the C13 vocabulary.",
@@ -8606,7 +8576,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["parseComponentXml"]
+            "./render-tree": ["parseComponentXml"]
           },
           "review": {
             "basis": "parseComponentXml is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -8702,7 +8672,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["renderRouteHtml"]
+            "./rendering": ["renderRouteHtml"]
           },
           "review": {
             "basis": "renderRouteHtml is a reviewed output sink whose coerced framework-rendered values are authenticated through the fixed rendered-html purpose door; the hostile-value floor remains owned by C9.",
@@ -8883,70 +8853,6 @@
         {
           "capabilities": [],
           "disposition": "authority-free",
-          "id": "authority-free-sink-adapter-runtime-infra-7c116ea7db",
-          "matrix": {
-            "cells": {
-              "A": "c9-control",
-              "Au": "c9-control",
-              "C": "c9-control",
-              "I": "c9-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["Link"]
-          },
-          "review": {
-            "basis": "Link is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "sink-adapter"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-sink-adapter-runtime-infra-841cfd5d21",
-          "matrix": {
-            "cells": {
-              "A": "c9-control",
-              "Au": "c9-control",
-              "C": "c9-control",
-              "I": "c9-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["href"]
-          },
-          "review": {
-            "basis": "href is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "sink-adapter"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
           "id": "authority-free-sink-adapter-runtime-infra-8580e155cb",
           "matrix": {
             "cells": {
@@ -8958,7 +8864,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["renderTree"]
+            "./render-tree": ["renderTree"]
           },
           "review": {
             "basis": "renderTree is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
@@ -9026,38 +8932,6 @@
           },
           "review": {
             "basis": "StylesheetLink is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "sink-adapter"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-sink-adapter-runtime-infra-96f09d645d",
-          "matrix": {
-            "cells": {
-              "A": "c9-control",
-              "Au": "c9-control",
-              "C": "c9-control",
-              "I": "c9-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["redirect"]
-          },
-          "review": {
-            "basis": "redirect is a reviewed output/sink adapter whose hostile-value floor remains owned by the C9 registry.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9265,102 +9139,6 @@
           "securityRole": "sink-adapter"
         },
         {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-trust-escape-runtime-infra-9bed027611",
-          "matrix": {
-            "cells": {
-              "A": "trust-escape-audit",
-              "Au": "trust-escape-audit",
-              "C": "trust-escape-audit",
-              "I": "trust-escape-audit"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["trustedHtml"]
-          },
-          "review": {
-            "basis": "trustedHtml is an audited trust escape and remains tied to the trust-escape threat-matrix proof.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "trust-escape"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-trust-escape-runtime-infra-c2b8254012",
-          "matrix": {
-            "cells": {
-              "A": "trust-escape-audit",
-              "Au": "trust-escape-audit",
-              "C": "trust-escape-audit",
-              "I": "trust-escape-audit"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["customVerifier"]
-          },
-          "review": {
-            "basis": "customVerifier is an audited trust escape and remains tied to the trust-escape threat-matrix proof.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "trust-escape"
-        },
-        {
-          "capabilities": [],
-          "disposition": "authority-free",
-          "id": "authority-free-trust-escape-runtime-infra-c8bbc47880",
-          "matrix": {
-            "cells": {
-              "A": "trust-escape-audit",
-              "Au": "trust-escape-audit",
-              "C": "trust-escape-audit",
-              "I": "trust-escape-audit"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["trustedUrl"]
-          },
-          "review": {
-            "basis": "trustedUrl is an audited trust escape and remains tied to the trust-escape threat-matrix proof.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "trust-escape"
-        },
-        {
           "capabilities": ["database-driver"],
           "disposition": "framework-door",
           "id": "framework-door-framework-door-db-data-plane-database-driver-c08eeaa3ce",
@@ -9406,10 +9184,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["createPostgresAppRuntimeDb"]
+            "./postgres": ["createPostgresAppRuntimeDb"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#createPostgresAppRuntimeDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/postgres#createPostgresAppRuntimeDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9438,10 +9216,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["migratePostgresAppDb"]
+            "./postgres": ["migratePostgresAppDb"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#migratePostgresAppDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/postgres#migratePostgresAppDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9470,10 +9248,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["planPostgresAppDbMigration"]
+            "./postgres": ["planPostgresAppDbMigration"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#planPostgresAppDbMigration implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/postgres#planPostgresAppDbMigration implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9502,10 +9280,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["checkPostgresAppDbPosture"]
+            "./postgres": ["checkPostgresAppDbPosture"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#checkPostgresAppDbPosture implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/postgres#checkPostgresAppDbPosture implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9534,10 +9312,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["provisionPostgresAppDb"]
+            "./postgres": ["provisionPostgresAppDb"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#provisionPostgresAppDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/postgres#provisionPostgresAppDb implementation is a constrained framework-owned database-driver boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9566,10 +9344,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["rootedFiles"]
+            "./files": ["rootedFiles"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#rootedFiles implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/files#rootedFiles implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9580,38 +9358,6 @@
               "packages/server/src/security-bootstrap.ts"
             ],
             "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
-        },
-        {
-          "capabilities": ["crypto-acquisition", "digest", "filesystem"],
-          "disposition": "framework-door",
-          "id": "framework-door-server-filesystem-crypto-digest",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["createFileSystemStorage"]
-          },
-          "review": {
-            "basis": "The server re-export preserves core's constrained filesystem capability, cryptographic UUID entropy, and fixed non-secret SHA-256 digest posture; no primitive or wildcard authority escapes.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
@@ -9630,10 +9376,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["exportStaticApp"]
+            "./static-export": ["exportStaticApp"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#exportStaticApp implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/static-export#exportStaticApp implementation is a constrained framework-owned filesystem boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9644,38 +9390,6 @@
               "packages/server/src/security-bootstrap.ts"
             ],
             "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "framework-door"
-        },
-        {
-          "capabilities": ["digest", "network"],
-          "disposition": "framework-door",
-          "id": "framework-door-server-network-digest",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "runtime-infra"
-          },
-          "members": {
-            ".": ["createS3CompatibleStorage"]
-          },
-          "review": {
-            "basis": "The server re-export preserves core's constrained network capability and fixed non-secret SHA-256 digest posture; no generic crypto or wildcard authority escapes.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
           },
           "rootKind": "none",
           "securityRole": "framework-door"
@@ -9694,10 +9408,10 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["runCommand"]
+            "./command": ["runCommand"]
           },
           "review": {
-            "basis": "The exact @kovojs/server#runCommand implementation is a constrained framework-owned process boundary; no wildcard export inherits this authority.",
+            "basis": "The exact @kovojs/server/command#runCommand implementation is a constrained framework-owned process boundary; no wildcard export inherits this authority.",
             "evidence": [
               "packages/server/src/document-structured.ts",
               "packages/server/src/html.ts",
@@ -9758,20 +9472,45 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["<module>"]
+            ".": ["<module>"],
+            "./agent": ["<module>"],
+            "./client-modules": ["<module>"],
+            "./command": ["<module>"],
+            "./confidential": ["<module>"],
+            "./custom-adapters": ["<module>"],
+            "./data": ["<module>"],
+            "./delegation": ["<module>"],
+            "./derived-data": ["<module>"],
+            "./diagnostics": ["<module>"],
+            "./egress": ["<module>"],
+            "./files": ["<module>"],
+            "./node": ["<module>"],
+            "./password": ["<module>"],
+            "./postgres": ["<module>"],
+            "./principal-epochs": ["<module>"],
+            "./principal-erasure": ["<module>"],
+            "./render-tree": ["<module>"],
+            "./rendering": ["<module>"],
+            "./replay": ["<module>"],
+            "./routing": ["<module>"],
+            "./secret-reading": ["<module>"],
+            "./security": ["<module>"],
+            "./signing": ["<module>"],
+            "./static-export": ["<module>"],
+            "./storage-downloads": ["<module>"],
+            "./storage-keys": ["<module>"],
+            "./tasks": ["<module>"],
+            "./webhooks": ["<module>"],
+            "./write-safety": ["<module>"]
           },
           "review": {
-            "basis": "The @kovojs/server root eagerly installs the process bootstrap and pins the purpose-closed crypto authority; module initialization is classified separately from each named export.",
+            "basis": "Every manifest-public @kovojs/server entry eagerly imports security-bootstrap, which pins process posture and the purpose-closed crypto authority before exposing named values; module initialization remains classified separately from those values.",
             "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
+              "packages/server/src/public-agent.ts",
+              "packages/server/src/public-security.ts",
               "packages/server/src/security-bootstrap.ts"
             ],
-            "id": "first-party-runtime-posture/2026-07-19-crypto-authority"
+            "id": "first-party-runtime-posture/2026-07-29-semantic-subpaths"
           },
           "rootKind": "none",
           "securityRole": "module-initializer"
@@ -9790,7 +9529,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["toNodeHandler"]
+            "./node": ["toNodeHandler"]
           },
           "review": {
             "basis": "The exact toNodeHandler call creates a endpoint untrusted-data root; root status is independent from raw-capability disposition.",
@@ -9908,44 +9647,6 @@
           "reason": "build is tooling/bootstrap authority and is not a request-handler capability door."
         },
         {
-          "capabilities": ["database-driver", "filesystem", "process"],
-          "disposition": "request-closed",
-          "id": "request-closed-request-closed-db-data-plane-database-driver-filesystem-process-dd91a85630",
-          "matrix": {
-            "cells": {
-              "A": "public-runtime-export-posture-control",
-              "Au": "public-runtime-export-posture-control",
-              "C": "public-runtime-export-posture-control",
-              "I": "public-runtime-export-posture-control"
-            },
-            "surface": "db-data-plane"
-          },
-          "members": {
-            "./testing": [
-              "<module>",
-              "createPostgresTestRuntime",
-              "mutationCsrfTokenForTesting",
-              "renderWithRequestForTesting"
-            ]
-          },
-          "review": {
-            "basis": "testing is tooling/bootstrap authority and is not a request-handler capability door.",
-            "evidence": [
-              "packages/server/src/document-structured.ts",
-              "packages/server/src/html.ts",
-              "packages/server/src/index.ts",
-              "packages/server/src/node.ts",
-              "packages/server/src/render-tree.ts",
-              "packages/server/src/schema.ts",
-              "packages/server/src/security-bootstrap.ts"
-            ],
-            "id": "first-party-runtime-posture/2026-07-18"
-          },
-          "rootKind": "none",
-          "securityRole": "request-closed",
-          "reason": "testing is tooling/bootstrap authority and is not a request-handler capability door."
-        },
-        {
           "capabilities": [],
           "disposition": "authority-free",
           "id": "authority-free-security-control-principal-erasure-error-v1",
@@ -9959,7 +9660,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["PrincipalErasureIncompleteError"]
+            "./principal-erasure": ["PrincipalErasureIncompleteError"]
           },
           "review": {
             "basis": "PrincipalErasureIncompleteError is a fail-closed result carrier and exposes no raw platform capability.",
@@ -9994,7 +9695,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["erasePrincipal"]
+            "./principal-erasure": ["erasePrincipal"]
           },
           "review": {
             "basis": "erasePrincipal is the fixed SPEC §10.3 erasure door over an exact managed Postgres runtime, a fixed-purpose signing key ring, and every supplied enumerable storage adapter. It exposes no raw SQL, storage enumeration, network, filesystem, digest, or signing primitive.",
@@ -10023,7 +9724,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["verifyPrincipalErasureReceipt"]
+            "./principal-erasure": ["verifyPrincipalErasureReceipt"]
           },
           "review": {
             "basis": "verifyPrincipalErasureReceipt enters only the fixed principal-erasure receipt verification purpose and exposes neither signing nor raw key authority.",
@@ -10052,7 +9753,7 @@
             "surface": "runtime-infra"
           },
           "members": {
-            ".": ["derived"]
+            "./derived-data": ["derived"]
           },
           "review": {
             "basis": "derived reconstructs principal-scoped persistence authority at the exact governed-data boundary and exposes no raw host capability.",
@@ -10068,7 +9769,7 @@
           "reason": "derived binds a reviewed adapter to the current request principal through the canonical ScopedKey containment door."
         }
       ],
-      "sourceTreeSha256": "e0b3d5c4b1c83249a5c78c6d30dc2cdadf2f9adee8d4c07c24fa827206dc5c88"
+      "sourceTreeSha256": "8781abbb4fed415c117201894008cfcd7682381be85c54632f85261bf756e14c"
     },
     {
       "manifestVariants": [
@@ -10134,15 +9835,7 @@
             "surface": "render-browser"
           },
           "members": {
-            ".": [
-              "attrs",
-              "create",
-              "createTheme",
-              "defineTheme",
-              "defineVars",
-              "keyframes",
-              "tokens"
-            ]
+            ".": ["attrs", "create", "defineTheme", "defineVars", "keyframes", "tokens"]
           },
           "review": {
             "basis": "@kovojs/style exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; doors, roots, escapes, sinks, and module initialization are split into separate groups.",
@@ -10153,13 +9846,200 @@
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "4167ef35bfa4adbb2eabe49206881691ba63f0811156815367173e316b992cdc"
+      "sourceTreeSha256": "534511343819d5ec3ad0aa954cf695f21e14ed71d54a70b4ff8cd8d4bffac6cd"
     },
     {
       "manifestVariants": [
         {
           "exports": {
+            "./assertions": {
+              "types": "./dist/assertions.d.mts",
+              "default": "./dist/assertions.mjs"
+            },
+            "./csrf": {
+              "types": "./dist/csrf.d.mts",
+              "default": "./dist/csrf.mjs"
+            },
+            "./headers": {
+              "types": "./dist/headers.d.mts",
+              "default": "./dist/headers.mjs"
+            },
+            "./harness": {
+              "types": "./dist/harness.d.mts",
+              "default": "./dist/harness.mjs"
+            },
+            "./html-fragment": {
+              "types": "./dist/html-fragment.d.mts",
+              "default": "./dist/html-fragment.mjs"
+            },
+            "./internal/harness-operations": {
+              "types": "./dist/harness-operations.d.mts",
+              "default": "./dist/harness-operations.mjs"
+            },
+            "./internal/html-wire": {
+              "types": "./dist/internal/html-wire.d.mts",
+              "default": "./dist/internal/html-wire.mjs"
+            },
+            "./internal/integration": {
+              "types": "./dist/integration/index.d.mts",
+              "default": "./dist/integration/index.mjs"
+            },
+            "./internal/integration/boot-fixture-child": {
+              "types": "./dist/integration/boot-fixture-child.d.mts",
+              "default": "./dist/integration/boot-fixture-child.mjs"
+            },
+            "./internal/integration/fixture-browser-abi": {
+              "types": "./dist/integration/fixture-browser-abi.d.mts",
+              "default": "./dist/integration/fixture-browser-abi.mjs"
+            },
+            "./internal/integration/define": {
+              "types": "./dist/integration/define-fixture.d.mts",
+              "default": "./dist/integration/define-fixture.mjs"
+            },
+            "./internal/integration/fixture-abi": {
+              "types": "./dist/integration/fixture-abi.d.mts",
+              "default": "./dist/integration/fixture-abi.mjs"
+            },
+            "./internal/integration/optimistic-client": {
+              "types": "./dist/integration/optimistic-client.d.mts",
+              "default": "./dist/integration/optimistic-client.mjs"
+            },
+            "./internal/legacy-harness": {
+              "types": "./dist/legacy-harness.d.mts",
+              "default": "./dist/legacy-harness.mjs"
+            },
+            "./internal/page": {
+              "types": "./dist/page.d.mts",
+              "default": "./dist/page.mjs"
+            },
+            "./internal/sql-observer": {
+              "types": "./dist/sql-observer.d.mts",
+              "default": "./dist/sql-observer.mjs"
+            },
+            "./internal/verifier": {
+              "types": "./dist/verifier.d.mts",
+              "default": "./dist/verifier.mjs"
+            },
+            "./internal/verifier-diagnostics": {
+              "types": "./dist/verifier-diagnostics.d.mts",
+              "default": "./dist/verifier-diagnostics.mjs"
+            },
+            "./internal/verifier-sql": {
+              "types": "./dist/verifier-sql.d.mts",
+              "default": "./dist/verifier-sql.mjs"
+            },
+            "./pglite": {
+              "types": "./dist/pglite.d.mts",
+              "default": "./dist/pglite.mjs"
+            },
+            "./postgres": {
+              "types": "./dist/postgres.d.mts",
+              "default": "./dist/postgres.mjs"
+            },
+            "./sqlite": {
+              "types": "./dist/sqlite.d.mts",
+              "default": "./dist/sqlite.mjs"
+            }
+          },
+          "fingerprint": "sha256:2e9eb36faf23361a91802dd3361206adeed601f5caee80d49cd647df9b806eba"
+        },
+        {
+          "exports": {
+            "./assertions": {
+              "types": "./dist/assertions.d.mts",
+              "default": "./dist/assertions.mjs"
+            },
+            "./csrf": {
+              "types": "./dist/csrf.d.mts",
+              "default": "./dist/csrf.mjs"
+            },
+            "./headers": {
+              "types": "./dist/headers.d.mts",
+              "default": "./dist/headers.mjs"
+            },
+            "./harness": {
+              "types": "./dist/harness.d.mts",
+              "default": "./dist/harness.mjs"
+            },
+            "./html-fragment": {
+              "types": "./dist/html-fragment.d.mts",
+              "default": "./dist/html-fragment.mjs"
+            },
+            "./internal/harness-operations": {
+              "types": "./dist/harness-operations.d.mts",
+              "default": "./dist/harness-operations.mjs"
+            },
+            "./internal/html-wire": {
+              "types": "./dist/internal/html-wire.d.mts",
+              "default": "./dist/internal/html-wire.mjs"
+            },
+            "./internal/integration": {
+              "types": "./dist/integration/index.d.mts",
+              "default": "./dist/integration/index.mjs"
+            },
+            "./internal/integration/boot-fixture-child": {
+              "types": "./dist/integration/boot-fixture-child.d.mts",
+              "default": "./dist/integration/boot-fixture-child.mjs"
+            },
+            "./internal/integration/fixture-browser-abi": {
+              "types": "./dist/integration/fixture-browser-abi.d.mts",
+              "default": "./dist/integration/fixture-browser-abi.mjs"
+            },
+            "./internal/integration/define": {
+              "types": "./dist/integration/define-fixture.d.mts",
+              "default": "./dist/integration/define-fixture.mjs"
+            },
+            "./internal/integration/fixture-abi": {
+              "types": "./dist/integration/fixture-abi.d.mts",
+              "default": "./dist/integration/fixture-abi.mjs"
+            },
+            "./internal/integration/optimistic-client": {
+              "types": "./dist/integration/optimistic-client.d.mts",
+              "default": "./dist/integration/optimistic-client.mjs"
+            },
+            "./internal/legacy-harness": {
+              "types": "./dist/legacy-harness.d.mts",
+              "default": "./dist/legacy-harness.mjs"
+            },
+            "./internal/page": {
+              "types": "./dist/page.d.mts",
+              "default": "./dist/page.mjs"
+            },
+            "./internal/sql-observer": {
+              "types": "./dist/sql-observer.d.mts",
+              "default": "./dist/sql-observer.mjs"
+            },
+            "./internal/verifier": {
+              "types": "./dist/verifier.d.mts",
+              "default": "./dist/verifier.mjs"
+            },
+            "./internal/verifier-diagnostics": {
+              "types": "./dist/verifier-diagnostics.d.mts",
+              "default": "./dist/verifier-diagnostics.mjs"
+            },
+            "./internal/verifier-sql": {
+              "types": "./dist/verifier-sql.d.mts",
+              "default": "./dist/verifier-sql.mjs"
+            },
+            "./pglite": {
+              "types": "./dist/pglite.d.mts",
+              "default": "./dist/pglite.mjs"
+            },
+            "./postgres": {
+              "types": "./dist/postgres.d.mts",
+              "default": "./dist/postgres.mjs"
+            },
+            "./sqlite": {
+              "types": "./dist/sqlite.d.mts",
+              "default": "./dist/sqlite.mjs"
+            }
+          },
+          "fingerprint": "sha256:79b7df9280a3dad6528c21761228537106b84570c920a33d8b6aa1bf257532ba"
+        },
+        {
+          "exports": {
             "./assertions": "./src/assertions.ts",
+            "./csrf": "./src/csrf.ts",
             "./headers": "./src/headers.ts",
             "./harness": "./src/harness.ts",
             "./html-fragment": "./src/html-fragment.ts",
@@ -10171,186 +10051,17 @@
             "./internal/integration/define": "./src/integration/define-fixture.ts",
             "./internal/integration/fixture-abi": "./src/integration/fixture-abi.ts",
             "./internal/integration/optimistic-client": "./src/integration/optimistic-client.ts",
+            "./internal/legacy-harness": "./src/legacy-harness.ts",
             "./internal/page": "./src/page.ts",
             "./internal/sql-observer": "./src/sql-observer.ts",
             "./internal/verifier": "./src/verifier.ts",
             "./internal/verifier-diagnostics": "./src/verifier-diagnostics.ts",
             "./internal/verifier-sql": "./src/verifier-sql.ts",
             "./pglite": "./src/pglite.ts",
-            "./sqlite": "./src/sqlite.ts",
-            "./test-case": "./src/test-case.ts"
+            "./postgres": "./src/postgres.ts",
+            "./sqlite": "./src/sqlite.ts"
           },
-          "fingerprint": "sha256:0028abbecb8425c3d13f305d338f041c12662e73a9f1bc55b2925affdf84ff78"
-        },
-        {
-          "exports": {
-            "./assertions": {
-              "types": "./dist/assertions.d.mts",
-              "default": "./dist/assertions.mjs"
-            },
-            "./headers": {
-              "types": "./dist/headers.d.mts",
-              "default": "./dist/headers.mjs"
-            },
-            "./harness": {
-              "types": "./dist/harness.d.mts",
-              "default": "./dist/harness.mjs"
-            },
-            "./html-fragment": {
-              "types": "./dist/html-fragment.d.mts",
-              "default": "./dist/html-fragment.mjs"
-            },
-            "./internal/harness-operations": {
-              "types": "./dist/harness-operations.d.mts",
-              "default": "./dist/harness-operations.mjs"
-            },
-            "./internal/html-wire": {
-              "types": "./dist/internal/html-wire.d.mts",
-              "default": "./dist/internal/html-wire.mjs"
-            },
-            "./internal/integration": {
-              "types": "./dist/integration/index.d.mts",
-              "default": "./dist/integration/index.mjs"
-            },
-            "./internal/integration/boot-fixture-child": {
-              "types": "./dist/integration/boot-fixture-child.d.mts",
-              "default": "./dist/integration/boot-fixture-child.mjs"
-            },
-            "./internal/integration/fixture-browser-abi": {
-              "types": "./dist/integration/fixture-browser-abi.d.mts",
-              "default": "./dist/integration/fixture-browser-abi.mjs"
-            },
-            "./internal/integration/define": {
-              "types": "./dist/integration/define-fixture.d.mts",
-              "default": "./dist/integration/define-fixture.mjs"
-            },
-            "./internal/integration/fixture-abi": {
-              "types": "./dist/integration/fixture-abi.d.mts",
-              "default": "./dist/integration/fixture-abi.mjs"
-            },
-            "./internal/integration/optimistic-client": {
-              "types": "./dist/integration/optimistic-client.d.mts",
-              "default": "./dist/integration/optimistic-client.mjs"
-            },
-            "./internal/page": {
-              "types": "./dist/page.d.mts",
-              "default": "./dist/page.mjs"
-            },
-            "./internal/sql-observer": {
-              "types": "./dist/sql-observer.d.mts",
-              "default": "./dist/sql-observer.mjs"
-            },
-            "./internal/verifier": {
-              "types": "./dist/verifier.d.mts",
-              "default": "./dist/verifier.mjs"
-            },
-            "./internal/verifier-diagnostics": {
-              "types": "./dist/verifier-diagnostics.d.mts",
-              "default": "./dist/verifier-diagnostics.mjs"
-            },
-            "./internal/verifier-sql": {
-              "types": "./dist/verifier-sql.d.mts",
-              "default": "./dist/verifier-sql.mjs"
-            },
-            "./pglite": {
-              "types": "./dist/pglite.d.mts",
-              "default": "./dist/pglite.mjs"
-            },
-            "./sqlite": {
-              "types": "./dist/sqlite.d.mts",
-              "default": "./dist/sqlite.mjs"
-            },
-            "./test-case": {
-              "types": "./dist/test-case.d.mts",
-              "default": "./dist/test-case.mjs"
-            }
-          },
-          "fingerprint": "sha256:00c0bece9507f985ab410b795a4e90e11d8dcee72e6fb64bbb1f1f497671c662"
-        },
-        {
-          "exports": {
-            "./assertions": {
-              "types": "./dist/assertions.d.mts",
-              "default": "./dist/assertions.mjs"
-            },
-            "./headers": {
-              "types": "./dist/headers.d.mts",
-              "default": "./dist/headers.mjs"
-            },
-            "./harness": {
-              "types": "./dist/harness.d.mts",
-              "default": "./dist/harness.mjs"
-            },
-            "./html-fragment": {
-              "types": "./dist/html-fragment.d.mts",
-              "default": "./dist/html-fragment.mjs"
-            },
-            "./internal/harness-operations": {
-              "types": "./dist/harness-operations.d.mts",
-              "default": "./dist/harness-operations.mjs"
-            },
-            "./internal/html-wire": {
-              "types": "./dist/internal/html-wire.d.mts",
-              "default": "./dist/internal/html-wire.mjs"
-            },
-            "./internal/integration": {
-              "types": "./dist/integration/index.d.mts",
-              "default": "./dist/integration/index.mjs"
-            },
-            "./internal/integration/boot-fixture-child": {
-              "types": "./dist/integration/boot-fixture-child.d.mts",
-              "default": "./dist/integration/boot-fixture-child.mjs"
-            },
-            "./internal/integration/fixture-browser-abi": {
-              "types": "./dist/integration/fixture-browser-abi.d.mts",
-              "default": "./dist/integration/fixture-browser-abi.mjs"
-            },
-            "./internal/integration/define": {
-              "types": "./dist/integration/define-fixture.d.mts",
-              "default": "./dist/integration/define-fixture.mjs"
-            },
-            "./internal/integration/fixture-abi": {
-              "types": "./dist/integration/fixture-abi.d.mts",
-              "default": "./dist/integration/fixture-abi.mjs"
-            },
-            "./internal/integration/optimistic-client": {
-              "types": "./dist/integration/optimistic-client.d.mts",
-              "default": "./dist/integration/optimistic-client.mjs"
-            },
-            "./internal/page": {
-              "types": "./dist/page.d.mts",
-              "default": "./dist/page.mjs"
-            },
-            "./internal/sql-observer": {
-              "types": "./dist/sql-observer.d.mts",
-              "default": "./dist/sql-observer.mjs"
-            },
-            "./internal/verifier": {
-              "types": "./dist/verifier.d.mts",
-              "default": "./dist/verifier.mjs"
-            },
-            "./internal/verifier-diagnostics": {
-              "types": "./dist/verifier-diagnostics.d.mts",
-              "default": "./dist/verifier-diagnostics.mjs"
-            },
-            "./internal/verifier-sql": {
-              "types": "./dist/verifier-sql.d.mts",
-              "default": "./dist/verifier-sql.mjs"
-            },
-            "./pglite": {
-              "types": "./dist/pglite.d.mts",
-              "default": "./dist/pglite.mjs"
-            },
-            "./sqlite": {
-              "types": "./dist/sqlite.d.mts",
-              "default": "./dist/sqlite.mjs"
-            },
-            "./test-case": {
-              "types": "./dist/test-case.d.mts",
-              "default": "./dist/test-case.mjs"
-            }
-          },
-          "fingerprint": "sha256:23d8b069bc142bad59bca7ac655c1599b481465bb819f2928927534e5399eb7b"
+          "fingerprint": "sha256:928d9d4769cd4fa42351462d45b47a656f6a81274b2264ff68ab17671a8aea97"
         }
       ],
       "packageName": "@kovojs/test",
@@ -10373,8 +10084,7 @@
             "./assertions": ["<module>"],
             "./harness": ["<module>"],
             "./headers": ["<module>"],
-            "./html-fragment": ["<module>"],
-            "./test-case": ["<module>"]
+            "./html-fragment": ["<module>"]
           },
           "review": {
             "basis": "@kovojs/test manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
@@ -10427,8 +10137,7 @@
               "htmlLinkHrefs",
               "htmlTextContent",
               "kovoQueryJsonValues"
-            ],
-            "./test-case": ["kovoTest"]
+            ]
           },
           "review": {
             "basis": "@kovojs/test exact value constructors, transforms, or descriptors were reviewed as raw-capability-free; doors, roots, escapes, sinks, and module initialization are split into separate groups.",
@@ -10499,385 +10208,73 @@
           "rootKind": "none",
           "securityRole": "request-closed",
           "reason": "Raw test database constructors are test-process authority, not request-handler doors."
+        },
+        {
+          "capabilities": ["crypto-acquisition"],
+          "disposition": "request-closed",
+          "id": "request-closed-test-csrf-crypto-acquisition-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "build-compiler"
+          },
+          "members": {
+            "./csrf": ["<module>", "mutationCsrfTokenForTesting"]
+          },
+          "reason": "CSRF token minting here is explicit test-process setup authority and is not a request-handler capability door.",
+          "review": {
+            "basis": "The focused test helper reaches Kovo’s purpose-closed CSRF signing path only to prepare synthetic mutation submissions; both module evaluation and the named helper remain request-closed.",
+            "evidence": [
+              "packages/server/src/csrf.ts",
+              "packages/server/src/internal/csrf.ts",
+              "packages/test/src/csrf.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-29-test-harness-v2"
+          },
+          "rootKind": "none",
+          "securityRole": "request-closed"
+        },
+        {
+          "capabilities": ["database-driver", "filesystem", "process"],
+          "disposition": "request-closed",
+          "id": "request-closed-test-postgres-database-filesystem-process-v1",
+          "matrix": {
+            "cells": {
+              "A": "public-runtime-export-posture-control",
+              "Au": "public-runtime-export-posture-control",
+              "C": "public-runtime-export-posture-control",
+              "I": "public-runtime-export-posture-control"
+            },
+            "surface": "db-data-plane"
+          },
+          "members": {
+            "./postgres": ["<module>", "createPostgresTestRuntime"]
+          },
+          "reason": "Ephemeral Postgres construction is explicit test-process setup authority and is not a request-handler capability door.",
+          "review": {
+            "basis": "The Postgres test helper owns an ephemeral PGlite data directory and exercises Kovo’s real database posture only from the test process; the former public server/testing door has been removed.",
+            "evidence": [
+              "packages/server/src/internal/testing.ts",
+              "packages/server/src/postgres-runtime.ts",
+              "packages/server/src/testing.ts",
+              "packages/test/src/postgres.ts"
+            ],
+            "id": "first-party-runtime-posture/2026-07-29-test-harness-v2"
+          },
+          "rootKind": "none",
+          "securityRole": "request-closed"
         }
       ],
-      "sourceTreeSha256": "27a9ea7d29e88aec448fddaf48d89ac6e6ed10176dcfa27865969bb5d822f114"
+      "sourceTreeSha256": "288728f097b09f17df6e77d65cbfcfc178ba858ec1a5e142af8d505dd55de12d"
     },
     {
       "manifestVariants": [
         {
           "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./accordion": {
-              "types": "./dist/accordion.d.mts",
-              "default": "./dist/accordion.mjs"
-            },
-            "./alert": {
-              "types": "./dist/alert.d.mts",
-              "default": "./dist/alert.mjs"
-            },
-            "./alert-dialog": {
-              "types": "./dist/alert-dialog.d.mts",
-              "default": "./dist/alert-dialog.mjs"
-            },
-            "./autocomplete": {
-              "types": "./dist/autocomplete.d.mts",
-              "default": "./dist/autocomplete.mjs"
-            },
-            "./avatar": {
-              "types": "./dist/avatar.d.mts",
-              "default": "./dist/avatar.mjs"
-            },
-            "./badge": {
-              "types": "./dist/badge.d.mts",
-              "default": "./dist/badge.mjs"
-            },
-            "./breadcrumb": {
-              "types": "./dist/breadcrumb.d.mts",
-              "default": "./dist/breadcrumb.mjs"
-            },
-            "./button": {
-              "types": "./dist/button.d.mts",
-              "default": "./dist/button.mjs"
-            },
-            "./card": {
-              "types": "./dist/card.d.mts",
-              "default": "./dist/card.mjs"
-            },
-            "./checkbox": {
-              "types": "./dist/checkbox.d.mts",
-              "default": "./dist/checkbox.mjs"
-            },
-            "./checkbox-group": {
-              "types": "./dist/checkbox-group.d.mts",
-              "default": "./dist/checkbox-group.mjs"
-            },
-            "./collapsible": {
-              "types": "./dist/collapsible.d.mts",
-              "default": "./dist/collapsible.mjs"
-            },
-            "./combobox": {
-              "types": "./dist/combobox.d.mts",
-              "default": "./dist/combobox.mjs"
-            },
-            "./command": {
-              "types": "./dist/command.d.mts",
-              "default": "./dist/command.mjs"
-            },
-            "./context-menu": {
-              "types": "./dist/context-menu.d.mts",
-              "default": "./dist/context-menu.mjs"
-            },
-            "./dialog": {
-              "types": "./dist/dialog.d.mts",
-              "default": "./dist/dialog.mjs"
-            },
-            "./disclosure": {
-              "types": "./dist/disclosure.d.mts",
-              "default": "./dist/disclosure.mjs"
-            },
-            "./drawer": {
-              "types": "./dist/drawer.d.mts",
-              "default": "./dist/drawer.mjs"
-            },
-            "./dropdown-menu": {
-              "types": "./dist/dropdown-menu.d.mts",
-              "default": "./dist/dropdown-menu.mjs"
-            },
-            "./field": {
-              "types": "./dist/field.d.mts",
-              "default": "./dist/field.mjs"
-            },
-            "./hover-card": {
-              "types": "./dist/hover-card.d.mts",
-              "default": "./dist/hover-card.mjs"
-            },
-            "./kbd": {
-              "types": "./dist/kbd.d.mts",
-              "default": "./dist/kbd.mjs"
-            },
-            "./menubar": {
-              "types": "./dist/menubar.d.mts",
-              "default": "./dist/menubar.mjs"
-            },
-            "./meter": {
-              "types": "./dist/meter.d.mts",
-              "default": "./dist/meter.mjs"
-            },
-            "./navigation-menu": {
-              "types": "./dist/navigation-menu.d.mts",
-              "default": "./dist/navigation-menu.mjs"
-            },
-            "./number-field": {
-              "types": "./dist/number-field.d.mts",
-              "default": "./dist/number-field.mjs"
-            },
-            "./otp-field": {
-              "types": "./dist/otp-field.d.mts",
-              "default": "./dist/otp-field.mjs"
-            },
-            "./popover": {
-              "types": "./dist/popover.d.mts",
-              "default": "./dist/popover.mjs"
-            },
-            "./progress": {
-              "types": "./dist/progress.d.mts",
-              "default": "./dist/progress.mjs"
-            },
-            "./radio-group": {
-              "types": "./dist/radio-group.d.mts",
-              "default": "./dist/radio-group.mjs"
-            },
-            "./scroll-area": {
-              "types": "./dist/scroll-area.d.mts",
-              "default": "./dist/scroll-area.mjs"
-            },
-            "./separator": {
-              "types": "./dist/separator.d.mts",
-              "default": "./dist/separator.mjs"
-            },
-            "./sheet": {
-              "types": "./dist/sheet.d.mts",
-              "default": "./dist/sheet.mjs"
-            },
-            "./select": {
-              "types": "./dist/select.d.mts",
-              "default": "./dist/select.mjs"
-            },
-            "./skeleton": {
-              "types": "./dist/skeleton.d.mts",
-              "default": "./dist/skeleton.mjs"
-            },
-            "./slider": {
-              "types": "./dist/slider.d.mts",
-              "default": "./dist/slider.mjs"
-            },
-            "./switch": {
-              "types": "./dist/switch.d.mts",
-              "default": "./dist/switch.mjs"
-            },
-            "./table": {
-              "types": "./dist/table.d.mts",
-              "default": "./dist/table.mjs"
-            },
-            "./tabs": {
-              "types": "./dist/tabs.d.mts",
-              "default": "./dist/tabs.mjs"
-            },
-            "./tooltip": {
-              "types": "./dist/tooltip.d.mts",
-              "default": "./dist/tooltip.mjs"
-            },
-            "./toggle": {
-              "types": "./dist/toggle.d.mts",
-              "default": "./dist/toggle.mjs"
-            },
-            "./toggle-group": {
-              "types": "./dist/toggle-group.d.mts",
-              "default": "./dist/toggle-group.mjs"
-            },
-            "./toast": {
-              "types": "./dist/toast.d.mts",
-              "default": "./dist/toast.mjs"
-            },
-            "./toolbar": {
-              "types": "./dist/toolbar.d.mts",
-              "default": "./dist/toolbar.mjs"
-            }
-          },
-          "fingerprint": "sha256:33f0967bfcf7f2e00c790868ff57f13f5dc3b7b12049caf0282f6b260adf880a"
-        },
-        {
-          "exports": {
-            ".": {
-              "types": "./dist/index.d.mts",
-              "default": "./dist/index.mjs"
-            },
-            "./accordion": {
-              "types": "./dist/accordion.d.mts",
-              "default": "./dist/accordion.mjs"
-            },
-            "./alert": {
-              "types": "./dist/alert.d.mts",
-              "default": "./dist/alert.mjs"
-            },
-            "./alert-dialog": {
-              "types": "./dist/alert-dialog.d.mts",
-              "default": "./dist/alert-dialog.mjs"
-            },
-            "./autocomplete": {
-              "types": "./dist/autocomplete.d.mts",
-              "default": "./dist/autocomplete.mjs"
-            },
-            "./avatar": {
-              "types": "./dist/avatar.d.mts",
-              "default": "./dist/avatar.mjs"
-            },
-            "./badge": {
-              "types": "./dist/badge.d.mts",
-              "default": "./dist/badge.mjs"
-            },
-            "./breadcrumb": {
-              "types": "./dist/breadcrumb.d.mts",
-              "default": "./dist/breadcrumb.mjs"
-            },
-            "./button": {
-              "types": "./dist/button.d.mts",
-              "default": "./dist/button.mjs"
-            },
-            "./card": {
-              "types": "./dist/card.d.mts",
-              "default": "./dist/card.mjs"
-            },
-            "./checkbox": {
-              "types": "./dist/checkbox.d.mts",
-              "default": "./dist/checkbox.mjs"
-            },
-            "./checkbox-group": {
-              "types": "./dist/checkbox-group.d.mts",
-              "default": "./dist/checkbox-group.mjs"
-            },
-            "./collapsible": {
-              "types": "./dist/collapsible.d.mts",
-              "default": "./dist/collapsible.mjs"
-            },
-            "./combobox": {
-              "types": "./dist/combobox.d.mts",
-              "default": "./dist/combobox.mjs"
-            },
-            "./command": {
-              "types": "./dist/command.d.mts",
-              "default": "./dist/command.mjs"
-            },
-            "./context-menu": {
-              "types": "./dist/context-menu.d.mts",
-              "default": "./dist/context-menu.mjs"
-            },
-            "./dialog": {
-              "types": "./dist/dialog.d.mts",
-              "default": "./dist/dialog.mjs"
-            },
-            "./disclosure": {
-              "types": "./dist/disclosure.d.mts",
-              "default": "./dist/disclosure.mjs"
-            },
-            "./drawer": {
-              "types": "./dist/drawer.d.mts",
-              "default": "./dist/drawer.mjs"
-            },
-            "./dropdown-menu": {
-              "types": "./dist/dropdown-menu.d.mts",
-              "default": "./dist/dropdown-menu.mjs"
-            },
-            "./field": {
-              "types": "./dist/field.d.mts",
-              "default": "./dist/field.mjs"
-            },
-            "./hover-card": {
-              "types": "./dist/hover-card.d.mts",
-              "default": "./dist/hover-card.mjs"
-            },
-            "./kbd": {
-              "types": "./dist/kbd.d.mts",
-              "default": "./dist/kbd.mjs"
-            },
-            "./menubar": {
-              "types": "./dist/menubar.d.mts",
-              "default": "./dist/menubar.mjs"
-            },
-            "./meter": {
-              "types": "./dist/meter.d.mts",
-              "default": "./dist/meter.mjs"
-            },
-            "./navigation-menu": {
-              "types": "./dist/navigation-menu.d.mts",
-              "default": "./dist/navigation-menu.mjs"
-            },
-            "./number-field": {
-              "types": "./dist/number-field.d.mts",
-              "default": "./dist/number-field.mjs"
-            },
-            "./otp-field": {
-              "types": "./dist/otp-field.d.mts",
-              "default": "./dist/otp-field.mjs"
-            },
-            "./popover": {
-              "types": "./dist/popover.d.mts",
-              "default": "./dist/popover.mjs"
-            },
-            "./progress": {
-              "types": "./dist/progress.d.mts",
-              "default": "./dist/progress.mjs"
-            },
-            "./radio-group": {
-              "types": "./dist/radio-group.d.mts",
-              "default": "./dist/radio-group.mjs"
-            },
-            "./scroll-area": {
-              "types": "./dist/scroll-area.d.mts",
-              "default": "./dist/scroll-area.mjs"
-            },
-            "./separator": {
-              "types": "./dist/separator.d.mts",
-              "default": "./dist/separator.mjs"
-            },
-            "./sheet": {
-              "types": "./dist/sheet.d.mts",
-              "default": "./dist/sheet.mjs"
-            },
-            "./select": {
-              "types": "./dist/select.d.mts",
-              "default": "./dist/select.mjs"
-            },
-            "./skeleton": {
-              "types": "./dist/skeleton.d.mts",
-              "default": "./dist/skeleton.mjs"
-            },
-            "./slider": {
-              "types": "./dist/slider.d.mts",
-              "default": "./dist/slider.mjs"
-            },
-            "./switch": {
-              "types": "./dist/switch.d.mts",
-              "default": "./dist/switch.mjs"
-            },
-            "./table": {
-              "types": "./dist/table.d.mts",
-              "default": "./dist/table.mjs"
-            },
-            "./tabs": {
-              "types": "./dist/tabs.d.mts",
-              "default": "./dist/tabs.mjs"
-            },
-            "./tooltip": {
-              "types": "./dist/tooltip.d.mts",
-              "default": "./dist/tooltip.mjs"
-            },
-            "./toggle": {
-              "types": "./dist/toggle.d.mts",
-              "default": "./dist/toggle.mjs"
-            },
-            "./toggle-group": {
-              "types": "./dist/toggle-group.d.mts",
-              "default": "./dist/toggle-group.mjs"
-            },
-            "./toast": {
-              "types": "./dist/toast.d.mts",
-              "default": "./dist/toast.mjs"
-            },
-            "./toolbar": {
-              "types": "./dist/toolbar.d.mts",
-              "default": "./dist/toolbar.mjs"
-            }
-          },
-          "fingerprint": "sha256:514791bcd40edec103bc393e68f003802db1e36b35d4540c810146f2b754cb3d"
-        },
-        {
-          "exports": {
-            ".": "./src/index.tsx",
             "./accordion": "./src/accordion.tsx",
             "./alert": "./src/alert.tsx",
             "./alert-dialog": "./src/alert-dialog.tsx",
@@ -10923,7 +10320,369 @@
             "./toast": "./src/toast.tsx",
             "./toolbar": "./src/toolbar.tsx"
           },
-          "fingerprint": "sha256:fd26347fa01858664402985dd000080b4dd119b6dd158d31fe5169c5b78d96f5"
+          "fingerprint": "sha256:017f1568b1680d64beb230c9a5f0bc2d514d60f6f471bd8a325bf5b76fba4c43"
+        },
+        {
+          "exports": {
+            "./accordion": {
+              "types": "./dist/accordion.d.mts",
+              "default": "./dist/accordion.mjs"
+            },
+            "./alert": {
+              "types": "./dist/alert.d.mts",
+              "default": "./dist/alert.mjs"
+            },
+            "./alert-dialog": {
+              "types": "./dist/alert-dialog.d.mts",
+              "default": "./dist/alert-dialog.mjs"
+            },
+            "./autocomplete": {
+              "types": "./dist/autocomplete.d.mts",
+              "default": "./dist/autocomplete.mjs"
+            },
+            "./avatar": {
+              "types": "./dist/avatar.d.mts",
+              "default": "./dist/avatar.mjs"
+            },
+            "./badge": {
+              "types": "./dist/badge.d.mts",
+              "default": "./dist/badge.mjs"
+            },
+            "./breadcrumb": {
+              "types": "./dist/breadcrumb.d.mts",
+              "default": "./dist/breadcrumb.mjs"
+            },
+            "./button": {
+              "types": "./dist/button.d.mts",
+              "default": "./dist/button.mjs"
+            },
+            "./card": {
+              "types": "./dist/card.d.mts",
+              "default": "./dist/card.mjs"
+            },
+            "./checkbox": {
+              "types": "./dist/checkbox.d.mts",
+              "default": "./dist/checkbox.mjs"
+            },
+            "./checkbox-group": {
+              "types": "./dist/checkbox-group.d.mts",
+              "default": "./dist/checkbox-group.mjs"
+            },
+            "./collapsible": {
+              "types": "./dist/collapsible.d.mts",
+              "default": "./dist/collapsible.mjs"
+            },
+            "./combobox": {
+              "types": "./dist/combobox.d.mts",
+              "default": "./dist/combobox.mjs"
+            },
+            "./command": {
+              "types": "./dist/command.d.mts",
+              "default": "./dist/command.mjs"
+            },
+            "./context-menu": {
+              "types": "./dist/context-menu.d.mts",
+              "default": "./dist/context-menu.mjs"
+            },
+            "./dialog": {
+              "types": "./dist/dialog.d.mts",
+              "default": "./dist/dialog.mjs"
+            },
+            "./disclosure": {
+              "types": "./dist/disclosure.d.mts",
+              "default": "./dist/disclosure.mjs"
+            },
+            "./drawer": {
+              "types": "./dist/drawer.d.mts",
+              "default": "./dist/drawer.mjs"
+            },
+            "./dropdown-menu": {
+              "types": "./dist/dropdown-menu.d.mts",
+              "default": "./dist/dropdown-menu.mjs"
+            },
+            "./field": {
+              "types": "./dist/field.d.mts",
+              "default": "./dist/field.mjs"
+            },
+            "./hover-card": {
+              "types": "./dist/hover-card.d.mts",
+              "default": "./dist/hover-card.mjs"
+            },
+            "./kbd": {
+              "types": "./dist/kbd.d.mts",
+              "default": "./dist/kbd.mjs"
+            },
+            "./menubar": {
+              "types": "./dist/menubar.d.mts",
+              "default": "./dist/menubar.mjs"
+            },
+            "./meter": {
+              "types": "./dist/meter.d.mts",
+              "default": "./dist/meter.mjs"
+            },
+            "./navigation-menu": {
+              "types": "./dist/navigation-menu.d.mts",
+              "default": "./dist/navigation-menu.mjs"
+            },
+            "./number-field": {
+              "types": "./dist/number-field.d.mts",
+              "default": "./dist/number-field.mjs"
+            },
+            "./otp-field": {
+              "types": "./dist/otp-field.d.mts",
+              "default": "./dist/otp-field.mjs"
+            },
+            "./popover": {
+              "types": "./dist/popover.d.mts",
+              "default": "./dist/popover.mjs"
+            },
+            "./progress": {
+              "types": "./dist/progress.d.mts",
+              "default": "./dist/progress.mjs"
+            },
+            "./radio-group": {
+              "types": "./dist/radio-group.d.mts",
+              "default": "./dist/radio-group.mjs"
+            },
+            "./scroll-area": {
+              "types": "./dist/scroll-area.d.mts",
+              "default": "./dist/scroll-area.mjs"
+            },
+            "./separator": {
+              "types": "./dist/separator.d.mts",
+              "default": "./dist/separator.mjs"
+            },
+            "./sheet": {
+              "types": "./dist/sheet.d.mts",
+              "default": "./dist/sheet.mjs"
+            },
+            "./select": {
+              "types": "./dist/select.d.mts",
+              "default": "./dist/select.mjs"
+            },
+            "./skeleton": {
+              "types": "./dist/skeleton.d.mts",
+              "default": "./dist/skeleton.mjs"
+            },
+            "./slider": {
+              "types": "./dist/slider.d.mts",
+              "default": "./dist/slider.mjs"
+            },
+            "./switch": {
+              "types": "./dist/switch.d.mts",
+              "default": "./dist/switch.mjs"
+            },
+            "./table": {
+              "types": "./dist/table.d.mts",
+              "default": "./dist/table.mjs"
+            },
+            "./tabs": {
+              "types": "./dist/tabs.d.mts",
+              "default": "./dist/tabs.mjs"
+            },
+            "./tooltip": {
+              "types": "./dist/tooltip.d.mts",
+              "default": "./dist/tooltip.mjs"
+            },
+            "./toggle": {
+              "types": "./dist/toggle.d.mts",
+              "default": "./dist/toggle.mjs"
+            },
+            "./toggle-group": {
+              "types": "./dist/toggle-group.d.mts",
+              "default": "./dist/toggle-group.mjs"
+            },
+            "./toast": {
+              "types": "./dist/toast.d.mts",
+              "default": "./dist/toast.mjs"
+            },
+            "./toolbar": {
+              "types": "./dist/toolbar.d.mts",
+              "default": "./dist/toolbar.mjs"
+            }
+          },
+          "fingerprint": "sha256:f9ff803baed08af99f02652c73807af5276e064e9463932bb275ead591e9870c"
+        },
+        {
+          "exports": {
+            "./accordion": {
+              "types": "./dist/accordion.d.mts",
+              "default": "./dist/accordion.mjs"
+            },
+            "./alert": {
+              "types": "./dist/alert.d.mts",
+              "default": "./dist/alert.mjs"
+            },
+            "./alert-dialog": {
+              "types": "./dist/alert-dialog.d.mts",
+              "default": "./dist/alert-dialog.mjs"
+            },
+            "./autocomplete": {
+              "types": "./dist/autocomplete.d.mts",
+              "default": "./dist/autocomplete.mjs"
+            },
+            "./avatar": {
+              "types": "./dist/avatar.d.mts",
+              "default": "./dist/avatar.mjs"
+            },
+            "./badge": {
+              "types": "./dist/badge.d.mts",
+              "default": "./dist/badge.mjs"
+            },
+            "./breadcrumb": {
+              "types": "./dist/breadcrumb.d.mts",
+              "default": "./dist/breadcrumb.mjs"
+            },
+            "./button": {
+              "types": "./dist/button.d.mts",
+              "default": "./dist/button.mjs"
+            },
+            "./card": {
+              "types": "./dist/card.d.mts",
+              "default": "./dist/card.mjs"
+            },
+            "./checkbox": {
+              "types": "./dist/checkbox.d.mts",
+              "default": "./dist/checkbox.mjs"
+            },
+            "./checkbox-group": {
+              "types": "./dist/checkbox-group.d.mts",
+              "default": "./dist/checkbox-group.mjs"
+            },
+            "./collapsible": {
+              "types": "./dist/collapsible.d.mts",
+              "default": "./dist/collapsible.mjs"
+            },
+            "./combobox": {
+              "types": "./dist/combobox.d.mts",
+              "default": "./dist/combobox.mjs"
+            },
+            "./command": {
+              "types": "./dist/command.d.mts",
+              "default": "./dist/command.mjs"
+            },
+            "./context-menu": {
+              "types": "./dist/context-menu.d.mts",
+              "default": "./dist/context-menu.mjs"
+            },
+            "./dialog": {
+              "types": "./dist/dialog.d.mts",
+              "default": "./dist/dialog.mjs"
+            },
+            "./disclosure": {
+              "types": "./dist/disclosure.d.mts",
+              "default": "./dist/disclosure.mjs"
+            },
+            "./drawer": {
+              "types": "./dist/drawer.d.mts",
+              "default": "./dist/drawer.mjs"
+            },
+            "./dropdown-menu": {
+              "types": "./dist/dropdown-menu.d.mts",
+              "default": "./dist/dropdown-menu.mjs"
+            },
+            "./field": {
+              "types": "./dist/field.d.mts",
+              "default": "./dist/field.mjs"
+            },
+            "./hover-card": {
+              "types": "./dist/hover-card.d.mts",
+              "default": "./dist/hover-card.mjs"
+            },
+            "./kbd": {
+              "types": "./dist/kbd.d.mts",
+              "default": "./dist/kbd.mjs"
+            },
+            "./menubar": {
+              "types": "./dist/menubar.d.mts",
+              "default": "./dist/menubar.mjs"
+            },
+            "./meter": {
+              "types": "./dist/meter.d.mts",
+              "default": "./dist/meter.mjs"
+            },
+            "./navigation-menu": {
+              "types": "./dist/navigation-menu.d.mts",
+              "default": "./dist/navigation-menu.mjs"
+            },
+            "./number-field": {
+              "types": "./dist/number-field.d.mts",
+              "default": "./dist/number-field.mjs"
+            },
+            "./otp-field": {
+              "types": "./dist/otp-field.d.mts",
+              "default": "./dist/otp-field.mjs"
+            },
+            "./popover": {
+              "types": "./dist/popover.d.mts",
+              "default": "./dist/popover.mjs"
+            },
+            "./progress": {
+              "types": "./dist/progress.d.mts",
+              "default": "./dist/progress.mjs"
+            },
+            "./radio-group": {
+              "types": "./dist/radio-group.d.mts",
+              "default": "./dist/radio-group.mjs"
+            },
+            "./scroll-area": {
+              "types": "./dist/scroll-area.d.mts",
+              "default": "./dist/scroll-area.mjs"
+            },
+            "./separator": {
+              "types": "./dist/separator.d.mts",
+              "default": "./dist/separator.mjs"
+            },
+            "./sheet": {
+              "types": "./dist/sheet.d.mts",
+              "default": "./dist/sheet.mjs"
+            },
+            "./select": {
+              "types": "./dist/select.d.mts",
+              "default": "./dist/select.mjs"
+            },
+            "./skeleton": {
+              "types": "./dist/skeleton.d.mts",
+              "default": "./dist/skeleton.mjs"
+            },
+            "./slider": {
+              "types": "./dist/slider.d.mts",
+              "default": "./dist/slider.mjs"
+            },
+            "./switch": {
+              "types": "./dist/switch.d.mts",
+              "default": "./dist/switch.mjs"
+            },
+            "./table": {
+              "types": "./dist/table.d.mts",
+              "default": "./dist/table.mjs"
+            },
+            "./tabs": {
+              "types": "./dist/tabs.d.mts",
+              "default": "./dist/tabs.mjs"
+            },
+            "./tooltip": {
+              "types": "./dist/tooltip.d.mts",
+              "default": "./dist/tooltip.mjs"
+            },
+            "./toggle": {
+              "types": "./dist/toggle.d.mts",
+              "default": "./dist/toggle.mjs"
+            },
+            "./toggle-group": {
+              "types": "./dist/toggle-group.d.mts",
+              "default": "./dist/toggle-group.mjs"
+            },
+            "./toast": {
+              "types": "./dist/toast.d.mts",
+              "default": "./dist/toast.mjs"
+            },
+            "./toolbar": {
+              "types": "./dist/toolbar.d.mts",
+              "default": "./dist/toolbar.mjs"
+            }
+          },
+          "fingerprint": "sha256:fb69d904fd84fc5e7ea3e59cc60a7188ec108ce496e129bbc72e0f266748c5b9"
         }
       ],
       "packageName": "@kovojs/ui",
@@ -10943,7 +10702,6 @@
             "surface": "render-browser"
           },
           "members": {
-            ".": ["<module>"],
             "./accordion": ["<module>"],
             "./alert": ["<module>"],
             "./alert-dialog": ["<module>"],
@@ -10991,7 +10749,7 @@
           },
           "review": {
             "basis": "@kovojs/ui manifest-public initializers and eager imports in this exact authority/matrix group were reviewed separately from named members; every subpath remains an explicit member.",
-            "evidence": ["packages/ui/src/index.tsx", "packages/ui/registry.json"],
+            "evidence": ["packages/ui/src/card.tsx", "packages/ui/registry.json"],
             "id": "first-party-runtime-posture/2026-07-18"
           },
           "rootKind": "none",
@@ -11046,7 +10804,14 @@
               "BreadcrumbSeparator"
             ],
             "./button": ["Button"],
-            "./card": ["Card"],
+            "./card": [
+              "Card",
+              "CardContent",
+              "CardDescription",
+              "CardFooter",
+              "CardHeader",
+              "CardTitle"
+            ],
             "./checkbox": ["Checkbox"],
             "./checkbox-group": [
               "CheckboxGroup",
@@ -11207,14 +10972,14 @@
           },
           "review": {
             "basis": "@kovojs/ui manifest-pinned component primitives were reviewed as raw-capability-free; doors, roots, escapes, sinks, and module initialization are split into separate groups.",
-            "evidence": ["packages/ui/src/index.tsx", "packages/ui/registry.json"],
+            "evidence": ["packages/ui/src/card.tsx", "packages/ui/registry.json"],
             "id": "first-party-runtime-posture/2026-07-18"
           },
           "rootKind": "none",
           "securityRole": "ordinary-runtime"
         }
       ],
-      "sourceTreeSha256": "f21fb0995980e79b84513d40bd9622175e075072aac498ed0f37e2ce6a6c3d78"
+      "sourceTreeSha256": "8fb5f433331e698046982ed34884e43d27bf2ac02e21b27dac03341858d14a62"
     },
     {
       "manifestVariants": [
@@ -11258,8 +11023,8 @@
           "members": {
             ".": [
               "<module>",
-              "KOVO_CERTIFICATE_CAPABILITY_DOMAIN",
               "formatCertificateVerification",
+              "KOVO_CERTIFICATE_CAPABILITY_DOMAIN",
               "verifyCertificate",
               "verifyCertificateDirectory"
             ]
@@ -11274,7 +11039,7 @@
           "reason": "Certificate verification is build/release tooling; its filesystem authority is not available inside request handlers."
         }
       ],
-      "sourceTreeSha256": "90e6cc5f6340861b4a70bbcf1504b35c077c28bf926de3e6e4ccebea384a41c9"
+      "sourceTreeSha256": "e735ce15fb96ea63852feb1a83454ebe8b536c84cfba0961f1cc9023d602b832"
     }
   ]
 }

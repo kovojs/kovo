@@ -25,63 +25,65 @@ const securityRoleContracts = [
   ['@kovojs/better-auth', '.', 'betterAuthCsrfFromEnvironment', 'security-control'],
   ['@kovojs/better-auth', '.', 'betterAuthPasswordResetMailDoor', 'security-control'],
   ['@kovojs/better-auth', '.', 'role', 'security-control'],
-  ['@kovojs/core', '.', 'DeclassifyPolicy', 'request-closed'],
-  ['@kovojs/core', '.', 'hmacSignature', 'security-control'],
+  ['@kovojs/core', './security', 'DeclassifyPolicy', 'request-closed'],
+  ['@kovojs/core', './webhooks', 'hmacSignature', 'security-control'],
   ['@kovojs/core', '.', 'href', 'sink-adapter'],
-  ['@kovojs/core', '.', 'isRedacted', 'secret-flow'],
-  ['@kovojs/core', '.', 'isSecret', 'secret-flow'],
-  ['@kovojs/core', '.', 'isUntrusted', 'secret-flow'],
-  ['@kovojs/core', '.', 'revealSecret', 'request-closed'],
-  ['@kovojs/core', '.', 'revealUntrusted', 'request-closed'],
-  ['@kovojs/core', '.', 'standardWebhooks', 'security-control'],
-  ['@kovojs/core', '.', 'trustedReveal', 'request-closed'],
+  ['@kovojs/core', './security', 'isRedacted', 'secret-flow'],
+  ['@kovojs/core', './security', 'isSecret', 'secret-flow'],
+  ['@kovojs/core', './security', 'isUntrusted', 'secret-flow'],
+  ['@kovojs/core', './security', 'revealSecret', 'request-closed'],
+  ['@kovojs/core', './security', 'revealUntrusted', 'request-closed'],
+  ['@kovojs/core', './webhooks', 'standardWebhooks', 'security-control'],
+  ['@kovojs/core', './security', 'trustedReveal', 'request-closed'],
   ['@kovojs/drizzle', '.', 'kovoAnalyzerSummary', 'trust-escape'],
   ['@kovojs/drizzle', '.', 'sql', 'security-control'],
   ['@kovojs/drizzle', '.', 'staticSql', 'security-control'],
-  ['@kovojs/server', '.', 'cmd', 'security-control'],
-  ['@kovojs/server', '.', 'commandAllowlist', 'security-control'],
-  ['@kovojs/server', '.', 'createMemoryMutationReplayStore', 'security-control'],
-  ['@kovojs/server', '.', 'createMemoryVersionedClientModuleRegistry', 'security-control'],
-  ['@kovojs/server', '.', 'createMemoryWebhookReplayStore', 'security-control'],
-  ['@kovojs/server', '.', 'declarePublicRead', 'capability-escape'],
-  ['@kovojs/server', '.', 'erasePrincipal', 'framework-door'],
+  ['@kovojs/server', './command', 'cmd', 'security-control'],
+  ['@kovojs/server', './command', 'commandAllowlist', 'security-control'],
+  ['@kovojs/server', './replay', 'createMemoryMutationReplayStore', 'security-control'],
+  [
+    '@kovojs/server',
+    './client-modules',
+    'createMemoryVersionedClientModuleRegistry',
+    'security-control',
+  ],
+  ['@kovojs/server', './webhooks', 'createMemoryWebhookReplayStore', 'security-control'],
+  ['@kovojs/server', './data', 'declarePublicRead', 'capability-escape'],
+  ['@kovojs/server', './principal-erasure', 'erasePrincipal', 'framework-door'],
   ['@kovojs/server', '.', 'guard', 'security-control'],
   ['@kovojs/server', '.', 'guards', 'security-control'],
-  ['@kovojs/server', '.', 'hmacSignature', 'security-control'],
-  ['@kovojs/server', '.', 'isArgon2idPasswordDigest', 'security-control'],
-  ['@kovojs/server', '.', 'mintCsrfField', 'security-control'],
-  ['@kovojs/server', '.', 'mintCsrfToken', 'security-control'],
+  ['@kovojs/server', './password', 'isArgon2idPasswordDigest', 'security-control'],
+  ['@kovojs/server', './security', 'mintCsrfField', 'security-control'],
+  ['@kovojs/server', './security', 'mintCsrfToken', 'security-control'],
   ['@kovojs/server', '.', 'mutationFormAttributes', 'security-control'],
-  ['@kovojs/server', '.', 'PASSWORD_ARGON2ID_DEFAULTS', 'security-control'],
-  ['@kovojs/server', '.', 'parseComponentXml', 'sink-adapter'],
-  ['@kovojs/server', '.', 'postgresAppRuntimeOptions', 'security-control'],
-  ['@kovojs/server', '.', 'postgresSchemaModule', 'security-control'],
-  ['@kovojs/server', '.', 'PrincipalErasureIncompleteError', 'security-control'],
+  ['@kovojs/server', './password', 'PASSWORD_ARGON2ID_DEFAULTS', 'security-control'],
+  ['@kovojs/server', './render-tree', 'parseComponentXml', 'sink-adapter'],
+  ['@kovojs/server', './postgres', 'postgresAppRuntimeOptions', 'security-control'],
+  ['@kovojs/server', './postgres', 'postgresSchemaModule', 'security-control'],
+  ['@kovojs/server', './principal-erasure', 'PrincipalErasureIncompleteError', 'security-control'],
   ['@kovojs/server', '.', 'publicAccess', 'capability-escape'],
-  ['@kovojs/server', '.', 'readonlyDb', 'security-control'],
-  ['@kovojs/server', '.', 'replayMutationWireBody', 'security-control'],
+  ['@kovojs/server', './data', 'readonlyDb', 'security-control'],
+  ['@kovojs/server', './replay', 'replayMutationWireBody', 'security-control'],
   ['@kovojs/server', '.', 's', 'security-control'],
-  ['@kovojs/server', '.', 'standardWebhooks', 'security-control'],
   ['@kovojs/server', '.', 'verifiedAccess', 'security-control'],
-  ['@kovojs/server', '.', 'verifyPrincipalErasureReceipt', 'security-control'],
-  ['@kovojs/server', '.', 'webhookReplayIdentity', 'security-control'],
+  ['@kovojs/server', './principal-erasure', 'verifyPrincipalErasureReceipt', 'security-control'],
+  ['@kovojs/server', './webhooks', 'webhookReplayIdentity', 'security-control'],
 ];
 
 const rootContracts = [
   ['@kovojs/better-auth', '.', 'mount', 'endpoint'],
   ['@kovojs/browser', '.', 'handler', 'serialized-browser-handler'],
-  ['@kovojs/server', '.', 'createApp', 'application'],
-  ['@kovojs/server', '.', 'createRequestHandler', 'endpoint'],
-  ['@kovojs/server', '.', 'createStorageDownloadEndpoint', 'endpoint'],
   ['@kovojs/server', '.', 'endpoint', 'endpoint'],
   ['@kovojs/server', '.', 'layout', 'layout'],
   ['@kovojs/server', '.', 'mutation', 'mutation'],
   ['@kovojs/server', '.', 'query', 'query'],
   ['@kovojs/server', '.', 'route', 'route'],
-  ['@kovojs/server', '.', 'task', 'durable-task'],
-  ['@kovojs/server', '.', 'toNodeHandler', 'endpoint'],
-  ['@kovojs/server', '.', 'tool', 'agent-tool-callback'],
-  ['@kovojs/server', '.', 'webhook', 'webhook'],
+  ['@kovojs/server', './agent', 'tool', 'agent-tool-callback'],
+  ['@kovojs/server', './custom-adapters', 'createRequestHandler', 'endpoint'],
+  ['@kovojs/server', './node', 'toNodeHandler', 'endpoint'],
+  ['@kovojs/server', './storage-downloads', 'createStorageDownloadEndpoint', 'endpoint'],
+  ['@kovojs/server', './tasks', 'task', 'durable-task'],
+  ['@kovojs/server', './webhooks', 'webhook', 'webhook'],
 ];
 
 function clone(value) {
@@ -122,8 +124,8 @@ describe('framework public runtime export posture gate', () => {
   it('binds every manifest-public runtime value and module initializer to reviewed posture', () => {
     expect(validateFrameworkExportPosture({ actual, ledger })).toEqual([]);
     const rows = expandFrameworkExportPostureLedger(ledger);
-    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_347);
-    expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_839);
+    expect(rows.filter((row) => row.name !== '<module>')).toHaveLength(2_286);
+    expect(rows.filter((row) => row.name === '<module>')).toHaveLength(1_871);
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
     expect(rows.every((row) => row.rootKind !== undefined)).toBe(true);
     expect(rows.every((row) => row.securityRole !== undefined)).toBe(true);
@@ -322,9 +324,9 @@ describe('framework public runtime export posture gate', () => {
       unconditionalRequestClosure: true,
     });
     expect(
-      groupWithMember(ledger, '@kovojs/browser', './client', 'defaultEnhancedFetch'),
+      groupWithMember(ledger, '@kovojs/browser', './client', 'installKovoClient'),
     ).toMatchObject({
-      capabilities: ['network'],
+      capabilities: ['dynamic-loader', 'network'],
       disposition: 'request-closed',
       securityRole: 'request-closed',
     });
@@ -335,28 +337,35 @@ describe('framework public runtime export posture gate', () => {
       disposition: 'framework-door',
       securityRole: 'security-control',
     });
-    expect(groupWithMember(ledger, '@kovojs/server', '.', 'trustedHtml').securityRole).toBe(
+    expect(groupWithMember(ledger, '@kovojs/browser', '.', 'trustedHtml').securityRole).toBe(
       'trust-escape',
     );
-    expect(groupWithMember(ledger, '@kovojs/core', '.', 'publishToClient').securityRole).toBe(
-      'capability-escape',
-    );
+    expect(
+      groupWithMember(ledger, '@kovojs/core', './security', 'publishToClient').securityRole,
+    ).toBe('capability-escape');
     for (const name of ['DeclassifyPolicy', 'revealSecret', 'revealUntrusted', 'trustedReveal']) {
-      expect(groupWithMember(ledger, '@kovojs/core', '.', name)).toMatchObject({
+      expect(groupWithMember(ledger, '@kovojs/core', './security', name)).toMatchObject({
         capabilities: [],
         disposition: 'request-closed',
         rootKind: 'none',
         securityRole: 'request-closed',
       });
     }
-    expect(groupWithMember(ledger, '@kovojs/server', '.', 'erasePrincipal')).toMatchObject({
+    expect(
+      groupWithMember(ledger, '@kovojs/server', './principal-erasure', 'erasePrincipal'),
+    ).toMatchObject({
       capabilities: ['crypto-acquisition', 'database-driver', 'digest', 'filesystem', 'network'],
       disposition: 'framework-door',
       rootKind: 'none',
       securityRole: 'framework-door',
     });
     expect(
-      groupWithMember(ledger, '@kovojs/server', '.', 'verifyPrincipalErasureReceipt'),
+      groupWithMember(
+        ledger,
+        '@kovojs/server',
+        './principal-erasure',
+        'verifyPrincipalErasureReceipt',
+      ),
     ).toMatchObject({
       capabilities: ['crypto-acquisition'],
       disposition: 'framework-door',
@@ -366,14 +375,14 @@ describe('framework public runtime export posture gate', () => {
     expect(
       groupWithMember(ledger, '@kovojs/drizzle', '.', 'kovoAnalyzerSummary').securityRole,
     ).toBe('trust-escape');
-    expect(groupWithMember(ledger, '@kovojs/server', '.', 'createApp')).toMatchObject({
+    expect(groupWithMember(ledger, '@kovojs/server', '.', 'defineKovo')).toMatchObject({
       disposition: 'authority-free',
-      rootKind: 'application',
-      securityRole: 'root-factory',
+      rootKind: 'none',
+      securityRole: 'ordinary-runtime',
     });
     expect(
       expandFrameworkExportPostureLedger(ledger).filter((row) => row.rootKind !== 'none'),
-    ).toHaveLength(14);
+    ).toHaveLength(13);
   });
 
   it('cuts exact implementation dependencies only for wholly request-closed packages', () => {

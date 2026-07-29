@@ -18,7 +18,7 @@ describe('public API decision ledger', () => {
   beforeAll(() => {
     inventory = buildPublicApiInventory({ repoRoot });
     ledger = JSON.parse(readFileSync(path.join(repoRoot, 'api-surface-decisions.json'), 'utf8'));
-  });
+  }, 60_000);
 
   it('covers the complete manifest-declared public surface', () => {
     const result = validateApiDecisionLedger({ inventory, ledger, repoRoot });

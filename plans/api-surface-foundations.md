@@ -31,32 +31,52 @@ in a companion JSON artifact once the cleaned inventory lands.
 
 ## Mechanical ledger
 
-- [ ] Define the versioned symbol decision schema: `keep`, `move`, `internalize`, or `remove`.
-- [ ] Require canonical home, user story, SPEC link, evidence, compiling packed example, and
+- [x] Define the versioned symbol decision schema: `keep`, `move`, `internalize`, or `remove`.
+  - Evidence: `node scripts/api-decision-ledger.mjs` validates
+    `kovo-api-surface-decisions/v1` and the closed decision vocabulary.
+- [x] Require canonical home, user story, SPEC link, evidence, compiling packed example, and
       contract test for every retained public symbol or generated-family rule.
-- [ ] Generate initial rows from the cleaned Track 2 inventory and fail on unclassified public
+  - Evidence: the decision gate validates every current row's story, canonical home, SPEC clause,
+    evidence bundle, packed example, and contract tests.
+- [x] Generate initial rows from the cleaned Track 2 inventory and fail on unclassified public
       symbols/subpaths.
-- [ ] Reject a public-surface increase without a reviewed `keep` row.
-- [ ] Reject task subpaths without a documented task and owner.
-- [ ] Publish package/root counts as health metrics without allowing counts to replace decisions.
+  - Evidence: the gate reports `declarations=1666 subpaths=1871 decisions=keep:1666` with no
+    unclassified current row.
+- [x] Reject a public-surface increase without a reviewed `keep` row.
+  - Evidence: `scripts/api-decision-ledger.test.mjs` kills undeclared symbol-growth mutants.
+- [x] Reject task subpaths without a documented task and owner.
+  - Evidence: `scripts/api-decision-ledger.test.mjs` kills undocumented public-subpath mutants.
+- [x] Publish package/root counts as health metrics without allowing counts to replace decisions.
+  - Evidence: the gate emits per-package root/target counts only after exact row validation.
 
 ## Ratchets
 
-- [ ] Replace the accepted 532 recursive-publicness baseline with a no-additions descending
+- [x] Replace the accepted 532 recursive-publicness baseline with a no-additions descending
       per-package ratchet.
-- [ ] Reach zero recursive leaks without promoting leaked implementation types.
+  - Evidence: `node scripts/api-surface-gate.mjs` validates a zero-entry descending baseline and
+    rejects recursive additions.
+- [x] Reach zero recursive leaks without promoting leaked implementation types.
+  - Evidence: the gate reports `recursive-publicness-v2 total=0`; the baseline records zero
+    recursive packages and zero documentation exceptions.
 - [ ] Add an AST-based packed-declaration `any` gate with owner/reason/expiry exceptions.
 - [ ] Reject `any` hidden behind aliases or conditional wrappers.
 
 ## Migration protocol
 
-- [ ] Define versioned codemod inputs, result records, check/write modes, and refusal categories.
-- [ ] Require each breaking batch to land and exercise its rewrite/refusal rules before removing
+- [x] Define versioned codemod inputs, result records, check/write modes, and refusal categories.
+  - Evidence: `node scripts/api-migration-protocol.mjs` validates eight versioned batches with
+    check/write modes and structured `kovo-api-migration-result/v1` results.
+- [x] Require each breaking batch to land and exercise its rewrite/refusal rules before removing
       old exports.
-- [ ] Refuse ambiguous trust, auth, CSRF, SQL, app-context, and deployment rewrites.
+  - Evidence: the protocol gate requires fixtures for every action actually present; the
+    `test-harness-v2` batch executes its source-anchored refusal fixture before removal.
+- [x] Refuse ambiguous trust, auth, CSRF, SQL, app-context, and deployment rewrites.
+  - Evidence: the protocol ledger and unit tests cover all six refusal classes and reject
+    unanchored or guessed rewrites.
 
 ## Latest verification
 
-Migrated family decisions were reconciled from the completed API, docs, testing, capability, and
-audit ledgers during Track 0 adoption. Symbol-level classification remains open until the cleaned
-inventory lands.
+`pnpm run check:api-surface` passes all three gates and 28 mutation tests. The reviewed inventory is
+fully classified, the recursive baseline is zero, and the refusal-only `test-harness-v2` migration
+tool passes its four focused tests. The two packed-declaration `any` items remain owned by the
+integration checkpoint and are not claimed here.
