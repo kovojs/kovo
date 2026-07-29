@@ -2817,7 +2817,7 @@ describe('kovo check', () => {
     try {
       writeFileSync(graphPath, '[]');
 
-      expect(main(['explain', '--unguarded', graphPath])).toBe(1);
+      expect(main(['explain', 'unguarded', graphPath])).toBe(1);
     } finally {
       stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
