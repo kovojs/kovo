@@ -23,6 +23,7 @@ import type {
   CreateAppOptions,
   KovoApp as RuntimeKovoApp,
 } from './app-types.js';
+import { isAppMutationAdapter, type AppMutationAdapter } from './app-mutation-adapter.js';
 import { createApp } from './app.js';
 import { createKovoAppToken, type KovoApp } from './app-token.js';
 import type {
@@ -34,10 +35,13 @@ import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentDeclaration } from './document-structured.js';
 import {
   endpoint,
+  type EndpointAuthDeclaration,
+  type EndpointDbContext,
   type EndpointDeclaration,
-  type EndpointDefinition,
   type EndpointMethod,
   type EndpointMount,
+  type EndpointRequest,
+  type EndpointResponsePosture,
 } from './endpoint.js';
 import {
   guards,
@@ -52,7 +56,6 @@ import {
 import type { StylesheetAsset } from './hints.js';
 import {
   mutation,
-  type MutationCsrfDeclaration,
   type MutationDefinition,
   type MutationFail,
   type MutationFormDefinition,
@@ -81,11 +84,7 @@ import {
   type RoutePageResult,
   type RouteRegionDefinitions,
 } from './route.js';
-import {
-  task,
-  type TaskDefinition,
-  type TaskSchedulingRequest,
-} from './task.js';
+import { task, type TaskDefinition, type TaskSchedulingRequest } from './task.js';
 import type { InferSchema, Schema } from './schema.js';
 import type { AppResponseHeaders } from './response.js';
 import {
@@ -109,29 +108,18 @@ declare const appOptimisticBindingBrand: unique symbol;
 declare const kovoContractBrand: unique symbol;
 
 type AppId = string | undefined;
-type MaybeSchema<Value> = Schema<Value> | undefined;
-type LayoutQueryMap<Request> = Readonly<
-  Record<string, QueryDefinition<string, unknown, unknown, Request>>
->;
 type OptimisticFunction = (...args: unknown[]) => unknown;
-
-/** Private-witness-bearing base shared by named app-scoped declaration handles. */
-export interface AppDeclarationHandle<
-  Kind extends AppDeclarationKind,
-  Owner extends AppId = AppId,
-> {
-  readonly [appDeclarationHandleBrand]: {
-    readonly kind: Kind;
-    readonly owner: Owner;
-  };
-}
 
 /** Named app-scoped route handle. */
 export interface RouteHandle<
   Path extends string = string,
   Request = unknown,
-  Owner extends AppId = AppId,
-> extends AppDeclarationHandle<'route', Owner> {
+  Owner extends string | undefined = string | undefined,
+> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'route';
+    readonly owner: Owner;
+  };
   readonly path: Path;
   readonly __kovoRouteRequest?: (request: Request) => Request;
 }
@@ -139,16 +127,24 @@ export interface RouteHandle<
 /** Named app-scoped layout handle. */
 export interface LayoutHandle<
   Request = unknown,
-  Owner extends AppId = AppId,
-> extends AppDeclarationHandle<'layout', Owner> {
+  Owner extends string | undefined = string | undefined,
+> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'layout';
+    readonly owner: Owner;
+  };
   readonly __kovoLayoutRequest?: (request: Request) => Request;
 }
 
 /** Named app-scoped endpoint handle. */
 export interface EndpointHandle<
   Path extends string = string,
-  Owner extends AppId = AppId,
-> extends AppDeclarationHandle<'endpoint', Owner> {
+  Owner extends string | undefined = string | undefined,
+> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'endpoint';
+    readonly owner: Owner;
+  };
   readonly path: Path;
 }
 
@@ -156,8 +152,18 @@ export interface EndpointHandle<
 export interface TaskHandle<
   Input = unknown,
   Value = unknown,
-  Owner extends AppId = AppId,
-> extends AppDeclarationHandle<'task', Owner> {
+  Owner extends string | undefined = string | undefined,
+> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'task';
+    readonly owner: Owner;
+  };
+  readonly input: Schema<Input>;
+  readonly key: string;
+  readonly run: (
+    input: Input,
+    context: import('./task.js').TaskRunContext,
+  ) => Promise<Value> | Value;
   readonly __kovoTaskTypes?: (input: Input) => Value;
 }
 
@@ -180,7 +186,7 @@ export interface KeyedQueryOptimisticOptions<QueryInput, Value, MutationInput> {
 export interface QueryOptimisticBinding<
   MutationInput = unknown,
   Value = unknown,
-  Owner extends AppId = AppId,
+  Owner extends string | undefined = string | undefined,
 > {
   readonly [appOptimisticBindingBrand]: {
     readonly input: MutationInput;
@@ -189,30 +195,38 @@ export interface QueryOptimisticBinding<
   };
 }
 
-type QueryOptimisticMethod<QueryInput, Value, Owner extends AppId> =
-  [QueryInput] extends [undefined]
-    ? {
-        optimistic<MutationInput>(
-          apply: QueryOptimisticApply<Value, MutationInput> | QueryOptimisticStatus,
-        ): QueryOptimisticBinding<MutationInput, Value, Owner>;
-      }
-    : {
-        optimistic<MutationInput>(
-          options:
-            | KeyedQueryOptimisticOptions<QueryInput, Value, MutationInput>
-            | QueryOptimisticStatus,
-        ): QueryOptimisticBinding<MutationInput, Value, Owner>;
-      };
-
 /** Named app-scoped query handle with inferred input/result and handle-bound optimism. */
-export type QueryHandle<
+export interface QueryHandle<
   QueryInput = undefined,
   Value = JsonValue,
-  Owner extends AppId = AppId,
+  Owner extends string | undefined = string | undefined,
   Request = unknown,
-> = QueryDefinition<string, Value, QueryInput, Request> &
-  AppDeclarationHandle<'query', Owner> &
-  QueryOptimisticMethod<QueryInput, Value, Owner>;
+> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'query';
+    readonly owner: Owner;
+    readonly request: Request;
+  };
+  readonly args: [QueryInput] extends [undefined]
+    ? undefined
+    : Schema<QueryInput> & {
+        <Props extends object>(
+          mapper: (props: Props) => QueryInput,
+        ): {
+          args: (props: Props) => QueryInput;
+          query: { key: string };
+          schema: Schema<QueryInput>;
+        };
+      };
+  readonly key: string;
+  optimistic(status: QueryOptimisticStatus): QueryOptimisticBinding<never, Value, Owner>;
+  optimistic<InputSchema extends Schema<unknown>>(
+    input: InputSchema,
+    policy: [QueryInput] extends [undefined]
+      ? QueryOptimisticApply<Value, InferSchema<InputSchema>>
+      : KeyedQueryOptimisticOptions<QueryInput, Value, InferSchema<InputSchema>>,
+  ): QueryOptimisticBinding<InferSchema<InputSchema>, Value, Owner>;
+}
 
 /** Named app-scoped mutation handle with inferred input/result/error payloads. */
 export interface MutationHandle<
@@ -220,267 +234,264 @@ export interface MutationHandle<
   Value = unknown,
   Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
   Request = unknown,
-  Owner extends AppId = AppId,
-> extends AppDeclarationHandle<'mutation', Owner> {
-  readonly __kovoMutationTypes?: (
+  Owner extends string | undefined = string | undefined,
+> extends MutationFormDefinition<string, Request> {
+  readonly [appDeclarationHandleBrand]: {
+    readonly kind: 'mutation';
+    readonly owner: Owner;
+  };
+  readonly errors?: Errors;
+  readonly handler: (
     input: Input,
     request: Request,
-    errors: Errors,
-  ) => Value;
-}
-
-type TypeEqual<Left, Right> = [Left] extends [Right]
-  ? [Right] extends [Left]
-    ? true
-    : false
-  : false;
-
-type GuardRefinementDelta<Input, Refined> = {
-  [Key in keyof Refined as Key extends keyof Input
-    ? TypeEqual<Refined[Key], Input[Key]> extends true
-      ? never
-      : Key
-    : Key]: Refined[Key];
-};
-
-type GuardRefinedRequest<Base, Candidate> = Candidate extends Guard<
-  infer Input,
-  infer Refined
->
-  ? Base & GuardRefinementDelta<Input, Refined>
-  : Base;
-
-type AccessRefinedRequest<Base, Access> = Access extends readonly []
-  ? Base
-  : Access extends readonly [infer First, ...infer Rest]
-    ? AccessRefinedRequest<Base & GuardRefinedRequest<Base, First>, Rest>
-    : Access extends readonly (infer Item)[]
-      ? Base & GuardRefinedRequest<Base, Item>
-      : Base;
-
-type OptionalAccessRefinedRequest<Base, Access> = [Access] extends [undefined]
-  ? Base
-  : AccessRefinedRequest<Base, Extract<Access, AccessDecision>>;
-
-interface AppQueryDefinition<
-  Request,
-  Input,
-  Value extends JsonValue,
-  Access extends AccessDecision,
-> {
-  access: Access;
-  delta?: QueryDefinition<string, Value, Input, Request>['delta'];
-  guard?: never;
-  instanceKey?: QueryInstanceKey<Input>;
-  load?: (
-    input: Input,
-    context: QueryLoadContext<Request>,
-  ) => Promise<Value> | Value;
-  output?: Schema<Value>;
-  read?: QueryReadConfig;
-  reads?: readonly Domain[];
-  version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
-}
-
-/** Query factory bound to one app request/session/DB/env contract. */
-export interface AppQueryFactory<Request, Owner extends AppId> {
-  <
-    const Access extends AccessDecision,
-    Value extends JsonValue = JsonValue,
-  >(
-    definition: AppQueryDefinition<
-      AccessRefinedRequest<Request, Access>,
-      undefined,
-      Value,
-      Access
-    > & { args?: never },
-  ): QueryHandle<
-    undefined,
-    Value,
-    Owner,
-    AccessRefinedRequest<Request, Access>
-  >;
-  <
-    Input,
-    const Access extends AccessDecision,
-    Value extends JsonValue = JsonValue,
-  >(
-    definition: AppQueryDefinition<
-      AccessRefinedRequest<Request, Access>,
-      Input,
-      Value,
-      Access
-    > & { args: Schema<Input> },
-  ): QueryHandle<
-    Input,
-    Value,
-    Owner,
-    AccessRefinedRequest<Request, Access>
-  >;
-}
-
-type AppMutationDefinition<
-  InputSchema extends Schema<unknown>,
-  Errors extends Record<string, Schema<unknown>>,
-  Request,
-  Value,
-  Access extends AccessDecision,
-  Owner extends AppId,
-> = Omit<
-  MutationDefinition<
-    string,
-    InputSchema,
-    Errors,
-    MutationHandlerRequest<Request>,
-    Value,
-    AppMutationRefinedRequest<Request, Access>
-  >,
-  | 'access'
-  | 'csrf'
-  | 'csrfJustification'
-  | 'guard'
-  | 'handler'
-  | 'key'
-  | 'machineReplayPrincipal'
-  | 'optimistic'
-> & {
-  access: Access;
-  handler: (
-    input: InferSchema<InputSchema>,
-    request: AppMutationRefinedRequest<Request, Access>,
     context: MutationContext<Errors>,
   ) => Promise<Value | MutationFail> | Value | MutationFail;
-  optimistic?: readonly QueryOptimisticBinding<InferSchema<InputSchema>, unknown, Owner>[];
-} & MutationCsrfDeclaration<
-  MutationHandlerRequest<Request>,
-  AppMutationRefinedRequest<Request, Access>
->;
+  readonly input: Schema<Input>;
+  readonly __kovoMutationTypes?: (input: Input, request: Request, errors: Errors) => Value;
+}
 
-type AppMutationRefinedRequest<Request, Access> = MutationHandlerRequest<Request> &
-  MutationHandlerRequest<AccessRefinedRequest<Request, Access>>;
+/** Request shape visible after every guard in an app access decision has passed. */
+export type AppRequestForAccess<Base, Access> = Access extends readonly (infer Item)[]
+  ? Item extends Guard<any, infer Refined>
+    ? Base & Refined
+    : Base
+  : Base;
+
+/** Query factory bound to one app request/session/DB/env contract. */
+export interface AppQueryFactory<Request, Owner extends string | undefined> {
+  <const Access extends AccessDecision, Value extends JsonValue = JsonValue>(definition: {
+    access: Access;
+    args?: never;
+    delta?: readonly { domain: string; key: string; path: string }[];
+    guard?: never;
+    instanceKey?: string;
+    load?: (
+      input: undefined,
+      context: QueryLoadContext<AppRequestForAccess<Request, Access>>,
+    ) => Promise<Value> | Value;
+    output?: Schema<Value>;
+    read?: QueryReadConfig;
+    reads?: readonly Domain[];
+    version?: ((input: undefined, value: Value) => number | string | undefined) | number | string;
+  }): QueryHandle<undefined, Value, Owner, AppRequestForAccess<Request, Access>>;
+  <Input, const Access extends AccessDecision, Value extends JsonValue = JsonValue>(definition: {
+    access: Access;
+    args: Schema<Input>;
+    delta?: readonly { domain: string; key: string; path: string }[];
+    guard?: never;
+    instanceKey?: ((input: Input) => string | undefined) | string;
+    load?: (
+      input: Input,
+      context: QueryLoadContext<AppRequestForAccess<Request, Access>>,
+    ) => Promise<Value> | Value;
+    output?: Schema<Value>;
+    read?: QueryReadConfig;
+    reads?: readonly Domain[];
+    version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
+  }): QueryHandle<Input, Value, Owner, AppRequestForAccess<Request, Access>>;
+}
 
 /** Mutation factory bound to one app request/session/DB/env contract. */
-export interface AppMutationFactory<Request, Owner extends AppId> {
+export interface AppMutationFactory<Request, Owner extends string | undefined> {
   <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
     const Access extends AccessDecision = AccessDecision,
     Value = unknown,
   >(
-    definition: AppMutationDefinition<
-      InputSchema,
-      Errors,
-      Request,
-      Value,
-      Access,
-      Owner
-    >,
-  ): MutationDefinition<
-      string,
-      InputSchema,
-      Errors,
-      MutationHandlerRequest<Request>,
-      Value,
-      AppMutationRefinedRequest<Request, Access>
-    > &
-    MutationFormDefinition<string, MutationHandlerRequest<Request>> &
-    MutationHandle<
-      InferSchema<InputSchema>,
-      Value,
-      Errors,
-      AppMutationRefinedRequest<Request, Access>,
-      Owner
-    >;
+    definition: {
+      access: Access;
+      defaultRedirectTo?: string;
+      errors?: Errors;
+      guard?: never;
+      handler: (
+        input: InferSchema<InputSchema>,
+        request: MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
+        context: MutationContext<Errors>,
+      ) => Promise<Value | MutationFail> | Value | MutationFail;
+      input: InputSchema;
+      optimistic?: readonly QueryOptimisticBinding<InferSchema<InputSchema>, unknown, Owner>[];
+      principalEpoch?: unknown;
+      queue?: unknown;
+      redirectTo?: unknown;
+      registry?: {
+        queries?: readonly { key: string }[];
+        tables?: readonly string[];
+        touches?: readonly Domain[];
+      };
+      stream?: unknown;
+      transaction?: unknown;
+    } & (
+      | {
+          csrf?: never;
+          csrfJustification?: never;
+          machineReplayPrincipal?: never;
+        }
+      | {
+          csrf: false;
+          csrfJustification: string;
+          machineReplayPrincipal?: (
+            request: MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
+          ) => string;
+        }
+    ),
+  ): MutationHandle<
+    InferSchema<InputSchema>,
+    Value,
+    Errors,
+    MutationHandlerRequest<AppRequestForAccess<Request, Access>>,
+    Owner
+  >;
 }
 
 /** Endpoint factory with its managed DB context inferred from `defineKovo({ db })`. */
-export interface AppEndpointFactory<Db, Owner extends AppId> {
+export interface AppEndpointFactory<Db, Owner extends string | undefined> {
   <
     const Path extends string,
     const Method extends EndpointMethod = EndpointMethod,
     const Mount extends EndpointMount = 'exact',
   >(
     path: Path,
-    definition: EndpointDefinition<Method, Mount, Db>,
-  ): EndpointDeclaration<Path, Method, Mount, Db> & EndpointHandle<Path, Owner>;
+    definition: {
+      access?: AccessDecision;
+      auth?: EndpointAuthDeclaration;
+      handler:
+        | ((request: EndpointRequest) => Promise<Response> | Response)
+        | ((
+            request: EndpointRequest,
+            context: EndpointDbContext<Db, Method>,
+          ) => Promise<Response> | Response);
+      method: Method;
+      reason: string;
+      response: EndpointResponsePosture;
+    } & ({ db?: never } | { db: true }) &
+      (Mount extends 'prefix'
+        ? { mount: Mount; mountJustification: string }
+        : { mount?: Mount; mountJustification?: never }) &
+      ({ csrf?: true; csrfJustification?: never } | { csrf: false; csrfJustification: string }),
+  ): EndpointHandle<Path, Owner>;
 }
 
 /** Route factory with params/search and lifecycle request inferred from the app contract. */
-export interface AppRouteFactory<Request, Owner extends AppId> {
+export interface AppRouteFactory<Request, Owner extends string | undefined> {
   <
     const Path extends string,
-    const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
-    const SearchSchema extends MaybeSchema<Record<string, RouteSearchValue>> = undefined,
+    const ParamsSchema extends Schema<Record<string, string>> | undefined = undefined,
+    const SearchSchema extends Schema<Record<string, RouteSearchValue>> | undefined = undefined,
     const Access extends AccessDecision = AccessDecision,
     Page extends RoutePageResult = RoutePageResult,
-    Regions extends RouteRegionDefinitions<
-      any,
-      AccessRefinedRequest<Request, Access>,
-      Page
-    > = RouteRegionDefinitions<any, AccessRefinedRequest<Request, Access>, Page>,
+    Regions extends Readonly<
+      Record<
+        string,
+        (
+          context: {
+            params: ParamsSchema extends Schema<infer Params> ? Params : Record<string, string>;
+            path: Path;
+            search: SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
+          },
+          request: AppRequestForAccess<Request, Access>,
+        ) => Page | Promise<Page>
+      >
+    > = Readonly<Record<never, never>>,
   >(
     path: Path,
-    definition: Omit<
-      RouteDefinition<
-        Path,
-        ParamsSchema,
-        SearchSchema,
-        Request,
-        Page,
-        AccessRefinedRequest<Request, Access>,
-        Regions
-      >,
-      'access' | 'guard'
-    > & { access: Access; guard?: never },
-  ): RouteDeclaration<
-      Path,
-      ParamsSchema,
-      SearchSchema,
-      Request,
-      Page,
-      AccessRefinedRequest<Request, Access>
-    > &
-    RouteHandle<Path, AccessRefinedRequest<Request, Access>, Owner>;
+    definition: {
+      access: Access;
+      bootstrapScript?: string;
+      boundaries?: unknown;
+      guard?: never;
+      i18n?: unknown;
+      layout?: LayoutHandle<any, Owner>;
+      meta?: unknown;
+      modulepreloads?: readonly string[];
+      onUnauthenticated?: unknown;
+      page?: (
+        context: {
+          params: ParamsSchema extends Schema<infer Params> ? Params : Record<string, string>;
+          path: Path;
+          search: SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
+          signUrl?: (...args: any[]) => unknown;
+        },
+        request: AppRequestForAccess<Request, Access>,
+      ) => Page | Promise<Page>;
+      params?: ParamsSchema;
+      prefetch?: 'conservative' | 'moderate' | false;
+      prefetchJustification?: string;
+      prerenderUrls?: readonly string[];
+      regions?: Regions;
+      search?: SearchSchema;
+      staticPaths?: readonly string[];
+      stylesheets?: readonly (string | StylesheetAsset)[];
+    },
+  ): RouteHandle<Path, AppRequestForAccess<Request, Access>, Owner>;
 }
 
 /** Layout factory bound to the app read request. */
-export interface AppLayoutFactory<Request, Owner extends AppId> {
+export interface AppLayoutFactory<Request, Owner extends string | undefined> {
   <
     const Access extends AccessDecision | undefined = undefined,
-    const Queries extends LayoutQueryMap<
-      OptionalAccessRefinedRequest<Request, Access>
-    > = LayoutQueryMap<OptionalAccessRefinedRequest<Request, Access>>,
+    const Queries extends Readonly<Record<string, QueryHandle<any, any, Owner, any>>> = Readonly<
+      Record<never, never>
+    >,
     Page extends LayoutRenderResult = LayoutRenderResult,
     Regions extends LayoutRegionResults = LayoutRegionResults,
-  >(
-    definition: Omit<
-      LayoutDefinition<
-        OptionalAccessRefinedRequest<Request, Access>,
-        Queries,
-        Page,
-        Regions
-      >,
-      'access' | 'guard'
-    > &
-      (
-        | { access: Exclude<Access, undefined>; guard?: never }
-        | { access?: never; guard?: never }
-      ),
-  ): LayoutDeclaration<
-      OptionalAccessRefinedRequest<Request, Access>,
-      Queries,
-      Page,
-      Regions
-    > &
-    LayoutHandle<OptionalAccessRefinedRequest<Request, Access>, Owner>;
+  >(definition: {
+    access?: Exclude<Access, undefined>;
+    bootstrapScript?: string;
+    boundaries?: unknown;
+    guard?: never;
+    i18n?: unknown;
+    meta?: unknown;
+    modulepreloads?: readonly string[];
+    parent?: LayoutHandle<any, Owner>;
+    prefetch?: 'conservative' | 'moderate' | false;
+    prefetchJustification?: string;
+    prerenderUrls?: readonly string[];
+    queries?: Queries;
+    render?: (
+      queries: {
+        [Name in keyof Queries]: Queries[Name] extends QueryHandle<any, infer Value, any, any>
+          ? Awaited<Value>
+          : unknown;
+      },
+      state: undefined,
+      slots: {
+        children: unknown;
+        regions: Regions;
+        request: [Access] extends [undefined]
+          ? Request
+          : AppRequestForAccess<Request, Extract<Access, AccessDecision>>;
+      },
+    ) => Page | Promise<Page>;
+    stylesheets?: readonly (string | StylesheetAsset)[];
+  }): LayoutHandle<
+    [Access] extends [undefined]
+      ? Request
+      : AppRequestForAccess<Request, Extract<Access, AccessDecision>>,
+    Owner
+  >;
 }
 
 /** Durable-task factory returning an app-owned named handle. */
-export interface AppTaskFactory<Owner extends AppId> {
-  <InputSchema extends Schema<unknown>, Value = unknown>(
-    definition: Omit<TaskDefinition<string, InputSchema, Value>, 'key'>,
-  ): TaskDefinition<string, InputSchema, Value> &
-    TaskHandle<InferSchema<InputSchema>, Value, Owner>;
+export interface AppTaskFactory<Owner extends string | undefined> {
+  <InputSchema extends Schema<unknown>, Value = unknown>(definition: {
+    catchUp?: 'skip' | 'backfill';
+    concurrency?: number;
+    cron?: string;
+    cronArgs?: InferSchema<InputSchema>;
+    input: InputSchema;
+    maxGenerations?: number;
+    priority?: number;
+    retry?: {
+      backoff?: 'exponential' | 'linear';
+      maxAttempts?: number;
+    };
+    run(
+      args: InferSchema<InputSchema>,
+      context: import('./task.js').TaskRunContext,
+    ): Promise<Value> | Value;
+    timeoutMs?: number;
+  }): TaskHandle<InferSchema<InputSchema>, Value, Owner>;
 }
 
 /** Provider/config declarations captured inertly by `defineKovo`. */
@@ -490,13 +501,20 @@ export interface DefineKovoOptions<
   DbValue,
   EnvValue extends Record<string, unknown>,
   Request,
-  Owner extends AppId,
+  Owner extends string | undefined,
 > {
   appId?: Owner;
   auth?: SessionProvider<RawRequest, SessionValue>;
   clientModules?: VersionedClientModuleStore | VersionedClientModuleRegistry;
-  csrf?: CsrfOptions<Request>;
-  db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  csrf?: CsrfOptions<NoInfer<Request>>;
+  db?:
+    | ((
+        request: RawRequest &
+          ([SessionValue] extends [never] ? object : { session: SessionValue | null }) & {
+            env: Readonly<EnvValue>;
+          },
+      ) => Promise<DbValue> | DbValue)
+    | FrameworkManagedDbProvider<DbValue>;
   document?: AppDocumentOptions | DocumentDeclaration;
   egress?: AppEgressOptions;
   env?: Schema<EnvValue>;
@@ -506,43 +524,56 @@ export interface DefineKovoOptions<
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   principalEpochStore?: PrincipalEpochStore;
-  renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
+  renderRoute?: (
+    value: unknown,
+    context: {
+      params: Record<string, string>;
+      request: Request;
+      route: { path: string };
+      search: unknown;
+    },
+  ) => Promise<string> | string;
   requestLimits?: AppRequestLimitOptions;
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
 
-type ProviderSessionValue<Result> = Result extends null | undefined
-  ? never
-  : Result extends { readonly setCookies: readonly string[]; readonly value: infer Value }
-    ? NonNullable<Value>
-    : Result;
-
-type InferSessionProviderValue<Provider> = Provider extends (
-  ...args: any[]
-) => infer Result
-  ? ProviderSessionValue<Awaited<Result>>
+/** Session value inferred from a plain or cookie-forwarding `defineKovo({ auth })` provider. */
+export type InferKovoSession<Provider> = Provider extends (...args: any[]) => infer Result
+  ? Awaited<Result> extends infer Item
+    ? Item extends null | undefined
+      ? never
+      : Item extends {
+            readonly setCookies?: readonly string[];
+            readonly value: infer Value;
+          }
+        ? NonNullable<Value>
+        : Item
+    : never
   : never;
 
-type InferEnvSchemaValue<EnvSchema> = EnvSchema extends Schema<infer EnvValue>
-  ? EnvValue extends Record<string, unknown>
-    ? EnvValue
-    : Record<never, never>
-  : Record<never, never>;
+/** Environment record inferred from `defineKovo({ env: schema })`. */
+export type InferKovoEnv<EnvSchema> =
+  EnvSchema extends Schema<infer EnvValue>
+    ? EnvValue extends Record<string, unknown>
+      ? EnvValue
+      : Record<never, never>
+    : Record<never, never>;
 
-type DefineKovoInput<
+/** Fully inferred input object accepted by `defineKovo()`. */
+export type DefineKovoInput<
   RawRequest extends globalThis.Request,
   AuthProvider extends SessionProvider<RawRequest, any> | undefined,
   DbValue,
   DatabaseProvider,
   EnvSchema extends Schema<Record<string, unknown>> | undefined,
   Request,
-  Owner extends AppId,
+  Owner extends string | undefined,
 > = Omit<
   DefineKovoOptions<
     RawRequest,
-    InferSessionProviderValue<AuthProvider>,
+    InferKovoSession<AuthProvider>,
     DbValue,
-    InferEnvSchemaValue<EnvSchema>,
+    InferKovoEnv<EnvSchema>,
     Request,
     Owner
   >,
@@ -553,48 +584,31 @@ type DefineKovoInput<
   env?: EnvSchema;
 };
 
-type DefinedKovoContract<
+/** App contract produced after provider/session/DB/env inference. */
+export type DefinedKovoContract<
   RawRequest extends globalThis.Request,
   AuthProvider extends SessionProvider<RawRequest, any> | undefined,
   DbValue,
   EnvSchema extends Schema<Record<string, unknown>> | undefined,
   Request,
-  Owner extends AppId,
+  Owner extends string | undefined,
 > = KovoContract<
   RawRequest,
-  InferSessionProviderValue<AuthProvider>,
+  InferKovoSession<AuthProvider>,
   DbValue,
-  InferEnvSchemaValue<EnvSchema>,
+  InferKovoEnv<EnvSchema>,
   Request,
   Owner
 >;
 
 /** Explicit declaration inventory consumed once by `app.assemble()`. */
-export interface AppAssemblyOptions<
-  Request,
-  DbValue,
-  Owner extends AppId,
-> {
-  endpoints?: readonly (
-    | (EndpointDeclaration<string, EndpointMethod, EndpointMount, DbValue> &
-        AppDeclarationHandle<'endpoint', Owner>)
-  )[];
-  layouts?: readonly (
-    | (LayoutDeclaration<any, any, any, any> &
-        AppDeclarationHandle<'layout', Owner>)
-  )[];
-  mutations?: readonly (
-    | (AppMutationDeclaration<Request> & AppDeclarationHandle<'mutation', Owner>)
-  )[];
-  queries?: readonly (
-    | (AppQueryDeclaration<Request> & AppDeclarationHandle<'query', Owner>)
-  )[];
-  routes?: readonly (
-    | (AppRouteDeclaration<Request> & AppDeclarationHandle<'route', Owner>)
-  )[];
-  tasks?: readonly (
-    | (AppTaskDeclaration<Request> & AppDeclarationHandle<'task', Owner>)
-  )[];
+export interface AppAssemblyOptions<Request, DbValue, Owner extends string | undefined> {
+  endpoints?: readonly EndpointHandle<string, Owner>[];
+  layouts?: readonly LayoutHandle<any, Owner>[];
+  mutations?: readonly MutationHandle<any, any, any, any, Owner>[];
+  queries?: readonly QueryHandle<any, any, Owner, any>[];
+  routes?: readonly RouteHandle<string, any, Owner>[];
+  tasks?: readonly TaskHandle<any, any, Owner>[];
 }
 
 /** App request refined by the executable `app.authenticated` guard. */
@@ -617,8 +631,11 @@ export interface KovoContract<
   SessionValue = never,
   DbValue = never,
   EnvValue extends Record<string, unknown> = Record<never, never>,
-  Request = AppLifecycleRequest<RawRequest, SessionValue, DbValue, EnvValue>,
-  Owner extends AppId = AppId,
+  Request = RawRequest &
+    ([SessionValue] extends [never] ? object : { session: SessionValue | null }) &
+    ([DbValue] extends [never] ? object : { db: DbValue }) &
+    ([EnvValue] extends [never] ? object : { env: Readonly<EnvValue> }),
+  Owner extends string | undefined = string | undefined,
 > {
   readonly [kovoContractBrand]: {
     readonly db: DbValue;
@@ -638,9 +655,12 @@ export interface KovoContract<
   readonly route: AppRouteFactory<AppReadRequest<Request>, Owner>;
   readonly task: AppTaskFactory<Owner>;
   readonly verifiedAccess: typeof verifiedAccess;
+  integrateMutation<Definition extends { key: string }>(
+    adapter: AppMutationAdapter<Definition>,
+  ): Definition & MutationHandle<any, any, any, any, Owner>;
   all<const Items extends readonly Guard<Request, any>[]>(
     ...items: Items
-  ): Guard<Request, AccessRefinedRequest<Request, Items>>;
+  ): Guard<Request, AppRequestForAccess<Request, Items>>;
   assemble(
     options: AppAssemblyOptions<Request, DbValue, Owner>,
   ): KovoApp<KovoContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>>;
@@ -662,6 +682,7 @@ interface ContractState {
 
 interface OptimisticBindingState {
   readonly apply?: OptimisticFunction;
+  readonly input?: Schema<unknown>;
   readonly keys?: OptimisticFunction;
   readonly owner: object;
   readonly query: QueryDefinition<string, unknown, unknown, unknown>;
@@ -680,87 +701,73 @@ export function defineKovo<
   RawRequest extends globalThis.Request = globalThis.Request,
   const AuthProvider extends SessionProvider<RawRequest, any> | undefined = undefined,
   const EnvSchema extends Schema<Record<string, unknown>> | undefined = undefined,
-  Request = AppLifecycleRequest<
-    RawRequest,
-    InferSessionProviderValue<AuthProvider>,
-    DbValue,
-    InferEnvSchemaValue<EnvSchema>
-  >,
-  const Owner extends AppId = undefined,
+  Request = RawRequest &
+    ([InferKovoSession<AuthProvider>] extends [never]
+      ? object
+      : { session: InferKovoSession<AuthProvider> | null }) & { db: DbValue } & {
+      env: Readonly<InferKovoEnv<EnvSchema>>;
+    },
+  const Owner extends string | undefined = undefined,
 >(
   options: DefineKovoInput<
     RawRequest,
     AuthProvider,
     DbValue,
     (
-      request: AppLifecycleRequest<
-        RawRequest,
-        InferSessionProviderValue<AuthProvider>,
-        never,
-        InferEnvSchemaValue<EnvSchema>
-      >,
+      request: RawRequest &
+        ([InferKovoSession<AuthProvider>] extends [never]
+          ? object
+          : { session: InferKovoSession<AuthProvider> | null }) & {
+          env: Readonly<InferKovoEnv<EnvSchema>>;
+        },
     ) => Promise<DbValue>,
     EnvSchema,
     Request,
     Owner
   >,
-): DefinedKovoContract<
-  RawRequest,
-  AuthProvider,
-  DbValue,
-  EnvSchema,
-  Request,
-  Owner
->;
+): DefinedKovoContract<RawRequest, AuthProvider, DbValue, EnvSchema, Request, Owner>;
 export function defineKovo<
   DbValue,
   RawRequest extends globalThis.Request = globalThis.Request,
   const AuthProvider extends SessionProvider<RawRequest, any> | undefined = undefined,
   const EnvSchema extends Schema<Record<string, unknown>> | undefined = undefined,
-  Request = AppLifecycleRequest<
-    RawRequest,
-    InferSessionProviderValue<AuthProvider>,
-    DbValue,
-    InferEnvSchemaValue<EnvSchema>
-  >,
-  const Owner extends AppId = undefined,
+  Request = RawRequest &
+    ([InferKovoSession<AuthProvider>] extends [never]
+      ? object
+      : { session: InferKovoSession<AuthProvider> | null }) & { db: DbValue } & {
+      env: Readonly<InferKovoEnv<EnvSchema>>;
+    },
+  const Owner extends string | undefined = undefined,
 >(
   options: DefineKovoInput<
     RawRequest,
     AuthProvider,
     DbValue,
     (
-      request: AppLifecycleRequest<
-        RawRequest,
-        InferSessionProviderValue<AuthProvider>,
-        never,
-        InferEnvSchemaValue<EnvSchema>
-      >,
+      request: RawRequest &
+        ([InferKovoSession<AuthProvider>] extends [never]
+          ? object
+          : { session: InferKovoSession<AuthProvider> | null }) & {
+          env: Readonly<InferKovoEnv<EnvSchema>>;
+        },
     ) => DbValue,
     EnvSchema,
     Request,
     Owner
   >,
-): DefinedKovoContract<
-  RawRequest,
-  AuthProvider,
-  DbValue,
-  EnvSchema,
-  Request,
-  Owner
->;
+): DefinedKovoContract<RawRequest, AuthProvider, DbValue, EnvSchema, Request, Owner>;
 export function defineKovo<
   DbValue,
   RawRequest extends globalThis.Request = globalThis.Request,
   const AuthProvider extends SessionProvider<RawRequest, any> | undefined = undefined,
   const EnvSchema extends Schema<Record<string, unknown>> | undefined = undefined,
-  Request = AppLifecycleRequest<
-    RawRequest,
-    InferSessionProviderValue<AuthProvider>,
-    DbValue,
-    InferEnvSchemaValue<EnvSchema>
-  >,
-  const Owner extends AppId = undefined,
+  Request = RawRequest &
+    ([InferKovoSession<AuthProvider>] extends [never]
+      ? object
+      : { session: InferKovoSession<AuthProvider> | null }) & { db: DbValue } & {
+      env: Readonly<InferKovoEnv<EnvSchema>>;
+    },
+  const Owner extends string | undefined = undefined,
 >(
   options: DefineKovoInput<
     RawRequest,
@@ -771,40 +778,25 @@ export function defineKovo<
     Request,
     Owner
   >,
-): DefinedKovoContract<
-  RawRequest,
-  AuthProvider,
-  DbValue,
-  EnvSchema,
-  Request,
-  Owner
->;
+): DefinedKovoContract<RawRequest, AuthProvider, DbValue, EnvSchema, Request, Owner>;
 export function defineKovo<
   RawRequest extends globalThis.Request = globalThis.Request,
   const AuthProvider extends SessionProvider<RawRequest, any> | undefined = undefined,
   const EnvSchema extends Schema<Record<string, unknown>> | undefined = undefined,
-  Request = AppLifecycleRequest<
-    RawRequest,
-    InferSessionProviderValue<AuthProvider>,
-    never,
-    InferEnvSchemaValue<EnvSchema>
-  >,
-  const Owner extends AppId = undefined,
+  Request = RawRequest &
+    ([InferKovoSession<AuthProvider>] extends [never]
+      ? object
+      : { session: InferKovoSession<AuthProvider> | null }) & {
+      env: Readonly<InferKovoEnv<EnvSchema>>;
+    },
+  const Owner extends string | undefined = undefined,
 >(
-  options: DefineKovoInput<
-    RawRequest,
-    AuthProvider,
-    never,
-    undefined,
-    EnvSchema,
-    Request,
-    Owner
-  >,
+  options: DefineKovoInput<RawRequest, AuthProvider, never, undefined, EnvSchema, Request, Owner>,
 ): DefinedKovoContract<RawRequest, AuthProvider, never, EnvSchema, Request, Owner>;
 export function defineKovo(options: any): any {
   type RawRequest = globalThis.Request;
   type AuthProvider = SessionProvider<RawRequest, any> | undefined;
-  type SessionValue = InferSessionProviderValue<AuthProvider>;
+  type SessionValue = InferKovoSession<AuthProvider>;
   type DbValue = any;
   type EnvValue = Record<string, unknown>;
   type Request = AppLifecycleRequest<RawRequest, SessionValue, DbValue, EnvValue>;
@@ -826,10 +818,7 @@ export function defineKovo(options: any): any {
   };
   witnessWeakMapSet(contractStates, contract, state);
 
-  const authenticated = guards.authed<any>() as Guard<
-    Request,
-    AuthenticatedAppRequest<Request>
-  >;
+  const authenticated = guards.authed<any>() as Guard<Request, AuthenticatedAppRequest<Request>>;
   witnessDefineProperty(contract, 'authenticated', immutable(authenticated));
   witnessDefineProperty(contract, 'publicAccess', immutable(publicAccess));
   witnessDefineProperty(contract, 'verifiedAccess', immutable(verifiedAccess));
@@ -838,11 +827,7 @@ export function defineKovo(options: any): any {
     'env',
     immutableGetter(() => contractRuntimeApp(state, 'app.env').env),
   );
-  witnessDefineProperty(
-    contract,
-    'query',
-    immutable(createAppQueryFactory<Request, Owner>(state)),
-  );
+  witnessDefineProperty(contract, 'query', immutable(createAppQueryFactory<Request, Owner>(state)));
   witnessDefineProperty(
     contract,
     'mutation',
@@ -866,6 +851,25 @@ export function defineKovo(options: any): any {
   witnessDefineProperty(contract, 'task', immutable(createAppTaskFactory<Owner>(state)));
   witnessDefineProperty(
     contract,
+    'integrateMutation',
+    immutable((adapter: AppMutationAdapter<AppMutationDeclaration<Request>>) => {
+      assertContractOpen(state, 'app.integrateMutation()');
+      if (!isAppMutationAdapter(adapter)) {
+        throw new TypeError(
+          'KOVO_APP_MUTATION_ADAPTER: app.integrateMutation() requires an exact ' +
+            'framework-minted mutation adapter; structural copies and casts are rejected.',
+        );
+      }
+      if (appDeclarationOwner(adapter) !== undefined) {
+        throw new TypeError(
+          'KOVO_APP_MUTATION_ADAPTER: one adapter mutation can be integrated exactly once.',
+        );
+      }
+      return ownDeclaration(state, 'mutation', adapter);
+    }),
+  );
+  witnessDefineProperty(
+    contract,
     'all',
     immutable((...items: Guard<Request, Request>[]) => guards.all(...items)),
   );
@@ -886,24 +890,18 @@ export function defineKovo(options: any): any {
     contract,
     'owns',
     immutable(
-      (
-        keyOf: (request: Request) => unknown,
-        keyColumn: FrameworkPostgresOwnerKeyColumn<unknown>,
-      ) => guards.owns<any, any, unknown>(keyOf, keyColumn) as Guard<Request>,
+      (keyOf: (request: Request) => unknown, keyColumn: FrameworkPostgresOwnerKeyColumn<unknown>) =>
+        guards.owns<any, any, unknown>(keyOf, keyColumn) as Guard<Request>,
     ),
   );
   witnessDefineProperty(
     contract,
     'assemble',
     immutable((assembly: AppAssemblyOptions<Request, DbValue, Owner>) =>
-      assembleContract<
-        RawRequest,
-        SessionValue,
-        DbValue,
-        EnvValue,
-        Request,
-        Owner
-      >(state, assembly),
+      assembleContract<RawRequest, SessionValue, DbValue, EnvValue, Request, Owner>(
+        state,
+        assembly,
+      ),
     ),
   );
 
@@ -932,7 +930,9 @@ function createAppQueryFactory<Request, Owner extends AppId>(
     witnessDefineProperty(
       declaration,
       'optimistic',
-      immutable((options: unknown) => createOptimisticBinding(state, declaration, options)),
+      immutable((inputOrStatus: unknown, options?: unknown) =>
+        createOptimisticBinding(state, declaration, inputOrStatus, options),
+      ),
     );
     return declaration;
   }) as unknown as AppQueryFactory<AppReadRequest<Request>, Owner>;
@@ -953,8 +953,9 @@ function createAppMutationFactory<Request, Owner extends AppId>(
     ownDeclaration(state, 'mutation', declaration);
     if (optimistic !== undefined) {
       const bindings = denseObjectArray(optimistic, 'app.mutation.optimistic');
+      const mutationInput = optionalOwnDataValue(runtimeDefinition, 'input', 'app.mutation.input');
       for (let index = 0; index < bindings.length; index += 1) {
-        requireOptimisticBinding(bindings[index]!, state.contract, index);
+        requireOptimisticBinding(bindings[index]!, state.contract, mutationInput, index);
       }
       registerAppDeclarationMetadata(declaration, witnessFreeze(bindings));
     }
@@ -986,12 +987,10 @@ function createAppEndpointFactory<Db, Owner extends AppId>(
   return ((path: string, definition: object) => {
     assertContractOpen(state, 'app.endpoint()');
     return ownDeclaration(state, 'endpoint', endpoint(path, definition as any));
-  }) as AppEndpointFactory<Db, Owner>;
+  }) as unknown as AppEndpointFactory<Db, Owner>;
 }
 
-function createAppTaskFactory<Owner extends AppId>(
-  state: ContractState,
-): AppTaskFactory<Owner> {
+function createAppTaskFactory<Owner extends AppId>(state: ContractState): AppTaskFactory<Owner> {
   return ((definition: object) => {
     assertContractOpen(state, 'app.task()');
     return ownDeclaration(state, 'task', task(definition as any));
@@ -1004,15 +1003,14 @@ function ownDeclaration<Declaration extends object>(
   declaration: Declaration,
 ): Declaration {
   registerAppDeclarationOwner(declaration, { contract: state.contract, kind });
-  state.declarations[kind]!.push(
-    appDeclarationOwner(declaration)!.declaration,
-  );
+  state.declarations[kind]!.push(appDeclarationOwner(declaration)!.declaration);
   return declaration;
 }
 
 function createOptimisticBinding(
   state: ContractState,
   queryDeclaration: QueryDefinition<string, unknown, unknown, unknown>,
+  inputOrStatus: unknown,
   options: unknown,
 ): QueryOptimisticBinding {
   const queryOwner = appDeclarationOwner(queryDeclaration);
@@ -1021,40 +1019,57 @@ function createOptimisticBinding(
   }
 
   let bindingState: OptimisticBindingState;
-  if (options === 'await-fragment') {
+  if (inputOrStatus === 'await-fragment' && options === undefined) {
     bindingState = {
       owner: state.contract,
       query: queryDeclaration,
       status: 'await-fragment',
     };
-  } else if (typeof options === 'function') {
-    if (optionalOwnDataValue(queryDeclaration, 'args', 'query.args') !== undefined) {
-      throw new TypeError(
-        'KOVO_OPTIMISTIC_KEYS_REQUIRED: a parameterized query requires ' +
-          'query.optimistic({ keys, apply }); the bare callback is only for an unkeyed query.',
-      );
-    }
-    bindingState = {
-      apply: options as unknown as OptimisticFunction,
-      owner: state.contract,
-      query: queryDeclaration,
-      status: 'hand-written',
-    };
   } else {
-    if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+    if (
+      typeof inputOrStatus !== 'object' ||
+      inputOrStatus === null ||
+      witnessIsArray(inputOrStatus) ||
+      typeof optionalOwnDataValue(inputOrStatus, 'parse', 'query.optimistic.input.parse') !==
+        'function'
+    ) {
       throw new TypeError(
-        'query.optimistic() requires a pure callback, { keys, apply }, or await-fragment.',
+        'query.optimistic() requires the mutation input schema as its first argument.',
       );
     }
-    const apply = requiredFunctionOwnDataValue(options, 'apply', 'query.optimistic.apply');
-    const keys = requiredFunctionOwnDataValue(options, 'keys', 'query.optimistic.keys');
-    bindingState = {
-      apply,
-      keys,
-      owner: state.contract,
-      query: queryDeclaration,
-      status: 'hand-written',
-    };
+    const input = inputOrStatus as Schema<unknown>;
+    if (typeof options === 'function') {
+      if (optionalOwnDataValue(queryDeclaration, 'args', 'query.args') !== undefined) {
+        throw new TypeError(
+          'KOVO_OPTIMISTIC_KEYS_REQUIRED: a parameterized query requires ' +
+            'query.optimistic(input, { keys, apply }); the callback form is only for an unkeyed query.',
+        );
+      }
+      bindingState = {
+        apply: options as unknown as OptimisticFunction,
+        input,
+        owner: state.contract,
+        query: queryDeclaration,
+        status: 'hand-written',
+      };
+    } else {
+      if (typeof options !== 'object' || options === null || witnessIsArray(options)) {
+        throw new TypeError(
+          'query.optimistic() requires an input schema plus a pure callback or { keys, apply }, ' +
+            'or the single await-fragment status.',
+        );
+      }
+      const apply = requiredFunctionOwnDataValue(options, 'apply', 'query.optimistic.apply');
+      const keys = requiredFunctionOwnDataValue(options, 'keys', 'query.optimistic.keys');
+      bindingState = {
+        apply,
+        input,
+        keys,
+        owner: state.contract,
+        query: queryDeclaration,
+        status: 'hand-written',
+      };
+    }
   }
 
   const binding = witnessFreeze(witnessCreateNullRecord());
@@ -1082,20 +1097,8 @@ function assembleContract<
       state.config,
       'defineKovo assembly options',
       new Set(['auth']),
-    ) as CreateAppOptions<
-      SessionValue,
-      DbValue,
-      RawRequest,
-      Request,
-      EnvValue
-    >;
-    const runtimeApp = createApp<
-      SessionValue,
-      DbValue,
-      RawRequest,
-      Request,
-      EnvValue
-    >({
+    ) as CreateAppOptions<SessionValue, DbValue, RawRequest, Request, EnvValue>;
+    const runtimeApp = createApp<SessionValue, DbValue, RawRequest, Request, EnvValue>({
       ...config,
       endpoints: inventories.endpoint as readonly EndpointDeclaration<
         string,
@@ -1103,14 +1106,12 @@ function assembleContract<
         EndpointMount,
         never
       >[],
-      mutations: inventories.mutation.map(materializeMutationOptimism) as AppMutationDeclaration<
-        Request
-      >[],
+      mutations: inventories.mutation.map(
+        materializeMutationOptimism,
+      ) as AppMutationDeclaration<Request>[],
       queries: inventories.query as AppQueryDeclaration<Request>[],
       routes: inventories.route as AppRouteDeclaration<Request>[],
-      sessionProvider: state.config.auth as
-        | SessionProvider<RawRequest, SessionValue>
-        | undefined,
+      sessionProvider: state.config.auth as SessionProvider<RawRequest, SessionValue> | undefined,
       tasks: inventories.task as AppTaskDeclaration<Request>[],
     } as CreateAppOptions<SessionValue, DbValue, RawRequest, Request, EnvValue>);
     state.runtimeApp = runtimeApp;
@@ -1240,12 +1241,23 @@ function optimisticBindingsState(value: object, index: number): OptimisticBindin
   return state;
 }
 
-function requireOptimisticBinding(value: object, owner: object, index: number): void {
+function requireOptimisticBinding(
+  value: object,
+  owner: object,
+  mutationInput: unknown,
+  index: number,
+): void {
   const state = optimisticBindingsState(value, index);
   if (state.owner !== owner) {
     throw new TypeError(
       `KOVO_APP_OWNER_MISMATCH: optimistic[${index}] belongs to another app contract or ` +
         'duplicate @kovojs/server package instance.',
+    );
+  }
+  if (state.status === 'hand-written' && state.input !== mutationInput) {
+    throw new TypeError(
+      `KOVO_OPTIMISTIC_INPUT: optimistic[${index}] must name the exact input schema passed to ` +
+        'app.mutation({ input }).',
     );
   }
 }

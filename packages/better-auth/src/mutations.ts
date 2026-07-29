@@ -1,4 +1,8 @@
-import type { MutationDefinition, MutationFormDefinition } from '@kovojs/server';
+import type {
+  AppMutationAdapter,
+  MutationDefinition,
+  MutationFormDefinition,
+} from '@kovojs/server';
 import { createBetterAuthCredentialMutation } from '@kovojs/server/internal/better-auth';
 
 import {
@@ -87,7 +91,8 @@ export function betterAuthRequestPasswordResetMutation<
   BetterAuthCredentialMutationValue<'recovery-accepted'>,
   GuardedRequest
 > &
-  MutationFormDefinition<Key, Request> {
+  MutationFormDefinition<Key, Request> &
+  AppMutationAdapter {
   const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'requestPasswordReset');
   const mail = betterAuthOwnDataOption<PinnedBetterAuthPasswordResetMailDoor>(
     options,
@@ -176,7 +181,8 @@ export function betterAuthSignInEmailMutation<
   BetterAuthCredentialMutationValue<'signed-in'>,
   GuardedRequest
 > &
-  MutationFormDefinition<Key, Request> {
+  MutationFormDefinition<Key, Request> &
+  AppMutationAdapter {
   const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'signInEmail');
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
@@ -264,7 +270,8 @@ export function betterAuthSignUpEmailMutation<
   BetterAuthCredentialMutationValue<'signed-up'>,
   GuardedRequest
 > &
-  MutationFormDefinition<Key, Request> {
+  MutationFormDefinition<Key, Request> &
+  AppMutationAdapter {
   const pinnedAuth = pinBetterAuthCredentialHandler(auth, 'signUpEmail');
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(
@@ -347,7 +354,8 @@ export function betterAuthSignOutMutation<
   BetterAuthCredentialMutationValue<'signed-out'>,
   GuardedRequest
 > &
-  MutationFormDefinition<Key, Request> {
+  MutationFormDefinition<Key, Request> &
+  AppMutationAdapter {
   const pinnedAuth = pinBetterAuthSignOut(auth);
   const defaultRedirectTo = redirectPath(
     betterAuthOwnDataOption<string>(

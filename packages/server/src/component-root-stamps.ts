@@ -440,7 +440,7 @@ function shadowInheritedToJson(value: unknown[]): void {
   });
 }
 
-function componentPropKeys(definition: Readonly<Record<string, unknown>>): string[] {
+function componentPropKeys(definition: { props?: Record<string, unknown> }): string[] {
   const propDefinitions = optionalOwnDataValue(definition, 'props', 'Component definition');
   if (!isRecord(propDefinitions)) return [];
   return snapshotDenseStrings(securityObjectKeys(propDefinitions), 'Component prop metadata keys');

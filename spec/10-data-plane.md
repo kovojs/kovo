@@ -838,17 +838,24 @@ or an authored query key:
 
 ```ts
 optimistic: [
-  cartQuery.optimistic((data, input) => ({ ...data, count: data.count + input.quantity })),
-  productQuery.optimistic({
+  cartQuery.optimistic(cartMutationInput, (data, input) => ({
+    ...data,
+    count: data.count + input.quantity,
+  })),
+  productQuery.optimistic(cartMutationInput, {
     keys: (input) => [{ id: input.productId }],
     apply: (product, input) => ({ ...product, stock: product.stock - input.quantity }),
   }),
-]
+];
 ```
 
-The bare callback is legal only for a query with no client-visible instance key. A keyed query
-requires `{ keys, apply }`; `keys(input)` returns a bounded dense list of that query's exact inferred
-args shape and each instance receives the same pure transform. Each invalidated query handle occurs
+The first argument of every hand-written transform is the exact schema object also passed to
+`app.mutation({ input })`. This gives TypeScript a concrete inference source for the callback input
+without an explicit generic and lets runtime assembly reject schema drift by identity; the
+`'await-fragment'` status needs no schema because it consumes no mutation input. The callback form
+is legal only for a query with no client-visible instance key. A keyed query requires
+`{ keys, apply }`; `keys(input)` returns a bounded dense list of that query's exact inferred args
+shape and each instance receives the same pure transform. Each invalidated query handle occurs
 exactly once with status `derived`, one hand-written transform, or `await-fragment`. Duplicate,
 unrelated, cross-app, copied, or non-invalidated handles are hard errors, as is a keyed query with
 missing, empty, or malformed instance keys. The compiler resolves handle symbol identity to the

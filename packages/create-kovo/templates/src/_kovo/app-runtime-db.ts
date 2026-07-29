@@ -5,11 +5,16 @@ import {
   type MutationReplayStore,
   type PrincipalEpochStore,
 } from '@kovojs/server';
-import { createBetterAuthPostgresBindingsFromEnvironment } from '@kovojs/better-auth';
+import {
+  authed,
+  createBetterAuthPostgresBindingsFromEnvironment,
+  type BetterAuthBindingRequest,
+  type BetterAuthCsrfRequestLike,
+} from '@kovojs/better-auth';
 
 import { appRuntimeDbOptions, appRuntimeSchema } from './app-runtime-db-options.js';
 import type { AppReadonlyDb } from '../db.js';
-import type { AppRequest, AppSession } from '../auth.js';
+import type { AppSession } from '../auth.js';
 
 // SPEC §6.6/§10.3: app boot eagerly mints the database runtime and its one narrowly scoped
 // auth capability. Generated runtime exports below project only app-safe values; the system
@@ -25,10 +30,14 @@ const authSystemDb = appDatabase.systemDb({
 export const appRuntimeMutationReplayStore: MutationReplayStore = appDatabase.mutationReplayStore;
 export const appRuntimePrincipalEpochStore: PrincipalEpochStore = appDatabase.principalEpochStore;
 
+type StarterAuthRequest = BetterAuthBindingRequest &
+  BetterAuthCsrfRequestLike & {
+    session?: AppSession | null;
+  };
+
 interface AppAuthBindingOptions {
-  csrf: CsrfOptions<AppRequest>;
+  csrf: CsrfOptions<StarterAuthRequest>;
   signInAccess: AccessDecision;
-  signOutAccess: AccessDecision;
 }
 
 /**
@@ -40,9 +49,9 @@ interface AppAuthBindingOptions {
  */
 export function createAppAuthBindings(options: AppAuthBindingOptions) {
   return createBetterAuthPostgresBindingsFromEnvironment<
-    AppRequest,
+    StarterAuthRequest,
     AppSession,
-    AppRequest & { session: AppSession }
+    StarterAuthRequest & { session: AppSession }
   >({
     csrf: options.csrf,
     mapSession: ({ session: authSession, user }) => ({
@@ -52,7 +61,7 @@ export function createAppAuthBindings(options: AppAuthBindingOptions) {
     principalEpochStore: appRuntimePrincipalEpochStore,
     schema: appRuntimeSchema.authSchema,
     signInAccess: options.signInAccess,
-    signOutAccess: options.signOutAccess,
+    signOutAccess: [authed<StarterAuthRequest>()],
     systemDb: authSystemDb,
   });
 }

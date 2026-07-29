@@ -44,6 +44,7 @@ import {
   componentRenderSlots,
   componentStateReturnObjectModel,
   handlerWriteSinks,
+  handlerWriteSinkUsesManagedAppTransaction,
   jsxExpressions,
   jsxElementChildBody,
   type ComponentModel,
@@ -695,6 +696,7 @@ export function validateDirectDbAccess(
       | HandlerWriteSinkFact
       | undefined;
     if (!sink) compilerFailClosed(`Handler write sinks[${index}] must be own data.`);
+    if (handlerWriteSinkUsesManagedAppTransaction(sink)) continue;
     compilerArrayAppend(
       result,
       handlerWriteSinkDiagnostic(diagnostics, sink),

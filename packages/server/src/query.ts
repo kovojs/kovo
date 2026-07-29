@@ -119,35 +119,35 @@ export interface QueryReadConfig {
  * that throws `KovoReadonlyHandleError`). A loader destructures `{ db }` and reads through it; a
  * write in a loader is a `tsc` error, a runtime throw, AND a KV433 static-gate error.
  */
-type QueryContextDb<Request, Db> = [Db] extends [never]
-  ? Request extends { db: infer RequestDb }
-    ? RequestDb
-    : never
-  : Reader<Db>;
-
-type QueryContextEnv<Request, Env> = [Env] extends [never]
-  ? Request extends { env: infer RequestEnv }
-    ? Readonly<RequestEnv>
-    : never
-  : Readonly<Env>;
-
-type QueryContextDbField<Request, Db> = [QueryContextDb<Request, Db>] extends [never]
+export type QueryLoadContext<Request = unknown, Db = never, Env = never> = [
+  [Db] extends [never] ? (Request extends { db: infer RequestDb } ? RequestDb : never) : Reader<Db>,
+] extends [never]
   ? { db?: never }
-  : { db: QueryContextDb<Request, Db> };
-
-export type QueryLoadContext<
-  Request = unknown,
-  Db = never,
-  Env = never,
-> = QueryContextDbField<Request, Db> & {
-  request: Request;
-  signal: AbortSignal;
-} & (Request extends { session: infer Session }
-  ? { session: Session }
-  : { session?: never }) &
-  ([QueryContextEnv<Request, Env>] extends [never]
-    ? { env?: never }
-    : { env: QueryContextEnv<Request, Env> });
+  : {
+      db: [Db] extends [never]
+        ? Request extends { db: infer RequestDb }
+          ? RequestDb
+          : never
+        : Reader<Db>;
+    } & {
+      request: Request;
+      signal: AbortSignal;
+    } & (Request extends { session: infer Session } ? { session: Session } : { session?: never }) &
+      ([
+        [Env] extends [never]
+          ? Request extends { env: infer RequestEnv }
+            ? Readonly<RequestEnv>
+            : never
+          : Readonly<Env>,
+      ] extends [never]
+        ? { env?: never }
+        : {
+            env: [Env] extends [never]
+              ? Request extends { env: infer RequestEnv }
+                ? Readonly<RequestEnv>
+                : never
+              : Readonly<Env>;
+          });
 
 /** @internal */
 export interface QueryEndpointRequest<
@@ -288,7 +288,7 @@ type BivariantQueryGuard = {
 }['call'];
 
 type BivariantQueryLoad = {
-  call(input: unknown, context?: QueryLoadContext<unknown>): unknown;
+  call(...args: any[]): unknown;
 }['call'];
 
 type BivariantQueryVersion = {
@@ -649,9 +649,7 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     ...(requestContext.session === undefined ? {} : { session: requestContext.session }),
     signal:
       currentRequestDeadlineSignal() ??
-      (isNativeAbortSignal(requestSignal)
-        ? requestSignal
-        : createAuthorityNeutralAbortSignal()),
+      (isNativeAbortSignal(requestSignal) ? requestSignal : createAuthorityNeutralAbortSignal()),
   } as QueryLoadContext<Request>;
   const value = definition.load ? await definition.load(input, loadContext) : (null as Value);
   const outputResult = parseQueryOutput(definition, value);

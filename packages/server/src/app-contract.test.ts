@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { publicAccess } from './access.js';
 import { defineKovo } from './app-contract.js';
 import { resolveKovoAppToken } from './app-token.js';
+import { registerAppMutationAdapter } from './app-mutation-adapter.js';
 import { createRequestHandler } from './app.js';
+import { mutation } from './mutation/definition.js';
 import { assignDerivedMutationKey } from './mutation/definition.js';
 import { assignDerivedQueryKey } from './query.js';
 import { s } from './schema.js';
@@ -66,9 +68,7 @@ describe('defineKovo app contract', () => {
       new Request('https://kovo.test/_q/test%2Fcontacts'),
     );
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain(
-      '{"items":[{"id":"c1","name":"Ada"}]}',
-    );
+    expect(await response.text()).toContain('{"items":[{"id":"c1","name":"Ada"}]}');
     expect(authCalls).toBe(1);
     expect(dbCalls).toBe(1);
   });
@@ -108,9 +108,9 @@ describe('defineKovo app contract', () => {
       duplicate.query({ access: publicAccess('unit-test public query'), load: () => null }),
       'test/duplicate',
     );
-    expect(() =>
-      duplicate.assemble({ queries: [duplicateQuery, duplicateQuery] }),
-    ).toThrow(/KOVO_APP_DUPLICATE_DECLARATION/u);
+    expect(() => duplicate.assemble({ queries: [duplicateQuery, duplicateQuery] })).toThrow(
+      /KOVO_APP_DUPLICATE_DECLARATION/u,
+    );
 
     expect(secondQuery.key).toBe('test/second');
   });
@@ -127,12 +127,13 @@ describe('defineKovo app contract', () => {
       }),
       'test/contacts',
     );
+    const createContactInput = s.object({ id: s.string() });
     const createContact = assignDerivedMutationKey(
       contract.mutation({
         access: publicAccess('unit-test public mutation'),
-        input: s.object({ id: s.string() }),
+        input: createContactInput,
         optimistic: [
-          contacts.optimistic<{ readonly id: string }>((value, input) => ({
+          contacts.optimistic(createContactInput, (value, input) => ({
             items: [...value.items, { id: input.id }],
           })),
         ],
@@ -157,5 +158,44 @@ describe('defineKovo app contract', () => {
         { id: 'pending' },
       ),
     ).toEqual({ items: [{ id: 'pending' }] });
+  });
+
+  it('integrates exact framework mutation adapters without accepting structural copies', () => {
+    const contract = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const credentialMutation = registerAppMutationAdapter(
+      mutation('auth/sign-in', {
+        access: publicAccess('unit-test credential adapter'),
+        csrf: false,
+        csrfJustification: 'unit-test machine credential adapter',
+        input: s.object({ email: s.string() }),
+        handler: ({ email }) => ({ email }),
+      }),
+    );
+    const integrated = contract.integrateMutation(credentialMutation);
+
+    const token = contract.assemble({ mutations: [integrated] });
+    const runtime = resolveKovoAppToken(token, 'app-contract adapter test');
+    expect(runtime.mutations.map((definition) => definition.key)).toEqual(['auth/sign-in']);
+
+    const forgedContract = defineKovo({
+      appId: '7ca98c5f-76c3-4825-9647-69701e2ecf78',
+      egress: { enabled: false, justification: 'isolated app-contract unit test' },
+    });
+    const structuralMutation = mutation('auth/forged', {
+      access: publicAccess('unit-test structural negative control'),
+      csrf: false,
+      csrfJustification: 'unit-test structural negative control',
+      input: s.object({ email: s.string() }),
+      handler: ({ email }) => ({ email }),
+    });
+    expect(() =>
+      forgedContract.integrateMutation(
+        // @ts-expect-error a structural mutation is not an opaque framework adapter.
+        structuralMutation,
+      ),
+    ).toThrow(/KOVO_APP_MUTATION_ADAPTER/u);
   });
 });

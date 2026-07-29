@@ -13,7 +13,10 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
-import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
+import {
+  compilerOwnedAppContractFactoryEquals,
+  compilerOwnedAppContractMemberEquals,
+} from '../app-contract-resolver.js';
 import {
   contextualizeCompilerDiagnostic,
   diagnosticFor,
@@ -887,6 +890,17 @@ function isFrameworkAccessExpression(
   expression: ts.Expression,
   identity: FrameworkExportIdentity,
 ): boolean {
+  if (
+    (identity.exportName === 'publicAccess' || identity.exportName === 'verifiedAccess') &&
+    compilerOwnedAppContractMemberEquals(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      identity.exportName,
+    )
+  ) {
+    return true;
+  }
   return expressionResolvesToFrameworkExport(
     ts as FrameworkIdentityTypeScript,
     sourceFile,
@@ -904,6 +918,17 @@ function accessGuardNames(access: ts.ArrayLiteralExpression, sourceFile: ts.Sour
       index,
       'Compiler access guard elements',
     ) as ts.Expression;
+    if (
+      compilerOwnedAppContractMemberEquals(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        element,
+        'authenticated',
+      )
+    ) {
+      compilerArrayAppend(names, 'authed', 'Compiler access guard names');
+      continue;
+    }
     if (
       !ts.isCallExpression(element) ||
       !isFrameworkAccessExpression(sourceFile, element.expression, GUARD_IDENTITY)

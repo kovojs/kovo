@@ -1,82 +1,41 @@
-import { mutation, s, trustedAssign, type MutationContext } from '@kovojs/server';
+import { s, trustedAssign } from '@kovojs/server';
 import { eq } from 'drizzle-orm';
 
-import { appAuthed, appCsrf, type AppRequest } from './auth.js';
+import { app } from './kovo.js';
 import { contact } from './model.js';
-import { contactsQuery, type ContactListResult } from './queries.js';
+import { contactsQuery } from './queries.js';
 import { contacts } from './schema.js';
 
-// Register the query result + the queries this mutation invalidates. The compiler
-// uses these to type-check optimistic coverage (KV310) and to refresh the contact
-// list after a write (SPEC.md §11.1).
-declare module '@kovojs/core' {
-  interface QueryRegistry {
-    'queries/contacts-query': ContactListResult;
-  }
-  interface InvalidationSets {
-    'mutations/add-contact': 'queries/contacts-query';
-  }
-}
-
-export interface AddContactInput {
-  company: string;
-  email: string;
-  name: string;
-}
-
 const duplicateEmailError = s.object({ email: s.string() });
-
-async function writeContact(
-  db: AppRequest['db'],
-  row: { company: string; email: string; name: string },
-): Promise<void> {
-  await db.insert(contacts).values({
-    company: row.company,
-    email: row.email,
-    id: trustedAssign(row.email, {
-      evidence: {
-        digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',
-        kind: 'test',
-        reference: 'starter-tests/contact-email-primary-key',
-      },
-      invariant: 'governed-write.authorized-principal',
-      why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },
-    }),
-    name: row.name,
-  });
-}
+const addContactInput = s.object({
+  name: s.string(),
+  email: s.string(),
+  company: s.string(),
+});
 
 // One real write: validate input, guard it behind a session, insert a row, and
 // predict the optimistic list update. No-JS clients POST to the typed mutation
 // endpoint and get the refreshed page; `enhance` upgrades the same form to a fragment swap.
-export const addContact = mutation({
-  access: [appAuthed],
-  csrf: appCsrf,
+export const addContact = app.mutation({
+  access: [app.authenticated],
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
-  input: s.object({
-    name: s.string(),
-    email: s.string(),
-    company: s.string(),
-  }),
-  optimistic: {
-    [contactsQuery.key](draft: ContactListResult, $input: AddContactInput) {
+  input: addContactInput,
+  optimistic: [
+    contactsQuery.optimistic(addContactInput, (value, input) => {
       const row = {
-        id: `pending-${$input.email}`,
-        name: $input.name,
-        email: $input.email,
-        company: $input.company,
+        id: `pending-${input.email}`,
+        name: input.name,
+        email: input.email,
+        company: input.company,
       };
-      const index = draft.items.findIndex((entry) => entry.id > row.id);
-      if (index < 0) draft.items.push(row);
-      else draft.items.splice(index, 0, row);
-    },
-  },
+      return {
+        ...value,
+        items: [...value.items, row].sort((left, right) => left.id.localeCompare(right.id)),
+      };
+    }),
+  ],
   registry: { tables: ['contacts'], touches: [contact] },
-  async handler(
-    { name, email, company },
-    request: AppRequest,
-    context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
-  ) {
+  async handler({ name, email, company }, request, context) {
     const [existing] = await request.db
       .select()
       .from(contacts)
@@ -85,7 +44,20 @@ export const addContact = mutation({
     if (existing) {
       return context.fail('DUPLICATE_EMAIL', { email });
     }
-    await writeContact(request.db, { name, email, company });
+    await request.db.insert(contacts).values({
+      company,
+      email,
+      id: trustedAssign(email, {
+        evidence: {
+          digest: 'sha256:18a30ad899a45b62f335cc711d04e66652b0d0edbe5bf7baeb7ccaa111d7808e',
+          kind: 'test',
+          reference: 'starter-tests/contact-email-primary-key',
+        },
+        invariant: 'governed-write.authorized-principal',
+        why: { kind: 'policy', policy: 'starter.contact-email-primary-key/v1' },
+      }),
+      name,
+    });
     return { ok: true };
   },
 });

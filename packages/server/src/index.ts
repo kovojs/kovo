@@ -282,18 +282,22 @@ export type {
 } from './app-types.js';
 export type {
   AppAssemblyOptions,
-  AppDeclarationHandle,
   AppEndpointFactory,
   AppLayoutFactory,
   AppMutationFactory,
   AppQueryFactory,
   AppRouteFactory,
   AppTaskFactory,
+  AppRequestForAccess,
   AuthenticatedAppRequest,
   DefineKovoOptions,
+  DefineKovoInput,
+  DefinedKovoContract,
   EndpointHandle,
   KeyedQueryOptimisticOptions,
   KovoContract,
+  InferKovoEnv,
+  InferKovoSession,
   LayoutHandle,
   MutationHandle,
   QueryHandle,
@@ -303,6 +307,7 @@ export type {
   RouteHandle,
   TaskHandle as AppTaskHandle,
 } from './app-contract.js';
+export type { AppMutationAdapter } from './app-mutation-adapter.js';
 export type { KovoApp } from './app-token.js';
 // `@kovojs/server/sqlite` names this opaque carrier in KovoSqliteDbProvider. Export the recursive
 // type without exposing its module-private mint/resolve controls (rules/api-surface.md; SPEC

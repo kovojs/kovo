@@ -20,7 +20,10 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { isReviewedComponentEventBoundary } from '../component-event-boundary-registry.js';
 import { reviewedCanonicalClientHandlerImportTarget } from '../client-handler-import-policy.js';
-import { compilerOwnedAppContractFactoryIdentity } from '../app-contract-resolver.js';
+import {
+  compilerOwnedAppContractFactoryIdentity,
+  compilerOwnedAppContractMemberEquals,
+} from '../app-contract-resolver.js';
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   compilerArrayAppend,
@@ -45,6 +48,7 @@ import {
   compilerSetDelete,
   compilerSetForEach,
   compilerSetHas,
+  compilerSetSize,
   compilerSha256Hex,
   compilerSnapshotDenseArray,
   compilerStringIncludes,
@@ -465,12 +469,13 @@ export function parseComponentModule(
       ts.isCallExpression(node) &&
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
+      const appContractFactoryIdentity = compilerOwnedAppContractFactoryIdentity(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        node.expression,
+      );
       const factoryIdentity =
-        compilerOwnedAppContractFactoryIdentity(
-          ts as FrameworkIdentityTypeScript,
-          sourceFile,
-          node.expression,
-        ) ??
+        appContractFactoryIdentity ??
         canonicalFrameworkExportForExpression(
           ts as FrameworkIdentityTypeScript,
           sourceFile,
@@ -525,7 +530,12 @@ export function parseComponentModule(
       if (frameworkExportEquals(factoryIdentity, MUTATION_FACTORY_IDENTITY)) {
         appendDenseValues(
           mutationHandlers,
-          mutationHandlerModels(sourceFile, source, node),
+          mutationHandlerModels(
+            sourceFile,
+            source,
+            node,
+            frameworkExportEquals(appContractFactoryIdentity, MUTATION_FACTORY_IDENTITY),
+          ),
           'Mutation handler models',
         );
       }
@@ -2772,6 +2782,7 @@ function mutationHandlerModels(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
+  appContractMutation: boolean,
 ): MutationHandlerModel[] {
   const owner = mutationOwner(sourceFile, call);
   const inspection = inspectHandlerProperty(sourceFile, source, call, 'handler', 'mutation');
@@ -2781,17 +2792,21 @@ function mutationHandlerModels(
     const { body, handler, model, parameters } = entries[index]!;
     const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
     const authorityFingerprint = mutationHandlerFingerprint(sourceFile, source, handler);
+    const handlerWriteSinks = handlerWriteSinkFacts(sourceFile, source, body, {
+      owner,
+      resolvedTargetFilter: (identity) =>
+        compilerSetHas(directDbTargets, identity) || looksLikeDbTargetIdentity(identity),
+      surface: 'mutation',
+    });
+    if (appContractMutation) {
+      markManagedAppMutationWriteSinks(sourceFile, body, parameters, handlerWriteSinks);
+    }
     compilerArrayAppend(
       result,
       {
         ...model,
         ...(authorityFingerprint === undefined ? {} : { authorityFingerprint }),
-        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-          owner,
-          resolvedTargetFilter: (identity) =>
-            compilerSetHas(directDbTargets, identity) || looksLikeDbTargetIdentity(identity),
-          surface: 'mutation',
-        }),
+        handlerWriteSinks,
         mutationOwner: owner,
         ...serverSecurityOperationModel(
           sourceFile,
@@ -4331,6 +4346,12 @@ function cacheAccessInfluence(
   if (!expression) return 'none';
   const access = unwrapExpression(expression);
   if (
+    compilerOwnedAppContractMemberEquals(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      access,
+      'verifiedAccess',
+    ) ||
     expressionResolvesToFrameworkExport(
       ts as FrameworkIdentityTypeScript,
       sourceFile,
@@ -4342,12 +4363,18 @@ function cacheAccessInfluence(
   }
   if (
     ts.isCallExpression(access) &&
-    expressionResolvesToFrameworkExport(
+    (compilerOwnedAppContractMemberEquals(
       ts as FrameworkIdentityTypeScript,
       sourceFile,
       access.expression,
-      PUBLIC_ACCESS_IDENTITY,
-    )
+      'publicAccess',
+    ) ||
+      expressionResolvesToFrameworkExport(
+        ts as FrameworkIdentityTypeScript,
+        sourceFile,
+        access.expression,
+        PUBLIC_ACCESS_IDENTITY,
+      ))
   ) {
     return 'none';
   }
@@ -5618,6 +5645,315 @@ function expressionTargetIdentity(expression: ts.Expression): string | undefined
 function looksLikeDbTargetIdentity(identity: string): boolean {
   const normalized = compilerStringToLowerCase(identity);
   return compilerStringIncludes(normalized, 'db') || compilerStringIncludes(normalized, 'database');
+}
+
+const managedAppMutationWriteSinks = compilerCreateWeakMap<HandlerWriteSinkFact, true>();
+
+/**
+ * Parser-owned authoring provenance for SPEC §10.3's app-scoped managed transaction. The marker is
+ * deliberately non-structural: app authors cannot add a field to a serialized sink fact to exempt
+ * an ordinary mutation, endpoint, task, or captured driver write from KV330.
+ */
+export function handlerWriteSinkUsesManagedAppTransaction(sink: HandlerWriteSinkFact): boolean {
+  return compilerWeakMapGet(managedAppMutationWriteSinks, sink) === true;
+}
+
+function markManagedAppMutationWriteSinks(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  sinks: readonly HandlerWriteSinkFact[],
+): void {
+  const secondParameter = compilerOwnDataValue(parameters, 1, 'App mutation handler parameters') as
+    | ts.ParameterDeclaration
+    | undefined;
+  if (!secondParameter) return;
+
+  const proof = managedAppMutationDbProof(body, parameters, secondParameter);
+  const sinkLength = compilerArrayLength(sinks, 'App mutation handler write sinks');
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        isHandlerWriteSinkOperation(callee.name.text) &&
+        managedAppMutationDbExpressionIsProven(callee.expression, proof)
+      ) {
+        const start = callee.getStart(sourceFile);
+        const end = callee.getEnd();
+        for (let index = 0; index < sinkLength; index += 1) {
+          const sink = compilerOwnDataValue(sinks, index, 'App mutation handler write sinks') as
+            | HandlerWriteSinkFact
+            | undefined;
+          if (!sink) {
+            throw new TypeError(`App mutation handler write sinks[${index}] must be own data.`);
+          }
+          if (
+            sink.span.start === start &&
+            sink.span.end === end &&
+            sink.operationKind === callee.name.text &&
+            !handlerWriteSinkIsUnresolvedFact(sink)
+          ) {
+            compilerWeakMapSet(managedAppMutationWriteSinks, sink, true);
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+}
+
+interface ManagedAppMutationDbProof {
+  readonly dbHandleNames: ReadonlySet<string>;
+  readonly requestCarrierNames: ReadonlySet<string>;
+  readonly stableBindingNames: ReadonlySet<string>;
+}
+
+function managedAppMutationDbProof(
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+  secondParameter: ts.ParameterDeclaration,
+): ManagedAppMutationDbProof {
+  const bindingCounts = compilerCreateMap<string, number>();
+  const candidates: ts.VariableDeclaration[] = [];
+  const recordName = (name: string): void => {
+    compilerMapSet(bindingCounts, name, (compilerMapGet(bindingCounts, name) ?? 0) + 1);
+  };
+  const recordBinding = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) {
+      recordName(name.text);
+      return;
+    }
+    const elementLength = compilerArrayLength(name.elements, 'Managed-db binding elements');
+    for (let index = 0; index < elementLength; index += 1) {
+      const element = compilerOwnDataValue(name.elements, index, 'Managed-db binding elements') as
+        | ts.ArrayBindingElement
+        | ts.BindingElement
+        | undefined;
+      if (element && ts.isBindingElement(element)) recordBinding(element.name);
+    }
+  };
+  const parameterLength = compilerArrayLength(parameters, 'Managed-db handler parameters');
+  for (let index = 0; index < parameterLength; index += 1) {
+    const parameter = compilerOwnDataValue(parameters, index, 'Managed-db handler parameters') as
+      | ts.ParameterDeclaration
+      | undefined;
+    if (parameter) recordBinding(parameter.name);
+  }
+  const collect = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) {
+      recordBinding(node.name);
+      if ((node.parent.flags & ts.NodeFlags.Const) !== 0) {
+        compilerArrayAppend(candidates, node, 'Managed-db alias candidates');
+      }
+    } else if (ts.isFunctionLike(node) && node !== body.parent) {
+      const nestedLength = compilerArrayLength(node.parameters, 'Nested managed-db parameters');
+      for (let index = 0; index < nestedLength; index += 1) {
+        const parameter = compilerOwnDataValue(
+          node.parameters,
+          index,
+          'Nested managed-db parameters',
+        ) as ts.ParameterDeclaration | undefined;
+        if (parameter) recordBinding(parameter.name);
+      }
+    } else if (ts.isCatchClause(node) && node.variableDeclaration) {
+      recordBinding(node.variableDeclaration.name);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(body);
+
+  const requestCarrierNames = compilerCreateSet<string>();
+  const dbHandleNames = compilerCreateSet<string>();
+  if (ts.isIdentifier(secondParameter.name)) {
+    compilerSetAdd(requestCarrierNames, secondParameter.name.text);
+  } else if (ts.isObjectBindingPattern(secondParameter.name)) {
+    collectManagedDbDestructureNames(secondParameter.name, dbHandleNames);
+  }
+
+  let changed = true;
+  let remaining = compilerArrayLength(candidates, 'Managed-db alias candidates') + 1;
+  while (changed && remaining > 0) {
+    changed = false;
+    remaining -= 1;
+    const candidateLength = compilerArrayLength(candidates, 'Managed-db alias candidates');
+    for (let index = 0; index < candidateLength; index += 1) {
+      const candidate = compilerOwnDataValue(candidates, index, 'Managed-db alias candidates') as
+        | ts.VariableDeclaration
+        | undefined;
+      if (!candidate?.initializer) continue;
+      if (
+        ts.isIdentifier(candidate.name) &&
+        managedAppMutationDbExpressionIsProven(candidate.initializer, {
+          dbHandleNames,
+          requestCarrierNames,
+          stableBindingNames: stableManagedBindingNames(
+            body,
+            bindingCounts,
+            requestCarrierNames,
+            dbHandleNames,
+          ),
+        }) &&
+        !compilerSetHas(dbHandleNames, candidate.name.text)
+      ) {
+        compilerSetAdd(dbHandleNames, candidate.name.text);
+        changed = true;
+      } else if (
+        ts.isObjectBindingPattern(candidate.name) &&
+        managedAppMutationRequestCarrierIsProven(candidate.initializer, requestCarrierNames)
+      ) {
+        const before = compilerSetSize(dbHandleNames);
+        collectManagedDbDestructureNames(candidate.name, dbHandleNames);
+        if (compilerSetSize(dbHandleNames) !== before) changed = true;
+      }
+    }
+  }
+
+  return {
+    dbHandleNames,
+    requestCarrierNames,
+    stableBindingNames: stableManagedBindingNames(
+      body,
+      bindingCounts,
+      requestCarrierNames,
+      dbHandleNames,
+    ),
+  };
+}
+
+function collectManagedDbDestructureNames(
+  pattern: ts.ObjectBindingPattern,
+  target: Set<string>,
+): void {
+  const elementLength = compilerArrayLength(pattern.elements, 'Managed-db destructure elements');
+  for (let index = 0; index < elementLength; index += 1) {
+    const element = compilerOwnDataValue(
+      pattern.elements,
+      index,
+      'Managed-db destructure elements',
+    ) as ts.BindingElement | undefined;
+    if (!element) continue;
+    const property = element.propertyName;
+    const propertyName =
+      property === undefined && ts.isIdentifier(element.name)
+        ? element.name.text
+        : property
+          ? bindingPropertyNameText(property)
+          : undefined;
+    if (propertyName !== 'db') continue;
+    collectBindingIdentifiers(element.name, target);
+  }
+}
+
+function stableManagedBindingNames(
+  body: ts.ConciseBody,
+  bindingCounts: ReadonlyMap<string, number>,
+  requestCarrierNames: ReadonlySet<string>,
+  dbHandleNames: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const stable = compilerCreateSet<string>();
+  const consider = (name: string): void => {
+    if ((compilerMapGet(bindingCounts, name) ?? 0) !== 1) return;
+    if (managedBindingNameIsMutated(body, name)) return;
+    compilerSetAdd(stable, name);
+  };
+  compilerSetForEach(requestCarrierNames, consider);
+  compilerSetForEach(dbHandleNames, consider);
+  return stable;
+}
+
+function managedBindingNameIsMutated(body: ts.ConciseBody, name: string): boolean {
+  let mutated = false;
+  const contains = (node: ts.Node): boolean => {
+    if (ts.isIdentifier(node) && node.text === name) return true;
+    let found = false;
+    ts.forEachChild(node, (child) => {
+      if (!found && contains(child)) found = true;
+    });
+    return found;
+  };
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    if (
+      ts.isBinaryExpression(node) &&
+      handlerIsAssignmentOperator(node.operatorToken.kind) &&
+      contains(node.left)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      contains(node.operand)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (ts.isDeleteExpression(node) && contains(node.expression)) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Object' &&
+      (node.expression.name.text === 'defineProperty' ||
+        node.expression.name.text === 'defineProperties') &&
+      node.arguments[0] &&
+      contains(node.arguments[0])
+    ) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return mutated;
+}
+
+function managedAppMutationRequestCarrierIsProven(
+  expression: ts.Expression,
+  requestCarrierNames: ReadonlySet<string>,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  return ts.isIdentifier(unwrapped) && compilerSetHas(requestCarrierNames, unwrapped.text);
+}
+
+function managedAppMutationDbExpressionIsProven(
+  expression: ts.Expression,
+  proof: ManagedAppMutationDbProof,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    return (
+      compilerSetHas(proof.dbHandleNames, unwrapped.text) &&
+      compilerSetHas(proof.stableBindingNames, unwrapped.text)
+    );
+  }
+  if (!ts.isPropertyAccessExpression(unwrapped)) return false;
+  const receiver = unwrapExpression(unwrapped.expression);
+  if (
+    unwrapped.name.text === 'db' &&
+    ts.isIdentifier(receiver) &&
+    compilerSetHas(proof.requestCarrierNames, receiver.text) &&
+    compilerSetHas(proof.stableBindingNames, receiver.text)
+  ) {
+    return true;
+  }
+  return managedAppMutationDbExpressionIsProven(receiver, proof);
+}
+
+function handlerWriteSinkIsUnresolvedFact(sink: HandlerWriteSinkFact): boolean {
+  return (
+    sink.operationKind === 'UNRESOLVED' ||
+    sink.path === 'UNRESOLVED' ||
+    sink.owner.value === 'UNRESOLVED' ||
+    sink.canonicalTarget.identity === 'UNRESOLVED'
+  );
 }
 
 const requestLikeContextParamNames = compilerCreateSet<string>();

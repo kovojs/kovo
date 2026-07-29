@@ -1078,6 +1078,12 @@ const REQUEST_HANDLER_FACTORIES = [
       },
       {
         carriers: [{ carrier: 'request', index: 0 }],
+        property: 'auth',
+        publicWirePaths: [['setCookies']],
+        roles: ['request'],
+      },
+      {
+        carriers: [{ carrier: 'request', index: 0 }],
         property: 'db',
         roles: ['request'],
       },
@@ -1893,8 +1899,10 @@ function requestProcessSinksForProject(
           return context.facts;
         }
         requestRootCount += 1;
-        const { args, factory, site } = invocation;
-        verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);
+        const { args, declarationContract, factory, site } = invocation;
+        if (!declarationContract) {
+          verifyRequestTaskBCapabilityRoot(context, factory.exportName, site);
+        }
         if (!args || args.length === 0) {
           appendOpaqueRequestHandlerFact(context, site, '<dynamic-or-empty-config>');
           continue;
@@ -3965,6 +3973,8 @@ function requestModuleInitializerAuthorityArgumentIsClosed(
 
 interface RequestHandlerFactoryInvocation {
   readonly args?: readonly Node[];
+  /** `defineKovo` snapshots provider callbacks but is not itself the application root. */
+  readonly declarationContract?: true;
   readonly factory: (typeof REQUEST_HANDLER_FACTORIES)[number];
   readonly site: Node;
 }
@@ -3978,9 +3988,13 @@ function requestHandlerFactoryInvocationsForCall(
   const member = requestStaticCallMember(callee);
   let names: readonly RequestHandlerFactoryName[] = [];
   let args: readonly Node[] | undefined = call.getArguments();
+  let declarationContract = false;
   const adapted = requestAdaptedFactoryInvocation(call);
 
-  if (adapted) {
+  if (requestCallIsExactDefineKovo(call)) {
+    names = ['createApp'];
+    declarationContract = true;
+  } else if (adapted) {
     names = requestFrameworkFactoriesForExpression(adapted.target, session);
     args = adapted.args;
   } else if (
@@ -4003,7 +4017,16 @@ function requestHandlerFactoryInvocationsForCall(
 
   return names.flatMap((name) => {
     const factory = REQUEST_HANDLER_FACTORIES.find((candidate) => candidate.exportName === name);
-    return factory ? [{ ...(args === undefined ? {} : { args }), factory, site: call }] : [];
+    return factory
+      ? [
+          {
+            ...(args === undefined ? {} : { args }),
+            ...(declarationContract ? { declarationContract: true as const } : {}),
+            factory,
+            site: call,
+          },
+        ]
+      : [];
   });
 }
 
@@ -4679,7 +4702,7 @@ function requestFrameworkFactoriesForExpression(
   if (
     Node.isElementAccessExpression(node) &&
     staticMemberName(node.getArgumentExpression()) === undefined &&
-    requestExpressionIsCreateAppAuthoringContext(node.getExpression(), new Set(), session)
+    requestExpressionIsKovoAppAuthoringContext(node.getExpression(), new Set(), session)
   ) {
     for (const factory of REQUEST_APP_AUTHORING_FACTORIES) resolved.add(factory);
   }
@@ -5132,11 +5155,41 @@ function requestFrameworkFactoriesInAggregate(
 }
 
 const REQUEST_APP_AUTHORING_FACTORIES = new Set<RequestHandlerFactoryName>([
+  'endpoint',
   'layout',
   'mutation',
   'query',
   'route',
   'task',
+]);
+
+const REQUEST_DEFINED_KOVO_MEMBERS = new Set([
+  'all',
+  'assemble',
+  'authenticated',
+  'endpoint',
+  'integrateMutation',
+  'layout',
+  'mutation',
+  'owns',
+  'publicAccess',
+  'query',
+  'rateLimit',
+  'role',
+  'route',
+  'task',
+  'verifiedAccess',
+]);
+
+const REQUEST_DEFINED_KOVO_RETAINED_CONFIG_METHODS = new Set([
+  'all',
+  'assemble',
+  'integrateMutation',
+  'owns',
+  'publicAccess',
+  'rateLimit',
+  'role',
+  'verifiedAccess',
 ]);
 
 function requestAppAuthoringFactoryForExpression(
@@ -5152,7 +5205,7 @@ function requestAppAuthoringFactoryForExpression(
       return undefined;
     }
     const receiver = unwrapStaticExpression(node.getExpression());
-    const context = requestExpressionIsCreateAppAuthoringContext(receiver, new Set(), session);
+    const context = requestExpressionIsKovoAppAuthoringContext(receiver, new Set(), session);
     return context ? (member as RequestHandlerFactoryName) : undefined;
   }
   if (!Node.isIdentifier(node)) return undefined;
@@ -5173,11 +5226,178 @@ function requestAppAuthoringFactoryForExpression(
       return name;
     }
     const source = bindingElementSourceExpression(declaration);
-    if (source && requestExpressionIsCreateAppAuthoringContext(source, new Set(), session)) {
+    if (source && requestExpressionIsKovoAppAuthoringContext(source, new Set(), session)) {
       return name;
     }
   }
   return undefined;
+}
+
+function requestExpressionIsKovoAppAuthoringContext(
+  expression: Node,
+  seen: Set<string>,
+  session: RequestProvenanceSession,
+): boolean {
+  return (
+    requestExpressionIsDefinedKovoContract(expression, new Set(seen), session) ||
+    requestExpressionIsCreateAppAuthoringContext(expression, seen, session)
+  );
+}
+
+function requestExpressionIsDefinedKovoContract(
+  expression: Node,
+  seen: Set<string>,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!requestProvenanceStep(session, node)) return false;
+  const nodeKey = `defined-kovo-contract:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+
+  if (Node.isCallExpression(node)) {
+    return requestCallIsExactDefineKovo(node);
+  }
+  if (Node.isConditionalExpression(node)) {
+    return (
+      requestExpressionIsDefinedKovoContract(node.getWhenTrue(), new Set(seen), session) &&
+      requestExpressionIsDefinedKovoContract(node.getWhenFalse(), new Set(seen), session)
+    );
+  }
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const member = Node.isPropertyAccessExpression(node)
+      ? staticMemberName(node.getNameNode())
+      : staticMemberName(node.getArgumentExpression());
+    const projected = member
+      ? requestWireProjectedExpression(node.getExpression(), [member], new Set(), 0)
+      : undefined;
+    return !!(
+      projected && requestExpressionIsDefinedKovoContract(projected, new Set(seen), session)
+    );
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length > 0) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  if (
+    declarations.length === 0 ||
+    declarations.some(
+      (declaration) =>
+        Node.isVariableDeclaration(declaration) &&
+        (declaration.getVariableStatement()?.getDeclarationKind() !==
+          VariableDeclarationKind.Const ||
+          declaration.getVariableStatement()?.getParent() !== declaration.getSourceFile()),
+    )
+  ) {
+    return false;
+  }
+  const initializers = declarations
+    .map(valueDeclarationInitializer)
+    .filter((initializer): initializer is Node => initializer !== undefined);
+  return (
+    initializers.length > 0 &&
+    initializers.every((initializer) =>
+      requestExpressionIsDefinedKovoContract(initializer, new Set(seen), session),
+    )
+  );
+}
+
+function requestCallIsExactDefineKovo(call: import('ts-morph').CallExpression): boolean {
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    call.getArguments().length === 1 &&
+    requestExactPristineDirectImport(call.getExpression(), '@kovojs/server', 'defineKovo')
+  );
+}
+
+function requestDefinedKovoMemberForExpression(
+  expression: Node,
+  session: RequestProvenanceSession,
+): string | undefined {
+  const node = unwrapStaticExpression(expression);
+  if (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node)) {
+    return undefined;
+  }
+  const member = Node.isPropertyAccessExpression(node)
+    ? staticMemberName(node.getNameNode())
+    : staticMemberName(node.getArgumentExpression());
+  if (
+    !member ||
+    !REQUEST_DEFINED_KOVO_MEMBERS.has(member) ||
+    !requestExpressionIsDefinedKovoContract(node.getExpression(), new Set(), session)
+  ) {
+    return undefined;
+  }
+  return member;
+}
+
+function requestCallIsExactDefinedKovoRetainedConfigMethod(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const member = requestDefinedKovoMemberForExpression(call.getExpression(), session);
+  return !!(
+    member &&
+    REQUEST_DEFINED_KOVO_RETAINED_CONFIG_METHODS.has(member) &&
+    !call.getQuestionDotTokenNode()
+  );
+}
+
+function requestExpressionIsDefinedKovoQueryHandle(
+  expression: Node,
+  seen: Set<string>,
+  session: RequestProvenanceSession,
+): boolean {
+  const node = unwrapStaticExpression(expression);
+  if (!requestProvenanceStep(session, node)) return false;
+  const nodeKey = `defined-kovo-query:${requestNodeIdentity(node)}`;
+  if (seen.has(nodeKey)) return false;
+  seen.add(nodeKey);
+  if (Node.isCallExpression(node)) {
+    return requestAppAuthoringFactoryForExpression(node.getExpression(), session) === 'query';
+  }
+  if (!Node.isIdentifier(node)) return false;
+  const symbol = requestIdentifierValueSymbol(node);
+  if (!symbol || requestAssignedBindingProjections(symbol, session).length > 0) return false;
+  const symbolKey = requestSymbolKey(symbol);
+  if (seen.has(symbolKey)) return false;
+  seen.add(symbolKey);
+  const declarations = symbol.getDeclarations();
+  if (
+    declarations.length === 0 ||
+    declarations.some(
+      (declaration) =>
+        Node.isVariableDeclaration(declaration) &&
+        declaration.getVariableStatement()?.getDeclarationKind() !== VariableDeclarationKind.Const,
+    )
+  ) {
+    return false;
+  }
+  const initializers = declarations
+    .map(valueDeclarationInitializer)
+    .filter((initializer): initializer is Node => initializer !== undefined);
+  return (
+    initializers.length > 0 &&
+    initializers.every((initializer) =>
+      requestExpressionIsDefinedKovoQueryHandle(initializer, new Set(seen), session),
+    )
+  );
+}
+
+function requestCallIsExactDefinedKovoQueryOptimistic(
+  call: import('ts-morph').CallExpression,
+  session: RequestProvenanceSession,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  return !!(
+    !call.getQuestionDotTokenNode() &&
+    Node.isPropertyAccessExpression(callee) &&
+    callee.getName() === 'optimistic' &&
+    requestExpressionIsDefinedKovoQueryHandle(callee.getExpression(), new Set(), session)
+  );
 }
 
 function requestExpressionIsCreateAppAuthoringContext(
@@ -5644,6 +5864,9 @@ function requestRetainedConfigOpaqueDerivation(
     return close(firstOpaque(values));
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    if (requestDefinedKovoMemberForExpression(node, session)) {
+      return close(undefined);
+    }
     const member = Node.isPropertyAccessExpression(node)
       ? staticMemberName(node.getNameNode())
       : staticMemberName(node.getArgumentExpression());
@@ -7400,6 +7623,13 @@ function requestRetainedConfigCallIsReviewed(
   if (requestBuildConfigConstructorCallIsClosed(call)) return true;
   if (requestCallIsExactClosedRedirect(call)) return true;
   if (requestCallIsExactPostgresSchemaModule(call)) return true;
+  if (
+    requestCallIsExactDefineKovo(call) ||
+    requestCallIsExactDefinedKovoRetainedConfigMethod(call, session) ||
+    requestCallIsExactDefinedKovoQueryOptimistic(call, session)
+  ) {
+    return true;
+  }
   if (requestHandlerFactoryInvocationsForCall(call, session).length > 0) return true;
   if (
     requestStaticFrameworkGuardIsClosed(call) ||
@@ -8106,7 +8336,8 @@ function requestCallIsExactBetterAuthEnvironmentBindings(
       return false;
     if (
       name === 'signOutAccess' &&
-      !requestExpressionIsExactGeneratedAuthFactoryOption(initializer, call, 'signOutAccess')
+      !requestExpressionIsExactGeneratedAuthFactoryOption(initializer, call, 'signOutAccess') &&
+      !requestExpressionIsExactGeneratedSignOutAccess(initializer)
     )
       return false;
     if (name === 'systemDb' && !requestExpressionIsExactGeneratedAuthSystemDb(initializer))
@@ -8250,11 +8481,30 @@ function requestCallIsExactBetterAuthAuthed(call: import('ts-morph').CallExpress
   );
 }
 
+function requestExpressionIsExactGeneratedSignOutAccess(expression: Node): boolean {
+  const value = unwrapStaticExpression(expression);
+  const [guard, ...extra] = Node.isArrayLiteralExpression(value) ? value.getElements() : [];
+  const invocation = guard ? unwrapStaticExpression(guard) : undefined;
+  return !!(
+    guard &&
+    extra.length === 0 &&
+    invocation &&
+    Node.isCallExpression(invocation) &&
+    requestCallIsExactBetterAuthAuthed(invocation)
+  );
+}
+
 function requestExpressionIsExactGeneratedAppAuthed(expression: Node): boolean {
   return !!requestExactGeneratedConstBinding(expression, 'appAuthed', (initializer) => {
     const call = unwrapStaticExpression(initializer);
     return Node.isCallExpression(call) && requestCallIsExactBetterAuthAuthed(call);
   });
+}
+
+function requestExpressionIsExactGeneratedAppSignOutAccess(expression: Node): boolean {
+  const value = unwrapStaticExpression(expression);
+  const [guard, ...extra] = Node.isArrayLiteralExpression(value) ? value.getElements() : [];
+  return !!(guard && extra.length === 0 && requestExpressionIsExactGeneratedAppAuthed(guard));
 }
 
 function requestExactGeneratedBetterAuthBindingFactoryInnerCall(
@@ -8290,14 +8540,6 @@ function requestExactGeneratedBetterAuthBindingFactoryInnerCall(
         );
       },
     ],
-    [
-      'signOutAccess',
-      (value) => {
-        const array = unwrapStaticExpression(value);
-        const [guard, ...extra] = Node.isArrayLiteralExpression(array) ? array.getElements() : [];
-        return !!(guard && extra.length === 0 && requestExpressionIsExactGeneratedAppAuthed(guard));
-      },
-    ],
   ]);
   for (const property of options.getProperties()) {
     if (
@@ -8308,6 +8550,13 @@ function requestExactGeneratedBetterAuthBindingFactoryInnerCall(
     }
     const name = staticMemberName(property.getNameNode());
     const initializer = property.getInitializer();
+    if (
+      name === 'signOutAccess' &&
+      initializer &&
+      requestExpressionIsExactGeneratedAppSignOutAccess(initializer)
+    ) {
+      continue;
+    }
     const validate = name ? expected.get(name) : undefined;
     if (!name || !initializer || !validate || !validate(initializer)) return undefined;
     expected.delete(name);
@@ -9517,7 +9766,51 @@ function requestCallIsExactMemoryClientModuleRegistryConstructor(
   session: RequestProvenanceSession,
 ): boolean {
   const declaration = requestExactMemoryClientModuleRegistryDeclaration(call);
-  return !!declaration && requestMemoryClientModuleRegistryIsPristine(declaration, session);
+  return (
+    (!!declaration && requestMemoryClientModuleRegistryIsPristine(declaration, session)) ||
+    requestCallIsExactInlineDefinedKovoClientModuleRegistry(call)
+  );
+}
+
+function requestCallIsExactInlineDefinedKovoClientModuleRegistry(
+  call: import('ts-morph').CallExpression,
+): boolean {
+  const callee = unwrapStaticExpression(call.getExpression());
+  if (
+    call.getArguments().length !== 0 ||
+    !requestExactPristineDirectImport(
+      callee,
+      '@kovojs/server',
+      'createMemoryVersionedClientModuleRegistry',
+    )
+  ) {
+    return false;
+  }
+  const property = call.getParentIfKind(SyntaxKind.PropertyAssignment);
+  const initializer = property?.getInitializer();
+  const propertyName = property ? requestObjectLiteralElementNameNode(property) : undefined;
+  const definition = property?.getParentIfKind(SyntaxKind.ObjectLiteralExpression);
+  const appCall = definition?.getParentIfKind(SyntaxKind.CallExpression);
+  return !!(
+    property &&
+    initializer &&
+    requestNodesAreSame(unwrapStaticExpression(initializer), call) &&
+    propertyName &&
+    !Node.isComputedPropertyName(propertyName) &&
+    staticMemberName(propertyName) === 'clientModules' &&
+    definition &&
+    definition.getProperties().filter((candidate) => {
+      const name = requestObjectLiteralElementNameNode(candidate);
+      return (
+        !!name && !Node.isComputedPropertyName(name) && staticMemberName(name) === 'clientModules'
+      );
+    }).length === 1 &&
+    appCall &&
+    appCall.getArguments().length === 1 &&
+    appCall.getArguments()[0] &&
+    requestNodesAreSame(unwrapStaticExpression(appCall.getArguments()[0]!), definition) &&
+    requestCallIsExactDefineKovo(appCall)
+  );
 }
 
 function requestExactMemoryClientModuleRegistryDeclaration(
@@ -13339,7 +13632,7 @@ function scanRequestRootCallbackCandidate(
     return;
   }
   if (
-    callback === 'sessionProvider' &&
+    (callback === 'sessionProvider' || callback === 'auth') &&
     requestExpressionResolvesToExactBetterAuthSessionProvider(
       expression,
       context.provenance,
@@ -13374,7 +13667,12 @@ function scanRequestRootCallbackCandidate(
       appendOpaqueRequestHandlerFact(context, expression, resolution.opaqueModule);
     } else if (
       !spec.staticValue ||
-      !requestStaticCallbackValueIsClosed(expression, spec.staticValue, new Set())
+      !requestStaticCallbackValueIsClosed(
+        expression,
+        spec.staticValue,
+        new Set(),
+        context.provenance,
+      )
     ) {
       appendOpaqueRequestHandlerFact(context, expression, '<dynamic-callback>');
     }
@@ -13401,6 +13699,7 @@ function requestStaticCallbackValueIsClosed(
   expression: Node,
   kind: NonNullable<RequestRootCallbackSpec['staticValue']>,
   seen: Set<string>,
+  session: RequestProvenanceSession,
 ): boolean {
   const node = unwrapStaticExpression(expression);
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return true;
@@ -13416,12 +13715,42 @@ function requestStaticCallbackValueIsClosed(
   if ((kind === 'access' || kind === 'guard') && requestStaticFrameworkGuardIsClosed(node)) {
     return true;
   }
+  if (kind === 'access' || kind === 'guard') {
+    const appMember = requestDefinedKovoMemberForExpression(node, session);
+    if (appMember === 'authenticated') return true;
+    if (Node.isCallExpression(node)) {
+      const member = requestDefinedKovoMemberForExpression(node.getExpression(), session);
+      if (
+        member === 'publicAccess' &&
+        node.getArguments().length === 1 &&
+        requestStaticCallbackValueIsClosed(
+          node.getArguments()[0]!,
+          'scalar',
+          new Set(seen),
+          session,
+        )
+      ) {
+        return true;
+      }
+      if (
+        member === 'all' &&
+        node.getArguments().length > 0 &&
+        node
+          .getArguments()
+          .every((argument) =>
+            requestStaticCallbackValueIsClosed(argument, kind, new Set(seen), session),
+          )
+      ) {
+        return true;
+      }
+    }
+  }
   if (kind === 'access' && Node.isCallExpression(node)) {
     const [reason, ...extra] = node.getArguments();
     return !!(
       reason &&
       extra.length === 0 &&
-      requestStaticCallbackValueIsClosed(reason, 'scalar', new Set(seen)) &&
+      requestStaticCallbackValueIsClosed(reason, 'scalar', new Set(seen), session) &&
       ['publicAccess', 'verifiedMachineAccess'].some(
         (name) =>
           expressionResolvesToFrameworkExport(
@@ -13437,9 +13766,9 @@ function requestStaticCallbackValueIsClosed(
   }
   if (Node.isConditionalExpression(node)) {
     return (
-      requestStaticCallbackValueIsClosed(node.getCondition(), 'scalar', new Set(seen)) &&
-      requestStaticCallbackValueIsClosed(node.getWhenTrue(), kind, new Set(seen)) &&
-      requestStaticCallbackValueIsClosed(node.getWhenFalse(), kind, new Set(seen))
+      requestStaticCallbackValueIsClosed(node.getCondition(), 'scalar', new Set(seen), session) &&
+      requestStaticCallbackValueIsClosed(node.getWhenTrue(), kind, new Set(seen), session) &&
+      requestStaticCallbackValueIsClosed(node.getWhenFalse(), kind, new Set(seen), session)
     );
   }
   if (kind === 'redirect' && Node.isCallExpression(node)) {
@@ -13455,7 +13784,9 @@ function requestStaticCallbackValueIsClosed(
       const name = property.getNameNode();
       if (Node.isComputedPropertyName(name)) return false;
       const value = property.getInitializer();
-      return value ? requestStaticCallbackValueIsClosed(value, 'scalar', new Set(seen)) : false;
+      return value
+        ? requestStaticCallbackValueIsClosed(value, 'scalar', new Set(seen), session)
+        : false;
     });
   }
   if (!Node.isIdentifier(node)) return false;
@@ -13472,7 +13803,10 @@ function requestStaticCallbackValueIsClosed(
       return false;
     }
     const initializer = valueDeclarationInitializer(declaration);
-    if (initializer && requestStaticCallbackValueIsClosed(initializer, kind, new Set(seen))) {
+    if (
+      initializer &&
+      requestStaticCallbackValueIsClosed(initializer, kind, new Set(seen), session)
+    ) {
       return true;
     }
   }
@@ -15692,8 +16026,7 @@ function scanRequestCallable(callable: RequestCallable, context: RequestProcessS
     }
     if (
       requestCallIsPublicStyleCreate(call) ||
-      requestCallIsReviewedPublicJsxAttributeHelper(call) ||
-      requestCallIsReviewedPublicUiRender(call)
+      requestCallIsReviewedPublicJsxAttributeHelper(call)
     ) {
       scanRequestFunctionArguments(call, context);
       continue;
@@ -16439,6 +16772,7 @@ function scanRequestImplicitExecutionProtocols(
     if (
       reviewedDrizzleSql &&
       (requestTaggedTemplateIsReviewedDrizzleSql(reviewedDrizzleSql) ||
+        requestTaggedTemplateIsExactDrizzleAuthzPolicy(reviewedDrizzleSql) ||
         requestTaggedTemplateIsExactKovoStaticSql(reviewedDrizzleSql) ||
         requestTaggedTemplateIsExactKovoTrustedSqlInput(reviewedDrizzleSql))
     ) {
@@ -18073,7 +18407,9 @@ function scanRequestTaggedTemplate(
     Node.isPropertyAccessExpression(tag) &&
     tag.getName() === 'raw' &&
     expressionResolvesToGlobalNamespace(tag.getExpression(), 'String', new Set(), 0);
-  const safeDrizzleSql = requestTaggedTemplateIsReviewedDrizzleSql(tagged);
+  const safeDrizzleSql =
+    requestTaggedTemplateIsReviewedDrizzleSql(tagged) ||
+    requestTaggedTemplateIsExactDrizzleAuthzPolicy(tagged);
   const safeKovoStaticSql = requestTaggedTemplateIsExactKovoStaticSql(tagged);
   const safeKovoTrustedSql = requestTaggedTemplateIsExactKovoTrustedSqlInput(tagged);
   if (
@@ -18257,6 +18593,7 @@ function scanRequestPropertyAccessProtocols(
     (requestExactLexicalComponentSlotProjectionRole(access, callable) !== undefined ||
       requestPropertyAccessIsExactRequestPrimitive(access, callable) ||
       requestPropertyAccessIsExactUrlSearchParams(access, callable, context.provenance) ||
+      requestDefinedKovoMemberForExpression(access, context.provenance) !== undefined ||
       requestCompilerSemanticHelperPlainDataRead(receiver, callable, context.provenance))
   ) {
     return;
@@ -18317,10 +18654,6 @@ function scanRequestPropertyAccessProtocols(
     scanRequestSuperPropertyAccess(access, member, site, callable, context, write);
     return;
   }
-  // The starter renders the three reviewed UI descriptors through their frozen public
-  // `definition.render` entrypoint. Suppress only the exact, pristine call chain; local/bare
-  // lookalikes and any same- or cross-module member replacement stay opaque.
-  if (requestPropertyAccessBelongsToReviewedPublicUiRenderCall(access)) return;
   if (scanRequestProxyUse(receiver, site, context)) return;
   const accessors = write
     ? requestAccessorCallablesForExpression(receiver, member, new Set(), context.provenance)
@@ -21125,6 +21458,13 @@ function requestExpressionIsProtocolSafeUncached(
   seen.add(nodeKey);
 
   if (
+    (Node.isIdentifier(node) || Node.isCallExpression(node)) &&
+    requestExpressionIsDefinedKovoContract(node, new Set(), session)
+  ) {
+    return true;
+  }
+
+  if (
     (requestExpressionMayBeExactManagedRuntimeMember(node) &&
       (
         [
@@ -21214,6 +21554,7 @@ function requestExpressionIsProtocolSafeUncached(
     return requestExpressionIsProtocolSafe(node.getExpression(), callable, seen, session);
   }
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    if (requestDefinedKovoMemberForExpression(node, session)) return true;
     if (requestExpressionIsReviewedFrozenStyleValue(node)) return true;
     if (requestExpressionResolvesToExactSignUrlResult(node.getExpression(), session, new Set())) {
       return !!(
@@ -21253,6 +21594,14 @@ function requestExpressionIsProtocolSafeUncached(
     if (requestCallCrossesDeferredRootAuthorityBoundary(node, callable, session)) return false;
     const callee = unwrapStaticExpression(node.getExpression());
     if (callee.getKind() === SyntaxKind.ImportKeyword) return true;
+    if (
+      requestCallIsExactDefineKovo(node) ||
+      requestCallIsExactDefinedKovoRetainedConfigMethod(node, session) ||
+      requestCallIsExactDefinedKovoQueryOptimistic(node, session) ||
+      requestHandlerFactoryInvocationsForCall(node, session).length > 0
+    ) {
+      return true;
+    }
     if (requestCallIsExactPublicScopedKey(node, callable, session)) return true;
     if (
       requestCallIsExactAcceptedFileParse(node, session) ||
@@ -21331,7 +21680,6 @@ function requestExpressionIsProtocolSafeUncached(
       return true;
     }
     if (requestCallIsPublicStyleCreate(node)) return true;
-    if (requestCallIsReviewedPublicUiRender(node)) return true;
     if (
       Node.isIdentifier(callee) &&
       [...REQUEST_SAFE_GLOBAL_CALLABLES, 'Symbol'].includes(callee.getText()) &&
@@ -21735,7 +22083,10 @@ function scanRequestJsxComponents(
       }
       continue;
     }
-    if (requestJsxTagIsReviewedPublicComponent(tag)) {
+    if (
+      requestJsxTagIsReviewedPublicComponent(tag) ||
+      requestReviewedPublicUiComponentForJsxTag(tag)
+    ) {
       for (const value of requestJsxValueExpressions(element)) {
         scanRequestProxyUse(value, element, context);
         scanRequestCallableValuesInExpression(value, context, true);
@@ -22300,9 +22651,6 @@ function requestWireAuthoritiesForExpressionUncached(
         requestCallIsPublicStyleAttrs(node) ? node.getArguments() : [],
         state,
       );
-    }
-    if (requestCallIsReviewedPublicUiRender(node)) {
-      return requestWireAuthoritiesForExpressions(node.getArguments(), state);
     }
     const headerCall = requestWireHeaderCallClassification(node, state);
     if (headerCall.handled) return headerCall.authority ? [headerCall.authority] : [];
@@ -23264,6 +23612,12 @@ function requestWireAuthoritiesForJsxElement(
   }
   if (requestJsxTagIsReviewedPublicComponent(tag)) {
     return requestWireAuthoritiesForReviewedFormError(element, state);
+  }
+  if (requestReviewedPublicUiComponentForJsxTag(tag)) {
+    return dedupeRequestWireAuthorities([
+      ...requestWireAuthoritiesForJsxAttributes(opening.getAttributes(), state),
+      ...requestWireAuthoritiesForJsxChildren(children, state),
+    ]);
   }
 
   const resolution = resolveRequestCallable(tag, new Set(), 0, state.session);
@@ -26138,11 +26492,6 @@ function requestCallIsKnownSafe(
 
   if (requestCallIsReviewedPublicJsxAttributeHelper(call)) {
     scanRequestReviewedPublicJsxHelperArguments(call, context);
-    return true;
-  }
-
-  if (requestCallIsReviewedPublicUiRender(call)) {
-    scanRequestFunctionArguments(call, context);
     return true;
   }
 
@@ -32911,12 +33260,8 @@ function requestDomainValueContainerIsReviewed(
     }
     return (
       requestExpressionIsDirectImportedExport(parent.getExpression(), '@kovojs/drizzle', 'kovo') ||
-      ['mutation', 'query', 'webhook'].some((exportName) =>
-        requestExpressionIsDirectImportedExport(
-          parent.getExpression(),
-          '@kovojs/server',
-          exportName,
-        ),
+      requestHandlerFactoryInvocationsForCall(parent, session).some((invocation) =>
+        ['mutation', 'query', 'webhook'].includes(invocation.factory.exportName),
       ) ||
       requestCallIsExactMutationDomainInvalidateForTarget(parent, target, session) ||
       requestCallIsExactWebhookRecordChangeForTarget(parent, target, session)
@@ -34945,121 +35290,23 @@ const REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS = new Map<
 ]);
 
 /**
- * SPEC §13.1: recognize only the starter's reviewed public UI descriptor entrypoint. The package
- * namespace and arbitrary descriptor members are deliberately not capabilities.
+ * SPEC §13.1: JSX may invoke only the three reviewed UI entrypoints through an exact, pristine
+ * runtime named import. Local aliases, namespace members, barrels, type-only imports, and any
+ * project-wide carrier mutation remain ordinary opaque components.
  */
-function requestReviewedPublicUiComponentForExpression(
-  expression: Node,
+function requestReviewedPublicUiComponentForJsxTag(
+  tag: Node,
 ): RequestReviewedPublicUiComponent | undefined {
-  if (
-    ![...REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS].some(([module, exportName]) =>
-      requestSourceImportsExactExport(expression, module, exportName),
-    )
-  ) {
-    return undefined;
-  }
-  const imported = requestImportedModuleExportForExpression(
-    expression,
-    (specifier) =>
-      REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.has(
-        specifier as RequestReviewedPublicUiComponent['module'],
-      ),
-    new Set(),
-    0,
-  );
-  if (!imported) return undefined;
-  const expected = REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS.get(
-    imported.module as RequestReviewedPublicUiComponent['module'],
-  );
-  return expected === imported.exportName
-    ? {
-        exportName: expected,
-        module: imported.module as RequestReviewedPublicUiComponent['module'],
-      }
-    : undefined;
-}
-
-function requestCallIsReviewedPublicUiRender(call: import('ts-morph').CallExpression): boolean {
-  const callee = unwrapStaticExpression(call.getExpression());
-  if (!Node.isPropertyAccessExpression(callee) && !Node.isElementAccessExpression(callee)) {
-    return false;
-  }
-  if (requestStaticCallMember(callee) !== 'render') return false;
-  const definition = unwrapStaticExpression(callee.getExpression());
-  if (
-    (!Node.isPropertyAccessExpression(definition) && !Node.isElementAccessExpression(definition)) ||
-    (Node.isPropertyAccessExpression(definition)
-      ? definition.getName()
-      : staticMemberName(definition.getArgumentExpression())) !== 'definition'
-  ) {
-    return false;
-  }
-  const component = unwrapStaticExpression(definition.getExpression());
-  const identity = requestReviewedPublicUiComponentForExpression(component);
-  return !!identity && requestReviewedPublicUiComponentIsPristine(call, identity);
-}
-
-function requestPropertyAccessBelongsToReviewedPublicUiRenderCall(access: Node): boolean {
-  let candidate = access;
-  while (true) {
-    const parent = candidate.getParent();
+  if (!Node.isIdentifier(tag)) return undefined;
+  for (const [module, exportName] of REQUEST_REVIEWED_PUBLIC_UI_COMPONENTS) {
     if (
-      (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
-      requestNodesAreSame(parent.getExpression(), candidate)
+      requestExpressionIsDirectImportedExport(tag, module, exportName) &&
+      requestExactImportedCarrierIsPristine(tag, module, exportName)
     ) {
-      candidate = parent;
-      continue;
-    }
-    if (Node.isCallExpression(parent) && requestNodesAreSame(parent.getExpression(), candidate)) {
-      return requestCallIsReviewedPublicUiRender(parent);
-    }
-    return false;
-  }
-}
-
-function requestReviewedPublicUiComponentIsPristine(
-  call: import('ts-morph').CallExpression,
-  identity: RequestReviewedPublicUiComponent,
-): boolean {
-  const expressionContainsIdentity = (expression: Node | undefined): boolean => {
-    if (!expression) return false;
-    const identifiers = [
-      ...(Node.isIdentifier(expression) ? [expression] : []),
-      ...expression.getDescendantsOfKind(SyntaxKind.Identifier),
-    ];
-    return identifiers.some((identifier) => {
-      const imported = requestReviewedPublicUiComponentForExpression(identifier);
-      return imported?.module === identity.module && imported.exportName === identity.exportName;
-    });
-  };
-
-  // Scan the complete authoritative project, not merely the call's source file: a sibling module
-  // can import the same descriptor and install a getter or replacement before this request runs.
-  for (const sourceFile of call.getProject().getSourceFiles()) {
-    for (const assignment of sourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-      const operator = assignment.getOperatorToken().getKind();
-      if (operator < SyntaxKind.FirstAssignment || operator > SyntaxKind.LastAssignment) continue;
-      if (expressionContainsIdentity(assignment.getLeft())) return false;
-    }
-    for (const deletion of sourceFile.getDescendantsOfKind(SyntaxKind.DeleteExpression)) {
-      if (expressionContainsIdentity(deletion.getExpression())) return false;
-    }
-    for (const mutation of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const target = unwrapStaticExpression(mutation.getExpression());
-      const receiver = requestCallReceiver(target);
-      const member = requestStaticCallMember(target);
-      const [object] = mutation.getArguments();
-      if (!receiver || !member || !expressionContainsIdentity(object)) continue;
-      const objectMutation =
-        expressionResolvesToGlobalNamespace(receiver, 'Object', new Set(), 0) &&
-        ['assign', 'defineProperties', 'defineProperty', 'setPrototypeOf'].includes(member);
-      const reflectMutation =
-        expressionResolvesToGlobalNamespace(receiver, 'Reflect', new Set(), 0) &&
-        ['defineProperty', 'deleteProperty', 'set', 'setPrototypeOf'].includes(member);
-      if (objectMutation || reflectMutation) return false;
+      return { exportName, module };
     }
   }
-  return true;
+  return undefined;
 }
 
 function requestExpressionContainsClosedAuthority(

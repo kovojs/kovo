@@ -21,6 +21,7 @@ const SECURITY_SURFACE_FILES = new Set([
   'src/components/contacts.tsx',
   'src/db.ts',
   'src/endpoint-posture.test.ts',
+  'src/kovo.ts',
   'src/model.ts',
   'src/mutations.ts',
   'src/queries.ts',
@@ -30,10 +31,9 @@ const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
   'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Map([
   [
-    'src/app.tsx',
+    'src/kovo.ts',
     new Set([
       'appRuntimeDbProvider',
-      'appRuntimeDbReady',
       'appRuntimeMutationReplayStore',
       'appRuntimePrincipalEpochStore',
     ]),

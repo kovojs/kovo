@@ -591,12 +591,15 @@ function collectCall(
   const first = arguments_[0];
   const firstArgumentBinding = first === undefined ? undefined : expressionBindingKey(first);
   const assignedName = assignedCallName(node);
+  const assignedTopLevelConst =
+    assignedName === undefined ? false : callIsDirectTopLevelConstInitializer(node);
   const taggedLiteral =
     ts.isTaggedTemplateExpression(node) && ts.isNoSubstitutionTemplateLiteral(node.template)
       ? node.template.text
       : undefined;
   calls.push({
     ...(assignedName === undefined ? {} : { assignedName }),
+    ...(assignedTopLevelConst ? { assignedTopLevelConst: true } : {}),
     callee,
     ...(provenance === undefined
       ? {
@@ -1149,6 +1152,27 @@ function assignedCallName(
     return parent.left.text;
   }
   return undefined;
+}
+
+function callIsDirectTopLevelConstInitializer(
+  call: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
+): boolean {
+  const declaration = call.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== call ||
+    !ts.isIdentifier(declaration.name)
+  ) {
+    return false;
+  }
+  const declarationList = declaration.parent;
+  const statement = declarationList.parent;
+  return (
+    ts.isVariableDeclarationList(declarationList) &&
+    (declarationList.flags & ts.NodeFlags.Const) !== 0 &&
+    ts.isVariableStatement(statement) &&
+    ts.isSourceFile(statement.parent)
+  );
 }
 
 function identifierIsValueReference(identifier: ts.Identifier): boolean {

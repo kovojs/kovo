@@ -226,6 +226,7 @@ const templateFiles: readonly TemplateFile[] = [
   { path: 'src/_kovo/app-runtime-db-options.ts', postgresOnly: true },
   { path: 'src/_kovo/app-runtime-db.ts', sqlitePath: 'src/_kovo/app-runtime-db.sqlite.ts' },
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
+  'src/kovo.ts',
   'src/model.ts',
   'src/queries.ts',
   'src/mutations.ts',

@@ -1,11 +1,14 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
+import { compileComponentModule } from './compile.js';
+import { componentTaskBSourceOperationFacts } from './security-operation-facts.js';
+import { parseComponentModule } from './scan/parse.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -45,6 +48,184 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.parsedFactories).toContain('query');
     expect(result.resolver.exactNodeCount).toBe(1);
     expect(result.serverPackageRoots).toEqual([fixture.serverA]);
+  });
+
+  it('carries app-scoped handler roots into the finite TASK B semantic carrier', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'export const item = app.query({',
+        '  load(_input, request) { return request.db.select(); },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const finite = project.withEntryResolutions(entry, (source) => ({
+      compiled: compileComponentModule({ fileName: entry, source }),
+      operations: componentTaskBSourceOperationFacts(parseComponentModule(entry, source)),
+    }));
+
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: expect.stringMatching(/^query:.*item$/u),
+      }),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toContainEqual(expect.stringMatching(/^query:.*item$/u));
+  });
+
+  it('recognizes exact app access members and only exempts managed request.db writes', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/app-surfaces.tsx');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'declare const capturedDb: { insert(value?: unknown): unknown };',
+        "export const publicPage = app.route('/public', {",
+        "  access: app.publicAccess('public fixture page'),",
+        '  page: () => <main>Public</main>,',
+        '});',
+        "export const privatePage = app.route('/private', {",
+        '  access: [app.authenticated],',
+        '  page: () => <main>Private</main>,',
+        '});',
+        'export const managed = app.mutation({',
+        '  handler(_input, request) {',
+        '    const transaction = request.db;',
+        '    transaction.insert();',
+        '  },',
+        '});',
+        'export const destructured = app.mutation({',
+        '  handler(_input, { db }) { db.insert(); },',
+        '});',
+        'export const captured = app.mutation({',
+        '  handler() { capturedDb.insert(); },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const project = createCompilerOwnedAppContractProject({ rootNames: [contract, entry] });
+
+    const result = project.compileEntry(entry);
+    const staticFacts = project.staticFacts().filter((fact) => fact.fileName === entry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.component?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330'),
+    ).toHaveLength(1);
+    expect(
+      result.route?.routePageFacts.map((fact) => ({
+        access: fact.access,
+        route: fact.route,
+      })),
+    ).toEqual([
+      { access: { kind: 'public', reason: 'public fixture page' }, route: '/public' },
+      { access: { guards: ['authed'], kind: 'guard-chain' }, route: '/private' },
+    ]);
+    expect(staticFacts.map((fact) => fact.memberName)).toEqual(
+      expect.arrayContaining(['authenticated', 'mutation', 'publicAccess', 'route']),
+    );
+    expect(staticFacts.every((fact) => fact.source === result.source)).toBe(true);
+  });
+
+  it('keeps finite app-contract facts when build roots are workspace-relative', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const entry = join(fixture.root, 'app/src/product-entry.ts');
+    await writeSource(
+      contract,
+      [
+        "import { defineKovo } from '@kovojs/server';",
+        'export const app = defineKovo({',
+        "  appId: '00000000-0000-4000-8000-000000000002',",
+        '});',
+        '',
+      ].join('\n'),
+    );
+    await writeSource(
+      entry,
+      [
+        "import { app } from './kovo.js';",
+        'export const item = app.query({',
+        '  load(_input, request) { return request.db.select(); },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    const relativeContract = relative(process.cwd(), contract);
+    const relativeEntry = relative(process.cwd(), entry);
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [relativeContract, relativeEntry],
+    });
+
+    const result = project.compileEntry(relativeEntry);
+    const finite = project.withEntryResolutions(relativeEntry, (source) => {
+      const unprovedFileName = join(dirname(relativeEntry), 'unproved-copy.ts');
+      return {
+        compiled: compileComponentModule({ fileName: relativeEntry, source }),
+        operations: componentTaskBSourceOperationFacts(parseComponentModule(relativeEntry, source)),
+        unproved: compileComponentModule({ fileName: unprovedFileName, source }),
+        unprovedOperations: componentTaskBSourceOperationFacts(
+          parseComponentModule(unprovedFileName, source),
+        ),
+      };
+    });
+
+    expect(result.parsedFactories).toContain('query');
+    expect(result.resolver.exactNodeCount).toBe(1);
+    expect(finite.operations).toContainEqual(
+      expect.objectContaining({
+        door: 'handler-root',
+        kind: 'server.handler.root',
+        root: expect.stringMatching(/^query:.*item$/u),
+      }),
+    );
+    expect(
+      finite.compiled.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toContainEqual(expect.stringMatching(/^query:.*item$/u));
+    expect(finite.unprovedOperations).not.toContainEqual(
+      expect.objectContaining({ kind: 'server.handler.root' }),
+    );
+    expect(
+      finite.unproved.componentGraphFacts.flatMap(
+        (fact) => fact.securitySemanticGraph?.roots.map((root) => root.root) ?? [],
+      ),
+    ).toEqual([]);
   });
 
   it('accepts ordinary, named/star re-exported, aliased, and shared-package receivers', async () => {
@@ -438,6 +619,7 @@ describe('D1 compiler-owned exact project resolver', () => {
         ]),
       ),
     ).toEqual({
+      'blank-consumer-file-name': ['D1A107'],
       'blank-owner-key': ['D1A105'],
       'blank-server-package-root': ['D1A106'],
       'duplicate-span': ['D1A101'],

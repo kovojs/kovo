@@ -820,6 +820,111 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  // @kovo-security-certifies C13 app-contract-capability-root-provenance
+  it('carries exact defineKovo receiver roots across ordinary imports and re-exports', () => {
+    const result = analyze([
+      {
+        fileName: 'kovo.ts',
+        source: `
+          import { defineKovo } from '@kovojs/server';
+          export const app = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+        `,
+      },
+      {
+        fileName: 'contract.ts',
+        source: `export { app as product } from './kovo.js';`,
+      },
+      {
+        fileName: 'declarations.ts',
+        source: `
+          import { product as app } from './contract.js';
+          export const page = app.route('/contract', { render() { return null; } });
+          export const shell = app.layout({ render() { return null; } });
+          export const contacts = app.query({ load() { return { items: [] }; } });
+          export const save = app.mutation({ handler() { return { ok: true }; } });
+          export const health = app.endpoint({ handler() { return new Response('ok'); } });
+          export const digest = app.task({ run() { return 'done'; } });
+          export default app.assemble({
+            endpoints: [health],
+            layouts: [shell],
+            mutations: [save],
+            queries: [contacts],
+            routes: [page],
+            tasks: [digest],
+          });
+        `,
+      },
+      {
+        fileName: 'optimistic.ts',
+        source: `
+          import { product as app } from './contract.js';
+          import { contacts } from './declarations.js';
+          const input = { parse(value) { return value; } };
+          export const optimisticSave = app.mutation({
+            optimistic: [contacts.optimistic(input, (value) => value)],
+            handler() { return { ok: true }; },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      result.facts
+        .filter((fact) => fact.kind === 'root')
+        .map((fact) => `${fact.rootKind}:${fact.name}`)
+        .sort(),
+    ).toEqual([
+      'application:assemble',
+      'durable-task:digest',
+      'endpoint:health',
+      'layout:shell',
+      'mutation:optimisticSave',
+      'mutation:save',
+      'query:contacts',
+      'route:/contract',
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('does not authenticate same-named constructors, forged objects, or mutable contract exports', () => {
+    const result = analyze([
+      {
+        fileName: 'forged.ts',
+        source: `
+          function defineKovo() {
+            return { route() { return null; } };
+          }
+          export const sameNamed = defineKovo();
+          export const structural = { route() { return null; } };
+        `,
+      },
+      {
+        fileName: 'mutable.ts',
+        source: `
+          import { defineKovo } from '@kovojs/server';
+          export let mutable = defineKovo({
+            appId: '5f31d8d7-45e7-4e91-a34b-2b1263de9b5e',
+          });
+        `,
+      },
+      {
+        fileName: 'app.ts',
+        source: `
+          import { sameNamed, structural } from './forged.js';
+          import { mutable } from './mutable.js';
+          export const one = sameNamed.route('/same-name', {});
+          export const two = structural.route('/structural', {});
+          export const three = mutable.route('/mutable', {});
+        `,
+      },
+    ]);
+
+    expect(result.facts.filter((fact) => fact.kind === 'root')).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('keeps ordinary calls in JSX attributes and children bound to exact lexical provenance', () => {
     const result = analyze([
       {
@@ -1047,8 +1152,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV448')).toHaveLength(4);
   });
 
-  it('keeps more than 32 opaque JSX component invocations globally fail closed', () => {
-    const opaqueComponents = Array.from({ length: 40 }, (_, index) => `<Opaque${index} />`).join(
+  it('keeps more than 128 opaque JSX component invocations globally fail closed', () => {
+    const opaqueComponents = Array.from({ length: 160 }, (_, index) => `<Opaque${index} />`).join(
       '\n',
     );
     const files = [
@@ -1080,8 +1185,8 @@ describe('SPEC §6.6 capability-closed module graph', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('KV448');
   });
 
-  it('keeps more than 32 genuine opaque effects globally fail closed', () => {
-    const opaqueReads = Array.from({ length: 40 }, (_, index) => `value.member${index};`).join(
+  it('keeps more than 128 genuine opaque effects globally fail closed', () => {
+    const opaqueReads = Array.from({ length: 160 }, (_, index) => `value.member${index};`).join(
       '\n',
     );
     const files = [

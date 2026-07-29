@@ -1,15 +1,19 @@
 import { createHash } from 'node:crypto';
 import { realpathSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
 import { compileComponentModule } from './compile.js';
 import {
   appContractDeclarationFamilies,
+  appContractMemberNames,
   type AppContractDeclarationFamily,
+  type AppContractMemberName,
   type AppContractResolverDiagnostic,
+  type CompilerOwnedAppContractMemberResolution,
   type CompilerOwnedAppContractResolution,
+  validateCompilerOwnedAppContractMemberResolutions,
   validateCompilerOwnedAppContractResolutions,
   withCompilerOwnedAppContractResolutions,
 } from './app-contract-resolver.js';
@@ -69,17 +73,25 @@ export interface CompilerOwnedAppContractEntry {
   readonly source: string;
 }
 
+/** @internal Exact, source-bound app member fact consumed by compiler-owned static analyzers. */
+export interface CompilerOwnedAppContractStaticFact {
+  readonly end: number;
+  readonly fileName: string;
+  readonly memberName: AppContractMemberName;
+  readonly ownerKey: string;
+  readonly source: string;
+  readonly start: number;
+}
+
 /** @internal Exact filesystem project. No method accepts an identity claim. */
 export interface CompilerOwnedAppContractProject {
   compileEntry(fileName: string): CompilerOwnedAppContractEntry;
   diagnosticCodesForFile(fileName: string): readonly number[];
+  staticFacts(): readonly CompilerOwnedAppContractStaticFact[];
   resolverIntegrityMutations(
     fileName: string,
   ): Readonly<Record<string, readonly AppContractResolverDiagnostic[]>>;
-  withEntryResolutions<Value>(
-    fileName: string,
-    operation: (source: string) => Value,
-  ): Value;
+  withEntryResolutions<Value>(fileName: string, operation: (source: string) => Value): Value;
 }
 
 /** @internal Exact root names used to construct the compiler-owned TypeScript Program. */
@@ -116,6 +128,7 @@ type FactoryProof =
 interface EntryAnalysis {
   readonly diagnostics: readonly CompilerOwnedAppContractDiagnostic[];
   readonly facts: readonly CompilerOwnedAppContractResolution[];
+  readonly memberFacts: readonly CompilerOwnedAppContractMemberResolution[];
   readonly ownerKey: string | null;
   readonly serverPackageRoots: readonly string[];
 }
@@ -151,6 +164,7 @@ export function createCompilerOwnedAppContractProject(
   rawOptions: CreateCompilerOwnedAppContractProjectOptions,
 ): CompilerOwnedAppContractProject {
   const rootNames = snapshotRootNames(rawOptions);
+  const consumerRootNames = Object.freeze([...new Set(rawOptions.rootNames)].sort());
   const options = appContractCompilerOptions();
   const program = ts.createProgram({ options, rootNames });
   const checker = program.getTypeChecker();
@@ -158,12 +172,7 @@ export function createCompilerOwnedAppContractProject(
   const context: ProvenanceContext = { checker, options, program };
 
   const sourceFileFor = (fileName: string): ts.SourceFile => {
-    const normalized = normalizeFileName(fileName);
-    const exact =
-      program.getSourceFile(fileName) ??
-      program
-        .getSourceFiles()
-        .find((candidate) => normalizeFileName(candidate.fileName) === normalized);
+    const exact = programSourceFile(program, fileName);
     if (!exact) throw new TypeError(`App-contract project does not contain ${fileName}.`);
     return exact;
   };
@@ -172,6 +181,7 @@ export function createCompilerOwnedAppContractProject(
     const sourceFile = sourceFileFor(fileName);
     const diagnostics: CompilerOwnedAppContractDiagnostic[] = [];
     const facts: CompilerOwnedAppContractResolution[] = [];
+    const memberFacts: CompilerOwnedAppContractMemberResolution[] = [];
     const dynamicImport = firstAppProviderDynamicImport(sourceFile, context);
     if (dynamicImport) {
       diagnostics.push(
@@ -212,6 +222,23 @@ export function createCompilerOwnedAppContractProject(
           });
         }
       }
+      if (ts.isPropertyAccessExpression(node) && isAppContractMemberName(node.name.text)) {
+        const receiver = proveReceiver(sourceFile, node.expression, context, new Set(), 0);
+        if (receiver.kind === 'diagnostic') {
+          diagnostics.push(receiver.diagnostic);
+        } else if (receiver.kind === 'app') {
+          memberFacts.push({
+            end: node.getEnd(),
+            memberName: node.name.text,
+            node,
+            ownerKey: receiver.ownerKey,
+            serverPackageRoot: receiver.serverPackageRoot,
+            sourceFile,
+            sourceSnapshot: sourceFile.text,
+            start: node.getStart(sourceFile),
+          });
+        }
+      }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
@@ -235,7 +262,10 @@ export function createCompilerOwnedAppContractProject(
       }
     }
 
-    const integrity = validateCompilerOwnedAppContractResolutions(facts);
+    const integrity = [
+      ...validateCompilerOwnedAppContractResolutions(facts),
+      ...validateCompilerOwnedAppContractMemberResolutions(memberFacts),
+    ];
     if (integrity.length > 0) {
       throw new TypeError(integrity.map((entry) => entry.message).join('\n'));
     }
@@ -245,9 +275,14 @@ export function createCompilerOwnedAppContractProject(
     const serverPackageRoots = unique([
       ...reachableServerPackageRoots(sourceFile, context),
       ...facts.map((fact) => fact.serverPackageRoot),
+      ...memberFacts.map((fact) => fact.serverPackageRoot),
     ]);
     if (serverPackageRoots.length > 1) {
-      const target = facts[0]?.node ?? firstTopLevelCall(sourceFile)?.expression ?? sourceFile;
+      const target =
+        facts[0]?.node ??
+        memberFacts[0]?.node ??
+        firstTopLevelCall(sourceFile)?.expression ??
+        sourceFile;
       return {
         diagnostics: [
           appContractExperimentDiagnostic(
@@ -260,12 +295,16 @@ export function createCompilerOwnedAppContractProject(
           ),
         ],
         facts: [],
+        memberFacts: [],
         ownerKey: null,
         serverPackageRoots,
       };
     }
 
-    const ownerKeys = unique(facts.map((fact) => fact.ownerKey));
+    const ownerKeys = unique([
+      ...facts.map((fact) => fact.ownerKey),
+      ...memberFacts.map((fact) => fact.ownerKey),
+    ]);
     if (ownerKeys.length > 1) {
       diagnostics.push(
         appContractExperimentDiagnostic(
@@ -280,6 +319,7 @@ export function createCompilerOwnedAppContractProject(
     return {
       diagnostics: finalDiagnostics,
       facts: finalDiagnostics.length === 0 ? facts : [],
+      memberFacts: finalDiagnostics.length === 0 ? memberFacts : [],
       ownerKey: finalDiagnostics.length === 0 ? (ownerKeys[0] ?? null) : null,
       serverPackageRoots,
     };
@@ -292,46 +332,50 @@ export function createCompilerOwnedAppContractProject(
       if (analysis.diagnostics.length > 0) {
         return rejectedEntry(sourceFile, analysis);
       }
-      return withCompilerOwnedAppContractResolutions(analysis.facts, () => {
-        const component = compileComponentModule({
-          fileName: sourceFile.fileName,
-          source: sourceFile.text,
-        });
-        const route = compileRouteModule({
-          fileName: sourceFile.fileName,
-          source: sourceFile.text,
-        });
-        const parsed = parseComponentModule(sourceFile.fileName, sourceFile.text);
-        const loweredSource = lowerStandaloneSourceDerivedRegistryDeclarations({
-          fileName: sourceFile.fileName,
-          source: sourceFile.text,
-        });
-        const graphResult = deriveAppGraph({ components: [component], routePages: [route] });
-        return {
-          component,
-          diagnostics: [],
-          graph: {
-            handlerRoots: countHandlerRoots(graphResult.graph),
-            pages: graphResult.graph.pages?.length ?? 0,
-          },
-          loweredSource,
-          ownerKey: analysis.ownerKey,
-          parsedFactories: unique(
-            parsed.calls.flatMap((call) =>
-              isDeclarationFamily(call.frameworkFactory) ? [call.frameworkFactory] : [],
+      return withCompilerOwnedAppContractResolutions(
+        analysis.facts,
+        () => {
+          const component = compileComponentModule({
+            fileName: sourceFile.fileName,
+            source: sourceFile.text,
+          });
+          const route = compileRouteModule({
+            fileName: sourceFile.fileName,
+            source: sourceFile.text,
+          });
+          const parsed = parseComponentModule(sourceFile.fileName, sourceFile.text);
+          const loweredSource = lowerStandaloneSourceDerivedRegistryDeclarations({
+            fileName: sourceFile.fileName,
+            source: sourceFile.text,
+          });
+          const graphResult = deriveAppGraph({ components: [component], routePages: [route] });
+          return {
+            component,
+            diagnostics: [],
+            graph: {
+              handlerRoots: countHandlerRoots(graphResult.graph),
+              pages: graphResult.graph.pages?.length ?? 0,
+            },
+            loweredSource,
+            ownerKey: analysis.ownerKey,
+            parsedFactories: unique(
+              parsed.calls.flatMap((call) =>
+                isDeclarationFamily(call.frameworkFactory) ? [call.frameworkFactory] : [],
+              ),
             ),
-          ),
-          resolver: {
-            exactNodeCount: analysis.facts.length,
-            schema: 'kovo.app-contract-d1-compiler-resolver/v2',
-            sourceFileName: normalizeFileName(sourceFile.fileName),
-          },
-          route,
-          semanticGraph: graphResult.graph,
-          serverPackageRoots: analysis.serverPackageRoots,
-          source: sourceFile.text,
-        };
-      });
+            resolver: {
+              exactNodeCount: analysis.facts.length,
+              schema: 'kovo.app-contract-d1-compiler-resolver/v2',
+              sourceFileName: normalizeFileName(sourceFile.fileName),
+            },
+            route,
+            semanticGraph: graphResult.graph,
+            serverPackageRoots: analysis.serverPackageRoots,
+            source: sourceFile.text,
+          };
+        },
+        analysis.memberFacts,
+      );
     },
 
     diagnosticCodesForFile(fileName: string): readonly number[] {
@@ -345,6 +389,39 @@ export function createCompilerOwnedAppContractProject(
       );
     },
 
+    staticFacts(): readonly CompilerOwnedAppContractStaticFact[] {
+      const facts: CompilerOwnedAppContractStaticFact[] = [];
+      for (const fileName of consumerRootNames) {
+        const sourceFile = sourceFileFor(fileName);
+        const analysis = analyzeEntry(fileName);
+        if (analysis.diagnostics.length > 0) {
+          throw new TypeError(
+            analysis.diagnostics
+              .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+              .join('\n'),
+          );
+        }
+        for (const member of analysis.memberFacts) {
+          facts.push({
+            end: member.end,
+            fileName,
+            memberName: member.memberName,
+            ownerKey: member.ownerKey,
+            source: sourceFile.text,
+            start: member.start,
+          });
+        }
+      }
+      return Object.freeze(
+        facts.sort(
+          (left, right) =>
+            left.fileName.localeCompare(right.fileName) ||
+            left.start - right.start ||
+            left.end - right.end,
+        ),
+      );
+    },
+
     resolverIntegrityMutations(
       fileName: string,
     ): Readonly<Record<string, readonly AppContractResolverDiagnostic[]>> {
@@ -354,6 +431,9 @@ export function createCompilerOwnedAppContractProject(
         throw new TypeError('Resolver-integrity probe requires one accepted Arm A declaration.');
       }
       return Object.freeze({
+        'blank-consumer-file-name': validateCompilerOwnedAppContractResolutions([
+          { ...fact, consumerFileName: '' },
+        ]),
         'blank-owner-key': validateCompilerOwnedAppContractResolutions([{ ...fact, ownerKey: '' }]),
         'blank-server-package-root': validateCompilerOwnedAppContractResolutions([
           { ...fact, serverPackageRoot: '' },
@@ -375,10 +455,7 @@ export function createCompilerOwnedAppContractProject(
       });
     },
 
-    withEntryResolutions<Value>(
-      fileName: string,
-      operation: (source: string) => Value,
-    ): Value {
+    withEntryResolutions<Value>(fileName: string, operation: (source: string) => Value): Value {
       const sourceFile = sourceFileFor(fileName);
       const analysis = analyzeEntry(fileName);
       if (analysis.diagnostics.length > 0) {
@@ -388,8 +465,22 @@ export function createCompilerOwnedAppContractProject(
             .join('\n'),
         );
       }
-      return withCompilerOwnedAppContractResolutions(analysis.facts, () =>
-        operation(sourceFile.text),
+      // `sourceFileFor()` above proves this caller spelling resolves to the exact Program
+      // SourceFile. Carry only that authenticated alias into the invocation-local resolver so
+      // project-relative build censuses and absolute Program roots share identity without any
+      // ambient suffix/path guessing.
+      const facts = analysis.facts.map((fact) => ({
+        ...fact,
+        consumerFileName: fileName,
+      }));
+      const members = analysis.memberFacts.map((fact) => ({
+        ...fact,
+        consumerFileName: fileName,
+      }));
+      return withCompilerOwnedAppContractResolutions(
+        facts,
+        () => operation(sourceFile.text),
+        members,
       );
     },
   });
@@ -2353,7 +2444,7 @@ function snapshotRootNames(raw: CreateCompilerOwnedAppContractProjectOptions): r
     if (typeof fileName !== 'string' || fileName.length === 0) {
       throw new TypeError(`App-contract project rootNames[${index}] must be a non-empty string.`);
     }
-    return fileName;
+    return resolve(fileName);
   });
   if (names.length === 0) throw new TypeError('App-contract project needs at least one root file.');
   return Object.freeze([...new Set(names)].sort());
@@ -2589,17 +2680,23 @@ function isDeclarationFamily(value: string | undefined): value is AppContractDec
   );
 }
 
+function isAppContractMemberName(value: string): value is AppContractMemberName {
+  return (appContractMemberNames as readonly string[]).includes(value);
+}
+
 function normalizeFileName(fileName: string): string {
   return fileName.replaceAll('\\', '/');
 }
 
 function programSourceFile(program: ts.Program, fileName: string): ts.SourceFile | undefined {
   const normalized = normalizeFileName(fileName);
+  const absolute = normalizeFileName(resolve(fileName));
   return (
     program.getSourceFile(fileName) ??
-    program
-      .getSourceFiles()
-      .find((candidate) => normalizeFileName(candidate.fileName) === normalized)
+    program.getSourceFiles().find((candidate) => {
+      const candidateName = normalizeFileName(candidate.fileName);
+      return candidateName === normalized || normalizeFileName(resolve(candidateName)) === absolute;
+    })
   );
 }
 

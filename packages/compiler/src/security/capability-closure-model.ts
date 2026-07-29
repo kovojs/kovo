@@ -176,6 +176,13 @@ export interface ScannedExportBindingFact {
 /** @internal */
 export interface ScannedCallFact {
   readonly assignedName?: string;
+  /**
+   * The call is the direct initializer of a module-scope `const` binding. This narrow fact lets
+   * capability closure carry an exact reviewed declaration-factory result across ordinary
+   * imports/re-exports without treating mutable values or arbitrary function returns as trusted
+   * receivers.
+   */
+  readonly assignedTopLevelConst?: boolean;
   readonly callee: string;
   readonly calleeCandidates?: readonly ScannedBindingCandidate[];
   readonly calleeRootWideningRequired?: boolean;

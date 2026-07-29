@@ -32,6 +32,7 @@ import {
   type MutationDefinition,
   type MutationFormDefinition,
 } from '../mutation/definition.js';
+import { registerAppMutationAdapter, type AppMutationAdapter } from '../app-mutation-adapter.js';
 import type { Schema } from '../schema.js';
 export {
   compareResponseObservations,
@@ -119,11 +120,12 @@ export function createBetterAuthCredentialMutation<
   > &
     MutationCsrfDeclaration<Request>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> &
-  MutationFormDefinition<Key, Request> {
+  MutationFormDefinition<Key, Request> &
+  AppMutationAdapter {
   // This adapter's broad generic keeps both optional keys in its structural type. Enter the same
   // runtime-validating constructor directly: an actual dual declaration is still rejected before
   // any mutation snapshot or executable declaration can escape.
-  return constructMutationDeclaration(key, definition);
+  return registerAppMutationAdapter(constructMutationDeclaration(key, definition));
 }
 
 /**

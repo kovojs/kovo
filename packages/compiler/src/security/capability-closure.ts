@@ -108,6 +108,19 @@ type BindingOrigin =
       readonly namespace?: boolean;
       readonly specifier: string;
     }
+  | {
+      /**
+       * Exact method projection from a module-scope immutable result of a reviewed framework
+       * declaration factory. This is deliberately not a package export: `app.assemble`, for
+       * example, is an authenticated receiver root while `defineKovo()` itself is only inert
+       * contract construction.
+       */
+      readonly factoryExportName: string;
+      readonly factorySpecifier: string;
+      readonly kind: 'reviewed-declaration-receiver';
+      readonly member: string;
+      readonly rootKind: CapabilityRootKind;
+    }
   | { readonly kind: 'unknown'; readonly reason: string };
 
 interface ReachablePackageUse {
@@ -311,6 +324,22 @@ const frameworkRootKinds = new Set<CapabilityRootKind | 'none'>([
   'webhook',
 ]);
 const lexicalOverflowRootCandidateBudget = 32;
+
+const reviewedDeclarationReceiverRoots = new Map<string, ReadonlyMap<string, CapabilityRootKind>>([
+  [
+    frameworkMemberId('@kovojs/server', '.', 'defineKovo'),
+    new Map([
+      ['assemble', 'application'],
+      ['endpoint', 'endpoint'],
+      ['integrateMutation', 'mutation'],
+      ['layout', 'layout'],
+      ['mutation', 'mutation'],
+      ['query', 'query'],
+      ['route', 'route'],
+      ['task', 'durable-task'],
+    ]),
+  ],
+]);
 
 const frameworkPostureRegistry = createFrameworkPostureRegistry();
 
@@ -1125,6 +1154,20 @@ function discoverRoots(
         ).values(),
       ];
       for (const origin of origins) {
+        if (origin.kind === 'reviewed-declaration-receiver') {
+          let kind = origin.rootKind;
+          if (kind === 'durable-task' && call.hasCron) kind = 'scheduled-task';
+          appendRoot(roots, keys, {
+            kind,
+            ...(use.uncertain || use.rootWideningRequired || module.lexicalProvenanceBudgetExhausted
+              ? { lexicalProvenanceClosed: true }
+              : {}),
+            module: module.fileName,
+            name: call.firstLiteral ?? call.assignedName ?? origin.member,
+            site: call.site,
+          });
+          continue;
+        }
         if (origin.kind !== 'package') continue;
         const factoryId = frameworkMemberId(
           packageNameForSpecifier(origin.specifier),
@@ -2020,6 +2063,8 @@ class BindingResolver {
 
   resolveCandidate(moduleName: string, candidate: ScannedBindingCandidate): BindingOrigin {
     if (candidate.kind === 'unknown') return { kind: 'unknown', reason: candidate.reason };
+    const reviewedReceiver = this.#resolveReviewedDeclarationCandidate(moduleName, candidate);
+    if (reviewedReceiver !== undefined) return reviewedReceiver;
     let origin: BindingOrigin =
       candidate.kind === 'local'
         ? { exportName: candidate.exportName, kind: 'local', module: moduleName }
@@ -2027,9 +2072,35 @@ class BindingResolver {
           ? this.#resolveNamespaceImport(moduleName, candidate.specifier)
           : this.#resolveImport(moduleName, candidate.specifier, candidate.exportName, new Set());
     for (const member of candidate.members ?? []) {
-      origin = this.#resolveNamespaceMember(origin, member, new Set());
+      origin = this.#resolveMember(origin, member, new Set());
     }
     return origin;
+  }
+
+  #resolveReviewedDeclarationCandidate(
+    moduleName: string,
+    candidate: Exclude<ScannedBindingCandidate, { readonly kind: 'unknown' }>,
+  ): BindingOrigin | undefined {
+    if (candidate.kind !== 'import' || candidate.reviewedDeclarationFactory === undefined) {
+      return undefined;
+    }
+    const members = candidate.members ?? [];
+    if (members.length !== 1) return undefined;
+    const baseCandidate: ScannedBindingCandidate = {
+      exportName: candidate.exportName,
+      kind: 'import',
+      ...(candidate.namespace === true ? { namespace: true } : {}),
+      specifier: candidate.specifier,
+    };
+    const base = this.resolveCandidate(moduleName, baseCandidate);
+    if (base.kind !== 'package') return undefined;
+    const factoryId = frameworkMemberId(
+      packageNameForSpecifier(base.specifier),
+      packageSubpath(base.specifier),
+      base.exportName,
+    );
+    if (factoryId !== candidate.reviewedDeclarationFactory) return undefined;
+    return this.#reviewedDeclarationReceiver(factoryId, base, members[0]!);
   }
 
   #resolveBinding(moduleName: string, binding: string, seen: Set<string>): BindingOrigin {
@@ -2151,6 +2222,9 @@ class BindingResolver {
 
   #resolveNamespaceMember(origin: BindingOrigin, member: string, seen: Set<string>): BindingOrigin {
     if (origin.kind === 'unknown') return origin;
+    if (origin.kind === 'reviewed-declaration-receiver') {
+      return { kind: 'unknown', reason: `${member} is not a reviewed receiver member` };
+    }
     if (origin.namespace !== true) {
       return { kind: 'unknown', reason: `${member} is not a namespace member` };
     }
@@ -2158,6 +2232,58 @@ class BindingResolver {
       return { exportName: member, kind: 'package', specifier: origin.specifier };
     }
     return this.#resolveExport(origin.module, member, seen);
+  }
+
+  #resolveMember(origin: BindingOrigin, member: string, seen: Set<string>): BindingOrigin {
+    if (origin.kind === 'local') {
+      const declarationReceiver = this.#resolveLocalDeclarationReceiver(origin, member);
+      if (declarationReceiver !== undefined) return declarationReceiver;
+    }
+    return this.#resolveNamespaceMember(origin, member, seen);
+  }
+
+  #resolveLocalDeclarationReceiver(
+    origin: Extract<BindingOrigin, { readonly kind: 'local' }>,
+    member: string,
+  ): BindingOrigin | undefined {
+    const module = this.#modules.get(origin.module);
+    if (module === undefined) return undefined;
+    const factories = module.calls.filter(
+      (call) =>
+        call.assignedTopLevelConst === true &&
+        call.assignedName === origin.exportName &&
+        call.calleeRootWideningRequired !== true &&
+        call.calleeUncertain !== true,
+    );
+    if (factories.length !== 1) return undefined;
+    const call = factories[0]!;
+    const candidates = call.calleeCandidates;
+    if (candidates === undefined || candidates.length === 0) return undefined;
+    const origins = candidates.map((candidate) => this.resolveCandidate(origin.module, candidate));
+    const factory = sameOrigin(origins);
+    if (factory?.kind !== 'package') return undefined;
+    const factoryId = frameworkMemberId(
+      packageNameForSpecifier(factory.specifier),
+      packageSubpath(factory.specifier),
+      factory.exportName,
+    );
+    return this.#reviewedDeclarationReceiver(factoryId, factory, member);
+  }
+
+  #reviewedDeclarationReceiver(
+    factoryId: string,
+    factory: Extract<BindingOrigin, { readonly kind: 'package' }>,
+    member: string,
+  ): BindingOrigin | undefined {
+    const rootKind = reviewedDeclarationReceiverRoots.get(factoryId)?.get(member);
+    if (rootKind === undefined) return undefined;
+    return {
+      factoryExportName: factory.exportName,
+      factorySpecifier: factory.specifier,
+      kind: 'reviewed-declaration-receiver',
+      member,
+      rootKind,
+    };
   }
 }
 
@@ -2171,6 +2297,9 @@ function sameOrigin(origins: readonly BindingOrigin[]): BindingOrigin | undefine
 
 function bindingOriginKey(origin: BindingOrigin): string {
   if (origin.kind === 'unknown') return `unknown:${origin.reason}`;
+  if (origin.kind === 'reviewed-declaration-receiver') {
+    return `reviewed-declaration-receiver:${origin.factorySpecifier}:${origin.factoryExportName}:${origin.member}:${origin.rootKind}`;
+  }
   return origin.kind === 'local'
     ? `local:${origin.module}:${origin.exportName}:${origin.namespace === true ? 'namespace' : 'value'}`
     : `package:${origin.specifier}:${origin.exportName}:${origin.namespace === true ? 'namespace' : 'value'}`;
