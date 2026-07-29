@@ -13,10 +13,6 @@ import {
 } from '@kovojs/core/internal/wire-input-grammar';
 import { createExampleTestRequestHandler } from '../../../tests/example-raw-request-handler.js';
 
-import {
-  buildCrmInteractiveApp as buildCrmInteractiveApplication,
-  type BuildCrmInteractiveAppOptions,
-} from './interactive-app.js';
 import { contacts, deals } from './schema.js';
 
 // SPEC.md §9.1: the interactive CRM app's mutation endpoints run the REAL Drizzle
@@ -36,9 +32,11 @@ const insertedDealId = 'd-11111111-1111-4111-8111-111111111111';
 const unownedDealInputId = 'd-22222222-2222-4222-8222-222222222222';
 const invalidStageDealId = 'd-33333333-3333-4333-8333-333333333333';
 
-async function buildCrmInteractiveApp(options: BuildCrmInteractiveAppOptions = {}) {
+async function buildCrmInteractiveApp() {
   return runWithCrmGeneratedGraphs(async () => {
-    const application = await buildCrmInteractiveApplication(options);
+    const { buildCrmInteractiveApp: buildCrmInteractiveApplication } =
+      await import('./interactive-app.js');
+    const application = await buildCrmInteractiveApplication();
     return { ...application, handler: createExampleTestRequestHandler(application.app) };
   });
 }

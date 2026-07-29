@@ -6,6 +6,7 @@ import {
 import { isRenderedHtml, renderedHtmlContent, renderHtmlValue } from './html.js';
 import { isKovoComponentDescriptor } from './component-authority.js';
 import type { MutationFail } from './mutation.js';
+import { securityPromiseResolve, securityPromiseThen } from './response-security-intrinsics.js';
 import { formLikeToRecord, type ValidationFailurePayload } from './schema.js';
 import {
   witnessArrayAppend,
@@ -63,7 +64,7 @@ export function renderComponent<
   component: Component<Props>,
   queries: Queries,
   options: ComponentRenderOptions<State> = {},
-): string {
+): Promise<string> | string {
   if (!isKovoComponentDescriptor(component)) {
     throw new TypeError('Kovo refused a component descriptor without framework provenance.');
   }
@@ -79,10 +80,22 @@ export function renderComponent<
   return renderComponentValue(render(queries, state, slots));
 }
 
-function renderComponentValue(value: unknown): string {
+function renderComponentValue(value: unknown): Promise<string> | string {
+  if (isPromiseLike(value)) {
+    return securityPromiseThen(securityPromiseResolve(value), renderComponentValue);
+  }
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (isRenderedHtml(value)) return renderedHtmlContent(value);
   return renderHtmlValue(value);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 /**
@@ -103,7 +116,7 @@ export function renderComponentMutationFailure<
   queries: Queries,
   failure: MutationFail,
   options: ComponentMutationFailureRenderOptions<State>,
-): string {
+): Promise<string> | string {
   const { formName, slots, submitted, ...renderOptions } = options;
 
   return renderComponent(component, queries, {

@@ -12,7 +12,7 @@ import {
   TableRow,
 } from '@kovojs/ui/table';
 
-import { createDeal, type CrmRequest } from '../mutations.js';
+import { createDeal } from '../mutations.js';
 import {
   contactListQuery,
   openDealsQuery,
@@ -121,75 +121,43 @@ const pipelineStyles = style.create({
   },
 });
 
-interface PipelineRenderSlots {
-  request?: CrmRequest | undefined;
-}
-
 function renderStageCard(bucket: PipelineStageBucket): string {
-  return rendered(
-    Card.definition.render({
-      children: (
-        <div style={pipelineStyles.stackSm}>
-          <div>{stageBadge(bucket.stage)}</div>
-          <p style={pipelineStyles.tabularStrong}>{money(bucket.total)}</p>
-        </div>
-      ),
-    }),
+  return (
+    <Card>
+      <div style={pipelineStyles.stackSm}>
+        <div>{stageBadge(bucket.stage)}</div>
+        <p style={pipelineStyles.tabularStrong}>{money(bucket.total)}</p>
+      </div>
+    </Card>
   );
-}
-
-function rendered(value: unknown): string {
-  return String(value);
 }
 
 function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, ContactRow>): string {
-  const head = rendered(
-    TableHead.definition.render({
-      children: rendered(
-        TableRow.definition.render({
-          children:
-            rendered(TableHeaderCell.definition.render({ children: 'Deal' })) +
-            rendered(TableHeaderCell.definition.render({ children: 'Contact' })) +
-            rendered(TableHeaderCell.definition.render({ children: 'Amount' })),
-        }),
-      ),
-    }),
-  );
-
-  const rows = openDeals
-    .map((deal) => {
-      const dealCell = rendered(
-        TableCell.definition.render({
-          children: (
-            <a style={pipelineStyles.backLink} href={`/deals/${deal.id}`}>
-              {deal.id.toUpperCase()}
-            </a>
-          ),
-        }),
-      );
-      const contactCell = rendered(
-        TableCell.definition.render({
-          children: contactsById.get(deal.contactId)?.name ?? deal.contactId,
-        }),
-      );
-      const amountCell = rendered(
-        TableCell.definition.render({
-          children: <span style={pipelineStyles.tabular}>{money(deal.amount)}</span>,
-        }),
-      );
-
-      return rendered(
-        TableRow.definition.render({
-          children: dealCell + contactCell + amountCell,
-        }),
-      );
-    })
-    .join('');
-
-  return rendered(
-    Table.definition.render({
-      children: head + rendered(TableBody.definition.render({ children: rows })),
-    }),
+  return (
+    <Table>
+      <TableHead>
+        <TableRow>
+          <TableHeaderCell>Deal</TableHeaderCell>
+          <TableHeaderCell>Contact</TableHeaderCell>
+          <TableHeaderCell>Amount</TableHeaderCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {openDeals.map((deal) => (
+          <TableRow>
+            <TableCell>
+              <a style={pipelineStyles.backLink} href={`/deals/${deal.id}`}>
+                {deal.id.toUpperCase()}
+              </a>
+            </TableCell>
+            <TableCell>{contactsById.get(deal.contactId)?.name ?? deal.contactId}</TableCell>
+            <TableCell>
+              <span style={pipelineStyles.tabular}>{money(deal.amount)}</span>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -200,19 +168,15 @@ export const PipelineRegion = component({
     openDeals: openDealsQuery,
     pipelineByStage: pipelineByStageQuery,
   },
-  render: (
-    {
-      contactList,
-      openDeals,
-      pipelineByStage,
-    }: {
-      contactList: ContactListResult;
-      openDeals: OpenDealsResult;
-      pipelineByStage: PipelineByStageResult;
-    },
-    _state,
-    _slots: PipelineRenderSlots = {},
-  ) => {
+  render: ({
+    contactList,
+    openDeals,
+    pipelineByStage,
+  }: {
+    contactList: ContactListResult;
+    openDeals: OpenDealsResult;
+    pipelineByStage: PipelineByStageResult;
+  }) => {
     const contacts = contactList.items;
     const buckets = pipelineByStage.buckets;
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
@@ -267,11 +231,9 @@ export const PipelineRegion = component({
                 placeholder="Amount"
                 style={pipelineStyles.input}
               />
-              {Button.definition.render({
-                children: 'Create deal',
-                type: 'submit',
-                variant: 'primary',
-              })}
+              <Button type="submit" variant="primary">
+                Create deal
+              </Button>
             </div>
           </form>
         </section>

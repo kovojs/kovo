@@ -1,6 +1,5 @@
 import '../../../tests/example-generated-graphs.setup.js';
 
-import { readonlyDb } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
@@ -12,17 +11,12 @@ import {
   type MoveDealInput,
 } from './model.js';
 import {
-  applyMoveDealPipeline,
-  closeDealOptimistic,
-  createDealOptimistic,
-  moveDealOptimistic,
+  predictCloseDealOpenList,
+  predictCreateDealContacts,
+  predictCreateDealPipeline,
+  predictMoveDealPipeline,
 } from './mutations.js';
-import {
-  contactListQuery,
-  dealListQuery,
-  openDealsQuery,
-  pipelineByStageQuery,
-} from './queries.js';
+import type { ContactListResult, OpenDealsResult, PipelineByStageResult } from './queries.js';
 import { contacts, deals } from './schema.js';
 
 async function beforeAndAfter<Value>(
@@ -35,15 +29,6 @@ async function beforeAndAfter<Value>(
   return { before, after: await load(db) };
 }
 
-function applyTransform<Value, Input>(transform: unknown, before: Value, input: Input): Value {
-  expect(typeof transform).toBe('function');
-  if (typeof transform !== 'function') return before;
-
-  const draft = structuredClone(before);
-  const returned = (transform as (draft: Value, input: Input) => unknown)(draft, input);
-  return returned === undefined ? draft : (returned as Value);
-}
-
 describe('CRM optimistic demo behavior', () => {
   it('updates the contact list and pipeline summary for a new deal', async () => {
     const input: CreateDealInput = {
@@ -53,67 +38,81 @@ describe('CRM optimistic demo behavior', () => {
       stage: 'open',
     };
 
-    const contactList = await beforeAndAfter(
-      (db) => contactListQuery.load(undefined, queryContext(db)),
-      createDealEffect(input),
-    );
-    expect(
-      applyTransform(
-        createDealOptimistic.transforms[contactListQuery.key],
-        contactList.before,
-        input,
-      ),
-    ).toEqual(contactList.after);
+    const contactList = await beforeAndAfter(loadContactList, createDealEffect(input));
+    expect(predictCreateDealContacts(contactList.before, input)).toEqual(contactList.after);
 
-    const pipeline = await beforeAndAfter(
-      (db) => pipelineByStageQuery.load(undefined, queryContext(db)),
-      createDealEffect(input),
-    );
-    expect(
-      applyTransform(
-        createDealOptimistic.transforms[pipelineByStageQuery.key],
-        pipeline.before,
-        input,
-      ),
-    ).toEqual(pipeline.after);
+    const pipeline = await beforeAndAfter(loadPipelineByStage, createDealEffect(input));
+    expect(predictCreateDealPipeline(pipeline.before, input)).toEqual(pipeline.after);
   });
 
-  it('uses server fragments for stage moves, but keeps a row-carrying helper for summaries', async () => {
+  it('keeps a row-carrying prediction helper for stage summaries', async () => {
     const input: MoveDealInput = { dealId: 'd1', stage: 'won' };
-
-    expect(moveDealOptimistic.transforms[openDealsQuery.key]).toBe('await-fragment');
-    expect(moveDealOptimistic.transforms[pipelineByStageQuery.key]).toBe('await-fragment');
-
-    const { before, after } = await beforeAndAfter(
-      (db) => pipelineByStageQuery.load(undefined, queryContext(db)),
-      (db) => db.update(deals).set({ stage: input.stage }).where(eq(deals.id, input.dealId)),
+    const { before, after } = await beforeAndAfter(loadPipelineByStage, (db) =>
+      db.update(deals).set({ stage: input.stage }).where(eq(deals.id, input.dealId)),
     );
     expect(
-      applyMoveDealPipeline(before, { amount: 5000, fromStage: 'open', toStage: input.stage }),
+      predictMoveDealPipeline(before, {
+        amount: 5000,
+        fromStage: 'open',
+        toStage: input.stage,
+      }),
     ).toEqual(after);
   });
 
-  it('removes a closed deal from the open pipeline while waiting for server-computed totals', async () => {
+  it('removes a closed deal from the open pipeline', async () => {
     const input: CloseDealInput = { dealId: 'd1' };
-
-    const { before, after } = await beforeAndAfter(
-      (db) => openDealsQuery.load(undefined, queryContext(db)),
-      (db) =>
-        db
-          .update(deals)
-          .set({ stage: 'won', amount: sql`compute_commission(${deals.amount})` })
-          .where(eq(deals.id, input.dealId)),
+    const { before, after } = await beforeAndAfter(loadOpenDeals, (db) =>
+      db
+        .update(deals)
+        .set({ stage: 'won', amount: sql`compute_commission(${deals.amount})` })
+        .where(eq(deals.id, input.dealId)),
     );
-
-    const openDealsTransform = closeDealOptimistic.transforms[openDealsQuery.key];
-    expect(applyTransform(openDealsTransform, before, input)).toEqual(after);
-    expect(closeDealOptimistic.transforms[dealListQuery.key]).toBe('await-fragment');
-    expect(closeDealOptimistic.transforms[pipelineByStageQuery.key]).toBe('await-fragment');
+    expect(predictCloseDealOpenList(before, input)).toEqual(after);
   });
 });
 
-function queryContext(db: CrmDb) {
-  return { db: readonlyDb(db), request: { db } };
+async function loadContactList(db: CrmDb): Promise<ContactListResult> {
+  return {
+    items: await db
+      .select({
+        id: contacts.id,
+        name: contacts.name,
+        email: contacts.email,
+        ownerId: contacts.ownerId,
+        dealCount: contacts.dealCount,
+      })
+      .from(contacts)
+      .orderBy(contacts.id),
+  };
+}
+
+async function loadPipelineByStage(db: CrmDb): Promise<PipelineByStageResult> {
+  return {
+    buckets: await db
+      .select({
+        stage: deals.stage,
+        total: sql<number>`coalesce(sum(${deals.amount}), 0)::int`,
+      })
+      .from(deals)
+      .groupBy(deals.stage)
+      .orderBy(deals.stage),
+  };
+}
+
+async function loadOpenDeals(db: CrmDb): Promise<OpenDealsResult> {
+  return {
+    items: await db
+      .select({
+        id: deals.id,
+        contactId: deals.contactId,
+        stage: deals.stage,
+        amount: deals.amount,
+        ownerId: deals.ownerId,
+      })
+      .from(deals)
+      .where(eq(deals.stage, 'open'))
+      .orderBy(deals.id),
+  };
 }
 
 function createDealEffect(input: CreateDealInput) {

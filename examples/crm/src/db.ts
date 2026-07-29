@@ -5,6 +5,7 @@ import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
 /** The CRM runtime database: Drizzle over PGlite. */
 export type CrmDb = PgliteDatabase;
+export const FALLBACK_CRM_DEMO_SESSION_ID = 'demo-session';
 
 const SCHEMA_DDL = [
   // Presentational fields carry defaults so the demo forms can keep their inputs small.

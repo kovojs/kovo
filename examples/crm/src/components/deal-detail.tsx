@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
-import { closeDeal, moveDeal, type CrmRequest } from '../mutations.js';
+import { closeDeal, moveDeal } from '../mutations.js';
 import {
   activityListQuery,
   contactListQuery,
@@ -125,10 +125,6 @@ const dealDetailStyles = style.create({
   },
 });
 
-interface DealDetailRenderSlots {
-  request?: CrmRequest | undefined;
-}
-
 // Rendered as both the detail page region and the deal-action fragment payload.
 export const DealDetailRegion = component({
   props: { dealId: String },
@@ -137,21 +133,17 @@ export const DealDetailRegion = component({
     contactList: contactListQuery,
     dealList: dealListQuery,
   },
-  render: (
-    {
-      activityList,
-      contactList,
-      dealId,
-      dealList,
-    }: {
-      activityList: ActivityListResult;
-      contactList: ContactListResult;
-      dealId: string;
-      dealList: DealListResult;
-    },
-    _state,
-    _slots: DealDetailRenderSlots = {},
-  ) => {
+  render: ({
+    activityList,
+    contactList,
+    dealId,
+    dealList,
+  }: {
+    activityList: ActivityListResult;
+    contactList: ContactListResult;
+    dealId: string;
+    dealList: DealListResult;
+  }) => {
     const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);
     const activities = activityList.items.filter((item) => item.dealId === dealId);

@@ -45,12 +45,12 @@ describe('bugz.md M2 / bugz-3 L5: compiler escapeText single-escape (SPEC §4.5/
     expect(html).not.toContain(PREFIX);
   });
 
-  it('D) live-component server render of escapeText text is single-escaped', () => {
+  it('D) live-component server render of escapeText text is single-escaped', async () => {
     const Widget = component({
       render: () =>
         jsx('span', { children: escapeText('R&D <b>') }) as unknown as ComponentRenderResult,
     });
-    const html = renderComponent(Widget, {});
+    const html = await renderComponent(Widget, {});
     expect(html).toBe('<span>R&amp;D &lt;b&gt;</span>');
     expect(html).not.toContain(PREFIX);
   });

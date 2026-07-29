@@ -80,7 +80,11 @@ const DEMO_FAVICON_ICO = Buffer.from([
  *     vite: import('vite-plus').ViteDevServer,
  *     runtime: { createRequestHandler: (app: unknown) => unknown },
  *   ) =>
- *     Promise<{ referenceApp: unknown, buildHandler: () => unknown }>,
+ *     Promise<{
+ *       referenceApp: unknown,
+ *       buildHandler: () => unknown,
+ *       onEvict?: (sid: string) => void,
+ *     }>,
  *   host?: string,
  *   port?: number,
  *   strictPort?: boolean,
@@ -121,13 +125,14 @@ export async function createDemoServeServer({
       throw new Error('@kovojs/server/internal/app-shell-vite must export createRequestHandler.');
     }
 
-    const { referenceApp, buildHandler } = await loadInstanceFactory(vite, {
+    const { referenceApp, buildHandler, onEvict } = await loadInstanceFactory(vite, {
       createRequestHandler,
     });
     const dispatcher = createPerSessionDispatcher({
       buildHandler,
       idleMs: positiveEnvInt('KOVO_DEMO_IDLE_MS', 20 * 60_000),
       maxSessions: positiveEnvInt('KOVO_DEMO_MAX_SESSIONS', 40),
+      ...(onEvict === undefined ? {} : { onEvict }),
       warmSessions: nonNegativeEnvInt('KOVO_DEMO_WARM_SESSIONS', 0),
     });
 

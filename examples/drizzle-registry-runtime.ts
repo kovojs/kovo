@@ -17,6 +17,7 @@ import { serializeCoreRegistryModule } from '../packages/drizzle/src/derive-code
 import { deriveOptimistic } from '../packages/drizzle/src/derive.ts';
 import { puntReasonLabel } from '../packages/core/src/derivation.ts';
 import type { AlgebraicQueryShape, SymbolicEffect } from '../packages/core/src/derivation.ts';
+import { compilerOwnedAppContractStaticFactsFromFiles } from '../packages/compiler/src/app-contract-project.ts';
 import { registerGeneratedMutationTouchRegistry } from '../packages/server/src/generated-mutation-registry.ts';
 import { registerGeneratedQueryReadRegistry } from '../packages/server/src/generated-query-registry.ts';
 
@@ -53,16 +54,21 @@ export interface ExampleCoreRegistryOptions {
 
 export function registerExampleDrizzleRegistries(options: ExampleDrizzleRegistryOptions): void {
   const files = sourceFilesForDrizzleRegistry(options.sourceRoot);
-  const queryFacts = extractQueryFactsFromProject({ files });
+  const appContractStaticFacts = compilerOwnedAppContractStaticFactsFromFiles(
+    files,
+    options.sourceRoot,
+  );
+  const input = { appContractStaticFacts, files };
+  const queryFacts = extractQueryFactsFromProject(input);
   // SPEC.md §11.4 / §10.2 / §10.3: gate on the error-severity data-plane diagnostics instead of
   // silently discarding `.diagnostics`. The default `vp build` path gates these too (the kovo()
   // Vite plugin), so this is defense-in-depth that keeps the example registry fail-closed if the
   // example is built without the plugin gate.
-  assertNoDataPlaneErrors(files, queryFacts);
+  assertNoDataPlaneErrors(input, queryFacts);
   const queryRegistry = queryFacts
     .filter((fact) => fact.reads.length > 0)
     .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
-  const touchGraph = extractTouchGraphFromProject({ files });
+  const touchGraph = extractTouchGraphFromProject(input);
   const mutationTouchGraphKeys = options.mutationTouchGraphKeys ?? {};
   const mutationTouchRegistry =
     Object.keys(mutationTouchGraphKeys).length === 0
@@ -102,13 +108,13 @@ export interface ExampleOptimisticDerivationFact {
  * an out-of-grammar pair stays hand-written / `'await-fragment'` with its named reason.
  */
 function deriveExampleOptimisticSets(
-  files: readonly SourceFileInput[],
+  input: ExampleStaticAnalysisInput,
   invalidations: Readonly<Record<string, readonly string[]>>,
   mutationTouchGraphKeys: Readonly<Record<string, string>>,
 ): { derivations: Record<string, string[]>; facts: ExampleOptimisticDerivationFact[] } {
-  const effectFacts = extractSymbolicEffectsFromProject({ files });
+  const effectFacts = extractSymbolicEffectsFromProject(input);
   const shapeByQuery = new Map<string, AlgebraicQueryShape>(
-    extractAlgebraicShapesFromProject({ files }).map((shape) => [shape.query, shape]),
+    extractAlgebraicShapesFromProject(input).map((shape) => [shape.query, shape]),
   );
   const derivations: Record<string, string[]> = {};
   const facts: ExampleOptimisticDerivationFact[] = [];
@@ -161,10 +167,15 @@ function computeExampleCoreRegistry(
   options: ExampleCoreRegistryOptions,
 ): ExampleRegistryComputation {
   const files = sourceFilesForDrizzleRegistry(options.sourceRoot);
+  const appContractStaticFacts = compilerOwnedAppContractStaticFactsFromFiles(
+    files,
+    options.sourceRoot,
+  );
+  const input = { appContractStaticFacts, files };
   // Defense-in-depth: never emit a registry for a project with error-severity data-plane findings.
-  assertNoDataPlaneErrors(files, extractQueryFactsFromProject({ files }));
+  assertNoDataPlaneErrors(input, extractQueryFactsFromProject(input));
 
-  const touchGraph = extractTouchGraphFromProject({ files });
+  const touchGraph = extractTouchGraphFromProject(input);
   const invalidationRegistry = deriveInvalidationRegistry({
     mutations: Object.entries(options.mutationTouchGraphKeys).map(([mutation, touchGraphKey]) => ({
       mutation,
@@ -181,7 +192,7 @@ function computeExampleCoreRegistry(
   // SPEC.md §10.5 — DERIVE the optimistic transforms the compiler can prove, and fold them into
   // `OptimisticDerivationSets` so they become optional (derived) in each mutation's optimistic map.
   const { derivations, facts } = deriveExampleOptimisticSets(
-    files,
+    input,
     invalidations,
     options.mutationTouchGraphKeys,
   );
@@ -240,13 +251,18 @@ export function writeExampleCoreRegistry(
  * projection / exempt-table reads), and KV429 (single-row lost-update writes). Reuses the SAME
  * `@kovojs/drizzle` analyzers as the `kovo` CLI and the kovo() Vite plugin (one source of truth).
  */
+interface ExampleStaticAnalysisInput {
+  appContractStaticFacts: ReturnType<typeof compilerOwnedAppContractStaticFactsFromFiles>;
+  files: readonly SourceFileInput[];
+}
+
 function assertNoDataPlaneErrors(
-  files: readonly SourceFileInput[],
+  input: ExampleStaticAnalysisInput,
   queryFacts: ReturnType<typeof extractQueryFactsFromProject>,
 ): void {
   const findings: string[] = [];
 
-  for (const diagnostic of analyzeSqlSafetyFromProject({ files })) {
+  for (const diagnostic of analyzeSqlSafetyFromProject(input)) {
     if ((diagnostic.severity ?? 'error') === 'error') {
       findings.push(`ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`);
     }
@@ -256,7 +272,7 @@ function assertNoDataPlaneErrors(
       findings.push(`ERROR ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`);
     }
   }
-  for (const fact of extractToctouFromProject({ files })) {
+  for (const fact of extractToctouFromProject(input)) {
     findings.push(
       `ERROR KV429 ${fact.site} Read-then-write on a contended column without an atomic/version guard (${fact.table}.${fact.column}).`,
     );

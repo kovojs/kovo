@@ -1,28 +1,25 @@
-import { guards, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { s, type JsonValue } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
-import type { CrmDb } from './db.js';
+import { app } from './kovo.js';
 import { deal } from './model.js';
-import type { CrmRequest } from './mutations.js';
 import { activities, contacts, deals } from './schema.js';
 
 // Drizzle reads are extracted from each loader and exposed as generated query-read registries during
 // tests/runtime.
 //
-// SPEC §9.4/§10.3 (MARQUEE / KV433 Stage 1): a query loader receives the framework-owned read-only
-// managed handle as `context.db`, typed `Reader<CrmDb>` — the write verbs are removed at the type
-// level and throw `KovoReadonlyHandleError` at runtime.
-type CrmQueryLoadContext = QueryLoadContext<CrmRequest, CrmDb>;
+// SPEC §9.4/§10.3 (MARQUEE / KV433 Stage 1): `defineKovo({ db })` infers the framework-owned
+// read-only managed handle at `context.db`; write verbs are absent at the type level and throw
+// `KovoReadonlyHandleError` at runtime.
 
 // Every CRM read returns the signed-in owner's pipeline/contacts, so each query is an
 // authenticated surface with the session-presence guard that is its KV436 access decision
 // (SPEC §10.2), matching the guarded mutations and routes.
-const crmRead = guards.authed<CrmRequest>();
-
 // Keep the Drizzle selects inline so the graph emitter can read the same source
 // the app runs.
 
 export type ContactRow = {
+  readonly [key: string]: JsonValue;
   id: string;
   name: string;
   email: string;
@@ -31,6 +28,7 @@ export type ContactRow = {
 };
 
 export type DealRow = {
+  readonly [key: string]: JsonValue;
   id: string;
   contactId: string;
   stage: string;
@@ -39,31 +37,38 @@ export type DealRow = {
 };
 
 export type ContactListResult = {
+  readonly [key: string]: JsonValue;
   items: ContactRow[];
 };
 
 export type DealListResult = {
+  readonly [key: string]: JsonValue;
   items: DealRow[];
 };
 
 export type ContactDealCountResult = {
+  readonly [key: string]: JsonValue;
   count: number;
 };
 
 export type OpenDealsResult = {
+  readonly [key: string]: JsonValue;
   items: DealRow[];
 };
 
 export type PipelineStageBucket = {
+  readonly [key: string]: JsonValue;
   stage: string;
   total: number;
 };
 
 export type PipelineByStageResult = {
+  readonly [key: string]: JsonValue;
   buckets: PipelineStageBucket[];
 };
 
 export type ActivityRow = {
+  readonly [key: string]: JsonValue;
   id: number;
   dealId: string;
   kind: string;
@@ -71,14 +76,15 @@ export type ActivityRow = {
 };
 
 export type ActivityListResult = {
+  readonly [key: string]: JsonValue;
   items: ActivityRow[];
 };
 
 /** AGG(contacts) — the full contact book, ordered by id (a derivable rowset). */
-export const contactListQuery = query({
-  guard: crmRead,
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<ContactListResult> => {
-    const db = crmQueryDb(context);
+export const contactListQuery = app.query({
+  access: [app.authenticated],
+  load: async (_input, context): Promise<ContactListResult> => {
+    const db = context.db;
     const items = await db
       .select({
         id: contacts.id,
@@ -94,10 +100,10 @@ export const contactListQuery = query({
 });
 
 /** AGG(deals) ordered by id — the full pipeline list (a derivable rowset). */
-export const dealListQuery = query({
-  guard: crmRead,
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<DealListResult> => {
-    const db = crmQueryDb(context);
+export const dealListQuery = app.query({
+  access: [app.authenticated],
+  load: async (_input, context): Promise<DealListResult> => {
+    const db = context.db;
     const items = await db
       .select({
         id: deals.id,
@@ -113,22 +119,22 @@ export const dealListQuery = query({
 });
 
 /** COUNT(deals) — the scalar count of deals across the pipeline (derivable). */
-export const contactDealCountQuery = query({
-  guard: crmRead,
+export const contactDealCountQuery = app.query({
+  access: [app.authenticated],
   output: s.object({ count: s.number() }),
   reads: [deal],
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<ContactDealCountResult> => {
-    const db = crmQueryDb(context);
+  load: async (_input, context): Promise<ContactDealCountResult> => {
+    const db = context.db;
     const rows = await db.select({ value: count() }).from(deals);
     return { count: Number(rows[0]?.value ?? 0) };
   },
 });
 
 /** AGG(deals WHERE stage = 'open') — the open pipeline (a filtered rowset). */
-export const openDealsQuery = query({
-  guard: crmRead,
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<OpenDealsResult> => {
-    const db = crmQueryDb(context);
+export const openDealsQuery = app.query({
+  access: [app.authenticated],
+  load: async (_input, context): Promise<OpenDealsResult> => {
+    const db = context.db;
     const items = await db
       .select({
         id: deals.id,
@@ -147,14 +153,14 @@ export const openDealsQuery = query({
 /**
  * SUM(amount) GROUP BY stage — the pipeline value per stage.
  */
-export const pipelineByStageQuery = query({
-  guard: crmRead,
+export const pipelineByStageQuery = app.query({
+  access: [app.authenticated],
   output: s.object({
     buckets: s.array(s.object({ stage: s.string(), total: s.number() })),
   }),
   reads: [deal],
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<PipelineByStageResult> => {
-    const db = crmQueryDb(context);
+  load: async (_input, context): Promise<PipelineByStageResult> => {
+    const db = context.db;
     const buckets = await db
       .select({ stage: deals.stage, total: sql<number>`coalesce(sum(${deals.amount}), 0)::int` })
       .from(deals)
@@ -165,10 +171,10 @@ export const pipelineByStageQuery = query({
 });
 
 /** AGG(activities) ordered by id — timeline rows for deal-detail regions. */
-export const activityListQuery = query({
-  guard: crmRead,
-  load: async (_input: unknown, context?: CrmQueryLoadContext): Promise<ActivityListResult> => {
-    const db = crmQueryDb(context);
+export const activityListQuery = app.query({
+  access: [app.authenticated],
+  load: async (_input, context): Promise<ActivityListResult> => {
+    const db = context.db;
     const items = await db
       .select({
         id: activities.id,
@@ -190,13 +196,3 @@ export const crmQueries = [
   pipelineByStageQuery,
   activityListQuery,
 ];
-
-// SPEC §9.4 (MARQUEE): resolve the framework-threaded read-only handle. The loader no longer takes
-// db from the request — the framework owns the handle.
-function crmQueryDb(context?: CrmQueryLoadContext): Reader<CrmDb> {
-  const db = context?.db;
-  if (!db) {
-    throw new Error('CRM query loaders require the framework-provided context.db');
-  }
-  return db;
-}

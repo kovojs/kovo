@@ -1,12 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
+import { component, FormError } from '@kovojs/core';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import * as style from '@kovojs/style';
 
-import { addContact, type CrmRequest } from '../mutations.js';
+import { addContact } from '../mutations.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
 
@@ -96,48 +96,36 @@ const contactStyles = style.create({
 });
 
 function renderContactCard(contact: ContactRow): string {
-  return Card.definition.render({
-    children: (
+  return (
+    <Card>
       <div style={contactStyles.row}>
-        {Avatar.definition.render({
-          children: AvatarFallback.definition.render({ children: initials(contact.name) }),
-        })}
+        <Avatar>
+          <AvatarFallback>{initials(contact.name)}</AvatarFallback>
+        </Avatar>
         <div style={contactStyles.cardBody}>
           <p style={contactStyles.tabularStrong}>{contact.name}</p>
           <p style={contactStyles.muted}>{contact.email}</p>
         </div>
         <span style={contactStyles.cardBadge}>
-          {Badge.definition.render({
-            variant: contact.dealCount > 0 ? 'success' : 'neutral',
-            children: `${contact.dealCount} ${contact.dealCount === 1 ? 'deal' : 'deals'}`,
-          })}
+          <Badge variant={contact.dealCount > 0 ? 'success' : 'neutral'}>
+            {contact.dealCount} {contact.dealCount === 1 ? 'deal' : 'deals'}
+          </Badge>
         </span>
       </div>
-    ),
-  });
+    </Card>
+  );
 }
 
-type ContactsRenderSlots = ComponentRenderSlots<{ addContact: typeof addContact }> & {
-  request?: CrmRequest | undefined;
-};
 interface DuplicateEmailFailure {
   code: 'DUPLICATE_EMAIL';
   payload: { email: string };
 }
 
-const defaultContactsRenderSlots: ContactsRenderSlots = {
-  forms: { addContact: { failure: null } },
-};
-
 // Rendered as both the full page region and the add-contact fragment payload.
 export const ContactsRegion = component({
   mutations: { addContact },
   queries: { contactList: contactListQuery },
-  render: (
-    { contactList }: { contactList: ContactListResult },
-    _state,
-    _slots: ContactsRenderSlots = defaultContactsRenderSlots,
-  ) => {
+  render: ({ contactList }: { contactList: ContactListResult }, _state, slots) => {
     const contacts = contactList.items;
 
     return (
@@ -159,14 +147,13 @@ export const ContactsRegion = component({
               placeholder="name@example.com"
               style={contactStyles.input}
             />
-            {Button.definition.render({
-              children: 'Add contact',
-              type: 'submit',
-              variant: 'primary',
-            })}
+            <Button type="submit" variant="primary">
+              Add contact
+            </Button>
           </div>
           <FormError
             code="DUPLICATE_EMAIL"
+            failure={slots.forms.addContact.failure}
             style={contactStyles.muted}
             message={(failure: DuplicateEmailFailure) =>
               `${failure.payload.email} is already in the contact book.`

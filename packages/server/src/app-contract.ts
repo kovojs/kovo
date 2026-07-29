@@ -1,5 +1,4 @@
-import type { JsonValue } from '@kovojs/core';
-import type { RouteSearchValue } from '@kovojs/core';
+import type { ComponentChild, JsonValue, RouteSearchValue } from '@kovojs/core';
 import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
 import {
   appDeclarationMetadata,
@@ -456,7 +455,7 @@ export interface AppLayoutFactory<Request, Owner extends string | undefined> {
       },
       state: undefined,
       slots: {
-        children: unknown;
+        children: ComponentChild;
         regions: Regions;
         request: [Access] extends [undefined]
           ? Request

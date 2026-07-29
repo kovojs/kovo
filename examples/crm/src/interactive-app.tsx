@@ -1,21 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import {
-  createApp,
-  createMemoryVersionedClientModuleRegistry,
-  layout,
-  route,
-  s,
-  stylesheet,
-} from '@kovojs/server';
+import { s } from '@kovojs/server';
 
 import { ContactsRegion } from './components/contacts.js';
 import { DealDetailRegion } from './components/deal-detail.js';
 import { PipelineRegion } from './components/pipeline.js';
 import { CrmShell } from './components/chrome.js';
-import { createCrmDb, type CrmDb } from './db.js';
-import { seedCrmDemo } from './demo-data.js';
-import { CRM_DEMO_USER_ID } from './model.js';
-import { addContact, authed, closeDeal, createDeal, moveDeal } from './mutations.js';
+import { app, crmStylesheets, resetCrmDatabase } from './kovo.js';
+import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
 import {
   activityListQuery,
   contactDealCountQuery,
@@ -24,16 +15,10 @@ import {
   openDealsQuery,
   pipelineByStageQuery,
 } from './queries.js';
-import { crmTheme } from './theme.js';
 
 // Interactive CRM app: pipeline, contacts, and deal detail pages backed by the
 // demo database. Forms post to `/_m/*` and refresh query-backed regions.
 
-const crmStylesheets = [
-  stylesheet('./styles.css', {
-    theme: crmTheme,
-  }),
-] as const;
 const crmStaticDealPaths = [
   '/deals/d1',
   '/deals/d2',
@@ -47,100 +32,78 @@ const crmStaticDealPaths = [
   '/deals/d10',
 ] as const;
 
-// Fixed demo viewer attached to each request so the guarded mutations can run.
-const demoSession = {
-  id: 'demo-session',
-  user: { id: CRM_DEMO_USER_ID, roles: ['sales'] as const },
-};
-
 // Every CRM route shows the seeded owner's pipeline/contacts, so the layouts carry
 // the session-presence guard each child route inherits as its access decision (KV436,
 // SPEC §10.2). The guarded mutations already require the same session.
-const PipelineLayout = layout({
-  guard: authed,
+const PipelineLayout = app.layout({
+  access: [app.authenticated],
   render: (_queries, _state, { children }) => <CrmShell active="pipeline">{children}</CrmShell>,
 });
 
-const ContactsLayout = layout({
-  guard: authed,
+const ContactsLayout = app.layout({
+  access: [app.authenticated],
   render: (_queries, _state, { children }) => <CrmShell active="contacts">{children}</CrmShell>,
 });
 
-export interface CrmInteractiveApp {
-  app: ReturnType<typeof createApp>;
-  db: CrmDb;
-}
+/**
+ * One parameterized detail route keeps newly created deals viewable.
+ */
+const dealDetailRoute = app.route('/deals/:id', {
+  access: [app.authenticated],
+  meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
+  params: s.object({ id: s.string() }),
+  staticPaths: crmStaticDealPaths,
+  page({ params }) {
+    return <DealDetailRegion dealId={params.id} />;
+  },
+  layout: PipelineLayout,
+  stylesheets: crmStylesheets,
+});
 
-export interface BuildCrmInteractiveAppOptions {
-  db?: CrmDb;
-}
+const pipelineRoute = app.route('/', {
+  access: [app.authenticated],
+  meta: {
+    description: 'Sales pipeline by stage with open deals.',
+    title: 'Pipeline · Atlas CRM',
+  },
+  page() {
+    return <PipelineRegion />;
+  },
+  layout: PipelineLayout,
+  stylesheets: crmStylesheets,
+});
+
+const contactsRoute = app.route('/contacts', {
+  access: [app.authenticated],
+  meta: { description: 'The CRM contact book.', title: 'Contacts · Atlas CRM' },
+  page() {
+    return <ContactsRegion />;
+  },
+  layout: ContactsLayout,
+  stylesheets: crmStylesheets,
+});
+
+export const crmApp = app.assemble({
+  layouts: [PipelineLayout, ContactsLayout],
+  mutations: [addContact, createDeal, moveDeal, closeDeal],
+  queries: [
+    contactListQuery,
+    dealListQuery,
+    contactDealCountQuery,
+    openDealsQuery,
+    pipelineByStageQuery,
+    activityListQuery,
+  ],
+  routes: [pipelineRoute, contactsRoute, dealDetailRoute],
+});
 
 /**
- * Build the interactive CRM app over a (seeded) PGlite database. Pass an existing
- * `db` to share state with an already-rendered shell; otherwise a fresh seeded
- * database is created. Runtime entries construct the guarded handler only
- * after their supported runner establishes realm lockdown (SPEC §6.6).
+ * Reset the direct-development/test database and return the already-closed app token.
+ *
+ * Public demo requests carry a dispatcher-owned session header, so their lazy databases remain
+ * isolated without rebuilding declarations or assembling a second graph.
  */
-export async function buildCrmInteractiveApp(
-  options: BuildCrmInteractiveAppOptions = {},
-): Promise<CrmInteractiveApp> {
-  let db = options.db;
-  if (!db) {
-    db = await createCrmDb();
-    await seedCrmDemo(db);
-  }
-  const database = db;
-
-  // One parameterized detail route keeps newly created deals viewable.
-  const dealDetailRoute = route('/deals/:id', {
-    meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
-    params: s.object({ id: s.string() }),
-    staticPaths: crmStaticDealPaths,
-    page({ params }: { params: { id: string } }) {
-      return <DealDetailRegion dealId={params.id} />;
-    },
-    layout: PipelineLayout,
-    stylesheets: crmStylesheets,
-  });
-
-  const app = createApp({
-    appId: '0e3f07cd-cc4b-4f10-85bb-9eaaf6f73338',
-    clientModules: createMemoryVersionedClientModuleRegistry(),
-    db: () => database,
-    document: { lang: 'en-US' },
-    mutations: [addContact, createDeal, moveDeal, closeDeal],
-    queries: [
-      contactListQuery,
-      dealListQuery,
-      contactDealCountQuery,
-      openDealsQuery,
-      pipelineByStageQuery,
-      activityListQuery,
-    ],
-    routes: [
-      route('/', {
-        meta: {
-          description: 'Sales pipeline by stage with open deals.',
-          title: 'Pipeline · Atlas CRM',
-        },
-        page() {
-          return <PipelineRegion />;
-        },
-        layout: PipelineLayout,
-        stylesheets: crmStylesheets,
-      }),
-      route('/contacts', {
-        meta: { description: 'The CRM contact book.', title: 'Contacts · Atlas CRM' },
-        page() {
-          return <ContactsRegion />;
-        },
-        layout: ContactsLayout,
-        stylesheets: crmStylesheets,
-      }),
-      dealDetailRoute,
-    ],
-    sessionProvider: () => demoSession,
-  });
-
-  return { app, db: database };
+export async function buildCrmInteractiveApp() {
+  const db = await resetCrmDatabase();
+  return { app: crmApp, db };
 }

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, FieldError, form, FormError } from '@kovojs/core';
+import { component, FieldError, form, FormError, type ComponentChild } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,7 +11,24 @@ import type { MutationFail } from './mutation.js';
 import { renderServerRenderable } from './renderable.js';
 
 describe('renderComponent', () => {
-  it('passes SPEC §4.5 render-time children and named slots to component render', () => {
+  it('awaits nested Kovo component output in generated live-target renders', async () => {
+    const Action = component({
+      render: ({ children }: { children: ComponentChild }) => <button>{children}</button>,
+    });
+    const Region = component({
+      render: () => (
+        <section>
+          <Action>Save</Action>
+        </section>
+      ),
+    });
+
+    await expect(renderComponent(Region, {})).resolves.toBe(
+      '<section><button>Save</button></section>',
+    );
+  });
+
+  it('passes SPEC §4.5 render-time children and named slots to component render', async () => {
     const Card = component({
       render: (
         { title }: { title: string },
@@ -27,7 +44,7 @@ describe('renderComponent', () => {
     });
 
     expect(
-      renderComponent(
+      await renderComponent(
         Card,
         { title: 'Cart' },
         { slots: { children: <p>Ready</p>, footer: 'Done' } },
@@ -37,7 +54,7 @@ describe('renderComponent', () => {
     );
   });
 
-  it('injects SPEC §6.3 typed mutation failure state into component render slots', () => {
+  it('injects SPEC §6.3 typed mutation failure state into component render slots', async () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
@@ -62,7 +79,7 @@ describe('renderComponent', () => {
     };
 
     expect(
-      renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
+      await renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
     ).toBe('<form aria-invalid="true"><output role="alert">Only 2 left.</output></form>');
   });
 
@@ -107,7 +124,7 @@ describe('renderComponent', () => {
       status: 422,
     };
 
-    const validationHtml = renderComponentMutationFailure(QuestionForm, {}, validation, {
+    const validationHtml = await renderComponentMutationFailure(QuestionForm, {}, validation, {
       formName: 'saveQuestion',
       submitted: { title: 'bad' },
     });
@@ -116,7 +133,7 @@ describe('renderComponent', () => {
     );
     expect(validationHtml).not.toContain('&lt;output role=&quot;alert&quot;');
 
-    const blockedHtml = renderComponentMutationFailure(QuestionForm, {}, blocked, {
+    const blockedHtml = await renderComponentMutationFailure(QuestionForm, {}, blocked, {
       formName: 'saveQuestion',
       submitted: { title: 'blocked launch' },
     });
@@ -168,7 +185,7 @@ describe('renderComponent', () => {
     });
   });
 
-  it('exposes submitted values to component failure rerenders', () => {
+  it('exposes submitted values to component failure rerenders', async () => {
     const updateProfile = form<
       'profile/update',
       { company: string; email: string },
@@ -191,7 +208,7 @@ describe('renderComponent', () => {
     };
 
     expect(
-      renderComponentMutationFailure(ProfileForm, {}, failure, {
+      await renderComponentMutationFailure(ProfileForm, {}, failure, {
         formName: 'updateProfile',
         submitted: { company: 'Acme', email: 'a@example.com' },
       }),

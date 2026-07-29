@@ -1,17 +1,7 @@
-import {
-  guards,
-  mutation,
-  queue,
-  s,
-  SchemaValidationError,
-  type MutationContext,
-  type MutationQueue,
-  type Schema,
-} from '@kovojs/server';
+import { queue, s, SchemaValidationError, type Schema } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
-import type { OptimisticPlan } from '@kovojs/browser';
 
-import type { CrmDb } from './db.js';
+import { app } from './kovo.js';
 import {
   CRM_DEMO_USER_ID,
   CRM_STAGES,
@@ -21,10 +11,7 @@ import {
   type CloseDealInput,
   type CreateDealInput,
   type CrmStage,
-  type MoveDealInput,
 } from './model.js';
-import { contacts, deals } from './schema.js';
-
 import {
   contactDealCountQuery,
   contactListQuery,
@@ -32,86 +19,14 @@ import {
   openDealsQuery,
   pipelineByStageQuery,
 } from './queries.js';
-import type {
-  ContactDealCountResult,
-  ContactListResult,
-  DealListResult,
-  OpenDealsResult,
-  PipelineByStageResult,
-} from './queries.js';
-
-declare module '@kovojs/core' {
-  interface QueryRegistry {
-    'queries/contact-deal-count-query': ContactDealCountResult;
-    'queries/contact-list-query': ContactListResult;
-    'queries/deal-list-query': DealListResult;
-    'queries/open-deals-query': OpenDealsResult;
-    'queries/pipeline-by-stage-query': PipelineByStageResult;
-  }
-
-  interface InvalidationSets {
-    'mutations/add-contact': 'queries/contact-list-query';
-    'mutations/close-deal':
-      | 'queries/contact-deal-count-query'
-      | 'queries/deal-list-query'
-      | 'queries/open-deals-query'
-      | 'queries/pipeline-by-stage-query';
-    'mutations/create-deal':
-      | 'queries/contact-deal-count-query'
-      | 'queries/contact-list-query'
-      | 'queries/deal-list-query'
-      | 'queries/open-deals-query'
-      | 'queries/pipeline-by-stage-query';
-    'mutations/move-deal':
-      | 'queries/contact-deal-count-query'
-      | 'queries/deal-list-query'
-      | 'queries/open-deals-query'
-      | 'queries/pipeline-by-stage-query';
-  }
-}
-
-/**
- * The per-request value handed to every CRM mutation: a Drizzle/PGlite db plus
- * the fixed demo session used by the interactive app.
- */
-export interface CrmRequest {
-  db: CrmDb;
-  session?: {
-    id?: string;
-    user?: { id?: string; roles?: readonly string[] } | null;
-  } | null;
-}
-
-export interface CrmCsrfRequest {
-  session?: { id?: string } | null;
-}
-
-export const EXAMPLE_ONLY_CRM_CSRF_SECRET = 'crm-reference-demo-csrf-secret-0123456789';
-
-export const crmCsrf = {
-  field: 'csrf',
-  secret: exampleDeploymentSecret('KOVO_CRM_CSRF_SECRET', EXAMPLE_ONLY_CRM_CSRF_SECRET),
-  sessionId(request: CrmCsrfRequest) {
-    return request.session?.id;
-  },
-};
-
-/**
- * The CRM's session-presence guard. Exported so the interactive app's layouts can
- * carry it as their route guard — every CRM page reads the seeded owner's data, so
- * each route is an authenticated surface (its KV436 access decision, SPEC §10.2).
- */
-export const authed = guards.authed<CrmRequest>();
+import type { ContactListResult, OpenDealsResult, PipelineByStageResult } from './queries.js';
+import { contacts, deals } from './schema.js';
 
 const duplicateEmailError = s.object({ email: s.string() });
 const contactOwnershipError = s.object({ contactId: s.string() });
 const dealOwnershipError = s.object({ dealId: s.string() });
 const contactIdSchema = prefixedUuidSchema('c');
 const dealIdSchema = prefixedUuidSchema('d');
-// The CRM demo intentionally serializes contact/deal writes through one conceptual client queue:
-// every pipeline mutation can affect shared dashboard summaries, so this value is shared queue
-// vocabulary, not a registry identity.
-const CRM_QUEUE = queue('crm');
 const crmStageSchema: Schema<CrmStage> = {
   parse(input: unknown): CrmStage {
     if (typeof input !== 'string' || !isCrmStage(input)) {
@@ -121,202 +36,175 @@ const crmStageSchema: Schema<CrmStage> = {
   },
 };
 
-export async function addContactHandler(
-  { id, name, email }: AddContactInput,
-  request: CrmRequest,
-  context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
-) {
-  const db = request.db;
-  const ownerId = crmUserId(request);
-  const [existing] = await db.select().from(contacts).where(eq(contacts.email, email)).limit(1);
-  if (existing) {
-    return context.fail('DUPLICATE_EMAIL', { email });
-  }
+// Every pipeline mutation can affect shared dashboard summaries, so they serialize through one
+// conceptual queue. This is execution vocabulary, not a hand-maintained query registry.
+const CRM_QUEUE = queue('crm');
 
-  try {
-    await db.insert(contacts).values({ id, name, email, ownerId, dealCount: 0 });
-  } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      return context.fail('DUPLICATE_EMAIL', { email });
-    }
-    throw error;
-  }
-  return { id };
-}
+const addContactInput = s.object({
+  id: contactIdSchema,
+  name: s.string(),
+  email: s.string(),
+});
 
-export const addContact = mutation({
-  csrf: crmCsrf,
+export const addContact = app.mutation({
+  access: [app.authenticated],
   errors: {
     DUPLICATE_EMAIL: duplicateEmailError,
   },
-  guard: authed,
-  input: s.object({
-    id: contactIdSchema,
-    name: s.string(),
-    email: s.string(),
-  }),
-  optimistic: {
-    [contactListQuery.key](draft: ContactListResult, $input: AddContactInput) {
-      const row = {
-        dealCount: 0,
-        email: $input.email,
-        id: $input.id,
-        name: $input.name,
-        ownerId: CRM_DEMO_USER_ID,
-      };
-      const index = draft.items.findIndex((entry) => entry.id > row.id);
-      if (index < 0) draft.items.push(row);
-      else draft.items.splice(index, 0, row);
-    },
-  },
+  input: addContactInput,
+  optimistic: [contactListQuery.optimistic(addContactInput, predictAddContact)],
   queue: CRM_QUEUE,
   registry: { touches: [contact] },
-  handler: addContactHandler,
+  async handler({ id, name, email }, request, context) {
+    const db = request.db;
+    const ownerId = request.session.user.id;
+    const [existing] = await db.select().from(contacts).where(eq(contacts.email, email)).limit(1);
+    if (existing) {
+      return context.fail('DUPLICATE_EMAIL', { email });
+    }
+
+    try {
+      await db.insert(contacts).values({ id, name, email, ownerId, dealCount: 0 });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        return context.fail('DUPLICATE_EMAIL', { email });
+      }
+      throw error;
+    }
+    return { id };
+  },
 });
 
-export const addContactOptimistic = optimisticPlan<AddContactInput>(addContact);
+const createDealInput = s.object({
+  id: dealIdSchema,
+  contactId: s.string(),
+  stage: crmStageSchema,
+  amount: s.number().int().min(0),
+});
 
-export async function createDealHandler(
-  { id, contactId, stage, amount }: CreateDealInput,
-  request: CrmRequest,
-  context: MutationContext<{ CONTACT_NOT_FOUND: typeof contactOwnershipError }>,
-) {
-  const db = request.db;
-  const ownerId = crmUserId(request);
-  if (!(await hasOwnedContact(db, contactId, ownerId))) {
-    return context.fail('CONTACT_NOT_FOUND', { contactId });
-  }
-  await db.insert(deals).values({ id, contactId, stage, amount, ownerId });
-  await db
-    .update(contacts)
-    .set({ dealCount: sql`${contacts.dealCount} + 1` })
-    .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)));
-  return { id };
-}
-
-export const createDeal = mutation({
-  csrf: crmCsrf,
+export const createDeal = app.mutation({
+  access: [app.authenticated],
   errors: {
     CONTACT_NOT_FOUND: contactOwnershipError,
   },
-  guard: authed,
-  input: s.object({
-    id: dealIdSchema,
-    contactId: s.string(),
-    stage: crmStageSchema,
-    amount: s.number().int().min(0),
-  }),
-  optimistic: {
-    [contactDealCountQuery.key](draft: ContactDealCountResult, _$input: CreateDealInput) {
-      draft.count = (draft.count ?? 0) + 1;
-    },
-    // Hand-written optimistic patches for UI values the generated plan cannot know:
-    // contactList needs the server-side dealCount increment, and pipelineByStage is a
-    // grouped summary.
-    [contactListQuery.key](draft: ContactListResult, $input: CreateDealInput) {
-      const target = draft.items.find((item) => item.id === $input.contactId);
-      if (target) target.dealCount += 1;
-    },
-    [dealListQuery.key](draft: DealListResult, $input: CreateDealInput) {
-      const row = {
-        amount: $input.amount,
-        contactId: $input.contactId,
-        id: $input.id,
-        ownerId: CRM_DEMO_USER_ID,
-        stage: $input.stage,
-      };
-      const rowId = row.id ?? '';
-      const index = draft.items.findIndex((entry) => entry.id > rowId);
-      if (index < 0) draft.items.push(row);
-      else draft.items.splice(index, 0, row);
-    },
-    [openDealsQuery.key](draft: OpenDealsResult, $input: CreateDealInput) {
-      const row = {
-        amount: $input.amount,
-        contactId: $input.contactId,
-        id: $input.id,
-        ownerId: CRM_DEMO_USER_ID,
-        stage: $input.stage,
-      };
-      const rowId = row.id ?? '';
-      const index = draft.items.findIndex((entry) => entry.id > rowId);
-      if (index < 0) draft.items.push(row);
-      else draft.items.splice(index, 0, row);
-    },
-    [pipelineByStageQuery.key](draft: PipelineByStageResult, $input: CreateDealInput) {
-      const bucket = draft.buckets.find((entry) => entry.stage === $input.stage);
-      if (bucket) bucket.total += $input.amount;
-      else draft.buckets.push({ stage: $input.stage, total: $input.amount });
-      draft.buckets.sort((left, right) => left.stage.localeCompare(right.stage));
-    },
-  },
+  input: createDealInput,
+  optimistic: [
+    contactDealCountQuery.optimistic(createDealInput, (value) => ({
+      ...value,
+      count: value.count + 1,
+    })),
+    contactListQuery.optimistic(createDealInput, predictCreateDealContacts),
+    dealListQuery.optimistic(createDealInput, (value, input) => ({
+      ...value,
+      items: [
+        ...value.items,
+        {
+          amount: input.amount,
+          contactId: input.contactId,
+          id: input.id,
+          ownerId: CRM_DEMO_USER_ID,
+          stage: input.stage,
+        },
+      ].sort((left, right) => left.id.localeCompare(right.id)),
+    })),
+    openDealsQuery.optimistic(createDealInput, (value, input) => ({
+      ...value,
+      items:
+        input.stage === 'open'
+          ? [
+              ...value.items,
+              {
+                amount: input.amount,
+                contactId: input.contactId,
+                id: input.id,
+                ownerId: CRM_DEMO_USER_ID,
+                stage: input.stage,
+              },
+            ].sort((left, right) => left.id.localeCompare(right.id))
+          : value.items,
+    })),
+    pipelineByStageQuery.optimistic(createDealInput, predictCreateDealPipeline),
+  ],
   queue: CRM_QUEUE,
   registry: { touches: [contact, deal] },
-  handler: createDealHandler,
+  async handler({ id, contactId, stage, amount }, request, context) {
+    const db = request.db;
+    const ownerId = request.session.user.id;
+    const [ownedContact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)))
+      .limit(1);
+    if (!ownedContact) {
+      return context.fail('CONTACT_NOT_FOUND', { contactId });
+    }
+    await db.insert(deals).values({ id, contactId, stage, amount, ownerId });
+    await db
+      .update(contacts)
+      .set({ dealCount: sql`${contacts.dealCount} + 1` })
+      .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)));
+    return { id };
+  },
 });
 
-export const createDealOptimistic = optimisticPlan<CreateDealInput>(createDeal);
+const moveDealInput = s.object({
+  dealId: s.string(),
+  stage: crmStageSchema,
+});
 
-export async function moveDealHandler(
-  { dealId, stage }: MoveDealInput,
-  request: CrmRequest,
-  context: MutationContext<{ DEAL_NOT_FOUND: typeof dealOwnershipError }>,
-) {
-  const db = request.db;
-  const ownerId = crmUserId(request);
-  if (!(await hasOwnedDeal(db, dealId, ownerId))) {
-    return context.fail('DEAL_NOT_FOUND', { dealId });
-  }
-  await db
-    .update(deals)
-    .set({ stage })
-    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
-  return { dealId };
-}
-
-export const moveDeal = mutation({
-  csrf: crmCsrf,
+export const moveDeal = app.mutation({
+  access: [app.authenticated],
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
   },
-  guard: authed,
-  input: s.object({
-    dealId: s.string(),
-    stage: crmStageSchema,
-  }),
-  optimistic: {
-    [contactDealCountQuery.key](_draft: ContactDealCountResult, _$input: MoveDealInput) {},
-    [dealListQuery.key](draft: DealListResult, $input: MoveDealInput) {
-      const target = draft.items.find((entry) => entry.id === $input.dealId);
-      if (target) target.stage = $input.stage;
-    },
-    // Moving a deal can change filtered and grouped views in ways that need row
-    // context, so the demo waits for the server fragment for those regions.
-    [openDealsQuery.key]: 'await-fragment',
-    [pipelineByStageQuery.key]: 'await-fragment',
-  },
+  input: moveDealInput,
+  optimistic: [
+    contactDealCountQuery.optimistic(moveDealInput, (value) => value),
+    dealListQuery.optimistic(moveDealInput, (value, input) => ({
+      ...value,
+      items: value.items.map((item) =>
+        item.id === input.dealId ? { ...item, stage: input.stage } : item,
+      ),
+    })),
+    // Moving a deal can change filtered and grouped views in ways that need row context. A no-op
+    // prediction preserves the current value until the returned server fragment reconciles it.
+    openDealsQuery.optimistic(moveDealInput, (value) => value),
+    pipelineByStageQuery.optimistic(moveDealInput, (value) => value),
+  ],
   queue: CRM_QUEUE,
   registry: { touches: [deal] },
-  handler: moveDealHandler,
+  async handler({ dealId, stage }, request, context) {
+    const db = request.db;
+    const ownerId = request.session.user.id;
+    const [ownedDeal] = await db
+      .select({ id: deals.id })
+      .from(deals)
+      .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)))
+      .limit(1);
+    if (!ownedDeal) {
+      return context.fail('DEAL_NOT_FOUND', { dealId });
+    }
+    await db
+      .update(deals)
+      .set({ stage })
+      .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
+    return { dealId };
+  },
 });
 
-export const moveDealOptimistic = optimisticPlan<MoveDealInput>(moveDeal);
-
 /**
- * Row-carrying helper for updating pipelineByStage when the old stage and amount
- * are already known.
+ * Row-carrying helper for updating pipelineByStage when the old stage and amount are already known.
  */
 export function applyMoveDealPipeline(
   current: { buckets: { stage: string; total: number }[] },
-  deal: { amount: number; fromStage: string; toStage: string },
+  movedDeal: { amount: number; fromStage: string; toStage: string },
 ): { buckets: { stage: string; total: number }[] } {
   const next = structuredClone(current);
-  const from = next.buckets.find((entry) => entry.stage === deal.fromStage);
-  if (from) from.total -= deal.amount;
-  const to = next.buckets.find((entry) => entry.stage === deal.toStage);
-  if (to) to.total += deal.amount;
-  else next.buckets.push({ stage: deal.toStage, total: deal.amount });
-  // Empty buckets disappear and the surviving buckets stay stage-sorted.
+  const from = next.buckets.find((entry) => entry.stage === movedDeal.fromStage);
+  if (from) from.total -= movedDeal.amount;
+  const to = next.buckets.find((entry) => entry.stage === movedDeal.toStage);
+  if (to) to.total += movedDeal.amount;
+  else next.buckets.push({ stage: movedDeal.toStage, total: movedDeal.amount });
   return {
     buckets: next.buckets
       .filter((entry) => entry.total !== 0)
@@ -324,112 +212,122 @@ export function applyMoveDealPipeline(
   };
 }
 
-export async function closeDealHandler(
-  { dealId }: CloseDealInput,
-  request: CrmRequest,
-  context: MutationContext<{ DEAL_NOT_FOUND: typeof dealOwnershipError }>,
-) {
-  const db = request.db;
-  const ownerId = crmUserId(request);
-  if (!(await hasOwnedDeal(db, dealId, ownerId))) {
-    return context.fail('DEAL_NOT_FOUND', { dealId });
-  }
-  await db
-    .update(deals)
-    .set({ stage: 'won', amount: sql`compute_commission(${deals.amount})` })
-    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
-  return { dealId };
-}
+const closeDealInput = s.object({
+  dealId: s.string(),
+});
 
-export const closeDeal = mutation({
-  csrf: crmCsrf,
+export const closeDeal = app.mutation({
+  access: [app.authenticated],
   errors: {
     DEAL_NOT_FOUND: dealOwnershipError,
   },
-  guard: authed,
-  input: s.object({
-    dealId: s.string(),
-  }),
-  optimistic: {
-    [contactDealCountQuery.key](_draft: ContactDealCountResult, _$input: CloseDealInput) {},
-    // A closed deal leaves the open list immediately. Views that include the
-    // server-computed commission wait for the returned fragment.
-    [openDealsQuery.key](draft: OpenDealsResult, $input: CloseDealInput) {
-      const index = draft.items.findIndex((item) => item.id === $input.dealId);
-      if (index >= 0) draft.items.splice(index, 1);
-    },
-    [dealListQuery.key]: 'await-fragment',
-    [pipelineByStageQuery.key]: 'await-fragment',
-  },
+  input: closeDealInput,
+  optimistic: [
+    contactDealCountQuery.optimistic(closeDealInput, (value) => value),
+    openDealsQuery.optimistic(closeDealInput, predictCloseDealOpenList),
+    // Views that include the server-computed commission retain their current value until the
+    // returned fragment supplies authoritative truth.
+    dealListQuery.optimistic(closeDealInput, (value) => value),
+    pipelineByStageQuery.optimistic(closeDealInput, (value) => value),
+  ],
   queue: CRM_QUEUE,
   registry: { touches: [deal] },
-  handler: closeDealHandler,
+  async handler({ dealId }, request, context) {
+    const db = request.db;
+    const ownerId = request.session.user.id;
+    const [ownedDeal] = await db
+      .select({ id: deals.id })
+      .from(deals)
+      .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)))
+      .limit(1);
+    if (!ownedDeal) {
+      return context.fail('DEAL_NOT_FOUND', { dealId });
+    }
+    await db
+      .update(deals)
+      .set({ stage: 'won', amount: sql`compute_commission(${deals.amount})` })
+      .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
+    return { dealId };
+  },
 });
-
-export const closeDealOptimistic = optimisticPlan<CloseDealInput>(closeDeal);
 
 export const crmMutations = [addContact, createDeal, moveDeal, closeDeal];
 
-function optimisticPlan<Input>(definition: {
-  key: string;
-  optimistic?: Record<string, unknown>;
-  queue?: string | true | MutationQueue;
-}): OptimisticPlan<Input> {
-  const queue =
-    definition.queue === true
-      ? definition.key
-      : typeof definition.queue === 'object'
-        ? definition.queue.name
-        : definition.queue;
+export function predictAddContact(
+  value: Readonly<ContactListResult>,
+  input: AddContactInput,
+): ContactListResult {
+  const row = {
+    dealCount: 0,
+    email: input.email,
+    id: input.id,
+    name: input.name,
+    ownerId: CRM_DEMO_USER_ID,
+  };
   return {
-    ...(queue ? { queue } : {}),
-    transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
+    ...value,
+    items: [...value.items, row].sort((left, right) => left.id.localeCompare(right.id)),
   };
 }
 
-function exampleDeploymentSecret(envName: string, fallback: string): string {
-  const secret = process.env[envName];
-  if (secret && secret !== fallback) return secret;
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
-  }
-  return fallback;
+export function predictCreateDealContacts(
+  value: Readonly<ContactListResult>,
+  input: CreateDealInput,
+): ContactListResult {
+  return {
+    ...value,
+    items: value.items.map((item) =>
+      item.id === input.contactId ? { ...item, dealCount: item.dealCount + 1 } : item,
+    ),
+  };
+}
+
+export function predictCreateDealPipeline(
+  value: Readonly<PipelineByStageResult>,
+  input: CreateDealInput,
+): PipelineByStageResult {
+  const matching = value.buckets.find((entry) => entry.stage === input.stage);
+  const buckets = matching
+    ? value.buckets.map((entry) =>
+        entry.stage === input.stage ? { ...entry, total: entry.total + input.amount } : entry,
+      )
+    : [...value.buckets, { stage: input.stage, total: input.amount }];
+  return {
+    ...value,
+    buckets: buckets.toSorted((left, right) => left.stage.localeCompare(right.stage)),
+  };
+}
+
+export function predictMoveDealPipeline(
+  current: { buckets: { stage: string; total: number }[] },
+  movedDeal: { amount: number; fromStage: string; toStage: string },
+): { buckets: { stage: string; total: number }[] } {
+  return applyMoveDealPipeline(current, movedDeal);
+}
+
+export function predictCloseDealOpenList(
+  value: Readonly<OpenDealsResult>,
+  input: CloseDealInput,
+): OpenDealsResult {
+  return {
+    ...value,
+    items: value.items.filter((item) => item.id !== input.dealId),
+  };
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
-  const code = 'code' in error ? String((error as { code?: unknown }).code) : '';
+  const code = Reflect.get(error, 'code');
   if (code === '23505') return true;
-  const message = 'message' in error ? String((error as { message?: unknown }).message) : '';
-  return /duplicate key|unique constraint|unique violation/iu.test(message);
-}
-
-function crmUserId(request: CrmRequest): string {
-  const userId = request.session?.user?.id;
-  if (!userId) throw validationFailure('Authenticated CRM user is required', ['session']);
-  return userId;
-}
-
-async function hasOwnedContact(db: CrmDb, contactId: string, ownerId: string): Promise<boolean> {
-  const [contact] = await db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)))
-    .limit(1);
-  return contact !== undefined;
-}
-
-async function hasOwnedDeal(db: CrmDb, dealId: string, ownerId: string): Promise<boolean> {
-  const [deal] = await db
-    .select({ id: deals.id })
-    .from(deals)
-    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)))
-    .limit(1);
-  return deal !== undefined;
+  const message = Reflect.get(error, 'message');
+  return (
+    typeof message === 'string' &&
+    /duplicate key|unique constraint|unique violation/iu.test(message)
+  );
 }
 
 function isCrmStage(value: string): value is CrmStage {
-  return (CRM_STAGES as readonly string[]).includes(value);
+  return CRM_STAGES.some((stage) => stage === value);
 }
 
 function prefixedUuidSchema(prefix: 'c' | 'd'): Schema<string> {

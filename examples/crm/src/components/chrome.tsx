@@ -117,7 +117,7 @@ export function stageBadgeVariant(stage: string): BadgeVariant {
 export function stageBadge(stage: string): string {
   return (
     <span style={chromeStyles.stageText}>
-      {Badge.definition.render({ variant: stageBadgeVariant(stage), children: stage })}
+      <Badge variant={stageBadgeVariant(stage)}>{stage}</Badge>
     </span>
   );
 }
