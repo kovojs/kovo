@@ -447,7 +447,7 @@ describe('server app shell Vite dev seam', () => {
 
     await expect(invoke()).resolves.toBeUndefined();
     await expect(invoke()).rejects.toThrow(
-      '/src/app-shell.ts must export default as a Kovo app for Vite dev.',
+      '/src/app-shell.ts must export default as the opaque Kovo app returned by app.assemble().',
     );
   });
 

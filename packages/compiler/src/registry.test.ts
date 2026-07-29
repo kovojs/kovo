@@ -894,7 +894,7 @@ export const ProductGrid = component({
       fileName: 'src/components/product-grid.tsx',
       source: `
 import { component } from '@kovojs/core';
-import { mutation as defineMutation } from '@kovojs/server/api/data';
+import { mutation as defineMutation } from '@kovojs/server';
 
 const mutationAlias = defineMutation;
 
