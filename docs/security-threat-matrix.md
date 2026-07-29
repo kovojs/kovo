@@ -82,7 +82,7 @@ GREEN (no longer pending).
   gating. Log/error secret redaction via `scrubConsoleArgs` (`logging.ts:39`).
 - **Config secret → Wire/Render/Build/Runtime × C — GREEN.** An app author may accidentally route
   an operator-supplied API key, connection string, or signing seed toward ordinary HTML, wire JSON,
-  logging, cloning, or client capture. `createApp({ env: s.object(...) })` exposes only a frozen
+  logging, cloning, or client capture. `defineKovo({ env: s.object(...) })` exposes only a frozen
   declared projection; undeclared raw environment keys remain internal, and `s.secret(...)` fields
   are registered runtime `SecretValue` boxes. `packages/server/src/schema.test.ts` proves template,
   JSON, structured-clone, wire, SSR, and inspected-log behavior; `packages/server/src/env.test.ts`

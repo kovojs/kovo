@@ -8,8 +8,9 @@ the compiler derives most optimistic UI, layered with **authentication** and
 
 ## What it demonstrates
 
-- **Server-rendered MPA, zero hydration** — every page (`src/app.tsx`) is a
-  `createApp()` route composing TSX components; no client framework.
+- **Server-rendered MPA, zero hydration** — `src/kovo.ts` declares app context once and every page
+  in `src/app.tsx` is an app-scoped route closed by `app.assemble(...)`, composing TSX components
+  without a client framework.
 - **Typed queries** (`src/queries.ts`) over Drizzle (`src/schema.ts`, `src/db.ts`):
   product grid pagination, cart count, and order history, each naming the
   domains it reads so the compiler can prove invalidation.

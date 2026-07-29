@@ -7,9 +7,10 @@ optimism spectrum: it mixes **compiler-derived** optimistic updates with a few
 
 ## What it demonstrates
 
-- **Multi-page server-rendered app** (`src/interactive-app.tsx`): a `createApp()`
-  with a shared `layout()` chrome and routes for the pipeline, contacts, and each
-  deal (`/deals/:id`); zero hydration.
+- **Multi-page server-rendered app** (`src/kovo.ts`, `src/interactive-app.tsx`): one
+  `defineKovo()` contract with app-scoped layouts, routes, queries, and mutations, closed by
+  `app.assemble(...)`; shared chrome covers the pipeline, contacts, and each deal
+  (`/deals/:id`) with zero hydration.
 - **Typed queries** (`src/queries.ts`) over Drizzle (`src/schema.ts`, `src/model.ts`,
   `src/db.ts`) backed by PGlite, each declaring the domains it reads.
 - **Mixed optimism** (`src/mutations.ts`): mutations declare inline optimistic

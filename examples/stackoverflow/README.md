@@ -7,10 +7,10 @@ and questions) is **derived by the compiler**, with no hand-written merge code.
 
 ## What it demonstrates
 
-- **Server-rendered MPA, zero hydration** (`src/interactive-app.tsx`): a
-  `createApp()` with a shared `layout()` chrome and routes for the question list
-  and each question (`/questions/:id`). Native `enhance` forms POST to `/_m/*`
-  and the inline loader morphs the re-rendered region (SPEC §9.1).
+- **Server-rendered MPA, zero hydration** (`src/kovo.ts`, `src/interactive-app.tsx`): one
+  `defineKovo()` contract with app-scoped shared layouts and routes for the question list and each
+  question (`/questions/:id`), closed by `app.assemble(...)`. Native `enhance` forms POST to
+  `/_m/*` and the inline loader morphs the re-rendered region (SPEC §9.1).
 - **Typed queries** (`src/queries.ts`) over Drizzle (`src/schema.ts`,
   `src/model.ts`, `src/db.ts`) backed by PGlite, each naming the domains it reads.
 - **Fully derived optimism** (`src/mutations.ts` +

@@ -440,9 +440,10 @@ function bootstrapEgressFloor(egress: AppEgressOptions | undefined): void {
   // ahead of `kovo build --format json|github`'s single framework-owned diagnostic stream.
   if (devDefault && currentKovoBuildContext()?.graphDerivation !== true) {
     warn(
-      'createApp() installed the default outbound-egress floor in development with local ' +
+      'app.assemble() installed the default outbound-egress floor in development with local ' +
         'private-network destinations permitted; cloud metadata remains blocked. Pass ' +
-        '`egress: { allowInternal: [] }` to exercise production empty-allowlist semantics.',
+        '`defineKovo({ egress: { allowInternal: [] } })` to exercise production ' +
+        'empty-allowlist semantics.',
     );
   }
   if (mode === 'production') {

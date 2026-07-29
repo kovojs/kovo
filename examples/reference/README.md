@@ -16,9 +16,10 @@ sessions, CSRF, guards, and the scope-audit graph — is easy to read in full.
   `/admin`, so authorization is checked at the route boundary.
 - **Reference shell tests** exercise the same auth and scope behavior through
   routes, forms, and mutations instead of hand-authored graph fixtures.
-- **App shell** (`src/app-shell.ts`): a `createApp()` wiring the routes,
-  mutations, mutation responses (redirects + failure re-render), and a public
-  shell with a `/c/` client module — including synthetic-replay export.
+- **App contract and shell** (`src/kovo.ts`, `src/app-shell.ts`): one `defineKovo()` contract whose
+  typed handles are closed once with `app.assemble(...)`, wiring routes, mutations, redirects,
+  failure re-rendering, and a `/c/` client module. `src/public-app.ts` closes a separate public-only
+  contract for synthetic-replay export.
 
 This example has **no live demo service**, so it does not appear in the
 human-facing `/examples/` route; its authored source is surfaced to agents via

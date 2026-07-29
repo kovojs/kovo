@@ -20,21 +20,23 @@ per-request `db`, seeding, and teardown.
 
 ```tsx
 // tests/integration/fixtures/hello/app.tsx
-import { createApp, route } from '@kovojs/server';
+import { defineKovo } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/integration/define';
 
-const app = createApp({
-  routes: [
-    route('/', {
-      page: () => (
-        <main>
-          <h1>Hello</h1>
-        </main>
-      ),
-    }),
-  ],
+const kovo = defineKovo({
   renderRoute: (value) => String(value),
 });
+
+const home = kovo.route('/', {
+  access: kovo.publicAccess('integration fixture landing page'),
+  page: () => (
+    <main>
+      <h1>Hello</h1>
+    </main>
+  ),
+});
+
+const app = kovo.assemble({ routes: [home] });
 
 export default defineFixture({ app });
 ```
