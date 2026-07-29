@@ -5801,7 +5801,11 @@ function managedAppMutationDbProof(
         changed = true;
       } else if (
         ts.isObjectBindingPattern(candidate.name) &&
-        managedAppMutationRequestCarrierIsProven(candidate.initializer, requestCarrierNames)
+        managedAppMutationRequestCarrierIsProven(
+          candidate.initializer,
+          requestCarrierNames,
+          stableManagedBindingNames(body, bindingCounts, requestCarrierNames, dbHandleNames),
+        )
       ) {
         const before = compilerSetSize(dbHandleNames);
         collectManagedDbDestructureNames(candidate.name, dbHandleNames);
@@ -5918,9 +5922,14 @@ function managedBindingNameIsMutated(body: ts.ConciseBody, name: string): boolea
 function managedAppMutationRequestCarrierIsProven(
   expression: ts.Expression,
   requestCarrierNames: ReadonlySet<string>,
+  stableBindingNames: ReadonlySet<string>,
 ): boolean {
   const unwrapped = unwrapExpression(expression);
-  return ts.isIdentifier(unwrapped) && compilerSetHas(requestCarrierNames, unwrapped.text);
+  return (
+    ts.isIdentifier(unwrapped) &&
+    compilerSetHas(requestCarrierNames, unwrapped.text) &&
+    compilerSetHas(stableBindingNames, unwrapped.text)
+  );
 }
 
 function managedAppMutationDbExpressionIsProven(

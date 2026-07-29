@@ -5,7 +5,11 @@ import { dirname, join, relative } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createCompilerOwnedAppContractProject } from './app-contract-project.js';
+import {
+  compilerOwnedAppContractStaticFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
+  createCompilerOwnedAppContractProject,
+} from './app-contract-project.js';
 import { compileComponentModule } from './compile.js';
 import { componentTaskBSourceOperationFacts } from './security-operation-facts.js';
 import { parseComponentModule } from './scan/parse.js';
@@ -134,6 +138,12 @@ describe('D1 compiler-owned exact project resolver', () => {
         'export const captured = app.mutation({',
         '  handler() { capturedDb.insert(); },',
         '});',
+        'export const shadowed = app.mutation({',
+        '  handler(_input, request) {',
+        '    const run = (request) => request.db.insert();',
+        '    return run(request);',
+        '  },',
+        '});',
         '',
       ].join('\n'),
     );
@@ -145,7 +155,7 @@ describe('D1 compiler-owned exact project resolver', () => {
     expect(result.diagnostics).toEqual([]);
     expect(
       result.component?.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330'),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(
       result.route?.routePageFacts.map((fact) => ({
         access: fact.access,
@@ -159,6 +169,105 @@ describe('D1 compiler-owned exact project resolver', () => {
       expect.arrayContaining(['authenticated', 'mutation', 'publicAccess', 'route']),
     );
     expect(staticFacts.every((fact) => fact.source === result.source)).toBe(true);
+  });
+
+  it('derives imported mutation-form facts from exact app.mutation and a pristine shared schema', async () => {
+    const fixture = await createFixture();
+    const contract = join(fixture.root, 'app/src/kovo.ts');
+    const mutations = join(fixture.root, 'app/src/mutations.ts');
+    const form = join(fixture.root, 'app/src/form.tsx');
+    const contractSource = [
+      "import { defineKovo } from '@kovojs/server';",
+      'export const app = defineKovo({',
+      "  appId: '00000000-0000-4000-8000-000000000002',",
+      '});',
+      '',
+    ].join('\n');
+    const mutationSource = [
+      "import { s } from '@kovojs/server';",
+      "import { app } from './kovo.js';",
+      'const addContactInput = s.object({',
+      '  name: s.string(),',
+      '  email: s.string().optional(),',
+      '});',
+      'export const addContact = app.mutation({',
+      '  input: addContactInput,',
+      '  handler() { return { ok: true }; },',
+      '});',
+      '',
+    ].join('\n');
+    const formSource = [
+      "import { addContact } from './mutations.js';",
+      'export const binding = addContact;',
+      '',
+    ].join('\n');
+    await writeSource(contract, contractSource);
+    await writeSource(mutations, mutationSource);
+    await writeSource(form, formSource);
+    const project = createCompilerOwnedAppContractProject({
+      rootNames: [contract, mutations, form],
+    });
+
+    const facts = project.projectMutationRegistryFacts([
+      { fileName: contract, source: contractSource },
+      { fileName: mutations, source: mutationSource },
+      { fileName: form, source: formSource },
+    ]);
+
+    expect(facts.mutationBindings).toContainEqual(
+      expect.objectContaining({
+        fileName: form,
+        key: expect.stringMatching(/mutations\/add-contact$/u),
+        localName: 'addContact',
+      }),
+    );
+    expect(
+      Object.values(facts.mutationInputs)
+        .flat()
+        .map((field) => ({
+          name: field.name,
+          optional: field.optional,
+        })),
+    ).toEqual([
+      { name: 'name', optional: false },
+      { name: 'email', optional: true },
+    ]);
+
+    expect(() =>
+      project.projectMutationRegistryFacts([
+        { fileName: contract, source: contractSource },
+        { fileName: mutations, source: `${mutationSource}// stale` },
+        { fileName: form, source: formSource },
+      ]),
+    ).toThrow(/stale source snapshot/u);
+
+    const bridged = compilerOwnedProjectMutationRegistryFactsFromFiles(
+      [
+        { fileName: 'kovo.ts', source: contractSource },
+        { fileName: 'mutations.ts', source: mutationSource },
+        { fileName: 'form.tsx', source: formSource },
+      ],
+      dirname(contract),
+    );
+    expect(bridged.mutationBindings).toContainEqual(
+      expect.objectContaining({ fileName: 'form.tsx', localName: 'addContact' }),
+    );
+    expect(
+      compilerOwnedAppContractStaticFactsFromFiles(
+        [
+          { fileName: 'kovo.ts', source: contractSource },
+          { fileName: 'mutations.ts', source: mutationSource },
+          { fileName: 'form.tsx', source: formSource },
+        ],
+        dirname(contract),
+      ),
+    ).toContainEqual(
+      expect.objectContaining({
+        fileName: 'mutations.ts',
+        memberName: 'mutation',
+        source: mutationSource,
+      }),
+    );
   });
 
   it('keeps finite app-contract facts when build roots are workspace-relative', async () => {

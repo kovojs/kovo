@@ -20,8 +20,13 @@ import {
 import { deriveAppGraph } from './graph.js';
 import { compileRouteModule } from './scan/route-pages.js';
 import { parseComponentModule } from './scan/parse.js';
+import {
+  projectMutationRegistryFactsFromFiles,
+  type ProjectMutationRegistryFacts,
+  type ProjectMutationSourceFile,
+} from './scan/project-mutation-bindings.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
-import type { CompileResult, CompileRouteModuleResult } from './types.js';
+import type { CompileResult, CompileRouteModuleResult, MutationInputFieldFact } from './types.js';
 
 /** @internal D1 diagnostic emitted by the compiler-owned app resolver. */
 export interface CompilerOwnedAppContractDiagnostic {
@@ -87,7 +92,12 @@ export interface CompilerOwnedAppContractStaticFact {
 export interface CompilerOwnedAppContractProject {
   compileEntry(fileName: string): CompilerOwnedAppContractEntry;
   diagnosticCodesForFile(fileName: string): readonly number[];
-  staticFacts(): readonly CompilerOwnedAppContractStaticFact[];
+  projectMutationRegistryFacts(
+    files: readonly ProjectMutationSourceFile[],
+  ): ProjectMutationRegistryFacts;
+  staticFacts(
+    files?: readonly ProjectMutationSourceFile[],
+  ): readonly CompilerOwnedAppContractStaticFact[];
   resolverIntegrityMutations(
     fileName: string,
   ): Readonly<Record<string, readonly AppContractResolverDiagnostic[]>>;
@@ -97,6 +107,100 @@ export interface CompilerOwnedAppContractProject {
 /** @internal Exact root names used to construct the compiler-owned TypeScript Program. */
 export interface CreateCompilerOwnedAppContractProjectOptions {
   readonly rootNames: readonly string[];
+}
+
+/**
+ * Run the project mutation census against exact on-disk source snapshots while retaining the
+ * caller's path spelling in the returned lowering facts. Framework runners use this instead of
+ * invoking the structural project scanner outside the compiler-owned app resolver (SPEC §5.2).
+ */
+export function compilerOwnedProjectMutationRegistryFactsFromFiles(
+  files: readonly ProjectMutationSourceFile[],
+  rootDirectory: string = process.cwd(),
+): ProjectMutationRegistryFacts {
+  if (files.length === 0) return projectMutationRegistryFactsFromFiles(files);
+  const originalNames = new Map<string, string>();
+  const programFiles = files.map((file) => {
+    const fileName = resolve(rootDirectory, file.fileName);
+    const canonical = normalizeFileName(fileName);
+    if (originalNames.has(canonical)) {
+      throw new TypeError(
+        `App-contract project mutation census refused duplicate source identity ${file.fileName}.`,
+      );
+    }
+    originalNames.set(canonical, file.fileName);
+    return { fileName, source: file.source };
+  });
+  const project = createCompilerOwnedAppContractProject({
+    rootNames: programFiles.map((file) => file.fileName),
+  });
+  const facts = project.projectMutationRegistryFacts(programFiles);
+  const originalName = (fileName: string): string => {
+    const mapped = originalNames.get(normalizeFileName(resolve(fileName)));
+    if (mapped === undefined) {
+      throw new TypeError(
+        `App-contract project mutation census produced an unowned source path ${fileName}.`,
+      );
+    }
+    return mapped;
+  };
+  const mutationInputs: Record<string, readonly MutationInputFieldFact[]> = {};
+  for (const [key, fields] of Object.entries(facts.mutationInputs)) {
+    mutationInputs[key] = fields.map((field) => ({
+      ...field,
+      ...(field.source === undefined
+        ? {}
+        : {
+            source: {
+              ...field.source,
+              fileName: originalName(field.source.fileName),
+            },
+          }),
+    }));
+  }
+  return {
+    mutationBindings: facts.mutationBindings.map((binding) => ({
+      ...binding,
+      fileName: originalName(binding.fileName),
+      source: {
+        ...binding.source,
+        fileName: originalName(binding.source.fileName),
+      },
+    })),
+    mutationInputs,
+  };
+}
+
+/** Build exact app-member facts for framework-owned whole-project analyzers (SPEC §5.2). */
+export function compilerOwnedAppContractStaticFactsFromFiles(
+  files: readonly ProjectMutationSourceFile[],
+  rootDirectory: string = process.cwd(),
+): readonly CompilerOwnedAppContractStaticFact[] {
+  if (files.length === 0) return [];
+  const originalNames = new Map<string, string>();
+  const programFiles = files.map((file) => {
+    const fileName = resolve(rootDirectory, file.fileName);
+    const canonical = normalizeFileName(fileName);
+    if (originalNames.has(canonical)) {
+      throw new TypeError(
+        `App-contract static census refused duplicate source identity ${file.fileName}.`,
+      );
+    }
+    originalNames.set(canonical, file.fileName);
+    return { fileName, source: file.source };
+  });
+  const project = createCompilerOwnedAppContractProject({
+    rootNames: programFiles.map((file) => file.fileName),
+  });
+  return project.staticFacts(programFiles).map((fact) => {
+    const fileName = originalNames.get(normalizeFileName(resolve(fact.fileName)));
+    if (fileName === undefined) {
+      throw new TypeError(
+        `App-contract static census produced an unowned source path ${fact.fileName}.`,
+      );
+    }
+    return { ...fact, fileName };
+  });
 }
 
 type ReceiverProof =
@@ -389,9 +493,91 @@ export function createCompilerOwnedAppContractProject(
       );
     },
 
-    staticFacts(): readonly CompilerOwnedAppContractStaticFact[] {
+    projectMutationRegistryFacts(
+      files: readonly ProjectMutationSourceFile[],
+    ): ProjectMutationRegistryFacts {
+      const facts: CompilerOwnedAppContractResolution[] = [];
+      const members: CompilerOwnedAppContractMemberResolution[] = [];
+      const inputs: ProjectMutationSourceFile[] = [];
+      for (const file of files) {
+        if (
+          !file ||
+          typeof file !== 'object' ||
+          typeof file.fileName !== 'string' ||
+          typeof file.source !== 'string'
+        ) {
+          throw new TypeError(
+            'App-contract project mutation census requires exact fileName/source records.',
+          );
+        }
+        const sourceFile = sourceFileFor(file.fileName);
+        if (sourceFile.text !== file.source) {
+          throw new TypeError(
+            `App-contract project mutation census refused a stale source snapshot for ${file.fileName}.`,
+          );
+        }
+        const analysis = analyzeEntry(file.fileName);
+        if (analysis.diagnostics.length > 0) {
+          throw new TypeError(
+            analysis.diagnostics
+              .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+              .join('\n'),
+          );
+        }
+        facts.push(
+          ...analysis.facts.map((fact) => ({
+            ...fact,
+            consumerFileName: file.fileName,
+          })),
+        );
+        members.push(
+          ...analysis.memberFacts.map((fact) => ({
+            ...fact,
+            consumerFileName: file.fileName,
+          })),
+        );
+        inputs.push({ fileName: file.fileName, source: sourceFile.text });
+      }
+      return withCompilerOwnedAppContractResolutions(
+        facts,
+        () => projectMutationRegistryFactsFromFiles(inputs),
+        members,
+      );
+    },
+
+    staticFacts(
+      files?: readonly ProjectMutationSourceFile[],
+    ): readonly CompilerOwnedAppContractStaticFact[] {
       const facts: CompilerOwnedAppContractStaticFact[] = [];
-      for (const fileName of consumerRootNames) {
+      const fileNames =
+        files === undefined
+          ? consumerRootNames
+          : files.map((file) => {
+              if (
+                !file ||
+                typeof file !== 'object' ||
+                typeof file.fileName !== 'string' ||
+                typeof file.source !== 'string'
+              ) {
+                throw new TypeError(
+                  'App-contract static census requires exact fileName/source records.',
+                );
+              }
+              const sourceFile = sourceFileFor(file.fileName);
+              if (sourceFile.text !== file.source) {
+                throw new TypeError(
+                  `App-contract static census refused a stale source snapshot for ${file.fileName}.`,
+                );
+              }
+              return file.fileName;
+            });
+      if (
+        new Set(fileNames.map((fileName) => normalizeFileName(resolve(fileName)))).size !==
+        fileNames.length
+      ) {
+        throw new TypeError('App-contract static census refused duplicate source identities.');
+      }
+      for (const fileName of fileNames) {
         const sourceFile = sourceFileFor(fileName);
         const analysis = analyzeEntry(fileName);
         if (analysis.diagnostics.length > 0) {

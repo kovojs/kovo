@@ -1,5 +1,10 @@
 import * as ts from 'typescript';
 
+import { compilerOwnedAppContractFactoryEquals } from '../app-contract-resolver.js';
+import {
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import {
   compilerArrayAppend,
   compilerArrayJoin,
@@ -98,6 +103,7 @@ const BETTER_AUTH_BINDING_CONSTRUCTORS = new Set([
   'createBetterAuthPostgresBindingsFromEnvironment',
   'createBetterAuthSqliteBindingsFromEnvironment',
 ]);
+const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 
 const BETTER_AUTH_SIGN_IN_FIELDS: readonly MutationInputFieldFact[] = [
   {
@@ -340,9 +346,18 @@ function directKovoMutationProof(module: ProjectModule, localName: string): Muta
   const initializer = unwrapExpression(declaration.initializer);
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   const callee = unwrapExpression(initializer.expression);
-  if (!callee || !ts.isIdentifier(callee) || callee.text !== 'mutation') return null;
-  if (!hasExactPackageImport(module, 'mutation', '@kovojs/server')) return null;
-  if (bindingHasVisibleMutation(module.sourceFile, 'mutation')) return null;
+  if (!callee) return null;
+  const appMutation = compilerOwnedAppContractFactoryEquals(
+    ts as FrameworkIdentityTypeScript,
+    module.sourceFile,
+    callee,
+    MUTATION_FACTORY_IDENTITY,
+  );
+  if (!appMutation) {
+    if (!ts.isIdentifier(callee) || callee.text !== 'mutation') return null;
+    if (!hasExactPackageImport(module, 'mutation', '@kovojs/server')) return null;
+    if (bindingHasVisibleMutation(module.sourceFile, 'mutation')) return null;
+  }
 
   let key: string;
   let definition: ts.Expression | undefined;

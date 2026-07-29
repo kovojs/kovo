@@ -61,6 +61,7 @@ import { deriveAppGraph } from '@kovojs/compiler/graph';
 import {
   analyzeCapabilityClosure,
   collectCapabilityPackageRequests,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   componentTaskBSourceOperationFacts,
   compilerGeneratedCapabilityDependencies,
   createCompilerOwnedAppContractProject,
@@ -76,6 +77,7 @@ import {
   type AppDependencyCapabilityManifest,
   type CompilerGeneratedCapabilityDependency,
   type CompilerOwnedAppContractProject,
+  type CompilerOwnedAppContractStaticFact,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact,
   type AnalyzeCapabilityClosureResult,
@@ -523,8 +525,7 @@ type ExportArgParseResult =
   | { message: string; ok: false };
 
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
-type ExportStaticApp =
-  (typeof import('@kovojs/server/internal/static-export'))['exportStaticApp'];
+type ExportStaticApp = (typeof import('@kovojs/server/internal/static-export'))['exportStaticApp'];
 
 interface KovoBuildOptions {
   appModulePath: string;
@@ -2099,14 +2100,19 @@ async function staticBuildCheckGraph(
   },
 ): Promise<KovoBuildCheckArtifacts> {
   const files = options.preEvaluationStaticTrust.files;
+  // Reuse the exact compiler-owned app-member proof that authorized pre-evaluation lowering.
+  // Drizzle receives only source-bound spans; it does not rediscover app identity structurally.
+  const sourceGraphFacts = options.preEvaluationStaticTrust.sourceGraphFacts;
   const drizzleFacts =
     files.length === 0
       ? emptyStaticDataPlaneBuildFacts()
-      : await staticDataPlaneBuildFacts(files, { cache: options.cache });
+      : await staticDataPlaneBuildFacts(files, {
+          appContractStaticFacts: sourceGraphFacts.appContractStaticFacts,
+          cache: options.cache,
+        });
   // SPEC §5.2 rule 9 / §6.6: graph assembly consumes the compiler facts that already authorized
   // evaluation. Recompiling or re-reading identity files here would create a second carrier whose
   // verdict could disagree with the exact bytes admitted by the pre-evaluation gate.
-  const sourceGraphFacts = options.preEvaluationStaticTrust.sourceGraphFacts;
   // SPEC §6.6/§9.1 (audit-only, threat-matrix M3): surface every app-authored escape-hatch call site
   // (`kovo explain --capabilities`) and credential-cookie downgrade (`--cookies`) in the REAL build
   // graph.json — the static producers detect them at their call site, so a merely-built (not run) app
@@ -2379,6 +2385,7 @@ function compareBuildRevealFacts(
 }
 
 interface SourceGraphFacts {
+  appContractStaticFacts: readonly CompilerOwnedAppContractStaticFact[];
   compilerDependencies: CompilerGeneratedCapabilityDependency[];
   compilerSecuritySemanticSources: CompilerSecuritySemanticSource[];
   compilerTaskBFiniteVerdict: CompilerTaskBFiniteVerdict;
@@ -2611,9 +2618,7 @@ function compilerOwnedAppContractProjectForBuild(
   const seen = buildCreateSet<string>();
   const sources = buildSnapshotDenseArray(files, 'App-contract compiler source roots');
   for (let index = 0; index < sources.length; index += 1) {
-    const fileName = absoluteRoots
-      ? resolve(sources[index]!.fileName)
-      : sources[index]!.fileName;
+    const fileName = absoluteRoots ? resolve(sources[index]!.fileName) : sources[index]!.fileName;
     const canonicalFileName = resolve(fileName);
     if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
     buildSetAdd(seen, canonicalFileName);
@@ -2627,9 +2632,7 @@ function compilerOwnedAppContractProjectForBuild(
     buildSetAdd(seen, canonicalFileName);
     buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
   }
-  return rootNames.length === 0
-    ? undefined
-    : createCompilerOwnedAppContractProject({ rootNames });
+  return rootNames.length === 0 ? undefined : createCompilerOwnedAppContractProject({ rootNames });
 }
 
 function withBuildAppContractResolutions<Value>(
@@ -2663,7 +2666,10 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   // SPEC §5.2 rule 10 / §6.3: derive imported mutation-form ownership once from the same immutable
   // source snapshot used by build/check. Lowering receives only typed, path-scoped facts and never
   // infers authority from a bare identifier or a post-evaluation runtime object.
-  const projectMutationFacts = projectMutationRegistryFactsFromFiles(sourceFiles);
+  const projectMutationFacts =
+    appContractProject?.projectMutationRegistryFacts(sourceFiles) ??
+    projectMutationRegistryFactsFromFiles(sourceFiles);
+  const appContractStaticFacts = appContractProject?.staticFacts() ?? [];
   for (let fileIndex = 0; fileIndex < sourceFiles.length; fileIndex += 1) {
     const file = sourceFiles[fileIndex]!;
     // Every identity input comes from the same descriptor-bound source census. Supplying the
@@ -2835,6 +2841,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   }
 
   return {
+    appContractStaticFacts,
     compilerDependencies,
     compilerSecuritySemanticSources,
     compilerTaskBFiniteVerdict: snapshotCompilerTaskBFiniteVerdict({
@@ -3819,16 +3826,12 @@ function sourceDerivedRegistryVitePlugin(
       if (sourceClaimsKovoBuildCompilerAuthority(fileName, source)) {
         assertKovoBuildAuthoredCompilerAuthority(fileName, source);
       }
-      const code = withBuildAppContractResolutions(
-        appContractProject,
-        sourcePath,
-        source,
-        () =>
-          lowerRegistryDeclarations({
-            fileName: sourcePath,
-            identityFileName: fileName,
-            source,
-          }),
+      const code = withBuildAppContractResolutions(appContractProject, sourcePath, source, () =>
+        lowerRegistryDeclarations({
+          fileName: sourcePath,
+          identityFileName: fileName,
+          source,
+        }),
       );
       return code === null ? null : { code, map: null };
     },
@@ -5622,6 +5625,56 @@ function projectMutationRegistryFactsForBuild(
   sourceIdentityRoot: string = buildRoot,
 ): ProjectMutationRegistryFacts {
   const files = buildSnapshotDenseArray(sourceFiles, 'Project mutation build source files');
+  const exactFacts = compilerOwnedProjectMutationRegistryFactsFromFiles(files, sourceIdentityRoot);
+  const projectFileName = (fileName: string): string =>
+    kovoBuildFilterFileName(resolve(sourceIdentityRoot, fileName), buildRoot);
+  const mutationInputs = buildCreateNullRecord<
+    ProjectMutationRegistryFacts['mutationInputs'][string]
+  >() as ProjectMutationRegistryFacts['mutationInputs'];
+  const mutationInputKeys = buildSnapshotDenseArray(
+    buildObjectKeys(exactFacts.mutationInputs),
+    'Project mutation input keys',
+  );
+  for (let keyIndex = 0; keyIndex < mutationInputKeys.length; keyIndex += 1) {
+    const key = mutationInputKeys[keyIndex]!;
+    const fields = buildSnapshotDenseArray(
+      buildOwnDataValue(
+        exactFacts.mutationInputs,
+        key,
+        `Project mutation input ${key}`,
+      ) as ProjectMutationRegistryFacts['mutationInputs'][string],
+      `Project mutation input ${key}`,
+    );
+    const projectedFields: (typeof fields)[number][] = [];
+    for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+      const field = fields[fieldIndex]!;
+      buildSecurityArrayAppend(
+        projectedFields,
+        {
+          ...field,
+          ...(field.source === undefined
+            ? {}
+            : {
+                source: {
+                  ...field.source,
+                  fileName: projectFileName(field.source.fileName),
+                },
+              }),
+        },
+        `Projected mutation input ${key}`,
+      );
+    }
+    (mutationInputs as Record<string, readonly (typeof fields)[number][]>)[key] = projectedFields;
+  }
+  const mutationBindings: ProjectMutationRegistryFacts['mutationBindings'] =
+    exactFacts.mutationBindings.map((binding) => ({
+      ...binding,
+      fileName: projectFileName(binding.fileName),
+      source: {
+        ...binding.source,
+        fileName: projectFileName(binding.source.fileName),
+      },
+    }));
   const viteFiles: BuildCheckSourceFile[] = [];
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
@@ -5652,7 +5705,12 @@ function projectMutationRegistryFactsForBuild(
       'Project mutation Vite source files',
     );
   }
-  return projectMutationRegistryFactsFromFiles(viteFiles);
+  // Retain the existing exact source census here as a path-remapping integrity check. The
+  // compiler-owned proof above is the only channel allowed to authenticate app.mutation.
+  if (viteFiles.length !== files.length) {
+    throw new TypeError('Project mutation build source census changed during path projection.');
+  }
+  return { mutationBindings, mutationInputs };
 }
 
 function kovoBuildFilterFileName(fileName: string, root: string): string {

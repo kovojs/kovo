@@ -4,6 +4,8 @@ export type {
   SourcePosition,
 } from './diagnostics.js';
 export {
+  compilerOwnedAppContractStaticFactsFromFiles,
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   createCompilerOwnedAppContractProject,
   type CompilerOwnedAppContractDiagnostic,
   type CompilerOwnedAppContractEntry,

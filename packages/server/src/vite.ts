@@ -16,8 +16,8 @@ import {
   extractPackageComponentCss,
 } from '@kovojs/compiler/package-styles';
 import {
+  compilerOwnedProjectMutationRegistryFactsFromFiles,
   collectCssAssetManifest,
-  projectMutationRegistryFactsFromFiles,
   type ComponentCssAsset,
   type ProjectMutationRegistryFacts,
   type QueryShapeFact as CompilerViteQueryShapeFact,
@@ -907,7 +907,10 @@ function collectCompilerProjectMutationFacts(
   app: string,
 ): ProjectMutationRegistryFacts {
   const appSourceDir = buildSecurityPathDirname(appEntryFileName(app, root));
-  return projectMutationRegistryFactsFromFiles(dataPlaneSourceFilesAdapter(appSourceDir, root));
+  return compilerOwnedProjectMutationRegistryFactsFromFiles(
+    dataPlaneSourceFilesAdapter(appSourceDir, root),
+    root,
+  );
 }
 
 function compilerViteQueryShapeFacts(
