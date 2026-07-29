@@ -1,18 +1,16 @@
-import { mutation, publicAccess, s } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
+import { defineKovo, s } from '@kovojs/server';
 
-interface ContactsRequest {
-  contacts: { create(input: { email: string; name: string }): Promise<void> };
-}
+const app = defineKovo({
+  appId: 'f68bd563-574a-42d4-af25-b1631e7937c4',
+  csrf: {
+    anonymousCookie: false,
+    secret: 'golden-mutation-csrf-secret-at-least-32-bytes',
+    sessionId: () => undefined,
+  },
+});
 
-export function defineCreateContact(csrf: CsrfOptions<ContactsRequest>) {
-  return mutation({
-    access: publicAccess('the public demo accepts contact submissions'),
-    csrf,
-    input: s.object({ email: s.string().email(), name: s.string() }),
-    async handler(input, request: ContactsRequest) {
-      await request.contacts.create(input);
-      return { created: input.email };
-    },
-  });
-}
+export const createContact = app.mutation({
+  access: app.publicAccess('the public demo accepts contact submissions'),
+  input: s.object({ email: s.string().email(), name: s.string() }),
+  handler: (input) => ({ created: input.email, name: input.name }),
+});

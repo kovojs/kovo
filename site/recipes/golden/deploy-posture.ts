@@ -1,6 +1,6 @@
 import { defineConfig, node } from '@kovojs/server/build';
 
-export const deployConfig = defineConfig({
+export const deployPosture = defineConfig({
   preset: node({
     retention: {
       hours: 24,

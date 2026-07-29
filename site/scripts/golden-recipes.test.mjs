@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GOLDEN_RECIPE_TASKS,
+  GOLDEN_RENAME_TARGETS,
   readGoldenRecipeManifest,
   validateGoldenRecipes,
+  validateGoldenRenameDrills,
 } from './golden-recipes.mjs';
 
 const pagePath = path.join(process.cwd(), 'site/content/guides/golden-recipes.md');
@@ -19,6 +21,19 @@ describe('golden task recipes', () => {
     expect(result.tasks).toBe(16);
     expect(result.recipes.map((recipe) => recipe.task)).toEqual(GOLDEN_RECIPE_TASKS);
     expect(new Set(result.recipes.map((recipe) => recipe.sourcePath)).size).toBe(16);
+    expect(result.renameDrills).toHaveLength(10);
+  });
+
+  it('pairs each rename with a packed-type diagnostic and compiling fix', async () => {
+    const markdown = await readFile(pagePath, 'utf8');
+    const drills = validateGoldenRenameDrills({ markdown });
+
+    expect(drills.map((drill) => `${drill.target}:${drill.phase}`)).toEqual(
+      GOLDEN_RENAME_TARGETS.flatMap((target) => [`${target}:stale`, `${target}:fix`]),
+    );
+    expect(
+      drills.filter((drill) => drill.phase === 'stale').every((drill) => drill.diagnostic),
+    ).toBe(true);
   });
 
   it('rejects a displayed recipe that drifts from its tracked source bytes', async () => {
@@ -56,5 +71,23 @@ describe('golden task recipes', () => {
         requireTracked: false,
       }),
     ).toThrow(/task set\/order drifted/u);
+  });
+
+  it('fails closed when a rename pair loses its diagnostic or compiling fix', async () => {
+    const markdown = await readFile(pagePath, 'utf8');
+
+    expect(() =>
+      validateGoldenRenameDrills({
+        markdown: markdown.replace(' diagnostic="\'text\' does not exist"', ''),
+      }),
+    ).toThrow(/requires a diagnostic/u);
+    expect(() =>
+      validateGoldenRenameDrills({
+        markdown: markdown.replace(
+          'target="component props" phase="fix"',
+          'target="component props" phase="stale" diagnostic="text"',
+        ),
+      }),
+    ).toThrow(/set\/order drifted|type-error directive/u);
   });
 });

@@ -6,13 +6,13 @@ order: 0.4
 
 # Golden task recipes
 
-Start here when you know the job but not the Kovo name. Each recipe below is one complete,
-standalone source file. The docs gate checks the displayed bytes against that tracked file, compiles
-them from packed packages, and runs the whole set.
+Start here when you know the job but not the Kovo name. Each recipe is a real tracked source file.
+The docs gate checks the displayed bytes and exported symbol, compiles every file from packed
+packages, and runs the set through those same packages.
 
 ## Render a component
 
-Use `component()` when a reusable view needs typed props, query bindings, state, or mutation slots.
+Use `component()` when a reusable view needs typed props, queries, state, or mutation slots.
 
 <!-- kovo-recipe task="component" source="site/recipes/golden/component.tsx" export="SaveButton" -->
 
@@ -25,42 +25,59 @@ export const SaveButton = component({
     return <button type="submit">{props.label}</button>;
   },
 });
+
+export function saveButtonPreview() {
+  return <SaveButton label="Save" />;
+}
 ```
 
-Call it as `<SaveButton label="Save" />`. Renaming `label` makes every stale call fail in the
-component-prop drill below.
+Call it as `<SaveButton label="Save" />`. A stale prop fails the rename drill below.
 
 ## Add a route
 
-Use `route()` for an HTML page. Put path parameters in one schema.
+Declare the route on the app contract so its access posture and request type share one owner.
 
 <!-- kovo-recipe task="route" source="site/recipes/golden/route.tsx" export="contactRoute" -->
 
 ```tsx
-import { route, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 
-export const contactRoute = route('/contacts/:contactId', {
+const app = defineKovo({
+  appId: 'ba3fd9ff-cf8e-4fea-89ea-188f88e8c915',
+  egress: { allowInternal: [] },
+  renderRoute: renderRouteHtml,
+});
+
+export const contactRoute = app.route('/contacts/:contactId', {
+  access: app.publicAccess('the public directory is intentionally visible'),
   params: s.object({ contactId: s.string() }),
   page({ params }) {
     return <main>Contact {params.contactId}</main>;
   },
 });
+
+export const routeRecipeApp = app.assemble({ routes: [contactRoute] });
 ```
 
-A path rename and its param-schema rename travel together. `kovo check` catches a stale
-`params.contactId`.
+Use a guard such as `[app.authenticated]` when the page is private.
 
 ## Load a query
 
-Use `query()` for typed server data that a component may refresh after a write.
+Put reads on the same app contract. The output schema becomes the result contract for every
+consumer.
 
 <!-- kovo-recipe task="query" source="site/recipes/golden/query.ts" export="contactQuery" -->
 
 ```ts
-import { publicAccess, query, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 
-export const contactQuery = query({
-  access: publicAccess('the public directory is intentionally visible'),
+const app = defineKovo({
+  appId: '4109e077-a43d-4f42-bd6c-8b8a33981cd7',
+});
+
+export const contactQuery = app.query({
+  access: app.publicAccess('the public directory is intentionally visible'),
   args: s.object({ contactId: s.string() }),
   output: s.object({ displayName: s.string(), id: s.string() }),
   load: ({ contactId }: { contactId: string }) => ({
@@ -70,129 +87,184 @@ export const contactQuery = query({
 });
 ```
 
-Use a guard instead of `publicAccess(...)` for private data. A real loader reads through the
-framework-provided `context.db`; the [queries guide](/guides/queries/) adds that database shape.
+A production loader reads through the app-inferred read-only `context.db`. Add the handle to the
+app's single `app.assemble({ queries })` call; the compiler supplies its source-derived identity.
 
 ## Write a mutation
 
-Use `mutation()` for browser writes. Accept the app-owned CSRF posture once, then keep validation
-and the write next to each other.
+Declare CSRF once on the app, then keep validation and the handler together.
 
-<!-- kovo-recipe task="mutation" source="site/recipes/golden/mutation.ts" export="defineCreateContact" -->
-
-```ts
-import { mutation, publicAccess, s } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
-
-interface ContactsRequest {
-  contacts: { create(input: { email: string; name: string }): Promise<void> };
-}
-
-export function defineCreateContact(csrf: CsrfOptions<ContactsRequest>) {
-  return mutation({
-    access: publicAccess('the public demo accepts contact submissions'),
-    csrf,
-    input: s.object({ email: s.string().email(), name: s.string() }),
-    async handler(input, request: ContactsRequest) {
-      await request.contacts.create(input);
-      return { created: input.email };
-    },
-  });
-}
-```
-
-Production apps normally get the CSRF and request types from their app contract. The factory keeps
-this standalone recipe honest without hard-coding a signing secret.
-
-## Render a typed form
-
-Put the mutation on the component. The form field names and submitted values now come from the same
-input schema.
-
-<!-- kovo-recipe task="form" source="site/recipes/golden/form.tsx" export="defineProfileForm" -->
-
-```tsx
-import { component, FieldError, FormError } from '@kovojs/core';
-import { mutation, publicAccess, s } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
-
-export function defineProfileForm(csrf: CsrfOptions<unknown>) {
-  const updateProfile = mutation({
-    access: publicAccess('the demo profile form is intentionally public'),
-    csrf,
-    errors: { EMAIL_TAKEN: s.object({ email: s.string() }) },
-    input: s.object({ email: s.string().email(), name: s.string() }),
-    handler: (input) => ({ updated: input.email }),
-  });
-
-  return component({
-    mutations: { updateProfile },
-    render(_props, _state, { forms }) {
-      return (
-        <form mutation={updateProfile}>
-          <input name="name" value={forms.updateProfile.submitted?.name ?? ''} />
-          <input name="email" type="email" />
-          <FieldError name="email" />
-          <FormError code="EMAIL_TAKEN">That email is already registered.</FormError>
-          <button type="submit">Save profile</button>
-        </form>
-      );
-    },
-  });
-}
-```
-
-Kovo emits the CSRF and idempotency fields. Do not hand-build hidden mutation fields.
-
-## Expose a machine endpoint
-
-Use `endpoint()` when the caller needs raw HTTP rather than an HTML form.
-
-<!-- kovo-recipe task="endpoint" source="site/recipes/golden/endpoint.ts" export="healthEndpoint" -->
+<!-- kovo-recipe task="mutation" source="site/recipes/golden/mutation.ts" export="createContact" -->
 
 ```ts
-import { endpoint } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 
-export const healthEndpoint = endpoint('/healthz', {
-  auth: { kind: 'none', justification: 'public uptime probe' },
-  csrf: false,
-  csrfJustification: 'GET health probes carry no browser write authority',
-  handler: () => Response.json({ ok: true }),
-  method: 'GET',
-  reason: 'load balancer health probe',
-  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+const app = defineKovo({
+  appId: 'f68bd563-574a-42d4-af25-b1631e7937c4',
+  csrf: {
+    anonymousCookie: false,
+    secret: 'golden-mutation-csrf-secret-at-least-32-bytes',
+    sessionId: () => undefined,
+  },
+});
+
+export const createContact = app.mutation({
+  access: app.publicAccess('the public demo accepts contact submissions'),
+  input: s.object({ email: s.string().email(), name: s.string() }),
+  handler: (input) => ({ created: input.email, name: input.name }),
 });
 ```
 
-The reason, auth, CSRF, response body, and cache posture all appear in `kovo explain endpoints`.
+Load the signing secret from deployment configuration in a real app. Kovo emits CSRF and
+idempotency fields for forms; do not hand-build them. Assemble the handle in the app root so the
+compiler supplies its source-derived identity.
 
-## Guard an account page
+## Show a typed form error
 
-Use `guards.authed()` for a page that needs a session. The page callback receives the refined
-request.
+Declare error payloads on the mutation and render them with the form helpers. The error code and
+field names remain compiler-checked.
 
-<!-- kovo-recipe task="auth" source="site/recipes/golden/auth.tsx" export="accountRoute" -->
+<!-- kovo-recipe task="form error" source="site/recipes/golden/form-error.tsx" export="ProfileForm" -->
 
 ```tsx
-import { guards, route } from '@kovojs/server';
+import { component, FieldError, FormError } from '@kovojs/core';
+import { defineKovo, s } from '@kovojs/server';
 
-interface AccountRequest {
-  session?: { id: string; user: { email: string; id: string } } | null;
-}
+const app = defineKovo({
+  appId: '425ca355-d01e-434a-86fc-3697ca21c0b7',
+  csrf: {
+    anonymousCookie: false,
+    secret: 'golden-form-error-csrf-secret-at-least-32-bytes',
+    sessionId: () => undefined,
+  },
+});
 
-export const accountRoute = route('/account', {
-  guard: guards.authed<AccountRequest>(),
-  page(_input, request) {
-    return <main>Signed in as {request.session.user.email}</main>;
+export const updateProfile = app.mutation({
+  access: app.publicAccess('the demo profile form is intentionally public'),
+  errors: { EMAIL_TAKEN: s.object({ email: s.string() }) },
+  input: s.object({ email: s.string().email(), name: s.string() }),
+  handler(input, _request, context) {
+    if (input.email === 'taken@example.test') {
+      return context.fail('EMAIL_TAKEN', { email: input.email });
+    }
+    return { updated: input.email };
+  },
+});
+
+export const ProfileForm = component({
+  mutations: { updateProfile },
+  render(_props, _state, { forms }) {
+    return (
+      <form mutation={updateProfile}>
+        <input name="name" value={forms.updateProfile.submitted?.name ?? ''} />
+        <input name="email" type="email" />
+        <FieldError name="email" />
+        <FormError code="EMAIL_TAKEN">That email is already registered.</FormError>
+        <button type="submit">Save profile</button>
+      </form>
+    );
   },
 });
 ```
 
-Use the Better Auth binding constructors for production sign-in, sign-out, and session loading.
+Validation errors use the same helpers. Application errors stay named and payload-typed.
+
+## Guard an account page
+
+Declare the session provider once. `app.authenticated` refines the request for the page.
+
+<!-- kovo-recipe task="auth" source="site/recipes/golden/auth.tsx" export="accountRoute" -->
+
+```tsx
+import { defineKovo } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+
+const app = defineKovo({
+  appId: '2afc9fe5-730d-486a-89d8-1f4c166103a4',
+  auth: () => ({
+    id: 'session-1',
+    user: { email: 'ada@example.test', id: 'user-1' },
+  }),
+  egress: { allowInternal: [] },
+  renderRoute: renderRouteHtml,
+});
+
+export const accountRoute = app.route('/account', {
+  access: [app.authenticated],
+  page(_input, request) {
+    return <main>Signed in as {request.session.user.email}</main>;
+  },
+});
+
+export const authRecipeApp = app.assemble({ routes: [accountRoute] });
+```
+
+Use the Better Auth binding for production credentials and session rotation.
+
+## Add inline optimism
+
+Bind the prediction to the query it updates. The mutation accepts only bindings owned by the same
+app and the same input schema.
+
+<!-- kovo-recipe task="inline optimism" source="site/recipes/golden/inline-optimism.ts" export="addItem" -->
+
+```ts
+import { defineKovo, s } from '@kovojs/server';
+
+const app = defineKovo({
+  appId: '0c27a49f-2779-46cf-9b72-34478869ccb8',
+  csrf: {
+    anonymousCookie: false,
+    secret: 'golden-inline-optimism-secret-at-least-32-bytes',
+    sessionId: () => undefined,
+  },
+});
+
+export const cartCountQuery = app.query({
+  access: app.publicAccess('the anonymous cart count is intentionally visible'),
+  output: s.object({ count: s.number().int().min(0) }),
+  load: () => ({ count: 1 }),
+});
+
+const addItemInput = s.object({ quantity: s.number().int().min(1) });
+
+export function predictCartCount(
+  current: Readonly<{ count: number }>,
+  input: { quantity: number },
+) {
+  return { count: current.count + input.quantity };
+}
+
+export const addItem = app.mutation({
+  access: app.publicAccess('the anonymous cart write is protected by app CSRF'),
+  input: addItemInput,
+  optimistic: [cartCountQuery.optimistic(addItemInput, predictCartCount)],
+  handler: ({ quantity }) => ({ quantity }),
+});
+```
+
+Use `query.optimistic('await-fragment')` when server truth cannot be predicted safely.
+
+## Render trusted output
+
+Prefer a validating constructor. `safeRichHtml()` sanitizes CMS markup before minting the
+framework-owned output carrier.
+
+<!-- kovo-recipe task="trusted output" source="site/recipes/golden/trusted-output.ts" export="trustedArticleBody" -->
+
+```ts
+import { safeRichHtml } from '@kovojs/server';
+
+export const trustedArticleBody = safeRichHtml('<p>Hello <strong>reader</strong>.</p>', {
+  source: 'CMS rich-text field',
+});
+```
+
+Reserve `trustedHtml()` for already reviewed renderer output and keep the reason at the call site.
 
 ## Store an object
 
-Start tests with memory storage. Keep the server-minted scoped key instead of a client filename.
+Keep the server-minted scoped key instead of accepting a client filename.
 
 <!-- kovo-recipe task="storage" source="site/recipes/golden/storage.ts" export="saveAvatar" -->
 
@@ -201,39 +273,42 @@ import { createMemoryStorage } from '@kovojs/core/storage';
 import { publicScopedKey } from '@kovojs/core';
 
 export const avatarStorage = createMemoryStorage();
+export const avatarKey = publicScopedKey('avatars/current.png');
 
 export async function saveAvatar(bytes: Uint8Array) {
-  return avatarStorage.put(publicScopedKey('avatars/current.png'), bytes, {
+  return avatarStorage.put(avatarKey, bytes, {
     contentType: 'image/png',
   });
 }
 ```
 
-Swap in filesystem storage for local development or S3-compatible storage for deployment.
+Use memory storage in tests, filesystem locally, and a validated S3-compatible adapter in
+deployment.
 
-## Run a background task
+## Accept an upload
 
-Use `task()` when work should survive the request and retry after failure.
+Cap bytes, accept a narrow media type, and store under a server-owned prefix.
 
-<!-- kovo-recipe task="task" source="site/recipes/golden/task.ts" export="rebuildSearch" -->
+<!-- kovo-recipe task="upload" source="site/recipes/golden/upload.ts" export="avatarUpload" -->
 
 ```ts
+import { createMemoryStorage } from '@kovojs/core/storage';
 import { s } from '@kovojs/server';
-import { task } from '@kovojs/server/tasks';
 
-export const rebuildSearch = task({
-  input: s.object({ index: s.string() }),
-  retry: { backoff: 'exponential', maxAttempts: 4 },
-  run: ({ index }) => ({ rebuilt: index }),
-});
+const uploads = createMemoryStorage();
+
+export const avatarUpload = s
+  .file()
+  .maxBytes(2_000_000)
+  .accept(['image/png'])
+  .store({ keyPrefix: 'avatars', storage: uploads });
 ```
 
-Schedule it from a mutation with `request.schedule(rebuildSearch, { index: 'contacts' })`.
+Put this schema in a mutation input. Kovo makes its form multipart automatically.
 
 ## Verify a webhook
 
-Build the provider verifier from deployment secret material, then parse the body only after the
-signature passes.
+Build the verifier from deployment secret material, then parse the body only after verification.
 
 <!-- kovo-recipe task="webhook" source="site/recipes/golden/webhook.ts" export="defineOrderWebhook" -->
 
@@ -256,128 +331,139 @@ export function defineOrderWebhook(secret: string) {
 }
 ```
 
-A webhook that writes app data also declares replay storage, idempotency, write domains, and an
-explicit principal posture.
+A webhook that writes also declares replay storage, idempotency, write domains, and principal
+posture.
 
-## Send an email
+## Run a task
 
-Email is durable work plus a bounded egress call. Put the provider call in a task.
+Declare durable work on the app so its input and runtime owner stay in the same graph.
 
-<!-- kovo-recipe task="email" source="site/recipes/golden/email.ts" export="sendReceiptEmail" -->
+<!-- kovo-recipe task="task" source="site/recipes/golden/task.ts" export="rebuildSearch" -->
 
 ```ts
-import { s } from '@kovojs/server';
-import { task } from '@kovojs/server/tasks';
+import { defineKovo, s } from '@kovojs/server';
 
-export const sendReceiptEmail = task({
-  input: s.object({ orderId: s.string(), to: s.string().email() }),
-  async run({ orderId, to }, context) {
-    const response = await context.fetch('https://api.resend.com/emails', {
-      body: JSON.stringify({ orderId, to }),
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Email provider returned ${response.status}.`);
-    return { delivered: to };
-  },
+const app = defineKovo({
+  appId: '7719fe41-b5b2-44c8-81da-0d8ff0ce35b0',
+});
+
+export const rebuildSearch = app.task({
+  input: s.object({ index: s.string() }),
+  retry: { backoff: 'exponential', maxAttempts: 4 },
+  run: ({ index }) => ({ rebuilt: index }),
 });
 ```
 
-Add `https://api.resend.com` to the app egress allowlist. A missing allowlist stays a loud runtime
-failure.
+Add the handle to the app root's task inventory, then schedule it from a mutation through the
+framework-provided request context.
 
-## Return a file
+## Customize the document shell
 
-Use `respond.file()` for route-owned bytes. Name interpretation-changing metadata explicitly.
+Compose the framework-owned document with structured primitives. This keeps scripts, URLs, CSP,
+and shell attributes auditable.
 
-<!-- kovo-recipe task="file" source="site/recipes/golden/file.ts" export="invoiceDownload" -->
-
-```ts
-import { respond } from '@kovojs/server';
-
-export const invoiceDownload = respond.file(new TextEncoder().encode('invoice,paid\n42,true\n'), {
-  contentType: 'text/csv; charset=utf-8',
-  filename: 'invoice-42.csv',
-  headers: { 'Cache-Control': 'private, no-store' },
-});
-```
-
-Return this value from a route page. Kovo owns `Content-Disposition` and adapter framing.
-
-## Accept an upload
-
-Use `s.file()` in a mutation input. Cap bytes, verify the content type, and store under a server
-key.
-
-<!-- kovo-recipe task="upload" source="site/recipes/golden/upload.ts" export="avatarUpload" -->
-
-```ts
-import { createMemoryStorage } from '@kovojs/core/storage';
-import { s } from '@kovojs/server';
-
-const uploads = createMemoryStorage();
-
-export const avatarUpload = s
-  .file()
-  .maxBytes(2_000_000)
-  .accept(['image/png'])
-  .store({ keyPrefix: 'avatars', storage: uploads });
-```
-
-Put `avatar: avatarUpload` in the mutation schema. The generated form becomes multipart
-automatically.
-
-## Render rich HTML
-
-Use `safeRichHtml()` for CMS-style markup. It sanitizes the fragment before minting the raw-HTML
-carrier.
-
-<!-- kovo-recipe task="raw HTML" source="site/recipes/golden/raw-html.ts" export="articleBody" -->
-
-```ts
-import { safeRichHtml } from '@kovojs/server';
-
-export const articleBody = safeRichHtml('<p>Hello <strong>reader</strong>.</p>', {
-  source: 'CMS rich-text field',
-});
-```
-
-Use `trustedHtml()` only for already reviewed renderer output and keep its reason and source inline.
-
-## Mint a capability link
-
-A route receives `signUrl` from the request shell. Mint a short-lived URL for one scoped object.
-
-<!-- kovo-recipe task="capability link" source="site/recipes/golden/capability-link.tsx" export="receiptRoute" -->
+<!-- kovo-recipe task="custom shell" source="site/recipes/golden/custom-shell.tsx" export="customShellApp" -->
 
 ```tsx
-import { publicScopedKey } from '@kovojs/core';
-import { route, s } from '@kovojs/server';
+import { BodyAttrs, BodyStart, defineKovo, Document, Head, Meta } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
 
-export const receiptRoute = route('/receipts/:receiptId', {
-  params: s.object({ receiptId: s.string() }),
-  async page({ params, signUrl }) {
-    const signed = await signUrl!({
-      expiresIn: 5 * 60_000,
-      key: publicScopedKey(`receipts/${params.receiptId}.pdf`),
-    });
-    return <a href={signed.url}>Download receipt</a>;
-  },
+const appDocument = Document({
+  lang: 'en',
+  title: 'Kovo contacts',
+  children: [
+    Head({ children: Meta({ content: 'width=device-width, initial-scale=1', name: 'viewport' }) }),
+    BodyAttrs({ class: 'app-shell' }),
+    BodyStart({ children: <a href="#main">Skip to content</a> }),
+  ],
 });
+
+const app = defineKovo({
+  appId: '7f55ad66-6ec7-4bd0-995c-34747b7a09dd',
+  document: appDocument,
+  egress: { allowInternal: [] },
+  renderRoute: renderRouteHtml,
+});
+
+const homeRoute = app.route('/', {
+  access: app.publicAccess('the landing page is intentionally public'),
+  page: () => <main id="main">Contacts</main>,
+});
+
+export const customShellApp = app.assemble({ routes: [homeRoute] });
 ```
 
-Mount `createStorageDownloadEndpoint()` with the matching signing ring and storage capability. The
-endpoint verifies the token before reading the object.
+Do not replace the document with a free-form HTML template; the structured shell is the public
+customization door.
 
-## Declare deploy retention
+## Define a theme
 
-Pick a preset and state the retention your serving layer really provides.
+Seed the token system once. Components consume typed system tokens; the built stylesheet receives
+deterministic light and dark values.
 
-<!-- kovo-recipe task="deploy" source="site/recipes/golden/deploy.ts" export="deployConfig" -->
+<!-- kovo-recipe task="theme" source="site/recipes/golden/theme.ts" export="contactTheme" -->
+
+```ts
+import { defineTheme } from '@kovojs/style';
+
+export const contactTheme = defineTheme({
+  colors: {
+    success: '#047857',
+  },
+  seed: '#2563eb',
+  shape: {
+    cornerMedium: '8px',
+  },
+});
+
+export const contactThemeCss = contactTheme.css;
+```
+
+Pass the theme through `stylesheet(..., { theme })`; Kovo does not add a client theme store.
+
+## Open the app-scoped test harness
+
+Import the opaque assembled app and point the harness at an exact successful-build artifact. The
+artifact supplies graph facts; callers cannot manufacture them.
+
+<!-- kovo-recipe task="test harness" source="site/recipes/golden/test-harness.tsx" export="createContactHarness" -->
+
+```tsx
+import { defineKovo } from '@kovojs/server';
+import { renderRouteHtml } from '@kovojs/server/rendering';
+import { createKovoTestHarness } from '@kovojs/test/harness';
+
+const app = defineKovo({
+  appId: '93378e19-6823-4e3b-ab23-400af6bd4748',
+  egress: { allowInternal: [] },
+  renderRoute: renderRouteHtml,
+});
+
+const healthRoute = app.route('/health', {
+  access: app.publicAccess('the health page is intentionally visible'),
+  page: () => <main>ok</main>,
+});
+
+export const harnessRecipeApp = app.assemble({ routes: [healthRoute] });
+
+export function createContactHarness(artifact: string | URL, projectRoot: string | URL) {
+  return createKovoTestHarness(harnessRecipeApp, { artifact, projectRoot });
+}
+```
+
+Call `createContactHarness(new URL('../dist/.kovo/graph.json', import.meta.url), projectRoot)` after
+`kovo build`. Relative, stale, partial, or wrong-app artifacts fail closed.
+
+## Declare deploy posture
+
+Pick a preset and state the retention the serving layer really provides.
+
+<!-- kovo-recipe task="deploy posture" source="site/recipes/golden/deploy-posture.ts" export="deployPosture" -->
 
 ```ts
 import { defineConfig, node } from '@kovojs/server/build';
 
-export const deployConfig = defineConfig({
+export const deployPosture = defineConfig({
   preset: node({
     retention: {
       hours: 24,
@@ -396,16 +482,17 @@ Do not copy the retention claim until the platform keeps both artifact classes f
 pnpm run check:golden-recipes
 ```
 
-The quick gate verifies the task set, source bytes, public imports, and exported symbols. The
-publish gate repeats the compile from freshly packed packages and executes all sixteen recipes.
+The quick gate validates the exact task set, tracked source bytes, app-facing imports, exported
+symbols, and rename-drill pairs. The publish gate recompiles and executes all sixteen recipes from
+fresh package tarballs.
 
 ## Check a rename
 
-These five drills model the stale side of a rename. Each block is expected to fail from packed
-types; the block after it is the compiling fix.
+Each stale block must fail from packed types with the named diagnostic. The paired fix must compile.
 
 ### Component props
 
+<!-- kovo-rename-drill target="component props" phase="stale" diagnostic="'text' does not exist" -->
 <!-- kovo-sample: type-error -->
 
 ```tsx
@@ -417,6 +504,8 @@ const SaveButton = component({
 SaveButton({ text: 'Save' });
 ```
 
+<!-- kovo-rename-drill target="component props" phase="fix" -->
+
 ```tsx
 import { component } from '@kovojs/core';
 const SaveButton = component({
@@ -427,43 +516,63 @@ SaveButton({ label: 'Save' });
 
 ### Query results
 
+<!-- kovo-rename-drill target="query results" phase="stale" diagnostic="Property 'name' does not exist" -->
 <!-- kovo-sample: type-error -->
 
 ```ts
 // kovo-expected-error: Property 'name' does not exist
-import { query, s } from '@kovojs/server';
-const contact = query({
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+const loadContact = () => ({ displayName: 'Ada' });
+app.query({
+  access: app.publicAccess('public rename drill'),
   output: s.object({ displayName: s.string() }),
-  load: () => ({ displayName: 'Ada' }),
+  load: loadContact,
 });
-contact.load().name;
+type ContactResult = Awaited<ReturnType<typeof loadContact>>;
+declare const result: ContactResult;
+result.name;
 ```
 
+<!-- kovo-rename-drill target="query results" phase="fix" -->
+
 ```ts
-import { query, s } from '@kovojs/server';
-const contact = query({
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+const loadContact = () => ({ displayName: 'Ada' });
+app.query({
+  access: app.publicAccess('public rename drill'),
   output: s.object({ displayName: s.string() }),
-  load: () => ({ displayName: 'Ada' }),
+  load: loadContact,
 });
-contact.load().displayName;
+type ContactResult = Awaited<ReturnType<typeof loadContact>>;
+declare const result: ContactResult;
+result.displayName;
 ```
 
 ### Route params
 
+<!-- kovo-rename-drill target="route params" phase="stale" diagnostic="Property 'id' does not exist" -->
 <!-- kovo-sample: type-error -->
 
 ```tsx
 // kovo-expected-error: Property 'id' does not exist
-import { route, s } from '@kovojs/server';
-route('/contacts/:contactId', {
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.route('/contacts/:contactId', {
+  access: app.publicAccess('public rename drill'),
   params: s.object({ contactId: s.string() }),
   page: ({ params }) => <main>{params.id}</main>,
 });
 ```
 
+<!-- kovo-rename-drill target="route params" phase="fix" -->
+
 ```tsx
-import { route, s } from '@kovojs/server';
-route('/contacts/:contactId', {
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.route('/contacts/:contactId', {
+  access: app.publicAccess('public rename drill'),
   params: s.object({ contactId: s.string() }),
   page: ({ params }) => <main>{params.contactId}</main>,
 });
@@ -471,24 +580,27 @@ route('/contacts/:contactId', {
 
 ### Form fields
 
+<!-- kovo-rename-drill target="form fields" phase="stale" diagnostic="Property 'fullName' does not exist" -->
 <!-- kovo-sample: type-error -->
 
 ```ts
 // kovo-expected-error: Property 'fullName' does not exist
-import { mutation, s } from '@kovojs/server';
-const updateProfile = mutation({
-  csrf: false,
-  csrfJustification: 'signed non-browser rename drill',
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.mutation({
+  access: app.publicAccess('public rename drill'),
   input: s.object({ name: s.string() }),
   handler: (input) => input.fullName,
 });
 ```
 
+<!-- kovo-rename-drill target="form fields" phase="fix" -->
+
 ```ts
-import { mutation, s } from '@kovojs/server';
-const updateProfile = mutation({
-  csrf: false,
-  csrfJustification: 'signed non-browser rename drill',
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.mutation({
+  access: app.publicAccess('public rename drill'),
   input: s.object({ name: s.string() }),
   handler: (input) => input.name,
 });
@@ -496,25 +608,28 @@ const updateProfile = mutation({
 
 ### Mutation errors
 
+<!-- kovo-rename-drill target="mutation errors" phase="stale" diagnostic="EMAIL_TAKEN" -->
 <!-- kovo-sample: type-error -->
 
 ```ts
 // kovo-expected-error: Argument of type '"EMAIL_TAKEN"'
-import { mutation, s } from '@kovojs/server';
-mutation({
-  csrf: false,
-  csrfJustification: 'signed non-browser rename drill',
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.mutation({
+  access: app.publicAccess('public rename drill'),
   errors: { DUPLICATE_EMAIL: s.object({ email: s.string() }) },
   input: s.object({ email: s.string() }),
   handler: (_input, _request, context) => context.fail('EMAIL_TAKEN', { email: 'a@example.test' }),
 });
 ```
 
+<!-- kovo-rename-drill target="mutation errors" phase="fix" -->
+
 ```ts
-import { mutation, s } from '@kovojs/server';
-mutation({
-  csrf: false,
-  csrfJustification: 'signed non-browser rename drill',
+import { defineKovo, s } from '@kovojs/server';
+const app = defineKovo({});
+app.mutation({
+  access: app.publicAccess('public rename drill'),
   errors: { DUPLICATE_EMAIL: s.object({ email: s.string() }) },
   input: s.object({ email: s.string() }),
   handler: (_input, _request, context) =>
@@ -524,16 +639,16 @@ mutation({
 
 ## Next
 
-- [Build the first app](/getting-started/quickstart/) — put the recipes into a generated project.
-- [Mutations & forms](/guides/mutations/) — add transactions, typed failures, and refresh.
+- [Build the first app](/getting-started/quickstart/) — put one recipe into a generated project.
+- [Mutations & forms](/guides/mutations/) — add transactions and refresh.
 - [Deployment](/guides/deployment/) — prove the platform posture behind the config.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-Components and source-derived identity: SPEC §4.1. Routes, forms, raw ingress, files, capability
-links, and webhooks: SPEC §9.1. Queries, mutations, storage, and scoped writes: SPEC §10.2–§10.3.
-Durable tasks: SPEC §9.6. Raw output and egress trust doors: SPEC §6.6. Deploy-skew retention:
+Components and source-derived identity: SPEC §4.1. App contracts, routes, forms, uploads, and
+webhooks: SPEC §6.2.1 and §9.1. Queries, mutations, storage, and optimism: SPEC §10.2–§10.4.
+Durable tasks: SPEC §9.6. Output trust doors: SPEC §6.6. Testing: SPEC §12. Deploy-skew retention:
 SPEC §14.
 
 </details>

@@ -1086,7 +1086,9 @@ export interface KovoClient {
 }
 
 export class ComponentXmlError extends Error {}
+export const BodyAttrs: any;
 export const BodyEnd: any;
+export const BodyStart: any;
 export const Button: any;
 export const Defer: any;
 export const Document: any;
@@ -1096,6 +1098,7 @@ export const FormError: any;
 export const Head: any;
 export const InlineScript: any;
 export const Link: any;
+export const Meta: any;
 export const Search: any;
 export const Select: any;
 export const SelectContent: any;

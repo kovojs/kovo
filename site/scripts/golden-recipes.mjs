@@ -13,6 +13,10 @@ const recipeRoot = path.join(repoRoot, 'site/recipes/golden');
 const executePath = path.join(recipeRoot, 'execute.mjs');
 const MARKER =
   /^<!-- kovo-recipe task="([^"]+)" source="([^"]+)" export="([A-Za-z_$][A-Za-z0-9_$]*)" -->$/u;
+const RENAME_MARKER =
+  /^<!-- kovo-rename-drill target="([^"]+)" phase="(stale|fix)"(?: diagnostic="([^"]+)")? -->$/u;
+const TYPE_ERROR_DIRECTIVE = '<!-- kovo-sample: type-error -->';
+const EXPECTED_TYPE_ERROR = /^\s*\/\/\s*kovo-expected-error:\s*(.+?)\s*$/mu;
 const KOVO_IMPORT = /^@kovojs\/[a-z0-9-]+(?:\/.*)?$/u;
 
 export const GOLDEN_RECIPE_TASKS = [
@@ -20,18 +24,26 @@ export const GOLDEN_RECIPE_TASKS = [
   'route',
   'query',
   'mutation',
-  'form',
-  'endpoint',
+  'form error',
   'auth',
+  'inline optimism',
+  'trusted output',
   'storage',
-  'task',
-  'webhook',
-  'email',
-  'file',
   'upload',
-  'raw HTML',
-  'capability link',
-  'deploy',
+  'webhook',
+  'task',
+  'custom shell',
+  'theme',
+  'test harness',
+  'deploy posture',
+];
+
+export const GOLDEN_RENAME_TARGETS = [
+  'component props',
+  'query results',
+  'route params',
+  'form fields',
+  'mutation errors',
 ];
 
 export function readGoldenRecipeManifest({ markdown = readFileSync(contentPath, 'utf8') } = {}) {
@@ -79,6 +91,7 @@ export function validateGoldenRecipes({
   requireTracked = true,
 } = {}) {
   const recipes = readGoldenRecipeManifest({ markdown });
+  const renameDrills = validateGoldenRenameDrills({ markdown });
   const actualTasks = recipes.map((recipe) => recipe.task);
   if (JSON.stringify(actualTasks) !== JSON.stringify(GOLDEN_RECIPE_TASKS)) {
     throw new TypeError(
@@ -109,7 +122,86 @@ export function validateGoldenRecipes({
     assertPublicKovoImports(sourceFilePath, source, recipe);
   }
 
-  return { recipes, tasks: recipes.length };
+  return { recipes, renameDrills, tasks: recipes.length };
+}
+
+export function validateGoldenRenameDrills({ markdown = readFileSync(contentPath, 'utf8') } = {}) {
+  const lines = markdown.split('\n');
+  const entries = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!lines[index].includes('kovo-rename-drill')) continue;
+    const marker = RENAME_MARKER.exec(lines[index]);
+    if (!marker) {
+      throw new TypeError(`golden-recipes:${index + 1} malformed rename-drill marker`);
+    }
+    const target = marker[1];
+    const phase = marker[2];
+    const diagnostic = marker[3];
+    let cursor = nextNonblankLine(lines, index + 1);
+    const hasTypeErrorDirective = lines[cursor] === TYPE_ERROR_DIRECTIVE;
+    if (hasTypeErrorDirective) cursor = nextNonblankLine(lines, cursor + 1);
+    const fence = /^```(ts|tsx)$/u.exec(lines[cursor] ?? '');
+    if (!fence) {
+      throw new TypeError(
+        `golden-recipes:${index + 1} rename-drill marker must own the next TypeScript fence`,
+      );
+    }
+    const body = [];
+    let end = cursor + 1;
+    while (end < lines.length && lines[end] !== '```') {
+      body.push(lines[end]);
+      end += 1;
+    }
+    if (end >= lines.length) {
+      throw new TypeError(`golden-recipes:${cursor + 1} unclosed rename-drill fence`);
+    }
+    const code = body.join('\n');
+    if (phase === 'stale') {
+      if (!hasTypeErrorDirective || diagnostic === undefined) {
+        throw new TypeError(
+          `golden-recipes:${index + 1} stale rename drill requires a diagnostic and type-error directive`,
+        );
+      }
+      const expected = EXPECTED_TYPE_ERROR.exec(code)?.[1];
+      if (expected === undefined || !expected.includes(diagnostic)) {
+        throw new TypeError(
+          `golden-recipes:${index + 1} stale rename diagnostic must match kovo-expected-error`,
+        );
+      }
+    } else if (hasTypeErrorDirective || diagnostic !== undefined) {
+      throw new TypeError(
+        `golden-recipes:${index + 1} fixed rename drill must be an executable sample`,
+      );
+    }
+    entries.push({ code, diagnostic, line: index + 1, phase, target });
+    index = end;
+  }
+
+  const expectedOrder = GOLDEN_RENAME_TARGETS.flatMap((target) => [
+    `${target}:stale`,
+    `${target}:fix`,
+  ]);
+  const actualOrder = entries.map((entry) => `${entry.target}:${entry.phase}`);
+  if (JSON.stringify(actualOrder) !== JSON.stringify(expectedOrder)) {
+    throw new TypeError(
+      `golden-recipes rename-drill set/order drifted: expected ${expectedOrder.join(', ')}; received ${actualOrder.join(', ')}`,
+    );
+  }
+  for (const target of GOLDEN_RENAME_TARGETS) {
+    const stale = entries.find((entry) => entry.target === target && entry.phase === 'stale');
+    const fix = entries.find((entry) => entry.target === target && entry.phase === 'fix');
+    if (stale?.code === fix?.code) {
+      throw new TypeError(`golden-recipes ${target} rename fix must change the stale source`);
+    }
+  }
+  return entries;
+}
+
+function nextNonblankLine(lines, start) {
+  let cursor = start;
+  while (cursor < lines.length && lines[cursor].trim() === '') cursor += 1;
+  return cursor;
 }
 
 export async function compileAndExecuteGoldenRecipes({ nodeModulesDir, projectRoot } = {}) {
@@ -322,11 +414,13 @@ function canonicalPath(candidate) {
 
 if (isMainEntry(import.meta.url)) {
   await runGate(async () => {
-    const { tasks } = validateGoldenRecipes();
+    const { renameDrills, tasks } = validateGoldenRecipes();
     const executeSource = await readFile(executePath, 'utf8');
     if (!executeSource.includes(`tasks=${tasks} OK`)) {
       throw new TypeError('golden recipe executor task count drifted');
     }
-    process.stdout.write(`golden-recipes/v1 tasks=${tasks} sources=${tasks} OK\n`);
+    process.stdout.write(
+      `golden-recipes/v1 tasks=${tasks} sources=${tasks} renameDrills=${renameDrills.length / 2} OK\n`,
+    );
   });
 }

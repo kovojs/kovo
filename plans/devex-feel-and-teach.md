@@ -75,8 +75,12 @@ compiler/runtime facts; none may become a second analyzer.
       implementation/protocol types.
   - Evidence: the focused API-reference suite covers value/supporting-type grouping, copyable
     examples before signatures, and exclusion of generated/internal and Drizzle runtime carriers.
-- [ ] Publish and pack-test one canonical recipe for every golden task named in the charter.
-- [ ] Run rename drills for props, query results, route params, form fields, and mutation errors.
+- [x] Publish and pack-test one canonical recipe for every golden task named in the charter.
+  - Evidence: the focused packed-doc-samples command in Latest verification compiled and executed
+    all 16 tracked-source recipes from 14 package tarballs.
+- [x] Run rename drills for props, query results, route params, form fields, and mutation errors.
+  - Evidence: the same packed gate accepted exactly five intended type errors and their compiling
+    fixes; the recipe validator locks the target order, diagnostic text, and stale/fixed pairing.
 - [x] Generate searchable UI and icon catalogs from owning manifests and one catalog schema.
   - Evidence: the focused catalog suite in Latest verification proves 44 component and 1,737 icon
     entries, shared schema validity, deterministic regeneration, and site search coverage.
@@ -95,9 +99,11 @@ compiler/runtime facts; none may become a second analyzer.
 
 - `pnpm exec vitest --run site/scripts/api-ref.test.mjs site/src/content-api-manifest.test.ts
 --reporter=dot` passed (2 files, 25 tests; 12 packages, 1,666/1,666 documented exports).
-- `node scripts/build-component-catalog.mjs && node scripts/package-front-door.mjs && node
-site/scripts/golden-recipes.mjs` plus the four focused suites passed (4 files, 10 tests; 44
-  components, 1,737 icons, 14 package front doors, 16 recipe sources).
+- `node scripts/build-component-catalog.mjs && node scripts/package-front-door.mjs` plus the
+  focused catalog/front-door suites passed (44 components, 1,737 icons, 14 package front doors).
+- `pnpm run check:docs-samples:packed -- --packed-manifest
+.release/packed-recipes-temp.json` passed (14 packages; 2,941 samples; 5 intended type errors;
+  16 compiled and executed golden recipes).
 - `pnpm run check:publish`: 14 packages; 3,096 classified samples; 1,139 executable; 59 output;
   1,898 illustrative; 920 JSDoc examples; 93 CLI invocations; zero type errors.
 - `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts

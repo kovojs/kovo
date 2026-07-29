@@ -6,3 +6,7 @@ export const SaveButton = component({
     return <button type="submit">{props.label}</button>;
   },
 });
+
+export function saveButtonPreview() {
+  return <SaveButton label="Save" />;
+}
