@@ -78,6 +78,41 @@ function buildFixtureMutationBody(
 }
 
 describe('kovo build', () => {
+  it('keeps positive compiler-authored fixtures on one app-contract receiver', () => {
+    const fixtures = {
+      appModuleSource: appModuleSource(),
+      blockedCloudflareApiAppModuleSource: blockedCloudflareApiAppModuleSource(),
+      databaseEnvAppModuleSource: databaseEnvAppModuleSource(),
+      documentShellRouteSplitAppModuleSource: documentShellRouteSplitAppModuleSource(),
+      dynamicAppModuleSource: dynamicAppModuleSource(),
+      fatalOptimisticCoverageAppModuleSource: fatalOptimisticCoverageAppModuleSource(),
+      handlerWriteSinkPreflightAppModuleSource: handlerWriteSinkPreflightAppModuleSource(),
+      kv414PreflightAppModuleSource: kv414PreflightAppModuleSource(),
+      mutationFragmentStylesheetAppModuleSource: mutationFragmentStylesheetAppModuleSource(),
+      registryWrappedContactsQuerySource: registryWrappedContactsQuerySource(),
+      registryWrappedFragmentBuildAppSource: registryWrappedFragmentBuildAppSource(),
+      registryWrappedKovoSource: registryWrappedKovoSource(),
+      securityPreflightAppModuleSource: securityPreflightAppModuleSource(),
+      splitSrcStylesheetRouteAppModuleSource: splitSrcStylesheetRouteAppModuleSource(),
+      splitStylesheetRouteAppModuleSource: splitStylesheetRouteAppModuleSource(),
+      staticAppModuleSource: staticAppModuleSource(),
+      staticStylesheetRouteComponentAppModuleSource:
+        staticStylesheetRouteComponentAppModuleSource(),
+      trustedHtmlBarrelPreflightAppModuleSource: trustedHtmlBarrelPreflightAppModuleSource(),
+      trustedHtmlBarrelPreflightComponentSource: trustedHtmlBarrelPreflightComponentSource(),
+      trustedHtmlHiddenCalleePreflightComponentSource:
+        trustedHtmlHiddenCalleePreflightComponentSource(),
+      trustedHtmlStarBarrelElementAccessPreflightComponentSource:
+        trustedHtmlStarBarrelElementAccessPreflightComponentSource(),
+      typescriptAppModuleSource: typescriptAppModuleSource(),
+      webhookRecordChangePreflightAppModuleSource: webhookRecordChangePreflightAppModuleSource(),
+    };
+
+    for (const [name, source] of Object.entries(fixtures)) {
+      assertCompilerAuthoredAppFixture(source, name);
+    }
+  });
+
   it('bundles an app module and emits node preset output without Vite at request time', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cli-'));
     const appPath = join(root, 'app.mjs');
@@ -498,7 +533,6 @@ export default app.assemble({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 import { ContactCard } from './src/contact-card.js';
 
@@ -568,7 +602,6 @@ export function ContactCard(props: { name: string }) {
 /** @jsxImportSource @kovojs/server */
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -624,7 +657,6 @@ export default app.assemble({
 /** @jsxImportSource @kovojs/server */
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -685,7 +717,6 @@ export default app.assemble({
         [
           '/** @jsxImportSource @kovojs/server */',
           "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
-          "import { route } from '@kovojs/server';",
           "import { CounterIsland } from './components/counter-island.js';",
           '',
           'export default app.assemble({',
@@ -767,6 +798,7 @@ export default app.assemble({
       writeRetentionProofConfig(root);
       mkdirSync(join(root, 'src/components'), { recursive: true });
       writeFileSync(appPath, registryWrappedFragmentBuildAppSource(), 'utf8');
+      writeFileSync(join(root, 'src/kovo.ts'), registryWrappedKovoSource(), 'utf8');
       writeFileSync(
         join(root, 'src/contacts-query.ts'),
         registryWrappedContactsQuerySource(),
@@ -897,7 +929,6 @@ export default app.assemble({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -928,9 +959,9 @@ export default app.assemble({
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-json-diagnostic-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
-    const querySource = `import { query } from '@kovojs/server';
+    const querySource = `import { app } from '../kovo.js';
 
-export const contacts = query({
+export const contacts = app.query({
   load() {
     return { items: [] };
   },
@@ -946,14 +977,14 @@ export const contacts = query({
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeFileSync(
         appPath,
-        `import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+        `import { app } from './kovo.js';
 import { contacts } from './src/queries.js';
 
 export default app.assemble({ queries: [contacts] });
 `,
         'utf8',
       );
+      writeFixtureKovoContract(root);
       writeFileSync(join(root, 'src/queries.ts'), querySource, 'utf8');
 
       const exitCode = await withCwd(root, () =>
@@ -1014,7 +1045,6 @@ export default app.assemble({ queries: [contacts] });
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 import { readFile } from 'node:fs/promises';
 
 export const page = app.route('/closed-files', {
@@ -1062,7 +1092,7 @@ export default app.assemble({ routes: [page] });
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { endpoint, guards, publicAccess, query as defineQuery, s } from '@kovojs/server';import { webhook } from '@kovojs/server/webhooks';
+import { guards, s } from '@kovojs/server';import { webhook } from '@kovojs/server/webhooks';
 
 const requestGuard = guards.authed();
 
@@ -1080,13 +1110,13 @@ export const guardedEndpoint = app.endpoint('/guarded-endpoint', {
   response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
-export const guardedWebhook = webhook('/guarded-webhook', {
+export const guardedWebhook = app.endpoint(webhook('/guarded-webhook', {
   guard: requestGuard,
   handler: () => ({ ok: true }),
   input: s.object({}),
   verify: 'none',
   verifyJustification: 'H23 build fixture',
-});
+}));
 
 throw new Error('H23 fixture must not be evaluated');
 export default app.assemble({
@@ -1180,7 +1210,7 @@ export default {};
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { guards, mutation, publicAccess, s } from '@kovojs/server';
+import { guards, s } from '@kovojs/server';
 
 const unsafe = app.mutation('auth/unsafe-cookie', {
   access: app.publicAccess('machine callback'),
@@ -1338,7 +1368,7 @@ export default app.assemble({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, publicAccess, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
 
 const unsafe = app.mutation('auth/map-poison', {
   access: app.publicAccess('machine callback'),
@@ -1350,14 +1380,14 @@ const unsafe = app.mutation('auth/map-poison', {
     return { ok: true };
   },
 });
-const app = app.assemble({ mutations: [unsafe] });
+const assembledApp = app.assemble({ mutations: [unsafe] });
 const nativeMap = Array.prototype.map;
 const nativeApply = Reflect.apply;
 Array.prototype.map = function poisonedMutationMap(callback, thisArg) {
   if (this.length === 1 && this[0]?.handler === unsafe.handler) return [];
   return nativeApply(nativeMap, this, [callback, thisArg]);
 };
-export default app;
+export default assembledApp;
 `,
         'utf8',
       );
@@ -1397,7 +1427,7 @@ export default app;
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, publicAccess, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
 
 const unsafe = app.mutation('auth/lowercase-poison', {
   access: app.publicAccess('machine callback'),
@@ -1453,7 +1483,7 @@ export default app.assemble({ mutations: [unsafe] });
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, publicAccess, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
 
 const runtimeKey = 'auth/runtime-key';
 const dynamicKey = app.mutation(runtimeKey, {
@@ -1507,9 +1537,10 @@ export default app.assemble({ mutations: [dynamicKey] });
       writeFileSync(
         join(root, 'unsafe.mjs'),
         `
-import { mutation, publicAccess, s } from '@kovojs/server';
-export const outside = mutation({
-  access: publicAccess('outside-scan callback'),
+import { s } from '@kovojs/server';
+import { app } from './src/server/kovo.mjs';
+export const outside = app.mutation({
+  access: app.publicAccess('outside-scan callback'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1524,9 +1555,10 @@ export const outside = mutation({
       writeFileSync(
         join(appRoot, 'safe-decoy.mjs'),
         `
-import { mutation, publicAccess, s } from '@kovojs/server';
-export const decoy = mutation({
-  access: publicAccess('unreachable safe decoy'),
+import { s } from '@kovojs/server';
+import { app } from './kovo.mjs';
+export const decoy = app.mutation({
+  access: app.publicAccess('unreachable safe decoy'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1540,11 +1572,16 @@ export const decoy = mutation({
       writeFileSync(
         appPath,
         `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+import { app } from './kovo.mjs';
+import { decoy } from './safe-decoy.mjs';
 import { outside } from '../../unsafe.mjs';
-export default app.assemble({ mutations: [outside] });
+export default app.assemble({ mutations: [outside, decoy] });
 `,
+        'utf8',
+      );
+      writeFileSync(
+        join(appRoot, 'kovo.mjs'),
+        "import { defineKovo } from '@kovojs/server';\nexport const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\n",
         'utf8',
       );
 
@@ -1592,16 +1629,8 @@ export default app.assemble({ mutations: [outside] });
       writeFileSync(
         join(packageRoot, 'index.mjs'),
         `
-export function createActual({ mutation, publicAccess, s }) {
-  return mutation('auth/colliding-handler', {
-    access: publicAccess('bare-package callback'),
-    csrf: false,
-    csrfJustification: 'machine-authority security regression fixture',
-    input: s.object({}),
-    handler(_input, request) {
-      return request.headers.get('Cookie');
-    },
-  });
+export function unsafeHandler(_input, request) {
+  return request.headers.get('Cookie');
 }
 `,
         'utf8',
@@ -1609,9 +1638,10 @@ export function createActual({ mutation, publicAccess, s }) {
       writeFileSync(
         join(root, 'safe-decoy.mjs'),
         `
-import { mutation, publicAccess, s } from '@kovojs/server';
-export const decoy = mutation('auth/colliding-handler', {
-  access: publicAccess('reachable safe decoy'),
+import { s } from '@kovojs/server';
+import { app } from './kovo.mjs';
+export const decoy = app.mutation('auth/colliding-handler', {
+  access: app.publicAccess('reachable safe decoy'),
   csrf: false,
   csrfJustification: 'machine-authority security regression fixture',
   input: s.object({}),
@@ -1625,21 +1655,31 @@ export const decoy = mutation('auth/colliding-handler', {
       writeFileSync(
         appPath,
         `
-import './safe-decoy.mjs';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, publicAccess, s } from '@kovojs/server';
-import { createActual } from 'unsafe-authority-fixture';
+import { s } from '@kovojs/server';
+import { app } from './kovo.mjs';
+import { decoy } from './safe-decoy.mjs';
+import { unsafeHandler } from 'unsafe-authority-fixture';
 const mutableCrypto = createRequire(import.meta.url)('node:crypto');
 mutableCrypto.createHash = () => ({
   digest: () => '0'.repeat(64),
   update() { return this; },
 });
 syncBuiltinESMExports();
-const actual = createActual({ mutation, publicAccess, s });
-export default app.assemble({ mutations: [actual] });
+const actual = app.mutation('auth/colliding-handler', {
+  access: app.publicAccess('bare-package callback'),
+  csrf: false,
+  csrfJustification: 'machine-authority security regression fixture',
+  input: s.object({}),
+  handler: unsafeHandler,
+});
+export default app.assemble({ mutations: [decoy, actual] });
 `,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'kovo.mjs'),
+        "import { defineKovo } from '@kovojs/server';\nexport const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\n",
         'utf8',
       );
 
@@ -1679,7 +1719,7 @@ export default app.assemble({ mutations: [actual] });
     const appSource = `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { guards, mutation, query, route, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
+import { guards, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 const allow = guards.rateLimit({ max: 100, per: 'global' });
 
@@ -1851,15 +1891,15 @@ export default app.assemble({
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const appSource = [
-      "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
+      "import { app } from './kovo.mjs';",
       "import { sharedRoute } from '../shared.mjs';",
       'export default app.assemble({ routes: [sharedRoute] });',
       '',
     ].join('\n');
     const sharedSource = [
-      "import { guards, route } from '@kovojs/server'\nimport { trustedHtml } from '@kovojs/browser';",
+      "import { guards } from '@kovojs/server'\nimport { trustedHtml } from '@kovojs/browser';\nimport { app } from './src/kovo.mjs';",
       "const allow = guards.rateLimit({ max: 10, per: 'global' });",
-      "export const sharedRoute = route('/shared', {",
+      "export const sharedRoute = app.route('/shared', {",
       '  guard: allow,',
       "  page: () => trustedHtml('<main>Shared</main>', { reason: 'nested source identity fixture' }),",
       '});',
@@ -1873,10 +1913,15 @@ export default app.assemble({
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
-      mkdirSync(join(root, 'src/src'), { recursive: true });
+      mkdirSync(join(root, 'src'), { recursive: true });
       writeFileSync(join(root, 'src/app.mjs'), appSource, 'utf8');
+      writeFileSync(
+        join(root, 'src/kovo.mjs'),
+        "import { defineKovo } from '@kovojs/server';\nexport const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\n",
+        'utf8',
+      );
       writeFileSync(join(root, 'shared.mjs'), sharedSource, 'utf8');
-      writeFileSync(join(root, 'src/src/client.ts'), clientSource, 'utf8');
+      writeFileSync(join(root, 'src/client.ts'), clientSource, 'utf8');
       writeFileSync(join(root, 'src/index.html'), clientEntry, 'utf8');
       writeRetentionProofConfig(root);
 
@@ -2139,13 +2184,10 @@ export default app.assemble({
       writeFileSync(
         appPath,
         [
-          "import { defineKovo } from '@kovojs/server';\nconst app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });",
-          "import { s } from '@kovojs/server';",
+          "import { defineKovo, s } from '@kovojs/server';",
+          "const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001', env: s.object({ KOVO_BUILD_SENTINEL_SECRET: s.secret(s.string()) }) });",
           '',
           'export default app.assemble({',
-          '  env: s.object({',
-          '    KOVO_BUILD_SENTINEL_SECRET: s.secret(s.string()),',
-          '  }),',
           '  routes: [],',
           '});',
           '',
@@ -2281,7 +2323,6 @@ export default app.assemble({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 const domain = () => 'not drizzle';
 domain();
@@ -2338,7 +2379,6 @@ export async function search(input, db) {
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 const nativeFilter = Array.prototype.filter;
 const nativeApply = Reflect.apply;
@@ -2417,7 +2457,6 @@ export async function unsafe(db, input) {
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -2479,7 +2518,7 @@ export const marker = sql.raw('select 1');
 import { component } from '@kovojs/core';
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, query, route, s } from '@kovojs/server';
+import { domain, s } from '@kovojs/server';
 
 const contactDomain = domain();
 const contactsDb = { count: 0 };
@@ -2557,20 +2596,10 @@ export default app.assemble({
       writeFileSync(
         appPath,
         `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, publicAccess, query, route, s } from '@kovojs/server';import { task } from '@kovojs/server/tasks'
+import { s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
-
-const contactDomain = domain('model/contact');
-
-const contactsQuery = app.query('queries/contacts-query', {
-  access: app.publicAccess('source-derived consumer fixture'),
-  reads: [contactDomain],
-  load() {
-    return { items: [] };
-  },
-});
+import { app, contactDomain } from './src/kovo.js';
+import { contactsQuery } from './src/queries.js';
 
 const addContact = app.mutation('mutations/add-contact', {
   access: app.publicAccess('source-derived consumer fixture'),
@@ -2584,10 +2613,10 @@ const addContact = app.mutation('mutations/add-contact', {
   },
 });
 
-const recordContactTask = task('tasks/record-contact', {
+const recordContactTask = app.task({
   input: s.object({ name: s.string() }),
   async run(input, ctx) {
-    await ctx.runMutation(addContact, input);
+    await ctx.actAs('source-derived consumer fixture').runMutation(addContact, input);
   },
 });
 
@@ -2606,11 +2635,23 @@ export default app.assemble({
         'utf8',
       );
       writeFileSync(
+        join(root, 'src/kovo.ts'),
+        `
+import { defineKovo, domain } from '@kovojs/server';
+
+export const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
+export const contactDomain = domain('model/contact');
+`,
+        'utf8',
+      );
+      writeFileSync(
         join(root, 'src/queries.ts'),
         `
-import { query } from '@kovojs/server';
+import { app, contactDomain } from './kovo.js';
 
-export const contactsQuery = query({
+export const contactsQuery = app.query({
+  access: app.publicAccess('source-derived consumer fixture'),
+  reads: [contactDomain],
   load() {
     return { items: [] };
   },
@@ -2651,7 +2692,7 @@ export const ContactsRegion = defineRegion({
         'queries/contacts-query',
       );
       expect(graph.tasks).toContainEqual({
-        key: 'tasks/record-contact',
+        key: 'app/record-contact-task',
         runMutations: ['addContact'],
       });
     } finally {
@@ -2679,7 +2720,7 @@ export const ContactsRegion = defineRegion({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, publicAccess, query, route, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
+import { domain, s } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
 
 const contactDomain = domain('contact');
 const authDomain = domain('auth');
@@ -2816,6 +2857,7 @@ export default app.assemble({
       );
       writeClientEntry(root);
       writeFileSync(appPath, kv414PreflightAppModuleSource(), 'utf8');
+      writeFixtureKovoContract(root);
       writeKv414PreflightStaticSources(root);
 
       const exitCode = await withCwd(root, () =>
@@ -2917,6 +2959,7 @@ export const memberships = pgTable('memberships', {
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
       writeFileSync(appPath, securityPreflightAppModuleSource(), 'utf8');
+      writeFixtureKovoContract(root);
       writeSecurityPreflightStaticSources(root);
 
       const exitCode = await withCwd(root, () =>
@@ -3023,6 +3066,7 @@ export const memberships = pgTable('memberships', {
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
+      writeFixtureKovoContract(root);
       writeFileSync(
         join(root, 'safe-html.ts'),
         "export { trustedHtml, trustedUrl } from '@kovojs/browser';\n",
@@ -3061,6 +3105,7 @@ export const memberships = pgTable('memberships', {
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
+      writeFixtureKovoContract(root);
       writeFileSync(
         join(root, 'safe-html-root.ts'),
         "export { trustedHtml, trustedUrl } from '@kovojs/browser';\n",
@@ -3104,6 +3149,7 @@ export const memberships = pgTable('memberships', {
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       writeClientEntry(root);
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
+      writeFixtureKovoContract(root);
       writeFileSync(
         join(root, 'promo.tsx'),
         trustedHtmlHiddenCalleePreflightComponentSource(),
@@ -3321,7 +3367,7 @@ export default app.assemble({
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { endpoint, publicAccess } from '@kovojs/server';import { hmacSignature } from '@kovojs/core/webhooks';
+import { hmacSignature } from '@kovojs/core/webhooks';
 
 const official = hmacSignature({
   encoding: 'hex',
@@ -3381,7 +3427,6 @@ export default app.assemble({ endpoints: [forgedEndpoint] });
         `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -4500,11 +4545,40 @@ export const homeQuery = {
   });
 });
 
+function assertCompilerAuthoredAppFixture(source: string, name: string): void {
+  // SPEC §5.2 rule 6 / §6.2.1: positive authored fixtures must use one literal app owner and keep
+  // provider/config posture outside the declaration-only assemble inventory.
+  expect(source, name).not.toMatch(
+    /import\s*\{[^}]*\b(?:endpoint|layout|mutation|query|route|task)\b[^}]*\}\s*from\s*['"]@kovojs\/server['"]/u,
+  );
+  expect(source, name).not.toMatch(
+    /(?:^|[^\w.])(?:endpoint|layout|mutation|query|route|task)\s*\(/mu,
+  );
+  expect(source, name).not.toMatch(/\bconst\s+\w+\s*=\s*webhook\s*\(/u);
+  if (source.includes('defineKovo({')) {
+    expect(source, name).toMatch(
+      /defineKovo\(\{\s*[\s\S]*?\bappId:\s*['"]00000000-0000-4000-8000-00000000000[12]['"]/u,
+    );
+  } else {
+    expect(source, name).toMatch(/import\s*\{\s*app(?:\s*,[^}]*)?\s*\}\s*from\s*['"].*kovo/u);
+  }
+
+  for (const match of source.matchAll(/app\.assemble\(\{([\s\S]*?)^\}\);/gmu)) {
+    expect(match[1], name).not.toMatch(
+      /^\s{2}(?:appId|clientModules|csrf|db|document|egress|env|requestLimits|sessionProvider|stylesheets|unexpectedErrors):/mu,
+    );
+    const keys = [...(match[1] ?? '').matchAll(/^\s{2}([A-Za-z]\w*):/gmu)].map((entry) => entry[1]);
+    expect(keys, name).toEqual(
+      keys.filter((key) =>
+        ['endpoints', 'layouts', 'mutations', 'queries', 'routes', 'tasks'].includes(key ?? ''),
+      ),
+    );
+  }
+}
+
 function appModuleSource(): string {
   return `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, query, route, s } from '@kovojs/server';import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
+import { defineKovo, domain, s } from '@kovojs/server';import { createMemoryVersionedClientModuleRegistry } from '@kovojs/server/client-modules';
 
 import { trustedHtml } from '@kovojs/browser';
 
@@ -4514,6 +4588,18 @@ const clientModules = createMemoryVersionedClientModuleRegistry();
 clientModules.put({
   path: '/c/cart.client.js',
   source: ${JSON.stringify(BUILD_FIXTURE_CLIENT_SOURCE)},
+});
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  clientModules,
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
 });
 const cartQuery = app.query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },
@@ -4535,15 +4621,6 @@ const addToCart = app.mutation('cart/add', {
 });
 
 export default app.assemble({
-  clientModules,
-  csrf: {
-    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
-    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
-  },
-  egress: {
-    enabled: false,
-    justification: 'test harness serves the emitted app on an ephemeral loopback port',
-  },
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
@@ -4559,21 +4636,11 @@ export default app.assemble({
 function registryWrappedFragmentBuildAppSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
+import { app } from './kovo.js';
 import { ContactsRegion } from './components/contacts-region.js';
 import { addContact, contactsQuery } from './contacts-query.js';
 
 export default app.assemble({
-  csrf: {
-    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
-    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
-  },
-  egress: {
-    enabled: false,
-    justification: 'test harness serves the emitted app on an ephemeral loopback port',
-  },
   mutations: [addContact],
   queries: [contactsQuery],
   routes: [
@@ -4586,19 +4653,38 @@ export default app.assemble({
 `;
 }
 
+function registryWrappedKovoSource(): string {
+  return `
+import { defineKovo } from '@kovojs/server';
+
+export const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
+});
+`;
+}
+
 function registryWrappedContactsQuerySource(): string {
   return `
-import { domain, mutation, query, s } from '@kovojs/server';
+import { domain, s } from '@kovojs/server';
+import { app } from './kovo.js';
 
 export const contactDomain = domain();
 let contactsCount = 0;
-export const contactsQuery = query({
+export const contactsQuery = app.query({
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: contactsCount }),
   output: s.object({ count: s.number() }),
   reads: [contactDomain],
 });
-export const addContact = mutation({
+export const addContact = app.mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
   input: s.object({}),
   optimistic: { [contactsQuery.key]: 'await-fragment' },
@@ -4663,14 +4749,19 @@ function kebabCaseFixturePart(value: string): string {
 
 function dynamicAppModuleSource(): string {
   return `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, query, route, s } from '@kovojs/server';
+import { defineKovo, domain, s } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
 const cart = domain('cart');
 const db = { count: 0 };
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+});
 const cartQuery = app.query('cart', {
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
@@ -4691,10 +4782,6 @@ const addToCart = app.mutation('cart/add', {
 });
 
 export default app.assemble({
-  csrf: {
-    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
-    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
-  },
   mutations: [addToCart],
   queries: [cartQuery],
   routes: [
@@ -4734,7 +4821,6 @@ function staticAppModuleSource(): string {
   return `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
@@ -4752,10 +4838,12 @@ export default app.assemble({
 function staticStylesheetRouteComponentAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
 import { AutoCssCard } from './src/auto-css-card.js';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  stylesheets: [stylesheet('./styles.css')],
+});
 
 export default app.assemble({
   routes: [
@@ -4764,7 +4852,6 @@ export default app.assemble({
       page: () => <AutoCssCard />,
     }),
   ],
-  stylesheets: [stylesheet('./styles.css')],
 });
 `;
 }
@@ -4772,12 +4859,14 @@ export default app.assemble({
 function splitStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  stylesheets: [stylesheet('./styles.css')],
+});
 
 export default app.assemble({
   routes: [
@@ -4790,7 +4879,6 @@ export default app.assemble({
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
-  stylesheets: [stylesheet('./styles.css')],
 });
 `;
 }
@@ -4798,16 +4886,18 @@ export default app.assemble({
 function documentShellRouteSplitAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 import { siteDocument } from './document-template.js';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  document: siteDocument,
+  stylesheets: [stylesheet('./styles.css')],
+});
 
 export default app.assemble({
-  document: siteDocument,
   routes: [
     app.route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
@@ -4818,7 +4908,6 @@ export default app.assemble({
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
-  stylesheets: [stylesheet('./styles.css')],
 });
 `;
 }
@@ -4826,12 +4915,14 @@ export default app.assemble({
 function splitSrcStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route, stylesheet } from '@kovojs/server';
+import { defineKovo, stylesheet } from '@kovojs/server';
 import { HomePanel } from './home-panel.js';
 import { LoginPanel } from './login-panel.js';
 import { SharedCard } from './shared-card.js';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  stylesheets: [stylesheet('./styles.css')],
+});
 
 export default app.assemble({
   routes: [
@@ -4844,7 +4935,6 @@ export default app.assemble({
       page: () => <><SharedCard /><LoginPanel /></>,
     }),
   ],
-  stylesheets: [stylesheet('./styles.css')],
 });
 `;
 }
@@ -4852,13 +4942,19 @@ export default app.assemble({
 function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, route, s, stylesheet } from '@kovojs/server';
+import { defineKovo, s, stylesheet } from '@kovojs/server';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 import { home } from './src/shared.js';
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
+  stylesheets: [stylesheet('./styles.css')],
+});
 
 const touchHome = app.mutation('home/touch', {
   access: { kind: 'public', reason: 'build fixture mutation' },
@@ -4874,10 +4970,6 @@ const touchHome = app.mutation('home/touch', {
 });
 
 export default app.assemble({
-  egress: {
-    enabled: false,
-    justification: 'test harness serves the emitted app on an ephemeral loopback port',
-  },
   mutations: [touchHome],
   routes: [
     app.route('/', {
@@ -4889,7 +4981,6 @@ export default app.assemble({
       page: () => <main><SharedCard /><LoginPanel /></main>,
     }),
   ],
-  stylesheets: [stylesheet('./styles.css')],
 });
 `;
 }
@@ -4898,7 +4989,6 @@ function databaseEnvAppModuleSource(): string {
   return `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
@@ -4918,7 +5008,6 @@ function blockedCloudflareApiAppModuleSource(): string {
 import { spawnSync } from 'node:child_process';
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
 
 export default app.assemble({
   routes: [
@@ -4936,9 +5025,7 @@ export default app.assemble({
 
 function securityPreflightAppModuleSource(): string {
   return `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { route } from '@kovojs/server';
+import { app } from './kovo.js';
 import { accountById, badRead, inlineContextAccountById } from './security.js';
 
 export default app.assemble({
@@ -4955,9 +5042,7 @@ export default app.assemble({
 
 function kv414PreflightAppModuleSource(): string {
   return `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';
+import { app } from './kovo.js';
 import { accountById } from './account-query.js';
 
 export default app.assemble({
@@ -4976,8 +5061,7 @@ function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
-import { task } from '@kovojs/server/tasks';
+import { s } from '@kovojs/server';import { createMemoryWebhookReplayStore, webhook, webhookReplayIdentity } from '@kovojs/server/webhooks'
 
 const webhookReplayStore = createMemoryWebhookReplayStore();
 const appDb = {
@@ -4997,7 +5081,7 @@ const saveCart = app.mutation('cart/save', {
   },
 });
 
-const sendReceipt = task('tasks/send-receipt', {
+const sendReceipt = app.task('tasks/send-receipt', {
   input: s.object({ id: s.string() }),
   run(input, context) {
     // @ts-expect-error security regression fixture deliberately exercises forbidden task DB access
@@ -5006,7 +5090,7 @@ const sendReceipt = task('tasks/send-receipt', {
   },
 });
 
-const paymentWebhook = webhook('/webhooks/payment', {
+const paymentWebhook = app.endpoint(webhook('/webhooks/payment', {
   access: { kind: 'public', reason: 'build preflight regression fixture' },
   handler(input, context) {
     // @ts-expect-error security regression fixture deliberately exercises forbidden webhook DB access
@@ -5018,7 +5102,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   replayStore: webhookReplayStore,
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',
-});
+}));
 
 export default app.assemble({
   endpoints: [paymentWebhook],
@@ -5038,7 +5122,7 @@ const contact = domain('model/contact');
 const billing = domain('billing');
 const webhookReplayStore = createMemoryWebhookReplayStore();
 
-const paymentWebhook = webhook('/webhooks/payment', {
+const paymentWebhook = app.endpoint(webhook('/webhooks/payment', {
   access: { kind: 'public', reason: 'build preflight regression fixture' },
   handler(input, context) {
     context.recordChange(contact, { keys: [input.id] });
@@ -5051,7 +5135,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
   verify: 'none',
   verifyJustification: 'build preflight regression fixture',
   writes: [contact],
-});
+}));
 
 export default app.assemble({
   endpoints: [paymentWebhook],
@@ -5062,12 +5146,12 @@ export default app.assemble({
 function trustedHtmlBarrelPreflightAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { publicAccess, route } from '@kovojs/server';import { trustedHtml } from '@kovojs/browser';
-import { Promo } from './promo.js';
+import { app } from './kovo.js';
+import { trustedHtml } from '@kovojs/browser';
+import { Promo, postQuery } from './promo.js';
 
 export default app.assemble({
+  queries: [postQuery],
   routes: [
     app.route('/', {
       access: app.publicAccess('trustedHtml barrel build preflight fixture'),
@@ -5082,11 +5166,12 @@ function trustedHtmlBarrelPreflightComponentSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { publicAccess, query, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { app } from './kovo.js';
 import { trustedHtml, trustedUrl } from './safe-html.js';
 
-export const postQuery = query({
-  access: publicAccess('trustedHtml barrel build preflight fixture'),
+export const postQuery = app.query({
+  access: app.publicAccess('trustedHtml barrel build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
 });
@@ -5107,12 +5192,13 @@ function trustedHtmlStarBarrelElementAccessPreflightComponentSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { publicAccess, query, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { app } from './kovo.js';
 import * as browser from '@kovojs/browser';
 import * as safeHtml from './safe-html.js';
 
-export const postQuery = query({
-  access: publicAccess('trustedHtml star barrel build preflight fixture'),
+export const postQuery = app.query({
+  access: app.publicAccess('trustedHtml star barrel build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
 });
@@ -5135,14 +5221,15 @@ function trustedHtmlHiddenCalleePreflightComponentSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { publicAccess, query, s } from '@kovojs/server';
+import { s } from '@kovojs/server';
+import { app } from './kovo.js';
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
 
 const trust = { html: trustedHtml, url: trustedUrl };
 class R { html = trustedHtml; }
 
-export const postQuery = query('post', {
-  access: publicAccess('trustedHtml hidden callee build preflight fixture'),
+export const postQuery = app.query('post', {
+  access: app.publicAccess('trustedHtml hidden callee build preflight fixture'),
   load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
   output: s.object({ body: s.string(), href: s.string() }),
 });
@@ -5166,7 +5253,7 @@ function fatalOptimisticCoverageAppModuleSource(): string {
   return `
 import { defineKovo } from '@kovojs/server';
 const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { domain, mutation, query, route, s } from '@kovojs/server';
+import { domain, s } from '@kovojs/server';
 
 const cart = domain('cart');
 const cartQuery = app.query('cart', {
@@ -5220,20 +5307,21 @@ function writeSecurityPreflightStaticSources(root: string): void {
       'import { eq, sql } from "drizzle-orm";',
       'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
       'import type { QueryLoadContext } from "@kovojs/server";',
-      'import { query, s } from "@kovojs/server";',
+      'import { s } from "@kovojs/server";',
+      'import { app } from "./kovo.js";',
       'import { accounts } from "./schema";',
       '',
       'type AppDb = PgAsyncDatabase<any, any>;',
       'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
       '',
-      'export const accountById = query("accountById", {',
+      'export const accountById = app.query("accountById", {',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',
       '',
-      'export const inlineContextAccountById = query("inlineContextAccountById", {',
+      'export const inlineContextAccountById = app.query("inlineContextAccountById", {',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
       '    const db = context!.db!;',
@@ -5248,7 +5336,7 @@ function writeSecurityPreflightStaticSources(root: string): void {
       '  await db.update(accounts).set({ role: input.role }).where(eq(accounts.id, input.id));',
       '}',
       '',
-      'export const badRead = query("badRead", {',
+      'export const badRead = app.query("badRead", {',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
       '    await db.update(accounts).set({ role: "admin" }).where(eq(accounts.id, input.id));',
@@ -5288,12 +5376,13 @@ function writeKv414PreflightStaticSources(root: string): void {
     [
       'import { eq } from "drizzle-orm";',
       'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-      'import { query, s, type QueryLoadContext, type Reader } from "@kovojs/server";',
+      'import { s, type QueryLoadContext, type Reader } from "@kovojs/server";',
+      'import { app } from "./kovo.js";',
       'import { accounts } from "./schema.js";',
       '',
       'type AppDb = PgAsyncDatabase<any, any>;',
       'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
-      'export const accountById = query({',
+      'export const accountById = app.query({',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
       '    const db: Reader<AppDb> | undefined = context?.db;',
@@ -5303,6 +5392,14 @@ function writeKv414PreflightStaticSources(root: string): void {
       '});',
       '',
     ].join('\n'),
+    'utf8',
+  );
+}
+
+function writeFixtureKovoContract(root: string): void {
+  writeFileSync(
+    join(root, 'kovo.ts'),
+    "import { defineKovo } from '@kovojs/server';\nexport const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });\n",
     'utf8',
   );
 }
@@ -5686,13 +5783,22 @@ function readBuildJson(filePath: string): unknown {
 
 function typescriptAppModuleSource(): string {
   return `
-import { defineKovo } from '@kovojs/server';
-const app = defineKovo({ appId: '00000000-0000-4000-8000-000000000001' });
-import { mutation, query, route, s } from '@kovojs/server';
+import { defineKovo, s } from '@kovojs/server';
 
 import { trustedHtml } from '@kovojs/browser';
 
 const db: { count: number } = { count: 4 };
+const app = defineKovo({
+  appId: '00000000-0000-4000-8000-000000000001',
+  csrf: {
+    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
+    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
+  },
+  egress: {
+    enabled: false,
+    justification: 'test harness serves the emitted app on an ephemeral loopback port',
+  },
+});
 const typedQuery = app.query('typed', {
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: db.count }),
@@ -5707,14 +5813,6 @@ export const addToCart = app.mutation({
 });
 
 export default app.assemble({
-  csrf: {
-    secret: ${JSON.stringify(BUILD_FIXTURE_CSRF_SECRET)},
-    sessionId: () => ${JSON.stringify(BUILD_FIXTURE_CSRF_SESSION_ID)},
-  },
-  egress: {
-    enabled: false,
-    justification: 'test harness serves the emitted app on an ephemeral loopback port',
-  },
   mutations: [addToCart],
   queries: [typedQuery],
   routes: [
