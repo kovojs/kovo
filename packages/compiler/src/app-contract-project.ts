@@ -4,6 +4,12 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
+import {
+  clientModuleHrefForSourceFile,
+  clientModuleRepresentationDigest,
+  parseVersionedClientModuleTarget,
+} from '@kovojs/core/internal/client-module-url';
+
 import { compileComponentModule } from './compile.js';
 import {
   appContractDeclarationFamilies,
@@ -20,6 +26,7 @@ import {
 import { deriveAppGraph } from './graph.js';
 import { compileRouteModule } from './scan/route-pages.js';
 import { parseComponentModule } from './scan/parse.js';
+import { appOptimisticProjectFacts } from './scan/app-optimistic.js';
 import {
   projectMutationRegistryFactsFromFiles,
   type ProjectMutationRegistryFacts,
@@ -170,6 +177,39 @@ export function compilerOwnedProjectMutationRegistryFactsFromFiles(
           }),
     }));
   }
+  const moduleHrefAliases = new Map<string, string>();
+  const optimisticModules = facts.optimisticModules?.map((module) => {
+    const fileName = originalName(module.fileName);
+    const href = clientModuleHrefForSourceFile(
+      fileName,
+      clientModuleRepresentationDigest(module.source),
+    );
+    const target = parseVersionedClientModuleTarget(href);
+    if (!target) {
+      throw new TypeError(`App-contract project emitted a non-canonical optimism module ${href}.`);
+    }
+    moduleHrefAliases.set(module.href, href);
+    return {
+      ...module,
+      fileName,
+      href,
+      path: target.path,
+    };
+  });
+  const mutationOptimism =
+    facts.mutationOptimism === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(facts.mutationOptimism).map(([key, fact]) => {
+            const moduleHref = moduleHrefAliases.get(fact.moduleHref);
+            if (moduleHref === undefined) {
+              throw new TypeError(
+                `App-contract project emitted optimism for ${key} without an owned client module.`,
+              );
+            }
+            return [key, { ...fact, moduleHref }];
+          }),
+        );
   return {
     mutationBindings: facts.mutationBindings.map((binding) => ({
       ...binding,
@@ -180,6 +220,8 @@ export function compilerOwnedProjectMutationRegistryFactsFromFiles(
       },
     })),
     mutationInputs,
+    ...(mutationOptimism === undefined ? {} : { mutationOptimism }),
+    ...(optimisticModules === undefined ? {} : { optimisticModules }),
   };
 }
 
@@ -563,11 +605,19 @@ export function createCompilerOwnedAppContractProject(
         );
         inputs.push({ fileName: file.fileName, source: sourceFile.text });
       }
-      return withCompilerOwnedAppContractResolutions(
-        facts,
-        () => projectMutationRegistryFactsFromFiles(inputs),
-        members,
-      );
+      return withCompilerOwnedAppContractResolutions(facts, () => {
+        const registryFacts = projectMutationRegistryFactsFromFiles(inputs);
+        return {
+          ...registryFacts,
+          ...appOptimisticProjectFacts({
+            checker,
+            files: inputs,
+            members,
+            mutationInputs: registryFacts.mutationInputs,
+            program,
+          }),
+        };
+      }, members);
     },
 
     staticFacts(

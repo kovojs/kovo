@@ -110,6 +110,9 @@ export type {
   FragmentTargetFact,
   MutationInputFieldCoercion,
   MutationInputFieldFact,
+  OptimisticModuleFact,
+  OptimisticMutationFact,
+  OptimisticTransformStatus,
   PackageComponentPrefixFact,
   ProjectMutationBindingFact,
   PublishToClientFact,
@@ -137,6 +140,8 @@ export type {
   ProjectMutationSourceFile,
 } from './scan/project-mutation-bindings.js';
 export { projectMutationRegistryFactsFromFiles } from './scan/project-mutation-bindings.js';
+export type { AppOptimisticProjectFacts } from './scan/app-optimistic.js';
+export { appOptimisticProjectFacts } from './scan/app-optimistic.js';
 export type {
   InlineOptimisticPlanFact,
   InlineOptimisticTransformFact,

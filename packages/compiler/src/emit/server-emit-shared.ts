@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { parseVersionedClientModuleTarget } from '@kovojs/core/internal/client-module-url';
 
 import {
   compilerArrayAppend,
@@ -260,6 +261,10 @@ export function enhancedMutationFormLowering(
   const keyAttribute = serverEmitAttribute(element, 'key');
   const streamAttribute = serverEmitAttribute(element, 'stream');
   const streaming = streamAttribute !== undefined;
+  const optimisticModuleHref = optimisticModuleHrefForMutation(
+    options?.registryFacts,
+    mutationKey,
+  );
   if (!keyAttribute && element.repeatable) return null;
   const generateEnctype = multipart && !enctypeAttribute;
   const preserveRuntimeMutation = !componentRenderSlotsParam(model);
@@ -294,6 +299,18 @@ export function enhancedMutationFormLowering(
     `data-mutation="${escapeAttribute(mutationKey)}"`,
     'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
+  if (optimisticModuleHref !== undefined) {
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      `data-kovo-optimistic-module="${escapeAttribute(optimisticModuleHref)}"`,
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+    compilerArrayAppend(
+      generatedInMutationSlot,
+      `data-kovo-module-allowlist="${escapeAttribute(optimisticModuleHref)}"`,
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  }
   if (streaming)
     compilerArrayAppend(
       generatedInMutationSlot,
@@ -357,7 +374,13 @@ export function enhancedMutationFormLowering(
   // data-mutation* are generated-only control-plane stamps. Render equivalence compares the
   // authored form's visible/native semantics (method/action/enctype), while byte/fixpoint gates
   // separately prove the exact compiler-owned runtime markers (SPEC.md §5.2 rule 3).
-  const generatedAttributeNameValues = ['action', 'data-mutation', 'data-mutation-stream'];
+  const generatedAttributeNameValues = [
+    'action',
+    'data-kovo-module-allowlist',
+    'data-kovo-optimistic-module',
+    'data-mutation',
+    'data-mutation-stream',
+  ];
   if (generateEnctype)
     compilerArrayAppend(
       generatedAttributeNameValues,
@@ -414,6 +437,26 @@ export function enhancedMutationFormLowering(
     formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
     'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
   );
+  if (optimisticModuleHref !== undefined) {
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext(
+        'data-kovo-optimistic-module',
+        optimisticModuleHref,
+        'optimistic mutation form lowering',
+      ),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+    compilerArrayAppend(
+      outputContexts,
+      formLoweringOutputContext(
+        'data-kovo-module-allowlist',
+        optimisticModuleHref,
+        'optimistic mutation form lowering',
+      ),
+      'Compiler packages/compiler/src/emit/server-emit-shared.ts collection',
+    );
+  }
   if (streaming) {
     compilerArrayAppend(
       outputContexts,
@@ -518,6 +561,8 @@ export function enhancedMutationFormConflicts(
 ): EnhancedMutationFormConflict[] {
   const names = serverEmitStringSet([
     'action',
+    'data-kovo-module-allowlist',
+    'data-kovo-optimistic-module',
     'data-mutation',
     'data-mutation-stream',
     'kovo-fragment-target',
@@ -539,6 +584,42 @@ export function enhancedMutationFormConflicts(
       );
   }
   return conflicts;
+}
+
+function optimisticModuleHrefForMutation(
+  registryFacts: RegistryFacts | undefined,
+  mutationKey: string,
+): string | undefined {
+  if (registryFacts?.mutationOptimism === undefined) return undefined;
+  const fact = compilerOwnDataValue(
+    registryFacts.mutationOptimism,
+    mutationKey,
+    'Registry optimistic mutation facts',
+  );
+  if (fact === undefined) return undefined;
+  if (typeof fact !== 'object' || fact === null) {
+    throw new TypeError(`Optimistic mutation fact for ${mutationKey} must be an object.`);
+  }
+  const declaredMutation = compilerOwnDataValue(
+    fact,
+    'mutation',
+    `Optimistic mutation fact ${mutationKey}`,
+  );
+  const moduleHref = compilerOwnDataValue(
+    fact,
+    'moduleHref',
+    `Optimistic mutation fact ${mutationKey}`,
+  );
+  if (
+    declaredMutation !== mutationKey ||
+    typeof moduleHref !== 'string' ||
+    parseVersionedClientModuleTarget(moduleHref) === undefined
+  ) {
+    throw new TypeError(
+      `Optimistic mutation fact for ${mutationKey} must carry its exact mutation and canonical immutable client module.`,
+    );
+  }
+  return moduleHref;
 }
 
 export function submittedFormFieldsReplacement(

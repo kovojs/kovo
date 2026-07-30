@@ -30,6 +30,8 @@ import { deriveMutationKey } from '../mutation-names.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import type {
   MutationInputFieldFact,
+  OptimisticModuleFact,
+  OptimisticMutationFact,
   ProjectMutationBindingFact,
   RegistryMutationInputFacts,
 } from '../types.js';
@@ -47,6 +49,8 @@ export interface ProjectMutationSourceFile {
 export interface ProjectMutationRegistryFacts {
   readonly mutationBindings: readonly ProjectMutationBindingFact[];
   readonly mutationInputs: RegistryMutationInputFacts;
+  readonly mutationOptimism?: Readonly<Record<string, OptimisticMutationFact>>;
+  readonly optimisticModules?: readonly OptimisticModuleFact[];
 }
 
 interface ProjectModule {

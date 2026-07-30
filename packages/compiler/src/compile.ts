@@ -2196,6 +2196,7 @@ function sliceRegistryFacts(
   if (!facts) return undefined;
 
   const mutationInputs = sliceRecord(facts.mutationInputs, mutationKeys);
+  const mutationOptimism = sliceRecord(facts.mutationOptimism, mutationKeys);
   const mutationBindings = sliceProjectMutationBindings(
     facts.mutationBindings,
     usage.fileName,
@@ -2227,6 +2228,7 @@ function sliceRegistryFacts(
     ...(facts.liveTargets === undefined ? {} : { liveTargets: facts.liveTargets }),
     ...(mutationBindings === undefined ? {} : { mutationBindings }),
     ...(mutationInputs === undefined ? {} : { mutationInputs }),
+    ...(mutationOptimism === undefined ? {} : { mutationOptimism }),
     ...(facts.mutations === undefined ? {} : { mutations: facts.mutations }),
     ...(facts.queries === undefined ? {} : { queries: facts.queries }),
     ...(facts.routes === undefined ? {} : { routes: facts.routes }),

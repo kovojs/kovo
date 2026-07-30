@@ -173,7 +173,17 @@ export interface RegistryFacts {
    */
   mutationBindings?: readonly ProjectMutationBindingFact[];
   mutationInputs?: RegistryMutationInputFacts;
+  /**
+   * @internal Compiler-authenticated browser handoff for app-scoped optimistic mutations. The
+   * source scanner resolves query-handle and schema identity before this string-keyed IR exists.
+   */
+  mutationOptimism?: Readonly<Record<string, OptimisticMutationFact>>;
   mutations?: RegistryTypeFacts;
+  /**
+   * @internal Immutable client representations emitted for optimistic mutation plans. Framework
+   * build/dev runners register these alongside ordinary component client modules.
+   */
+  optimisticModules?: readonly OptimisticModuleFact[];
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
   statefulComponents?: readonly string[];
@@ -212,6 +222,28 @@ export interface MutationInputFieldFact {
 
 /** @internal Declared FormData coercion family for a mutation input field. */
 export type MutationInputFieldCoercion = 'boolean' | 'file' | 'number' | 'string' | 'unknown';
+
+/** @internal Compiler-authenticated optimistic status for one invalidated query. */
+export type OptimisticTransformStatus = 'await-fragment' | 'hand-written';
+
+/** @internal Browser plan metadata for one app-scoped mutation. */
+export interface OptimisticMutationFact {
+  readonly inputFields: readonly MutationInputFieldFact[];
+  readonly invalidations: readonly string[];
+  readonly moduleHref: string;
+  readonly mutation: string;
+  readonly queue?: string;
+  readonly statuses: Readonly<Record<string, OptimisticTransformStatus>>;
+}
+
+/** @internal One immutable compiler-emitted optimistic client module. */
+export interface OptimisticModuleFact {
+  readonly fileName: string;
+  readonly href: string;
+  readonly mutationKeys: readonly string[];
+  readonly path: string;
+  readonly source: string;
+}
 
 /** @internal Registry-level field facts keyed by mutation key. */
 export type RegistryMutationInputFacts = Readonly<
