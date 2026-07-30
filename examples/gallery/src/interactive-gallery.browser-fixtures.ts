@@ -43,7 +43,7 @@ export async function mountInteractiveDemo(
   component: InteractiveDemoComponent,
 ): Promise<HTMLElement> {
   const host = document.createElement('main');
-  host.innerHTML = await jsx(component, {});
+  host.innerHTML = String(await jsx(component, {}));
   document.body.append(host);
 
   return required(host.firstElementChild as HTMLElement | null);

@@ -664,6 +664,7 @@ export function CardDemo() {
       <p data-demo-summary="no-js">
         Card exposes one header, title, description, content, and footer anatomy in pure markup.
       </p>
+      <h2>Card example</h2>
       <div data-ui-demo="card">{<Card>{anatomy}</Card>}</div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

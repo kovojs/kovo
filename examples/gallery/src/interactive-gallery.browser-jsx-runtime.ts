@@ -1,11 +1,21 @@
 import type { Component } from '@kovojs/core';
+import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/generated';
 
 import {
   browserHarnessComponentDefinition,
   isBrowserHarnessComponent,
 } from './interactive-gallery.browser-core.js';
 
-type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
+type JsxNode =
+  | BrowserHarnessRenderedHtml
+  | JsxNode[]
+  | boolean
+  | null
+  | number
+  | object
+  | Promise<JsxNode>
+  | string
+  | undefined;
 
 interface JsxProps {
   children?: JsxNode;
@@ -15,6 +25,13 @@ interface JsxProps {
 type JsxComponent = (props: any) => any;
 type KovoJsxComponent = Component<any>;
 type MaybePromise<Value> = Promise<Value> | Value;
+
+interface BrowserHarnessRenderedHtml {
+  readonly html: string;
+  toString(): string;
+}
+
+const browserHarnessRenderedHtmlValues = new WeakMap<object, string>();
 
 const voidElements = new Set([
   'area',
@@ -32,34 +49,38 @@ const voidElements = new Set([
   'wbr',
 ]);
 
-export function Fragment(props: JsxProps): MaybePromise<string> {
-  return renderJsxChildren(props.children);
+export function Fragment(props: JsxProps): MaybePromise<BrowserHarnessRenderedHtml> {
+  return toBrowserHarnessRenderedHtml(renderJsxChildren(props.children));
 }
 
 export function jsx(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybePromise<string> {
+): MaybePromise<BrowserHarnessRenderedHtml> {
   if (isKovoComponent(type)) return renderKovoComponent(type, props);
-  if (typeof type === 'function') return type(props);
+  if (typeof type === 'function') return renderFunctionComponentResult(type(props));
 
   const attributes = renderJsxAttributes(props, key);
-  if (voidElements.has(type)) return `<${type}${attributes}>`;
+  if (voidElements.has(type)) return browserHarnessRenderedHtml(`<${type}${attributes}>`);
 
   const children = renderJsxChildren(props.children);
   return isPromiseLike(children)
-    ? children.then((html) => `<${type}${attributes}>${html}</${type}>`)
-    : `<${type}${attributes}>${children}</${type}>`;
+    ? children.then((html) => browserHarnessRenderedHtml(`<${type}${attributes}>${html}</${type}>`))
+    : browserHarnessRenderedHtml(`<${type}${attributes}>${children}</${type}>`);
 }
 
 export const jsxs = jsx;
 export const jsxDEV = jsx;
 
 /** Browser-harness equivalent of the compiler-owned server text-escape ABI. */
-export function escapeText(value: unknown): string {
+export function escapeText(value: unknown): BrowserHarnessRenderedHtml {
+  return browserHarnessRenderedHtml(escapeTextContent(value));
+}
+
+function escapeTextContent(value: unknown): string {
   if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (Array.isArray(value)) return value.map((item) => escapeText(item)).join('');
+  if (Array.isArray(value)) return value.map((item) => escapeTextContent(item)).join('');
   if (typeof value === 'string') return escapeHtmlText(value);
   if (typeof value === 'bigint' || typeof value === 'number') {
     return escapeHtmlText(`${value}`);
@@ -67,7 +88,10 @@ export function escapeText(value: unknown): string {
   return escapeHtmlText(JSON.stringify(value) ?? '');
 }
 
-async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps): Promise<string> {
+async function renderKovoComponent(
+  component: KovoJsxComponent,
+  props: JsxProps,
+): Promise<BrowserHarnessRenderedHtml> {
   const definition = browserHarnessComponentDefinition(component);
   const state = definition.state?.();
   const render = definition.render as (
@@ -76,7 +100,7 @@ async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps)
     slots: Record<string, unknown>,
   ) => unknown;
   const rendered = render({ ...props }, state, jsxPropsToSlots(props)) as JsxNode;
-  return renderJsxChildren(rendered);
+  return browserHarnessRenderedHtml(await renderJsxChildren(rendered));
 }
 
 function jsxPropsToSlots(props: JsxProps): Record<string, unknown> {
@@ -102,7 +126,9 @@ function renderJsxAttributes(props: JsxProps, jsxKey?: unknown): string {
 
 function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
-  if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
+  if (isPromiseLike<JsxNode>(children)) {
+    return children.then((child) => renderJsxChildren(child));
+  }
   if (Array.isArray(children)) {
     const rendered = children.map((child) => renderJsxChildren(child));
     return rendered.some(isPromiseLike)
@@ -112,14 +138,48 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
       : (rendered as string[]).join('');
   }
 
-  return String(children);
+  const renderedHtml = browserHarnessRenderedHtmlContent(children);
+  if (renderedHtml !== undefined) return renderedHtml;
+  if (isKovoTrustedHtml(children)) return kovoTrustedHtmlContent(children);
+  return escapeTextContent(children);
+}
+
+function renderFunctionComponentResult(value: unknown): MaybePromise<BrowserHarnessRenderedHtml> {
+  return isPromiseLike(value)
+    ? value.then((resolved) => renderFunctionComponentResult(resolved))
+    : toBrowserHarnessRenderedHtml(renderJsxChildren(value as JsxNode));
+}
+
+function toBrowserHarnessRenderedHtml(
+  value: MaybePromise<string>,
+): MaybePromise<BrowserHarnessRenderedHtml> {
+  return isPromiseLike(value)
+    ? value.then((html) => browserHarnessRenderedHtml(html))
+    : browserHarnessRenderedHtml(value);
+}
+
+function browserHarnessRenderedHtml(html: string): BrowserHarnessRenderedHtml {
+  const value = {
+    html,
+    toString() {
+      return html;
+    },
+  };
+  browserHarnessRenderedHtmlValues.set(value, html);
+  return Object.freeze(value);
+}
+
+export function browserHarnessRenderedHtmlContent(value: unknown): string | undefined {
+  return typeof value === 'object' && value !== null
+    ? browserHarnessRenderedHtmlValues.get(value)
+    : undefined;
 }
 
 function isKovoComponent(value: unknown): value is KovoJsxComponent {
   return isBrowserHarnessComponent(value);
 }
 
-function isPromiseLike(value: unknown): value is Promise<unknown> {
+function isPromiseLike<Value = unknown>(value: unknown): value is Promise<Value> {
   return (
     typeof value === 'object' &&
     value !== null &&

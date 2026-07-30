@@ -1,10 +1,15 @@
 import { isKovoTrustedHtml, kovoTrustedHtmlContent } from '@kovojs/browser/generated';
 
-import { escapeText } from '../../examples/gallery/src/interactive-gallery.browser-jsx-runtime.js';
+import {
+  browserHarnessRenderedHtmlContent,
+  escapeText,
+} from '../../examples/gallery/src/interactive-gallery.browser-jsx-runtime.js';
 
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
 
 export function renderRouteHtml(value: unknown): string {
+  const renderedHtml = browserHarnessRenderedHtmlContent(value);
+  if (renderedHtml !== undefined) return renderedHtml;
   if (value === null || value === undefined || typeof value === 'boolean') return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
@@ -12,5 +17,5 @@ export function renderRouteHtml(value: unknown): string {
     return kovoTrustedHtmlContent(value);
   }
 
-  return escapeText(JSON.stringify(value) ?? '');
+  return String(escapeText(JSON.stringify(value) ?? ''));
 }

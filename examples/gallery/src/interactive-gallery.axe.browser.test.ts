@@ -4,7 +4,7 @@ import { GalleryCommandDemo } from './interactive/command-demo.js';
 import { GalleryDropdownMenuDemo } from './interactive/dropdown-menu-demo.js';
 import { GalleryFieldDemo } from './interactive/field-demo.js';
 import { GalleryToastDemo } from './interactive/toast-demo.js';
-import { renderInteractiveGalleryRoute } from './interactive-docs.js';
+import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 import {
   expectNoAxeViolations,
   installInteractiveGalleryLoader,
@@ -23,8 +23,14 @@ describe('compiled interactive gallery demos in the browser', () => {
     const host = document.createElement('div');
     host.innerHTML = await renderInteractiveGalleryRoute();
     document.body.append(host);
+    const route = required(
+      host.querySelector<HTMLElement>('[data-gallery-route="/gallery/interactive"]'),
+    );
 
-    await expectNoAxeViolations(host);
+    expect(route.querySelectorAll('[data-gallery-interactive-route]')).toHaveLength(
+      interactiveGalleryDemos.length,
+    );
+    await expectNoAxeViolations(route);
   });
 
   it('has no axe violations in representative generated interactive states', async () => {

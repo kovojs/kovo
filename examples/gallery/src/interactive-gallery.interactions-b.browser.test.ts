@@ -1323,7 +1323,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(navValue.textContent).toBe('docs');
     });
 
-    products.dispatchEvent(new Event('pointerenter', { bubbles: true, cancelable: true }));
+    dispatchPointerCrossing(products, 'pointerover');
 
     await vi.waitFor(() => {
       expect(navRoot.getAttribute('kovo-state')).toBe(
@@ -1569,7 +1569,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(content.hidden).toBe(true);
     expect(output.textContent).toBe('closed');
 
-    button.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+    dispatchPointerCrossing(button, 'pointerover');
 
     await vi.waitFor(() => {
       expect(imports.at(-1)).toBe('/c/src/interactive/tooltip-demo.client.js');
@@ -1584,7 +1584,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     // role=tooltip content) must stay axe-clean.
     await expectNoAxeViolations(root);
 
-    button.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+    dispatchPointerCrossing(button, 'pointerout');
 
     await vi.waitFor(() => {
       expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
@@ -1631,7 +1631,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(content.matches(':popover-open')).toBe(false);
     expect(output.textContent).toBe('closed');
 
-    trigger.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+    dispatchPointerCrossing(trigger, 'pointerover');
 
     await vi.waitFor(() => {
       expect(imports.at(-1)).toBe('/c/src/interactive/hover-card-demo.client.js');
@@ -1647,8 +1647,8 @@ describe('compiled interactive gallery demos in the browser', () => {
     // state=open) must stay axe-clean before pointer and keyboard dismissal paths run.
     await expectNoAxeViolations(root);
 
-    trigger.dispatchEvent(new Event('pointerleave', { bubbles: true }));
-    content.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+    dispatchPointerCrossing(trigger, 'pointerout', content);
+    dispatchPointerCrossing(content, 'pointerover', trigger);
 
     await vi.waitFor(() => {
       expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
@@ -1658,7 +1658,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(output.textContent).toBe('open');
     });
 
-    content.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+    dispatchPointerCrossing(content, 'pointerout');
 
     await vi.waitFor(() => {
       expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
@@ -1686,3 +1686,19 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 });
+
+function dispatchPointerCrossing(
+  target: Element,
+  type: 'pointerout' | 'pointerover',
+  relatedTarget: EventTarget | null = null,
+): void {
+  // SPEC §4.4: Kovo delegates the bubbling platform pair and synthesizes
+  // pointerenter/pointerleave only when the pointer actually crosses a handler boundary.
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      relatedTarget,
+    }),
+  );
+}
