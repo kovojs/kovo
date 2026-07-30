@@ -772,7 +772,7 @@ export default app.assemble({ routes: [home] });
     if (
       page.status !== 200 ||
       !html.includes('<title>Kovo Dataflow Devtool</title>') ||
-      !html.includes('live closed createApp() runtime registry')
+      !html.includes('live closed app.assemble() runtime registry')
     ) {
       throw new Error(
         `Packed kovo dev did not serve its devtool page (${page.status}).\n${stdout}\n${stderr}`,
