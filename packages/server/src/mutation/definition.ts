@@ -258,7 +258,7 @@ export type MutationOptimisticEntry<Input = unknown, Value = unknown> =
 /**
  * Compatibility map for standalone {@link mutation} declarations. Query-value ownership and
  * optimistic-policy exhaustiveness are enforced by the app-scoped `AppMutationFactory`, whose
- * `QueryOptimisticBinding[]` values bind exact query handles without a global registry.
+ * Opaque values returned by each exact query handle bind optimism without a global registry.
  */
 export type MutationOptimisticMap<
   _Key extends string,

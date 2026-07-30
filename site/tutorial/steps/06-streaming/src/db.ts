@@ -1,3 +1,5 @@
+import type { TaskSchedulingRequest } from '@kovojs/server/tasks';
+
 // Tutorial step 06 (chapter 6), carried from step 05: unchanged storage from step 04; the request
 // shell type moves here so queries can read the per-request database without
 // an import cycle through app.tsx.
@@ -15,10 +17,18 @@ export type CartItem = {
   unitPrice: number;
 };
 
+export interface ShopReadModel {
+  readonly cartItems: readonly CartItem[];
+  readonly products: ReadonlyMap<string, ShopProduct>;
+}
+
 // snippet:db
 export interface ShopDb {
   cartItems: CartItem[];
   products: Map<string, ShopProduct>;
+  query: {
+    snapshot(): ShopReadModel;
+  };
   transaction<Result>(run: (db: ShopDb) => Promise<Result>): Promise<Result>;
   write(table: 'cart_items' | 'products', value: unknown): void;
 }
@@ -32,6 +42,11 @@ export function createShopDb(): ShopDb {
       ['p2', { id: 'p2', name: 'Ceramic dripper', stock: 2, unitPrice: 2599 }],
       ['p3', { id: 'p3', name: 'Paper filters', stock: 8, unitPrice: 399 }],
     ]),
+    query: {
+      snapshot() {
+        return { cartItems: db.cartItems, products: db.products };
+      },
+    },
     // snippet:transaction
     async transaction(run) {
       const draft = cloneShopDb(db);
@@ -69,9 +84,39 @@ function cloneShopDb(source: ShopDb): ShopDb {
   return clone;
 }
 
-export interface ShopRequest {
+export interface ShopRequest extends Request, TaskSchedulingRequest {
   db: ShopDb;
-  session?: { id?: string } | null;
+  env: Readonly<Record<never, never>>;
+  session: { id?: string } | null;
+  tutorialDbToken: object;
+}
+
+const tutorialShopDbs = new WeakMap<object, ShopDb>();
+
+export function createShopRequest(
+  db = createShopDb(),
+  session: Exclude<ShopRequest['session'], undefined> = { id: 's1' },
+): ShopRequest {
+  const tutorialDbToken = {};
+  tutorialShopDbs.set(tutorialDbToken, db);
+  return Object.assign(new Request('https://tutorial.kovo.dev/'), {
+    async cancel() {
+      return false;
+    },
+    db,
+    env: Object.freeze({}),
+    schedule() {
+      return Promise.reject(new Error('tutorial request has no durable-task scheduler'));
+    },
+    session,
+    tutorialDbToken,
+  });
+}
+
+export function tutorialShopDb(request: Pick<ShopRequest, 'tutorialDbToken'>): ShopDb {
+  const db = tutorialShopDbs.get(request.tutorialDbToken);
+  if (!db) throw new Error('tutorial request is not bound to an in-memory shop database');
+  return db;
 }
 
 export function formatPrice(cents: number): string {

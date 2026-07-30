@@ -30,16 +30,17 @@ import {
   type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
-import { createShopDb } from './db.js';
+import { createShopDb, createShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import { ProductList } from './components/product-list.js';
 import { cartQuery, productsQuery } from './queries.js';
 
 type TutorialMutationHeaders = Record<string, readonly string[] | string | undefined>;
+type AddToCartRequest = Parameters<typeof addToCart.handler>[1];
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<AddToCartRequest>(
   'tutorial-step-06-test-build',
-  addToCart.csrf === false ? undefined : addToCart.csrf,
+  shopCsrf,
 );
 const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
@@ -48,7 +49,7 @@ const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 // (SPEC.md section 8) — assertable as a plain string, no browser.
 
 function shopRequest(db = createShopDb()): ShopRequest {
-  return { db, session: { id: 's1' } };
+  return createShopRequest(db);
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
@@ -62,7 +63,7 @@ function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   const endpointRequest: MutationEndpointRequest<
-    ShopRequest,
+    AddToCartRequest,
     { productId: string; quantity: number }
   > = {
     buildToken: 'tutorial-step-06-test-build',
@@ -83,11 +84,11 @@ function submitAddToCart(
 
 function successLiveTargetRenderers() {
   return [
-    componentLiveTargetRenderer<typeof CartBadge.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof CartBadge>[0]>, AddToCartRequest>({
       component: CartBadge,
       componentId: 'components/cart-badge/cart-badge',
     }),
-    componentLiveTargetRenderer<typeof ProductList.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof ProductList>[0]>, AddToCartRequest>({
       component: ProductList,
       componentId: 'components/product-list/product-list',
     }),

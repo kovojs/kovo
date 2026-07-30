@@ -14,47 +14,44 @@ forget a transform.
 
 ## Declare transforms
 
-A transform is a pure `(draft, input) => void` function over a query's result type. Put the
-optimistic map on the mutation, next to the write it predicts:
+A predictor is a pure `(current, input) => next` function over one query's result type. Extract it
+for direct testing, bind it through that query handle, and put the binding on the mutation next to
+the write it predicts:
 
 ```ts
-import { mutation, s } from '@kovojs/server';
+export const predictCart = (
+  current: Readonly<{ count: number }>,
+  input: { quantity: number },
+) => ({ count: current.count + input.quantity });
 
-export const addToCart = mutation({
-  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
-  queue: true,
-  optimistic: {
-    cart(draft, input) {
-      draft.count = (draft.count ?? 0) + input.quantity;
-    },
-    productGrid: 'await-fragment',
-  },
-  handler: async () => ({ ok: true }),
+export const addToCart = app.mutation({
+  input: addToCartInput,
+  optimistic: [
+    cartQuery.optimistic(addToCartInput, predictCart),
+    productGridQuery.optimistic('await-fragment'),
+  ],
+  queue: queue('cart'),
 });
 ```
 
-Three things to notice:
+The surrounding access decision, invalidation registry, and handler are omitted here. Three things
+to notice:
 
-- **The keys are query names**, and the required set is the mutation's derived invalidation set. The
-  compiler emits each mutation's invalidated-query keys into the registries, so the inline
-  `optimistic` object is typed from that source-derived mutation identity and the query result
-  registry.
-  Add a write that touches a new domain and `kovo check optimistic` reports the uncovered query.
+- **The identities are query handles, not strings.** `cartQuery.optimistic(...)` carries the exact
+  result type, app ownership, and input-schema identity. The compiler resolves the handle to wire
+  identity and compares the bindings with the mutation's derived invalidation set. Add a write that
+  touches a new domain and `kovo check optimistic` reports the uncovered query.
 - **`'await-fragment'` is a real answer.** It says "considered; the 1-RTT latency is fine here" — the
   product grid re-renders from the server fragment instead of being predicted. A deliberate deferral
   and a forgotten transform are different states, and only the second one is a diagnostic.
-- **`queue: true`** gives this mutation its own FIFO queue. Submissions sharing a queue still apply
+- **`queue('cart')`** gives related cart writes one named FIFO queue. Submissions sharing a queue still apply
   their optimistic transforms immediately, in submit order; only the network request waits behind the
   queue head. Two quick "add" clicks therefore show both predicted increments right away while the
-  requests settle in order. Use `queue('checkout')` when several mutations intentionally share one
-  conceptual queue.
+  requests settle in order.
 
-Transforms receive a draft of the query's inferred result, so mutate the draft and return
-nothing. A column rename breaks the transform in the editor instead of in production.
-
-The standalone `OptimisticFor<typeof form>` shape still exists as an escape hatch for rare cases
-where a transform must live outside the mutation module. The default path is inline on
-`mutation()`.
+Predictors receive a read-only view and return the next value. A column rename breaks the predictor
+in the editor instead of in production. The standalone string-keyed plan shape is compiler-owned
+generated ABI; app source has one authoring path: query-handle bindings inside `app.mutation`.
 
 ## Catch a missing transform
 
@@ -126,11 +123,11 @@ declared `'await-fragment'`, but silent inconsistency is not.
 
 Each query keeps a pending-transform log. When server truth arrives while other mutations are still
 in flight, the runtime morphs the authoritative value in, then re-applies the still-pending
-transforms in order. This rebase is safe because transforms are pure draft mutations:
+transforms in order. This rebase is safe because predictors are pure value transforms:
 
 ```ts
 // Conceptually, the loader keeps a per-query pending-transform log.
-pending.add('m1', { productId: 'p1', quantity: 2 }, addToCartOptimistic); // predict
+pending.add('m1', { productId: 'p1', quantity: 2 }, predictCart); // predict
 pending.applyServerTruth('cart', { count: 7 }); // morph truth in, re-apply pending
 pending.settle('m1'); // m1's response landed
 ```
@@ -140,12 +137,10 @@ dies with the document, so stale optimism can't outlive its mutation.
 
 ## Test the prediction
 
-A transform is a pure draft mutation, so you can unit-test it by cloning before apply:
+A predictor is an ordinary pure function, so its unit test needs no framework plan or draft adapter:
 
 ```ts
-const draft = { count: 1 };
-addToCart.optimistic.cart(draft, { productId: 'p1', quantity: 2 });
-expect(draft).toEqual({ count: 3 });
+expect(predictCart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual({ count: 3 });
 ```
 
 Beyond a point check, you can property-test that the prediction is _contained in eventual truth_ over

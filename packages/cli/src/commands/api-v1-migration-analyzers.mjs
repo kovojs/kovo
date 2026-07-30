@@ -4,6 +4,7 @@
 // the Kovo repository's scripts directory.
 export { analyzeBetterAuthApiV1Migration } from '../../../../scripts/migrate-better-auth-api-v1.mjs';
 export { analyzeBrowserAuthoringV1Migration } from '../../../../scripts/migrate-browser-authoring-v1.mjs';
+export { analyzeBrowserInlineOptimismV1Migration } from '../../../../scripts/migrate-browser-inline-optimism-v1.mjs';
 export { analyzeBrowserClientInstallerV1Migration } from '../../../../scripts/migrate-browser-client-installer-v1.mjs';
 export { analyzeCoreApiV1Migration } from '../../../../scripts/migrate-core-api-v1.mjs';
 export { analyzeDrizzleApiV1Migration } from '../../../../scripts/migrate-drizzle-api-v1.mjs';

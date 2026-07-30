@@ -31,9 +31,10 @@ kovo fix api-v1 src packages/app --write
 ```
 
 The result's `migrationBatches` field lists the exact checked-ledger order. The command covers the
-core, Style, UI/headless/icons, browser installer and authoring, server, test harness, Drizzle, and
-Better Auth batches. The standalone `scripts/migrate-*.mjs` commands remain release-maintainer
-evidence for those batches; app upgrades use the cumulative `kovo fix api-v1` command.
+core, Style, UI/headless/icons, browser installer and authoring, inline optimism, server, test
+harness, Drizzle, and Better Auth batches. The standalone `scripts/migrate-*.mjs` commands remain
+release-maintainer evidence for those batches; app upgrades use the cumulative
+`kovo fix api-v1` command.
 
 ## Move core imports
 
@@ -158,6 +159,48 @@ const article = trustedHtml(markup, {
 A non-empty static reason is wrapped mechanically. Missing, blank, or dynamic metadata is refused;
 Kovo will not invent a trust decision. Replace raw `derive` strings with `derive.query(...)`,
 `derive.state<Value>()`, or `derive.clock<Value>()` using the exact app-owned handle.
+
+## Bind optimism to query handles
+
+Standalone browser plans and their public support types are gone from app authoring. Extract pure
+predictors and bind each decision to the exact app-owned query handle.
+
+Before:
+
+```ts
+import type { OptimisticFor } from '@kovojs/browser';
+
+export const addToCartOptimistic = {
+  transforms: {
+    cart(current, input) {
+      return { count: current.count + input.quantity };
+    },
+    products: 'await-fragment',
+  },
+} satisfies OptimisticFor<typeof addToCartForm>;
+```
+
+After:
+
+```ts
+function predictCart(current: Readonly<CartResult>, input: AddToCartInput): CartResult {
+  return { count: current.count + input.quantity };
+}
+
+export const addToCart = app.mutation({
+  input: addToCartInput,
+  optimistic: [
+    cartQuery.optimistic(addToCartInput, predictCart),
+    productsQuery.optimistic('await-fragment'),
+  ],
+  // access, registry, and handler omitted
+});
+```
+
+The tool refuses removed root imports because only the application can select the correct query
+handles and predictor boundaries. `OptimisticFor` remains solely on
+`@kovojs/browser/generated` for compiler-emitted Drizzle modules; app source must not import that
+generated ABI.
 
 ## Move server imports by task
 

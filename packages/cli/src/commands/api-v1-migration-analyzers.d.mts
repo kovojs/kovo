@@ -21,6 +21,7 @@ export type ApiV1MigrationAnalyzer = (input: {
 export const analyzeBetterAuthApiV1Migration: ApiV1MigrationAnalyzer;
 export const analyzeBrowserAuthoringV1Migration: ApiV1MigrationAnalyzer;
 export const analyzeBrowserClientInstallerV1Migration: ApiV1MigrationAnalyzer;
+export const analyzeBrowserInlineOptimismV1Migration: ApiV1MigrationAnalyzer;
 export const analyzeCoreApiV1Migration: ApiV1MigrationAnalyzer;
 export const analyzeDrizzleApiV1Migration: ApiV1MigrationAnalyzer;
 export const analyzeServerApiV1Migration: ApiV1MigrationAnalyzer;

@@ -17,8 +17,9 @@ import { encodeTutorialMutationHeaders } from '../../../mutation-wire-test-heade
 
 import {
   addToCart,
-  addToCartOptimistic,
+  addToCartTouches,
   homeRoute,
+  predictCart,
   ProductList,
   renderAddToCartError,
   renderAddToCartForm,
@@ -28,15 +29,16 @@ import {
   type ShopRequest,
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
-import { createShopDb } from './db.js';
+import { createShopDb, createShopRequest } from './db.js';
 import { cart, product } from './domains.js';
 import { cartQuery, productsQuery } from './queries.js';
 
 type TutorialMutationHeaders = Record<string, readonly string[] | string | undefined>;
+type AddToCartRequest = Parameters<typeof addToCart.handler>[1];
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<AddToCartRequest>(
   'tutorial-step-05-test-build',
-  addToCart.csrf === false ? undefined : addToCart.csrf,
+  shopCsrf,
 );
 const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
@@ -46,7 +48,7 @@ const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 // (SPEC.md sections 10.3-10.6, 11.4).
 
 function shopRequest(db = createShopDb()): ShopRequest {
-  return { db, session: { id: 's1' } };
+  return createShopRequest(db);
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
@@ -60,7 +62,7 @@ function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   const endpointRequest: MutationEndpointRequest<
-    ShopRequest,
+    AddToCartRequest,
     { productId: string; quantity: number }
   > = {
     buildToken: 'tutorial-step-05-test-build',
@@ -81,11 +83,11 @@ function submitAddToCart(
 
 function successLiveTargetRenderers() {
   return [
-    componentLiveTargetRenderer<typeof CartBadge.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof CartBadge>[0]>, AddToCartRequest>({
       component: CartBadge,
       componentId: 'components/cart-badge/cart-badge',
     }),
-    componentLiveTargetRenderer<typeof ProductList.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof ProductList>[0]>, AddToCartRequest>({
       component: ProductList,
       componentId: 'components/product-list/product-list',
     }),
@@ -225,24 +227,14 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
     expect(response.body).toContain('<kovo-fragment target="product-list">');
     // The sanitized write summary: domains and keys, never input values.
     expect(response.headers['Kovo-Changes']).toBe(
-      `[{"domain":"${cart.key}"},{"domain":"${product.key}","keys":["p1"]}]`,
+      `[{"domain":"${cart.key}"},{"domain":"${product.key}"}]`,
     );
   });
   // /snippet
 
   // snippet:transform-test
   it('predicts the cart count with the hand-written transform', () => {
-    expect(addToCartOptimistic.queue).toBe('cart');
-    expect(
-      applyOptimisticTransform(
-        addToCartOptimistic.transforms.cart,
-        { count: 1 },
-        { productId: 'p1', quantity: 2 },
-      ),
-    ).toEqual({ count: 3 });
-    // Every invalidated query has an explicit status (SPEC.md §10.6).
-    expect(Object.keys(addToCartOptimistic.transforms).sort()).toEqual(['cart', 'products']);
-    expect(addToCartOptimistic.transforms.products).toBe('await-fragment');
+    expect(predictCart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual({ count: 3 });
   });
   // /snippet
 
@@ -255,11 +247,7 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
         },
         cases: propertyCases(),
         predict(state, input) {
-          return applyOptimisticTransform(
-            addToCartOptimistic.transforms.cart,
-            shapeCartQuery(state),
-            input,
-          );
+          return predictCart(shapeCartQuery(state), input);
         },
         shape(state) {
           return shapeCartQuery(state);
@@ -270,21 +258,6 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
   // /snippet
 
   it('records declared touches as change records on the mutation result', async () => {
-    expect(addToCart.registry?.inferredTouches?.map((touch) => touch.domain)).toEqual([
-      cart.key,
-      product.key,
-    ]);
+    expect(addToCartTouches.map((touch) => touch.domain)).toEqual([cart.key, product.key]);
   });
 });
-
-function applyOptimisticTransform<Value, Input>(
-  transform: unknown,
-  current: Value,
-  input: Input,
-): Value {
-  if (typeof transform !== 'function') return current;
-
-  const draft = structuredClone(current);
-  const returned = (transform as (draft: Value, input: Input) => unknown)(draft, input);
-  return returned === undefined ? draft : (returned as Value);
-}

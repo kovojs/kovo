@@ -56,14 +56,14 @@ Two deliberate choices are visible here:
   lives in the handler; predicting it client-side would mean duplicating server logic, so you
   accept the round-trip latency in writing.
 
-Exhaustiveness is the point. The step declares its invalidation sets in the registry interfaces
-— generated files in a real app, inline here so you can see the mechanism:
+Exhaustiveness is the point. App source binds each decision through the exact query handle:
+`cartQuery.optimistic(addToCartInput, predictCart)` carries the cart result and mutation-input
+types, while `productsQuery.optimistic('await-fragment')` records the deliberate wait. The
+compiler derives the invalidation registry from those source identities; the app does not augment
+generated registry interfaces.
 
-{{snippet:05-optimistic/src/registries.ts#registries}}
-
-Because of that declaration, the inline `mutation.optimistic` map is typed from the invalidated
-queries and their result shapes. Delete the `products` line and `kovo check optimistic` reports the
-missing transform — a forgotten optimistic update is never a silently stale badge.
+Delete the `productsQuery` binding and `kovo check optimistic` reports the uncovered invalidated
+query — a forgotten optimistic update is never a silently stale badge.
 
 {{snippet:05-optimistic/src/app.test.ts#transform-test}}
 
@@ -92,7 +92,8 @@ No `invalidate()` in the happy path; transaction lifecycle orders `COMMIT` befor
 adapter floor: SPEC §14. `Kovo-Changes` sanitized write summary: SPEC §9.1. Derived update plan
 across islands: SPEC §4.8. Optimism keyed per (mutation × query): SPEC §10.4. Derived
 transforms and explicit punts: SPEC §10.5. Exhaustiveness requirement: SPEC §10.6; a missing
-optimistic entry is **KV310** at the editor and in `kovo check`. Registries as generated files:
-SPEC §6.1. Transform/handler commutation proven over generated states: SPEC §11.4.
+optimistic binding is **KV310** in `kovo check`; query-handle typing keeps each authored predictor
+aligned with its query result and exact mutation schema. Generated registries: SPEC §6.1.
+Transform/handler commutation proven over generated states: SPEC §11.4.
 
 </details>

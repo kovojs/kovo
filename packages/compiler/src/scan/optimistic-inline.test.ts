@@ -3,11 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   inlineOptimisticPlansFromSource,
   serializeInlineOptimisticPlanIr,
-  type InlineOptimisticPlanFact,
 } from './optimistic-inline.js';
 
 describe('inline optimistic mutation lowering', () => {
-  it('lowers inline mutation optimism and standalone draft plans to byte-identical IR', () => {
+  it('lowers inline mutation optimism to canonical IR', () => {
     const inlineSource = `
       import { mutation, s } from '@kovojs/server';
 
@@ -25,27 +24,11 @@ describe('inline optimistic mutation lowering', () => {
         },
       });
     `;
-    const standaloneSource = `
-      export const addToCartOptimistic = {
-        queue: 'cart',
-        transforms: {
-          cart(draft, input) {
-            draft.count = (draft.count ?? 0) + input.quantity;
-          },
-          productGrid: 'await-fragment',
-        },
-      };
-    `;
-
     const inline = inlineOptimisticPlansFromSource('inline.ts', inlineSource)[0];
-    const standalone = inlineOptimisticPlansFromSource('standalone.ts', standaloneSource)[0];
-    if (!inline || !standalone) throw new Error('expected optimistic plans');
+    if (!inline) throw new Error('expected optimistic plan');
 
     expect(inline).toMatchObject({ localName: 'addToCart', mutation: 'cart/add', queue: 'cart' });
-    expect(standalone).toMatchObject({ localName: 'addToCartOptimistic', queue: 'cart' });
-    expect(serializeInlineOptimisticPlanIr(comparablePlan(inline))).toBe(
-      serializeInlineOptimisticPlanIr(comparablePlan(standalone)),
-    );
+    expect(serializeInlineOptimisticPlanIr(inline)).toContain('cart cart(draft, input)');
   });
 
   it('serializes a stable transform-plan IR for fixpoint checks', () => {
@@ -97,7 +80,7 @@ describe('inline optimistic mutation lowering', () => {
     });
   });
 
-  it('resolves local queue values in inline and standalone optimistic plans', () => {
+  it('resolves local queue values in inline optimistic plans', () => {
     const inlineSource = `
       const checkoutQueue = queue('checkout');
       export const addToCart = mutation({
@@ -110,26 +93,9 @@ describe('inline optimistic mutation lowering', () => {
         handler() {},
       });
     `;
-    const standaloneSource = `
-      const checkoutQueue = queue('checkout');
-      export const addToCartOptimistic = {
-        queue: checkoutQueue,
-        transforms: {
-          cart(draft, input) {
-            draft.count = (draft.count ?? 0) + input.quantity;
-          },
-        },
-      };
-    `;
-
     const [inline] = inlineOptimisticPlansFromSource('src/cart/mutations.ts', inlineSource);
-    const [standalone] = inlineOptimisticPlansFromSource(
-      'src/cart/optimistic.ts',
-      standaloneSource,
-    );
 
     expect(inline?.queue).toBe('checkout');
-    expect(standalone?.queue).toBe('checkout');
   });
 
   it('resolves local query value references in inline optimistic maps', () => {
@@ -239,7 +205,7 @@ describe('inline optimistic mutation lowering', () => {
     );
   });
 
-  it('captures a standalone OptimisticFor sibling `keys` map (SPEC §10.4)', () => {
+  it('ignores standalone plan objects in app-authored source', () => {
     const source = `
       export const voteOptimistic = {
         keys: {
@@ -253,82 +219,15 @@ describe('inline optimistic mutation lowering', () => {
         },
       } satisfies OptimisticFor<typeof voteUpMutation>;
     `;
-    const [plan] = inlineOptimisticPlansFromSource('optimistic.ts', source);
-    if (!plan) throw new Error('expected optimistic plan');
-
-    const detail = plan.transforms.find((transform) => transform.query === 'questionDetail');
-    expect(detail?.keys).toBe('(input) => ({ id: input.targetId })');
-    const list = plan.transforms.find((transform) => transform.query === 'questionList');
-    expect(list?.keys).toBeUndefined();
+    expect(inlineOptimisticPlansFromSource('optimistic.ts', source)).toEqual([]);
   });
 
-  it('resolves local query value references in standalone optimistic plans', () => {
+  it('lowers inline optimistic plans through root aliases and namespaces', () => {
     const source = `
-      export const questionDetail = query({
-        load: () => ({ score: 0 }),
-        reads: [],
-      });
-      export const voteOptimistic = {
-        keys: {
-          [questionDetail.key]: (input) => ({ id: input.targetId }),
-        },
-        transforms: {
-          [questionDetail.key]: {
-            keys: (input) => ({ id: input.targetId }),
-            transform(draft, _input) {
-              if (draft) draft.score += 1;
-            },
-          },
-        },
-      };
-    `;
-    const [plan] = inlineOptimisticPlansFromSource('src/questions/optimistic.ts', source);
-    if (!plan) throw new Error('expected optimistic plan');
+      import { mutation as defineMutation } from '@kovojs/server';
+      import * as server from '@kovojs/server';
 
-    expect(plan.transforms).toHaveLength(1);
-    expect(plan.transforms[0]?.query).toBe('questions/optimistic/question-detail');
-    expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
-  });
-
-  it('resolves imported query value references in standalone keys and transforms', () => {
-    const queriesSource = `
-      export const questionDetail = query({
-        load: () => ({ score: 0 }),
-        reads: [],
-      });
-    `;
-    const source = `
-      import { questionDetail } from './queries';
-
-      export const voteOptimistic = {
-        keys: {
-          [questionDetail.key]: (input) => ({ id: input.targetId }),
-        },
-        transforms: {
-          [questionDetail.key]: {
-            transform(draft, _input) {
-              if (draft) draft.score += 1;
-            },
-          },
-        },
-      };
-    `;
-    const [plan] = inlineOptimisticPlansFromSource('src/questions/optimistic.ts', source, {
-      resolveStaticImport: () => ({ fileName: 'src/questions/queries.ts', source: queriesSource }),
-    });
-    if (!plan) throw new Error('expected optimistic plan');
-
-    expect(plan.transforms).toHaveLength(1);
-    expect(plan.transforms[0]?.query).toBe('questions/queries/question-detail');
-    expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
-  });
-
-  it('lowers inline optimistic plans through mutation aliases and subpath namespaces', () => {
-    const source = `
-      import { mutation as defineMutation } from '@kovojs/server/api/data';
-      import * as data from '@kovojs/server/api/data';
-
-      const mutationAlias = data.mutation;
+      const mutationAlias = server.mutation;
 
       export const save = defineMutation({
         optimistic: { cart(draft) { draft.count += 1; } },
@@ -362,11 +261,3 @@ describe('inline optimistic mutation lowering', () => {
     expect(inlineOptimisticPlansFromSource('src/cart/mutations.ts', source)).toEqual([]);
   });
 });
-
-function comparablePlan(plan: InlineOptimisticPlanFact): InlineOptimisticPlanFact {
-  return {
-    localName: 'plan',
-    ...(plan.queue === undefined ? {} : { queue: plan.queue }),
-    transforms: plan.transforms,
-  };
-}

@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { form } from '@kovojs/core';
 
-import { type OptimisticFor } from './optimism.js';
+import { type OptimisticFor } from './generated.js';
 
-// SPEC.md §10.4: hand-written optimistic plans are typed from the mutation form
-// input and an explicit app-local query-value map; split from the
-// runtime apply and rebase seams in the sibling optimism-*.test.ts files.
-describe('optimistic query typing', () => {
-  it('types hand-written optimistic plans from mutation forms and query shapes', () => {
+// SPEC.md §5.2/§10.4: compiler-emitted plans retain a generated-only
+// exhaustiveness contract; app source uses query-handle-bound optimism.
+describe('generated optimistic plan ABI typing', () => {
+  it('types compiler-emitted plans from mutation forms and query shapes', () => {
     const addToCart = form(addToCartMutation);
     const optimistic = {
       queue: 'cart',

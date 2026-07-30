@@ -1,3 +1,5 @@
+import type { TaskSchedulingRequest } from '@kovojs/server/tasks';
+
 // Tutorial step 07 (chapter 7): the database gains an orders table and the
 // request shell gains a typed session user, so the cart/add write set —
 // cart, product, order — matches the reference commerce app's.
@@ -24,20 +26,59 @@ export type ShopOrder = {
   userId: string;
 };
 
+export interface ShopReadModel {
+  readonly cartItems: readonly CartItem[];
+  readonly orders: readonly ShopOrder[];
+  readonly products: ReadonlyMap<string, ShopProduct>;
+}
+
 export interface ShopDb {
   cartItems: CartItem[];
   orders: ShopOrder[];
   products: Map<string, ShopProduct>;
+  query: {
+    snapshot(): ShopReadModel;
+  };
   transaction<Result>(run: (db: ShopDb) => Promise<Result>): Promise<Result>;
   write(table: 'cart_items' | 'orders' | 'products', value: unknown): void;
 }
 
 // snippet:request-shell
-export interface ShopRequest {
+export interface ShopRequest extends Request, TaskSchedulingRequest {
   db: ShopDb;
-  session?: { id?: string; user?: { id: string } | null } | null;
+  env: Readonly<Record<never, never>>;
+  session: { id?: string; user?: { id: string } | null } | null;
+  tutorialDbToken: object;
 }
 // /snippet
+
+const tutorialShopDbs = new WeakMap<object, ShopDb>();
+
+export function createShopRequest(
+  db = createShopDb(),
+  session: Exclude<ShopRequest['session'], undefined> = { id: 's1', user: { id: 'u1' } },
+): ShopRequest {
+  const tutorialDbToken = {};
+  tutorialShopDbs.set(tutorialDbToken, db);
+  return Object.assign(new Request('https://tutorial.kovo.dev/'), {
+    async cancel() {
+      return false;
+    },
+    db,
+    env: Object.freeze({}),
+    schedule() {
+      return Promise.reject(new Error('tutorial request has no durable-task scheduler'));
+    },
+    session,
+    tutorialDbToken,
+  });
+}
+
+export function tutorialShopDb(request: Pick<ShopRequest, 'tutorialDbToken'>): ShopDb {
+  const db = tutorialShopDbs.get(request.tutorialDbToken);
+  if (!db) throw new Error('tutorial request is not bound to an in-memory shop database');
+  return db;
+}
 
 export function createShopDb(): ShopDb {
   const db: ShopDb = {
@@ -48,6 +89,11 @@ export function createShopDb(): ShopDb {
       ['p2', { id: 'p2', name: 'Ceramic dripper', stock: 2, unitPrice: 2599 }],
       ['p3', { id: 'p3', name: 'Paper filters', stock: 8, unitPrice: 399 }],
     ]),
+    query: {
+      snapshot() {
+        return { cartItems: db.cartItems, orders: db.orders, products: db.products };
+      },
+    },
     async transaction(run) {
       const draft = cloneShopDb(db);
       const result = await run(draft);

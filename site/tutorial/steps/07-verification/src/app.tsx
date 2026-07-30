@@ -1,30 +1,20 @@
 /** @jsxImportSource @kovojs/server */
-import { form, type FormInput } from '@kovojs/core';
-import type { OptimisticFor } from '@kovojs/browser';
 import {
-  guards,
-  mutation,
   publicAccess,
   route,
   s,
   session,
+  type InferSchema,
   type MutationFail,
 } from '@kovojs/server';
 
-import './registries.js';
-import type { ShopRequest } from './db.js';
+import { tutorialShopDb, type ShopRequest } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
 import { cart, order, product } from './domains.js';
 import { OrderHistory } from './components/order-history.js';
 import * as productListComponent from './components/product-list.js';
-import {
-  cartQuery,
-  orderHistoryQuery,
-  productsQuery,
-  type CartResult,
-  type OrderHistoryResult,
-  type ProductsResult,
-} from './queries.js';
+import { cartQuery, orderHistoryQuery, productsQuery, type CartResult } from './queries.js';
+import { app } from './kovo.js';
 
 // Tutorial step 07 (chapter 7): the finished app is commerce-shaped — three
 // islands, a guarded session-typed mutation writing three domains, and a
@@ -32,6 +22,7 @@ import {
 // without executing a browser (SPEC.md sections 5.3, 10.3, 11.4).
 
 export type { ShopRequest } from './db.js';
+export { shopCsrf } from './kovo.js';
 
 export type AddToCartFailure = MutationFail<string, unknown>;
 
@@ -41,8 +32,6 @@ export interface AddToCartFailureState {
 }
 
 export const { ProductList, renderAddToCartError, renderAddToCartForm } = productListComponent;
-
-const EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET = 'EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET';
 
 // snippet:session
 // SPEC.md section 6.5: the session is a declared schema, not an any-bag —
@@ -56,16 +45,6 @@ export const shopSession = session(
   }),
 );
 // /snippet
-
-export const shopCsrf = {
-  secret: tutorialDeploymentSecret(
-    'KOVO_TUTORIAL_SHOP_CSRF_SECRET',
-    EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET,
-  ),
-  sessionId(request: ShopRequest) {
-    return request.session?.id;
-  },
-};
 
 export const addToCartTouches = [
   {
@@ -97,80 +76,67 @@ export const shopTouchGraph = {
   },
 } as const;
 
+const addToCartInput = s.object({
+  productId: s.string(),
+  quantity: s.number().int().min(1).default(1),
+});
+
+export type AddToCartInput = InferSchema<typeof addToCartInput>;
+
+export function predictCart(current: Readonly<CartResult>, input: AddToCartInput): CartResult {
+  return { count: current.count + input.quantity };
+}
+
 // snippet:add-to-cart
-export const addToCart = mutation({
-  csrf: shopCsrf,
-  input: s.object({
-    productId: s.string(),
-    quantity: s.number().int().min(1).default(1),
-  }),
+export const addToCart = app.mutation({
+  input: addToCartInput,
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
   },
-  access: [
-    guards.all(
-      guards.authed<ShopRequest>(),
-      guards.rateLimit<ShopRequest>({ max: 10, per: 'session' }),
-    ),
-  ],
+  access: [app.all(app.authenticated, app.rateLimit({ max: 10, per: 'session' }))],
   registry: {
-    inferredTouches: addToCartTouches,
     queries: [cartQuery, productsQuery, orderHistoryQuery],
+    touches: [cart, order, product],
   },
-  transaction(request: ShopRequest, run) {
-    return request.db.transaction((db) => run({ ...request, db }));
+  queue: 'cart',
+  optimistic: [
+    cartQuery.optimistic(addToCartInput, predictCart),
+    orderHistoryQuery.optimistic('await-fragment'),
+    productsQuery.optimistic('await-fragment'),
+  ],
+  transaction<Result>(
+    request: ShopRequest,
+    run: (transactionRequest: ShopRequest) => Promise<Result>,
+  ): Promise<Result> {
+    return tutorialShopDb(request).transaction((db) =>
+      run(Object.assign(request.clone(), request, { db })),
+    );
   },
-  handler(input, request: ShopRequest, context) {
+  handler(input, request, context) {
     const currentSession = shopSession.parse(request);
     const found = request.db.products.get(input.productId);
     if (!found || found.stock < input.quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
     }
 
-    request.db.write('cart_items', {
+    request.db.cartItems.push({
       productId: input.productId,
       qty: input.quantity,
       unitPrice: found.unitPrice,
       userId: currentSession.user.id,
     });
-    request.db.write('orders', {
+    request.db.orders.push({
       id: `order-${request.db.orders.length + 1}`,
       productId: input.productId,
       qty: input.quantity,
       total: found.unitPrice * input.quantity,
       userId: currentSession.user.id,
     });
-    request.db.write('products', {
-      ...found,
-      stock: found.stock - input.quantity,
-    });
+    request.db.products.set(input.productId, { ...found, stock: found.stock - input.quantity });
     return { productId: input.productId, quantity: input.quantity };
   },
 });
 // /snippet
-
-export const addToCartForm = form(addToCart);
-export type AddToCartInput = FormInput<typeof addToCartForm>;
-
-export const addToCartOptimistic = {
-  queue: 'cart',
-  transforms: {
-    cart(current: CartResult | undefined, input: AddToCartInput) {
-      return {
-        count: (current?.count ?? 0) + input.quantity,
-      };
-    },
-    orderHistory: 'await-fragment',
-    products: 'await-fragment',
-  },
-} satisfies OptimisticFor<
-  typeof addToCartForm,
-  {
-    cart: CartResult;
-    orderHistory: OrderHistoryResult;
-    products: ProductsResult;
-  }
->;
 
 // snippet:graph
 // The app graph: every fact kovo check and kovo explain reason over. In the
@@ -236,12 +202,3 @@ export const homeRoute = route('/', {
     );
   },
 });
-
-function tutorialDeploymentSecret(envName: string, fallback: string): string {
-  const secret = process.env[envName];
-  if (secret && secret !== fallback) return secret;
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
-  }
-  return fallback;
-}

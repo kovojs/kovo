@@ -110,29 +110,9 @@ export type AuthoredOptimisticEntry<Input = unknown, Value = unknown> =
   | KeyedOptimisticEntry<Input, Value>;
 
 /**
- * The exhaustiveness-checked advanced optimistic plan for a mutation form. Pass
- * the app-local query-value map explicitly; compiler-generated global registries
- * are not part of the human API (SPEC §5.2/§10.4). Each entry is either a pure
- * `OptimisticTransform` (predict from input) or `'await-fragment'` (a recorded
- * decision to wait for server truth). TypeScript requires an entry per
- * listed query, so deleting a transform turns the `satisfies` clause red.
- *
- * Prefer `app.query(...).optimistic(...)` inside `app.mutation({ optimistic })`;
- * this standalone shape is for advanced generated plans that already own an
- * explicit query-value contract (SPEC §10.4/§10.6).
- *
- * @example
- * // kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."
- * import { form } from '@kovojs/core';
- * import type { OptimisticFor } from '@kovojs/browser';
- * import { addToCart } from './mutations';
- *
- * const addToCartForm = form(addToCart);
- *
- * export const addToCartOptimistic = {
- *   queue: 'cart',
- *   transforms: {},
- * } satisfies OptimisticFor<typeof addToCartForm, { cart: { count: number } }>;
+ * @generated Compiler-owned exhaustiveness contract for emitted derived optimistic plans.
+ * App-authored source binds predictors through `query.optimistic(...)` inside
+ * `app.mutation({ optimistic: [...] })` (SPEC §5.2/§10.4/§10.6).
  */
 export type OptimisticFor<
   Definition extends Form<string, Record<string, JsonValue>, unknown>,

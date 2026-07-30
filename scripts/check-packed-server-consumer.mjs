@@ -16,7 +16,7 @@ import { manifestPath, releasePackages, repoRoot } from './release-packages.mjs'
 
 const SERVER_PACKAGE = '@kovojs/server';
 const CORE_PACKAGE = '@kovojs/core';
-const ROOT_DECLARATION_COUNT = 120;
+const ROOT_DECLARATION_COUNT = 116;
 const REQUIRED_ROOT_EXPORTS = Object.freeze([
   'defineKovo',
   'mutation',
@@ -32,7 +32,11 @@ const RETIRED_ROOT_EXPORTS = Object.freeze([
   'createRequestHandler',
   'createSigningKeyRing',
   'createVerifier',
+  'KeyedQueryOptimisticOptions',
   'publicScopedKey',
+  'QueryOptimisticApply',
+  'QueryOptimisticBinding',
+  'QueryOptimisticStatus',
   'task',
   'toNodeHandler',
   'trustedHtml',
@@ -274,7 +278,7 @@ export function checkPackedServerConsumer() {
     assertPackedRuntimeConsumer(consumerRoot);
     assertPackedUnbootstrappedRefusal(consumerRoot);
     process.stdout.write(
-      'Packed server consumer passed (120 root declarations, task/Node/custom-adapter paths, literal-first bootstrap).\n',
+      'Packed server consumer passed (116 root declarations, task/Node/custom-adapter paths, literal-first bootstrap).\n',
     );
   } finally {
     rmSync(consumerRoot, { force: true, recursive: true });
@@ -318,6 +322,14 @@ import { task as retiredRootTask } from '@kovojs/server';
 import { toNodeHandler as retiredRootNodeHandler } from '@kovojs/server';
 // @ts-expect-error custom adapters moved to the semantic custom-adapter path.
 import { createRequestHandler as retiredRootRequestHandler } from '@kovojs/server';
+// @ts-expect-error query-handle optimism support types are framework internals.
+import type { KeyedQueryOptimisticOptions as RetiredKeyedQueryOptimisticOptions } from '@kovojs/server';
+// @ts-expect-error query-handle optimism support types are framework internals.
+import type { QueryOptimisticApply as RetiredQueryOptimisticApply } from '@kovojs/server';
+// @ts-expect-error query-handle optimism support types are framework internals.
+import type { QueryOptimisticBinding as RetiredQueryOptimisticBinding } from '@kovojs/server';
+// @ts-expect-error query-handle optimism support types are framework internals.
+import type { QueryOptimisticStatus as RetiredQueryOptimisticStatus } from '@kovojs/server';
 
 const app = defineKovo({
   appId: '394f368d-4e50-4d56-9b3f-f7cd970c5ac7',
@@ -348,6 +360,10 @@ void [
   retiredRootTask,
   taskContract,
 ];
+void (null as unknown as RetiredKeyedQueryOptimisticOptions);
+void (null as unknown as RetiredQueryOptimisticApply);
+void (null as unknown as RetiredQueryOptimisticBinding);
+void (null as unknown as RetiredQueryOptimisticStatus);
 `,
     'utf8',
   );

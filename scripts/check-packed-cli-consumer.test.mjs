@@ -37,6 +37,7 @@ describe('packed CLI consumer proof', () => {
         'ui-headless-icons-v1',
         'browser-client-installer-v1',
         'browser-authoring-v1',
+        'browser-inline-optimism-v1',
         'server-task-topology-v1',
         'test-harness-v2',
         'drizzle-typed-annotations-v1',

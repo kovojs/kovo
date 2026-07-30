@@ -100,15 +100,7 @@ export type {
 export type { EnhancedFormElementLike } from './mutation-form.js';
 export type { MutationBroadcast } from './broadcast.js';
 export { now, tempId } from './optimism.js';
-export type {
-  MutationChangeRecord,
-  OptimisticChange,
-  OptimisticEntry,
-  OptimisticFor,
-  OptimisticPlan,
-  OptimisticQueryKey,
-  OptimisticTransform,
-} from './optimism.js';
+export type { OptimisticFor } from './optimism.js';
 export type { PendingElementLike, PendingRoot } from './pending.js';
 export {
   kovoBoundAttributeValue,

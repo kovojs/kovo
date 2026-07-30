@@ -13,6 +13,7 @@ import {
   analyzeBetterAuthApiV1Migration,
   analyzeBrowserAuthoringV1Migration,
   analyzeBrowserClientInstallerV1Migration,
+  analyzeBrowserInlineOptimismV1Migration,
   analyzeCoreApiV1Migration,
   analyzeDrizzleApiV1Migration,
   analyzeServerApiV1Migration,
@@ -77,6 +78,13 @@ const API_V1_BATCHES = [
     id: 'browser-authoring-v1',
     manualAction:
       'Select the exact query, state, or clock handle for derive, or write structured non-empty review metadata for the cited trusted output.',
+  },
+  {
+    analyze: analyzeBrowserInlineOptimismV1Migration,
+    guide: 'bind-optimism-to-query-handles',
+    id: 'browser-inline-optimism-v1',
+    manualAction:
+      'Delete the retired plan/support annotation, extract each pure predictor, and bind it through the exact query handle inside app.mutation({ optimistic: [...] }); only compiler-emitted modules may import OptimisticFor from @kovojs/browser/generated.',
   },
   {
     analyze: analyzeServerApiV1Migration,

@@ -105,7 +105,7 @@ describe('packed server consumer proof', () => {
     ];
     const rootExports = [
       ...requiredRoot,
-      ...Array.from({ length: 120 - requiredRoot.length }, (_, index) => `RootFixture${index}`),
+      ...Array.from({ length: 116 - requiredRoot.length }, (_, index) => `RootFixture${index}`),
     ];
     const declarations = {
       customAdapters: exportDeclaration(
@@ -138,7 +138,7 @@ describe('packed server consumer proof', () => {
     expect(() =>
       assertPackedServerDeclarations({
         ...declarations,
-        root: exportDeclaration([...rootExports.slice(0, -1), 'task']),
+        root: exportDeclaration([...rootExports.slice(0, -1), 'QueryOptimisticBinding']),
       }),
     ).toThrow('retains moved declarations');
     expect(() =>

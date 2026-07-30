@@ -28,6 +28,7 @@
       "ui-headless-icons-v1",
       "browser-client-installer-v1",
       "browser-authoring-v1",
+      "browser-inline-optimism-v1",
       "server-task-topology-v1",
       "test-harness-v2",
       "drizzle-typed-annotations-v1",
@@ -2440,6 +2441,156 @@
       "exercised": {
         "resultSchema": "kovo-api-migration-result/v1",
         "command": "node scripts/migrate-browser-authoring-v1.mjs --check scripts/fixtures/api-migrations/browser-authoring-v1"
+      }
+    },
+    {
+      "id": "browser-inline-optimism-v1",
+      "state": "removed",
+      "owner": "browser-runtime",
+      "decisions": [
+        "@kovojs/browser#MutationChangeRecord",
+        "@kovojs/browser#OptimisticChange",
+        "@kovojs/browser#OptimisticEntry",
+        "@kovojs/browser#OptimisticFor",
+        "@kovojs/browser#OptimisticPlan",
+        "@kovojs/browser#OptimisticQueryKey",
+        "@kovojs/browser#OptimisticTransform",
+        "@kovojs/server#KeyedQueryOptimisticOptions",
+        "@kovojs/server#QueryOptimisticApply",
+        "@kovojs/server#QueryOptimisticBinding",
+        "@kovojs/server#QueryOptimisticStatus"
+      ],
+      "tool": {
+        "path": "scripts/migrate-browser-inline-optimism-v1.mjs",
+        "resultSchema": "kovo-api-migration-result/v1",
+        "checkArgs": ["--check"],
+        "writeArgs": ["--write"]
+      },
+      "releaseNote": "docs/releases/browser-inline-optimism-v1.md",
+      "rollback": "From a clean worktree, restore the prior Kovo package versions and the authored standalone plans together; do not restore root support types against the new compiler/runtime contract.",
+      "rules": [
+        {
+          "id": "mutation-change-record-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "MutationChangeRecord"
+          },
+          "category": "app-context",
+          "reason": "Runtime change-record representation is framework-owned; app code should declare domain touches through app.mutation."
+        },
+        {
+          "id": "optimistic-change-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticChange"
+          },
+          "category": "app-context",
+          "reason": "Runtime optimistic change representation is framework-owned and has no app-authored replacement type."
+        },
+        {
+          "id": "optimistic-entry-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticEntry"
+          },
+          "category": "app-context",
+          "reason": "Bind the decision through the exact query handle inside app.mutation instead of constructing a runtime entry."
+        },
+        {
+          "id": "optimistic-for-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticFor"
+          },
+          "category": "app-context",
+          "reason": "Extract pure predictors and bind them through query.optimistic; only compiler-emitted modules retain OptimisticFor on @kovojs/browser/generated."
+        },
+        {
+          "id": "optimistic-plan-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticPlan"
+          },
+          "category": "app-context",
+          "reason": "Only the application can choose the query handles and predictor boundaries that replace a standalone plan."
+        },
+        {
+          "id": "optimistic-query-key-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticQueryKey"
+          },
+          "category": "app-context",
+          "reason": "Query identity is carried by the app-owned query handle rather than an authored runtime key."
+        },
+        {
+          "id": "optimistic-transform-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/browser",
+            "symbol": "OptimisticTransform"
+          },
+          "category": "app-context",
+          "reason": "Use an app-local pure predictor whose input and result are inferred by query.optimistic."
+        },
+        {
+          "id": "keyed-query-optimistic-options-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "KeyedQueryOptimisticOptions"
+          },
+          "category": "app-context",
+          "reason": "Pass the keyed { keys, apply } object directly to the exact query handle and let its types infer."
+        },
+        {
+          "id": "query-optimistic-apply-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryOptimisticApply"
+          },
+          "category": "app-context",
+          "reason": "Define an app-local pure predictor and let query.optimistic infer its exact result and mutation input."
+        },
+        {
+          "id": "query-optimistic-binding-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryOptimisticBinding"
+          },
+          "category": "app-context",
+          "reason": "The binding is opaque framework output; construct it only by calling the exact query handle's optimistic method."
+        },
+        {
+          "id": "query-optimistic-status-refusal",
+          "action": "refuse",
+          "from": {
+            "specifier": "@kovojs/server",
+            "symbol": "QueryOptimisticStatus"
+          },
+          "category": "app-context",
+          "reason": "Pass the literal await-fragment decision to query.optimistic instead of naming its support type."
+        }
+      ],
+      "fixtures": {
+        "rewrites": [],
+        "refusals": [
+          "scripts/fixtures/api-migrations/browser-inline-optimism-v1/optimistic-for.refusal.ts",
+          "scripts/fixtures/api-migrations/browser-inline-optimism-v1/optimistic-plan.refusal.ts",
+          "scripts/fixtures/api-migrations/browser-inline-optimism-v1/query-support.refusal.ts"
+        ]
+      },
+      "exercised": {
+        "resultSchema": "kovo-api-migration-result/v1",
+        "command": "node scripts/migrate-browser-inline-optimism-v1.mjs --check scripts/fixtures/api-migrations/browser-inline-optimism-v1"
       }
     },
     {

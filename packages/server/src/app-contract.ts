@@ -166,22 +166,22 @@ export interface TaskHandle<
 }
 
 /** Query-handle optimistic status authored without a registry key. */
-export type QueryOptimisticStatus = 'await-fragment';
+type QueryOptimisticStatus = 'await-fragment';
 
 /** Pure optimistic result function (SPEC §10.4). */
-export type QueryOptimisticApply<Value, MutationInput> = (
+type QueryOptimisticApply<Value, MutationInput> = (
   value: Readonly<Value>,
   input: NoInfer<MutationInput>,
 ) => Value;
 
 /** Key selector required by parameterized query handles. */
-export interface KeyedQueryOptimisticOptions<QueryInput, Value, MutationInput> {
+interface KeyedQueryOptimisticOptions<QueryInput, Value, MutationInput> {
   apply: QueryOptimisticApply<Value, MutationInput>;
   keys: (input: NoInfer<MutationInput>) => readonly QueryInput[];
 }
 
 /** Opaque query-bound optimistic declaration consumed by `app.mutation`. */
-export interface QueryOptimisticBinding<
+interface QueryOptimisticBinding<
   MutationInput = unknown,
   Value = unknown,
   Owner extends string | undefined = string | undefined,
@@ -217,13 +217,28 @@ export interface QueryHandle<
         };
       };
   readonly key: string;
-  optimistic(status: QueryOptimisticStatus): QueryOptimisticBinding<never, Value, Owner>;
+  optimistic(status: 'await-fragment'): {
+    readonly [appOptimisticBindingBrand]: {
+      readonly input: never;
+      readonly owner: Owner;
+      readonly value: Value;
+    };
+  };
   optimistic<InputSchema extends Schema<unknown>>(
     input: InputSchema,
     policy: [QueryInput] extends [undefined]
-      ? QueryOptimisticApply<Value, InferSchema<InputSchema>>
-      : KeyedQueryOptimisticOptions<QueryInput, Value, InferSchema<InputSchema>>,
-  ): QueryOptimisticBinding<InferSchema<InputSchema>, Value, Owner>;
+      ? (value: Readonly<Value>, input: NoInfer<InferSchema<InputSchema>>) => Value
+      : {
+          apply: (value: Readonly<Value>, input: NoInfer<InferSchema<InputSchema>>) => Value;
+          keys: (input: NoInfer<InferSchema<InputSchema>>) => readonly QueryInput[];
+        },
+  ): {
+    readonly [appOptimisticBindingBrand]: {
+      readonly input: InferSchema<InputSchema>;
+      readonly owner: Owner;
+      readonly value: Value;
+    };
+  };
 }
 
 /** Named app-scoped mutation handle with inferred input/result/error payloads. */
@@ -327,7 +342,13 @@ export interface AppMutationFactory<Request, Owner extends string | undefined> {
         >[2],
       ) => Promise<Value | MutationFail> | Value | MutationFail;
       input: InputSchema;
-      optimistic?: readonly QueryOptimisticBinding<InferSchema<InputSchema>, unknown, Owner>[];
+      optimistic?: readonly {
+        readonly [appOptimisticBindingBrand]: {
+          readonly input: InferSchema<InputSchema>;
+          readonly owner: Owner;
+          readonly value: unknown;
+        };
+      }[];
       principalEpoch?: unknown;
       queue?: unknown;
       redirectTo?: unknown;

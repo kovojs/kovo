@@ -48,12 +48,10 @@ export interface InlineOptimisticScanOptions {
 }
 
 /**
- * @internal Extract inline `mutation({ optimistic })` plans and standalone
- * draft-style `{ queue, transforms }` plans into the same canonical IR.
+ * @internal Extract inline `mutation({ optimistic })` plans into canonical IR.
  *
- * SPEC.md §10.4 and §5.2: authored sugar lowers to a reviewable transform plan;
- * this is the source boundary that keeps inline mutation optimism and standalone
- * `OptimisticFor`-style escape hatches byte-comparable in compiler fixtures.
+ * SPEC.md §10.4 and §5.2: authored sugar lowers to a reviewable transform plan.
+ * Standalone plan objects are compiler-emitted ABI, not app-authored source.
  */
 export function inlineOptimisticPlansFromSource(
   fileName: string,
@@ -108,16 +106,7 @@ function optimisticPlanFromVariable(
   const initializer = unwrapTsExpression(node.initializer);
   if (!initializer) return null;
 
-  const inline = inlineMutationOptimisticPlan(
-    sourceFile,
-    localQueryKeys,
-    localQueueNames,
-    node.name.text,
-    initializer,
-  );
-  if (inline) return inline;
-
-  return standaloneOptimisticPlan(
+  return inlineMutationOptimisticPlan(
     sourceFile,
     localQueryKeys,
     localQueueNames,
@@ -165,35 +154,6 @@ function inlineMutationOptimisticPlan(
   };
 }
 
-function standaloneOptimisticPlan(
-  sourceFile: ts.SourceFile,
-  localQueryKeys: ReadonlyMap<string, string>,
-  localQueueNames: ReadonlyMap<string, string>,
-  localName: string,
-  initializer: ts.Expression,
-): InlineOptimisticPlanFact | null {
-  if (!ts.isObjectLiteralExpression(initializer)) return null;
-
-  const transformsObject = unwrapTsExpression(objectPropertyExpression(initializer, 'transforms'));
-  if (!transformsObject || !ts.isObjectLiteralExpression(transformsObject)) return null;
-
-  const queue = queuePropertyValue(initializer, localQueueNames);
-  const transforms = optimisticTransformsFromObject(sourceFile, localQueryKeys, transformsObject);
-  // SPEC §10.2/§10.4: the standalone `OptimisticFor` object form carries instance-key derivations
-  // in a sibling `keys` map (mirroring the runtime `OptimisticPlan.keys`); fold each into its
-  // transform fact so both authoring shapes lower the same keyed plan.
-  const keysObject = unwrapTsExpression(objectPropertyExpression(initializer, 'keys'));
-  const merged =
-    keysObject && ts.isObjectLiteralExpression(keysObject)
-      ? mergeSiblingKeyDerivations(sourceFile, localQueryKeys, transforms, keysObject)
-      : transforms;
-  return {
-    localName,
-    ...(queue === undefined ? {} : { queue }),
-    transforms: merged,
-  };
-}
-
 function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
   return expressionResolvesToFrameworkExport(
     ts as FrameworkIdentityTypeScript,
@@ -213,24 +173,6 @@ function mutationQueuePropertyValue(
   if (unwrapped?.kind === ts.SyntaxKind.TrueKeyword) return mutationKey;
   if (unwrapped && ts.isStringLiteralLike(unwrapped)) return unwrapped.text;
   return queueNameFromExpression(unwrapped, localQueueNames);
-}
-
-function mergeSiblingKeyDerivations(
-  sourceFile: ts.SourceFile,
-  localQueryKeys: ReadonlyMap<string, string>,
-  transforms: readonly InlineOptimisticTransformFact[],
-  keysObject: ts.ObjectLiteralExpression,
-): InlineOptimisticTransformFact[] {
-  const derivations = new Map<string, string>();
-  for (const property of keysObject.properties) {
-    const query = queryNameFromPropertyName(property.name, localQueryKeys);
-    const valueNode = objectMemberValueNode(property);
-    if (query && valueNode) derivations.set(query, valueNode.getText(sourceFile));
-  }
-  return transforms.map((transform) => {
-    const keys = derivations.get(transform.query);
-    return keys === undefined ? transform : { ...transform, keys };
-  });
 }
 
 function optimisticTransformsFromObject(
@@ -310,15 +252,6 @@ function objectPropertyExpression(
     if (propertyNameText(property.name) === propertyName) return property.initializer;
   }
   return null;
-}
-
-function queuePropertyValue(
-  object: ts.ObjectLiteralExpression,
-  localQueueNames: ReadonlyMap<string, string>,
-): string | undefined {
-  const expression = unwrapTsExpression(objectPropertyExpression(object, 'queue'));
-  if (expression && ts.isStringLiteralLike(expression)) return expression.text;
-  return queueNameFromExpression(expression, localQueueNames);
 }
 
 function queueNameFromExpression(

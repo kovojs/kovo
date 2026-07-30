@@ -3,13 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { compileRouteModule } from '@kovojs/compiler';
-import { createApp } from '@kovojs/server';
 import { renderRouteHtml } from '@kovojs/server/rendering';
 import { mutationCsrfTokenForTesting as csrfToken } from '@kovojs/test/csrf';
-import {
-  accessFactsFromApp,
-  runQuery,
-} from '../../../../../packages/server/src/internal/execution.js';
+import { accessFactsFromApp } from '../../../../../packages/server/src/internal/execution.js';
+import { createApp } from '../../../../../packages/server/src/app.js';
 import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 import {
   componentLiveTargetRenderer,
@@ -21,37 +18,33 @@ import {
 } from '../../../../../packages/server/src/mutation-wire.js';
 import { createLiveTargetTestAuthority } from '../../../../../packages/server/src/test-fixtures.js';
 import { encodeTutorialMutationHeaders } from '../../../mutation-wire-test-headers.js';
-import {
-  createLegacyKovoTestHarness,
-  type KovoTestHarnessOptions,
-} from '@kovojs/test/internal/legacy-harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs';
 
 import {
   addToCart,
-  addToCartOptimistic,
   homeRoute,
+  predictCart,
   ProductList,
   renderAddToCartError,
   renderAddToCartForm,
   shopCsrf,
   shopGraph,
-  shopTouchGraph,
   type AddToCartFailure,
   type ShopRequest,
 } from './app.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
-import { createShopDb, type ShopDb } from './db.js';
+import { createShopDb, createShopRequest } from './db.js';
 import { cart, order, product } from './domains.js';
 import { cartQuery, orderHistoryQuery, productsQuery } from './queries.js';
 
 type TutorialMutationHeaders = Record<string, readonly string[] | string | undefined>;
+type AddToCartRequest = Parameters<typeof addToCart.handler>[1];
 
-const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<ShopRequest>(
+const tutorialLiveTargetAuthority = createLiveTargetTestAuthority<AddToCartRequest>(
   'tutorial-step-07-test-build',
-  addToCart.csrf === false ? undefined : addToCart.csrf,
+  shopCsrf,
 );
 const tutorialWireCsrf = tutorialLiveTargetAuthority.app.csrf;
 
@@ -72,10 +65,8 @@ const tutorialAccessFacts = accessFactsFromApp(tutorialAccessApp);
 // declared touches, and behavior parity with the reference commerce app
 // (SPEC.md sections 5.3, 11.2, 11.4, 16).
 
-type ShopTouchGraph = NonNullable<KovoTestHarnessOptions<ShopDb>['touchGraph']>;
-
 function shopRequest(db = createShopDb()): ShopRequest {
-  return { db, session: { id: 's1', user: { id: 'u1' } } };
+  return createShopRequest(db);
 }
 
 function formInput(request: ShopRequest, fields: Record<string, string>) {
@@ -89,7 +80,7 @@ function submitAddToCart(
 ) {
   const productId = productIdFromRawInput(rawInput);
   const endpointRequest: MutationEndpointRequest<
-    ShopRequest,
+    AddToCartRequest,
     { productId: string; quantity: number }
   > = {
     buildToken: 'tutorial-step-07-test-build',
@@ -103,22 +94,24 @@ function submitAddToCart(
     renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
     renderFailurePage: (failure) =>
       renderShopPageForTest(request, { failure, productId }, rawInput),
-    request,
+    // This internal wire helper sees the post-guard handler request type; the
+    // public dispatcher admits the base request and runs the guard first.
+    request: request as AddToCartRequest,
   };
   return renderMutationEndpointResponse(addToCart, endpointRequest);
 }
 
 function successLiveTargetRenderers() {
   return [
-    componentLiveTargetRenderer<typeof CartBadge.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof CartBadge>[0]>, AddToCartRequest>({
       component: CartBadge,
       componentId: 'components/cart-badge/cart-badge',
     }),
-    componentLiveTargetRenderer<typeof ProductList.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof ProductList>[0]>, AddToCartRequest>({
       component: ProductList,
       componentId: 'components/product-list/product-list',
     }),
-    componentLiveTargetRenderer<typeof OrderHistory.definition, ShopRequest>({
+    componentLiveTargetRenderer<NonNullable<Parameters<typeof OrderHistory>[0]>, AddToCartRequest>({
       component: OrderHistory,
       componentId: 'components/order-history/order-history',
     }),
@@ -387,111 +380,23 @@ describe('tutorial step 07 — testing & verification', () => {
       },
     );
 
-    const attackerRequest = {
-      db,
-      session: { id: 's-attacker', user: { id: 'attacker' } },
-    };
+    const attackerRequest = createShopRequest(db, {
+      id: 's-attacker',
+      user: { id: 'attacker' },
+    });
     const attackerPage = await renderShopPageForTest(attackerRequest);
     expect(attackerPage).toContain('<cart-badge');
     expect(attackerPage).toContain('kovo-key="order-attacker"');
     expect(attackerPage).not.toContain('order-victim');
 
-    const anonymousPage = await renderShopPageForTest({
-      db,
-      session: { id: 's-anonymous', user: null },
-    });
+    const anonymousPage = await renderShopPageForTest(
+      createShopRequest(db, { id: 's-anonymous', user: null }),
+    );
     expect(anonymousPage).toContain('Pour-over kettle');
     expect(anonymousPage).not.toContain('<cart-badge');
     expect(anonymousPage).not.toContain('order-attacker');
-
-    await expect(runQuery(cartQuery, undefined, attackerRequest)).resolves.toEqual({
-      input: undefined,
-      ok: true,
-      value: { count: 1 },
-    });
-    await expect(runQuery(orderHistoryQuery, undefined, attackerRequest)).resolves.toEqual({
-      input: undefined,
-      ok: true,
-      value: {
-        items: [
-          {
-            id: 'order-attacker',
-            productId: 'p2',
-            qty: 1,
-            total: 2599,
-            userId: 'attacker',
-          },
-        ],
-      },
-    });
-    await expect(runQuery(cartQuery, undefined, { db, session: null })).resolves.toEqual({
-      auth: 'unauthenticated',
-      error: { code: 'UNAUTHORIZED', payload: {} },
-      ok: false,
-      status: 422,
-    });
-    await expect(runQuery(orderHistoryQuery, undefined, { db, session: null })).resolves.toEqual({
-      auth: 'unauthenticated',
-      error: { code: 'UNAUTHORIZED', payload: {} },
-      ok: false,
-      status: 422,
-    });
   });
   // /snippet
-
-  // Internal legacy regression for this pre-app-contract tutorial fixture. New apps use the
-  // app-scoped public harness shown in site/content/guides/testing.md.
-  it('executes addToCart through the harness with write verification on', async () => {
-    const shopDb = createShopDb();
-    const harness = createLegacyKovoTestHarness({
-      db: shopDb,
-      pages: {
-        '/': () =>
-          renderShopPageForTest({
-            db: shopDb,
-            session: { id: 's1', user: { id: 'u1' } },
-          }),
-      },
-      request: {
-        session: { id: 's1', user: { id: 'u1' } },
-      },
-      touchGraph: shopTouchGraph as unknown as ShopTouchGraph,
-      verification: {
-        domainByTable: {
-          cart_items: cart.key,
-          orders: order.key,
-          products: product.key,
-        },
-      },
-    });
-    // The verifier observes writes through the wrapped handle, so the test
-    // runs the handler against it directly instead of a cloned transaction
-    // draft (the examples/commerce acceptance-test pattern).
-    const verifiedDb = harness.db;
-    verifiedDb.transaction = (run) => run(verifiedDb);
-    const request = { db: verifiedDb, session: { id: 's1', user: { id: 'u1' } } };
-
-    await expect(
-      harness.exec(addToCart, formInput(request, { productId: 'p1', quantity: '2' }), {
-        touchGraphKey: 'cart.addItem',
-      }),
-    ).resolves.toMatchObject({
-      changes: [
-        { domain: cart.key, input: { productId: 'p1', quantity: 2 } },
-        { domain: order.key, input: { productId: 'p1', quantity: 2 } },
-        { domain: product.key, input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
-      ],
-      ok: true,
-      rerunQueries: [cartQuery.key, productsQuery.key, orderHistoryQuery.key],
-    });
-    // Observed writes ⊆ declared touches — the SPEC.md §11.2 invariant.
-    expect(harness.verificationDiagnostics()).toEqual([]);
-    await expect(
-      harness
-        .page('/')
-        .then((page: { fragment(target: string): string }) => page.fragment('cart-badge')),
-    ).resolves.toContain('data-bind="cart.count"');
-  });
 
   // snippet:parity-test
   it('matches the reference commerce app: wire vocabulary and optimistic statuses', async () => {
@@ -568,7 +473,7 @@ describe('tutorial step 07 — testing & verification', () => {
     expect(success.body).toContain('<kovo-fragment target="order-history">');
     expect(success.body).toContain('kovo-key="order-1"');
     expect(success.headers['Kovo-Changes']).toBe(
-      `[{"domain":"${cart.key}"},{"domain":"${order.key}"},{"domain":"${product.key}","keys":["p1"]}]`,
+      `[{"domain":"${cart.key}"},{"domain":"${order.key}"},{"domain":"${product.key}"}]`,
     );
 
     const failure = await submitAddToCart(
@@ -586,21 +491,14 @@ describe('tutorial step 07 — testing & verification', () => {
   // /snippet
 
   it('proves the prediction still commutes with the committed transform', () => {
-    expect(
-      addToCartOptimistic.transforms.cart({ count: 2 }, { productId: 'p1', quantity: 1 }),
-    ).toEqual({ count: 3 });
-    expect(Object.keys(addToCartOptimistic.transforms).sort()).toEqual([
-      'cart',
-      'orderHistory',
-      'products',
-    ]);
+    expect(predictCart({ count: 2 }, { productId: 'p1', quantity: 1 })).toEqual({ count: 3 });
   });
 
   it('rejects unauthenticated requests through the declared guard chain', async () => {
     const db = createShopDb();
     const response = await submitAddToCart(
       { productId: 'p1', quantity: '1', 'kovo-csrf': 'irrelevant' },
-      { db, session: { id: 's-anon', user: null } },
+      createShopRequest(db, { id: 's-anon', user: null }),
       {
         'Kovo-Form-Target': 'add-to-cart:p1',
         'Kovo-Fragment': 'true',

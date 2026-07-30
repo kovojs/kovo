@@ -193,30 +193,40 @@ Domain values those writes affect.
 Optimism is keyed to queries:
 
 ```ts
-import { mutation, publicAccess, s } from '@kovojs/server';
-import { type CsrfOptions } from '@kovojs/server/security';
+import { queue, s, type InferSchema } from '@kovojs/server';
 
-declare const cartCsrf: Readonly<CsrfOptions<unknown>>;
+import { app } from './kovo.js';
+import { cartSummaryQuery, productDetailQuery } from './queries.js';
+
 declare const addToCartHandler: (input: {
   productId: string;
   quantity: number;
 }) => Promise<{ ok: true }>;
 
-export const addToCart = mutation({
-  access: publicAccess('demo cart is intentionally public'),
-  csrf: cartCsrf,
-  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
-  optimistic: {
-    cartSummary(draft, input) {
-      draft.count += input.quantity;
-    },
-    productDetail: 'await-fragment',
-  },
+const addToCartInput = s.object({
+  productId: s.string(),
+  quantity: s.number().int().min(1),
+});
+type AddToCartInput = InferSchema<typeof addToCartInput>;
+
+export function predictCartSummary(current: Readonly<{ count: number }>, input: AddToCartInput) {
+  return { count: current.count + input.quantity };
+}
+
+export const addToCart = app.mutation({
+  access: app.publicAccess('demo cart is intentionally public'),
+  input: addToCartInput,
+  optimistic: [
+    cartSummaryQuery.optimistic(addToCartInput, predictCartSummary),
+    productDetailQuery.optimistic('await-fragment'),
+  ],
+  queue: queue('cart'),
   handler: addToCartHandler,
 });
 ```
 
-Use `'await-fragment'` when the safe prediction is not obvious. Server truth still wins after commit.
+The query handles preserve result typing and the exact mutation schema by identity. Use
+`'await-fragment'` when the safe prediction is not obvious. Server truth still wins after commit.
 
 ## Check it
 

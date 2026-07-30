@@ -32,8 +32,8 @@ interface RouteRegistry {
   '/products/:id': typeof productRoute; /* … */
 }
 interface InvalidationSets {
-  'cart/add': 'cart' | 'product'; // from the touch graph (§11.1); OptimisticFor demands a
-  // transform (or 'await-fragment') per invalidated query in tsc (§10.6)
+  'cart/add': 'cart' | 'product'; // compiler-owned IR from the touch graph (§11.1);
+  // app.mutation query-handle bindings are checked against this set (§10.6)
 }
 // also: DomainKey (schema domains), PageIds (per-page element ids, §6.4/KV221),
 // ComponentPackagePrefixes + ComponentPackageRegistry (§6.1.1)

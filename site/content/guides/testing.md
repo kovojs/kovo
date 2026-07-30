@@ -185,7 +185,7 @@ expect(
   propertyTest({
     apply: (state, input) => applyAddToCartEffect(state, input),
     cases: generatedCartStates(),
-    predict: (state, input) => addToCartOptimistic.transforms.cart(state, input),
+    predict: (state, input) => predictCart(shapeCartQuery(state), input),
     shape: (state) => shapeCartQuery(state),
   }),
 ).toEqual({ cases: 18 });

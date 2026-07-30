@@ -20,7 +20,8 @@
         "packages/browser/src/derive.test.ts",
         "packages/browser/src/index.test.ts",
         "packages/browser/src/security-output.test.ts",
-        "scripts/migrate-browser-authoring-v1.test.mjs"
+        "scripts/migrate-browser-authoring-v1.test.mjs",
+        "scripts/migrate-browser-inline-optimism-v1.test.mjs"
       ]
     },
     "cli-contract": {
@@ -64,7 +65,10 @@
     },
     "server-authoring-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
-      "contractTests": ["packages/server/src/app.test.ts"]
+      "contractTests": [
+        "packages/server/src/app.test.ts",
+        "scripts/migrate-browser-inline-optimism-v1.test.mjs"
+      ]
     },
     "server-build-contract": {
       "packedExample": "generated:api-surface-packed-example/v1",
@@ -1430,77 +1434,84 @@
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "MutationChangeRecord",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticChange",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticChange",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticEntry",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticEntry",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticFor",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticFor",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticPlan",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticPlan",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticQueryKey",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticQueryKey",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#OptimisticTransform",
       "package": "@kovojs/browser",
       "specifier": "@kovojs/browser",
       "symbol": "OptimisticTransform",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/browser",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "browser-authoring",
-      "evidence": "browser-contract"
+      "evidence": "browser-contract",
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/browser#safeRichHtml",
@@ -19094,16 +19105,12 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server",
       "symbol": "KeyedQueryOptimisticOptions",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "server-authoring",
       "evidence": "server-authoring-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/server-task-topology-v1.md",
-        "contractTest": "packages/server/src/api-topology.test.ts",
-        "nonTestExample": "packages/server/README.md"
-      }
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/server#KovoApp",
@@ -20509,48 +20516,36 @@
       "package": "@kovojs/server",
       "specifier": "@kovojs/server",
       "symbol": "QueryOptimisticApply",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "server-authoring",
       "evidence": "server-authoring-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/server-task-topology-v1.md",
-        "contractTest": "packages/server/src/api-topology.test.ts",
-        "nonTestExample": "packages/server/README.md"
-      }
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/server#QueryOptimisticBinding",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server",
       "symbol": "QueryOptimisticBinding",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "server-authoring",
       "evidence": "server-authoring-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/server-task-topology-v1.md",
-        "contractTest": "packages/server/src/api-topology.test.ts",
-        "nonTestExample": "packages/server/README.md"
-      }
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/server#QueryOptimisticStatus",
       "package": "@kovojs/server",
       "specifier": "@kovojs/server",
       "symbol": "QueryOptimisticStatus",
-      "state": "public",
-      "decision": "keep",
-      "canonicalHome": "@kovojs/server",
+      "state": "removed",
+      "decision": "remove",
+      "canonicalHome": "none",
       "story": "server-authoring",
       "evidence": "server-authoring-contract",
-      "introduced": {
-        "releaseNote": "docs/releases/server-task-topology-v1.md",
-        "contractTest": "packages/server/src/api-topology.test.ts",
-        "nonTestExample": "packages/server/README.md"
-      }
+      "migrationBatch": "browser-inline-optimism-v1"
     },
     {
       "id": "@kovojs/server#QueryReadConfig",
@@ -29066,7 +29061,7 @@
   "healthTargets": {
     "rootDeclarations": {
       "@kovojs/core": 60,
-      "@kovojs/server": 120,
+      "@kovojs/server": 116,
       "@kovojs/style": 14
     }
   }

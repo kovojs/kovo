@@ -914,19 +914,41 @@ weaken determinism, touched-path bounds, rollback, settlement, or emitted-transf
 **Derived:** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Hand-written transforms share the same IR, so an app can override generated transforms pair by pair.
 
 ```ts
-// emitted optimistic/cart.add.ts — DO NOT EDIT (override in cart.mutations.ts)
-export const derived = {
-  [cartQuery.key]: (cart, $input) => {
-    const r = cart.items.find((i) => i.productId === $input.productId);
-    if (!r) cart.count += 1;
-    if (r) r.qty += $input.quantity;
-    else cart.items.push({ productId: $input.productId, qty: $input.quantity, pending: true });
-  },
-  [productQuery.key(($i) => ({ id: $i.productId }))]: (p, $input) => {
-    p.stock -= $input.quantity;
-  },
-} satisfies OptimisticFor<typeof addToCart>;
+// cart.mutations.ts — app-authored override of a pair the compiler cannot derive
+const addToCartInput = s.object({
+  productId: s.string(),
+  quantity: s.number().int().min(1),
+});
+
+function predictCart(cart: Readonly<CartResult>, input: InferSchema<typeof addToCartInput>) {
+  const current = cart.items.find((item) => item.productId === input.productId);
+  return {
+    ...cart,
+    count: current ? cart.count : cart.count + 1,
+    items: current
+      ? cart.items.map((item) =>
+          item === current ? { ...item, qty: item.qty + input.quantity } : item,
+        )
+      : [...cart.items, { productId: input.productId, qty: input.quantity, pending: true }],
+  };
+}
+
+export const addToCart = app.mutation({
+  input: addToCartInput,
+  optimistic: [
+    cartQuery.optimistic(addToCartInput, predictCart),
+    productQuery.optimistic(addToCartInput, {
+      keys: (input) => [{ id: input.productId }],
+      apply: (product, input) => ({ ...product, stock: product.stock - input.quantity }),
+    }),
+  ],
+  // access, registry, and handler omitted
+});
 ```
+
+Compiler-derived transforms lower to the same internal plan, but that string-keyed representation
+is generated ABI/IR. App source authors query-handle bindings and pure predictors, never a
+standalone optimistic-plan object.
 
 **Runtime protocol:** snapshot the affected query values → apply transforms to the shared query values and run their update plans (all dependent islands update at once; affected islands get `kovo-pending` + `aria-busy` automatically) → on success, `<kovo-query>`/morph reconciles over the prediction (right guess ⇒ near-no-op; wrong guess ⇒ silent correction) → on error, restore snapshots, render error fragment.
 
@@ -976,7 +998,12 @@ mutation cart/applyCoupon:
 
 Punts report their reasons inline (e.g. `PUNTED (Opaque: compute_discount)`).
 
-The check runs at two altitudes off the same derived set: the compiler emits each mutation's invalidated-query keys into the registries (§6.1 `InvalidationSets`), so `OptimisticFor<typeof addToCart>` requires an entry — transform or `'await-fragment'` — per invalidated query, making KV310 an editor-visible type error; `kovo check` remains the CI/agent surface.
+The check runs at two altitudes off the same derived set. Query-handle bindings make each
+hand-written predictor editor-visible against the exact query result and mutation schema, and
+`app.mutation({ optimistic: [...] })` rejects copied, cross-app, duplicate, or schema-mismatched
+bindings. The compiler resolves those handles against §6.1 `InvalidationSets`; `kovo check` reports
+KV310 when any invalidated query lacks either a transform or `'await-fragment'`. The generated
+registry remains compiler/runtime IR rather than an app-authored type augmentation.
 
 Forgetting an optimistic update is a visible, suppressible diagnostic with the suppression recorded in source — never a silent UI inconsistency.
 
