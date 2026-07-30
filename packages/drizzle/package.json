@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "drizzle-orm": "1.0.0-rc.4",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "peerDependencies": {
     "drizzle-orm": ">=1.0.0-rc.4 <2"

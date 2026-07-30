@@ -169,7 +169,7 @@ describe('pack-security gate', () => {
     expect(
       validateSelfContainedVerifierPack({
         files: [{ path: 'NOTICE' }, { path: 'dist/index.mjs' }],
-        manifest: { devDependencies: { acorn: '8.17.0', vitest: '4.1.8' } },
+        manifest: { devDependencies: { acorn: '8.17.0', vitest: '4.1.10' } },
         readTextFile: () => 'export const verify = true;',
       }),
     ).toEqual([]);

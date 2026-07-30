@@ -45,6 +45,8 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(Object.keys(requireAuthTable(tables, 'twoFactor').fields).sort()).toEqual([
       'backupCodes',
+      'failedVerificationCount',
+      'lockedUntil',
       'secret',
       'userId',
       'verified',
@@ -125,6 +127,8 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(Object.keys(requireAuthTable(tables, 'twoFactor').fields).sort()).toEqual([
       'backupCodes',
+      'failedVerificationCount',
+      'lockedUntil',
       'secret',
       'userId',
       'verified',

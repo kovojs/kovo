@@ -31,7 +31,7 @@
     "test": "vitest --run src/diagnostic-adapter.test.mjs src/extension.test.mjs --reporter=dot"
   },
   "devDependencies": {
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "contributes": {
     "commands": [

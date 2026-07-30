@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { checkAuthProviderPin, providerGateCommand } from './check-auth-provider-pin.mjs';
 
 const integrity =
-  'sha512-M0XMJ9/KE9hlmuN2Zha1VayShZW5CQifAMPaoz41gtao2la6YpT5KrnL5MAeIAM/3d4DkdYA2BVMY1Gt4iEzHw==';
+  'sha512-B5s6+lPsDWp8rGLRnvNyr5h9tftG9zLRjNrlkEJdYRhcuhPhJiw9b8o6ibgxEFpSAdUqoDaP5/FLqfu8QsXIVg==';
 
 function rootPackage({ check = true, command = true } = {}) {
   return JSON.stringify({
@@ -20,14 +20,14 @@ function rootPackage({ check = true, command = true } = {}) {
   });
 }
 
-function providerPackage({ implementation = '1.6.17', peer } = {}) {
+function providerPackage({ implementation = '1.6.22', peer } = {}) {
   return JSON.stringify({
     dependencies: { 'better-auth': implementation },
     ...(peer === undefined ? {} : { peerDependencies: { 'better-auth': peer } }),
   });
 }
 
-function tcbManifest({ pinnedVersion = '1.6.17' } = {}) {
+function tcbManifest({ pinnedVersion = '1.6.22' } = {}) {
   return `# Test TCB
 
 \`\`\`json tcb-manifest
@@ -62,7 +62,7 @@ ${JSON.stringify({
 `;
 }
 
-function lockfile({ version = '1.6.17' } = {}) {
+function lockfile({ version = '1.6.22' } = {}) {
   return `lockfileVersion: '9.0'
 
 packages:
@@ -93,7 +93,7 @@ describe('Better Auth provider pin gate (C13 anchor)', () => {
     expect(run()).toEqual({
       findings: [],
       ok: true,
-      summary: 'OK better-auth provider exact-pinned to 1.6.17 across 2 TCB surfaces',
+      summary: 'OK better-auth provider exact-pinned to 1.6.22 across 2 TCB surfaces',
     });
   });
 
@@ -110,17 +110,17 @@ describe('Better Auth provider pin gate (C13 anchor)', () => {
     ).toEqual(expect.arrayContaining([expect.stringContaining('dependencies.better-auth')]));
     expect(
       run({
-        'packages/better-auth/package.json': providerPackage({ peer: '1.6.17' }),
+        'packages/better-auth/package.json': providerPackage({ peer: '1.6.22' }),
       }).findings,
     ).toEqual(expect.arrayContaining([expect.stringContaining('peerDependencies.better-auth')]));
   });
 
   it('kills TCB disagreement and a lockfile that lacks the exact subject', () => {
-    expect(run({ 'security/TCB.md': tcbManifest({ pinnedVersion: '1.6.18' }) }).findings).toEqual(
-      expect.arrayContaining([expect.stringContaining('1.6.18')]),
+    expect(run({ 'security/TCB.md': tcbManifest({ pinnedVersion: '1.6.23' }) }).findings).toEqual(
+      expect.arrayContaining([expect.stringContaining('1.6.23')]),
     );
-    expect(run({ 'pnpm-lock.yaml': lockfile({ version: '1.6.18' }) }).findings).toEqual(
-      expect.arrayContaining([expect.stringContaining('better-auth@1.6.17')]),
+    expect(run({ 'pnpm-lock.yaml': lockfile({ version: '1.6.23' }) }).findings).toEqual(
+      expect.arrayContaining([expect.stringContaining('better-auth@1.6.22')]),
     );
   });
 

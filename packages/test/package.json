@@ -144,7 +144,7 @@
     "better-sqlite3": "12.11.1",
     "drizzle-orm": "1.0.0-rc.4",
     "vite": "8.0.16",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "peerDependencies": {
     "@electric-sql/pglite": "0.5.1",

@@ -215,7 +215,7 @@
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "kovo": {
     "prefix": "kovo-"

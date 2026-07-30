@@ -37,6 +37,6 @@
     "@kovojs/test": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   }
 }

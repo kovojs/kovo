@@ -259,7 +259,7 @@ function printEnvironmentMetadata(): void {
       'compiler-perf environment',
       `node=${process.version}`,
       `v8=${process.versions.v8}`,
-      `vitest=4.1.8`,
+      `vitest=4.1.10`,
       `platform=${platform()}`,
       `release=${release()}`,
       `arch=${arch()}`,

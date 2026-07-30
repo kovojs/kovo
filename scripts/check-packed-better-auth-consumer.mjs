@@ -119,7 +119,7 @@ export function assertPackedBetterAuthManifest(manifest) {
     }
   }
   if (
-    manifest.dependencies?.['better-auth'] !== '1.6.17' ||
+    manifest.dependencies?.['better-auth'] !== '1.6.22' ||
     manifest.dependencies?.['drizzle-orm'] !== '0.45.2' ||
     manifest.peerDependencies?.['better-auth'] !== undefined ||
     manifest.dependencies?.[SERVER_PACKAGE] !== undefined ||

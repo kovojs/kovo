@@ -432,7 +432,7 @@ export const betterAuthDbVerificationConfig = betterAuthDeepFreeze(
 );
 
 /** @internal Build a KV406 degradation fact for the unavailable OAuth-provider successor metadata. */
-// Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor
+// Better Auth 1.6.22 deprecates `oidcProvider()` in favor of the successor
 // package. SPEC.md §11.2 keeps successor-owned writes KV406 until its real
 // table metadata and declared touches are pinned.
 export function betterAuthOAuthProviderSuccessorMetadataDegradation(

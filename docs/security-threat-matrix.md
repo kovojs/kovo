@@ -152,7 +152,7 @@ GREEN (no longer pending).
   filename fallback `inferComponentName` (`scan/parse.ts:444`) for an author-controlled component — asymmetric with the
   derive/live-target emitters which sanitize. Route through `sanitizeIdentifier`.
 - **Deps × C/I/Au (M6) — GREEN (closed, followup-16).** Exact-pinned `pg` 8.22.0 / `@electric-sql/pglite` 0.5.1 /
-  `@node-rs/argon2` 2.0.2 / `better-sqlite3` 12.11.1 (+ `better-auth` 1.6.17, `drizzle-orm` 1.0.0-rc.4);
+  `@node-rs/argon2` 2.0.2 / `better-sqlite3` 12.11.1 (+ `better-auth` 1.6.22, `drizzle-orm` 1.0.0-rc.4);
   `--frozen-lockfile` in the shared `kovo-setup` action + `release.yml`; `scripts/supply-chain-gates.mjs` +
   `check:pack-security`. `security/TCB.md` gained a `trustedDependencySurfaces` manifest naming the 10 dependency
   BEHAVIOR surfaces (node-pg + Drizzle parameterization; PGlite + Postgres RLS/role; Better Auth password,

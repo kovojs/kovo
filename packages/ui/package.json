@@ -297,7 +297,7 @@
   },
   "devDependencies": {
     "@kovojs/style": "workspace:*",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "peerDependencies": {
     "@kovojs/style": "workspace:*"

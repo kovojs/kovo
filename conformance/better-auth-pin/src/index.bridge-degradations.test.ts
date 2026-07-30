@@ -501,7 +501,7 @@ describe('Better Auth pinned conformance', () => {
       );
 
       // SPEC.md §10.1: these Better Auth plugins do not add app-visible
-      // tables in 1.6.17, so B1 stays on the core account/session/user bridge.
+      // tables in 1.6.22, so B1 stays on the core account/session/user bridge.
       expect(Object.keys(tables).sort(), pluginCase.name).toEqual([
         'account',
         'session',

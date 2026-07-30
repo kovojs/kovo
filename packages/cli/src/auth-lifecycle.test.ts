@@ -29,7 +29,7 @@ describe('kovo explain auth-lifecycle (Plan 3 §5.3 C13 anchor)', () => {
       exitCode: 0,
       output: [
         'kovo-explain/v1',
-        'AUTH-LIFECYCLE provider=better-auth version=1.6.17 posture=inherited-exact-pin',
+        'AUTH-LIFECYCLE provider=better-auth version=1.6.22 posture=inherited-exact-pin',
         'INHERITED expiresIn=604800 updateAge=86400 freshAge=86400 cookieCacheEnabled=false cookieCacheMaxAge=300 preexistingCookieSignIn=rotates-id-and-token-retains-prior-session',
         'OWNED signIn upstream=signInEmail surface=auth/sign-in devOnly=false',
         'OWNED signOut upstream=signOut surface=auth/sign-out devOnly=false',

@@ -1,7 +1,7 @@
 {
   "schema": "kovo-auth-lifecycle-boundary/v1",
   "provider": "better-auth",
-  "providerVersion": "1.6.17",
+  "providerVersion": "1.6.22",
   "posture": "inherited-exact-pin",
   "inheritedSession": {
     "expiresIn": 604800,

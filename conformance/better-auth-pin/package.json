@@ -13,7 +13,7 @@
     "@kovojs/test": "workspace:*"
   },
   "devDependencies": {
-    "better-auth": "1.6.17",
-    "vitest": "4.1.8"
+    "better-auth": "1.6.22",
+    "vitest": "4.1.10"
   }
 }

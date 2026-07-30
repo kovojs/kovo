@@ -70,7 +70,7 @@ function sessionCookie(response: Response): string {
   return pair;
 }
 
-describe('Better Auth 1.6.17 lifecycle inheritance (Plan 3 §5.3 C13 anchor)', () => {
+describe('Better Auth 1.6.22 lifecycle inheritance (Plan 3 §5.3 C13 anchor)', () => {
   it('characterizes every session default Kovo inherits by omitting session options', async () => {
     const { auth } = inheritedAuth();
     const context = await auth.$context;

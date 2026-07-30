@@ -39,6 +39,6 @@
   },
   "devDependencies": {
     "acorn": "8.17.0",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   }
 }
