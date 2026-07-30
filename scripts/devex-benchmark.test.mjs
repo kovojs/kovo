@@ -507,6 +507,11 @@ describe('DevEx benchmark foundation', () => {
     expect(kovoPackedWorkloadSource).toContain("'check', './src/app.tsx'");
     expect(kovoPackedWorkloadSource).toContain('KOVO_DEVEX_CHECK_PHASE_CENSUS_SOURCE');
     expect(kovoPackedWorkloadSource).toContain('kovo-check-phase-census/v1');
+    expect(kovoPackedWorkloadSource).toContain("import { app } from '../kovo.js'");
+    expect(kovoPackedWorkloadSource).toContain('app.query({');
+    expect(kovoPackedWorkloadSource).not.toContain(
+      "import { publicAccess, query, s } from '@kovojs/server'",
+    );
     expect(kovoPackedProfileSource).toContain('duration=');
     expect(kovoPackedProfileSource).toContain('rss=');
     expect(kovoPackedDevProfileSource).toContain("'dev',");
