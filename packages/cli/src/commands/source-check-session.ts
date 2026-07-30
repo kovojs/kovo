@@ -508,6 +508,13 @@ function validateRevisionResult(checked: KovoSourceCheckRevisionResult): void {
   ) {
     throw new TypeError('Rejected source-check input fabricated unavailable byte digests.');
   }
+  if (
+    checked.input.status === 'rejected' &&
+    (checked.result.exitCode === 0 || checked.census.checkGraphDigest !== null)
+  ) {
+    throw new TypeError('Rejected source-check input cannot publish a passing graph proof.');
+  }
+  let notReached = false;
   for (const [index, phase] of checked.census.phases.entries()) {
     if (
       phase.name !== KOVO_SOURCE_CHECK_PHASES[index] ||
@@ -518,6 +525,20 @@ function validateRevisionResult(checked: KovoSourceCheckRevisionResult): void {
     ) {
       throw new TypeError(`Source-check revision returned invalid phase ${phase.name}.`);
     }
+    if (
+      (phase.status === 'not-applicable' ||
+        phase.status === 'not-reached' ||
+        phase.status === 'reused-authenticated') &&
+      phase.durationMs !== 0
+    ) {
+      throw new TypeError(`Source-check revision returned nonzero skipped phase ${phase.name}.`);
+    }
+    if (notReached && phase.status !== 'not-reached') {
+      throw new TypeError(
+        `Source-check revision resumed after phase ${phase.name} was not reached.`,
+      );
+    }
+    if (phase.status === 'not-reached') notReached = true;
   }
 }
 

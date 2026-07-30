@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { commandFindingDiagnostic, formatKovoDiagnosticCommandResult } from '../diagnostic.js';
+import { normalizeCommandResultDiagnostics } from '../shared.js';
 import {
   createKovoSourceCheckInputProof,
   createRejectedKovoSourceCheckInputProof,
@@ -174,6 +176,35 @@ describe('foreground source-check session', () => {
     );
   });
 
+  it('embeds byte-equivalent fresh one-shot diagnostic envelopes for findings', () => {
+    const diagnostic = commandFindingDiagnostic('proof', 'A compiler proof failed.');
+    const result = {
+      diagnostics: [diagnostic],
+      exitCode: 1,
+      output: 'kovo-check/v1\nERROR KV235 authored lowered IR is forbidden\n',
+    } as const;
+    const normalized = normalizeCommandResultDiagnostics(result, 'proof');
+    const oneShot = JSON.parse(
+      formatKovoDiagnosticCommandResult(
+        normalized.diagnostics ?? [],
+        {
+          command: 'check',
+          exitCode: normalized.exitCode,
+          protocol: 'kovo-check/v1',
+          text: normalized.output,
+        },
+        'json',
+      ),
+    );
+    const record = JSON.parse(
+      formatKovoSourceCheckWatchRecord(0, {
+        ...revisionResult(),
+        result,
+      }),
+    );
+    expect(record.check).toEqual(oneShot);
+  });
+
   it('rejects a dropped phase or an unauthenticated digest before writing JSONL', () => {
     const valid = revisionResult();
     expect(() =>
@@ -225,6 +256,67 @@ describe('foreground source-check session', () => {
         .slice(1)
         .every((phase: { status: string }) => phase.status === 'not-reached'),
     ).toBe(true);
+  });
+
+  it('rejects resumed, nonzero reused, or passing rejected phase evidence', () => {
+    const valid = revisionResult();
+    expect(() =>
+      formatKovoSourceCheckWatchRecord(0, {
+        ...valid,
+        census: {
+          ...valid.census,
+          phases: valid.census.phases.map((phase, index) =>
+            index === 2
+              ? { ...phase, durationMs: 0, status: 'not-reached' }
+              : index === 3
+                ? { ...phase, durationMs: 0, status: 'executed' }
+                : phase,
+          ),
+        },
+      }),
+    ).toThrow(/resumed/u);
+    expect(() =>
+      formatKovoSourceCheckWatchRecord(0, {
+        ...valid,
+        census: {
+          ...valid.census,
+          phases: valid.census.phases.map((phase, index) =>
+            index === 1 ? { ...phase, durationMs: 1, status: 'reused-authenticated' } : phase,
+          ),
+        },
+      }),
+    ).toThrow(/nonzero skipped phase/u);
+
+    const rejected = createRejectedKovoSourceCheckInputProof('src/app.tsx', digest, 'missing');
+    expect(() =>
+      formatKovoSourceCheckWatchRecord(0, {
+        ...valid,
+        input: rejected,
+      }),
+    ).toThrow(/cannot publish a passing graph proof/u);
+  });
+
+  it('rejects project escapes and symlink roots before starting a revision callback', async () => {
+    const root = fixtureRoot();
+    writeFileSync(join(root, 'src/app.tsx'), 'export default {};\n');
+    let ran = false;
+    await expect(
+      runKovoSourceCheckWatchSession({
+        appModulePath: '../outside.tsx',
+        invocationRoot: root,
+        maxRevisions: 1,
+        async runRevision() {
+          ran = true;
+          return revisionResult();
+        },
+      }),
+    ).rejects.toThrow(/escapes the invocation project/u);
+    expect(ran).toBe(false);
+
+    const link = `${root}-link`;
+    roots.push(link);
+    symlinkSync(root, link);
+    expect(() => snapshotKovoSourceCheckProject(link)).toThrow(/non-symlink directory/u);
   });
 });
 
