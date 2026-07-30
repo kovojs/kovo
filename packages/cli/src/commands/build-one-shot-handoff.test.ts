@@ -46,6 +46,9 @@ describe('one-shot build private handoff', () => {
     });
     expect(Object.isFrozen(payload)).toBe(true);
     expect(Object.isFrozen(payload.analysis)).toBe(true);
+    expect([
+      ...(payload.analysis as { checkGraph: { routes: readonly unknown[] } }).checkGraph.routes,
+    ]).toEqual([]);
   });
 
   it.each([

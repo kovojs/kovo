@@ -222,7 +222,7 @@ function parseWire(wireInput: Uint8Array): {
 }
 
 function strictJsonStringify(value: unknown, label: string): string {
-  return capturedJSONStringify(immutableJsonData(value, 0, label));
+  return capturedJSONStringify(immutableJsonData(value, 0, label, false, true));
 }
 
 function assertStrictJsonData(value: unknown, label: string, depth: number): void {
@@ -283,20 +283,27 @@ function immutableJsonData(
   depth: number,
   label = 'decoded payload',
   validated = false,
+  nullArrayPrototype = false,
 ): unknown {
   if (!validated) assertStrictJsonData(value, label, depth);
   if (value === null || typeof value !== 'object') return value;
   if (capturedArrayIsArray(value)) {
     const copy: unknown[] = [];
     for (let index = 0; index < value.length; index += 1) {
-      copy[index] = immutableJsonData(value[index], depth + 1, label, true);
+      copy[index] = immutableJsonData(value[index], depth + 1, label, true, nullArrayPrototype);
     }
-    capturedObjectSetPrototypeOf(copy, null);
+    if (nullArrayPrototype) capturedObjectSetPrototypeOf(copy, null);
     return capturedObjectFreeze(copy);
   }
   const copy = capturedObjectCreate(null) as Record<string, unknown>;
   for (const key of capturedObjectKeys(value)) {
-    copy[key] = immutableJsonData((value as Record<string, unknown>)[key], depth + 1, label, true);
+    copy[key] = immutableJsonData(
+      (value as Record<string, unknown>)[key],
+      depth + 1,
+      label,
+      true,
+      nullArrayPrototype,
+    );
   }
   return capturedObjectFreeze(copy);
 }
