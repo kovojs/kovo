@@ -282,8 +282,16 @@ export function createCompilerOwnedAppContractProject(
   const options = appContractCompilerOptions();
   const program = ts.createProgram({ options, rootNames });
   const checker = program.getTypeChecker();
-  const semanticDiagnostics = ts.getPreEmitDiagnostics(program);
   const context: ProvenanceContext = { checker, options, program };
+  let semanticDiagnostics: readonly ts.Diagnostic[] | undefined;
+  const semanticDiagnosticsForProject = (): readonly ts.Diagnostic[] => {
+    // Most build/check consumers need exact receiver/type identity but never ask this project to
+    // reproduce TypeScript's ordinary diagnostic census. Computing that census eagerly retains a
+    // second whole-project diagnostic graph throughout the Vite build. Keep the same immutable
+    // Program and compute its diagnostics once, on the sole method that exposes them.
+    semanticDiagnostics ??= ts.getPreEmitDiagnostics(program);
+    return semanticDiagnostics;
+  };
 
   const sourceFileFor = (fileName: string): ts.SourceFile => {
     const exact = programSourceFile(program, fileName);
@@ -499,7 +507,7 @@ export function createCompilerOwnedAppContractProject(
     diagnosticCodesForFile(fileName: string): readonly number[] {
       const normalized = normalizeFileName(sourceFileFor(fileName).fileName);
       return uniqueNumbers(
-        semanticDiagnostics.flatMap((diagnostic) =>
+        semanticDiagnosticsForProject().flatMap((diagnostic) =>
           diagnostic.file && normalizeFileName(diagnostic.file.fileName) === normalized
             ? [diagnostic.code]
             : [],

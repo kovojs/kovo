@@ -1234,6 +1234,7 @@ async function loadAndCheckBuildApp(
       invocationRoot,
       preEvaluationStaticTrust.approvedSourceFiles,
       preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+      preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     ),
   );
   const buildStylesheetCss = await withBuildGraphDerivationContext(() =>
@@ -1299,6 +1300,7 @@ async function deriveCurrentSourceCheck(
       invocationRoot,
       preEvaluationStaticTrust.approvedSourceFiles,
       preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+      preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
     ),
   );
   recordSourceCheckPhase(phaseCensus, 'app-evaluation', 'executed', appEvaluationStartedAt);
@@ -2942,6 +2944,13 @@ interface SourceGraphFacts {
   registryDeclarationAnchors: Map<string, KovoDiagnosticSourceAnchor | null>;
   routeOutcomes: Map<string, 'file' | 'stream'>;
   routePages: SourceRoutePageFacts[];
+  sourceDerivedRegistryTransforms: readonly SourceDerivedRegistryTransform[];
+}
+
+interface SourceDerivedRegistryTransform {
+  readonly code: string | null;
+  readonly fileName: string;
+  readonly source: string;
 }
 
 async function sessionAuthorityFactsFromEntry(
@@ -3160,22 +3169,12 @@ function runtimeMutationHandlerFingerprint(handler: unknown): string | undefined
 
 function compilerOwnedAppContractProjectForBuild(
   files: readonly BuildCheckSourceFile[],
-  extraRootNames: readonly string[] = [],
-  absoluteRoots = false,
 ): CompilerOwnedAppContractProject | undefined {
   const rootNames: string[] = [];
   const seen = buildCreateSet<string>();
   const sources = buildSnapshotDenseArray(files, 'App-contract compiler source roots');
   for (let index = 0; index < sources.length; index += 1) {
-    const fileName = absoluteRoots ? resolve(sources[index]!.fileName) : sources[index]!.fileName;
-    const canonicalFileName = resolve(fileName);
-    if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
-    buildSetAdd(seen, canonicalFileName);
-    buildSecurityArrayAppend(rootNames, fileName, 'App-contract compiler source roots');
-  }
-  const extras = buildSnapshotDenseArray(extraRootNames, 'App-contract compiler extra roots');
-  for (let index = 0; index < extras.length; index += 1) {
-    const fileName = absoluteRoots ? resolve(extras[index]!) : extras[index]!;
+    const fileName = sources[index]!.fileName;
     const canonicalFileName = resolve(fileName);
     if (!/\.[cm]?[jt]sx?$/u.test(fileName) || buildSetHas(seen, canonicalFileName)) continue;
     buildSetAdd(seen, canonicalFileName);
@@ -3210,6 +3209,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
   const registryDeclarationAnchors = buildCreateMap<string, KovoDiagnosticSourceAnchor | null>();
   const routeOutcomes = buildCreateMap<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
+  const sourceDerivedRegistryTransforms: SourceDerivedRegistryTransform[] = [];
 
   const sourceFiles = buildSnapshotDenseArray(files, 'Build-check source files');
   const appContractProject = compilerOwnedAppContractProjectForBuild(sourceFiles);
@@ -3262,6 +3262,15 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
       }),
     );
     const component = resolvedCompilation.component;
+    buildSecurityArrayAppend(
+      sourceDerivedRegistryTransforms,
+      {
+        code: resolvedCompilation.standaloneRegistrySource,
+        fileName: file.fileName,
+        source: file.source,
+      },
+      'Preflight-authenticated source-derived registry transforms',
+    );
     appendBuildTaskBFiniteDiagnostics(
       compilerTaskBBlockingDiagnostics,
       component.diagnostics,
@@ -3412,6 +3421,7 @@ function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Sour
     registryDeclarationAnchors,
     routeOutcomes,
     routePages,
+    sourceDerivedRegistryTransforms,
   };
 }
 
@@ -4563,13 +4573,9 @@ async function loadBuildAppModule(
   root: string,
   approvedSourceFiles: readonly BuildCheckSourceFile[],
   dependencyCapabilities: AppDependencyCapabilityManifest,
+  sourceDerivedRegistryTransforms: readonly SourceDerivedRegistryTransform[],
 ): Promise<LoadedBuildAppModule> {
   const requireFromApp = createRequire(pathToFileURL(appModulePath));
-  const appContractProject = compilerOwnedAppContractProjectForBuild(
-    approvedSourceFiles,
-    [appModulePath],
-    true,
-  );
   const lifetime = await createBuildTimeViteRunnable({
     appType: 'custom',
     configFile: false,
@@ -4583,12 +4589,7 @@ async function loadBuildAppModule(
         'build-app',
         { sourceRoot: root },
       ),
-      sourceDerivedRegistryVitePlugin(
-        appModulePath,
-        root,
-        lowerStandaloneSourceDerivedRegistryDeclarations,
-        appContractProject,
-      ),
+      sourceDerivedRegistryVitePlugin(appModulePath, root, sourceDerivedRegistryTransforms),
     ],
     oxc: {
       jsx: {
@@ -4704,10 +4705,24 @@ function viteSsrModuleId(filePath: string, root: string): string {
 function sourceDerivedRegistryVitePlugin(
   appModulePath: string,
   root: string,
-  lowerRegistryDeclarations: typeof lowerStandaloneSourceDerivedRegistryDeclarations,
-  appContractProject: CompilerOwnedAppContractProject | undefined,
+  transforms: readonly SourceDerivedRegistryTransform[],
 ): Plugin {
   const authoredSourcePaths = buildCreateSet<string>();
+  const transformBySourcePath = buildCreateMap<string, SourceDerivedRegistryTransform>();
+  const transformSnapshot = buildSnapshotDenseArray(
+    transforms,
+    'Preflight-authenticated source-derived registry transforms',
+  );
+  for (let index = 0; index < transformSnapshot.length; index += 1) {
+    const transform = transformSnapshot[index]!;
+    const sourcePath = resolve(root, transform.fileName);
+    if (buildMapHas(transformBySourcePath, sourcePath)) {
+      throw new TypeError(
+        `Kovo source-derived registry preflight duplicated source identity ${transform.fileName}.`,
+      );
+    }
+    buildMapSet(transformBySourcePath, sourcePath, transform);
+  }
   buildSetAdd(authoredSourcePaths, resolve(appModulePath));
   return {
     enforce: 'pre',
@@ -4746,13 +4761,22 @@ function sourceDerivedRegistryVitePlugin(
       if (sourceClaimsKovoBuildCompilerAuthority(fileName, source)) {
         assertKovoBuildAuthoredCompilerAuthority(fileName, source);
       }
-      const code = withBuildAppContractResolutions(appContractProject, sourcePath, source, () =>
-        lowerRegistryDeclarations({
-          fileName: sourcePath,
-          identityFileName: fileName,
-          source,
-        }),
-      );
+      // SPEC §5.2 rules 6/9: the pre-evaluation compiler already lowered this exact immutable
+      // app-contract snapshot while its one TypeScript Program was live. Reusing the authenticated
+      // result here prevents Vite evaluation from allocating a second Program, while exact
+      // source/path equality keeps stale or late-authored bytes closed.
+      const transform = buildMapGet(transformBySourcePath, sourcePath);
+      if (transform === undefined) {
+        throw new TypeError(
+          `Kovo source-derived registry refused unapproved source ${fileName}; it is outside the compiler preflight snapshot.`,
+        );
+      }
+      if (transform.source !== source) {
+        throw new TypeError(
+          `Kovo source-derived registry refused changed source ${fileName}; its bytes no longer match the compiler preflight snapshot.`,
+        );
+      }
+      const code = transform.code;
       return code === null ? null : { code, map: null };
     },
   };
@@ -6893,6 +6917,7 @@ export async function runExportCommandStructured(
         resolvedOptions,
         preEvaluationStaticTrust.approvedSourceFiles,
         preEvaluationStaticTrust.capabilityClosure.dependencyManifest,
+        preEvaluationStaticTrust.sourceGraphFacts.sourceDerivedRegistryTransforms,
       );
       const app = appFromModule(
         loadedExport.appModule,
@@ -7165,15 +7190,11 @@ async function loadExportAppModule(
   options: KovoExportOptions,
   approvedSourceFiles: readonly BuildCheckSourceFile[],
   dependencyCapabilities: AppDependencyCapabilityManifest,
+  sourceDerivedRegistryTransforms: readonly SourceDerivedRegistryTransform[],
 ): Promise<LoadedExportAppModule> {
   const resolvedAppModulePath = options.appModulePath;
   const root = options.root ?? dirname(resolvedAppModulePath);
   const requireFromApp = createRequire(pathToFileURL(resolvedAppModulePath));
-  const appContractProject = compilerOwnedAppContractProjectForBuild(
-    approvedSourceFiles,
-    [resolvedAppModulePath],
-    true,
-  );
 
   const lifetime = await createBuildTimeViteRunnable({
     appType: 'custom',
@@ -7188,12 +7209,7 @@ async function loadExportAppModule(
         'export',
         { sourceRoot: root },
       ),
-      sourceDerivedRegistryVitePlugin(
-        resolvedAppModulePath,
-        root,
-        lowerStandaloneSourceDerivedRegistryDeclarations,
-        appContractProject,
-      ),
+      sourceDerivedRegistryVitePlugin(resolvedAppModulePath, root, sourceDerivedRegistryTransforms),
     ],
     oxc: {
       jsx: {
