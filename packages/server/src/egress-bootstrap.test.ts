@@ -259,11 +259,13 @@ describe('egress bootstrap: transport-floor install + self-probe', () => {
     const server = http.createServer((_req, res) => res.end('ok'));
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
     const port = (server.address() as AddressInfo).port;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     createApp({ egress: { allowInternal: [] } });
     teardown = activeEgressFloor()?.uninstall;
 
     await expect(fetch(`http://127.0.0.1:${port}/`)).rejects.toBeDefined();
+    expect(warn).not.toHaveBeenCalled();
 
     server.close();
   });

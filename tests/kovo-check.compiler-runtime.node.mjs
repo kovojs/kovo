@@ -1430,6 +1430,18 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   });
 });
 
+void test('D10 bundled CLI keeps migration entrypoints inert outside migration commands', async () => {
+  const { stderr, stdout } = await execFileAsync(
+    process.execPath,
+    [join(projectRootPath, 'dist/cli/src/index.mjs'), '--help'],
+    { cwd: projectRootPath, maxBuffer: 20 * 1024 * 1024 },
+  );
+
+  assert.match(stdout, /^Kovo \S+\n\nUsage:\n/u);
+  assert.equal(stderr, '');
+  assert.doesNotMatch(stdout, /usage: node scripts\/migrate-/u);
+});
+
 void test('D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces', async () => {
   const projectRoot = fileURLToPath(new URL('..', import.meta.url));
   const fileName = 'routes/diagnostic-card.tsx';
