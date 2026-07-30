@@ -13,15 +13,7 @@ describe('reference auth adoption', () => {
   it('ships no-JS login and logout forms backed by app-scoped credential mutations', () => {
     const request = referenceAuthRequest();
     const login = String(renderReferenceLoginForm(request, { next: '/admin' }));
-    const logout = String(
-      renderReferenceLogoutForm({
-        ...request,
-        session: {
-          id: 'session-u1',
-          user: { email: 'ada@example.com', id: 'u1', name: 'Ada Lovelace', roles: ['admin'] },
-        },
-      }),
-    );
+    const logout = String(renderReferenceLogoutForm());
 
     expect(login).toContain('data-mutation="auth/sign-in"');
     expect(login).toContain('name="Kovo-Idem"');

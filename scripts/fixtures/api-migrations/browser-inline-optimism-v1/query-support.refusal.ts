@@ -1,3 +1,4 @@
+// @ts-nocheck -- migration refusal intentionally imports the retired query optimism support surface.
 import type {
   KeyedQueryOptimisticOptions,
   QueryOptimisticApply,

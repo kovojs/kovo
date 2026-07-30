@@ -29,7 +29,7 @@ import {
 } from './queries.js';
 import { cartItems, orders, products } from './schema.js';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from './queries.js';
-import { commerceSignIn, createCommerceAuth, type CommerceAuthBindings } from './auth.js';
+import { createCommerceAuth, type CommerceAuthBindings, type CommerceAuthRequest } from './auth.js';
 import { bindCommerceApplicationRequest } from './commerce-context.js';
 
 export type ProductRow = { id: string; stock: number; unitPrice: number };
@@ -155,7 +155,7 @@ export function commerceAuthRequest(
   cookie?: string,
   auth: CommerceAuthBindings = createCommerceAuth(createCommerceDb()),
   url = 'http://localhost/commerce-auth-test',
-): Parameters<typeof commerceSignIn.handler>[1] {
+): CommerceAuthRequest {
   const headers = new Headers({ 'user-agent': 'commerce-auth-test' });
   if (cookie) headers.set('cookie', cookie);
 

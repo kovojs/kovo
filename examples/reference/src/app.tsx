@@ -10,7 +10,7 @@ export const accountRoute = app.route('/account', {
     return (
       <>
         account:{request.session.user.email}
-        {renderReferenceLogoutForm(request)}
+        {renderReferenceLogoutForm()}
       </>
     );
   },
@@ -22,7 +22,7 @@ export const adminRoute = app.route('/admin', {
     return (
       <>
         admin:{request.session?.user.id ?? 'anonymous'}
-        {renderReferenceLogoutForm(request)}
+        {renderReferenceLogoutForm()}
       </>
     );
   },
@@ -51,7 +51,7 @@ export function renderReferenceLoginForm(
   );
 }
 
-export function renderReferenceLogoutForm(_request: ReferenceRequest) {
+export function renderReferenceLogoutForm() {
   return (
     <form mutation={referenceSignOut}>
       <button type="submit">Sign out</button>
