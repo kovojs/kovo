@@ -204,7 +204,7 @@ export interface CompiledQueryUpdateContext {
 
 /** @internal Match one compiler-owned component root to an exact query instance. */
 export function queryBindingRootMatchesIdentity(
-  root: QueryBindingRoot,
+  root: object,
   queryIdentity: QueryIdentity,
 ): boolean {
   const deps = readQueryDependencyIdentities(readRuntimeElementAttribute(root, 'kovo-deps'));

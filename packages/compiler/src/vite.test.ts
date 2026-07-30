@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { kovoDeferredAppRuntimeModuleSource } from '@kovojs/browser/internal/deferred-app-runtime';
 import {
@@ -61,6 +62,7 @@ const kv236 = diagnosticDefinitions.KV236;
 const kv330 = diagnosticDefinitions.KV330;
 const kv435 = diagnosticDefinitions.KV435;
 const kv437 = diagnosticDefinitions.KV437;
+const frameworkServerPackageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../server');
 
 function compilerDiagnostic(
   code: keyof typeof diagnosticDefinitions,
@@ -828,7 +830,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     const serverScope = join(root, 'node_modules/@kovojs');
     mkdirSync(src, { recursive: true });
     mkdirSync(serverScope, { recursive: true });
-    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    symlinkSync(frameworkServerPackageRoot, join(serverScope, 'server'), 'dir');
     writeFileSync(
       join(src, 'provider-impl.ts'),
       "export const contactsProvider = { key: 'contacts' } as const;\n",
@@ -867,6 +869,23 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       expect(transformed?.code).toContain(
         'export const contacts = __kovoAssignDerivedQueryKey(app.query({ load() { return []; } }), "contacts/contacts")',
       );
+
+      const lookalikeEntry = join(src, 'lookalike.ts');
+      const lookalikeSource = [
+        'const app = {',
+        '  assemble() {},',
+        '  endpoint() {},',
+        '  layout() {},',
+        '  mutation() {},',
+        '  query(value: unknown) { return value; },',
+        '  route() {},',
+        '  task() {},',
+        '};',
+        'export const forged = app.query({ load() { return []; } });',
+        '',
+      ].join('\n');
+      writeFileSync(lookalikeEntry, lookalikeSource);
+      expect(plugin.transform(lookalikeSource, lookalikeEntry)).toBeNull();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -878,7 +897,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     const serverScope = join(root, 'node_modules/@kovojs');
     mkdirSync(src, { recursive: true });
     mkdirSync(serverScope, { recursive: true });
-    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    symlinkSync(frameworkServerPackageRoot, join(serverScope, 'server'), 'dir');
     writeFileSync(
       join(src, 'kovo.ts'),
       [
@@ -993,7 +1012,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     const serverScope = join(root, 'node_modules/@kovojs');
     mkdirSync(src, { recursive: true });
     mkdirSync(serverScope, { recursive: true });
-    symlinkSync(join(process.cwd(), 'packages/server'), join(serverScope, 'server'), 'dir');
+    symlinkSync(frameworkServerPackageRoot, join(serverScope, 'server'), 'dir');
     writeFileSync(
       join(src, 'kovo.ts'),
       [
