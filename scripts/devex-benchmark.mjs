@@ -111,6 +111,7 @@ const KOVO_FULL_CATALOG_PHASES = Object.freeze([
 ]);
 const authenticatedProductionScenarios = new WeakSet();
 const authenticatedProductionDocsEvidence = new WeakMap();
+const authenticatedFullCatalogBaselineReports = new WeakSet();
 const METRIC_UNITS = new Set(['bytes', 'ms']);
 const STATISTICS = new Set(['median', 'p95']);
 const RUNNER_STATUSES = new Set(['unratified', 'ratified']);
@@ -369,6 +370,31 @@ export function createFullCatalogWorkloadDefinition(catalog, packageSet) {
     },
     phases: KOVO_FULL_CATALOG_PHASES.map((phase) => ({ ...phase })),
   };
+}
+
+export function fullCatalogComponentsFromPackedUiManifest(manifest) {
+  const exports = manifest?.exports;
+  if (!exports || typeof exports !== 'object' || Array.isArray(exports)) {
+    throw new TypeError('authenticated @kovojs/ui manifest has no public exports');
+  }
+  const components = Object.keys(exports)
+    .filter((subpath) => subpath !== '.')
+    .map((subpath) => {
+      if (!/^\.\/[a-z][a-z0-9-]*$/u.test(subpath)) {
+        throw new TypeError(`@kovojs/ui contains a non-component public subpath ${subpath}`);
+      }
+      return subpath.slice(2);
+    })
+    .sort(compareStrings);
+  if (
+    components.length !== KOVO_FULL_CATALOG_COMPONENT_COUNT ||
+    new Set(components).size !== KOVO_FULL_CATALOG_COMPONENT_COUNT
+  ) {
+    throw new Error(
+      `authenticated @kovojs/ui must expose exactly ${String(KOVO_FULL_CATALOG_COMPONENT_COUNT)} component subpaths; found ${String(components.length)}`,
+    );
+  }
+  return Object.freeze(components);
 }
 
 export function fullCatalogScenarioDigest(definition) {
@@ -668,6 +694,107 @@ export function validateFullCatalogReportIdentity(report, label = 'report', opti
     findings.push(`${label} ratification requires at least five functionally successful samples`);
   }
   return findings;
+}
+
+function fullCatalogEvidenceIdentity(report) {
+  return {
+    source: structuredClone(report?.source),
+    packedRelease: structuredClone(report?.packedRelease),
+    packageSet: structuredClone(report?.packageSet),
+    catalog: structuredClone(report?.catalog),
+    scenario: structuredClone(report?.scenario),
+  };
+}
+
+function reproduceFreshFullCatalogEvidence({ repositoryRoot, sourceCommit }) {
+  const produced = produceFreshKovoPackedRelease({
+    repositoryRoot,
+    sourceCommit,
+  });
+  try {
+    const manifestFile = regularFileInsideRoot(
+      produced.repositoryRoot,
+      '.release/packed-packages.json',
+      'fresh full-catalog packed release manifest',
+    );
+    const manifestBytes = readFileSync(manifestFile);
+    const manifest = JSON.parse(manifestBytes.toString('utf8'));
+    const releaseEntries = validatePackedReleaseManifest(manifest, releasePackages());
+    const packageSet = [];
+    let uiManifest = null;
+    for (const releaseEntry of releaseEntries) {
+      const tarball = regularFileInsideRoot(
+        produced.repositoryRoot,
+        releaseEntry.tarball,
+        `${releaseEntry.name} fresh full-catalog tarball`,
+      );
+      verifyPackedAttestationBytes(releaseEntry, readPackageTarballSnapshot(tarball));
+      packageSet.push({
+        name: releaseEntry.name,
+        sha512: releaseEntry.sha512,
+        version: releaseEntry.version,
+      });
+      if (releaseEntry.name === '@kovojs/ui') uiManifest = releaseEntry.manifest;
+    }
+    packageSet.sort((left, right) => compareStrings(left.name, right.name));
+    const components = fullCatalogComponentsFromPackedUiManifest(uiManifest);
+    const catalog = {
+      componentCount: components.length,
+      components,
+      source: '@kovojs/ui packed manifest exports',
+    };
+    const definition = createFullCatalogWorkloadDefinition(catalog, packageSet);
+    return {
+      source: {
+        commit: produced.sourceCommit,
+        tree: 'clean',
+      },
+      packedRelease: {
+        schema: manifest.schema,
+        manifestSha256: sha256(manifestBytes),
+        packageSetSha256: fullCatalogPackageSetDigest(packageSet),
+      },
+      packageSet,
+      catalog,
+      scenario: {
+        name: definition.name,
+        digest: fullCatalogScenarioDigest(definition),
+        definition,
+      },
+    };
+  } finally {
+    produced.dispose();
+  }
+}
+
+/**
+ * Rebuild the release from the report's exact clean source revision before allowing one-time
+ * ratification. The persisted baseline digest then protects the authenticated report bytes.
+ */
+export function authenticateFullCatalogBaselineReport(report, options = {}) {
+  const findings = validateFullCatalogReportIdentity(report, 'baselineReport', {
+    requireAcceptedRunner: true,
+    requireSuccessfulSamples: true,
+  });
+  if (findings.length > 0) {
+    throw new Error(`Cannot authenticate full-catalog baseline:\n- ${findings.join('\n- ')}`);
+  }
+  const reproduceEvidence = options.reproduceEvidence ?? reproduceFreshFullCatalogEvidence;
+  const expected = reproduceEvidence({
+    repositoryRoot: path.resolve(options.repositoryRoot ?? defaultRepoRoot),
+    sourceCommit: report.source.commit,
+  });
+  const actual = fullCatalogEvidenceIdentity(report);
+  if (!sameJson(actual, expected)) {
+    const mismatches = Object.keys(actual).filter(
+      (field) => !sameJson(actual[field], expected?.[field]),
+    );
+    throw new Error(
+      `full-catalog baseline does not match the fresh code-owned packed release: ${mismatches.join(', ')}`,
+    );
+  }
+  authenticatedFullCatalogBaselineReports.add(report);
+  return report;
 }
 
 export const DEVEX_PACKED_PROFILE_COMMAND_DIGEST = sha256(
@@ -3061,6 +3188,14 @@ function validateProposal(proposal, options = {}) {
 export function ratifyBudgets(budgets, baselineReport, proposal, options = {}) {
   const reportSource = reportEvidenceSource(baselineReport);
   if (
+    reportSource === 'full-catalog' &&
+    !authenticatedFullCatalogBaselineReports.has(baselineReport)
+  ) {
+    throw new Error(
+      'full-catalog budget ratification requires evidence reproduced from the exact clean source revision',
+    );
+  }
+  if (
     reportSource === 'benchmark' &&
     (baselineReport?.scenario?.name !== 'kovo-packed-check' ||
       !authenticatedProductionScenarios.has(options.authenticatedProductionScenario) ||
@@ -3869,7 +4004,7 @@ function usage() {
   ].join('\n');
 }
 
-export function runDevexBenchmark(argv = process.argv.slice(2)) {
+export function runDevexBenchmark(argv = process.argv.slice(2), runtime = {}) {
   const args = parseArgs(argv);
   if (args.help) {
     process.stdout.write(usage());
@@ -3928,6 +4063,12 @@ export function runDevexBenchmark(argv = process.argv.slice(2)) {
       return 0;
     }
     if (baselineReport?.schema === DEVEX_FULL_CATALOG_REPORT_SCHEMA) {
+      authenticateFullCatalogBaselineReport(baselineReport, {
+        repositoryRoot: budgetsRoot,
+        ...(runtime.reproduceFullCatalogEvidence === undefined
+          ? {}
+          : { reproduceEvidence: runtime.reproduceFullCatalogEvidence }),
+      });
       const updated = ratifyBudgets(
         budgets,
         baselineReport,

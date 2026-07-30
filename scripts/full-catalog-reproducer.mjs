@@ -20,6 +20,7 @@ import {
   collectDevexEnvironment,
   createFullCatalogWorkloadDefinition,
   createRunnerFingerprint,
+  fullCatalogComponentsFromPackedUiManifest,
   fullCatalogPackageSetDigest,
   fullCatalogScenarioDigest,
   validateBudgets,
@@ -42,30 +43,11 @@ import { manifestPath as defaultManifestPath, repoRoot } from './release-package
 export const FULL_CATALOG_REPORT_SCHEMA = DEVEX_FULL_CATALOG_REPORT_SCHEMA;
 export const FULL_CATALOG_SAMPLE_SCHEMA = DEVEX_FULL_CATALOG_SAMPLE_SCHEMA;
 
-const EXPECTED_COMPONENTS = 44;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function packedUiComponentNames(packedPackages) {
   const ui = packedPackages.get('@kovojs/ui');
-  const exports = ui?.manifest?.exports;
-  if (!exports || typeof exports !== 'object' || Array.isArray(exports)) {
-    throw new TypeError('authenticated @kovojs/ui manifest has no public exports');
-  }
-  const names = Object.keys(exports)
-    .filter((subpath) => subpath !== '.')
-    .map((subpath) => {
-      if (!/^\.\/[a-z][a-z0-9-]*$/u.test(subpath)) {
-        throw new TypeError(`@kovojs/ui contains a non-component public subpath ${subpath}`);
-      }
-      return subpath.slice(2);
-    })
-    .sort(compareUtf8);
-  if (names.length !== EXPECTED_COMPONENTS || new Set(names).size !== EXPECTED_COMPONENTS) {
-    throw new Error(
-      `authenticated @kovojs/ui must expose exactly ${String(EXPECTED_COMPONENTS)} component subpaths; found ${String(names.length)}`,
-    );
-  }
-  return Object.freeze(names);
+  return fullCatalogComponentsFromPackedUiManifest(ui?.manifest);
 }
 
 export function runFullCatalogReproducer({

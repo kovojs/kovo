@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,11 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
+  authenticateFullCatalogBaselineReport,
   createFullCatalogWorkloadDefinition,
   createRunnerFingerprint,
   fullCatalogPackageSetDigest,
   fullCatalogScenarioDigest,
   ratifyBudgets,
+  runDevexBenchmark,
   validateBudgets,
 } from './devex-benchmark.mjs';
 import {
@@ -226,6 +227,7 @@ describe('packed full-catalog reproducer', () => {
 
   it('ratifies only the full-catalog RSS metric from five authenticated successful samples', () => {
     const report = validReport(5);
+    authenticateFullCatalogFixture(report);
     const baselinePath = 'baselines/full-catalog-fixture.json';
     const baselineBytes = Buffer.from(`${JSON.stringify(report, null, 2)}\n`);
     const proposal = {
@@ -353,10 +355,8 @@ describe('packed full-catalog reproducer', () => {
         )}\n`,
       );
 
-      const result = spawnSync(
-        process.execPath,
+      const result = runDevexBenchmark(
         [
-          path.join(repoRoot, 'scripts/devex-benchmark.mjs'),
           '--ratify',
           '--budgets',
           budgetsPath,
@@ -366,11 +366,12 @@ describe('packed full-catalog reproducer', () => {
           proposalPath,
           '--write',
         ],
-        { encoding: 'utf8' },
+        {
+          reproduceFullCatalogEvidence: () => fullCatalogEvidenceFixture(report),
+        },
       );
 
-      expect(result.stderr).toBe('');
-      expect(result.status).toBe(0);
+      expect(result).toBe(0);
       expect(
         JSON.parse(readFileSync(budgetsPath, 'utf8')).metrics['ui.fullCatalog.peakRssBytes']
           .ratification,
@@ -394,12 +395,14 @@ describe('packed full-catalog reproducer', () => {
         },
       },
     });
-    const ratify = (report) =>
-      ratifyBudgets(budgets, report, proposalFor(report), {
+    const ratify = (report) => {
+      authenticateFullCatalogFixture(report);
+      return ratifyBudgets(budgets, report, proposalFor(report), {
         baselineReportBytes: Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
         baselineReportPath: 'baselines/full-catalog-fixture.json',
         repoRoot,
       });
+    };
 
     expect(() => ratify(validReport(4))).toThrow(
       'baselineReport ratification requires at least five functionally successful samples',
@@ -458,6 +461,39 @@ describe('packed full-catalog reproducer', () => {
     wrongPhase.samples[0].phases[4].name = 'invented-check';
     expect(() => ratify(wrongPhase)).toThrow(
       'baselineReport.samples[0].phases must be an ordered prefix of the workload phases',
+    );
+  });
+
+  it('rejects self-consistent catalog and package rewrites against fresh packed evidence', () => {
+    const authentic = validReport(5);
+    expect(() => ratifyFullCatalogFixtureWithoutAuthentication(authentic)).toThrow(
+      'full-catalog budget ratification requires evidence reproduced from the exact clean source revision',
+    );
+    const renamedCatalog = structuredClone(authentic);
+    renamedCatalog.catalog.components = ['aardvark', ...renamedCatalog.catalog.components.slice(1)];
+    renamedCatalog.scenario.definition = createFullCatalogWorkloadDefinition(
+      renamedCatalog.catalog,
+      renamedCatalog.packageSet,
+    );
+    renamedCatalog.scenario.digest = fullCatalogScenarioDigest(renamedCatalog.scenario.definition);
+
+    const rewrittenPackages = structuredClone(authentic);
+    rewrittenPackages.packageSet[0] = {
+      ...rewrittenPackages.packageSet[0],
+      version: '9.9.9',
+      sha512: 'sha512-dGFtcGVyZWQ=',
+    };
+    rewrittenPackages.packedRelease = {
+      ...rewrittenPackages.packedRelease,
+      manifestSha256: `sha256:${'f'.repeat(64)}`,
+      packageSetSha256: fullCatalogPackageSetDigest(rewrittenPackages.packageSet),
+    };
+
+    expect(() => ratifyFullCatalogFixture(renamedCatalog, authentic)).toThrow(
+      'full-catalog baseline does not match the fresh code-owned packed release: catalog, scenario',
+    );
+    expect(() => ratifyFullCatalogFixture(rewrittenPackages, authentic)).toThrow(
+      'full-catalog baseline does not match the fresh code-owned packed release: packedRelease, packageSet',
     );
   });
 });
@@ -541,4 +577,48 @@ function validReport(sampleCount = 1) {
     },
     pass: true,
   };
+}
+
+function fullCatalogEvidenceFixture(report) {
+  return {
+    source: structuredClone(report.source),
+    packedRelease: structuredClone(report.packedRelease),
+    packageSet: structuredClone(report.packageSet),
+    catalog: structuredClone(report.catalog),
+    scenario: structuredClone(report.scenario),
+  };
+}
+
+function authenticateFullCatalogFixture(report, expectedReport = report) {
+  return authenticateFullCatalogBaselineReport(report, {
+    repositoryRoot: repoRoot,
+    reproduceEvidence: () => fullCatalogEvidenceFixture(expectedReport),
+  });
+}
+
+function ratifyFullCatalogFixture(report, expectedReport = report) {
+  authenticateFullCatalogFixture(report, expectedReport);
+  return ratifyFullCatalogFixtureWithoutAuthentication(report);
+}
+
+function ratifyFullCatalogFixtureWithoutAuthentication(report) {
+  return ratifyBudgets(
+    budgets,
+    report,
+    {
+      schema: 'kovo-devex-budget-proposal/v7',
+      runnerFingerprint: report.runner,
+      metrics: {
+        'ui.fullCatalog.peakRssBytes': {
+          budget: 1_900_000_000,
+          targetRationale: 'Keep the full catalog inside the reviewed memory envelope.',
+        },
+      },
+    },
+    {
+      baselineReportBytes: Buffer.from(`${JSON.stringify(report, null, 2)}\n`),
+      baselineReportPath: 'baselines/full-catalog-fixture.json',
+      repoRoot,
+    },
+  );
 }
