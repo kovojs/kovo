@@ -23,6 +23,8 @@ import {
   type QueryShapeFact as CompilerViteQueryShapeFact,
 } from '@kovojs/compiler/internal';
 import {
+  compilerOwnedViteClientModuleRoleForPlugin,
+  compilerOwnedViteDiagnosticForPlugin,
   isFrameworkKovoVitePluginOwnerForSourceRoot,
   kovoVitePlugin as createCompilerVitePlugin,
 } from '@kovojs/compiler/vite';
@@ -31,7 +33,9 @@ import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
 import {
   assertRegisteredDiagnostic,
+  createRegisteredDiagnostic,
   deriveRegisteredDiagnostic,
+  isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 /*
@@ -59,6 +63,11 @@ import {
 } from './internal/vite-security-sentinel.ts';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 import {
+  compilerDiagnosticBelongsToViteHandoff,
+  createCompilerClientModuleViteHandoff,
+  createCompilerClientModuleViteSnapshotPreparer,
+} from './compiler-client-module-provenance-vite.js';
+import {
   buildOwnDataProperty,
   buildSecurityPathDirname,
   buildSecurityPathIsAbsolute,
@@ -72,6 +81,7 @@ import {
   securityArrayIsArray,
   securityArrayJoin,
   securityRegExpExec,
+  securityNumberIsInteger,
   securityStringIncludes,
   securityStringIndexOf,
   securityStringReplaceAll,
@@ -88,6 +98,7 @@ const viteExistsSync = existsSync;
 const vitePathExtname = pathExtname;
 const viteReadFileSync = readFileSync;
 const viteReflectApply = globalThis.Reflect.apply;
+const viteMaximumSafeInteger = Number.MAX_SAFE_INTEGER;
 const viteParanoidValue = process.env.KOVO_PARANOID;
 const viteBootParanoidStaticAdvisory = viteParanoidValue === '1' || viteParanoidValue === 'true';
 
@@ -278,6 +289,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   let compilerProjectMutationFacts: ProjectMutationRegistryFacts | undefined;
   let appShellPlugin: KovoAppShellDevPlugin | undefined;
   let onModuleDiagnostics: ((report: unknown) => void) | undefined;
+  let onServerModuleDiagnostics: ((report: unknown) => void) | undefined;
   // SPEC.md §9.5: `serve` is the dev disposition (teaching, never fail-closed); any other
   // command is the fail-closed build path. Default to build so an unset command stays safe.
   let viteCommand: 'build' | 'serve' = 'build';
@@ -290,7 +302,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   // findings as dev teaching diagnostics in the existing ledger. Never throws — dev must not
   // crash HMR. Records are keyed per file so a later clean run clears the prior teaching page.
   const runDevDataPlaneGate = async (): Promise<void> => {
-    const emit = onModuleDiagnostics;
+    const emit = onServerModuleDiagnostics;
     if (!emit) return;
     let diagnostics: readonly DataPlaneDiagnostic[];
     try {
@@ -444,6 +456,14 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
       const compiler = await compilerPlugin();
       if (externalCompilerPlugin === undefined) await compiler.configureServer?.(server);
+      const compilerProvenanceHandoff = createCompilerClientModuleViteHandoff(
+        (value) => compilerOwnedViteClientModuleRoleForPlugin(compiler, value),
+        (value) => compilerOwnedViteDiagnosticForPlugin(compiler, value),
+      );
+      const prepareCompilerClientModules = createCompilerClientModuleViteSnapshotPreparer(
+        compilerProvenanceHandoff,
+        () => compiler.getClientModules?.() ?? [],
+      );
       const appRouteTargets = await routeTargets();
       let createDevIntegration: typeof import('./vite-dev.js').createKovoAppShellViteDevIntegration;
       if (trustedCreateDevIntegration !== undefined) {
@@ -466,9 +486,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
 
       const integration = createDevIntegration({
-        clientModules: () => compiler.getClientModules?.() ?? [],
         earlyHints: false,
         moduleId: app,
+        prepareCompilerClientModules,
         ...(responseSetCookieValues === undefined ? {} : { responseSetCookieValues }),
         stylesheetSourceRoot: buildSecurityPathDirname(appEntryFileName(app, root)),
         stylesheetAssets: () =>
@@ -477,10 +497,21 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
           ),
       }) as KovoAppShellViteDevIntegration;
 
+      // oxlint-disable-next-line typescript/unbound-method -- Invoked with its integration receiver through pinned Reflect.apply.
+      const integrationOnModuleDiagnostics = integration.onModuleDiagnostics;
+      const serverModuleDiagnosticSink =
+        typeof integrationOnModuleDiagnostics !== 'function'
+          ? undefined
+          : (report: unknown) =>
+              viteReflectApply(integrationOnModuleDiagnostics, integration, [report]);
+      onServerModuleDiagnostics = serverModuleDiagnosticSink;
       onModuleDiagnostics =
-        typeof integration.onModuleDiagnostics === 'function'
-          ? integration.onModuleDiagnostics.bind(integration)
-          : undefined;
+        serverModuleDiagnosticSink === undefined
+          ? undefined
+          : (report: unknown) =>
+              serverModuleDiagnosticSink(
+                adoptCompilerViteModuleDiagnosticReport(report, compilerProvenanceHandoff),
+              );
       appShellPlugin = integration.plugin;
 
       return integration.plugin.configureServer(server);
@@ -1033,6 +1064,143 @@ function logDevDataPlaneWarnings(diagnostics: readonly DataPlaneDiagnostic[]): v
 
 function dataPlaneWarningLine(diagnostic: DataPlaneDiagnostic): string {
   return `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`;
+}
+
+/**
+ * Re-enroll exact standalone-compiler diagnostics in the server graph before the dev ledger sees
+ * them. Structural copies never become registered diagnostics; the plugin-bound handoff must
+ * authenticate each source record first.
+ */
+function adoptCompilerViteModuleDiagnosticReport(
+  value: unknown,
+  handoff: object,
+): KovoAppShellViteCompilerModuleDiagnosticReport {
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
+    throw new TypeError('Kovo Vite compiler module diagnostics must be an own-data object.');
+  }
+  const diagnosticsProperty = buildOwnDataProperty(
+    value,
+    'diagnostics',
+    'Kovo Vite compiler module diagnostics',
+  );
+  const fileNameProperty = buildOwnDataProperty(
+    value,
+    'fileName',
+    'Kovo Vite compiler module diagnostics',
+  );
+  const sourceProperty = buildOwnDataProperty(
+    value,
+    'source',
+    'Kovo Vite compiler module diagnostics',
+  );
+  if (
+    !diagnosticsProperty.present ||
+    !fileNameProperty.present ||
+    typeof fileNameProperty.value !== 'string' ||
+    !sourceProperty.present ||
+    typeof sourceProperty.value !== 'string'
+  ) {
+    throw new TypeError(
+      'Kovo Vite compiler module diagnostics require own diagnostics/fileName/source fields.',
+    );
+  }
+  const diagnostics = snapshotBuildArray(
+    diagnosticsProperty.value as readonly unknown[],
+    'Kovo Vite compiler module diagnostics',
+  );
+  const adopted: DiagnosticDocumentDiagnostic[] = [];
+  for (let index = 0; index < diagnostics.length; index += 1) {
+    commitBuildArrayValue(
+      adopted,
+      adoptCompilerViteDiagnostic(diagnostics[index], handoff, index),
+      'Kovo Vite adopted compiler diagnostics',
+    );
+  }
+  return {
+    diagnostics: adopted,
+    fileName: fileNameProperty.value,
+    source: sourceProperty.value,
+  };
+}
+
+function adoptCompilerViteDiagnostic(
+  value: unknown,
+  handoff: object,
+  index: number,
+): DiagnosticDocumentDiagnostic {
+  compilerDiagnosticBelongsToViteHandoff(handoff, value);
+  if (typeof value !== 'object' || value === null || securityArrayIsArray(value)) {
+    throw new TypeError(`Kovo Vite compiler diagnostics[${index}] must be an object.`);
+  }
+  const label = `Kovo Vite compiler diagnostics[${index}]`;
+  const code = buildOwnDataProperty(value, 'code', label);
+  const fileName = buildOwnDataProperty(value, 'fileName', label);
+  const help = buildOwnDataProperty(value, 'help', label);
+  const length = buildOwnDataProperty(value, 'length', label);
+  const message = buildOwnDataProperty(value, 'message', label);
+  const severity = buildOwnDataProperty(value, 'severity', label);
+  const start = buildOwnDataProperty(value, 'start', label);
+  if (
+    !code.present ||
+    !isDiagnosticCode(code.value) ||
+    !fileName.present ||
+    typeof fileName.value !== 'string' ||
+    !message.present ||
+    typeof message.value !== 'string' ||
+    !severity.present ||
+    (severity.value !== 'error' &&
+      severity.value !== 'warn' &&
+      severity.value !== 'lint' &&
+      severity.value !== 'notice') ||
+    (help.present && typeof help.value !== 'string') ||
+    (length.present &&
+      (!securityNumberIsInteger(length.value) ||
+        (length.value as number) < 0 ||
+        (length.value as number) > viteMaximumSafeInteger))
+  ) {
+    throw new TypeError(`${label} has malformed authority fields.`);
+  }
+  let startValue: { column: number; line: number } | undefined;
+  if (start.present) {
+    if (
+      typeof start.value !== 'object' ||
+      start.value === null ||
+      securityArrayIsArray(start.value)
+    ) {
+      throw new TypeError(`${label}.start must be an own-data object.`);
+    }
+    const column = buildOwnDataProperty(start.value, 'column', `${label}.start`);
+    const line = buildOwnDataProperty(start.value, 'line', `${label}.start`);
+    if (
+      !column.present ||
+      !line.present ||
+      !securityNumberIsInteger(column.value) ||
+      !securityNumberIsInteger(line.value) ||
+      (column.value as number) < 0 ||
+      (line.value as number) < 0 ||
+      (column.value as number) > viteMaximumSafeInteger ||
+      (line.value as number) > viteMaximumSafeInteger
+    ) {
+      throw new TypeError(`${label}.start has malformed line/column values.`);
+    }
+    startValue = { column: column.value as number, line: line.value as number };
+  }
+  const adopted = createRegisteredDiagnostic(
+    code.value,
+    {
+      fileName: fileName.value,
+      ...(length.present ? { length: length.value as number } : {}),
+      ...(startValue === undefined ? {} : { start: startValue }),
+    },
+    {
+      ...(help.present ? { help: help.value as string } : {}),
+      message: message.value,
+    },
+  );
+  if (adopted.severity !== severity.value) {
+    throw new TypeError(`${label} disagrees with the registered diagnostic severity.`);
+  }
+  return adopted;
 }
 
 /** Build a dev-ledger module-diagnostics report (teaching disposition) for one app file. */

@@ -1,4 +1,6 @@
 import {
+  compilerOwnedViteDiagnosticForPlugin,
+  compilerOwnedViteClientModuleRoleForPlugin,
   createFrameworkKovoVitePlugin,
   isFrameworkKovoVitePluginOwnerForSourceRoot,
 } from './vite.ts';
@@ -19,4 +21,8 @@ export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlu
  * @internal Read-only proof query used by the server app-shell plugin to avoid recompiling output
  * from an earlier, immutable, full-source framework compiler owner (SPEC.md §5.2 / §6.6).
  */
-export { isFrameworkKovoVitePluginOwnerForSourceRoot };
+export {
+  compilerOwnedViteDiagnosticForPlugin,
+  compilerOwnedViteClientModuleRoleForPlugin,
+  isFrameworkKovoVitePluginOwnerForSourceRoot,
+};

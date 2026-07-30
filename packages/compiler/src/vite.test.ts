@@ -26,6 +26,8 @@ import { kovoVitePlugin } from './index.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import {
+  compilerOwnedViteClientModuleRoleForPlugin,
+  compilerOwnedViteDiagnosticForPlugin,
   createFrameworkKovoCssCollectorVitePlugin,
   createKovoVitePlugin,
   isFrameworkKovoVitePluginOwnerForSourceRoot,
@@ -655,6 +657,63 @@ export const orderPaid = webhook('/webhooks/order-paid', {
         (module) => compilerOwnedViteClientModuleRole(module) === undefined,
       ),
     ).toBe(true);
+  });
+
+  it('binds exact client-module role proofs to the genuine plugin that minted the record', async () => {
+    const owner = kovoVitePlugin();
+    const foreignOwner = kovoVitePlugin();
+    await owner.transform?.(cartBadgeSource, 'src/cart-badge.tsx');
+    await foreignOwner.transform?.(cartBadgeSource, 'src/foreign-cart-badge.tsx');
+    const owned = owner
+      .getClientModules?.()
+      .find(
+        (module) =>
+          compilerOwnedViteClientModuleRoleForPlugin(owner, module) === 'component-client',
+      );
+    const foreign = foreignOwner
+      .getClientModules?.()
+      .find(
+        (module) =>
+          compilerOwnedViteClientModuleRoleForPlugin(foreignOwner, module) === 'component-client',
+      );
+    expect(owned).toBeDefined();
+    expect(foreign).toBeDefined();
+
+    expect(compilerOwnedViteClientModuleRoleForPlugin(owner, owned)).toBe('component-client');
+    expect(compilerOwnedViteClientModuleRoleForPlugin(owner, { ...owned })).toBeUndefined();
+    expect(
+      compilerOwnedViteClientModuleRoleForPlugin(owner, new Proxy(owned!, {})),
+    ).toBeUndefined();
+    expect(compilerOwnedViteClientModuleRoleForPlugin(owner, foreign)).toBeUndefined();
+    expect(compilerOwnedViteClientModuleRoleForPlugin({ ...owner }, owned)).toBeUndefined();
+  });
+
+  it('binds callback diagnostics to the genuine plugin that emitted the exact record', async () => {
+    const reports: unknown[] = [];
+    const owner = kovoVitePlugin({
+      onModuleDiagnostics(report) {
+        reports.push(report);
+      },
+    });
+    const foreignOwner = kovoVitePlugin();
+
+    let thrown: unknown;
+    try {
+      await owner.transform?.(
+        '// @kovojs-ir\nexport const authoredLoweredIr = true;\n',
+        'src/authored-ir.tsx',
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toMatch(/KV235/u);
+    const report = reports[0] as { diagnostics: readonly object[] };
+    const diagnostic = report.diagnostics[0]!;
+    expect(compilerOwnedViteDiagnosticForPlugin(owner, diagnostic)).toBe(true);
+    expect(compilerOwnedViteDiagnosticForPlugin(owner, { ...diagnostic })).toBe(false);
+    expect(compilerOwnedViteDiagnosticForPlugin(owner, new Proxy(diagnostic, {}))).toBe(false);
+    expect(compilerOwnedViteDiagnosticForPlugin(foreignOwner, diagnostic)).toBe(false);
   });
 
   it('composes distinct component-local render-plan inputs into one app token', async () => {

@@ -8,6 +8,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 import { kovoVitePlugin as compilerKovoVitePlugin } from '@kovojs/compiler/vite';
+import { isRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 
 import { createKovoVitePlugin } from '../../compiler/src/vite.js';
 
@@ -120,8 +121,8 @@ export const SnapshotButton = component({
   render: () => <button onClick={() => null}>Snapshot</button>,
 });
 `;
-    let clientModules:
-      | (() => readonly {
+    let prepareCompilerClientModules:
+      | ((serverModule: object) => () => readonly {
           path: string;
           renderPlanFingerprint?: string;
           source: string;
@@ -140,9 +141,9 @@ export const SnapshotButton = component({
           expect(id).toBe('@kovojs/server/internal/app-shell-vite');
           return {
             createKovoAppShellViteDevIntegration(options: {
-              clientModules?: typeof clientModules;
+              prepareCompilerClientModules?: typeof prepareCompilerClientModules;
             }) {
-              clientModules = options.clientModules;
+              prepareCompilerClientModules = options.prepareCompilerClientModules;
               return {
                 onModuleDiagnostics() {},
                 plugin: { configureServer() {} },
@@ -152,16 +153,92 @@ export const SnapshotButton = component({
         },
       });
 
-      expect(clientModules?.()).toEqual([]);
+      expect(prepareCompilerClientModules).toBeTypeOf('function');
       await plugin.transform?.(componentSource, join(root, 'src/snapshot-button.tsx'));
+      const epoch = {};
+      const getter = prepareCompilerClientModules?.({
+        claimCompilerClientModuleViteInstaller(protocol: string) {
+          expect(protocol).toBe('kovo.compiler-client-module-role/v1');
+          return {
+            begin() {
+              const records: Array<{
+                path: string;
+                renderPlanFingerprint: string;
+                source: string;
+              }> = [];
+              const adopt = (module: {
+                path: string;
+                renderPlanFingerprint: string;
+                source: string;
+              }) => {
+                const record = { ...module };
+                records.push(record);
+                return record;
+              };
+              return {
+                adoptAppBootstrap: adopt,
+                adoptComponentClient: adopt,
+                adoptDeferredAppRuntime: adopt,
+                adoptOptimisticPlan: adopt,
+                seal: () => records,
+              };
+            },
+          };
+        },
+        compilerClientModuleViteEpoch: epoch,
+      });
 
-      expect(clientModules?.()).toEqual([
+      expect(getter?.()).toEqual([
         expect.objectContaining({
           path: '/c/src/snapshot-button.client.js',
           renderPlanFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
           source: expect.stringContaining('SnapshotButton$button_click'),
         }),
       ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('re-enrolls exact standalone compiler diagnostics in the server dev graph', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-public-vite-diagnostic-handoff-'));
+    let received: { diagnostics: readonly object[] } | undefined;
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'src/app-shell.ts'), 'export default {};\n', 'utf8');
+      const plugin = kovo({ app: '/src/app-shell.ts' }) as unknown as KovoViteConfigureServer;
+      await plugin.configResolved?.({ command: 'serve', root });
+      await plugin.configureServer({
+        config: { root },
+        middlewares: { use() {} },
+        async ssrLoadModule() {
+          return {
+            createKovoAppShellViteDevIntegration() {
+              return {
+                onModuleDiagnostics(report: { diagnostics: readonly object[] }) {
+                  received = report;
+                },
+                plugin: { configureServer() {} },
+              };
+            },
+          };
+        },
+      });
+
+      let thrown: unknown;
+      try {
+        await plugin.transform?.(
+          '// @kovojs-ir\nexport const authoredLoweredIr = true;\n',
+          join(root, 'src/authored-ir.ts'),
+        );
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toMatch(/KV235/u);
+      expect(received?.diagnostics).toHaveLength(1);
+      expect(isRegisteredDiagnostic(received?.diagnostics[0])).toBe(true);
+      expect(isRegisteredDiagnostic({ ...received?.diagnostics[0] })).toBe(false);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -690,6 +767,8 @@ export const LoginCard = component({
           if (id === '@kovojs/server/internal/app-shell-vite') {
             const module = await import('@kovojs/server/internal/app-shell-vite');
             return {
+              claimCompilerClientModuleViteInstaller: module.claimCompilerClientModuleViteInstaller,
+              compilerClientModuleViteEpoch: module.compilerClientModuleViteEpoch,
               createKovoAppShellViteDevIntegration: module.createKovoAppShellViteDevIntegration,
               dispatchKovoAppShellViteDevRequest: module.dispatchKovoAppShellViteDevRequest,
             };

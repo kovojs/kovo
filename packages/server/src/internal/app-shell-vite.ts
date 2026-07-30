@@ -1,5 +1,13 @@
 import '../security-bootstrap.js';
 
+export {
+  claimCompilerClientModuleViteInstaller,
+  compilerClientModuleViteEpoch,
+  type CompilerClientModuleViteInstaller,
+  type CompilerClientModuleViteRecord,
+  type CompilerClientModuleViteSnapshotInstaller,
+} from '../compiler-client-module-provenance-vite.js';
+
 // Generated handlers run only behind compiler or emitted-runner bootstrap. Keeping this raw
 // dispatcher on an internal subpath avoids a second cross-bundle lockdown after the emitted outer
 // wrapper already guarded the realm (SPEC §6.6).

@@ -46,7 +46,6 @@ import {
   compilerOwnDataValue,
   compilerPromiseIsPromise,
   compilerPromiseThen,
-  compilerRegExpExec,
   compilerRegExpReplace,
   compilerRegExpTest,
   compilerSnapshotDenseArray,
@@ -164,10 +163,16 @@ export const compilerViteClientModuleRoleVocabulary = compilerFreeze([
 export type CompilerOwnedViteClientModuleRole =
   (typeof compilerViteClientModuleRoleVocabulary)[number];
 
-const compilerOwnedViteClientModuleRoles = compilerCreateWeakMap<
+interface CompilerOwnedViteClientModuleAuthority {
+  readonly owner: object;
+  readonly role: CompilerOwnedViteClientModuleRole;
+}
+
+const compilerOwnedViteClientModuleAuthorities = compilerCreateWeakMap<
   object,
-  CompilerOwnedViteClientModuleRole
+  CompilerOwnedViteClientModuleAuthority
 >();
+const compilerOwnedViteDiagnosticOwners = compilerCreateWeakMap<object, object>();
 
 /**
  * @internal Verify the exact frozen record returned by the genuine framework compiler plugin.
@@ -178,14 +183,22 @@ export function compilerOwnedViteClientModuleRole(
   value: unknown,
 ): CompilerOwnedViteClientModuleRole | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  return compilerWeakMapGet(compilerOwnedViteClientModuleRoles, value);
+  return compilerWeakMapGet(compilerOwnedViteClientModuleAuthorities, value)?.role;
 }
 
 function markCompilerOwnedViteClientModule(
   module: KovoViteCompiledClientModule,
   role: CompilerOwnedViteClientModuleRole,
+  owner: object,
 ): KovoViteCompiledClientModule {
-  compilerWeakMapSet(compilerOwnedViteClientModuleRoles, module, role);
+  const prior = compilerWeakMapGet(compilerOwnedViteClientModuleAuthorities, module);
+  if (prior !== undefined) {
+    if (prior.owner !== owner || prior.role !== role) {
+      throw new TypeError('Kovo compiler client-module record has conflicting provenance.');
+    }
+    return module;
+  }
+  compilerWeakMapSet(compilerOwnedViteClientModuleAuthorities, module, { owner, role });
   return module;
 }
 
@@ -378,7 +391,7 @@ interface ViteDevFileState {
 
 interface ViteDevStateStore {
   buildMode: boolean;
-  compilerOwnedProvenance: boolean;
+  compilerOwnedProvenance: object | undefined;
   fileCount: number;
   files: Map<string, ViteDevFileState>;
   modules: Map<string, string>;
@@ -410,9 +423,11 @@ const frameworkViteClientModuleMintAuthority = compilerFreeze({});
 function maybeMarkCompilerOwnedViteClientModule(
   module: KovoViteCompiledClientModule,
   role: CompilerOwnedViteClientModuleRole,
-  compilerOwnedProvenance: boolean,
+  compilerOwnedProvenance: object | undefined,
 ): KovoViteCompiledClientModule {
-  return compilerOwnedProvenance ? markCompilerOwnedViteClientModule(module, role) : module;
+  return compilerOwnedProvenance === undefined
+    ? module
+    : markCompilerOwnedViteClientModule(module, role, compilerOwnedProvenance);
 }
 
 const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
@@ -430,6 +445,7 @@ const FRAMEWORK_VITE_PLUGIN_IDENTITY_PROPERTIES = compilerFreeze([
 ] as const);
 
 interface FrameworkVitePluginAuthority {
+  readonly clientModuleOwner: object;
   readonly identities: Readonly<Record<string, unknown>>;
   readonly purpose: ViteTransformPurpose;
   readonly sourceRootCoverage: '*' | string | null;
@@ -484,11 +500,13 @@ function createFrameworkKovoVitePluginForPurpose(
   purpose: ViteTransformPurpose,
 ): KovoVitePlugin {
   const optionsSnapshot = snapshotKovoVitePluginOptions(options);
+  const clientModuleOwner = compilerFreeze({});
   const plugin = createBoundKovoVitePlugin(
     compileComponentModuleForFramework,
     optionsSnapshot,
     purpose,
     frameworkViteClientModuleMintAuthority,
+    clientModuleOwner,
   );
   const identities = compilerCreateNullRecord<unknown>();
   const identityPropertyCount = compilerArrayLength(
@@ -508,6 +526,7 @@ function createFrameworkKovoVitePluginForPurpose(
     );
   }
   compilerWeakMapSet(frameworkVitePluginAuthorities, plugin, {
+    clientModuleOwner,
     identities: compilerFreeze(identities),
     purpose,
     sourceRootCoverage: frameworkVitePluginSourceRootCoverage(optionsSnapshot),
@@ -568,14 +587,74 @@ export function isFrameworkKovoVitePluginOwnerForSourceRoot(
   );
 }
 
+/**
+ * @internal Authenticate an exact client-module record against the genuine standalone `/vite`
+ * plugin that minted it.
+ *
+ * The proof is deliberately plugin-bound: records from another genuine plugin, copies, proxies,
+ * serialized values, and structural lookalikes are inert. Server Vite converts this read-only
+ * result into its own module-private pinning capability; no mint or adopter is exposed here.
+ */
+export function compilerOwnedViteClientModuleRoleForPlugin(
+  plugin: unknown,
+  value: unknown,
+): CompilerOwnedViteClientModuleRole | undefined {
+  if (
+    typeof plugin !== 'object' ||
+    plugin === null ||
+    typeof value !== 'object' ||
+    value === null
+  ) {
+    return undefined;
+  }
+  const pluginAuthority = compilerWeakMapGet(
+    frameworkVitePluginAuthorities,
+    plugin as KovoVitePlugin,
+  );
+  if (pluginAuthority?.purpose !== 'server') return undefined;
+  const moduleAuthority = compilerWeakMapGet(compilerOwnedViteClientModuleAuthorities, value);
+  return moduleAuthority?.owner === pluginAuthority.clientModuleOwner
+    ? moduleAuthority.role
+    : undefined;
+}
+
+/**
+ * @internal Authenticate an exact diagnostic record emitted to callbacks by one genuine
+ * standalone `/vite` plugin. Diagnostic records from another plugin or any reconstructed carrier
+ * are intentionally unrecognized.
+ */
+export function compilerOwnedViteDiagnosticForPlugin(plugin: unknown, value: unknown): boolean {
+  if (
+    typeof plugin !== 'object' ||
+    plugin === null ||
+    typeof value !== 'object' ||
+    value === null
+  ) {
+    return false;
+  }
+  const pluginAuthority = compilerWeakMapGet(
+    frameworkVitePluginAuthorities,
+    plugin as KovoVitePlugin,
+  );
+  return (
+    pluginAuthority?.purpose === 'server' &&
+    compilerWeakMapGet(compilerOwnedViteDiagnosticOwners, value) ===
+      pluginAuthority.clientModuleOwner
+  );
+}
+
 function createBoundKovoVitePlugin(
   compileComponentModule: ViteCompileComponentModule,
   options: KovoVitePluginOptions,
   purpose: ViteTransformPurpose,
   clientModuleMintAuthority?: object,
+  clientModuleOwner?: object,
 ): KovoVitePlugin {
   const compilerOwnedProvenance =
-    clientModuleMintAuthority === frameworkViteClientModuleMintAuthority;
+    clientModuleMintAuthority === frameworkViteClientModuleMintAuthority &&
+    clientModuleOwner !== undefined
+      ? clientModuleOwner
+      : undefined;
   let devState = createViteDevStateStore(true, compilerOwnedProvenance);
   let root = process.cwd();
   let configurationEpoch = 0;
@@ -780,6 +859,7 @@ function createBoundKovoVitePlugin(
           loadSourceFileSystems,
           id,
           isCurrent,
+          loadDevState.compilerOwnedProvenance,
         );
       } catch (error) {
         finish();
@@ -839,7 +919,12 @@ function createBoundKovoVitePlugin(
           return null;
         }
         if (isAuthoredSource && !isComponentSource) {
-          validateViteStandaloneAuthoringSurface(options, fileName, source);
+          validateViteStandaloneAuthoringSurface(
+            options,
+            fileName,
+            source,
+            transformDevState.compilerOwnedProvenance,
+          );
         }
         if (!isCurrent()) {
           finish();
@@ -956,7 +1041,12 @@ function createBoundKovoVitePlugin(
         const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
         if (!isCurrent()) return [];
         if (isAuthoredSource && !isComponentSource) {
-          validateViteStandaloneAuthoringSurface(options, fileName, source);
+          validateViteStandaloneAuthoringSurface(
+            options,
+            fileName,
+            source,
+            hotUpdateDevState.compilerOwnedProvenance,
+          );
         }
         if (!isCurrent()) return [];
         const optimisticModule = isAuthoredSource
@@ -1006,7 +1096,13 @@ function createBoundKovoVitePlugin(
         );
         if (!isCurrent()) return [];
         const emittedFiles = snapshotViteEmittedFiles(result);
-        const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+        const errorDiagnostics = reportViteDiagnostics(
+          result,
+          options,
+          fileName,
+          source,
+          hotUpdateDevState.compilerOwnedProvenance,
+        );
         const metadata = snapshotViteCompileMetadata(result);
         const next = metadata.hmrImpact;
         if (!isCurrent()) return [];
@@ -1142,7 +1238,7 @@ function viteAppRenderPlanFingerprint(store: ViteDevStateStore): string {
 function compilerMapDenseViteClientModules(
   modules: readonly KovoViteCompiledClientModule[],
   renderPlanFingerprint: string,
-  compilerOwnedProvenance: boolean,
+  compilerOwnedProvenance: object | undefined,
 ): KovoViteCompiledClientModule[] {
   const result: KovoViteCompiledClientModule[] = [];
   for (
@@ -1156,7 +1252,7 @@ function compilerMapDenseViteClientModules(
       'Vite compiled client modules',
     ) as KovoViteCompiledClientModule;
     const role = compilerOwnedViteClientModuleRole(module);
-    if (compilerOwnedProvenance && role === undefined) {
+    if (compilerOwnedProvenance !== undefined && role === undefined) {
       throw new TypeError('Kovo refused a client module without compiler-owned provenance.');
     }
     const pinned = compilerFreeze({
@@ -1166,9 +1262,9 @@ function compilerMapDenseViteClientModules(
     });
     compilerArrayAppend(
       result,
-      role === undefined || !compilerOwnedProvenance
+      role === undefined || compilerOwnedProvenance === undefined
         ? pinned
-        : markCompilerOwnedViteClientModule(pinned, role),
+        : markCompilerOwnedViteClientModule(pinned, role, compilerOwnedProvenance),
       'Compiler packages/compiler/src/vite.ts collection',
     );
   }
@@ -1207,7 +1303,13 @@ function transformViteCompileResult(
   if (!shouldRetainResult()) return null;
   const emittedFiles = snapshotViteEmittedFiles(result);
   if (!shouldRetainResult()) return null;
-  const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+  const errorDiagnostics = reportViteDiagnostics(
+    result,
+    options,
+    fileName,
+    source,
+    devState.compilerOwnedProvenance,
+  );
   if (!shouldRetainResult()) return null;
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
   const metadata = snapshotViteCompileMetadata(result);
@@ -1276,7 +1378,7 @@ function bindViteEmittedJsxRuntime(fileName: string, source: string): string {
 
 function createViteDevStateStore(
   buildMode: boolean,
-  compilerOwnedProvenance: boolean,
+  compilerOwnedProvenance: object | undefined,
 ): ViteDevStateStore {
   return {
     buildMode,
@@ -1347,6 +1449,7 @@ function validateViteStandaloneAuthoringSurface(
   options: KovoVitePluginOptions,
   fileName: string,
   source: string,
+  compilerOwnedProvenance: object | undefined,
 ): void {
   const model = parseComponentModule(fileName, source);
   const parseDiagnostics = parseDiagnosticsForSourceFile(model.sourceFile, source);
@@ -1360,6 +1463,7 @@ function validateViteStandaloneAuthoringSurface(
     options,
     fileName,
     source,
+    compilerOwnedProvenance,
   );
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 }
@@ -1783,6 +1887,7 @@ function loadViteClientModule(
   sourceFileSystems: readonly CompilerSourceFileSystem[],
   id: string,
   isCurrent: () => boolean,
+  compilerOwnedProvenance: object | undefined,
 ): MaybePromise<null | string> {
   if (!isCurrent()) return null;
   const clientFilePath = viteRequestFileName(id);
@@ -1807,11 +1912,25 @@ function loadViteClientModule(
   );
   if (isPromiseLike(result)) {
     return compilerPromiseThen(result, (resolvedResult) =>
-      loadViteClientCompileResult(options, fileName, source, resolvedResult, isCurrent),
+      loadViteClientCompileResult(
+        options,
+        fileName,
+        source,
+        resolvedResult,
+        isCurrent,
+        compilerOwnedProvenance,
+      ),
     );
   }
 
-  return loadViteClientCompileResult(options, fileName, source, result, isCurrent);
+  return loadViteClientCompileResult(
+    options,
+    fileName,
+    source,
+    result,
+    isCurrent,
+    compilerOwnedProvenance,
+  );
 }
 
 function loadViteClientCompileResult(
@@ -1820,11 +1939,18 @@ function loadViteClientCompileResult(
   source: string,
   result: ViteCompileResult,
   isCurrent: () => boolean,
+  compilerOwnedProvenance: object | undefined,
 ): null | string {
   if (!isCurrent()) return null;
   const emittedFiles = snapshotViteEmittedFiles(result);
   if (!isCurrent()) return null;
-  const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+  const errorDiagnostics = reportViteDiagnostics(
+    result,
+    options,
+    fileName,
+    source,
+    compilerOwnedProvenance,
+  );
   if (!isCurrent()) return null;
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 
@@ -2070,6 +2196,7 @@ function reportViteDiagnostics(
   options: KovoVitePluginOptions,
   fileName: string,
   source: string,
+  compilerOwnedProvenance: object | undefined,
 ): CompilerDiagnostic[] {
   const rawDiagnostics = compilerOwnDataValue(result, 'diagnostics', 'Vite compile result');
   if (rawDiagnostics !== undefined && !compilerArrayIsArray(rawDiagnostics)) {
@@ -2107,12 +2234,14 @@ function reportViteDiagnostics(
   }
 
   options.onModuleDiagnostics?.({
-    diagnostics: cloneViteCompilerDiagnostics(snapshot),
+    diagnostics: cloneViteCompilerDiagnostics(snapshot, compilerOwnedProvenance),
     fileName,
     source,
   });
   for (let index = 0; index < nonErrorDiagnostics.length; index += 1) {
-    options.onDiagnostic?.(cloneViteCompilerDiagnostic(nonErrorDiagnostics[index]!));
+    options.onDiagnostic?.(
+      cloneViteCompilerDiagnostic(nonErrorDiagnostics[index]!, compilerOwnedProvenance),
+    );
   }
 
   return errorDiagnostics;
@@ -2193,20 +2322,28 @@ function snapshotViteCompilerDiagnostic(value: unknown, index: number): Compiler
 
 function cloneViteCompilerDiagnostics(
   diagnostics: readonly CompilerDiagnostic[],
+  compilerOwnedProvenance: object | undefined,
 ): CompilerDiagnostic[] {
   const result: CompilerDiagnostic[] = [];
   for (let index = 0; index < diagnostics.length; index += 1) {
     compilerArrayAppend(
       result,
-      cloneViteCompilerDiagnostic(diagnostics[index]!),
+      cloneViteCompilerDiagnostic(diagnostics[index]!, compilerOwnedProvenance),
       'Compiler packages/compiler/src/vite.ts collection',
     );
   }
   return result;
 }
 
-function cloneViteCompilerDiagnostic(diagnostic: CompilerDiagnostic): CompilerDiagnostic {
-  return contextualizeCompilerDiagnostic(diagnostic, {});
+function cloneViteCompilerDiagnostic(
+  diagnostic: CompilerDiagnostic,
+  compilerOwnedProvenance: object | undefined,
+): CompilerDiagnostic {
+  const clone = contextualizeCompilerDiagnostic(diagnostic, {});
+  if (compilerOwnedProvenance !== undefined) {
+    compilerWeakMapSet(compilerOwnedViteDiagnosticOwners, clone, compilerOwnedProvenance);
+  }
+  return clone;
 }
 
 function snapshotViteEmittedFiles(result: ViteCompileResult): { kind: string; source: string }[] {

@@ -31,7 +31,10 @@ import {
   replaceVersionedClientModuleBuildSnapshot,
   type VersionedClientModuleInput,
 } from './client-modules.js';
-import { pinCompilerOwnedClientModule } from './compiler-client-module-provenance-build.js';
+import {
+  compilerOwnedClientModuleRole,
+  pinCompilerOwnedClientModuleRole,
+} from './compiler-client-module-provenance.js';
 import {
   copyRequestServerBindings,
   pinRequestIngressSurface,
@@ -252,6 +255,11 @@ export interface KovoAppShellViteDevPluginOptions {
     renderPlanFingerprint?: string;
     source: string;
   }[];
+  /**
+   * @internal Bootstrap-only bridge. The outer middleware invokes it with the exact live
+   * app-shell module before app evaluation and passes only its bound getter to dispatch.
+   */
+  prepareCompilerClientModules?: (serverModule: object) => () => readonly object[];
   /**
    * Dev diagnostic ledger shared with the compiler Vite plugin. When present,
    * requests depending on failed component modules render the same teaching
@@ -505,6 +513,7 @@ export async function dispatchKovoAppShellViteDevRequest(
   request: IncomingMessage,
   response: ServerResponse,
   next: (error?: unknown) => void,
+  compilerClientModules?: () => readonly object[],
 ): Promise<void> {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
@@ -525,6 +534,7 @@ export async function dispatchKovoAppShellViteDevRequest(
   const compilerSnapshotPublished = publishKovoAppShellViteDevClientModuleSnapshot(
     loadedApp,
     options,
+    compilerClientModules,
   );
   const baseApp = appWithRetainedKovoAppShellViteDevLiveTargets(
     server,
@@ -614,20 +624,18 @@ export async function dispatchKovoAppShellViteDevRequest(
 function publishKovoAppShellViteDevClientModuleSnapshot(
   app: KovoApp,
   options: KovoAppShellViteDevPluginOptions,
+  compilerClientModules?: () => readonly object[],
 ): boolean {
   const priorFailure = witnessWeakMapGet(failedViteDevClientModulePublications, app);
   if (priorFailure !== undefined) throw priorFailure;
 
-  const getter = viteDevOwnDataValue(
-    options,
-    'clientModules',
-    'Vite dev compiler client-module getter',
-  );
+  const getter =
+    compilerClientModules ??
+    viteDevOwnDataValue(options, 'clientModules', 'Vite dev compiler client-module getter');
   if (getter === undefined) return false;
   if (typeof getter !== 'function') {
     throw new TypeError('Vite dev compiler client-module getter must be a function.');
   }
-
   const snapshot = snapshotKovoAppShellViteDevClientModules(
     witnessReflectApply<unknown>(getter, undefined, []),
   );
@@ -835,9 +843,11 @@ function snapshotKovoAppShellViteDevClientModules(
       );
     }
     renderPlanFingerprint = fingerprint;
+    const pinned = witnessFreeze({ path, source: sourceText });
+    const role = compilerOwnedClientModuleRole(module);
     securityArrayPush(
       modules,
-      pinCompilerOwnedClientModule(module, witnessFreeze({ path, source: sourceText })),
+      role === undefined ? pinned : pinCompilerOwnedClientModuleRole(pinned, role),
     );
   }
 
@@ -894,6 +904,17 @@ export function kovoAppShellViteDevPlugin(
     );
     const ssrLoadModule = (id: string): Promise<Record<string, unknown>> =>
       witnessReflectApply(ssrLoadModuleSource, server, [id]);
+    const prepareCompilerClientModules = viteDevOwnDataValue(
+      options,
+      'prepareCompilerClientModules',
+      'Vite dev compiler client-module bootstrap',
+    );
+    if (
+      prepareCompilerClientModules !== undefined &&
+      typeof prepareCompilerClientModules !== 'function'
+    ) {
+      throw new TypeError('Vite dev compiler client-module bootstrap must be a function.');
+    }
     const dispatchServer: KovoAppShellViteDevModuleServer = witnessFreeze({
       ...(server.config === undefined ? {} : { config: server.config }),
       middlewares: server.middlewares,
@@ -916,12 +937,20 @@ export function kovoAppShellViteDevPlugin(
             `${kovoAppShellViteDevModuleId} must export dispatchKovoAppShellViteDevRequest().`,
           );
         }
+        const compilerClientModules =
+          prepareCompilerClientModules === undefined
+            ? undefined
+            : witnessReflectApply<unknown>(prepareCompilerClientModules, undefined, [serverModule]);
+        if (compilerClientModules !== undefined && typeof compilerClientModules !== 'function') {
+          throw new TypeError('Vite dev compiler client-module bound getter must be a function.');
+        }
         return witnessReflectApply(dispatch, undefined, [
           dispatchServer,
           options,
           request,
           response,
           next,
+          compilerClientModules,
         ]);
       });
       void securityPromiseThen(dispatched, () => undefined, next);
