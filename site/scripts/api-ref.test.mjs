@@ -361,11 +361,11 @@ describe('api-ref generator', () => {
   });
 
   it('renders reviewed JSDoc skips as non-visible directives outside the code fence', () => {
-    expect(browserPage).toContain(
-      '<!-- kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry." -->',
+    expect(corePage).toContain(
+      '<!-- kovo-sample: illustrative reason="The form descriptor depends on an app-local mutation declaration." -->',
     );
-    expect(browserPage).not.toContain(
-      '```ts\n// kovo-sample: illustrative reason="The form plan depends on an app-local mutation declaration and generated query registry."',
+    expect(corePage).not.toContain(
+      '```ts\n// kovo-sample: illustrative reason="The form descriptor depends on an app-local mutation declaration."',
     );
   });
 
