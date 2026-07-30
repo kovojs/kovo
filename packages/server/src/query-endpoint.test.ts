@@ -6,7 +6,9 @@ import { domain } from './domain.js';
 import {
   assignDerivedQueryKey,
   query,
+  queryEndpointHref,
   queryRuntimeWarningsFromRequest,
+  readQueryInstanceKey,
   recordQueryRuntimeWarnings,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
@@ -17,6 +19,89 @@ import { s, type Schema } from './schema.js';
 import { testTrustedRevealPolicy } from './declassification-policy.test-support.js';
 
 describe('query endpoints', () => {
+  it('derives collision-free default instance keys in declared args order', () => {
+    const empty = query('empty-args', {
+      args: s.object({}),
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    expect(readQueryInstanceKey(empty, {})).toBe('empty-args:');
+
+    const composite = query('composite', {
+      args: s.object({
+        left: s.string(),
+        right: s.string(),
+        optional: s.string().optional(),
+        tags: s.array(s.string()),
+      }),
+      load: (input) => input,
+      reads: [],
+    });
+    const declared = {
+      left: 'x:y',
+      right: 'z',
+      tags: ['a:b', 'c'],
+    };
+    const reversed = {
+      tags: ['a:b', 'c'],
+      right: 'z',
+      left: 'x:y',
+    };
+    expect(readQueryInstanceKey(composite, reversed)).toBe(
+      readQueryInstanceKey(composite, declared),
+    );
+    expect(queryEndpointHref(composite, reversed)).toBe(
+      '/_q/composite?left=x%3Ay&right=z&tags=a%3Ab&tags=c',
+    );
+    expect(
+      readQueryInstanceKey(composite, {
+        left: 'x',
+        right: 'y:z',
+        tags: ['a:b', 'c'],
+      }),
+    ).not.toBe(readQueryInstanceKey(composite, declared));
+
+    const typedString = query('typed', {
+      args: s.object({ value: s.string() }),
+      load: (input) => input,
+      reads: [],
+    });
+    const typedNumber = query('typed', {
+      args: s.object({ value: s.number() }),
+      load: (input) => input,
+      reads: [],
+    });
+    expect(readQueryInstanceKey(typedString, { value: '1' })).not.toBe(
+      readQueryInstanceKey(typedNumber, { value: 1 }),
+    );
+    expect(readQueryInstanceKey(composite, { ...declared, optional: undefined })).toBe(
+      readQueryInstanceKey(composite, declared),
+    );
+  });
+
+  it('requires explicit instance identity for unsupported or unauthenticated args shapes', () => {
+    const nested = query('nested', {
+      args: s.object({ filter: s.object({ active: s.boolean() }) }),
+      load: (input) => input,
+      reads: [],
+    });
+    expect(() => readQueryInstanceKey(nested, { filter: { active: true } })).toThrow(
+      /explicit instanceKey/iu,
+    );
+
+    const structuralSchema: Schema<{ id: string }> = {
+      parse(input) {
+        return input as { id: string };
+      },
+    };
+    const custom = query('custom', {
+      args: structuralSchema,
+      load: (input) => input,
+      reads: [],
+    });
+    expect(() => readQueryInstanceKey(custom, { id: 'p1' })).toThrow(/genuine s\.object/iu);
+  });
+
   it('ignores inherited query access/reads and refuses definition accessors', () => {
     const inherited = Object.create({
       access: publicAccess('prototype-provided public query'),
@@ -579,7 +664,7 @@ describe('query endpoints', () => {
     });
 
     await expect(renderQueryEndpointResponse(catalogQuery, { request: {} })).resolves.toEqual({
-      body: '<kovo-query name="catalogLimited" key="catalogLimited:3" href="/_q/catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
+      body: '<kovo-query name="catalogLimited" key="catalogLimited:f12:k5:limitn1:3" href="/_q/catalogLimited">{"rows":[{"id":0},{"id":1},{"id":2}]}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -837,7 +922,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'absent' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output" key="product-optional-output:absent" href="/_q/product-optional-output?mode=absent">{"id":"p1"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" key="product-optional-output:f16:k4:modes6:absent" href="/_q/product-optional-output?mode=absent">{"id":"p1"}</kovo-query>',
       status: 200,
     });
     await expect(
@@ -847,7 +932,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams({ mode: 'present' }),
       }),
     ).resolves.toMatchObject({
-      body: '<kovo-query name="product-optional-output" key="product-optional-output:present" href="/_q/product-optional-output?mode=present">{"id":"p1","note":"available"}</kovo-query>',
+      body: '<kovo-query name="product-optional-output" key="product-optional-output:f17:k4:modes7:present" href="/_q/product-optional-output?mode=present">{"id":"p1","note":"available"}</kovo-query>',
       status: 200,
     });
     expect(onError).not.toHaveBeenCalled();

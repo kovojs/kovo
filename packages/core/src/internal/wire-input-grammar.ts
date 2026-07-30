@@ -34,6 +34,236 @@ export const FRAMEWORK_WIRE_INPUT_GRAMMAR = Object.freeze({
   }),
 } as const);
 
+/** Scalar values admitted by the canonical query-instance key codec. @internal */
+export type CanonicalQueryInstanceScalar = boolean | number | string;
+
+/** @internal Shared result of the boot-captured server/generated-client key codec. */
+interface CanonicalQueryInstanceKeyCodec {
+  identities(
+    queryName: string,
+    declaredFields: readonly string[],
+    inputs: unknown,
+  ): readonly string[];
+  keyValue(declaredFields: readonly string[], input: unknown): string;
+}
+
+/**
+ * Encode one parsed query-args record as the collision-free `keyValue` half of
+ * `name:keyValue` (SPEC §10.2).
+ *
+ * Field names are supplied in the query schema's declared order. Each present field name and
+ * value is type-tagged and length-framed, so delimiters inside strings, scalar type differences,
+ * optional-field positions, and scalar-array boundaries cannot alias. `undefined` is normalized
+ * to an absent optional field because the canonical typed-read href omits it as well. An empty
+ * declared args object deliberately encodes to the empty string, making `name:` a valid keyed
+ * identity per §9.4.
+ *
+ * @internal Shared by server SSR/refetch identity and compiler-authenticated browser optimism.
+ */
+export const canonicalQueryInstanceKeyValue = /* @__PURE__ */ (() =>
+  createCanonicalQueryInstanceKeyCodec().keyValue)();
+
+/**
+ * Exact boot-capturing codec constructor embedded by the compiler in authenticated optimistic
+ * plan modules. Keeping it here makes generated browser keys and server keys one implementation
+ * without charging every document for the codec when no keyed optimism runs.
+ *
+ * @internal
+ */
+export function canonicalQueryInstanceKeyCodecFactorySource(): string {
+  return Reflect.apply(Function.prototype.toString, createCanonicalQueryInstanceKeyCodec, []);
+}
+
+function createCanonicalQueryInstanceKeyCodec(): CanonicalQueryInstanceKeyCodec {
+  // This constructor is intentionally self-contained: the compiler embeds its exact source into
+  // authenticated generated modules and invokes it before any app-authored predictor can run.
+  const apply = Reflect.apply;
+  const IntrinsicArray = Array;
+  const IntrinsicNumber = Number;
+  const IntrinsicObject = Object;
+  const IntrinsicReflect = Reflect;
+  const arrayIsArray = Array.isArray;
+  const arrayPush = Array.prototype.push;
+  const numberIsFinite = Number.isFinite;
+  const objectFreeze = Object.freeze;
+  const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const reflectOwnKeys = Reflect.ownKeys;
+  const stringValue = String;
+  const MAX_FIELDS = 1_024;
+  const MAX_ARRAY_ITEMS = 1_024;
+  const MAX_ENCODED_CHARACTERS = 1_048_576;
+
+  const ownData = (
+    carrier: unknown,
+    property: PropertyKey,
+    label: string,
+  ): { readonly found: boolean; readonly value?: unknown } => {
+    if (carrier === null || (typeof carrier !== 'object' && typeof carrier !== 'function')) {
+      return { found: false };
+    }
+    const descriptor = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
+      carrier,
+      property,
+    ]) as PropertyDescriptor | undefined;
+    if (descriptor === undefined) return { found: false };
+    const valueDescriptor = apply(objectGetOwnPropertyDescriptor, IntrinsicObject, [
+      descriptor,
+      'value',
+    ]) as PropertyDescriptor | undefined;
+    if (valueDescriptor === undefined) {
+      throw new TypeError(label + ' must contain stable own-data properties.');
+    }
+    return { found: true, value: valueDescriptor.value };
+  };
+
+  const frame = (tag: string, payload: string): string => tag + payload.length + ':' + payload;
+
+  const scalarFrame = (value: unknown, label: string): string => {
+    if (typeof value === 'string') return frame('s', value);
+    if (typeof value === 'boolean') return frame('b', value ? '1' : '0');
+    if (typeof value === 'number') {
+      if (!apply(numberIsFinite, IntrinsicNumber, [value])) {
+        throw new TypeError(label + ' must contain finite scalar values.');
+      }
+      return frame('n', apply(stringValue, undefined, [value]));
+    }
+    throw new TypeError(
+      label +
+        ' must contain only string, finite number, boolean, or dense scalar-array values; declare an explicit instanceKey for any other shape.',
+    );
+  };
+
+  const valueFrame = (value: unknown, label: string): string => {
+    if (!apply(arrayIsArray, IntrinsicArray, [value])) return scalarFrame(value, label);
+    const length = ownData(value, 'length', label);
+    if (
+      !length.found ||
+      typeof length.value !== 'number' ||
+      length.value < 0 ||
+      length.value % 1 !== 0 ||
+      length.value > MAX_ARRAY_ITEMS
+    ) {
+      throw new TypeError(label + ' must be a bounded dense scalar array.');
+    }
+    let payload = '';
+    for (let index = 0; index < length.value; index += 1) {
+      const entry = ownData(value, index, label);
+      if (!entry.found) throw new TypeError(label + ' must be a dense scalar array.');
+      payload += scalarFrame(entry.value, label);
+      if (payload.length > MAX_ENCODED_CHARACTERS) {
+        throw new RangeError('Kovo canonical query instance key exceeds its character budget.');
+      }
+    }
+    return frame('a', payload);
+  };
+
+  const keyValue = (declaredFields: readonly string[], input: unknown): string => {
+    if (!apply(arrayIsArray, IntrinsicArray, [declaredFields])) {
+      throw new TypeError('Kovo canonical query key fields must be a dense string array.');
+    }
+    const fieldLength = ownData(declaredFields, 'length', 'Kovo canonical query key fields');
+    if (
+      !fieldLength.found ||
+      typeof fieldLength.value !== 'number' ||
+      fieldLength.value < 0 ||
+      fieldLength.value % 1 !== 0 ||
+      fieldLength.value > MAX_FIELDS
+    ) {
+      throw new TypeError('Kovo canonical query key fields must have a bounded dense length.');
+    }
+    if (
+      typeof input !== 'object' ||
+      input === null ||
+      apply(arrayIsArray, IntrinsicArray, [input])
+    ) {
+      throw new TypeError('Kovo canonical query args must be a flat own-data record.');
+    }
+
+    const fields: string[] = [];
+    for (let index = 0; index < fieldLength.value; index += 1) {
+      const field = ownData(declaredFields, index, 'Kovo canonical query key fields');
+      if (!field.found || typeof field.value !== 'string') {
+        throw new TypeError('Kovo canonical query key fields must be dense strings.');
+      }
+      for (let prior = 0; prior < fields.length; prior += 1) {
+        if (fields[prior] === field.value) {
+          throw new TypeError('Kovo canonical query key fields must not contain duplicates.');
+        }
+      }
+      apply(arrayPush, fields, [field.value]);
+    }
+
+    const inputKeys = apply(reflectOwnKeys, IntrinsicReflect, [input]) as PropertyKey[];
+    for (let index = 0; index < inputKeys.length; index += 1) {
+      const key = ownData(inputKeys, index, 'Kovo canonical query args key snapshot');
+      if (!key.found || typeof key.value !== 'string') {
+        throw new TypeError('Kovo canonical query args must contain only declared string fields.');
+      }
+      let declared = false;
+      for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex += 1) {
+        if (fields[fieldIndex] === key.value) {
+          declared = true;
+          break;
+        }
+      }
+      if (!declared) {
+        throw new TypeError(
+          'Kovo canonical query args contain an undeclared field; return the exact query args shape.',
+        );
+      }
+    }
+
+    let encoded = '';
+    for (let index = 0; index < fields.length; index += 1) {
+      const field = fields[index]!;
+      const entry = ownData(input, field, `Kovo canonical query arg "${field}"`);
+      if (!entry.found || entry.value === undefined) continue;
+      encoded += frame('f', frame('k', field) + valueFrame(entry.value, `Query arg "${field}"`));
+      if (encoded.length > MAX_ENCODED_CHARACTERS) {
+        throw new RangeError('Kovo canonical query instance key exceeds its character budget.');
+      }
+    }
+    return encoded;
+  };
+
+  const identities = (
+    queryName: string,
+    declaredFields: readonly string[],
+    inputs: unknown,
+  ): readonly string[] => {
+    if (
+      typeof queryName !== 'string' ||
+      queryName.length === 0 ||
+      !apply(arrayIsArray, IntrinsicArray, [inputs])
+    ) {
+      throw new TypeError('Kovo optimistic keys must return query args arrays.');
+    }
+    const length = ownData(inputs, 'length', 'Kovo optimistic query args');
+    if (
+      !length.found ||
+      typeof length.value !== 'number' ||
+      length.value < 1 ||
+      length.value % 1 !== 0 ||
+      length.value > MAX_FIELDS
+    ) {
+      throw new TypeError('Kovo optimistic keys must return a bounded non-empty dense args array.');
+    }
+    const output: string[] = [];
+    for (let index = 0; index < length.value; index += 1) {
+      const input = ownData(inputs, index, 'Kovo optimistic query args');
+      if (!input.found) {
+        throw new TypeError('Kovo optimistic keys must return a dense args array.');
+      }
+      apply(arrayPush, output, [queryName + ':' + keyValue(declaredFields, input.value)]);
+    }
+    return apply(objectFreeze, IntrinsicObject, [output]) as readonly string[];
+  };
+
+  return apply(objectFreeze, IntrinsicObject, [
+    { identities, keyValue },
+  ]) as CanonicalQueryInstanceKeyCodec;
+}
+
 /** @internal */
 export type FrameworkWireInputCarrier =
   | 'header'

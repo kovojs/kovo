@@ -36,6 +36,7 @@ import {
 import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import {
+  currentJsxFrameworkContext,
   runWithJsxRequestContext,
   type DeferredRegionCollector,
   type JsxAnonymousCsrfBinding,
@@ -49,6 +50,7 @@ import {
   type AccessDecision,
 } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
+import type { DeferredStreamChunk } from './deferred-stream.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { MutationFail } from './mutation.js';
 import type { QueryDocumentCollector } from './query-document-collector.js';
@@ -57,6 +59,8 @@ import {
   type LiveTargetAttestationAuthority,
 } from './live-target-app-identity.js';
 import {
+  queryEndpointHref,
+  readQueryInstanceKey,
   recordQueryRuntimeWarnings,
   runQuery,
   type QueryDefinition,
@@ -119,6 +123,10 @@ import {
   witnessWeakMapGet,
   witnessWeakMapSet,
 } from './security-witness-intrinsics.js';
+
+type RoutePageResponseWithDeferredChunks = RoutePageResponse & {
+  readonly deferredChunks?: readonly Promise<DeferredStreamChunk>[];
+};
 
 // Public signatures cannot reference internal subpath types. Keep this type-level
 // mirror local while runtime URL construction consumes `internal/route-pattern`.
@@ -1138,9 +1146,9 @@ async function loadLayoutQueries<Request>(
     if (descriptor === undefined || !('value' in descriptor)) {
       throw new TypeError(`Layout query ${name} must be an own data property.`);
     }
-    const queryDefinition = descriptor.value;
+    const queryDefinition = descriptor.value as QueryDefinition<string, unknown, unknown, Request>;
     const result = await runQuery(
-      queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
+      queryDefinition,
       undefined,
       request,
       maxListItems === undefined ? {} : { maxListItems },
@@ -1150,6 +1158,13 @@ async function loadLayoutQueries<Request>(
     }
     recordQueryRuntimeWarnings(request, result.warnings);
     values[name] = result.value;
+    const key = readQueryInstanceKey(queryDefinition, result.input);
+    currentJsxFrameworkContext()?.queries?.add({
+      href: queryEndpointHref(queryDefinition, result.input),
+      ...(key === undefined ? {} : { key }),
+      name: queryDefinition.key,
+      value: result.value,
+    });
   }
 
   return values as LayoutQueryResults<LayoutQueryMap<any>>;
@@ -1672,6 +1687,42 @@ export async function renderRoutePageResponseForAppDocument<
 
   return attachLifecycleRequest(
     await runWithResponseLifecycleRequest(lifecycleRequest, lifecycleRequest, async () => {
+      const queryTransaction = options.queries?.begin();
+      let queryTransactionActive = queryTransaction !== undefined;
+      const settleQueryTransaction = (commit: boolean): void => {
+        if (!queryTransactionActive || queryTransaction === undefined) return;
+        queryTransactionActive = false;
+        if (commit) queryTransaction.commit();
+        else queryTransaction.rollback();
+      };
+      const renderSelectedBoundary = async (
+        boundary: ResolvedRouteBoundary,
+        status: 403 | 404 | 500,
+        boundaryOptions: { error?: unknown },
+      ): Promise<RoutePageResponseWithDeferredChunks> => {
+        const boundaryTransaction = options.queries?.begin();
+        const boundaryDeferredRegions = createDeferredRegionChunkCollector();
+        try {
+          const response = await runWithJsxRequestContext(
+            lifecycleRequest,
+            routeJsxContextOptions(options, boundaryDeferredRegions),
+            () =>
+              renderRouteBoundaryResponse(
+                boundary,
+                status,
+                lifecycleRequest,
+                render,
+                boundaryOptions,
+              ),
+          );
+          boundaryTransaction?.commit();
+          const deferredChunks = boundaryDeferredRegions.pendingChunks();
+          return deferredChunks.length === 0 ? response : { ...response, deferredChunks };
+        } catch (error) {
+          boundaryTransaction?.rollback();
+          throw error;
+        }
+      };
       let result: RoutePageInternalResult<Page>;
       try {
         result = await runRoutePageInternal(
@@ -1681,6 +1732,7 @@ export async function renderRoutePageResponseForAppDocument<
           routeJsxContextOptions(options, deferredRegions),
         );
       } catch (error) {
+        settleQueryTransaction(false);
         reportServerError(options.onError, error, {
           operation: 'route-page',
           request: lifecycleRequest,
@@ -1690,6 +1742,7 @@ export async function renderRoutePageResponseForAppDocument<
       }
 
       if (!result.ok) {
+        settleQueryTransaction(false);
         if (result.error?.code === 'VALIDATION') {
           return {
             body: 'Validation Failed',
@@ -1707,11 +1760,9 @@ export async function renderRoutePageResponseForAppDocument<
             });
           }
           return attachLifecycleRequest(
-            await renderRouteBoundaryResponse(
+            await renderSelectedBoundary(
               result.boundary,
               result.status,
-              lifecycleRequest,
-              render,
               result.thrown === undefined ? {} : { error: result.thrown },
             ),
             lifecycleRequest,
@@ -1720,9 +1771,18 @@ export async function renderRoutePageResponseForAppDocument<
 
         const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
         const unauthorizedBoundary = result.boundary;
+        let unauthorizedBoundaryResponse:
+          | Awaited<ReturnType<typeof renderSelectedBoundary>>
+          | undefined;
         const renderForbidden = unauthorizedBoundary
-          ? async () =>
-              renderRouteBoundaryBody(unauthorizedBoundary, 403, lifecycleRequest, render, {})
+          ? async () => {
+              unauthorizedBoundaryResponse = await renderSelectedBoundary(
+                unauthorizedBoundary,
+                403,
+                {},
+              );
+              return unauthorizedBoundaryResponse.body as string;
+            }
           : options.renderForbidden;
         const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
           ...options,
@@ -1730,7 +1790,14 @@ export async function renderRoutePageResponseForAppDocument<
           ...(onUnauthenticated === undefined ? {} : { onUnauthenticated }),
           ...(renderForbidden === undefined ? {} : { renderForbidden }),
         });
-        if (authResponse) return authResponse;
+        if (authResponse) {
+          return unauthorizedBoundaryResponse?.deferredChunks === undefined
+            ? authResponse
+            : {
+                ...authResponse,
+                deferredChunks: unauthorizedBoundaryResponse.deferredChunks,
+              };
+        }
 
         return stampGuardFailureDocumentSecurityFloor({
           body:
@@ -1748,6 +1815,7 @@ export async function renderRoutePageResponseForAppDocument<
       }
 
       if ('outcome' in result) {
+        settleQueryTransaction(false);
         return attachLifecycleRequest(
           routeOutcomeResponse(result.outcome, request),
           lifecycleRequest,
@@ -1755,6 +1823,7 @@ export async function renderRoutePageResponseForAppDocument<
       }
       // SPEC §6.4: page redirect() → 303 + sanitized Location header.
       if ('redirect' in result) {
+        settleQueryTransaction(false);
         return attachLifecycleRequest(
           blessRedirectResponse({
             body: '',
@@ -1768,6 +1837,7 @@ export async function renderRoutePageResponseForAppDocument<
       try {
         const body = await render(result.value);
         const deferredChunks = deferredRegions.pendingChunks();
+        settleQueryTransaction(true);
         return attachLifecycleRequest(
           {
             body,
@@ -1778,6 +1848,7 @@ export async function renderRoutePageResponseForAppDocument<
           lifecycleRequest,
         );
       } catch (error) {
+        settleQueryTransaction(false);
         reportServerError(options.onError, error, {
           operation: 'route-render',
           request: lifecycleRequest,

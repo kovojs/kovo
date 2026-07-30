@@ -1,10 +1,12 @@
-import type { QueryScriptRenderOptions } from './wire-html.js';
+import { stringifyWireValue, type QueryScriptRenderOptions } from './wire-html.js';
 import { securityArraySort } from './response-security-intrinsics.js';
 import {
   createWitnessMap,
   witnessArrayAppend,
   witnessFreeze,
+  witnessMapDelete,
   witnessMapForEach,
+  witnessMapGet,
   witnessMapSet,
 } from './security-witness-intrinsics.js';
 
@@ -15,7 +17,14 @@ import {
  */
 export interface QueryDocumentCollector {
   add(query: QueryScriptRenderOptions): void;
+  begin(): QueryDocumentCollectorTransaction;
   snapshot(): readonly QueryScriptRenderOptions[];
+}
+
+/** One reversible request-local query collection scope. @internal */
+export interface QueryDocumentCollectorTransaction {
+  commit(): void;
+  rollback(): void;
 }
 
 /** @internal Create one isolated initial/deferred render query collector. */
@@ -24,7 +33,56 @@ export function createQueryDocumentCollector(): QueryDocumentCollector {
   return {
     add(query) {
       const snapshot = snapshotDocumentQuery(query);
-      witnessMapSet(queries, `${snapshot.name}\0${snapshot.key ?? ''}`, snapshot);
+      const identity = `${snapshot.name}\0${snapshot.key ?? ''}`;
+      const previous = witnessMapGet(queries, identity);
+      if (previous !== undefined) {
+        if (
+          previous.href !== snapshot.href ||
+          stringifyWireValue(previous.value) !== stringifyWireValue(snapshot.value)
+        ) {
+          throw new TypeError(
+            `Kovo refused conflicting document query truth for identity "${snapshot.name}".`,
+          );
+        }
+        return;
+      }
+      witnessMapSet(queries, identity, snapshot);
+    },
+    begin() {
+      const checkpoint = createWitnessMap<string, QueryScriptRenderOptions>();
+      witnessMapForEach(queries, (query, identity) => {
+        witnessMapSet(checkpoint, identity, query);
+      });
+      let active = true;
+      const finish = (rollback: boolean): void => {
+        if (!active) {
+          throw new TypeError('Kovo query collection transaction has already settled.');
+        }
+        active = false;
+        if (!rollback) return;
+        const currentIdentities: string[] = [];
+        witnessMapForEach(queries, (_query, identity) => {
+          witnessArrayAppend(
+            currentIdentities,
+            identity,
+            'Document query transaction rollback identities',
+          );
+        });
+        for (let index = 0; index < currentIdentities.length; index += 1) {
+          witnessMapDelete(queries, currentIdentities[index]!);
+        }
+        witnessMapForEach(checkpoint, (query, identity) => {
+          witnessMapSet(queries, identity, query);
+        });
+      };
+      return witnessFreeze({
+        commit() {
+          finish(false);
+        },
+        rollback() {
+          finish(true);
+        },
+      });
     },
     snapshot() {
       const snapshot: QueryScriptRenderOptions[] = [];

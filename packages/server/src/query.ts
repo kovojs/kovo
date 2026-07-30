@@ -1,6 +1,7 @@
 import { isSecret } from '@kovojs/core/security';
 import { type JsonValue } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
+import { canonicalQueryInstanceKeyValue } from '@kovojs/core/internal/wire-input-grammar';
 import { reportServerError } from './diagnostics.js';
 import {
   snapshotSharedCacheInfluenceDeclaration,
@@ -48,7 +49,9 @@ import {
 } from './response.js';
 import {
   entriesToRecord,
+  inheritSchemaRuntimeMetadata,
   isSchemaValidationError,
+  schemaObjectFieldNames,
   snapshotSchemaForRuntime,
   type Schema,
   type SchemaValidationErrorLike,
@@ -67,6 +70,7 @@ import {
 import {
   securityEncodeURIComponent,
   securityArrayJoin,
+  securityArraySort,
   securityRegExpTest,
   securityString,
   securityStringIndexOf,
@@ -994,7 +998,7 @@ export function readQueryInstanceKey<const Key extends string, Value, Input, Req
   if (typeof queryDefinition.instanceKey === 'function') return queryDefinition.instanceKey(input);
   if (queryDefinition.instanceKey !== undefined) return queryDefinition.instanceKey;
   if (queryDefinition.args === undefined) return undefined;
-  return defaultQueryInstanceKey(queryDefinition.key, input);
+  return defaultQueryInstanceKey(queryDefinition.key, queryDefinition.args, input);
 }
 
 /**
@@ -1009,7 +1013,9 @@ export function queryEndpointHref<const Key extends string, Value, Input, Reques
 ): string {
   return queryEndpointCurrentUrl(
     queryDefinition.key,
-    queryDefinition.args === undefined ? [] : queryInputSearchEntries(input),
+    queryDefinition.args === undefined
+      ? []
+      : queryInputSearchEntries(input, schemaObjectFieldNames(queryDefinition.args)),
   );
 }
 
@@ -1080,6 +1086,7 @@ function queryArgsSchema<Input>(
     });
   }
 
+  inheritSchemaRuntimeMetadata(closedSchema, bind);
   return bind;
 }
 
@@ -1275,41 +1282,38 @@ function querySearchWithoutArgsSchemaFailure(): QueryEndpointFailure {
 
 type QuerySearchEntry = readonly [string, string];
 
-function defaultQueryInstanceKey(queryKey: string, input: unknown): string | undefined {
-  if (typeof input !== 'object' || input === null || witnessIsArray(input)) return undefined;
-  const names = witnessObjectKeys(input);
-  if (names.length === 0) return undefined;
-  let keyValue = '';
-  for (let index = 0; index < names.length; index += 1) {
-    const name = names[index]!;
-    const descriptor = witnessGetOwnPropertyDescriptor(input, name);
-    if (!descriptor || !('value' in descriptor)) {
-      throw new TypeError('Kovo canonical query-key fields must be own-data properties.');
-    }
-    const value = descriptor.value;
-    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-      // Non-scalar search/filter inputs remain one unkeyed instance unless the query declares an
-      // explicit instanceKey. Keyed optimism intentionally accepts the same scalar-record grammar.
-      return undefined;
-    }
-    keyValue += `${index === 0 ? '' : ':'}${securityString(value)}`;
+function defaultQueryInstanceKey(queryKey: string, args: Schema<unknown>, input: unknown): string {
+  const declaredFields = schemaObjectFieldNames(args);
+  if (declaredFields === undefined) {
+    throw new TypeError(
+      `Query "${queryKey}" requires an explicit instanceKey because its args are not a genuine s.object(...) schema.`,
+    );
   }
-  return `${queryKey}:${keyValue}`;
+  return `${queryKey}:${canonicalQueryInstanceKeyValue(declaredFields, input)}`;
 }
 
-function queryInputSearchEntries(input: unknown): readonly QuerySearchEntry[] {
+function queryInputSearchEntries(
+  input: unknown,
+  declaredFields: readonly string[] | undefined,
+): readonly QuerySearchEntry[] {
   if (typeof input !== 'object' || input === null || witnessIsArray(input)) {
     throw new TypeError('Kovo component query args must resolve to a flat own-data record.');
   }
   const entries: QuerySearchEntry[] = [];
-  const names = witnessObjectKeys(input);
+  const names = declaredFields === undefined ? witnessObjectKeys(input) : declaredFields;
+  if (declaredFields === undefined) {
+    securityArraySort(names as string[], (left, right) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    );
+  }
   if (names.length > 1_024) {
     throw new RangeError('Kovo component query args exceed the bounded field limit.');
   }
   for (let index = 0; index < names.length; index += 1) {
     const name = names[index]!;
     const descriptor = witnessGetOwnPropertyDescriptor(input, name);
-    if (!descriptor || !('value' in descriptor)) {
+    if (descriptor === undefined) continue;
+    if (!('value' in descriptor)) {
       throw new TypeError('Kovo component query args must be stable own-data properties.');
     }
     appendQueryInputSearchValues(entries, name, descriptor.value);

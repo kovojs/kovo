@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { canonicalJsonStringify } from '../json-clone.js';
 import {
+  canonicalQueryInstanceKeyValue,
   decodeFrameworkFormTargetHeader,
   decodeFrameworkIdentityToken,
   decodeFrameworkQueryDependencyToken,
@@ -36,6 +37,72 @@ function seededIdentity(seed: number): string {
   }
   return value;
 }
+
+describe('canonical query-instance key codec (SPEC §9.4/§10.2)', () => {
+  it('uses declared field order and keeps empty and optional args canonical', () => {
+    expect(canonicalQueryInstanceKeyValue([], {})).toBe('');
+
+    const declared = ['org', 'id', 'cursor'] as const;
+    const declaredOrder = canonicalQueryInstanceKeyValue(declared, {
+      org: 'o1',
+      id: 'p1',
+    });
+    const reversedInsertionOrder = canonicalQueryInstanceKeyValue(declared, {
+      id: 'p1',
+      org: 'o1',
+    });
+    expect(reversedInsertionOrder).toBe(declaredOrder);
+    expect(
+      canonicalQueryInstanceKeyValue(declared, {
+        cursor: 'p1',
+        org: 'o1',
+      }),
+    ).not.toBe(declaredOrder);
+    expect(
+      canonicalQueryInstanceKeyValue(declared, {
+        cursor: undefined,
+        id: 'p1',
+        org: 'o1',
+      }),
+    ).toBe(declaredOrder);
+  });
+
+  it('frames delimiters, scalar types, and dense scalar arrays without collisions', () => {
+    const fields = ['left', 'right'] as const;
+    expect(canonicalQueryInstanceKeyValue(fields, { left: 'x:y', right: 'z' })).not.toBe(
+      canonicalQueryInstanceKeyValue(fields, { left: 'x', right: 'y:z' }),
+    );
+    expect(canonicalQueryInstanceKeyValue(['value'], { value: '1' })).not.toBe(
+      canonicalQueryInstanceKeyValue(['value'], { value: 1 }),
+    );
+    expect(canonicalQueryInstanceKeyValue(['value'], { value: 1 })).not.toBe(
+      canonicalQueryInstanceKeyValue(['value'], { value: true }),
+    );
+    expect(canonicalQueryInstanceKeyValue(['values'], { values: ['x:y', 1, false] })).not.toBe(
+      canonicalQueryInstanceKeyValue(['values'], { values: ['x', 'y:1', false] }),
+    );
+    expect(canonicalQueryInstanceKeyValue(['values'], { values: [] })).not.toBe(
+      canonicalQueryInstanceKeyValue([], {}),
+    );
+  });
+
+  it('fails closed on undeclared, non-scalar, sparse, and non-finite values', () => {
+    expect(() => canonicalQueryInstanceKeyValue(['id'], { id: 'p1', extra: true })).toThrow(
+      /undeclared field/iu,
+    );
+    expect(() => canonicalQueryInstanceKeyValue(['id'], { id: { nested: true } })).toThrow(
+      /explicit instanceKey/iu,
+    );
+    expect(() => canonicalQueryInstanceKeyValue(['id'], { id: Number.NaN })).toThrow(
+      /finite scalar/iu,
+    );
+    const sparse = new Array(2);
+    sparse[1] = 'p1';
+    expect(() => canonicalQueryInstanceKeyValue(['ids'], { ids: sparse })).toThrow(
+      /dense scalar array/iu,
+    );
+  });
+});
 
 describe('framework wire-input grammar registry (SPEC §9.1)', () => {
   // @kovo-security-certifies C13 cache-influence-wire-input-vocabulary

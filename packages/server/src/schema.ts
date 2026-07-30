@@ -143,6 +143,15 @@ export function snapshotSchemaForRuntime<Value>(
   return witnessFreeze(snapshot);
 }
 
+/** @internal Preserve genuine schema metadata on a framework-owned callable schema wrapper. */
+export function inheritSchemaRuntimeMetadata(
+  source: Schema<unknown>,
+  target: Schema<unknown>,
+): void {
+  const metadata = witnessWeakMapGet(schemaMetadata, source);
+  if (metadata !== undefined) witnessWeakMapSet(schemaMetadata, target, metadata);
+}
+
 /**
  * @internal Parse a declared application environment through a genuine framework `s.object`
  * schema and freeze the resulting declared projection (SPEC §6.6/§9.5).
@@ -696,6 +705,23 @@ function schemaContainsFile(schema: Schema<unknown>): boolean {
   }
   if (metadata.kind === 'record') return schemaContainsFile(metadata.value);
   return false;
+}
+
+/**
+ * Return the exact declared field order for a genuine framework `s.object(...)` schema.
+ *
+ * @internal Query instance identity uses this private metadata instead of parsed-object insertion
+ * order, which a custom structural `Schema` cannot authenticate (SPEC §9.4/§10.2).
+ */
+export function schemaObjectFieldNames(schema: Schema<unknown>): readonly string[] | undefined {
+  const metadata = witnessWeakMapGet(schemaMetadata, schema);
+  if (metadata?.kind !== 'object') return undefined;
+  const names = witnessObjectKeys(metadata.shape);
+  const snapshot: string[] = [];
+  for (let index = 0; index < names.length; index += 1) {
+    appendSchemaArrayValue(snapshot, names[index]!);
+  }
+  return witnessFreeze(snapshot);
 }
 
 /** Minimal uploaded-file shape accepted by `s.file()` schemas (SPEC.md §6). */

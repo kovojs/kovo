@@ -96,9 +96,92 @@ describe('component query document hydration', () => {
 
     expect(body).toContain('data-crm-stage="open"');
     expect(body).toContain('kovo-query="queries/deal-by-id-query"');
-    expect(body).toContain('key="queries/deal-by-id-query:d1"');
+    expect(body).toContain('key="queries/deal-by-id-query:f10:k2:ids2:d1"');
     expect(body).toContain('data-kovo-query-href="/_q/queries/deal-by-id-query?id=d1"');
     expect(body).toContain('{"id":"d1","stage":"open"}');
+  });
+
+  it('includes layout query truth in the selected initial document', async () => {
+    const chromeQuery = query('queries/chrome-query', {
+      load: () => ({ tenant: 'acme' }),
+      reads: [],
+    });
+    const Shell = layout({
+      queries: { chrome: chromeQuery },
+      render: ({ chrome }, _state, { children }) =>
+        jsx('section', {
+          'data-layout-tenant': chrome.tenant,
+          children,
+        }),
+    });
+    const homeRoute = route('/layout-query', {
+      layout: Shell,
+      page: () => jsx('main', { children: 'home' }),
+    });
+    const request = new Request('https://example.test/layout-query');
+
+    const response = await renderAppRouteDocumentResponse({
+      app: createApp({ routes: [homeRoute] }),
+      params: {},
+      request,
+      route: homeRoute,
+      url: new URL(request.url),
+    });
+    const body = await responseBodyText(response.body);
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('data-layout-tenant="acme"');
+    expect(body).toContain('kovo-query="queries/chrome-query"');
+    expect(body).toContain('data-kovo-query-href="/_q/queries/chrome-query"');
+    expect(body).toContain('{"tenant":"acme"}');
+  });
+
+  it('rolls failed layout query truth back before rendering an error boundary', async () => {
+    const privateLayoutQuery = query('queries/private-layout-query', {
+      load: () => ({ secret: 'victim-only' }),
+      reads: [],
+    });
+    const safeBoundaryQuery = query('queries/safe-boundary-query', {
+      load: () => ({ message: 'safe-boundary' }),
+      reads: [],
+    });
+    const SafeBoundary = component({
+      queries: { safe: safeBoundaryQuery },
+      render: ({ safe }: { safe: { message: string } }) =>
+        jsx('main', {
+          'data-selected-boundary': safe.message,
+          children: safe.message,
+        }),
+    });
+    const BrokenShell = layout({
+      boundaries: {
+        error: () => jsx(SafeBoundary, {}),
+      },
+      queries: { privateLayout: privateLayoutQuery },
+      render() {
+        throw new Error('discard this layout branch');
+      },
+    });
+    const brokenRoute = route('/failed-layout-query', {
+      layout: BrokenShell,
+      page: () => jsx('article', { children: 'discarded page' }),
+    });
+    const request = new Request('https://example.test/failed-layout-query');
+
+    const response = await renderAppRouteDocumentResponse({
+      app: createApp({ onError: () => undefined, routes: [brokenRoute] }),
+      params: {},
+      request,
+      route: brokenRoute,
+      url: new URL(request.url),
+    });
+    const body = await responseBodyText(response.body);
+
+    expect(response.status).toBe(500);
+    expect(body).toContain('data-selected-boundary="safe-boundary"');
+    expect(body).toContain('kovo-query="queries/safe-boundary-query"');
+    expect(body).not.toContain('queries/private-layout-query');
+    expect(body).not.toContain('victim-only');
   });
 });
 

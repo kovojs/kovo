@@ -124,7 +124,23 @@ Derived from this one expression, statically:
   preserves `T | null` in the query handle, and contributes nullable query-shape metadata so the
   compiler continues to require optional traversal or explicit null handling (KV227). `undefined`
   is not admitted by this wrapper, and a local lookalike cannot mint framework query-shape facts.
-- **Instance key** from the WHERE eq-predicates, resolved to `args.*` or `req.session.*` — only args are client-visible. Canonical encoding: `name:keyValue` in declared arg order (`product:p1`). This full key remains the single currency for the client store (`<script kovo-query="product:p1">`), optimistic transform keys (§10.4), and live-push routing. On `kovo-deps` and `Kovo-Targets`, it is carried as the key field of the exact `{query name, full instance key}` dependency encoding from §9.1; it is never recovered by splitting a colon-shaped string. Two instances of one query coexist on a page; `data-bind` inside an island resolves against that island's instance.
+- **Instance key** from client-visible `args.*`. The full identity is `name:keyValue`. For a
+  genuine `s.object` args schema, Kovo derives `keyValue` from the parsed args in schema-declared
+  field order with this typed, collision-free grammar (lengths are JavaScript UTF-16 code units):
+  each present field is `f<length>:<k<length>:<field><value>>`; string, finite-number, and boolean
+  values are `s<length>:<text>`, `n<length>:<text>`, and `b1:0|b1:1`; a dense scalar array is
+  `a<length>:<concatenated scalar frames>`. Missing and `undefined` optional fields are omitted,
+  while a declared empty args object produces an empty `keyValue`, so `name:` is valid. Thus
+  `{ id: 'p1' }` for query `product` is `product:f10:k2:ids2:p1`, not a delimiter join that can
+  alias strings, scalar types, optional positions, or array boundaries. A custom structural schema
+  or unsupported value shape MUST declare `instanceKey`; compiler-generated keyed optimism accepts
+  only compiler-resolved genuine `s.object` args using the same core-owned codec and rejects an
+  authored `instanceKey` it cannot prove equivalent. This full key remains the single currency for
+  the client store (`<script kovo-query="product:f10:k2:ids2:p1">`), optimistic transform keys
+  (§10.4), and live-push routing. On `kovo-deps` and `Kovo-Targets`, it is carried as the key field
+  of the exact `{query name, full instance key}` dependency encoding from §9.1; it is never
+  recovered by splitting a colon-shaped string. Two instances of one query coexist on a page;
+  `data-bind` inside an island resolves against that island's instance.
 
 **Args bind locally (Constitution #2).** A component declares how its args derive from its own props — `queries: { product: productQuery.args((p) => ({ id: p.productId })) }` — so any page rendering the component satisfies the dependency without call-site knowledge. Route params reach queries as ordinary props through `route().page`; no call site enumerates query dependencies.
 
