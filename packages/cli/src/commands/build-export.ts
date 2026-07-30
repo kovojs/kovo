@@ -7066,10 +7066,6 @@ async function bundleKovoServerHandler(
           },
           { find: /^@kovojs\/server$/, replacement: requireFromCli.resolve('@kovojs/server') },
           {
-            find: /^@kovojs\/server\/internal\/app-shell-vite$/,
-            replacement: requireFromCli.resolve('@kovojs/server/internal/app-shell-vite'),
-          },
-          {
             find: /^@kovojs\/server\/internal\/execution$/,
             replacement: requireFromCli.resolve('@kovojs/server/internal/execution'),
           },
@@ -7463,7 +7459,9 @@ export function kovoServerHandlerEntrySource(
       runtimeTarget === 'cloudflare'
         ? ''
         : "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
-      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
+      `import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from ${stringifyBuildValue(
+        generatedHandlerRuntimeHref(),
+      )};`,
       generatedClientModuleEntry === undefined
         ? ''
         : `import { claimGeneratedBuildClientModuleInstaller } from ${stringifyBuildValue(
@@ -7684,15 +7682,22 @@ function generatedBuildClientModuleEntry(
   };
 }
 
-function generatedBuildClientModuleBootstrapHref(): string {
+function generatedServerInternalSiblingHref(stem: string): string {
   const appShellEntry = requireFromCli.resolve('@kovojs/server/internal/app-shell-vite');
   const extension = buildStringEndsWith(appShellEntry, '.ts')
     ? '.ts'
     : buildStringEndsWith(appShellEntry, '.mjs')
       ? '.mjs'
       : '.js';
-  return pathToFileURL(join(dirname(appShellEntry), `generated-build-client-modules${extension}`))
-    .href;
+  return pathToFileURL(join(dirname(appShellEntry), `${stem}${extension}`)).href;
+}
+
+function generatedBuildClientModuleBootstrapHref(): string {
+  return generatedServerInternalSiblingHref('generated-build-client-modules');
+}
+
+function generatedHandlerRuntimeHref(): string {
+  return generatedServerInternalSiblingHref('generated-handler-runtime');
 }
 
 /** @internal Serialize the production registry entry with the CLI's boot-captured JSON control. */

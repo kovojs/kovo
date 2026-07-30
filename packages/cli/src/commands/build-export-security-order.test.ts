@@ -177,9 +177,7 @@ describe('build/export security bootstrap ordering', () => {
       "import '@kovojs/server/internal/sql-parser-authority-bootstrap';",
     );
     const registryImport = source.indexOf("import './runtime-registry.mjs';");
-    const serverImport = source.indexOf(
-      "import { createRequestHandler, deriveClosedKovoApp, runWithGeneratedLiveTargetRegistry } from '@kovojs/server/internal/app-shell-vite';",
-    );
+    const serverImport = source.indexOf('generated-handler-runtime.ts');
     const appImport = source.indexOf('runWithGeneratedLiveTargetRegistry(() => import(');
     expect(bootstrapImport).toBe(0);
     expect(serverImport).toBeGreaterThan(bootstrapImport);
@@ -201,6 +199,7 @@ describe('build/export security bootstrap ordering', () => {
     ).not.toContain('sql-parser-authority-bootstrap');
     expect(source).not.toContain('lockServerRequestSafeRuntimeRealm();');
     expect(source).not.toContain('import * as appModule from');
+    expect(source).not.toContain("from '@kovojs/server/internal/app-shell-vite'");
     expect(source).toContain('appendFrameworkRuntimeArrayValue');
     expect(source).not.toContain('[result.length]');
     expect(source).not.toContain('[hrefOrder.length]');

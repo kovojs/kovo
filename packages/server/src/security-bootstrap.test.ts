@@ -34,6 +34,7 @@ describe('server security bootstrap census', () => {
       ['testing.ts', "import './security-bootstrap.js';"],
       ['internal/app-shell-vite.ts', "import '../security-bootstrap.js';"],
       ['internal/build.ts', "import '../security-bootstrap.js';"],
+      ['internal/generated-handler-runtime.ts', "import '../security-bootstrap.js';"],
       ['internal/static-export.ts', "import '../security-bootstrap.js';"],
     ] as const;
 
