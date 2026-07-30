@@ -1,6 +1,15 @@
 import { execFile } from 'node:child_process';
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  existsSync,
+  lstatSync,
+  openSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { join, relative, resolve, sep } from 'node:path';
 
 import {
   projectQualityDiagnostic,
@@ -8,10 +17,53 @@ import {
   type KovoDiagnosticSourceAnchor,
 } from '../diagnostic.js';
 import type { CliCommandResult } from '../shared.js';
-import { resolveVitePlusBin } from './vite-plus-bin.js';
+import { resolveVitePlusQualityBin, type VitePlusQualityBin } from './vite-plus-bin.js';
 
 const MAX_QUALITY_OUTPUT_BYTES = 16 * 1024 * 1024;
 const PROJECT_QUALITY_THREADS = 1;
+const QUALITY_CONFIG_SCHEMA = 'kovo-project-quality-config/v1';
+const QUALITY_CONFIG_PROBE = `
+import { pathToFileURL } from 'node:url';
+const modulePath = process.argv[1];
+const imported = await import(pathToFileURL(modulePath).href);
+const vitePlus = imported.default ?? imported;
+if (typeof vitePlus.loadConfigFromFile !== 'function') {
+  throw new TypeError('vite-plus config module has no loadConfigFromFile export');
+}
+const loaded = await vitePlus.loadConfigFromFile(
+  { command: 'build', mode: 'production' },
+  undefined,
+  process.cwd(),
+  'silent',
+);
+const config = loaded?.config ?? {};
+const seen = new Set();
+function jsonValue(value, label) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError(label + ' is cyclic');
+    seen.add(value);
+    const result = value.map((item, index) => jsonValue(item, label + '[' + String(index) + ']'));
+    seen.delete(value);
+    return result;
+  }
+  if (typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new TypeError(label + ' is not JSON-safe');
+  }
+  if (seen.has(value)) throw new TypeError(label + ' is cyclic');
+  seen.add(value);
+  const result = {};
+  for (const key of Object.keys(value).sort()) result[key] = jsonValue(value[key], label + '.' + key);
+  seen.delete(value);
+  return result;
+}
+process.stdout.write(JSON.stringify({
+  fmt: jsonValue(config.fmt ?? {}, 'fmt'),
+  lint: jsonValue(config.lint ?? {}, 'lint'),
+  schema: '${QUALITY_CONFIG_SCHEMA}',
+}));
+`;
 
 /** @internal Boot-captured process seam for exact orchestration tests. */
 export const projectQualityCommandShell = { execFile };
@@ -21,6 +73,11 @@ interface CommandExecution {
   readonly status: number | null;
   readonly stderr: string;
   readonly stdout: string;
+}
+
+interface ProjectQualityConfig {
+  readonly fmt: Record<string, unknown>;
+  readonly lint: Record<string, unknown>;
 }
 
 /**
@@ -35,29 +92,39 @@ export async function runProjectQualityCheck(
   protocol: 'kovo-build/v1' | 'kovo-check/v1',
 ): Promise<CliCommandResult> {
   const root = realpathSync(resolve(rootValue));
-  let executable: string;
+  let formatter: VitePlusQualityBin;
+  let linter: VitePlusQualityBin;
   try {
-    executable = resolveVitePlusBin();
+    formatter = resolveVitePlusQualityBin('oxfmt');
+    linter = resolveVitePlusQualityBin('oxlint');
   } catch (error) {
     return runnerFailure(protocol, error);
   }
 
-  // Both tools inspect the whole project. Keep their process trees disjoint and single-threaded so
-  // copy-in catalogs remain below the first-loop memory ceiling. The formatter's worker heap is
-  // itself the dominant packed-catalog phase, so sequential tools alone are not a sufficient bound.
-  const format = await execute(
-    executable,
-    ['fmt', '--list-different', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
-    root,
-    invocationEnv,
-  );
-  const lint = await execute(
-    executable,
-    ['lint', '--format=json', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
+  // Both tools still inspect the whole project. Load the declarative lint/fmt fields without
+  // executing unrelated Vite plugin hooks, then keep the exact pinned formatter/linter process
+  // trees disjoint and single-threaded. This preserves Vite Plus's root/config/ignore semantics
+  // without retaining its unified build/test heap or re-running Kovo compiler analysis around the
+  // packed catalog.
+  const config = await resolveProjectQualityConfig(formatter.configModule, root, invocationEnv);
+  if ('error' in config) return runnerFailure(protocol, config.error);
+  const format = await executeQualityTool(
+    formatter,
+    config.fmt,
+    'oxfmtrc',
+    ['--list-different', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
     root,
     invocationEnv,
   );
   if (format.error !== undefined) return runnerFailure(protocol, format.error);
+  const lint = await executeQualityTool(
+    linter,
+    config.lint,
+    'oxlintrc',
+    ['--format=json', `--threads=${String(PROJECT_QUALITY_THREADS)}`],
+    root,
+    invocationEnv,
+  );
   if (lint.error !== undefined) return runnerFailure(protocol, lint.error);
 
   let diagnostics: KovoDiagnosticRecord[];
@@ -101,8 +168,101 @@ export async function runProjectQualityCheck(
   };
 }
 
+async function resolveProjectQualityConfig(
+  configModule: string,
+  root: string,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<ProjectQualityConfig | { readonly error: unknown }> {
+  const configProbe = await executeNode(
+    ['--input-type=module', '--eval', QUALITY_CONFIG_PROBE, configModule],
+    root,
+    invocationEnv,
+  );
+  if (configProbe.error !== undefined || configProbe.status !== 0) {
+    return {
+      error:
+        configProbe.error === undefined
+          ? new TypeError(
+              `formatter config resolver failed: ${singleLine(configProbe.stderr) || `exit ${String(configProbe.status)}`}`,
+            )
+          : configProbe.error,
+    };
+  }
+
+  try {
+    const report = JSON.parse(configProbe.stdout) as unknown;
+    if (
+      !isRecord(report) ||
+      report.schema !== QUALITY_CONFIG_SCHEMA ||
+      !isRecord(report.fmt) ||
+      !isRecord(report.lint)
+    ) {
+      throw new TypeError('formatter config resolver emitted an invalid report');
+    }
+    return { fmt: report.fmt, lint: report.lint };
+  } catch (error) {
+    return {
+      error: new TypeError(`formatter config resolver report is invalid: ${singleLine(error)}`),
+    };
+  }
+}
+
+async function executeQualityTool(
+  tool: VitePlusQualityBin,
+  config: Record<string, unknown>,
+  configKind: 'oxfmtrc' | 'oxlintrc',
+  args: readonly string[],
+  root: string,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<CommandExecution> {
+  const configName = `.kovo-project-quality-${randomUUID()}.${configKind}.json`;
+  const configPath = join(root, configName);
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(configPath, 'wx', 0o600);
+    const ignorePatterns = config.ignorePatterns;
+    const enrolledIgnorePatterns =
+      ignorePatterns === undefined
+        ? [configName]
+        : Array.isArray(ignorePatterns) &&
+            ignorePatterns.every((value) => typeof value === 'string')
+          ? [...ignorePatterns, configName]
+          : undefined;
+    if (enrolledIgnorePatterns === undefined) {
+      throw new TypeError('formatter ignorePatterns config is invalid');
+    }
+    writeFileSync(
+      descriptor,
+      `${JSON.stringify({ ...config, ignorePatterns: enrolledIgnorePatterns })}\n`,
+      'utf8',
+    );
+    closeSync(descriptor);
+    descriptor = undefined;
+    return await execute(tool.executable, ['--config', configPath, ...args], root, {
+      ...invocationEnv,
+      ...tool.environment,
+      JS_RUNTIME_NAME: process.release.name,
+      JS_RUNTIME_VERSION: process.versions.node,
+      NODE_PACKAGE_MANAGER: 'vite-plus',
+    });
+  } catch (error) {
+    return { error, status: null, stderr: '', stdout: '' };
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+    if (existsSync(configPath)) unlinkSync(configPath);
+  }
+}
+
 async function execute(
   executable: string,
+  args: readonly string[],
+  root: string,
+  invocationEnv: NodeJS.ProcessEnv,
+): Promise<CommandExecution> {
+  return executeNode([executable, ...args], root, invocationEnv);
+}
+
+async function executeNode(
   args: readonly string[],
   root: string,
   invocationEnv: NodeJS.ProcessEnv,
@@ -110,7 +270,7 @@ async function execute(
   return new Promise((resolveExecution) => {
     projectQualityCommandShell.execFile(
       process.execPath,
-      [executable, ...args],
+      args,
       {
         cwd: root,
         encoding: 'utf8',
@@ -156,7 +316,14 @@ function formatDiagnostics(root: string, execution: CommandExecution): KovoDiagn
 
 function lintDiagnostics(root: string, execution: CommandExecution): KovoDiagnosticRecord[] {
   if (execution.status === 0) return [];
-  const report = JSON.parse(execution.stdout) as unknown;
+  let report: unknown;
+  try {
+    report = JSON.parse(execution.stdout) as unknown;
+  } catch (error) {
+    throw new TypeError(
+      `linter failed without a valid JSON report: ${singleLine(error)} ${singleLine(execution.stderr)}`,
+    );
+  }
   if (!isRecord(report) || !Array.isArray(report.diagnostics)) {
     throw new TypeError(`linter failed without a JSON report: ${singleLine(execution.stderr)}`);
   }
