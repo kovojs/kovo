@@ -3,7 +3,6 @@ import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
-import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CartPanelAuthority } from './cart-panel';
@@ -38,9 +37,6 @@ const homeRoute = route('/', {
     const cart = await readCart(request.db);
     return (
       <main>
-        {trustedHtml(renderQueryScript({ href: '/_q/cart', name: 'cart', value: cart }), {
-          reason: 'framework integration fixture markup',
-        })}
         {trustedHtml('<script type="module" src="/client.ts"></script>', {
           reason: 'framework integration fixture markup',
         })}

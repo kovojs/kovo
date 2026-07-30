@@ -1,4 +1,4 @@
-<form action="/_m/checkout/submit" kovo-c="checkout-form" kovo-deps="checkoutForm" kovo-fragment-target="checkout-form" method="post">
+<form action="/_m/checkout/submit" kovo-c="checkout-form" kovo-deps="checkoutForm" kovo-fragment-target="checkout-form" kovo-plan-owner="checkout-form/checkout-form" method="post">
   <label>
     "Quantity"
     <input name="quantity" type="number" value="2">

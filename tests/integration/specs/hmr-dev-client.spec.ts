@@ -16,8 +16,6 @@ import { createRegisteredDiagnostic } from '@kovojs/core/internal/diagnostics';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-import '@kovojs/server/internal/sql-parser-authority-bootstrap';
-
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, route, s } from '@kovojs/server';
 import { jsx } from '@kovojs/server/jsx-runtime';
@@ -29,12 +27,10 @@ import {
   runWithGeneratedLiveTargetRegistry,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
-import { resolveFixtureAppToken } from '@kovojs/server/internal/fixture-app';
 import {
+  assignDerivedComponentName,
   componentLiveTargetRenderer,
-  createLiveTargetAttestation as createAppLiveTargetAttestation,
   registerGeneratedLiveTargetRenderer,
-  type LiveTargetRenderer,
 } from '@kovojs/server/internal/wire';
 // These specs spin up ad hoc Vite/HTTP HMR servers and mutate module graphs; running
 // them concurrently inside one file causes CI-only startup/teardown contention.
@@ -47,52 +43,51 @@ type ViteMiddleware = (
 ) => void;
 type OnModuleDiagnostics = Exclude<KovoVitePluginOptions['onModuleDiagnostics'], undefined>;
 
-function liveTargetToken(
-  app: ReturnType<typeof createApp>,
-  request: Request,
-  target: string,
-  component: string,
-  props: Record<string, unknown> = {},
-): string {
-  return createAppLiveTargetAttestation(
-    resolveFixtureAppToken(app),
-    { component, props, target },
-    request,
-  );
-}
-
 test('dev HMR client applies server-rendered live-target fragments without reloading', async ({
   page,
 }) => {
+  const hmr = domain('hmr');
   let renderVersion = 1;
-  let app!: ReturnType<typeof createApp>;
-  const renderCard = (request: Request) => `<section
-      kovo-fragment-target="hmr-card"
-      kovo-c="hmr-card"
-      kovo-deps="hmr"
-      kovo-live-component="hmr/Card"
-      kovo-live-token="${liveTargetToken(app, request, 'hmr-card', 'hmr/Card', { id: 'one' })}"
-      kovo-props='{"id":"one"}'>
-      <label for="hmr-input">Draft</label>
-      <input id="hmr-input" kovo-key="input" value="server ${renderVersion}">
-      <output id="hmr-output" kovo-key="output">Version ${renderVersion}</output>
-    </section>`;
-  const renderer: LiveTargetRenderer<Request> = {
-    component: 'hmr/Card',
-    mutationKeys: [],
-    render(context) {
-      expect(context.props).toEqual({ id: 'one' });
-      expect(context.target).toBe('hmr-card');
-      return renderCard(context.request);
+  const hmrQuery = query('hmr', {
+    load() {
+      return { version: renderVersion };
     },
-  };
-  app = runWithGeneratedLiveTargetRegistry(() => {
+    reads: [hmr],
+  });
+  const Card = assignDerivedComponentName(
+    component({
+      queries: { hmr: hmrQuery },
+      render({ hmr }: { hmr: { version: number } }) {
+        return jsx('section', {
+          children: [
+            jsx('label', { children: 'Draft', for: 'hmr-input' }),
+            jsx('input', {
+              id: 'hmr-input',
+              'kovo-key': 'input',
+              value: `server ${hmr.version}`,
+            }),
+            jsx('output', {
+              children: `Version ${hmr.version}`,
+              id: 'hmr-output',
+              'kovo-key': 'output',
+            }),
+          ],
+        });
+      },
+    }),
+    'hmr/Card',
+  );
+  const renderer = componentLiveTargetRenderer({
+    component: Card,
+    componentId: 'hmr/Card',
+  });
+  const app = runWithGeneratedLiveTargetRegistry(() => {
     registerGeneratedLiveTargetRenderer(renderer);
     return createApp({
       routes: [
         route('/', {
-          page(_context, request) {
-            return `<main>${renderCard(request)}</main>`;
+          page() {
+            return jsx('main', { children: jsx(Card, {}) });
           },
         }),
       ],
@@ -128,9 +123,9 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
     });
     const [request] = await Promise.all([refreshRequest, refreshResponse]);
     const headers = request.headers();
-    expect(headers['kovo-live-targets']).toContain('hmr-card#hmr%2FCard@');
-    expect(headers['kovo-live-targets']).toContain(':{"id":"one"}');
-    expect(headers['kovo-targets']).toContain('hmr-card=hmr');
+    expect(headers['kovo-live-targets']).toContain('Card#hmr%2FCard@');
+    expect(headers['kovo-live-targets']).toContain(':{}');
+    expect(headers['kovo-targets']).toContain('Card=hmr');
     await expect(page.locator('#hmr-output')).toHaveText('Version 2');
     await expect(page.locator('#hmr-input')).toHaveValue('user draft');
     await expect(page.locator('#hmr-input')).toBeFocused();
@@ -144,7 +139,6 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   const product = domain('product');
   let stock = 7;
   const queryLoads: string[] = [];
-  let app!: ReturnType<typeof createApp>;
   const productQuery = query('product', {
     args: s.object({ id: s.string() }),
     load(input: { id: string }, context: unknown) {
@@ -158,41 +152,33 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     },
     reads: [product],
   });
-  const ProductCard = component({
-    queries: {
-      product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
-    },
-    render(
-      { product, productId }: { product: { id: string; stock: number }; productId: string },
-      _state: unknown,
-      { request }: { request: Request },
-    ) {
-      return jsx('section', {
-        'kovo-c': 'product-card',
-        'kovo-deps': `!product!product%3A${product.id}`,
-        'kovo-fragment-target': 'product-card',
-        'kovo-live-component': 'hmr/ProductCard',
-        'kovo-live-token': liveTargetToken(app, request, 'product-card', 'hmr/ProductCard', {
-          productId,
-        }),
-        'kovo-props': JSON.stringify({ productId }),
-        children: [
-          jsx('label', { children: 'Note', for: 'product-note' }),
-          jsx('input', {
-            id: 'product-note',
-            'kovo-key': 'note',
-            value: `server ${product.stock}`,
-          }),
-          jsx('output', { children: product.stock, id: 'product-stock', 'kovo-key': 'stock' }),
-        ],
-      });
-    },
-  });
+  const ProductCard = assignDerivedComponentName(
+    component({
+      props: { productId: String },
+      queries: {
+        product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render({ product }: { product: { id: string; stock: number }; productId: string }) {
+        return jsx('section', {
+          children: [
+            jsx('label', { children: 'Note', for: 'product-note' }),
+            jsx('input', {
+              id: 'product-note',
+              'kovo-key': 'note',
+              value: `server ${product.stock}`,
+            }),
+            jsx('output', { children: product.stock, id: 'product-stock', 'kovo-key': 'stock' }),
+          ],
+        });
+      },
+    }),
+    'hmr/ProductCard',
+  );
   const productRenderer = componentLiveTargetRenderer({
     component: ProductCard,
     componentId: 'hmr/ProductCard',
   });
-  app = runWithGeneratedLiveTargetRegistry(() => {
+  const app = runWithGeneratedLiveTargetRegistry(() => {
     registerGeneratedLiveTargetRenderer(productRenderer);
     return createApp({
       routes: [
@@ -230,9 +216,11 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     });
     const request = await refreshRequest;
     const headers = request.headers();
-    expect(headers['kovo-live-targets']).toContain('product-card#hmr%2FProductCard@');
+    expect(headers['kovo-live-targets']).toContain('ProductCard%3Ap1#hmr%2FProductCard@');
     expect(headers['kovo-live-targets']).toContain(':{"productId":"p1"}');
-    expect(headers['kovo-targets']).toContain('product-card=!product!product%3Ap1');
+    expect(headers['kovo-targets']).toContain(
+      'ProductCard%3Ap1=!product!product%3Af10%3Ak2%3Aids2%3Ap1',
+    );
 
     await expect(page.locator('#product-stock')).toHaveText('11');
     await expect(page.locator('#product-note')).toHaveValue('keep me');
@@ -585,18 +573,27 @@ async function serveHmrFixture(
     ...pluginOptions,
     moduleId: pluginOptions.moduleId ?? '/src/app-shell.ts',
   });
+  const loadModule = async (id: string): Promise<Record<string, unknown>> => {
+    if (id === '@kovojs/server/internal/app-shell-vite') {
+      return { dispatchKovoAppShellViteDevRequest };
+    }
+    return { default: app };
+  };
   plugin.configureServer({
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import: loadModule,
+        },
+      },
+    },
     middlewares: {
       use(handler) {
         middleware = handler;
       },
     },
-    async ssrLoadModule(id) {
-      if (id === '@kovojs/server/internal/app-shell-vite') {
-        return { dispatchKovoAppShellViteDevRequest };
-      }
-      return { default: app };
-    },
+    ssrLoadModule: loadModule,
   });
 
   const server: Server = createServer((request, response) => {

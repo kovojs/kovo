@@ -1,9 +1,8 @@
 <main>
-  <script kovo-query="profile" type="application/json">
-  <profile-summary kovo-c="profile-summary" kovo-deps="profile" kovo-fragment-target="profile-summary">
+  <profile-summary kovo-c="profile-summary" kovo-deps="profile" kovo-fragment-target="profile-summary" kovo-plan-owner="profile-summary/profile-summary">
     <h2 data-bind="profile.name">
       "Grace Hopper"
-  <profile-status kovo-c="profile-status" kovo-deps="profile" kovo-fragment-target="profile-status">
+  <profile-status kovo-c="profile-status" kovo-deps="profile" kovo-fragment-target="profile-status" kovo-plan-owner="profile-status/profile-status">
     <output data-bind="profile.status">
       "published"
   <form action="/_m/shared-query-consumers/publish" method="post">

@@ -1,6 +1,5 @@
 <main>
-  <script kovo-query="refetch" type="application/json">
   <script src="/client.ts" type="module">
-  <refetch-card kovo-deps="refetch">
+  <refetch-card kovo-c="refetch-card" kovo-deps="refetch" kovo-plan-owner="refetch-card/refetch-card">
     <output data-bind="refetch.message">
       "Externally changed"

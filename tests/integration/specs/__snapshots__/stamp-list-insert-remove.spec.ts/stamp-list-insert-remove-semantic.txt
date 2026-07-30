@@ -1,4 +1,4 @@
-<cart-list kovo-c="cart-list" kovo-deps="cart" kovo-fragment-target="cart-list">
+<cart-list kovo-c="cart-list" kovo-deps="cart" kovo-fragment-target="cart-list" kovo-plan-owner="cart-list/cart-list">
   <ul aria-label="Cart items">
     <li data-row="a" kovo-key="a">
       <span>

@@ -1,12 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { renderQueryScript, staticSql } from '@kovojs/test/internal/integration/fixture-abi';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { mutation, route, s } from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProductCard } from './product-card';
-import { productDomain, productQuery, readProduct } from './shared';
+import { productDomain, productQuery } from './shared';
 import { StaticProductCard } from './static-product-card';
 
 export const restockProduct = mutation('multi-instance-query/restock', {
@@ -30,42 +30,20 @@ export const restockProduct = mutation('multi-instance-query/restock', {
 });
 
 const homeRoute = route('/', {
-  page: async (_context, request: KovoFixtureRequest) => {
-    const p1 = await readProduct(request.db, 'p1');
-    const p2 = await readProduct(request.db, 'p2');
-    return (
-      <main>
-        {trustedHtml(
-          renderQueryScript({
-            href: '/_q/product?id=p1',
-            key: 'product:p1',
-            name: 'product',
-            value: p1,
-          }),
-          { reason: 'framework integration fixture markup' },
-        )}
-        {trustedHtml(
-          renderQueryScript({
-            href: '/_q/product?id=p2',
-            key: 'product:p2',
-            name: 'product',
-            value: p2,
-          }),
-          { reason: 'framework integration fixture markup' },
-        )}
-        {trustedHtml('<script type="module" src="/client.ts"></script>', {
-          reason: 'framework integration fixture markup',
-        })}
-        <ProductCard key="p1" productId="p1" />
-        <StaticProductCard key="p2" productId="p2" />
-        <form mutation={restockProduct} enhance>
-          <input type="hidden" name="id" value="p1" />
-          <input type="hidden" name="restock" value="5" />
-          <button type="submit">Restock Pen</button>
-        </form>
-      </main>
-    );
-  },
+  page: () => (
+    <main>
+      {trustedHtml('<script type="module" src="/client.ts"></script>', {
+        reason: 'framework integration fixture markup',
+      })}
+      <ProductCard key="p1" productId="p1" />
+      <StaticProductCard key="p2" productId="p2" />
+      <form mutation={restockProduct} enhance>
+        <input type="hidden" name="id" value="p1" />
+        <input type="hidden" name="restock" value="5" />
+        <button type="submit">Restock Pen</button>
+      </form>
+    </main>
+  ),
 });
 
 const app = createApp({

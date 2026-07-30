@@ -1,11 +1,11 @@
-<inventory-panel kovo-c="inventory-panel" kovo-deps="inventory" kovo-fragment-target="inventory-panel">
+<inventory-panel kovo-c="inventory-panel" kovo-deps="inventory" kovo-fragment-target="inventory-panel" kovo-plan-owner="inventory-panel/inventory-panel">
   <p>
     <span data-bind="inventory.label">
       "Sold out"
     ":"
     <span data-bind="inventory.count">
       "0"
-  <button data-derive-attr="disabled" data-derive="inventory.InventoryPanel$button_disabled_derive" type="button">
+  <button data-derive-attr="disabled" data-derive="inventory.InventoryPanel$button_disabled_derive" disabled="" type="button">
     "Ship order"
   <form action="/_m/derive-binding/sell-out" kovo-fragment-target="sell-out-inventory" method="post">
     <button type="submit">

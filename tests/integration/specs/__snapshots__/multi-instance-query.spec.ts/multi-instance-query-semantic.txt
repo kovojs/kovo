@@ -1,15 +1,13 @@
 <main>
-  <script kovo-query="product" type="application/json">
-  <script kovo-query="product" type="application/json">
   <script src="/client.ts" type="module">
-  <product-card kovo-c="product-card" kovo-deps="!product!product%3Ap1" kovo-fragment-target="product-card:p1">
+  <product-card kovo-c="product-card" kovo-deps="!product!product%3Ap1" kovo-fragment-target="product-card:p1" kovo-plan-owner="product-card/product-card">
     <h2 data-bind="product.name">
       "Pen"
     <p>
       "Stock"
       <span data-bind="product.stock">
         "7"
-  <product-card kovo-deps="product">
+  <product-card kovo-c="static-product-card" kovo-deps="!product!product%3Ap2" kovo-plan-owner="static-product-card/static-product-card">
     <h2 data-bind="product.name">
       "Notebook"
     <p>

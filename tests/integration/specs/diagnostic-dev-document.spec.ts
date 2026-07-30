@@ -2,14 +2,13 @@
 import { createServer, type Server } from 'node:http';
 
 import { createRegisteredDiagnostic, type DiagnosticCode } from '@kovojs/core/internal/diagnostics';
-import '@kovojs/server/internal/sql-parser-authority-bootstrap';
 
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
 import { route } from '@kovojs/server';
-import { resolveFixtureAppToken } from '@kovojs/server/internal/fixture-app';
 import {
   createKovoAppShellDevDiagnosticLedger,
-  kovoAppShellVitePlugin,
+  dispatchKovoAppShellViteDevRequest,
+  kovoAppShellViteDevPlugin,
   type KovoAppShellViteMiddleware,
 } from '@kovojs/server/internal/app-shell-vite';
 import { expect, test } from '@kovojs/test/internal/integration';
@@ -128,16 +127,32 @@ async function serveWithViteMiddleware(
   app: ReturnType<typeof createApp>,
   diagnostics: ReturnType<typeof createKovoAppShellDevDiagnosticLedger>,
 ): Promise<{ close(): Promise<void>; origin: string }> {
-  const plugin = kovoAppShellVitePlugin(resolveFixtureAppToken(app), {
+  const plugin = kovoAppShellViteDevPlugin({
     devDiagnostics: diagnostics,
+    moduleId: '/src/app-shell.ts',
   });
   const middlewares: KovoAppShellViteMiddleware[] = [];
+  const loadModule = async (id: string): Promise<Record<string, unknown>> => {
+    if (id === '@kovojs/server/internal/app-shell-vite') {
+      return { dispatchKovoAppShellViteDevRequest };
+    }
+    return { default: app };
+  };
   plugin.configureServer({
+    environments: {
+      ssr: {
+        runner: {
+          clearCache() {},
+          import: loadModule,
+        },
+      },
+    },
     middlewares: {
       use(handler) {
         middlewares.push(handler);
       },
     },
+    ssrLoadModule: loadModule,
   });
 
   const server: Server = createServer((request, response) => {
