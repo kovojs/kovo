@@ -171,6 +171,7 @@ type CheckArgParseResult =
       format: KovoDiagnosticFormat;
       ok: true;
       source: true;
+      watch: boolean;
     }
   | {
       artifact: boolean;
@@ -226,16 +227,21 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
       ok: false,
     };
   }
-  if (parsed.value.form === 'source-default' || parsed.value.form === 'source') {
+  if (
+    parsed.value.form === 'source-default' ||
+    parsed.value.form === 'source' ||
+    parsed.value.form === 'source-watch'
+  ) {
     return {
       appModulePath:
-        parsed.value.form === 'source'
+        parsed.value.form === 'source' || parsed.value.form === 'source-watch'
           ? (parsed.value.arguments.appModule ?? './src/app.tsx')
           : './src/app.tsx',
       cache: parsed.value.options.cache,
       format: parsed.value.options.format,
       ok: true,
       source: true,
+      watch: parsed.value.form === 'source-watch',
     };
   }
 

@@ -144,6 +144,18 @@ describe('semantic CLI contract', () => {
       compilerRealm: 'locked-before-dispatch',
       processLifecycle: 'one-shot',
     });
+    expect(
+      resolveKovoBinInvocationPosture(['check', 'source', '--watch', '--format', 'json']),
+    ).toEqual({
+      compilerRealm: 'locked-before-dispatch',
+      processLifecycle: 'long-lived',
+    });
+    expect(
+      resolveKovoBinInvocationPosture(['check', 'source', '--watch', '--format', 'human']),
+    ).toEqual({
+      compilerRealm: 'locked-before-dispatch',
+      processLifecycle: 'one-shot',
+    });
 
     expect(() =>
       assertUniqueKovoCommandVocabulary([

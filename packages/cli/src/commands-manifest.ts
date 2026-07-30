@@ -385,9 +385,14 @@ export function resolveKovoBinInvocationPosture(args: readonly string[]): KovoBi
   if (meta.ok && meta.handled) return META_INVOCATION_POSTURE;
   const command = resolveCommand(args[0]);
   if (command === undefined) return META_INVOCATION_POSTURE;
+  const parsed = parseKovoCommandInvocation(command.name, args.slice(1));
+  const form =
+    parsed.ok === true
+      ? command.usage.find((candidate) => candidate.id === parsed.value.form)
+      : undefined;
   return Object.freeze({
     compilerRealm: command.compilerRealm,
-    processLifecycle: command.processLifecycle,
+    processLifecycle: form?.processLifecycle ?? command.processLifecycle,
   });
 }
 
@@ -1142,6 +1147,18 @@ function parseEntryForm(
       !constraint.values.includes(String(semanticArguments[constraint.argument]))
     ) {
       return { error: 'usage', message: usage, ok: false, priority: 30, score };
+    }
+  }
+  for (const constraint of form.optionValues ?? []) {
+    const selected = semanticOptions[constraint.option];
+    if (typeof selected !== 'string' || !constraint.values.includes(selected)) {
+      return {
+        error: 'usage',
+        message: appendUsage(constraint.invalidValueMessage ?? '', usage),
+        ok: false,
+        priority: 30,
+        score,
+      };
     }
   }
   return {

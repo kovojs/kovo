@@ -16,11 +16,13 @@ export function renderSemanticCommandRequestSource(): string {
   const variants = KOVO_COMMAND_SCHEMA.filter(
     (entry) => entry.processLifecycle === 'one-shot',
   ).flatMap((entry) =>
-    entry.usage.flatMap((form) =>
-      constrainedArgumentSelections(entry, form).map((selection) =>
-        renderRequestVariant(entry, form, selection),
+    entry.usage
+      .filter((form) => (form.processLifecycle ?? entry.processLifecycle) === 'one-shot')
+      .flatMap((form) =>
+        constrainedArgumentSelections(entry, form).map((selection) =>
+          renderRequestVariant(entry, form, selection),
+        ),
       ),
-    ),
   );
   return `/**
  * Precise programmatic command union accepted by \`runKovoCommand\`.
@@ -29,8 +31,8 @@ export function renderSemanticCommandRequestSource(): string {
  * \`pnpm generate:cli-command-request\` after changing the semantic command AST.
  * Forms, arguments, options, enum literals, repeats, and boolean polarity are
  * schema-owned. Argv flag spellings are deliberately absent. Long-lived
- * \`dev\` and \`mcp\` processes stay executable-only until they have an explicit
- * abort/disposal contract.
+ * Long-lived command forms stay executable-only until they have an explicit
+ * programmatic abort/disposal contract.
  */
 export type KovoSemanticCommandRequest =
 ${variants.join('\n')}

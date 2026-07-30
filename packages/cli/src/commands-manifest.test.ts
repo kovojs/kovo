@@ -152,7 +152,7 @@ describe('commands manifest', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
     expect(CHECK_USAGE).toBe(
-      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check lifecycle [--format <human|json|github>] | kovo check endpoint-posture [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
+      'usage: kovo check [--no-cache] [--format <human|json|github>] | kovo check source [app-module] [--no-cache] [--format <human|json|github>] | kovo check source [app-module] --watch [--no-cache] --format <human|json|github> | kovo check lifecycle [--format <human|json|github>] | kovo check endpoint-posture [--format <human|json|github>] | kovo check [optimistic|coverage|endpoint-posture|sources-sinks] [graph.json] [--artifact <graph.json>] [--format <human|json|github>] | kovo check env [deployment.json] [--format <human|json|github>] | kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
     );
     expect(ADVISORY_USAGE).toBe(
       'usage: kovo check advisories [graph.json] [--feed <url|file>] [--attestation <url|file>] [--state <file>] [--severity-floor <low|moderate|high|critical>] [--format <human|json|github>]',
@@ -288,6 +288,31 @@ describe('commands manifest', () => {
           preset: 'node',
         },
       },
+    });
+
+    expect(
+      parseKovoCommandInvocation('check', ['source', './src/app.tsx', '--watch', '--format=json']),
+    ).toEqual({
+      ok: true,
+      value: {
+        arguments: { appModule: './src/app.tsx' },
+        command: 'check',
+        form: 'source-watch',
+        options: {
+          cache: true,
+          format: 'json',
+          watch: true,
+        },
+      },
+    });
+    expect(
+      parseKovoCommandInvocation('check', ['source', '--watch', '--format=human']),
+    ).toMatchObject({
+      error: 'usage',
+      message: expect.stringContaining(
+        'kovo: check source --watch requires --format json for versioned JSONL output.',
+      ),
+      ok: false,
     });
 
     expect(

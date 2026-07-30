@@ -110,9 +110,23 @@ export interface KovoCommandUsageForm {
   /** This form requires the asynchronous dispatcher even when sibling forms do not. */
   readonly async?: true;
   readonly id: string;
+  /**
+   * Override the command-level process lifetime for one concrete form.
+   *
+   * This keeps a foreground streaming form (for example `check source --watch`)
+   * in the same semantic command family without accidentally making every
+   * sibling invocation long-lived.
+   */
+  readonly processLifecycle?: KovoCommandProcessLifecycle;
   /** Cross-field grammar that remains semantic rather than argv-shaped. */
   readonly optionRequiresArgument?: readonly {
     readonly argument: string;
+    readonly option: string;
+    readonly values: readonly string[];
+  }[];
+  /** Restrict a form to a reviewed subset of one shared option's enum values. */
+  readonly optionValues?: readonly {
+    readonly invalidValueMessage?: string;
     readonly option: string;
     readonly values: readonly string[];
   }[];
@@ -322,6 +336,9 @@ const checkOptions = [
     booleanValue: false,
     category: 'advanced',
     defaultBoolean: true,
+  }),
+  flag('watch', ['--watch'], 'Keep one foreground source-check session open for revisions.', {
+    category: 'posture',
   }),
   flag('feed', ['--feed'], 'Override the default HTTPS advisory feed.', {
     category: 'input',
@@ -634,6 +651,7 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
     examples: [
       'kovo check',
       'kovo check source ./src/app.tsx --no-cache',
+      'kovo check source --watch --format json',
       'kovo check lifecycle',
       'kovo check coverage graph.json',
       'kovo check coverage --artifact dist/.kovo/graph.json',
@@ -665,6 +683,28 @@ export const KOVO_COMMAND_SCHEMA = deepFreezeSemanticSchema([
           argument('appModule', value('path', 'app-module'), { required: false }),
           option('cache'),
           option('format'),
+        ],
+      },
+      {
+        async: true,
+        id: 'source-watch',
+        optionValues: [
+          {
+            invalidValueMessage:
+              'kovo: check source --watch requires --format json for versioned JSONL output.\n',
+            option: 'format',
+            values: ['json'],
+          },
+        ],
+        processLifecycle: 'long-lived',
+        summary:
+          'Keep one project-confined foreground session open and emit each checked revision as versioned JSONL.',
+        tokens: [
+          literal('source', 'Derive proof from current authored source.'),
+          argument('appModule', value('path', 'app-module'), { required: false }),
+          option('watch', true),
+          option('cache'),
+          option('format', true),
         ],
       },
       {
