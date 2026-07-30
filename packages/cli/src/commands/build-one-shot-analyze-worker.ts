@@ -24,7 +24,7 @@ if (!parsed.ok) {
   } else {
     const identity = kovoBuildOneShotIdentity(parsed.options, outcome, security);
     const wire = encodeKovoBuildOneShotHandoff({
-      analysis: outcome,
+      analysis: { analysis: outcome },
       identity,
       schema: 'kovo-build-one-shot-analysis/v1',
     });
