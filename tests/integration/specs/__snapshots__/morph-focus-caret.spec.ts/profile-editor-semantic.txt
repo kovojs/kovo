@@ -2,7 +2,7 @@
   <form action="/_m/profile/save-draft" kovo-fragment-target="save-draft:draft-form" kovo-key="draft-form" method="post">
     <label>
       "Draft"
-    <input kovo-key="draft" name="draft">
+    <input kovo-key="draft" name="draft" value="server draft 1">
     <p>
       "Server version"
       <output data-bind="profile.version">
