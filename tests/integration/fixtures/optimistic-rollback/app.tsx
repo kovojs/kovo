@@ -1,13 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { createApp } from '@kovojs/test/internal/integration/fixture-abi';
-import {
-  domain,
-  mutation,
-  query,
-  route,
-  s,
-  type QueryLoadContext,
-} from '@kovojs/server';
+import { domain, mutation, query, route, s, type QueryLoadContext } from '@kovojs/server';
 import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { trustedHtml } from '@kovojs/browser';

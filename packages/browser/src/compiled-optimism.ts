@@ -79,7 +79,16 @@ export async function loadCompiledOptimisticSubmission(options: {
   }
   assertExactOwnKeys(
     rawPlan,
-    ['inputFields', 'invalidations', 'keys', 'mutation', 'queue', 'schema', 'statuses', 'transforms'],
+    [
+      'inputFields',
+      'invalidations',
+      'keys',
+      'mutation',
+      'queue',
+      'schema',
+      'statuses',
+      'transforms',
+    ],
     ['keys', 'queue'],
     `Kovo optimistic plan ${options.mutation}`,
   );
@@ -107,7 +116,11 @@ export async function loadCompiledOptimisticSubmission(options: {
       `Kovo optimistic plan ${options.mutation} requires own-data statuses and transforms.`,
     );
   }
-  assertExactRecordKeys(statuses, invalidations, `Kovo optimistic plan ${options.mutation} statuses`);
+  assertExactRecordKeys(
+    statuses,
+    invalidations,
+    `Kovo optimistic plan ${options.mutation} statuses`,
+  );
   assertExactRecordKeys(
     rawTransforms,
     invalidations,
@@ -257,10 +270,7 @@ function compiledOptimisticKeys(
 }
 
 function compiledInputFields(value: unknown, mutation: string): CompiledInputField[] {
-  if (
-    !securityArrayIsArray(value) ||
-    value.length > MAX_COMPILED_OPTIMISTIC_ENTRIES
-  ) {
+  if (!securityArrayIsArray(value) || value.length > MAX_COMPILED_OPTIMISTIC_ENTRIES) {
     throw new TypeError(`Kovo optimistic plan ${mutation} inputFields must be a bounded array.`);
   }
   const fields: CompiledInputField[] = [];
@@ -320,7 +330,9 @@ function decodeCompiledOptimisticInput(
           `Kovo optimistic mutation input field ${field.name} relies on a server schema default.`,
         );
       }
-      throw new TypeError(`Kovo optimistic mutation input is missing required field ${field.name}.`);
+      throw new TypeError(
+        `Kovo optimistic mutation input is missing required field ${field.name}.`,
+      );
     }
     let decoded: unknown = value;
     if (field.coercion === 'boolean') {
@@ -401,7 +413,8 @@ function assertExactRecordKeys(
   label: string,
 ): void {
   const actual = securityObjectKeys(value);
-  if (actual.length !== expected.length) throw new TypeError(`${label} do not match invalidations.`);
+  if (actual.length !== expected.length)
+    throw new TypeError(`${label} do not match invalidations.`);
   const expectedSet = securitySet<string>();
   for (let index = 0; index < expected.length; index += 1) {
     securitySetAdd(expectedSet, expected[index]!);

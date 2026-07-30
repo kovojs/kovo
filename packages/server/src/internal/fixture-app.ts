@@ -7,11 +7,7 @@
  * (SPEC §6.2.1/§9.5).
  */
 import { createApp as createRuntimeApp } from '../app.js';
-import {
-  createKovoAppToken,
-  resolveKovoAppToken,
-  type KovoApp,
-} from '../app-token.js';
+import { createKovoAppToken, resolveKovoAppToken, type KovoApp } from '../app-token.js';
 import type {
   AppLifecycleRequest,
   CreateAppOptions,

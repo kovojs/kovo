@@ -82,10 +82,7 @@ describe('compiler-emitted optimistic plans', () => {
     });
     expect(submission.optimistic.queue).toBe('cart');
     expect(
-      resolveOptimisticTargets(
-        submission.optimistic,
-        optimisticChangeFromInput(submission.input),
-      ),
+      resolveOptimisticTargets(submission.optimistic, optimisticChangeFromInput(submission.input)),
     ).toEqual([
       { queryName: 'cart' },
       { key: 'product:p1', queryName: 'product' },

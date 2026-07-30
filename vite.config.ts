@@ -82,6 +82,7 @@ export default defineConfig({
       'examples/gallery/src/demo-fixtures-controls.tsx',
       'packages/**/*.test.ts',
       'packages/**/*.test.tsx',
+      'packages/browser/src/inline-loader-runtime.ts',
       'packages/browser/src/inline-loader.ts',
       'packages/conformance-fixtures/**',
       'packages/create-kovo/templates/**',

@@ -19,10 +19,9 @@ for direct testing, bind it through that query handle, and put the binding on th
 the write it predicts:
 
 ```ts
-export const predictCart = (
-  current: Readonly<{ count: number }>,
-  input: { quantity: number },
-) => ({ count: current.count + input.quantity });
+export const predictCart = (current: Readonly<{ count: number }>, input: { quantity: number }) => ({
+  count: current.count + input.quantity,
+});
 
 export const addToCart = app.mutation({
   input: addToCartInput,

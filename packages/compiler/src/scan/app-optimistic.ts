@@ -126,7 +126,9 @@ export function appOptimisticProjectFacts(options: {
 
   const lowered: LoweredMutation[] = [];
   for (const mutation of mutations) {
-    const optimistic = unwrapExpression(objectPropertyExpression(mutation.definition, 'optimistic'));
+    const optimistic = unwrapExpression(
+      objectPropertyExpression(mutation.definition, 'optimistic'),
+    );
     if (optimistic === null) continue;
     if (!ts.isArrayLiteralExpression(optimistic)) {
       throw optimisticError(
@@ -210,7 +212,11 @@ export function appOptimisticProjectFacts(options: {
 
       const [first, second] = element.arguments;
       const firstValue = unwrapExpression(first);
-      if (firstValue && ts.isStringLiteralLike(firstValue) && firstValue.text === 'await-fragment') {
+      if (
+        firstValue &&
+        ts.isStringLiteralLike(firstValue) &&
+        firstValue.text === 'await-fragment'
+      ) {
         if (element.arguments.length !== 1) {
           throw optimisticError(
             'KOVO_OPTIMISTIC_BINDING',
@@ -238,7 +244,11 @@ export function appOptimisticProjectFacts(options: {
 
       const predictor = unwrapExpression(second);
       if (!predictor) {
-        throw optimisticError('KOVO_OPTIMISTIC_BINDING', mutation, `${query.key} has no predictor.`);
+        throw optimisticError(
+          'KOVO_OPTIMISTIC_BINDING',
+          mutation,
+          `${query.key} has no predictor.`,
+        );
       }
       if (ts.isObjectLiteralExpression(predictor)) {
         const keysNode = objectMemberValueNode(findObjectMember(predictor, 'keys'));
@@ -287,16 +297,8 @@ export function appOptimisticProjectFacts(options: {
   for (const [fileName, fileMutations] of [...byFile.entries()].sort(([left], [right]) =>
     left.localeCompare(right),
   )) {
-    const source = emitOptimisticModule(
-      fileName,
-      fileMutations,
-      options.checker,
-      sourceFileNames,
-    );
-    const href = clientModuleHrefForSourceFile(
-      fileName,
-      clientModuleRepresentationDigest(source),
-    );
+    const source = emitOptimisticModule(fileName, fileMutations, options.checker, sourceFileNames);
+    const href = clientModuleHrefForSourceFile(fileName, clientModuleRepresentationDigest(source));
     const target = parseVersionedClientModuleTarget(href);
     if (!target) throw new TypeError(`Compiler emitted a non-canonical optimism module ${href}.`);
     const mutationKeys = fileMutations.map((entry) => entry.declaration.key).sort();
@@ -631,7 +633,8 @@ function isInsideTypeNode(node: ts.Node): boolean {
   let current: ts.Node | undefined = node;
   while (current) {
     if (ts.isTypeNode(current)) return true;
-    if (ts.isExpression(current) || ts.isStatement(current) || ts.isSourceFile(current)) return false;
+    if (ts.isExpression(current) || ts.isStatement(current) || ts.isSourceFile(current))
+      return false;
     current = current.parent;
   }
   return false;
@@ -656,7 +659,9 @@ function executableFunctionExpression(node: ts.Node, sourceFile: ts.SourceFile):
 function declarationDefinition(call: ts.CallExpression): ts.ObjectLiteralExpression | null {
   const [first, second] = call.arguments;
   const candidate =
-    first && ts.isStringLiteralLike(unwrapNode(first)) ? unwrapExpression(second) : unwrapExpression(first);
+    first && ts.isStringLiteralLike(unwrapNode(first))
+      ? unwrapExpression(second)
+      : unwrapExpression(first);
   return candidate && ts.isObjectLiteralExpression(candidate) ? candidate : null;
 }
 
@@ -777,11 +782,7 @@ function unwrapNode<Node extends ts.Node>(node: Node): Node {
   return current as Node;
 }
 
-function optimisticError(
-  code: string,
-  mutation: MutationDeclaration,
-  detail: string,
-): TypeError {
+function optimisticError(code: string, mutation: MutationDeclaration, detail: string): TypeError {
   return new TypeError(
     `${code}: ${mutation.fileName} app.mutation ${mutation.key}: ${detail} ` +
       'Keep query handles direct and break query↔mutation import cycles before building.',

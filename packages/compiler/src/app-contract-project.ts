@@ -605,19 +605,23 @@ export function createCompilerOwnedAppContractProject(
         );
         inputs.push({ fileName: file.fileName, source: sourceFile.text });
       }
-      return withCompilerOwnedAppContractResolutions(facts, () => {
-        const registryFacts = projectMutationRegistryFactsFromFiles(inputs);
-        return {
-          ...registryFacts,
-          ...appOptimisticProjectFacts({
-            checker,
-            files: inputs,
-            members,
-            mutationInputs: registryFacts.mutationInputs,
-            program,
-          }),
-        };
-      }, members);
+      return withCompilerOwnedAppContractResolutions(
+        facts,
+        () => {
+          const registryFacts = projectMutationRegistryFactsFromFiles(inputs);
+          return {
+            ...registryFacts,
+            ...appOptimisticProjectFacts({
+              checker,
+              files: inputs,
+              members,
+              mutationInputs: registryFacts.mutationInputs,
+              program,
+            }),
+          };
+        },
+        members,
+      );
     },
 
     staticFacts(
@@ -647,10 +651,8 @@ export function createCompilerOwnedAppContractProject(
               return file.fileName;
             });
       if (
-        new Set(
-          fileNames.map((fileName) => normalizeFileName(resolve(rootDirectory, fileName))),
-        ).size !==
-        fileNames.length
+        new Set(fileNames.map((fileName) => normalizeFileName(resolve(rootDirectory, fileName))))
+          .size !== fileNames.length
       ) {
         throw new TypeError('App-contract static census refused duplicate source identities.');
       }

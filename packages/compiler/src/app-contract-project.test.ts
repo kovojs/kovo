@@ -503,9 +503,7 @@ describe('D1 compiler-owned exact project resolver', () => {
         source: expect.stringContaining('export const kovoOptimisticMutationPlans'),
       }),
     ]);
-    expect(facts.optimisticModules?.[0]?.source).toContain(
-      "schema: \"kovo.optimistic-plan/v1\"",
-    );
+    expect(facts.optimisticModules?.[0]?.source).toContain('schema: "kovo.optimistic-plan/v1"');
     expect(facts.optimisticModules?.[0]?.source).toContain('const predictCart = function');
     expect(facts.optimisticModules?.[0]?.source).toContain('keys: Object.freeze');
   });

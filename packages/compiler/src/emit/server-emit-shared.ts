@@ -261,10 +261,7 @@ export function enhancedMutationFormLowering(
   const keyAttribute = serverEmitAttribute(element, 'key');
   const streamAttribute = serverEmitAttribute(element, 'stream');
   const streaming = streamAttribute !== undefined;
-  const optimisticModuleHref = optimisticModuleHrefForMutation(
-    options?.registryFacts,
-    mutationKey,
-  );
+  const optimisticModuleHref = optimisticModuleHrefForMutation(options?.registryFacts, mutationKey);
   if (!keyAttribute && element.repeatable) return null;
   const generateEnctype = multipart && !enctypeAttribute;
   const preserveRuntimeMutation = !componentRenderSlotsParam(model);

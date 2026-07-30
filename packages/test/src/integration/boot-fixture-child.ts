@@ -219,17 +219,16 @@ export async function bootFixtureInLockedChild(
     const createRequestHandler = fixtureRequestHandlerFactory(customAdaptersModule);
     const prepareApp = fixtureAppPreparer(appShellModule, fixtureAppModule, managedDbModule);
     instance = await createFixtureInstance(descriptor, createRequestHandler, prepareApp);
-    const resolveFixtureAppToken = (
-      fixtureAppModule as { resolveFixtureAppToken?: unknown }
-    ).resolveFixtureAppToken;
+    const resolveFixtureAppToken = (fixtureAppModule as { resolveFixtureAppToken?: unknown })
+      .resolveFixtureAppToken;
     if (typeof resolveFixtureAppToken !== 'function') {
       throw new TypeError(
         'Fixture server could not resolve its opaque app token for native request routing.',
       );
     }
-    routingApp = verifierApply(resolveFixtureAppToken, undefined, [
-      instance.app,
-    ]) as Parameters<typeof shouldHandleKovoAppShellViteRequest>[1];
+    routingApp = verifierApply(resolveFixtureAppToken, undefined, [instance.app]) as Parameters<
+      typeof shouldHandleKovoAppShellViteRequest
+    >[1];
   } catch (error) {
     unregisterSqlSnapshotter();
     await vite.close();
@@ -240,9 +239,7 @@ export async function bootFixtureInLockedChild(
   const server = createHttpServer((req, res) => {
     void (async () => {
       if (await tryServeBuiltAsset(req.url ?? '/', distAssetsDir, res)) return;
-      if (
-        shouldHandleKovoAppShellViteRequest(req, routingApp)
-      ) {
+      if (shouldHandleKovoAppShellViteRequest(req, routingApp)) {
         await nodeHandler(req, res);
         return;
       }
@@ -295,12 +292,10 @@ function fixtureAppPreparer(
       'Fixture server could not load @kovojs/server deriveClosedKovoApp from the fixture SSR graph.',
     );
   }
-  const createFixtureAppToken = (
-    fixtureAppModule as { createFixtureAppToken?: unknown }
-  ).createFixtureAppToken;
-  const resolveFixtureAppToken = (
-    fixtureAppModule as { resolveFixtureAppToken?: unknown }
-  ).resolveFixtureAppToken;
+  const createFixtureAppToken = (fixtureAppModule as { createFixtureAppToken?: unknown })
+    .createFixtureAppToken;
+  const resolveFixtureAppToken = (fixtureAppModule as { resolveFixtureAppToken?: unknown })
+    .resolveFixtureAppToken;
   if (typeof createFixtureAppToken !== 'function' || typeof resolveFixtureAppToken !== 'function') {
     throw new TypeError(
       'Fixture server could not establish the opaque fixture-app token bridge in the fixture SSR graph.',
@@ -395,14 +390,22 @@ function fixtureAppPreparer(
       'test-fixture',
     ]);
     const runtimeApp = verifierApply(resolveFixtureAppToken, undefined, [app]);
-    const derivedRuntimeApp = verifierApply(deriveClosedKovoApp, undefined, [
-      runtimeApp,
-      {
-        db: () => bridgedDb,
-      },
-    ]);
+    const derivedRuntimeApp = verifierApply<NonNullable<PreparedFixtureApp['runtimeApp']>>(
+      deriveClosedKovoApp,
+      undefined,
+      [
+        runtimeApp,
+        {
+          db: () => bridgedDb,
+        },
+      ],
+    );
     return verifierFreeze({
-      app: verifierApply(createFixtureAppToken, undefined, [derivedRuntimeApp]),
+      // The exact framework constructor mints and validates the opaque token at runtime; the
+      // generic records that validated result across this dynamically loaded fixture seam.
+      app: verifierApply<PreparedFixtureApp['app']>(createFixtureAppToken, undefined, [
+        derivedRuntimeApp,
+      ]),
       managesDb: true,
       runtimeApp: derivedRuntimeApp,
     });
