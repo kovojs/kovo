@@ -394,7 +394,10 @@ export function resolveKovoBinInvocationPosture(args: readonly string[]): KovoBi
       : undefined;
   return Object.freeze({
     compilerRealm: command.compilerRealm,
-    processLifecycle: form?.processLifecycle ?? command.processLifecycle,
+    processLifecycle:
+      form !== undefined && 'processLifecycle' in form
+        ? form.processLifecycle
+        : command.processLifecycle,
   });
 }
 

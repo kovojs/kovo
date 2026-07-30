@@ -7,6 +7,7 @@ import { Node, SyntaxKind, type SourceFile } from 'ts-morph';
  * names the exact source snapshot and property-access node being analyzed (SPEC §5.2).
  */
 export const compilerOwnedAppContractMemberNames = [
+  'agent',
   'endpoint',
   'layout',
   'mutation',
