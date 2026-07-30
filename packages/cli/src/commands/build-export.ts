@@ -955,258 +955,283 @@ export async function runBuildCommand(
       );
       if (soundSubset.exitCode !== 0) return soundSubset;
     }
-    // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
-    // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
-    const reachableSessionAuthorityFacts =
-      await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
-    const loadedConfig = await configurationBoundaryAsync(() =>
-      loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
-    );
-    const selectedPreset = configurationBoundary(() =>
-      selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
-    );
-    // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
-    // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
-    // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
-    // analysis in each — the SAME analysis runKovoBuildCheckPreflight runs authoritatively just
-    // below — costing ~9s of duplicate ts-morph work cold. Flag the entire (concurrent) load span so
-    // the plugin skips it; the production client/server build passes run with the flag cleared, so
-    // their fail-closed gate still fires.
-    const loadAndCheck = await loadAndCheckBuildApp(
-      resolvedAppModulePath,
-      options,
-      reachableSessionAuthorityFacts,
-      security,
-      invocationRoot,
-    );
-    const {
-      app,
-      approvedClientEntry,
-      approvedSourceFiles,
-      buildStylesheetCss,
-      checkGraph,
-      cloudflare,
-      compilerClientModuleBuildInstaller,
-      dependencyCapabilities,
-      declaredKovoAppId,
-      deriveClosedKovoApp,
-      node,
-      queryShapeFacts,
-      resolveKovoBuildPreset,
-      snapshotVersionedClientModuleStaging,
-      vercel,
-      writeKovoNeutralBuild,
-    } = loadAndCheck;
-    const graphWithProvenance: CoreGraph.KovoCheckInput = {
-      ...checkGraph,
-      analysisInputs: buildAnalysisInputs({
-        appSources: approvedSourceFiles,
-        clientEntrySources: approvedClientEntry === undefined ? [] : [approvedClientEntry],
-        configSources: approvedConfig?.files ?? [],
-        runtimeTarget: selectedPreset.name,
-      }),
-      provenance: artifactProvenance,
-    };
     transaction = createKovoBuildOutputTransaction(outDir);
     const stagedOutDir = transaction.stagedOutDir;
-    const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
-    const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
-      resolvedAppModulePath,
-      clientRoot,
-      approvedSourceFiles,
-      invocationRoot,
-    );
-    const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
-      resolvedAppModulePath,
-      invocationRoot,
-      approvedSourceFiles,
-    );
-    // Reuse the exact entry-reachable source proof. Re-censusing dirname(app) here used to admit
-    // and repeatedly analyze every unimported copied UI module, making the documented full-catalog
-    // workflow exceed 6 GiB process-tree RSS. The preflight-derived registry is both narrower and
-    // stronger: Vite below rejects any later module load outside the same immutable snapshot
-    // (SPEC §5.2 rules 6/9; §11.4).
-    const staticRuntimeRegistry = loadAndCheck.runtimeRegistry;
-    if (app.document.csp !== undefined) {
-      assertDocumentCspConfigMatchesBrowserPosture(
-        app.document.csp,
-        staticRuntimeRegistry.browserPosture,
+    // Keep graph derivation, compiler transforms, and Vite discovery in a closed lexical lifetime.
+    // Preset inspection/emission needs only the completed neutral artifact and handler bytes. If
+    // these project-owned intermediates remain live in runBuildCommand's frame, V8 retains the
+    // TypeScript/compiler/Vite graphs through preset emission and a valid packed catalog exceeds
+    // the reviewed 2 GiB process-tree ceiling even though copied-but-unimported files never enter
+    // the app closure (SPEC §5.2 rules 6/9; §11.4).
+    const preparedEmission = await (async () => {
+      // SPEC §6.6 rule 6: classify app-authored authority before config, plugins, or app evaluation
+      // can mutate shared-realm prototypes. Runtime handler identity is joined after evaluation.
+      const reachableSessionAuthorityFacts =
+        await sessionAuthorityFactsFromEntry(resolvedAppModulePath);
+      const loadedConfig = await configurationBoundaryAsync(() =>
+        loadKovoBuildConfig(invocationRoot, resolvedAppModulePath, approvedConfig),
       );
-    }
-    const clientBuild = await buildKovoClientManifest(
-      join(stagedOutDir, '.kovo-client'),
-      clientRoot,
-      resolvedAppModulePath,
-      {
-        ...(approvedClientEntry === undefined ? {} : { approvedClientEntry }),
+      const selectedPreset = configurationBoundary(() =>
+        selectedKovoBuildPreset(options, loadedConfig.preset, security.invocationEnv),
+      );
+      // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
+      // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
+      // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
+      // analysis in each — the SAME analysis runKovoBuildCheckPreflight runs authoritatively just
+      // below — costing ~9s of duplicate ts-morph work cold. Flag the entire (concurrent) load span so
+      // the plugin skips it; the production client/server build passes run with the flag cleared, so
+      // their fail-closed gate still fires.
+      const loadAndCheck = await loadAndCheckBuildApp(
+        resolvedAppModulePath,
+        options,
+        reachableSessionAuthorityFacts,
+        security,
+        invocationRoot,
+      );
+      const {
+        app,
+        approvedClientEntry,
         approvedSourceFiles,
-        cache: options.cache,
+        buildStylesheetCss,
+        checkGraph,
+        cloudflare,
+        compilerClientModuleBuildInstaller,
         dependencyCapabilities,
-        projectMutationFacts: clientProjectMutationFacts,
+        declaredKovoAppId,
+        deriveClosedKovoApp,
+        node,
         queryShapeFacts,
-        sourceIdentityRoot: invocationRoot,
-      },
-    );
-    const buildCssAssets = mergeKovoBuildStylesheetAssets([
-      buildStylesheetCss.assets,
-      clientBuild.assets,
-    ]);
-    const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
-    const commonRuntimeRegistry = {
-      ...(staticRuntimeRegistry.browserPosture === undefined
-        ? {}
-        : { browserPosture: staticRuntimeRegistry.browserPosture }),
-      ...(staticRuntimeRegistry.tableSecurity === undefined
-        ? {}
-        : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
-    };
-    const discoveryGraph: CoreGraph.KovoCheckInput = {
-      ...graphWithProvenance,
-      // The first bundle is temporary discovery output, but the serializer must remain
-      // fail-closed for every server bundle. Give it the pre-proof posture that production
-      // builds used before the completed-build stamp existed; the final pass below replaces
-      // this with the graph-and-build-token-bound posture before anything is promoted.
-      runtimePosture: createKovoRuntimePostureManifest(graphWithProvenance),
-    };
-    // The server compiler contributes client modules, while the final runtime-posture registry
-    // embeds the completed graph. Run one non-emitted discovery pass to close that dependency,
-    // then prove the final pass retained the exact client-module set before any artifact write.
-    const discoveredServerHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
-      approvedSourceFiles,
-      buildRoot: invocationRoot,
-      dependencyCapabilities,
-      projectMutationFacts: serverProjectMutationFacts,
-      queryShapeFacts,
-      runtimeTarget: selectedPreset.name,
-      runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(discoveryGraph),
-        ...commonRuntimeRegistry,
-      },
-      stylesheetAssets: buildCssAssets,
-    });
-    const discoveredClientModules = uniqueKovoCompiledClientModules([
-      ...clientBuild.clientModules,
-      ...discoveredServerHandlerBuild.clientModules,
-    ]);
-    const discoveredClientModuleCensus = compilerClientModuleCensus(
-      discoveredClientModules,
-      'discovered compiler client modules',
-    );
-    const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
-    const hasGeneratedAppBootstrap = buildSomeDense(
-      discoveredClientModules,
-      'discovered compiler client modules',
-      (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
-    );
-    const nonCompilerClientModules = hasGeneratedAppBootstrap
-      ? appClientModuleStaging.stable
-      : appendDense(
-          appClientModuleStaging.stable,
-          appClientModuleStaging.mandatory,
-          'build app stable and mandatory client modules',
+        resolveKovoBuildPreset,
+        snapshotVersionedClientModuleStaging,
+        vercel,
+        writeKovoNeutralBuild,
+      } = loadAndCheck;
+      const graphWithProvenance: CoreGraph.KovoCheckInput = {
+        ...checkGraph,
+        analysisInputs: buildAnalysisInputs({
+          appSources: approvedSourceFiles,
+          clientEntrySources: approvedClientEntry === undefined ? [] : [approvedClientEntry],
+          configSources: approvedConfig?.files ?? [],
+          runtimeTarget: selectedPreset.name,
+        }),
+        provenance: artifactProvenance,
+      };
+      const clientRoot = kovoClientBuildRoot(resolvedAppModulePath, invocationRoot);
+      const clientProjectMutationFacts = projectMutationRegistryFactsForBuild(
+        resolvedAppModulePath,
+        clientRoot,
+        approvedSourceFiles,
+        invocationRoot,
+      );
+      const serverProjectMutationFacts = projectMutationRegistryFactsForBuild(
+        resolvedAppModulePath,
+        invocationRoot,
+        approvedSourceFiles,
+      );
+      // Reuse the exact entry-reachable source proof. Re-censusing dirname(app) here used to admit
+      // and repeatedly analyze every unimported copied UI module, making the documented full-catalog
+      // workflow exceed 6 GiB process-tree RSS. The preflight-derived registry is both narrower and
+      // stronger: Vite below rejects any later module load outside the same immutable snapshot
+      // (SPEC §5.2 rules 6/9; §11.4).
+      const staticRuntimeRegistry = loadAndCheck.runtimeRegistry;
+      if (app.document.csp !== undefined) {
+        assertDocumentCspConfigMatchesBrowserPosture(
+          app.document.csp,
+          staticRuntimeRegistry.browserPosture,
         );
-    const appBuildToken = deriveKovoAppBuildToken(
-      discoveredClientModules,
-      nonCompilerClientModules,
-    );
-    const graphWithProof: CoreGraph.KovoCheckInput = {
-      ...graphWithProvenance,
-      proof: createKovoGraphProof(graphWithProvenance, appBuildToken, declaredKovoAppId(app)),
-    };
-    const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
-    const completedCheckGraph: CoreGraph.KovoCheckInput = {
-      ...graphWithProof,
-      runtimePosture,
-    };
-    const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
-      approvedSourceFiles,
-      buildRoot: invocationRoot,
-      dependencyCapabilities,
-      projectMutationFacts: serverProjectMutationFacts,
-      queryShapeFacts,
-      runtimeTarget: selectedPreset.name,
-      runtimeRegistry: {
-        ...runtimeRegistryWireFactsFromGraph(completedCheckGraph),
-        ...commonRuntimeRegistry,
-      },
-      generatedClientModules: discoveredClientModules,
-      manualClientModules: appClientModuleStaging.stable,
-      stylesheetAssets: buildCssAssets,
-    });
-    const clientModules = uniqueKovoCompiledClientModules([
-      ...clientBuild.clientModules,
-      ...serverHandlerBuild.clientModules,
-    ]);
-    assertCompilerClientModuleCensus(
-      discoveredClientModuleCensus,
-      compilerClientModuleCensus(clientModules, 'final compiler client modules'),
-    );
-    if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
-      throw new TypeError(
-        'Kovo final runtime-posture bundle changed the discovered client-module identity.',
+      }
+      const clientBuild = await buildKovoClientManifest(
+        join(stagedOutDir, '.kovo-client'),
+        clientRoot,
+        resolvedAppModulePath,
+        {
+          ...(approvedClientEntry === undefined ? {} : { approvedClientEntry }),
+          approvedSourceFiles,
+          cache: options.cache,
+          dependencyCapabilities,
+          projectMutationFacts: clientProjectMutationFacts,
+          queryShapeFacts,
+          sourceIdentityRoot: invocationRoot,
+        },
       );
-    }
-    const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
-      clientModules,
-      compilerClientModuleBuildInstaller,
-    );
-    const neutralBuild = await writeKovoNeutralBuild({
-      app: buildApp,
-      buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
-      clientModules: neutralBuildClientModules,
-      manifestFile: clientBuild.manifestFile,
-      outDir: join(stagedOutDir, '.kovo'),
-      serverHandlerSource: serverHandlerBuild.source,
-      stylesheetSourceRoot: dirname(resolvedAppModulePath),
-    });
-    // Validate every trustedAssign review subject only after the deployment graph is complete.
-    const escapeObligationManifest = escapeObligationManifestForBuild(completedCheckGraph);
-    // Metric E signatures are a separate domain-separated subject family under the same anchor.
-    const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(completedCheckGraph);
-    writeKovoBuildGraphArtifact(
+      const buildCssAssets = mergeKovoBuildStylesheetAssets([
+        buildStylesheetCss.assets,
+        clientBuild.assets,
+      ]);
+      const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets, deriveClosedKovoApp);
+      const commonRuntimeRegistry = {
+        ...(staticRuntimeRegistry.browserPosture === undefined
+          ? {}
+          : { browserPosture: staticRuntimeRegistry.browserPosture }),
+        ...(staticRuntimeRegistry.tableSecurity === undefined
+          ? {}
+          : { tableSecurity: staticRuntimeRegistry.tableSecurity }),
+      };
+      const discoveryGraph: CoreGraph.KovoCheckInput = {
+        ...graphWithProvenance,
+        // The first bundle is temporary discovery output, but the serializer must remain
+        // fail-closed for every server bundle. Give it the pre-proof posture that production
+        // builds used before the completed-build stamp existed; the final pass below replaces
+        // this with the graph-and-build-token-bound posture before anything is promoted.
+        runtimePosture: createKovoRuntimePostureManifest(graphWithProvenance),
+      };
+      // The server compiler contributes client modules, while the final runtime-posture registry
+      // embeds the completed graph. Run one non-emitted discovery pass to close that dependency,
+      // then prove the final pass retained the exact client-module set before any artifact write.
+      const discoveredServerHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+        approvedSourceFiles,
+        buildRoot: invocationRoot,
+        dependencyCapabilities,
+        projectMutationFacts: serverProjectMutationFacts,
+        queryShapeFacts,
+        runtimeTarget: selectedPreset.name,
+        runtimeRegistry: {
+          ...runtimeRegistryWireFactsFromGraph(discoveryGraph),
+          ...commonRuntimeRegistry,
+        },
+        stylesheetAssets: buildCssAssets,
+      });
+      const discoveredClientModules = uniqueKovoCompiledClientModules([
+        ...clientBuild.clientModules,
+        ...discoveredServerHandlerBuild.clientModules,
+      ]);
+      const discoveredClientModuleCensus = compilerClientModuleCensus(
+        discoveredClientModules,
+        'discovered compiler client modules',
+      );
+      const appClientModuleStaging = snapshotVersionedClientModuleStaging(buildApp.clientModules);
+      const hasGeneratedAppBootstrap = buildSomeDense(
+        discoveredClientModules,
+        'discovered compiler client modules',
+        (module) => compilerOwnedViteClientModuleRole(module) === 'app-bootstrap',
+      );
+      const nonCompilerClientModules = hasGeneratedAppBootstrap
+        ? appClientModuleStaging.stable
+        : appendDense(
+            appClientModuleStaging.stable,
+            appClientModuleStaging.mandatory,
+            'build app stable and mandatory client modules',
+          );
+      const appBuildToken = deriveKovoAppBuildToken(
+        discoveredClientModules,
+        nonCompilerClientModules,
+      );
+      const graphWithProof: CoreGraph.KovoCheckInput = {
+        ...graphWithProvenance,
+        proof: createKovoGraphProof(graphWithProvenance, appBuildToken, declaredKovoAppId(app)),
+      };
+      const runtimePosture = createKovoRuntimePostureManifest(graphWithProof);
+      const completedCheckGraph: CoreGraph.KovoCheckInput = {
+        ...graphWithProof,
+        runtimePosture,
+      };
+      const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
+        approvedSourceFiles,
+        buildRoot: invocationRoot,
+        dependencyCapabilities,
+        projectMutationFacts: serverProjectMutationFacts,
+        queryShapeFacts,
+        runtimeTarget: selectedPreset.name,
+        runtimeRegistry: {
+          ...runtimeRegistryWireFactsFromGraph(completedCheckGraph),
+          ...commonRuntimeRegistry,
+        },
+        generatedClientModules: discoveredClientModules,
+        manualClientModules: appClientModuleStaging.stable,
+        stylesheetAssets: buildCssAssets,
+      });
+      const clientModules = uniqueKovoCompiledClientModules([
+        ...clientBuild.clientModules,
+        ...serverHandlerBuild.clientModules,
+      ]);
+      assertCompilerClientModuleCensus(
+        discoveredClientModuleCensus,
+        compilerClientModuleCensus(clientModules, 'final compiler client modules'),
+      );
+      if (deriveKovoAppBuildToken(clientModules, nonCompilerClientModules) !== appBuildToken) {
+        throw new TypeError(
+          'Kovo final runtime-posture bundle changed the discovered client-module identity.',
+        );
+      }
+      const neutralBuildClientModules = adoptCompilerClientModulesForNeutralBuild(
+        clientModules,
+        compilerClientModuleBuildInstaller,
+      );
+      const neutralBuild = await writeKovoNeutralBuild({
+        app: buildApp,
+        buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
+        clientModules: neutralBuildClientModules,
+        manifestFile: clientBuild.manifestFile,
+        outDir: join(stagedOutDir, '.kovo'),
+        serverHandlerSource: serverHandlerBuild.source,
+        stylesheetSourceRoot: dirname(resolvedAppModulePath),
+      });
+      // Validate every trustedAssign review subject only after the deployment graph is complete.
+      const escapeObligationManifest = escapeObligationManifestForBuild(completedCheckGraph);
+      // Metric E signatures are a separate domain-separated subject family under the same anchor.
+      const escapeCensusReviewManifest = escapeCensusReviewManifestForBuild(completedCheckGraph);
+      writeKovoBuildGraphArtifact(
+        neutralBuild,
+        completedCheckGraph,
+        escapeObligationManifest,
+        escapeCensusReviewManifest,
+      );
+      const presetToken =
+        selectedPreset.name === 'cloudflare'
+          ? cloudflare()
+          : selectedPreset.name === 'vercel'
+            ? vercel()
+            : node();
+      const preset = selectedPreset.preset ?? resolveKovoBuildPreset(presetToken);
+      if (preset === undefined) {
+        throw new Error(
+          `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
+        );
+      }
+      const presetOutDir = buildPresetOutDir(stagedOutDir, selectedPreset.name);
+      const presetLogs: string[] = [];
+      const serverHandlerSource = serverHandlerBuild.source;
+      const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerSource);
+      const presetContext: KovoBuildPresetContext = {
+        declaredEnv,
+        log(message) {
+          presetLogs.push(message);
+        },
+        outDir: presetOutDir,
+        projectRoot: invocationRoot,
+        readServerHandlerSource() {
+          return serverHandlerSource;
+        },
+        readNeutral() {
+          return neutralBuild;
+        },
+      };
+      const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
+      const blockingDiagnostics = buildFilterDense(
+        presetDiagnostics,
+        'Build preset diagnostics',
+        (diagnostic) => diagnostic.severity === 'error',
+      );
+      if (blockingDiagnostics.length > 0) {
+        throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
+      }
+      return {
+        neutralBuild,
+        preset,
+        presetContext,
+        presetDiagnostics,
+        presetLogs,
+        selectedPresetName: selectedPreset.name,
+      };
+    })();
+    const {
       neutralBuild,
-      completedCheckGraph,
-      escapeObligationManifest,
-      escapeCensusReviewManifest,
-    );
-    const presetToken =
-      selectedPreset.name === 'cloudflare'
-        ? cloudflare()
-        : selectedPreset.name === 'vercel'
-          ? vercel()
-          : node();
-    const preset = selectedPreset.preset ?? resolveKovoBuildPreset(presetToken);
-    if (preset === undefined) {
-      throw new Error(
-        `kovo build could not resolve framework-owned preset ${selectedPreset.name}.`,
-      );
-    }
-    const presetOutDir = buildPresetOutDir(stagedOutDir, selectedPreset.name);
-    const presetLogs: string[] = [];
-    const declaredEnv = inferredKovoBuildDeclaredEnv(serverHandlerBuild.source);
-    const presetContext: KovoBuildPresetContext = {
-      declaredEnv,
-      log(message) {
-        presetLogs.push(message);
-      },
-      outDir: presetOutDir,
-      projectRoot: invocationRoot,
-      readServerHandlerSource() {
-        return serverHandlerBuild.source;
-      },
-      readNeutral() {
-        return neutralBuild;
-      },
-    };
-    const presetDiagnostics = await inspectKovoBuildPreset(preset, neutralBuild, presetContext);
-    const blockingDiagnostics = buildFilterDense(
+      preset,
+      presetContext,
       presetDiagnostics,
-      'Build preset diagnostics',
-      (diagnostic) => diagnostic.severity === 'error',
-    );
-    if (blockingDiagnostics.length > 0) {
-      throw new KovoBuildPresetDiagnosticError(blockingDiagnostics);
-    }
+      presetLogs,
+      selectedPresetName,
+    } = preparedEmission;
 
     if (options.check) {
       // plans/fast-kovo-check2.md #6: validate-only. Every diagnostic-producing phase has
@@ -1220,7 +1245,7 @@ export async function runBuildCommand(
       return kovoBuildCheckResult({
         appModulePath: resolvedAppModulePath,
         neutralOutDir: join(outDir, '.kovo'),
-        preset: selectedPreset.name,
+        preset: selectedPresetName,
         presetDiagnostics,
         presetLogs,
       });
@@ -1234,10 +1259,10 @@ export async function runBuildCommand(
       appModulePath: resolvedAppModulePath,
       neutralOutDir: join(outDir, '.kovo'),
       outDir,
-      preset: selectedPreset.name,
+      preset: selectedPresetName,
       presetDiagnostics,
       presetLogs,
-      serverOutDir: buildPresetOutDir(outDir, selectedPreset.name),
+      serverOutDir: buildPresetOutDir(outDir, selectedPresetName),
     });
   } catch (error) {
     if (transaction !== undefined) {
