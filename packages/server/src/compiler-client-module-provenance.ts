@@ -6,7 +6,7 @@ import {
 import {
   createFrameworkAsyncContextCell,
   currentFrameworkAsyncContextValue,
-  runWithIsolatedFrameworkAsyncContext,
+  runWithFrameworkAsyncContext,
 } from './async-context.js';
 import {
   witnessArrayAppend,
@@ -93,7 +93,7 @@ export function claimGeneratedBuildClientModuleInstaller(): GeneratedBuildClient
         modules: witnessFreeze(modules),
         renderPlanFingerprint,
       });
-      return runWithIsolatedFrameworkAsyncContext(generatedBuildClientModuleContext, scope, load);
+      return runWithFrameworkAsyncContext(generatedBuildClientModuleContext, scope, load);
     },
     manual(module: object): void {
       stageManual(module);

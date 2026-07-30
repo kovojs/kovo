@@ -7459,11 +7459,9 @@ export function kovoServerHandlerEntrySource(
           ]),
       generatedClientModuleEntry === undefined
         ? `const appModule = await runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)}));`
-        : `const appModule = await generatedClientModuleInstaller.load(${stringifyBuildValue(
+        : `const appModule = await runWithGeneratedLiveTargetRegistry(() => generatedClientModuleInstaller.load(${stringifyBuildValue(
             generatedClientModuleEntry.renderPlanFingerprint,
-          )}, () => runWithGeneratedLiveTargetRegistry(() => import(${stringifyBuildValue(
-            pathToFileURL(appModulePath).href,
-          )})));`,
+          )}, () => import(${stringifyBuildValue(pathToFileURL(appModulePath).href)})));`,
       'const app = appModule.default ?? appModule.app;',
       `const stylesheetAssets = ${stringifyBuildValue(stylesheetAssets)};`,
       'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',

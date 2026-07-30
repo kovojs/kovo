@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
+import { assertBrowserDeferredAppRuntimePolicy } from './browser-deferred-app-runtime-policy.mjs';
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, '..');
 const entryPath = resolve(repositoryRoot, 'packages/browser/src/deferred-app-runtime-entry.ts');
@@ -31,6 +33,7 @@ const output = result.outputFiles?.[0]?.text;
 if (typeof output !== 'string' || output.length === 0) {
   throw new Error('Browser deferred app runtime bundling produced no JavaScript.');
 }
+assertBrowserDeferredAppRuntimePolicy(output);
 const modulePath = '/c/kovo-generated-app-runtime.client.js';
 const digest = clientModuleRepresentationDigest(output);
 const moduleHref = `/c/__v/${digest}/kovo-generated-app-runtime.client.js`;

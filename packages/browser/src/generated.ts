@@ -1,6 +1,6 @@
 import { generatedDerive } from './derive.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { installInlineKovoLoader as installInlineKovoLoaderRuntime } from './inline-loader.js';
+import { installInlineKovoLoader as installInlineKovoLoaderRuntime } from './inline-loader-runtime.js';
 
 export { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 export type {

@@ -3,4 +3,4 @@
 export const kovoDeferredAppRuntimeModulePath: string = '/c/kovo-generated-app-runtime.client.js';
 /** @internal Immutable href derived from the exact generated representation. */
 export const kovoDeferredAppRuntimeModuleHref: string =
-  '/c/__v/a642ef6564e546e3e2f9bff7dc027a6b27162d1bd72a78781c2196ca966b664c/kovo-generated-app-runtime.client.js';
+  '/c/__v/81a74bb8c52e50aefe7617397bcbba037bc0ab1434bc6357394e9c8840d1da51/kovo-generated-app-runtime.client.js';

@@ -1681,6 +1681,11 @@ function assembleCompileResult(
     },
   ];
   assertEmittedTranslation(client, registryCss, files, confidentialityClosed, parsed.originalModel);
+  const queryPlanBootstrapMetadata = emittedClientPlanExportMetadata(
+    parsed.componentName,
+    validated.queryUpdatePlans,
+    validated.clockUpdatePlans,
+  );
 
   return {
     agentGraphFacts: agentGraphFactsFromModel(parsed.originalModel, parsed.options.fileName),
@@ -1748,11 +1753,7 @@ function assembleCompileResult(
     platformSubstitutions: facts.platformSubstitutions,
     publishToClientFacts: facts.publishToClientFacts,
     queryUpdatePlans: facts.queryUpdatePlans,
-    queryPlanBootstrapMetadata: emittedClientPlanExportMetadata(
-      parsed.componentName,
-      validated.queryUpdatePlans,
-      validated.clockUpdatePlans,
-    ),
+    ...(queryPlanBootstrapMetadata === undefined ? {} : { queryPlanBootstrapMetadata }),
     renderEquivalenceChecks: verified.renderEquivalenceChecks,
     renderPlanFingerprint: client.renderPlanFingerprint,
     renderPlanFingerprintInput: client.renderPlanFingerprintInput,

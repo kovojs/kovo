@@ -13,6 +13,10 @@ import {
   snapshotVersionedClientModuleRegistry,
 } from './client-modules.js';
 import { claimGeneratedBuildClientModuleInstaller } from './internal/generated-build-client-modules.js';
+import {
+  registerGeneratedLiveTargetRenderer,
+  runWithGeneratedLiveTargetRegistry,
+} from './live-target-registry.js';
 
 async function genuineCompilerModules() {
   const plugin = kovoVitePlugin();
@@ -73,9 +77,17 @@ describe('generated build client-module boot scope', () => {
     }
     installer.manual(currentManual);
 
-    const app = await installer.load(fingerprint, async () =>
-      createApp({ clientModules: registry, routes: [] }),
-    );
+    const renderer = {
+      component: 'deal/card',
+      mutationKeys: [],
+      render: () => '<deal-card />',
+    };
+    const app = await runWithGeneratedLiveTargetRegistry(async () => {
+      registerGeneratedLiveTargetRenderer(renderer);
+      return installer.load(fingerprint, async () =>
+        createApp({ clientModules: registry, routes: [] }),
+      );
+    });
     const entries = app.clientModules.entries();
     expect(new Set(entries.map((module) => module.path))).toEqual(
       new Set([...modules.map((module) => module.path), currentManual.path]),
@@ -83,6 +95,7 @@ describe('generated build client-module boot scope', () => {
     expect(entries).not.toContainEqual(staleReserved);
     expect(entries).not.toContainEqual(staleCompiler);
     expect(entries).not.toContainEqual(staleManual);
+    expect(app.liveTargetRenderers).toEqual([renderer]);
 
     const hrefs = entries
       .map((module) =>

@@ -19,6 +19,7 @@ import {
   assertInlineKovoLoaderModuleArtifactParity,
   assertInlineKovoLoaderBootstrapGzipBudget,
   buildInlineKovoLoaderModuleSource,
+  buildInlineKovoLoaderRuntimeModuleSource,
   buildInlineKovoLoaderInstallerReadableSource,
   buildInlineKovoLoaderInstallerSource,
   buildInlineKovoLoaderStubInstallerSource,
@@ -101,12 +102,26 @@ export function createDocumentLifecycleRecovery() {
   it('emits the checked-in runtime module from the readable inline loader source', () => {
     // SPEC.md §4.4: build-time emission must keep the shipped bootstrap tied to readable source.
     const moduleSource = buildInlineKovoLoaderModuleSource();
+    const runtimeModuleSource = buildInlineKovoLoaderRuntimeModuleSource();
 
-    expect(() => assertInlineKovoLoaderModuleArtifactParity(moduleSource)).not.toThrow();
+    expect(() =>
+      assertInlineKovoLoaderModuleArtifactParity(
+        moduleSource,
+        'Inline Kovo loader module',
+        runtimeModuleSource,
+      ),
+    ).not.toThrow();
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
-    expect(moduleSource).toContain('const inlineKovoLoaderInstaller = (');
-    expect(moduleSource).toContain('inlineKovoLoaderInstaller(importModule, options);');
-    expect(moduleSource).toContain('enhancedMutations?: boolean;');
+    expect(runtimeModuleSource).toBe(
+      readFileSync(new URL('./inline-loader-runtime.ts', import.meta.url), 'utf8'),
+    );
+    expect(moduleSource).not.toContain('const inlineKovoLoaderInstaller = (');
+    expect(moduleSource).toContain(
+      "export { installInlineKovoLoader } from './inline-loader-runtime.js';",
+    );
+    expect(runtimeModuleSource).toContain('const inlineKovoLoaderInstaller = (');
+    expect(runtimeModuleSource).toContain('inlineKovoLoaderInstaller(importModule, options);');
+    expect(runtimeModuleSource).toContain('enhancedMutations?: boolean;');
     expect(moduleSource).toContain('const inlineKovoLoaderBootstrapInstaller = (');
     expect(moduleSource).toContain('installInlineKovoBootstrap(');
     expect(moduleSource).toContain('kovoDeferredRuntimeModuleSource');
@@ -117,7 +132,7 @@ export function createDocumentLifecycleRecovery() {
     expect(inlineKovoLoaderBootstrapInstallerSource).toBe(
       buildInlineKovoLoaderStubInstallerSource(),
     );
-    expect(moduleSource).toContain('importModule: ImportHandlerModule,');
+    expect(runtimeModuleSource).toContain('importModule: ImportHandlerModule,');
     expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
   });

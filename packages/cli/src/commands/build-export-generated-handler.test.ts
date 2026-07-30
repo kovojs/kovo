@@ -32,6 +32,82 @@ export const Card = component({
 }
 
 const emptyStyles = { app: [], fragments: {}, routes: {} } as const;
+const generatedHandlerClientModulesPath = fileURLToPath(
+  new URL('../../../server/src/client-modules.ts', import.meta.url),
+);
+const generatedHandlerCreateAppPath = fileURLToPath(
+  new URL('../../../server/src/app.ts', import.meta.url),
+);
+
+async function executeGeneratedHandlerBundle(
+  root: string,
+  name: string,
+  modules: Awaited<ReturnType<typeof compilerModules>>,
+) {
+  const appPath = join(root, `${name}-app.mjs`);
+  const entryPath = join(root, `${name}-handler.mjs`);
+  const outputPath = join(root, `${name}-bundle.mjs`);
+  const resultKey = `__kovo_generated_handler_${name}`;
+  writeFileSync(join(root, 'runtime-registry.mjs'), '', 'utf8');
+  writeFileSync(
+    appPath,
+    [
+      `import { createApp } from ${JSON.stringify(generatedHandlerCreateAppPath)};`,
+      `import { createMemoryVersionedClientModuleStore, snapshotVersionedClientModuleRegistry } from ${JSON.stringify(generatedHandlerClientModulesPath)};`,
+      "const stale = [{ path: '/c/stale.client.js', source: 'export const stale = true;' }];",
+      'const store = createMemoryVersionedClientModuleStore();',
+      `store.replaceActiveSnapshot({ modules: stale, renderPlanFingerprint: ${JSON.stringify(
+        modules[0]?.renderPlanFingerprint ?? computeRenderPlanFingerprint({}),
+      )} });`,
+      'const app = createApp({ clientModules: snapshotVersionedClientModuleRegistry(store), routes: [] });',
+      `globalThis[${JSON.stringify(resultKey)}] = app;`,
+      'export default app;',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  const emitted = kovoServerHandlerEntrySource(appPath, emptyStyles, 'cloudflare', modules, []);
+  const rewritten = emitted.replace(
+    JSON.stringify(pathToFileURL(appPath).href),
+    JSON.stringify(`./${name}-app.mjs`),
+  );
+  if (rewritten === emitted) throw new Error('Expected emitted app import to be rewritten.');
+  writeFileSync(entryPath, rewritten, 'utf8');
+
+  const built = await esbuild({
+    absWorkingDir: process.cwd(),
+    bundle: true,
+    entryPoints: [entryPath],
+    format: 'esm',
+    platform: 'node',
+    plugins: [
+      {
+        name: 'generated-handler-file-url',
+        setup(build) {
+          build.onResolve({ filter: /^file:\/\// }, (args) => ({
+            path: fileURLToPath(args.path),
+          }));
+        },
+      },
+    ],
+    target: 'node22',
+    write: false,
+  });
+  const output = built.outputFiles[0]?.text;
+  if (!output) throw new Error('Expected generated handler bundle output.');
+  writeFileSync(outputPath, output, 'utf8');
+  const exports = (await import(pathToFileURL(outputPath).href)) as Record<string, unknown>;
+  const app = (globalThis as Record<string, unknown>)[resultKey] as
+    | {
+        clientModules: {
+          entries(): readonly { path: string; source: string }[];
+        };
+      }
+    | undefined;
+  delete (globalThis as Record<string, unknown>)[resultKey];
+  if (!app) throw new Error('Generated handler app did not execute.');
+  return { app, exports };
+}
 
 describe('generated production handler client-module bootstrap', () => {
   it('registers the exact compiler and manual set before importing the app', async () => {
@@ -71,13 +147,43 @@ describe('generated production handler client-module bootstrap', () => {
     const load = source.indexOf(
       `generatedClientModuleInstaller.load("${computeRenderPlanFingerprint({})}"`,
     );
-    const appImport = source.indexOf('runWithGeneratedLiveTargetRegistry(() => import(');
+    const lifecycle = source.indexOf(
+      'runWithGeneratedLiveTargetRegistry(() => generatedClientModuleInstaller.load(',
+    );
+    const appImport = source.indexOf('() => import(', load);
 
     expect(claim).toBeGreaterThan(0);
-    expect(load).toBeGreaterThan(claim);
+    expect(lifecycle).toBeGreaterThan(claim);
+    expect(load).toBeGreaterThan(lifecycle);
     expect(appImport).toBeGreaterThan(load);
     expect(source).not.toContain('generatedClientModuleInstaller.appBootstrap(');
     expect(source).not.toContain('generatedClientModuleInstaller.manual(');
+  });
+
+  it('executes emitted nonempty and empty handlers in one process with exact replacement', async () => {
+    const root = mkdtempSync(join(process.cwd(), 'packages/cli/.tmp-generated-handler-'));
+    try {
+      const modules = await compilerModules();
+      const nonempty = await executeGeneratedHandlerBundle(root, 'nonempty', modules);
+      const empty = await executeGeneratedHandlerBundle(root, 'empty', []);
+
+      expect(Object.keys(nonempty.exports)).toEqual(['default']);
+      expect(Object.keys(empty.exports)).toEqual(['default']);
+      expect(new Set(nonempty.app.clientModules.entries().map((module) => module.path))).toEqual(
+        new Set(modules.map((module) => module.path)),
+      );
+      expect(empty.app.clientModules.entries().map((module) => module.path)).toEqual([
+        '/c/kovo-runtime.client.js',
+      ]);
+      expect(nonempty.app.clientModules.entries()).not.toContainEqual(
+        expect.objectContaining({ path: '/c/stale.client.js' }),
+      );
+      expect(empty.app.clientModules.entries()).not.toContainEqual(
+        expect.objectContaining({ path: '/c/stale.client.js' }),
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('rejects copied, duplicate, mixed-fingerprint, incomplete-pair, and reserved-manual input', async () => {

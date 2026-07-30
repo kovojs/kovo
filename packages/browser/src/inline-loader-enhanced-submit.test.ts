@@ -182,8 +182,14 @@ describe('inline loader enhanced submit source', () => {
           listeners.set(type, listener);
         };
         globalRecord.document = {
-          querySelector() {
-            return null;
+          querySelector(selector: string) {
+            return selector === 'meta[name="kovo-build"]'
+              ? {
+                  getAttribute(name: string) {
+                    return name === 'content' ? 'build-A' : null;
+                  },
+                }
+              : null;
           },
           querySelectorAll() {
             return [];
@@ -219,6 +225,7 @@ describe('inline loader enhanced submit source', () => {
         expect(fetch).not.toHaveBeenCalled();
         expect(importModule).not.toHaveBeenCalled();
         expect(preventDefault).not.toHaveBeenCalled();
+        expect(InertBroadcastChannel.instances).toHaveLength(0);
       } finally {
         Object.assign(globalRecord, {
           addEventListener: originals.addEventListener,

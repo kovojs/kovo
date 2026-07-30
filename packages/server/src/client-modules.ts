@@ -617,7 +617,7 @@ function compilerClientModuleRoles(
     const module = snapshotClientModuleInput(modules[index]!);
     const proof = proofs[index];
     const role = proof === undefined ? undefined : compilerOwnedClientModuleRole(proof);
-    if (role !== undefined) {
+    if (role !== undefined && proof !== undefined) {
       const proven = snapshotClientModuleInput(proof);
       if (proven.path !== module.path || proven.source !== module.source) {
         throw new TypeError(

@@ -55,6 +55,9 @@ if (!inlineBuildByteLengthRejectedForeignReceiver) {
 }
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const inlineKovoLoaderRuntimeModulePath = fileURLToPath(
+  new URL('./inline-loader-runtime.ts', import.meta.url),
+);
 const coreSinkPolicySourcePath = fileURLToPath(
   new URL('../../core/src/internal/sink-policy.ts', import.meta.url),
 );
@@ -1876,7 +1879,7 @@ function installInlineKovoLoader(im, options = {}) {
   let bc;
   let broadcastRetired = false;
   // SPEC §8/§9.3: unresolved session-dependent state has no safe BroadcastChannel principal.
-  if (pbt && (!sdp || !!sfp)) {
+  if (enhancedMutations && pbt && (!sdp || !!sfp)) {
     try {
       bc = bns.createMutationBroadcastChannel('kovo:mutation-response');
     } catch {}
@@ -3148,12 +3151,16 @@ export function buildInlineKovoLoaderStubInstallerSource(
 
 export interface EmitInlineKovoLoaderModuleOptions {
   check?: boolean;
+  runtimeTargetPath?: string;
   source?: string;
   targetPath?: string;
 }
 
 export interface EmitInlineKovoLoaderModuleResult {
   changed: boolean;
+  runtimeChanged: boolean;
+  runtimeSource: string;
+  runtimeTargetPath: string;
   source: string;
   targetPath: string;
 }
@@ -3164,6 +3171,8 @@ export function buildInlineKovoLoaderModuleSource(
   const installerSource = buildInlineKovoLoaderInstallerSource(source);
   const stubInstallerSource = buildInlineKovoLoaderStubInstallerSource();
   const runtimeModuleSource = buildKovoDeferredRuntimeModuleSource(installerSource);
+  const runtimeInstallerModuleSource =
+    buildInlineKovoLoaderRuntimeModuleSourceFromInstaller(installerSource);
   assertInlineKovoLoaderBootstrapGzipBudget(
     stubInstallerSource,
     'Generated inline Kovo loader bootstrap',
@@ -3174,9 +3183,21 @@ export function buildInlineKovoLoaderModuleSource(
     runtimeModuleSource,
     stubInstallerSource,
   }).join('\n')}\n`;
-  assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');
+  assertInlineKovoLoaderModuleArtifactParity(
+    moduleSource,
+    'Generated inline Kovo loader module',
+    runtimeInstallerModuleSource,
+  );
 
   return moduleSource;
+}
+
+export function buildInlineKovoLoaderRuntimeModuleSource(
+  source = inlineKovoLoaderInstallerReadableSource,
+): string {
+  return buildInlineKovoLoaderRuntimeModuleSourceFromInstaller(
+    buildInlineKovoLoaderInstallerSource(source),
+  );
 }
 
 interface InlineKovoLoaderModuleLineParts {
@@ -3193,7 +3214,8 @@ function buildInlineKovoLoaderModuleLines({
   const moduleHeaderLines = [
     '// @ts-nocheck',
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
-    "import type { ImportHandlerModule } from './handlers.js';",
+    "export { installInlineKovoLoader } from './inline-loader-runtime.js';",
+    "export type { InlineKovoLoaderOptions } from './inline-loader-runtime.js';",
     '',
   ];
   const runtimeSeedLines = [
@@ -3213,29 +3235,6 @@ function buildInlineKovoLoaderModuleLines({
     `export const kovoDeferredRuntimeModuleSource = ${inlineJavaScriptTemplateLiteral(
       runtimeModuleSource,
     )};`,
-    '',
-  ];
-  const runtimeInstallerLines = [
-    '// prettier-ignore',
-    'const inlineKovoLoaderInstaller = (',
-    `  ${installerSource}`,
-    ') as (',
-    '    importModule: ImportHandlerModule,',
-    '    options?: InlineKovoLoaderOptions,',
-    '  ) => void;',
-    '',
-    '/** @internal Framework composition controls for generated deferred runtimes. */',
-    'export interface InlineKovoLoaderOptions {',
-    '  enhancedMutations?: boolean;',
-    '}',
-    '',
-    '/** Runtime API used by Kovo applications and generated runtime integration. */',
-    'export function installInlineKovoLoader(',
-    '  importModule: ImportHandlerModule,',
-    '  options: InlineKovoLoaderOptions = {},',
-    '): void {',
-    '  inlineKovoLoaderInstaller(importModule, options);',
-    '}',
     '',
   ];
   const bootstrapInstallerLines = [
@@ -3293,10 +3292,38 @@ function buildInlineKovoLoaderModuleLines({
   return [
     ...moduleHeaderLines,
     ...runtimeSeedLines,
-    ...runtimeInstallerLines,
     ...bootstrapInstallerLines,
     ...publicSourceFactoryLines,
   ];
+}
+
+function buildInlineKovoLoaderRuntimeModuleSourceFromInstaller(installerSource: string): string {
+  return `${[
+    '// @ts-nocheck',
+    '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
+    "import type { ImportHandlerModule } from './handlers.js';",
+    '',
+    '// prettier-ignore',
+    'const inlineKovoLoaderInstaller = (',
+    `  ${installerSource}`,
+    ') as (',
+    '    importModule: ImportHandlerModule,',
+    '    options?: InlineKovoLoaderOptions,',
+    '  ) => void;',
+    '',
+    '/** @internal Framework composition controls for generated deferred runtimes. */',
+    'export interface InlineKovoLoaderOptions {',
+    '  enhancedMutations?: boolean;',
+    '}',
+    '',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
+    'export function installInlineKovoLoader(',
+    '  importModule: ImportHandlerModule,',
+    '  options: InlineKovoLoaderOptions = {},',
+    '): void {',
+    '  inlineKovoLoaderInstaller(importModule, options);',
+    '}',
+  ].join('\n')}\n`;
 }
 
 function buildKovoDeferredRuntimeModuleSource(installerSource: string): string {
@@ -4235,33 +4262,48 @@ function collectUnsupportedInlineHelperTopLevelBindings(sourceFile: ts.SourceFil
 export function assertInlineKovoLoaderModuleArtifactParity(
   moduleSource: string,
   label = 'Inline Kovo loader module',
+  runtimeModuleSource = buildInlineKovoLoaderRuntimeModuleSource(),
 ): void {
   const sourceFile = parseInlineKovoLoaderModuleSource(moduleSource, label);
+  const runtimeSourceFile = parseInlineKovoLoaderModuleSource(
+    runtimeModuleSource,
+    `${label} runtime-only module`,
+  );
   let installerLiteralSource: string | undefined;
   let installerFunctionSource: string | undefined;
 
-  const visit = (node: ts.Node): void => {
+  const visitModule = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       if (node.name.text === 'inlineKovoLoaderInstallerSource') {
         installerLiteralSource = readInlineInstallerSourceLiteral(node.initializer);
       }
-      if (node.name.text === 'inlineKovoLoaderInstaller') {
-        const expression = unwrapInlineInstallerExpression(node.initializer);
-        if (ts.isFunctionExpression(expression)) {
-          installerFunctionSource = expression.getText(sourceFile);
-        }
+    }
+
+    ts.forEachChild(node, visitModule);
+  };
+  const visitRuntime = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      node.name.text === 'inlineKovoLoaderInstaller'
+    ) {
+      const expression = unwrapInlineInstallerExpression(node.initializer);
+      if (ts.isFunctionExpression(expression)) {
+        installerFunctionSource = expression.getText(runtimeSourceFile);
       }
     }
 
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, visitRuntime);
   };
-  visit(sourceFile);
+  visitModule(sourceFile);
+  visitRuntime(runtimeSourceFile);
 
   if (installerLiteralSource === undefined) {
     throw new Error(`${label} is missing inlineKovoLoaderInstallerSource.`);
   }
   if (installerFunctionSource === undefined) {
-    throw new Error(`${label} is missing inlineKovoLoaderInstaller function artifact.`);
+    throw new Error(`${label} runtime-only module is missing inlineKovoLoaderInstaller.`);
   }
   if (installerLiteralSource !== installerFunctionSource) {
     throw new Error(
@@ -4315,32 +4357,71 @@ export async function emitInlineKovoLoaderModule(
   options: EmitInlineKovoLoaderModuleOptions = {},
 ): Promise<EmitInlineKovoLoaderModuleResult> {
   const targetPath = resolve(options.targetPath ?? inlineKovoLoaderModulePath);
+  const runtimeTargetPath = resolve(
+    options.runtimeTargetPath ??
+      (options.targetPath === undefined
+        ? inlineKovoLoaderRuntimeModulePath
+        : join(dirname(targetPath), 'inline-loader-runtime.ts')),
+  );
   const outputRoot = dirname(targetPath);
   const targetName = basename(targetPath);
+  const runtimeOutputRoot = dirname(runtimeTargetPath);
+  const runtimeTargetName = basename(runtimeTargetPath);
   const source =
     options.source === undefined
       ? buildInlineKovoLoaderModuleSource()
       : buildInlineKovoLoaderModuleSource(options.source);
+  const runtimeSource =
+    options.source === undefined
+      ? buildInlineKovoLoaderRuntimeModuleSource()
+      : buildInlineKovoLoaderRuntimeModuleSource(options.source);
   const current = await readInlineLoaderOutputFile(outputRoot, targetName);
-  const changed = current !== source;
+  const currentRuntime = await readInlineLoaderOutputFile(runtimeOutputRoot, runtimeTargetName);
+  const sourceChanged = current !== source;
+  const runtimeChanged = currentRuntime !== runtimeSource;
+  const changed = sourceChanged || runtimeChanged;
 
   if (options.check) {
     if (current !== undefined) {
-      assertInlineKovoLoaderModuleArtifactParity(current, targetPath);
+      assertInlineKovoLoaderModuleArtifactParity(
+        current,
+        targetPath,
+        currentRuntime ?? runtimeSource,
+      );
+    }
+    if (currentRuntime !== undefined) {
+      assertInlineKovoLoaderModuleArtifactParity(source, runtimeTargetPath, currentRuntime);
     }
     if (changed) {
       throw new Error(
-        `Inline Kovo loader module is stale: ${targetPath}. Run pnpm --filter @kovojs/browser run build:inline-loader.`,
+        `Inline Kovo loader modules are stale: ${targetPath}, ${runtimeTargetPath}. Run pnpm --filter @kovojs/browser run build:inline-loader.`,
       );
     }
-    return { changed, source, targetPath };
+    return {
+      changed,
+      runtimeChanged,
+      runtimeSource,
+      runtimeTargetPath,
+      source,
+      targetPath,
+    };
   }
 
-  if (changed) {
+  if (sourceChanged) {
     await writeInlineLoaderOutputFile(outputRoot, targetName, source);
   }
+  if (runtimeChanged) {
+    await writeInlineLoaderOutputFile(runtimeOutputRoot, runtimeTargetName, runtimeSource);
+  }
 
-  return { changed, source, targetPath };
+  return {
+    changed,
+    runtimeChanged,
+    runtimeSource,
+    runtimeTargetPath,
+    source,
+    targetPath,
+  };
 }
 
 async function readInlineLoaderOutputFile(
@@ -4463,7 +4544,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   if (!process.argv.includes('--check')) {
     console.log(
-      `${result.changed ? 'Wrote' : 'Unchanged'} ${result.targetPath} from inline-loader-build.ts.`,
+      `${result.changed ? 'Wrote' : 'Unchanged'} ${result.targetPath} and ${result.runtimeTargetPath} from inline-loader-build.ts.`,
     );
   }
 }
