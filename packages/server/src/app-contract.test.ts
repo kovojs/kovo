@@ -1,6 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { publicAccess } from './access.js';
+import {
+  agent,
+  agentContent,
+  assignDerivedAgentModelOperations,
+  assignDerivedAgentToolOperations,
+  runAgentTurn,
+  tool,
+} from './agent.js';
 import { defineKovo } from './app-contract.js';
 import { resolveKovoAppToken, type InferKovoAppTypes } from './app-token.js';
 import { registerAppMutationAdapter } from './app-mutation-adapter.js';
@@ -297,5 +305,108 @@ describe('defineKovo app contract', () => {
         ],
       }),
     ).toThrow(/KOVO_APP_OWNER_MISMATCH/u);
+  });
+
+  it('binds advanced agents to the assembled app request, session, DB, and env context', async () => {
+    let authCalls = 0;
+    let dbCalls = 0;
+    const contract = defineKovo({
+      appId: APP_ID,
+      auth: () => {
+        authCalls += 1;
+        return { user: { id: 'agent-user' } };
+      },
+      db: (request) => {
+        dbCalls += 1;
+        expect(request.session?.user.id).toBe('agent-user');
+        expect(request.env.APP_NAME).toBe('Kovo Agents');
+        return {
+          insert(value: string) {
+            return value.length;
+          },
+        };
+      },
+      egress: { enabled: false, justification: 'isolated app-agent bridge test' },
+      env: s.object({ APP_NAME: s.string() }),
+      envSource: { APP_NAME: 'Kovo Agents' },
+    });
+    const save = assignDerivedMutationKey(
+      contract.mutation({
+        access: [contract.authenticated],
+        input: s.object({ value: s.string() }),
+        handler(input, request) {
+          const userId: string = request.session.user.id;
+          const appName: string = request.env.APP_NAME;
+          return { appName, count: request.db.insert(input.value), userId };
+        },
+      }),
+      'test/agent-save',
+    );
+    const saveTool = assignDerivedAgentToolOperations(
+      tool('save', {
+        description: 'Save one value through the app mutation.',
+        mutation: save,
+      }),
+      [],
+    );
+    const assistant = assignDerivedAgentModelOperations(
+      agent('support', {
+        model: () => ({ input: { value: 'Ada' }, kind: 'tool-call', tool: 'save' }),
+        tools: [saveTool],
+      }),
+      [],
+    );
+    const bound = contract.agent(assistant);
+
+    expect(bound.name).toBe('support');
+    expect(authCalls).toBe(0);
+    expect(dbCalls).toBe(0);
+    expect(() => bound.session(new Request('https://kovo.test/agent'))).toThrow(
+      /before app\.assemble/u,
+    );
+
+    contract.assemble({ mutations: [save] });
+    const session = await bound.session(new Request('https://kovo.test/agent'));
+    const result = await runAgentTurn(session, agentContent('save Ada', 'principal'));
+    expect(result).toMatchObject({
+      integrity: 'untrusted',
+      kind: 'tool-result',
+      offeredTools: ['save'],
+      result: {
+        ok: true,
+        value: { appName: 'Kovo Agents', count: 3, userId: 'agent-user' },
+      },
+      tool: 'save',
+    });
+    expect(authCalls).toBe(1);
+    expect(dbCalls).toBe(1);
+
+    if (false) {
+      // @ts-expect-error the app bridge accepts the contract's raw Request type.
+      await bound.session({ url: 'https://kovo.test/forged' });
+    }
+  });
+
+  it('rejects copied, duplicate, and cross-contract advanced agent declarations', () => {
+    const first = defineKovo({
+      appId: APP_ID,
+      egress: { enabled: false, justification: 'isolated app-agent bridge test' },
+    });
+    const second = defineKovo({
+      appId: '0f62cb54-12e6-42e7-84c7-03fce22033b6',
+      egress: { enabled: false, justification: 'isolated app-agent bridge test' },
+    });
+    const assistant = assignDerivedAgentModelOperations(
+      agent('owned-agent', {
+        model: () => ({ kind: 'output', value: 'ok' }),
+        tools: [],
+      }),
+      [],
+    );
+
+    expect(() => first.agent({ ...assistant })).toThrow(/KOVO_APP_AGENT_DECLARATION/u);
+    expect(first.agent(assistant).name).toBe('owned-agent');
+    expect(() => first.agent(assistant)).toThrow(/KOVO_APP_DUPLICATE_DECLARATION/u);
+    expect(() => second.agent(assistant)).toThrow(/KOVO_APP_OWNER_MISMATCH/u);
   });
 });

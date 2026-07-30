@@ -2,6 +2,12 @@ import type { ComponentChild, JsonValue, RouteSearchValue } from '@kovojs/core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { publicAccess, verifiedAccess, type AccessDecision } from './access.js';
 import {
+  createAppAgentSession,
+  isAgentDefinition,
+  type AgentDefinition,
+  type AgentSession,
+} from './agent.js';
+import {
   appDeclarationMetadata,
   appDeclarationOwner,
   registerAppDeclarationMetadata,
@@ -23,6 +29,7 @@ import type {
   CreateAppOptions,
   KovoApp as RuntimeKovoApp,
 } from './app-types.js';
+import { resolveRequestClientIp } from './app-load-shed.js';
 import { isAppMutationAdapter, type AppMutationAdapter } from './app-mutation-adapter.js';
 import { createApp } from './app.js';
 import { createKovoAppToken, type KovoApp } from './app-token.js';
@@ -102,11 +109,31 @@ import {
 } from './security-witness-intrinsics.js';
 
 declare const appDeclarationHandleBrand: unique symbol;
+declare const appAgentHandleBrand: unique symbol;
 declare const appOptimisticBindingBrand: unique symbol;
 declare const kovoContractBrand: unique symbol;
 
 type AppId = string | undefined;
 type OptimisticFunction = (...args: unknown[]) => unknown;
+
+interface InternalAppAgentSessionOptions {
+  onSessionSetCookie?: (rawSetCookie: string) => void;
+}
+
+type InternalAppAgentFactory<
+  RawRequest extends globalThis.Request,
+  Owner extends string | undefined,
+> = <const Name extends string>(
+  declaration: AgentDefinition<Name>,
+) => {
+  readonly [appAgentHandleBrand]: {
+    readonly name: Name;
+    readonly owner: Owner;
+    readonly request: RawRequest;
+  };
+  readonly name: Name;
+  session(request: RawRequest, options?: InternalAppAgentSessionOptions): Promise<AgentSession>;
+};
 
 /** Named app-scoped route handle. */
 export interface RouteHandle<
@@ -746,6 +773,26 @@ export interface KovoContract<
     readonly request: Request;
     readonly session: SessionValue;
   };
+  /**
+   * Adopt one exact advanced declaration from `@kovojs/server/agent` while inheriting this app's
+   * request, session, DB, env, error, and trusted-client-IP providers.
+   */
+  readonly agent: <const Name extends string>(
+    declaration: AgentDefinition<Name>,
+  ) => {
+    readonly [appAgentHandleBrand]: {
+      readonly name: Name;
+      readonly owner: Owner;
+      readonly request: RawRequest;
+    };
+    readonly name: Name;
+    session(
+      request: RawRequest,
+      options?: {
+        onSessionSetCookie?: (rawSetCookie: string) => void;
+      },
+    ): Promise<AgentSession>;
+  };
   readonly authenticated: Guard<Request, AuthenticatedAppRequest<Request>>;
   readonly endpoint: AppEndpointFactory<DbValue, Owner>;
   readonly env: Readonly<EnvValue>;
@@ -835,6 +882,7 @@ interface OptimisticBindingState {
 }
 
 const contractStates = createWitnessWeakMap<object, ContractState>();
+const agentDefinitionOwners = createWitnessWeakMap<object, object>();
 const optimisticBindings = createWitnessWeakMap<object, OptimisticBindingState>();
 
 /**
@@ -963,6 +1011,11 @@ export function defineKovo(options: any): any {
   };
   witnessWeakMapSet(contractStates, contract, state);
 
+  witnessDefineProperty(
+    contract,
+    'agent',
+    immutable(createAppAgentFactory<RawRequest, Owner>(state)),
+  );
   const authenticated = guards.authed<any>() as Guard<Request, AuthenticatedAppRequest<Request>>;
   witnessDefineProperty(contract, 'authenticated', immutable(authenticated));
   witnessDefineProperty(contract, 'publicAccess', immutable(publicAccess));
@@ -1149,6 +1202,60 @@ function createAppEndpointFactory<Db, Owner extends AppId>(
       endpoint(pathOrDeclaration as string, definition as any),
     );
   }) as unknown as AppEndpointFactory<Db, Owner>;
+}
+
+function createAppAgentFactory<RawRequest extends globalThis.Request, Owner extends AppId>(
+  state: ContractState,
+): InternalAppAgentFactory<RawRequest, Owner> {
+  return ((definition: AgentDefinition) => {
+    assertContractOpen(state, 'app.agent()');
+    if (!isAgentDefinition(definition)) {
+      throw new TypeError(
+        'KOVO_APP_AGENT_DECLARATION: app.agent() requires one exact agent() declaration from ' +
+          '@kovojs/server/agent; structural copies, casts, and duplicate package instances are ' +
+          'rejected (SPEC §6.2.1/§6.6).',
+      );
+    }
+    const existingOwner = witnessWeakMapGet(agentDefinitionOwners, definition);
+    if (existingOwner !== undefined) {
+      if (existingOwner !== state.contract) {
+        throw new TypeError(
+          'KOVO_APP_OWNER_MISMATCH: this agent() declaration is already bound to another app ' +
+            'contract or duplicate @kovojs/server package instance.',
+        );
+      }
+      throw new TypeError(
+        'KOVO_APP_DUPLICATE_DECLARATION: app.agent() can adopt one exact advanced agent ' +
+          'declaration only once.',
+      );
+    }
+    witnessWeakMapSet(agentDefinitionOwners, definition, state.contract);
+
+    const handle = witnessCreateNullRecord<unknown>();
+    witnessDefineProperty(handle, 'name', immutable(definition.name));
+    witnessDefineProperty(
+      handle,
+      'session',
+      immutable((request: RawRequest, options: InternalAppAgentSessionOptions = {}) => {
+        const runtimeApp = contractRuntimeApp(state, 'app.agent().session()');
+        const sessionOptions = snapshotAppAgentSessionOptions(options);
+        return createAppAgentSession(definition, {
+          clientIp: (candidate) => resolveRequestClientIp(runtimeApp, candidate),
+          ...(runtimeApp.db === undefined ? {} : { db: runtimeApp.db }),
+          env: runtimeApp.env,
+          ...(runtimeApp.onError === undefined ? {} : { onError: runtimeApp.onError }),
+          ...(sessionOptions.onSessionSetCookie === undefined
+            ? {}
+            : { onSessionSetCookie: sessionOptions.onSessionSetCookie }),
+          request,
+          ...(runtimeApp.sessionProvider === undefined
+            ? {}
+            : { sessionProvider: runtimeApp.sessionProvider }),
+        });
+      }),
+    );
+    return witnessFreeze(handle);
+  }) as unknown as InternalAppAgentFactory<RawRequest, Owner>;
 }
 
 function adoptEndpointDeclaration<Declaration extends EndpointDeclaration>(
@@ -1501,6 +1608,29 @@ function snapshotContractOptions(source: object): Readonly<Record<string, unknow
     'stylesheets',
   ]);
   return witnessFreeze(copyOwnDataRecord(source, 'defineKovo options', undefined, allowed));
+}
+
+function snapshotAppAgentSessionOptions(
+  source: InternalAppAgentSessionOptions,
+): Readonly<InternalAppAgentSessionOptions> {
+  if (typeof source !== 'object' || source === null || witnessIsArray(source)) {
+    throw new TypeError('app.agent().session() options must be one stable own-data object.');
+  }
+  const snapshot = copyOwnDataRecord(
+    source,
+    'app agent session options',
+    undefined,
+    new Set(['onSessionSetCookie']),
+  );
+  const onSessionSetCookie = optionalOwnDataValue(
+    snapshot,
+    'onSessionSetCookie',
+    'app agent session onSessionSetCookie',
+  );
+  if (onSessionSetCookie !== undefined && typeof onSessionSetCookie !== 'function') {
+    throw new TypeError('app agent session onSessionSetCookie must be a function.');
+  }
+  return witnessFreeze(snapshot) as Readonly<InternalAppAgentSessionOptions>;
 }
 
 function copyOwnDataRecord(

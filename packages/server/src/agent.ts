@@ -17,6 +17,7 @@ import {
   isFrameworkManagedDbProvider,
   resolveLifecycleRequest,
   type AppDbProvider,
+  type DbProvider,
   type SessionProvider,
 } from './guards.js';
 import type { ServerErrorHandler } from './diagnostics.js';
@@ -203,6 +204,21 @@ interface AgentContentRecord {
   readonly value: unknown;
 }
 
+interface BoundAgentSessionOptions<
+  Request extends object,
+  SessionValue,
+  DbValue,
+  EnvValue extends Record<string, unknown>,
+> {
+  readonly clientIp?: (request: Request) => string | undefined;
+  readonly db?: DbProvider<Request, DbValue, SessionValue>;
+  readonly env?: Readonly<EnvValue>;
+  readonly onError?: ServerErrorHandler;
+  readonly onSessionSetCookie?: (rawSetCookie: string) => void;
+  readonly request: Request;
+  readonly sessionProvider?: SessionProvider<Request, SessionValue>;
+}
+
 const toolRecords = createWitnessWeakMap<object, AgentToolRecord>();
 const agentRecords = createWitnessWeakMap<object, AgentRecord>();
 const sessionRecords = createWitnessWeakMap<object, AgentSessionRecord>();
@@ -276,6 +292,11 @@ export function agent<const Name extends string>(
   return declaration;
 }
 
+/** @internal Exact-identity check used by the app-scoped advanced-capability bridge. */
+export function isAgentDefinition(value: unknown): value is AgentDefinition {
+  return isObject(value) && witnessWeakMapGet(agentRecords, value) !== undefined;
+}
+
 /** @internal Install the compiler-derived terminal operation closure on one exact tool. */
 export function assignDerivedAgentToolOperations<Definition extends AgentToolDefinition>(
   definition: Definition,
@@ -321,19 +342,6 @@ export async function createAgentSession<
   definition: AgentDefinition,
   options: CreateAgentSessionOptions<Request, SessionValue, DbValue>,
 ): Promise<AgentSession> {
-  const record = witnessWeakMapGet(agentRecords, definition);
-  if (record?.modelOperations === undefined) {
-    throw new TypeError('Agent session requires compiler-derived model operation evidence.');
-  }
-  for (let index = 0; index < record.tools.length; index += 1) {
-    const toolRecord = witnessWeakMapGet(toolRecords, record.tools[index]!);
-    if (toolRecord?.operations === undefined) {
-      throw new TypeError(
-        `Agent tool ${record.tools[index]!.name} lacks compiler-derived effects.`,
-      );
-    }
-  }
-
   const request = ownData(options, 'request', 'agent request');
   if (!isObject(request)) throw new TypeError('createAgentSession() request must be an object.');
   if (witnessGetOwnPropertyDescriptor(options, 'principalPosture') !== undefined) {
@@ -350,13 +358,97 @@ export async function createAgentSession<
   const onSessionSetCookie = optionalFunctionData(options, 'onSessionSetCookie') as
     | ((rawSetCookie: string) => void)
     | undefined;
-  const lifecycleRequest = await resolveLifecycleRequest<Request, SessionValue>(
-    request as Request,
+  const onError = optionalFunctionData(options, 'onError') as ServerErrorHandler | undefined;
+  return createResolvedAgentSession<Request, SessionValue, DbValue, Record<never, never>>(
+    definition,
     {
+      ...(clientIp === undefined ? {} : { clientIp }),
+      ...(db === undefined
+        ? {}
+        : { db: db as unknown as DbProvider<Request, DbValue, SessionValue> }),
+      ...(onError === undefined ? {} : { onError }),
+      ...(onSessionSetCookie === undefined ? {} : { onSessionSetCookie }),
+      request: request as Request,
       ...(sessionProvider === undefined
         ? {}
         : { sessionProvider: sessionProvider as SessionProvider<Request, SessionValue> }),
+    },
+  );
+}
+
+/**
+ * Bind an exact advanced agent declaration to the providers already validated by one assembled
+ * app contract. This remains internal so the task capability family stays on `/agent`; ordinary
+ * app code reaches it only through `app.agent(declaration)` (SPEC §6.2.1/§6.6).
+ *
+ * @internal
+ */
+export async function createAppAgentSession<
+  Request extends object,
+  SessionValue,
+  DbValue,
+  EnvValue extends Record<string, unknown>,
+>(
+  definition: AgentDefinition,
+  options: BoundAgentSessionOptions<Request, SessionValue, DbValue, EnvValue>,
+): Promise<AgentSession> {
+  const request = ownData(options, 'request', 'app agent request');
+  if (!isObject(request)) throw new TypeError('app agent session request must be an object.');
+  const clientIp = optionalFunctionData(options, 'clientIp') as
+    | ((request: Request) => string | undefined)
+    | undefined;
+  const db = optionalData(options, 'db') as DbProvider<Request, DbValue, SessionValue> | undefined;
+  const env = ownData(options, 'env', 'app agent environment') as Readonly<EnvValue>;
+  const onError = optionalFunctionData(options, 'onError') as ServerErrorHandler | undefined;
+  const onSessionSetCookie = optionalFunctionData(options, 'onSessionSetCookie') as
+    | ((rawSetCookie: string) => void)
+    | undefined;
+  const sessionProvider = optionalFunctionData(options, 'sessionProvider') as
+    | SessionProvider<Request, SessionValue>
+    | undefined;
+  return createResolvedAgentSession(definition, {
+    ...(clientIp === undefined ? {} : { clientIp }),
+    ...(db === undefined ? {} : { db }),
+    env,
+    ...(onError === undefined ? {} : { onError }),
+    ...(onSessionSetCookie === undefined ? {} : { onSessionSetCookie }),
+    request: request as Request,
+    ...(sessionProvider === undefined ? {} : { sessionProvider }),
+  });
+}
+
+async function createResolvedAgentSession<
+  Request extends object,
+  SessionValue,
+  DbValue,
+  EnvValue extends Record<string, unknown>,
+>(
+  definition: AgentDefinition,
+  options: BoundAgentSessionOptions<Request, SessionValue, DbValue, EnvValue>,
+): Promise<AgentSession> {
+  const record = witnessWeakMapGet(agentRecords, definition);
+  if (record?.modelOperations === undefined) {
+    throw new TypeError('Agent session requires compiler-derived model operation evidence.');
+  }
+  for (let index = 0; index < record.tools.length; index += 1) {
+    const toolRecord = witnessWeakMapGet(toolRecords, record.tools[index]!);
+    if (toolRecord?.operations === undefined) {
+      throw new TypeError(
+        `Agent tool ${record.tools[index]!.name} lacks compiler-derived effects.`,
+      );
+    }
+  }
+
+  const request = options.request;
+  const sessionProvider = options.sessionProvider;
+  const clientIp = options.clientIp;
+  const onSessionSetCookie = options.onSessionSetCookie;
+  const lifecycleRequest = await resolveLifecycleRequest<Request, SessionValue, never, EnvValue>(
+    request,
+    {
+      ...(sessionProvider === undefined ? {} : { sessionProvider }),
       ...(clientIp === undefined ? {} : { clientIp }),
+      ...(options.env === undefined ? {} : { env: options.env }),
       ...(onSessionSetCookie === undefined ? {} : { onSessionSetCookie }),
     },
   );
@@ -377,11 +469,11 @@ export async function createAgentSession<
   const session = witnessFreeze({ agent: definition.name }) as unknown as AgentSession;
   witnessWeakMapSet(sessionRecords, session, {
     clientIp,
-    db,
+    db: options.db,
     definition,
     integrity: 'principal',
     running: false,
-    onError: optionalFunctionData(options, 'onError') as ServerErrorHandler | undefined,
+    onError: options.onError,
     request: lifecycleRequest as object,
   });
   return session;
